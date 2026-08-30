@@ -1,4 +1,4 @@
-name: Entdecken providerfreier Sechs-Tage-Pool
+name: Entdecken und Radar im Sechs-Tage-Takt
 
 on:
   schedule:
@@ -8,6 +8,53 @@ permissions:
   contents: read
 
 jobs:
+  radar-six-day-trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: kinodreieck-radar-six-day
+      cancel-in-progress: false
+    steps:
+      - name: Faellige Radar-Ziele im 144-Stunden-Takt seriell pruefen
+        timeout-minutes: 30
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_RADAR_SCHEDULER: ${{ secrets.SUPABASE_RADAR_SCHEDULER }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_RADAR_SCHEDULER" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_RADAR_SCHEDULER nicht gesetzt."
+            exit 1
+          fi
+          case "$SUPABASE_RADAR_SCHEDULER" in
+            sb_secret_*) ;;
+            *)
+              echo "::error::SUPABASE_RADAR_SCHEDULER hat nicht das erwartete Secret-Key-Format."
+              exit 1
+              ;;
+          esac
+
+          for claim_number in $(seq 1 10); do
+            http_status="$(
+              curl --silent --show-error \
+                --request POST \
+                --connect-timeout 10 \
+                --max-time 150 \
+                --output /dev/null \
+                --write-out "%{http_code}" \
+                "${SUPABASE_URL%/}/functions/v1/radar-websearch-task" \
+                --header "apikey: ${SUPABASE_RADAR_SCHEDULER}" \
+                --header "x-kd-radar-refresh: scheduled-144h-v1"
+            )"
+            if [ "$http_status" = "204" ]; then
+              exit 0
+            fi
+            if [ "$http_status" != "200" ]; then
+              echo "::error::Radar-Lauf endete mit HTTP ${http_status}; kein Retry."
+              exit 1
+            fi
+          done
+
   entdecken-six-day-trigger:
     runs-on: ubuntu-latest
     timeout-minutes: 3

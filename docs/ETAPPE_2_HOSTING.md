@@ -63,15 +63,18 @@ Zusätzlich müssen `SUPABASE_URL` und `SUPABASE_PUBLISHABLE_KEY` auch als
 **Repository-Variablen** (Ebene Repository, nicht Environment) angelegt werden:
 Der zeitgesteuerte Keep-alive-Workflow (`keepalive.yml`) läuft ohne
 GitHub-Environment. Für den reinen Keep-alive-Read genügen diese öffentlichen
-Werte. Der getrennte Entdecken-Scheduler (`entdecken-six-day.yml`) benötigt
-zusätzlich das bereits für private Betriebsprüfungen verwendete Repository-
-Secret `SUPABASE_SERVICE_ROLE_KEY`; der Wert wird weder ausgegeben noch Teil
-des Function-Payloads.
+Werte. Der gemeinsame Sechs-Tage-Scheduler (`entdecken-six-day.yml`) enthält zwei
+voneinander unabhängige Jobs. Entdecken verwendet das Repository-Secret
+`SUPABASE_SERVICE_ROLE_KEY`. Radar verwendet ausschließlich das separate moderne
+Repository-Secret `SUPABASE_RADAR_SCHEDULER` im Format `sb_secret_…`; es wird nur
+als `apikey` gesendet, nie als `Authorization`-Header. Werte und Antworten werden
+nicht ausgegeben und sind kein Function-Payload.
 
 ### Providerfreier Entdecken-Anstoß alle 144 Stunden
 
-Der getrennte Schedule sendet täglich um `02:00 UTC` genau einen service-role-
-authentifizierten, bodylosen Refresh-`POST` an `entdecken-daily-task`. Das ist
+Der gemeinsame Schedule startet täglich um `02:00 UTC` zwei unabhängige Jobs.
+Der Entdecken-Job sendet genau einen service-role-authentifizierten, bodylosen
+Refresh-`POST` an `entdecken-daily-task`. Das ist
 `03:00` in der Wiener Normalzeit und `04:00` in der Sommerzeit. Der Step hat
 eine harte Zeitgrenze, folgt keinen Redirects und besitzt weder Schleife noch
 Curl-Retry. Es gibt absichtlich keinen manuellen Workflow-Einstieg. Normale
@@ -83,7 +86,10 @@ Stunden vergangen sind. Ein fälliger Lauf liest genau zwei öffentliche Joyn-
 Listen; Anbieter- und Websearchrequests bleiben bei null. Unbekannte Titel
 dürfen danach seriell und gecacht über die offizielle Wikidata-API ergänzt
 werden. Quellenblock, Timeout oder 429 führen zu keinem Retry im selben
-Zeitfenster und ersetzen den letzten guten Feed nicht.
+Zeitfenster und ersetzen den letzten guten Feed nicht. Der Radar-Job claimt
+seriell höchstens zehn verschiedene fällige Ziele. Jeder Claim besitzt seinen
+eigenen 144-Stunden-Zaun; ein Fehler wird nicht als Retry desselben Ziels
+wiederholt.
 
 Wiederkehrende Wirkung entsteht erst nach Aufnahme in den GitHub-Default-Branch.
 Ein Staging- oder Feature-Branch aktiviert für sich keinen Zeitplan automatisch;
@@ -95,11 +101,14 @@ lokale Workflowdatei, Migration oder grüne Mocks sind noch keine Aktivierung.
 |---|---|---|
 | `CLOUDFLARE_API_TOKEN` | GitHub Environment Secret | nur Pages-Deployments für das Zielprojekt |
 | `CLOUDFLARE_ACCOUNT_ID` | GitHub Environment Secret | Zielkonto für Wrangler |
+| `SUPABASE_SERVICE_ROLE_KEY` | GitHub Repository Secret | bestehender Entdecken-Betriebsjob |
+| `SUPABASE_RADAR_SCHEDULER` | GitHub Repository Secret | moderner `sb_secret_…` nur für den apikey-gebundenen Radar-Zeitplan |
 
-Claude-/KI-Anbieter-Key, Supabase-Service-Role-Key, persönliche Git-Sync-Tokens
-und Account-Session-Tokens dürfen weder als Repository-Variable noch mit
-`VITE_` angelegt werden. Sie gehören erst in späteren Etappen in einen
-serverseitigen Secret-Store.
+Claude-/KI-Anbieter-Key, persönliche Git-Sync-Tokens und Account-Session-Tokens
+dürfen weder als Repository-Variable noch mit `VITE_` angelegt werden. Die zwei
+oben ausdrücklich benannten Supabase-Betriebswerte sind ausschließlich
+Repository-Secrets; kein Supabase-Geheimnis darf als Variable oder `VITE_`-Wert
+im Frontend landen.
 
 Lokal dient `.env.example` als öffentliche Vorlage. Echte `.env`-Dateien
 bleiben ignoriert.

@@ -7,19 +7,10 @@ export const TITLE_GROUP_MIN_WORDS = 2;
 export const TITLE_GROUP_MIN_CHARACTERS = 8;
 export const TITLE_GROUP_MAX_MEMBERS = 20;
 
-/* Der erste serverfaehige Reihenvertrag ist bewusst klein. Aliasauflösung und
-   kanonische Reihen-ID sind explizit; die v5-Server-ID bleibt der bereits
-   deployte title_group-Schluessel. Weitere Reihen brauchen einen ebenso
-   belegten Vertrag und werden nicht aus einem Suchwort geraten. */
-export const CANONICAL_FRANCHISE_RADAR_CATALOG = Object.freeze([
-  Object.freeze({
-    franchiseId: "wikidata:Q462",
-    targetId: "title-group:v1:star-wars",
-    title: "Star Wars",
-    aliases: Object.freeze(["Star Wars", "Krieg der Sterne"]),
-    queryKey: "star wars",
-  }),
-]);
+/* Produktlogik enthaelt absichtlich keinen eingebauten Beispiel- oder
+   Franchise-Katalog. Neue Ziele kommen als unveraenderter Freitext vom Konto;
+   historische Titelgruppen bleiben nur fuer Feed-Kompatibilitaet lesbar. */
+export const CANONICAL_FRANCHISE_RADAR_CATALOG = Object.freeze([]);
 
 const YEAR_MIN = 1888;
 const YEAR_MAX = 2100;

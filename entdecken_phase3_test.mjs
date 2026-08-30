@@ -90,15 +90,11 @@ check("Radarzielsuche startet erst ab zwei Zeichen, bleibt bei acht ID-Treffern 
   });
   assert.deepEqual(ambiguous.entries, []);
 });
-check("Person und Reihe erscheinen nur als kanonische, typisierte ID-Treffer", () => {
+check("Produktlogik enthaelt keine eingebauten Personen- oder Reihenbeispiele", () => {
   const person = searchRadarTargets({ query: "Nicolas", personAvailable: true });
-  assert.deepEqual(person.entries.map((entry) => [entry.category, entry.stableId]), [
-    ["Person", "person:wikidata:Q42869:actor"],
-  ]);
+  assert.deepEqual(person.entries, []);
   const franchise = searchRadarTargets({ query: "Star Wars", franchiseAvailable: true });
-  assert.deepEqual(franchise.entries.map((entry) => [entry.category, entry.stableId]), [
-    ["Reihe", "title-group:v1:star-wars"],
-  ]);
+  assert.deepEqual(franchise.entries, []);
 });
 
 const pinTitel = { targetId: "watchmode:4711", watchmodeId: 4711, title: "Pin Film", year: 2026, type: "film" };
@@ -793,17 +789,21 @@ try {
     assert.equal(button(workUi.container, "Jetzt prüfen"), undefined);
   });
   const confirmedEvent = {
-    eventId, eventVersionId, targetId: workTarget.targetId, eventType: "kinostart_at", date: "2026-09-03",
+    eventId, eventVersionId, targetId: workTarget.targetId, title: "Passender Film",
+    eventType: "kinostart_at", date: "2026-09-03",
     region: "AT", platform: "-", lifecycleStatus: "scheduled", verificationStatus: "confirmed",
     evidence: [{ sourceId: "film-at", sourceDomain: "film.at", url: "https://film.at/start", retrievedAt: now }],
   };
   accountState = reconcileAccountRadarPilotFeed(accountState, feed([confirmedEvent])).state;
   await workUi.render(renderWorkProps());
-  check("Bestätigter Film-Treffer zeigt Titel, Datum und Quelle", () => {
+  check("Bestätigter Film-Treffer zeigt nur Titel, Inhaltsdatum und Typ", () => {
     assert.match(workUi.container.textContent, /Passender Film/);
     assert.match(workUi.container.textContent, /2026-09-03/);
-    assert.match(workUi.container.textContent, /Kinostart in Österreich/);
-    assert.equal(workUi.container.querySelector("a")?.textContent, "film.at");
+    assert.match(workUi.container.textContent, /Film · Kinostart Österreich/);
+    const news = [...workUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => /Neuigkeiten/.test(entry.textContent));
+    assert.equal(news.querySelectorAll("a").length, 0);
+    assert.doesNotMatch(news.textContent, /film\.at|Quelle/);
   });
   const accountReload = decodeLocalRadar(JSON.stringify(accountState), { authority: "account-cache" });
   assert.equal(accountReload.ok, true);
@@ -858,7 +858,7 @@ try {
     radarPilotEvents: [starfighterEvent],
   });
   await act(async () => { button(targetFoundUi.container, "Radar").click(); await tick(); });
-  check("Radar trennt abgeleiteten Fund und Suchziel mit dem sichtbaren Zielbezug", () => {
+  check("Radar trennt abgeleiteten Fund und Suchziel ohne Zusatzmetadaten im Fund", () => {
     const targets = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => /Meine Ziele/.test(entry.textContent));
     const news = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
@@ -866,7 +866,8 @@ try {
     assert.match(targets.textContent, /Star Wars/);
     assert.doesNotMatch(targets.textContent, /Star Wars: Starfighter/);
     assert.match(news.textContent, /Star Wars: Starfighter/);
-    assert.match(news.textContent, /Gefunden für: Star Wars/);
+    assert.doesNotMatch(news.textContent, /Gefunden für:/);
+    assert.equal(news.querySelectorAll("a,button").length, 0);
   });
   await targetFoundUi.cleanup();
 
@@ -876,7 +877,7 @@ try {
   });
   await act(async () => { button(targetFoundReloadUi.container, "Radar").click(); await tick(); });
   check("Reihen-Suchziel und abgeleiteter Fund bleiben nach Reload getrennt", () => {
-    assert.match(targetFoundReloadUi.container.textContent, /Gefunden für: Star Wars/);
+    assert.doesNotMatch(targetFoundReloadUi.container.textContent, /Gefunden für:/);
     assert.match(targetFoundReloadUi.container.textContent, /Star Wars: Starfighter/);
   });
   await targetFoundReloadUi.cleanup();
@@ -1055,9 +1056,9 @@ try {
   assert.equal(applied.ok, true);
   personState = applied.state;
   await personUi.render(renderPersonProps());
-  check("Validierter Personen-Treffer bleibt Vorschlag ohne Film-Abo", () => {
-    assert.match(personUi.container.textContent, /Dream Scenario/);
-    assert.match(personUi.container.textContent, /2023/);
+  check("Validierter Personen-Treffer bleibt intern ohne unvollstaendigen Neuigkeiten-Eintrag", () => {
+    assert.doesNotMatch(personUi.container.textContent, /Dream Scenario|2023/);
+    assert.equal(personState.personResults[0].decisions[0].work.title, "Dream Scenario");
     assert.equal(personState.subscriptions.length, 0);
   });
   const savedPersonState = JSON.stringify(personState);
@@ -1067,10 +1068,10 @@ try {
     ...baseProps, radarState: reloadedPerson.state, personRadarAvailable: false,
   });
   await act(async () => { button(personReloadUi.container, "Radar").click(); await tick(); });
-  check("Person, Rolle und Treffer überstehen Reload ohne irreführenden Suchfehler", () => {
+  check("Person und Rolle überstehen Reload ohne unvollstaendigen Treffer oder Suchfehler", () => {
     assert.match(personReloadUi.container.textContent, /Nicolas Cage/);
     assert.match(personReloadUi.container.textContent, /Schauspiel/);
-    assert.match(personReloadUi.container.textContent, /Dream Scenario/);
+    assert.doesNotMatch(personReloadUi.container.textContent, /Dream Scenario/);
     assert.doesNotMatch(personReloadUi.container.textContent, /Suche ist derzeit nicht verfügbar|Personensuche ist derzeit nicht verfügbar/);
     assert.doesNotMatch(personReloadUi.container.textContent, /wikidata:|watchmode:|fixture:|Proposal|Hash|Outbox|Pilot/i);
   });

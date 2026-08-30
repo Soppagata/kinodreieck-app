@@ -569,8 +569,11 @@ check("Browser verdrahtet keinen manuellen Radar- oder zweiten Websearch-Pfad",
     && /setRadarState\(decoded\.state\)/.test(radarController));
   check("Controller meldet Boot-Malformed und Lesefehler mit W3-Texten", /setErr\("Der lokale Radar-Stand passt nicht zur aktuellen Anmeldung oder ist beschädigt\. Er wurde nicht verändert und bleibt vorsichtshalber ausgeblendet\."\)/.test(radarController)
     && /setErr\("Der lokale Radar-Stand konnte nicht gelesen werden\. Es wurde nichts verändert\."\)/.test(radarController));
-  check("Boot-Sync nutzt decoded.state als Sync-Payload und aktiv-guarded commit", /setRadarPilotSyncStatus\("syncing"\)/.test(radarController)
-    && /await radarPilotAdapter\.sync\(\{[\s\S]*state: decoded\.state,[\s\S]*commit: \(next\) => \(aktiv \? setRadarState\(next\) : false\)[\s\S]*\}\)/.test(radarController));
+  check("Boot-Sync persistiert unsynchronisierte Freitextziele providerfrei vor dem aktiv-guarded Sync", /queueUnsyncedAccountTextRadarTargets\(decoded\.state/.test(radarController)
+    && /const persisted = await schreibeRadarState\(prepared\.state\)/.test(radarController)
+    && /stateForSync = persisted/.test(radarController)
+    && /setRadarPilotSyncStatus\("syncing"\)/.test(radarController)
+    && /await radarPilotAdapter\.sync\(\{[\s\S]*state: stateForSync,[\s\S]*commit: \(next\) => \(aktiv \? setRadarState\(next\) : false\)[\s\S]*\}\)/.test(radarController));
   check("Store-Lesefehler wird vorläufig unmounted-safe abgefangen", /} catch \{[\s\S]*if \(!aktiv\) return;[\s\S]*setRadarState\(createEmptyLocalRadar\(\{ authority: radarAuthority \}\)\);[\s\S]*setErr\("Der lokale Radar-Stand konnte nicht gelesen werden\. Es wurde nichts verändert\."\)/.test(radarController));
   check("Controller-Sync ruft den Pilot-Adapter exakt mit state und commit auf", /const syncRadarPilot = useCallback\(async \(stateForSync = null\) => \{[\s\S]*radarPilotAdapter\.sync\(\{[\s\S]*state,/.test(radarController)
     && /commit:\s*\(next\) => setRadarState\(next\)/.test(radarController));

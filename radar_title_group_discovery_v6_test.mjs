@@ -193,10 +193,11 @@ await check("v6 bindet genau eine Websuche an kanonische Reihen-ID, Name und 30/
   missingMembershipCitation.content[2].citations = [
     { type: "web_search_result_location", url: availabilityEvidence[0].url },
   ];
-  assert.throws(
-    () => parseAnthropicRadarWebsearchResponse(missingMembershipCitation, requestV6, setup, checkedAt),
-    (error) => error?.code === "provider-citation-invalid",
+  const missingMembership = parseAnthropicRadarWebsearchResponse(
+    missingMembershipCitation, requestV6, setup, checkedAt,
   );
+  assert.equal(missingMembership.envelope.response.status, "insufficient_evidence");
+  assert.deepEqual(missingMembership.envelope.response.candidates, []);
 });
 
 await check("The Ninth Jedi wird mit starker Werk-ID und zwei getrennten Belegrollen akzeptiert", () => {

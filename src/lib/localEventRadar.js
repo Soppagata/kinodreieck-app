@@ -3,8 +3,8 @@
    - kein Netzwerk, kein Provider, kein Scheduler
    - keine Personen-Automatik
    - globale Eventwahrheit bleibt vom persönlichen kd:radar-Topf getrennt
-   - im Kontomodus bleiben kanonische Ziele serverbestätigt; Freitextziele
-     bleiben bis zum ausdrücklichen Prüfen lokale Entwürfe
+   - im Kontomodus werden aktive Freitextziele providerfrei zur serverseitigen
+     Subscription synchronisiert; ein Anbietercheck entsteht dabei nie
    - Wochenprojektion ist read-only und schreibt nie in den Kalender */
 
 import { K, store } from "./storage.js";
@@ -278,8 +278,11 @@ function validateOutboxEntry(entry) {
   if (!validOperationId(entry.operationId)) errors.push("outbox-operation-id-invalid");
   if (!LOCAL_RADAR_OUTBOX_ACTIONS.includes(entry.action)) errors.push("outbox-action-invalid");
   if (!isStableContractId(entry.targetId)) errors.push("outbox-target-invalid");
-  if (!RADAR_TARGET_TYPES.includes(entry.targetType) && !person) errors.push("outbox-target-type-invalid");
-  if (entry.title !== null && !validPublicLabel(entry.title)) errors.push("outbox-title-invalid");
+  const textTarget = entry?.targetType === "text";
+  if (!RADAR_TARGET_TYPES.includes(entry.targetType) && !person && !textTarget) errors.push("outbox-target-type-invalid");
+  if (entry.title !== null && (textTarget ? !validRadarTargetText(entry.title) : !validPublicLabel(entry.title))) {
+    errors.push("outbox-title-invalid");
+  }
   if (entry.region !== RADAR_DEFAULT_REGION) errors.push("outbox-region-invalid");
   if (!RADAR_SCOPES.includes(entry.scope)) errors.push("outbox-scope-invalid");
   if (!LOCAL_RADAR_OUTBOX_STATUSES.includes(entry.status)) errors.push("outbox-status-invalid");
@@ -911,6 +914,81 @@ export function queueAccountRadarChange(state, {
   return Object.freeze({ ok: true, reason: "queued", state: freezeDeep(next), changed: true, createsProviderJob: false });
 }
 
+export function queueAccountTextRadarChange(state, {
+  operationId, action, targetText, now = new Date().toISOString(),
+} = {}) {
+  const targetId = createLocalTextRadarTargetId(targetText);
+  const entry = {
+    operationId: text(operationId), action, targetId: targetId || "",
+    targetType: "text", title: targetText, region: RADAR_DEFAULT_REGION, scope: "all",
+    status: "pending", createdAt: now, reason: null,
+  };
+  if (!validateLocalRadarState(state).ok || state.authority !== "account-cache") {
+    return Object.freeze({ ok: false, reason: "account-cache-required", state, changed: false });
+  }
+  if (!targetId || validateOutboxEntry(entry).length) {
+    return Object.freeze({ ok: false, reason: "outbox-text-invalid", state, changed: false });
+  }
+  const existing = state.outbox.find((item) => item.operationId === entry.operationId);
+  if (existing) {
+    const same = JSON.stringify(existing) === JSON.stringify(entry);
+    return Object.freeze({ ok: same, reason: same ? "idempotent" : "operation-id-conflict", state, changed: false });
+  }
+  if (state.outbox.length >= LOCAL_RADAR_MAX_OUTBOX) {
+    return Object.freeze({ ok: false, reason: "outbox-full", state, changed: false });
+  }
+  const activeTargets = new Set(state.subscriptions.filter((item) => item.status === "active").map((item) => item.targetId));
+  for (const person of state.personSubscriptions.filter((item) => item.status === "active")) {
+    const personTargetId = createPersonRadarTargetId(person.personExternalId, person.role);
+    if (personTargetId) activeTargets.add(personTargetId);
+  }
+  for (const pending of state.outbox.filter((item) => item.status === "pending")) {
+    if (pending.action === "upsert") activeTargets.add(pending.targetId);
+    if (["pause", "remove"].includes(pending.action)) activeTargets.delete(pending.targetId);
+  }
+  if (action === "upsert" && !activeTargets.has(targetId) && activeTargets.size >= RADAR_NORMAL_ACTIVE_LIMIT) {
+    return Object.freeze({ ok: false, reason: "quota-exceeded", state, changed: false });
+  }
+  const next = clone(state);
+  next.outbox.push(entry);
+  return Object.freeze({ ok: true, reason: "queued", state: freezeDeep(next), changed: true, createsProviderJob: false });
+}
+
+export function queueUnsyncedAccountTextRadarTargets(state, {
+  createOperationId,
+  now = new Date().toISOString(),
+} = {}) {
+  if (!validateLocalRadarState(state).ok || state.authority !== "account-cache"
+      || typeof createOperationId !== "function" || !validInstant(now)) {
+    return Object.freeze({ ok: false, reason: "account-text-bootstrap-invalid", state, changed: false });
+  }
+  let next = state;
+  let changed = false;
+  for (const subscription of state.subscriptions) {
+    if (subscription.targetType !== "text" || subscription.status !== "active"
+        || subscription.authority !== "local"
+        || state.outbox.some((entry) => entry.targetId === subscription.targetId)) continue;
+    const queued = queueAccountTextRadarChange(next, {
+      operationId: createOperationId(),
+      action: "upsert",
+      targetText: subscription.targetText,
+      now,
+    });
+    if (!queued.ok) {
+      return Object.freeze({ ok: false, reason: queued.reason, state, changed: false });
+    }
+    next = queued.state;
+    changed = true;
+  }
+  return Object.freeze({
+    ok: true,
+    reason: changed ? "queued" : "no-change",
+    state: next,
+    changed,
+    createsProviderJob: false,
+  });
+}
+
 /* Personen nutzen dieselbe accountgebundene Outbox. Der geschlossene
    Discriminator ist additiv; Werk-Abos und deren Zielvalidator bleiben
    unverändert. Eine spätere Server-RPC muss ID, Name und Rolle erneut gegen
@@ -1136,7 +1214,8 @@ export function reconcileAccountRadarSnapshot(state, snapshot) {
   const serverTextIds = new Set(snapshot.subscriptions
     .filter((entry) => entry.targetType === "text").map((entry) => entry.targetId));
   const localTextSubscriptions = state.subscriptions
-    .filter((entry) => entry.targetType === "text" && !serverTextIds.has(entry.targetId));
+    .filter((entry) => entry.targetType === "text" && entry.authority === "local"
+      && !serverTextIds.has(entry.targetId));
   next.subscriptions = [...snapshot.subscriptions.map((entry) => {
     const retainedTitle = [
       entry.title,
@@ -1321,6 +1400,28 @@ export function acknowledgeAccountRadarPilotSubscription(state, operationId, ack
     } else {
       next.personResults = next.personResults.filter((entry) => createPersonIdentityKey(entry) !== identityKey);
     }
+  } else if (pending.targetType === "text") {
+    next.subscriptions = next.subscriptions.filter((entry) => entry.targetId !== pending.targetId);
+    if (ack.status !== "removed") {
+      next.subscriptions.push({
+        targetId: pending.targetId,
+        targetType: "text",
+        targetText: pending.title,
+        title: pending.title,
+        region: RADAR_DEFAULT_REGION,
+        scope: "all",
+        status: ack.status,
+        authority: "server",
+        serverRevision: ack.revision,
+        serverChecksum: ack.checksum,
+        updatedAt: normalizedInstant(pending.createdAt),
+      });
+      next.subscriptions.sort((a, b) => a.targetId.localeCompare(b.targetId));
+    }
+    if (ack.status !== "active") {
+      next.shares = next.shares.filter((entry) => entry.targetId !== pending.targetId);
+      next.shareOutbox = next.shareOutbox.filter((entry) => entry.targetId !== pending.targetId);
+    }
   }
   next.pilot.status = "ready";
   const stateCheck = validateLocalRadarState(next);
@@ -1401,7 +1502,8 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
   const serverTextIds = new Set(feed.subscriptions
     .filter((entry) => entry.targetType === "text").map((entry) => entry.targetId));
   const localTextSubscriptions = state.subscriptions
-    .filter((entry) => entry.targetType === "text" && !serverTextIds.has(entry.targetId));
+    .filter((entry) => entry.targetType === "text" && entry.authority === "local"
+      && !serverTextIds.has(entry.targetId));
   next.subscriptions = [...feed.subscriptions.filter((entry) => entry.targetType !== "person").map((entry) => ({
     targetId: entry.targetId,
     targetType: entry.targetType,

@@ -40,7 +40,9 @@ check("Eigener Trigger laeuft taeglich um 02:00 UTC ohne manuellen Einstieg", ()
   assert.deepEqual(cronExpressions, ["0 2 * * *"]);
   assert.doesNotMatch(scheduleBlock, /timezone|workflow_dispatch/u);
   assert.doesNotMatch(keepalive, /entdecken|SUPABASE_SERVICE_ROLE_KEY/u);
-  assert.match(workflow, /^jobs:\n  entdecken-six-day-trigger:/m);
+  assert.match(workflow, /^jobs:\n  radar-six-day-trigger:/m);
+  assert.match(workflow, /^  entdecken-six-day-trigger:/m);
+  assert.doesNotMatch(workflow, /needs:\s*(?:\[?radar-six-day-trigger|\[?entdecken-six-day-trigger)/u);
 });
 
 check("02:00 UTC entspricht 03:00 CET und 04:00 CEST", () => {

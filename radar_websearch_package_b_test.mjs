@@ -376,7 +376,10 @@ await check("Realer Adapter macht genau einen begrenzten Fetch und der determini
   assert.deepEqual(sent.tools[0].allowed_domains, ["news-a.example", "news-b.example"]);
   assert.deepEqual(sent.tools[0].allowed_callers, ["direct"]);
   const providerInput = JSON.parse(sent.messages[0].content);
-  assert.deepEqual(providerInput, target);
+  assert.deepEqual(providerInput, {
+    ...target,
+    searchQuery: `${target.canonicalTitle} neuer Film neue Serie Start Österreich`,
+  });
   for (const forbidden of ["accountId", "profile", "library", "subscriptions", "password", "secret"]) {
     assert.equal(harness.fetchCalls[0].options.body.includes(forbidden), false);
   }
@@ -835,7 +838,8 @@ await check("Nicht freigegebener Format-6-Functionpfad bleibt hinter seinem alte
   assert.doesNotMatch(ENTDECKEN_MIXED_POOL_MIGRATION.path, /20260828233000/);
 });
 
-await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration und reinen Zeitplan", () => {
+await check("Historischer Radar-Tagesrelease bleibt belegbar, sein ersetzter Workflow ist lokal entfernt", () => {
+  const committedFileStat = () => ({ isFile: () => true, isSymbolicLink: () => false });
   const readCommitted = (absolutePath) => {
     const pathname = relative(REPO_ROOT, String(absolutePath)).split("\\").join("/");
     const result = spawnSync("/usr/bin/git", ["show", `${RADAR_DAILY_COMMIT}:${pathname}`], {
@@ -845,7 +849,7 @@ await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration un
     assert.equal(result.status, 0, pathname);
     return result.stdout;
   };
-  const proof = requireRadarDailyReleaseProvenance({ readFile: readCommitted });
+  const proof = requireRadarDailyReleaseProvenance({ readFile: readCommitted, stat: committedFileStat });
   assert.equal(proof.commit, RADAR_DAILY_COMMIT);
   assert.equal(proof.releaseSha256, RADAR_DAILY_RELEASE_SHA256);
   assert.deepEqual(proof.files, RADAR_DAILY_FILES);
@@ -853,9 +857,10 @@ await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration un
   assert.deepEqual(proof.workflow, RADAR_DAILY_WORKFLOW);
   assert.throws(() => requireRadarDailyReleaseProvenance(), (error) => (
     error instanceof RadarRemoteStartStop
-      && error.code === "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT"
+      && ["RADAR_DAILY_RELEASE_PROVENANCE_DRIFT", "CLOSURE_FILE_MISSING"].includes(error.code)
   ));
   assert.throws(() => requireRadarDailyReleaseProvenance({
+    stat: committedFileStat,
     readFile(absolutePath) {
       const bytes = readCommitted(absolutePath);
       return String(absolutePath).endsWith("radar-daily.yml")
@@ -1110,7 +1115,11 @@ const sixDayMigration = fs.readFileSync(
   "./supabase/migrations/20260830120000_radar_six_day_schedule.sql",
   "utf8",
 );
-const dailyWorkflow = fs.readFileSync("./.github/workflows/radar-daily.yml", "utf8");
+const sharedSixDayWorkflow = fs.readFileSync("./.github/workflows/entdecken-six-day.yml", "utf8");
+const radarJobStart = sharedSixDayWorkflow.indexOf("  radar-six-day-trigger:");
+const entdeckenJobStart = sharedSixDayWorkflow.indexOf("  entdecken-six-day-trigger:");
+const dailyWorkflow = radarJobStart >= 0 && entdeckenJobStart > radarJobStart
+  ? sharedSixDayWorkflow.slice(radarJobStart, entdeckenJobStart) : "";
 const liveSource = fs.readFileSync("./tools/radar_websearch_live.mjs", "utf8");
 const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf8"));
 
@@ -1270,10 +1279,11 @@ await check("Scheduled-Function ist bodylos, Secret-Key-only und antwortet ohne 
 
 await check("Daily-Workflow laeuft nur per Zeitplan, seriell hoechstens zehnmal und loggt keine Antwort", () => {
   assert.deepEqual(
-    [...dailyWorkflow.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]),
-    ["37 4 * * *"],
+    [...sharedSixDayWorkflow.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]),
+    ["0 2 * * *"],
   );
-  assert.doesNotMatch(dailyWorkflow, /workflow_dispatch|push:|pull_request:/);
+  assert.doesNotMatch(sharedSixDayWorkflow, /workflow_dispatch|push:|pull_request:/);
+  assert.match(dailyWorkflow, /^  radar-six-day-trigger:/);
   assert.equal((dailyWorkflow.match(/^\s*curl\b/gm) || []).length, 1);
   assert.match(dailyWorkflow, /for claim_number in \$\(seq 1 10\)/);
   assert.match(dailyWorkflow, /--request POST/);

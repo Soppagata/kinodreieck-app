@@ -4,13 +4,12 @@ import {
   searchPersonRadarCatalog,
 } from "./personRadarCatalog.js";
 import { isStableContractId } from "./radarContracts.js";
-import { CANONICAL_FRANCHISE_RADAR_CATALOG } from "./titleGroupRadar.js";
 
 export const RADAR_TARGET_SEARCH_MIN_LENGTH = 2;
 export const RADAR_TARGET_SEARCH_MAX_RESULTS = 8;
 
 const ROLE_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
-const KIND_ORDER = Object.freeze({ franchise: 0, person: 1, catalog: 2 });
+const KIND_ORDER = Object.freeze({ person: 0, catalog: 1 });
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function normalized(value) {
@@ -138,30 +137,6 @@ function personEntries(needle) {
   return entries;
 }
 
-function franchiseEntries(needle) {
-  const entries = [];
-  for (const franchise of CANONICAL_FRANCHISE_RADAR_CATALOG) {
-    if (!isStableContractId(franchise.franchiseId) || !isStableContractId(franchise.targetId)) continue;
-    const scores = franchise.aliases.map((alias) => rank(normalized(alias), needle)).filter((value) => value != null);
-    if (!scores.length) continue;
-    entries.push({
-      key: `franchise|${franchise.targetId}`,
-      stableId: franchise.targetId,
-      kind: "franchise",
-      category: "Reihe",
-      title: franchise.title,
-      meta: "Film- und Serienreihe",
-      score: Math.min(...scores),
-      franchise: Object.freeze({
-        franchiseId: franchise.franchiseId,
-        targetId: franchise.targetId,
-        name: franchise.title,
-      }),
-    });
-  }
-  return entries;
-}
-
 /* Rein lokale, ID-gebundene Vorschlagssuche. Sie startet weder Netz noch KI
    und erzeugt hoechstens acht sichtbare Treffer. Der grosse Katalog wird erst
    nach einer substanziellen Eingabe gelesen und nie als DOM-Select gerendert. */
@@ -171,14 +146,12 @@ export function searchRadarTargets({
   streamingKnown = null,
   streamingDiscover = null,
   personAvailable = false,
-  franchiseAvailable = false,
 } = {}) {
   const needle = normalized(query);
   if (needle.length < RADAR_TARGET_SEARCH_MIN_LENGTH) return frozen("idle");
   const entries = [
     ...catalogEntries({ master, streamingKnown, streamingDiscover }, needle),
     ...(personAvailable ? personEntries(needle) : []),
-    ...(franchiseAvailable ? franchiseEntries(needle) : []),
   ].filter((entry) => Number.isInteger(entry.score));
   entries.sort((left, right) => (
     left.score - right.score

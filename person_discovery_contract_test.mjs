@@ -20,31 +20,36 @@ import {
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; console.log(`✓ ${name}`); };
 const fixture = JSON.parse(fs.readFileSync(new URL("./src/data/person_discovery_phase1_fixtures.json", import.meta.url), "utf8"));
+const testCatalog = Object.freeze([
+  Object.freeze({ targetId: "person:wikidata:Q42869:actor", personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor" }),
+  Object.freeze({ targetId: "person:wikidata:Q47284:director", personExternalId: "wikidata:Q47284", name: "Robert Rodriguez", role: "director" }),
+]);
 
 check("Personenrollen sind ausschließlich Schauspiel und Regie", () => {
   assert.deepEqual(PERSON_DISCOVERY_ROLES, ["actor", "director"]);
 });
 
 check("Kuratierter Katalog löst Schauspiel und Regie nur über ID plus Rolle auf", () => {
-  const cage = searchPersonRadarCatalog({ query: "Nicolas Cage", role: "actor" });
-  const rodriguez = searchPersonRadarCatalog({ query: "Robert Rodriguez", role: "director" });
+  assert.deepEqual(PERSON_RADAR_CATALOG, []);
+  const cage = searchPersonRadarCatalog({ query: "Nicolas Cage", role: "actor" }, testCatalog);
+  const rodriguez = searchPersonRadarCatalog({ query: "Robert Rodriguez", role: "director" }, testCatalog);
   assert.equal(cage.status, "found");
   assert.equal(rodriguez.status, "found");
-  assert.equal(findPersonRadarCatalogIdentity(cage.entries[0])?.personExternalId, "wikidata:Q42869");
-  assert.equal(findPersonRadarCatalogIdentity(rodriguez.entries[0])?.personExternalId, "wikidata:Q47284");
-  assert.equal(searchPersonRadarCatalog({ query: "Robert Rodriguez", role: "actor" }).status, "role_mismatch");
+  assert.equal(findPersonRadarCatalogIdentity(cage.entries[0], testCatalog)?.personExternalId, "wikidata:Q42869");
+  assert.equal(findPersonRadarCatalogIdentity(rodriguez.entries[0], testCatalog)?.personExternalId, "wikidata:Q47284");
+  assert.equal(searchPersonRadarCatalog({ query: "Robert Rodriguez", role: "actor" }, testCatalog).status, "role_mismatch");
 });
 
 check("Namensdoublette bleibt mehrdeutig und Rollenwiderspruch blockiert", () => {
   const duplicate = [
-    ...PERSON_RADAR_CATALOG,
+    ...testCatalog,
     { targetId: "person:wikidata:Q999999:actor", personExternalId: "wikidata:Q999999", name: "Nicolas Cage", role: "actor" },
   ];
   assert.equal(searchPersonRadarCatalog({ query: "Nicolas Cage", role: "actor" }, duplicate).status, "ambiguous");
   assert.equal(findPersonRadarCatalogIdentity({
     targetId: "person:wikidata:Q42869:director",
     personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "director",
-  }), null);
+  }, testCatalog), null);
 });
 
 check("Nicolas Cage und Robert Rodriguez sind ehrlich nur synthetisch fixiert", () => {

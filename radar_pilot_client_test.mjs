@@ -232,9 +232,12 @@ await check("Pilot-Event-Evidence akzeptiert portlose Subdomain-URLs und erzwing
   );
 });
 
-await check("Importplattform folgt exakt dem E16A1-Eventtypvertrag", () => {
+await check("Optionale Produktplattform nutzt intern den bestehenden Eventtypvertrag", () => {
   assert.equal(C.validateRadarPilotImportPayload(importPayload({
     eventType: "streamingstart_at", platform: "Netflix",
+  })).ok, true);
+  assert.equal(C.validateRadarPilotImportPayload(importPayload({
+    eventType: "streamingstart_at", platform: "unknown",
   })).ok, true);
   assert.equal(C.validateRadarPilotImportPayload(importPayload({
     eventType: "streamingstart_at", platform: "-",
@@ -389,7 +392,7 @@ function harness({
 }
 
 for (const enabled of [false, undefined]) {
-  await check(`Flag ${String(enabled)} erzeugt trotz Outbox null Aufrufe aller vier Pilot-RPCs`, async () => {
+  await check(`Flag ${String(enabled)} erzeugt trotz Outbox null Aufrufe aller Pilot-RPCs`, async () => {
     const h = harness({ enabled });
     const result = await h.service.sync({ state: h.state, commit: h.commit });
     assert.equal(result.status, "disabled");
@@ -416,7 +419,7 @@ await check("Pilot-Sync reicht nur die exakt validierte Feed-Attestation an den 
   assert.deepEqual(result.automation, automation);
 });
 
-await check("Gast erzeugt null Aufrufe aller vier Pilot-RPCs", async () => {
+await check("Gast erzeugt null Aufrufe aller Pilot-RPCs", async () => {
   const h = harness({ mode: "guest" });
   const result = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(result.status, "guest");
@@ -424,6 +427,157 @@ await check("Gast erzeugt null Aufrufe aller vier Pilot-RPCs", async () => {
   assert.equal(h.writes("account-driver-a"), 0);
   assert.equal(h.writes("account-driver-b"), 0);
   for (const rpc of S.RADAR_PILOT_RPCS) assert.equal(h.calls.some((call) => call.rpc === rpc), false);
+});
+
+await check("Freitext-Outbox nutzt ausschließlich die auth-gebundene Text-RPC und startet keinen Providerpfad", async () => {
+  const textTarget = "Neue Mysteryserien aus Österreich";
+  const textOperationId = "12121212-1212-4121-8121-121212121212";
+  const textTargetId = R.createLocalTextRadarTargetId(textTarget);
+  const queued = R.queueAccountTextRadarChange(
+    R.createEmptyLocalRadar({ authority: "account-cache" }),
+    { operationId: textOperationId, action: "upsert", targetText: textTarget, now: instant },
+  );
+  assert.equal(queued.ok, true);
+  assert.equal(queued.createsProviderJob, false);
+  const rpcCalls = [];
+  let feedCalls = 0;
+  const h = harness({
+    state: queued.state,
+    fetchImpl: async (url, init) => {
+      const rpc = url.split("/").at(-1);
+      const body = JSON.parse(init.body);
+      rpcCalls.push({ rpc, body });
+      if (rpc === "kd_radar_pilot_feed") {
+        feedCalls += 1;
+        return response(200, feedCalls === 1
+          ? feed({ subscriptions: [], events: [], revision: 1, checksum: checksumA })
+          : feed({
+            subscriptions: [{
+              targetId: textTargetId,
+              targetType: "text",
+              title: textTarget,
+              region: "AT",
+              scope: "all",
+              status: "active",
+              updatedAt: later,
+            }],
+            events: [],
+            revision: 2,
+            checksum: checksumB,
+          }));
+      }
+      if (rpc === "kd_radar_pilot_set_text_subscription") {
+        return response(200, subscriptionAck({
+          operationId: textOperationId,
+          targetId: textTargetId,
+          revision: 2,
+          checksum: checksumB,
+        }));
+      }
+      throw new Error(`unexpected rpc: ${rpc}`);
+    },
+  });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(result.status, "ready", JSON.stringify(result));
+  assert.deepEqual(rpcCalls.map((entry) => entry.rpc), [
+    "kd_radar_pilot_feed",
+    "kd_radar_pilot_set_text_subscription",
+    "kd_radar_pilot_feed",
+  ]);
+  assert.deepEqual(rpcCalls[1].body, {
+    p_target_text: textTarget,
+    p_status: "active",
+    p_operation_id: textOperationId,
+  });
+  assert.equal(rpcCalls.some((entry) => /websearch|provider|prepare_text/i.test(entry.rpc)), false);
+  assert.equal(h.state.outbox.length, 0);
+  assert.equal(h.state.subscriptions[0].authority, "server");
+});
+
+await check("Freitext-Remove verschwindet nach RPC-Ack und leerem Folge-Feed samt Share", async () => {
+  const textTarget = "Neue Mysteryserien aus Österreich";
+  const textTargetId = R.createLocalTextRadarTargetId(textTarget);
+  const removeOperationId = "13131313-1313-4131-8131-131313131313";
+  const shareOperationId = "14141414-1414-4141-8141-141414141414";
+  const textSubscription = {
+    targetId: textTargetId,
+    targetType: "text",
+    title: textTarget,
+    region: "AT",
+    scope: "all",
+    status: "active",
+    updatedAt: instant,
+  };
+  const reconciled = R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }),
+    feed({ subscriptions: [textSubscription], events: [], revision: 1, checksum: checksumA }),
+  );
+  assert.equal(reconciled.ok, true);
+  const shared = structuredClone(reconciled.state);
+  shared.shares = [{
+    targetId: textTargetId,
+    status: "active",
+    authority: "server",
+    serverRevision: 1,
+    serverChecksum: checksumA,
+    updatedAt: instant,
+  }];
+  const shareQueued = R.queueAccountRadarShareChange(shared, {
+    operationId: shareOperationId,
+    targetId: textTargetId,
+    shareEnabled: false,
+    now: later,
+  });
+  assert.equal(shareQueued.ok, true);
+  const removeQueued = R.queueAccountTextRadarChange(shareQueued.state, {
+    operationId: removeOperationId,
+    action: "remove",
+    targetText: textTarget,
+    now: later,
+  });
+  assert.equal(removeQueued.ok, true);
+  const rpcCalls = [];
+  let feedCalls = 0;
+  const h = harness({
+    state: removeQueued.state,
+    fetchImpl: async (url, init) => {
+      const rpc = url.split("/").at(-1);
+      const body = JSON.parse(init.body);
+      rpcCalls.push({ rpc, body });
+      if (rpc === "kd_radar_pilot_feed") {
+        feedCalls += 1;
+        return response(200, feedCalls === 1
+          ? feed({ subscriptions: [textSubscription], events: [], revision: 1, checksum: checksumA })
+          : feed({ subscriptions: [], events: [], revision: 2, checksum: checksumB }));
+      }
+      if (rpc === "kd_radar_pilot_set_text_subscription") {
+        return response(200, subscriptionAck({
+          operationId: removeOperationId,
+          targetId: textTargetId,
+          status: "removed",
+          revision: 2,
+          checksum: checksumB,
+        }));
+      }
+      throw new Error(`unexpected rpc: ${rpc}`);
+    },
+  });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(result.status, "ready", JSON.stringify(result));
+  assert.deepEqual(rpcCalls.map((entry) => entry.rpc), [
+    "kd_radar_pilot_feed",
+    "kd_radar_pilot_set_text_subscription",
+    "kd_radar_pilot_feed",
+  ]);
+  assert.deepEqual(rpcCalls[1].body, {
+    p_target_text: textTarget,
+    p_status: "removed",
+    p_operation_id: removeOperationId,
+  });
+  assert.deepEqual(h.state.subscriptions, []);
+  assert.deepEqual(h.state.shares, []);
+  assert.deepEqual(h.state.shareOutbox, []);
+  assert.deepEqual(h.state.outbox, []);
 });
 
 await check("Subscription-Outbox läuft seriell mit maximaler Parallelität eins", async () => {

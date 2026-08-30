@@ -20,6 +20,8 @@ export const RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE = "canonical-group-v1";
 export const RADAR_WEBSEARCH_TITLE_GROUP_V1_QUERY_VERSION = "title-group-query-v1";
 export const RADAR_WEBSEARCH_TITLE_GROUP_V2_QUERY_VERSION = "title-group-query-v2";
 export const RADAR_WEBSEARCH_TEXT_KIND = "text";
+export const RADAR_WEBSEARCH_RECENT_DAYS = 365;
+export const RADAR_WEBSEARCH_FUTURE_DAYS = 3650;
 export const RADAR_WEBSEARCH_RESPONSE_MODES = Object.freeze([
   "structured", "partial", "degraded",
 ]);
@@ -433,9 +435,7 @@ function validateEventShape(event, request, errors) {
         || !event.platform || event.platform === "-" || event.platform.length > 80) {
       errors.push("response-event-platform-invalid");
     }
-  } else if (event.platform !== undefined) {
-    errors.push("response-event-platform-forbidden");
-  }
+  } else if (event.platform !== undefined) errors.push("response-event-platform-forbidden");
   if (event.eventType === "staffelstart") {
     if (!Number.isInteger(event.seasonNumber) || event.seasonNumber < 1 || event.seasonNumber > 999) {
       errors.push("response-event-season-invalid");
@@ -593,6 +593,18 @@ export function evaluateTextRadarWebsearchResponse(envelope, requestInput, sourc
     if (candidateErrors.length) droppedErrors.push(...candidateErrors, "response-text-candidate-dropped");
     else shapeValidCandidates.push(candidate);
   }
+  const checkedDay = validInstant(response.checkedAt)
+    ? Math.floor(Date.parse(response.checkedAt.slice(0, 10) + "T00:00:00.000Z") / 86400000) : null;
+  const outsidePracticalWindow = new Set();
+  for (const candidate of shapeValidCandidates) {
+    const candidateDay = dayNumber(candidate.eventDate);
+    if (checkedDay == null || candidateDay == null
+        || candidateDay < checkedDay - RADAR_WEBSEARCH_RECENT_DAYS
+        || candidateDay > checkedDay + RADAR_WEBSEARCH_FUTURE_DAYS) {
+      outsidePracticalWindow.add(candidate);
+      droppedErrors.push("response-text-date-outside-practical-window", "response-text-candidate-dropped");
+    }
+  }
   if (hardErrors.some((error) => error.includes("shape-invalid") || error.endsWith("-invalid"))) {
     return Object.freeze({ status: "invalid_response", textResult: null, errors: uniqueErrors([...hardErrors, ...droppedErrors]) });
   }
@@ -619,13 +631,22 @@ export function evaluateTextRadarWebsearchResponse(envelope, requestInput, sourc
       errors: uniqueErrors([...fatalErrors, ...droppedErrors]),
     });
   }
-  const seen = new Set();
+  const seen = new Map();
+  const conflicts = new Set();
+  for (const candidate of shapeValidCandidates) {
+    const key = [candidate.targetId, candidate.eventType, candidate.platform, candidate.seasonNumber ?? "-"].join("|");
+    if (seen.has(key) && seen.get(key) !== candidate.eventDate) conflicts.add(key);
+    else seen.set(key, candidate.eventDate);
+  }
+  seen.clear();
   const candidates = [];
   for (const candidate of shapeValidCandidates) {
+    if (outsidePracticalWindow.has(candidate)) continue;
     const candidateErrors = [];
     const key = [candidate.targetId, candidate.eventType, candidate.platform, candidate.seasonNumber ?? "-"].join("|");
+    if (conflicts.has(key)) { droppedErrors.push("response-text-candidate-ambiguous"); continue; }
     if (seen.has(key)) { droppedErrors.push("response-text-candidate-duplicate"); continue; }
-    seen.add(key);
+    seen.set(key, candidate.eventDate);
     const eventUrls = new Set(candidate.evidence.map((entry) => entry.url));
     if (candidate.relationEvidence.some((entry) => eventUrls.has(entry.url))) {
       candidateErrors.push("response-text-relation-evidence-not-separate");

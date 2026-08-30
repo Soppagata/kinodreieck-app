@@ -189,7 +189,7 @@ await check("Aktueller Radar-Text-Target-Zaun bindet Quellcommit, sechs Runtime-
   }), (error) => error?.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT");
 });
 
-await check("Radar-Tagesrelease bindet sieben Runtime-Dateien, Migration und Schedule an den Integrationscommit", () => {
+await check("Historischer Radar-Tagesrelease bleibt belegbar, sein ersetzter Workflow ist lokal entfernt", () => {
   assert.equal(RADAR_DAILY_COMMIT, "4ce2f4b0664ff56e90ebf7a825e4eac7c205714f");
   assert.deepEqual(RADAR_DAILY_FILES.map(({ path: pathname }) => pathname), [
     "supabase/functions/radar-websearch-task/anthropicAdapter.js",
@@ -211,6 +211,9 @@ await check("Radar-Tagesrelease bindet sieben Runtime-Dateien, Migration und Sch
     assert.equal(sha256(committed), digest, pathname);
   }
   const release = requireRadarDailyReleaseProvenance({
+    stat() {
+      return { isFile: () => true, isSymbolicLink: () => false };
+    },
     readFile(absolutePath) {
       return execFileSync("/usr/bin/git", [
         "show", `${RADAR_DAILY_COMMIT}:${provenancePath(absolutePath)}`,
@@ -222,7 +225,7 @@ await check("Radar-Tagesrelease bindet sieben Runtime-Dateien, Migration und Sch
   assert.deepEqual(release.migration, RADAR_DAILY_MIGRATION);
   assert.deepEqual(release.workflow, RADAR_DAILY_WORKFLOW);
   assert.throws(() => requireRadarDailyReleaseProvenance(), (error) => (
-    error?.code === "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT"
+    ["RADAR_DAILY_RELEASE_PROVENANCE_DRIFT", "CLOSURE_FILE_MISSING"].includes(error?.code)
   ));
 });
 
@@ -233,14 +236,23 @@ const franchiseCatalog = Object.freeze([
 ]);
 const starWars = resolveCanonicalFranchiseRadarTarget({ name: "Star Wars", catalog: franchiseCatalog });
 
-await check("Reihenvertrag bindet Star Wars exakt an Q462 und schliesst ähnlich benannte Werke aus", () => {
-  assert.equal(starWars.status, "ready");
-  assert.equal(starWars.franchise.franchiseId, "wikidata:Q462");
-  assert.equal(starWars.target.targetId, "title-group:v1:star-wars");
-  assert.deepEqual(starWars.target.titleGroup.members.map((entry) => entry.targetId), [
-    "watchmode:71001", "watchmode:71004",
-  ]);
+await check("Produktlogik loest keinen eingebauten Reihenbeispielvertrag mehr auf", () => {
+  assert.equal(starWars.status, "unresolved");
+  assert.equal(starWars.franchise, null);
+  assert.equal(starWars.target, null);
   assert.equal(resolveCanonicalFranchiseRadarTarget({ name: "Star Wards", catalog: franchiseCatalog }).status, "unresolved");
+});
+const legacyTitleGroupTarget = Object.freeze({
+  targetId: "title-group:v1:star-wars",
+  targetType: "franchise",
+  title: "Star Wars",
+  titleGroup: Object.freeze({
+    format: "kd-radar-title-group-v1",
+    queryVersion: "title-group-query-v1",
+    queryKey: "star wars",
+    displayName: "Star Wars",
+    members: Object.freeze(franchiseCatalog.slice(0, 2).map(({ franchiseId, ...member }) => Object.freeze(member))),
+  }),
 });
 
 const checkedAt = "2026-08-20T08:01:00.000Z";
@@ -289,12 +301,12 @@ const accountSession = Object.freeze({ mode: "account", state: "ready", account:
 
 await check("Person und Star-Wars-Reihe gehen mit ausschließlich der starken Ziel-ID über den Serverservice", async () => {
   const person = await serverService.checkPersonNow(personIdentity);
-  const franchise = await serverService.checkNow(starWars.target.targetId);
+  const franchise = await serverService.checkNow(legacyTitleGroupTarget.targetId);
   assert.equal(person.status, "confirmed");
   assert.equal(franchise.status, "confirmed");
   assert.deepEqual(serviceCalls.map((entry) => entry.body), [
     { targetId: personIdentity.targetId },
-    { targetId: starWars.target.targetId },
+    { targetId: legacyTitleGroupTarget.targetId },
   ]);
   assert.ok(serviceCalls.every((entry) => entry.url.endsWith("/functions/v1/radar-websearch-task")));
 });
@@ -316,9 +328,9 @@ const subscriptions = Object.freeze([
     personExternalId: personIdentity.personExternalId, personRole: personIdentity.role,
   }),
   Object.freeze({
-    targetId: starWars.target.targetId, targetType: "franchise", title: "Star Wars",
+    targetId: legacyTitleGroupTarget.targetId, targetType: "franchise", title: "Star Wars",
     region: "AT", scope: "all", status: "active", updatedAt: checkedAt,
-    titleGroup: starWars.target.titleGroup,
+    titleGroup: legacyTitleGroupTarget.titleGroup,
   }),
 ]);
 const events = Object.freeze([

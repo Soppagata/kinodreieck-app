@@ -45,7 +45,7 @@ export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
   "lifecycleStatus", "verificationStatus", "evidence",
 ]);
-export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber", "title"]);
+export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber", "title", "targetType"]);
 export const RADAR_PILOT_RECEIPT_KEYS = Object.freeze(["eventVersionId", "status", "updatedAt"]);
 
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -290,6 +290,9 @@ export function validateRadarPilotEvent(value) {
   if (!validUuid(value.eventVersionId)) errors.push("feed-event-version-invalid");
   if (!validTargetKey(value.targetId)) errors.push("feed-event-target-invalid");
   if (value.title !== undefined && !validTitle(value.title)) errors.push("feed-event-title-invalid");
+  if (value.targetType !== undefined && !["work", "series"].includes(value.targetType)) {
+    errors.push("feed-event-target-type-invalid");
+  }
   if (!RADAR_EVENT_TYPES.includes(value.eventType)) errors.push("feed-event-type-invalid");
   if (!validDay(value.date)) errors.push("feed-event-date-invalid");
   if (value.region !== RADAR_DEFAULT_REGION) errors.push("feed-event-region-invalid");

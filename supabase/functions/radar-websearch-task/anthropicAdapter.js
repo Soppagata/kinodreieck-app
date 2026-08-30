@@ -199,7 +199,7 @@ const TITLE_GROUP_DISCOVERY_SYSTEM_PROMPT = [
 const TEXT_SYSTEM_PROMPT = [
   "Du suchst neue belegte Starttermine, die sich eindeutig auf den unveraenderten Freitext der Nutzerin beziehen.",
   "Der Freitext kann eine Person, Titelgruppe, Serie oder ein Werk nennen; rate keine Kategorie und erfinde keine Identitaet.",
-  "Nutze genau eine Websuche und nur erlaubte Domains. Ein Kandidat braucht eine starke IMDb- oder TMDB-Werk-ID.",
+  "Nutze genau eine Websuche mit searchQuery und nur erlaubte Domains. Jeder Fund braucht intern eine starke IMDb- oder TMDB-Werk-ID; sie wird nicht in der App angezeigt.",
   "relationEvidence belegt die eindeutige Beziehung des Werks zum Freitext; evidence belegt separat Datum, Region AT und gegebenenfalls Plattform.",
   "Antworte im letzten Textblock ausschliesslich als JSON mit status und candidates.",
   "status ist confirmed, insufficient_evidence oder no_change; Unsicherheit ergibt eine leere candidates-Liste.",
@@ -215,6 +215,7 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
     && request.discoveryMode === RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE;
   const providerInput = textTarget ? {
     targetText: request.targetText,
+    searchQuery: `${request.targetText} neuer Film neue Serie Start Österreich`,
     region: request.region,
     scopes: request.scopes,
   } : person ? {
@@ -229,6 +230,7 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
     queryVersion: request.queryVersion,
     queryKey: request.queryKey,
     displayName: request.displayName,
+    searchQuery: `${request.displayName} neuer Film neue Serie Start Österreich`,
     region: request.region,
     catalog: request.catalog,
     ...(titleGroupDiscovery ? {
@@ -241,6 +243,7 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
   } : {
     targetId: request.targetId,
     canonicalTitle: request.canonicalTitle,
+    searchQuery: `${request.canonicalTitle} neuer Film neue Serie Start Österreich`,
     ...(request.releaseYear === undefined ? {} : { releaseYear: request.releaseYear }),
     mediaType: request.mediaType,
     region: request.region,
@@ -376,6 +379,12 @@ function normalizeEvidenceList(value, resultUrls, citationUrls, warnings) {
   return normalized;
 }
 
+function normalizePlatform(value, eventType) {
+  const normalized = typeof value === "string" ? text(value).slice(0, 80) : "";
+  if (eventType !== "streamingstart_at") return "-";
+  return normalized && !/^(?:-|unknown|unbekannt|n\/a)$/iu.test(normalized) ? normalized : "unknown";
+}
+
 function normalizeFinding(value, kind, request, resultUrls, citationUrls, warnings) {
   if (!plain(value)) {
     addWarning(warnings, "finding-dropped");
@@ -408,6 +417,7 @@ function normalizeFinding(value, kind, request, resultUrls, citationUrls, warnin
     "relationEvidence", "evidence",
   ];
   if (Object.keys(value).some((key) => !commonAllowed.includes(key))) addWarning(warnings, "extra-fields-ignored");
+  const normalizedPlatform = normalizePlatform(value.platform, value.eventType);
   const base = {
     targetId: value.targetId,
     targetType: value.targetType,
@@ -417,7 +427,7 @@ function normalizeFinding(value, kind, request, resultUrls, citationUrls, warnin
     eventType: value.eventType,
     eventDate: value.eventDate,
     region: value.region,
-    platform: value.platform ?? (value.eventType === "streamingstart_at" ? undefined : "-"),
+    platform: normalizedPlatform,
     ...(kind === "person" ? {} : {
       seasonNumber: value.seasonNumber ?? (value.eventType === "staffelstart" ? undefined : null),
     }),

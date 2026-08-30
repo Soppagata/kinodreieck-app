@@ -1311,7 +1311,7 @@ export default function App() {
     radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, fuegeRadarTextHinzu,
     radarAutomaticAvailable, fuehreRadarPilotReceipt, fuehreRadarPilotImport,
     fuehreRadarPilotSync, verwerfeAbgelehnteRadarAenderung,
-    personRadarAvailable, fuegePersonRadarHinzu, aenderePersonRadar, franchiseRadarAvailable, fuegeFranchiseRadarHinzu, } = useEntdeckenRadarController({
+    personRadarAvailable, fuegePersonRadarHinzu, aenderePersonRadar, } = useEntdeckenRadarController({
     session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
     entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr, });
   const {
@@ -2079,7 +2079,7 @@ export default function App() {
             onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}
             radarAutomaticAvailable={radarAutomaticAvailable} onRadarRejectedDismiss={verwerfeAbgelehnteRadarAenderung}
             onRadarTextAdd={fuegeRadarTextHinzu} recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
-            personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu} onPersonRadarChange={aenderePersonRadar} franchiseRadarAvailable={franchiseRadarAvailable} onFranchiseRadarAdd={fuegeFranchiseRadarHinzu}
+            personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu} onPersonRadarChange={aenderePersonRadar}
             blogProps={{
               artikel: artikelListe, master: refUniversum, angemeldet: remoteKontoAktiv,
               onFokusVerbraucht: () => setBlogFokus(null),

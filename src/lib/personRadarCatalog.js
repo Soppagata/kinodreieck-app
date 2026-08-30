@@ -10,16 +10,10 @@ export function createPersonRadarTargetId(personExternalId, role) {
     : null;
 }
 
-/* Der kleine Pilotkatalog uebernimmt nur die im lokalen Pflichtspike belegten
-   QIDs und Rollen. Namen dienen der Suche; erst die ausgewaehlte starke ID plus
-   Rolle wird zur Identitaet. Der Katalog ist bewusst keine freie Personensuche. */
-export const PERSON_RADAR_CATALOG = Object.freeze([
-  Object.freeze({ targetId: "person:wikidata:Q42869:actor", personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor" }),
-  Object.freeze({ targetId: "person:wikidata:Q47284:director", personExternalId: "wikidata:Q47284", name: "Robert Rodriguez", role: "director" }),
-  Object.freeze({ targetId: "person:wikidata:Q271967:actor", personExternalId: "wikidata:Q271967", name: "Greta Gerwig", role: "actor" }),
-  Object.freeze({ targetId: "person:wikidata:Q271967:director", personExternalId: "wikidata:Q271967", name: "Greta Gerwig", role: "director" }),
-  Object.freeze({ targetId: "person:wikidata:Q7374:director", personExternalId: "wikidata:Q7374", name: "Alfred Hitchcock", role: "director" }),
-]);
+/* Produktlogik enthaelt keinen eingebauten Personen-Beispielkatalog. Starke
+   IDs koennen weiterhin ueber injizierte, serverbestaetigte Katalogdaten
+   validiert werden; beliebige Eingaben bleiben Freitextziele. */
+export const PERSON_RADAR_CATALOG = Object.freeze([]);
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function normalized(value) {

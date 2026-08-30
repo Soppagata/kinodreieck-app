@@ -6,7 +6,6 @@ import {
   createEntdeckenRecommendations,
   localCalendarDay,
   localRadarTargetLabel,
-  radarSubscriptionForEvent,
   radarSyncProblem,
 } from "../lib/entdeckenUi.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
@@ -21,12 +20,21 @@ const ANSICHTEN = Object.freeze([
 ]);
 
 const ROLLEN_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
-const EREIGNIS_LABEL = Object.freeze({
-  kinostart_at: "Kinostart in Österreich",
-  streamingstart_at: "Streamingstart in Österreich",
-  dvd_bluray_at: "DVD-/Blu-ray-Start in Österreich",
-  festival_at: "Festivaltermin in Österreich",
-});
+function ereignisLabel(entry) {
+  if (entry?.eventType === "kinostart_at") return "Film · Kinostart Österreich";
+  if (entry?.eventType === "serienstart") return "Serie · Start Österreich";
+  if (entry?.eventType === "staffelstart") return "Staffel · Start Österreich";
+  if (entry?.eventType === "streamingstart_at") {
+    const art = entry?.targetType === "series" ? "Serie"
+      : entry?.targetType === "work" ? "Film" : "Film/Serie";
+    return `${art} · Streamingstart Österreich`;
+  }
+  return "Film/Serie · Start Österreich";
+}
+function sichtbarePlattform(value) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized && !/^(?:-|unknown|unbekannt|n\/a)$/iu.test(normalized) ? normalized : null;
+}
 
 function focusableElements(root) {
   return [...(root?.querySelectorAll(
@@ -330,26 +338,13 @@ function RadarView({
   const [message, setMessage] = useState(null);
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
-  const personResults = radarState?.personResults || [];
   const syncProblem = radarSyncProblem(radarState?.outbox, syncStatus);
-  const receiptByEvent = useMemo(() => new Map((radarState?.receipts || []).map((entry) => [
-    `${entry.eventId}|${entry.versionId}`, entry,
-  ])), [radarState?.receipts]);
   const events = useMemo(() => (radarPilotEvents || [])
-    .filter((entry) => entry.verificationStatus === "confirmed")
-    .map((entry) => {
-      const target = radarSubscriptionForEvent(entry, subscriptions) || entry.targetId;
-      const targetLabel = localRadarTargetLabel(target, {
-        master, streamingKnown, streamingDiscover,
-      });
-      return {
-        ...entry,
-        targetLabel,
-        title: entry.title || targetLabel,
-      };
-    })
+    .filter((entry) => entry.verificationStatus === "confirmed"
+      && typeof entry.title === "string" && !!entry.title.trim())
+    .map((entry) => ({ ...entry, title: entry.title.trim() }))
     .sort((a, b) => `${a.date}|${a.title}`.localeCompare(`${b.date}|${b.title}`, "de-AT")),
-  [master, radarPilotEvents, streamingDiscover, streamingKnown, subscriptions]);
+  [radarPilotEvents]);
 
   const addTarget = async (event) => {
     event.preventDefault();
@@ -379,9 +374,9 @@ function RadarView({
       <form className="kd-entdecken-formzeile" onSubmit={addTarget}>
         <label htmlFor="kd-radar-target-search">Wonach soll dein Radar suchen?</label>
         <input id="kd-radar-target-search" type="search" value={targetQuery} maxLength={160}
-          autoComplete="off" spellCheck={false} placeholder="Zum Beispiel Mutter Teresa"
+          autoComplete="off" spellCheck={false} placeholder="Person, Reihe, Titel oder Thema"
           onChange={(event) => { setTargetQuery(event.target.value); setMessage(null); }} />
-        <small>Beliebiger Text bleibt Freitext. Eindeutig bekannte Reihen werden als kanonisches Ziel gespeichert.{radarAutomaticAvailable ? " Aktive, serverbestätigte Ziele werden automatisch alle sechs Tage geprüft." : ""}</small>
+        <small>Beliebiger Text bleibt Freitext und wird als eigenes Radarziel gespeichert.{radarAutomaticAvailable ? " Aktive, serverbestätigte Ziele werden automatisch alle sechs Tage geprüft." : ""}</small>
         <button type="submit" className="kd-entdecken-primaer"
           disabled={targetAddBusy || !targetQuery.trim()}>{targetAddBusy ? "Wird gespeichert…" : "Im Radar speichern"}</button>
       </form>
@@ -406,27 +401,8 @@ function RadarView({
         <h3>Neuigkeiten</h3>
         {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
-          <span>Gefunden für: {entry.targetLabel}</span>
-          <span>{entry.date} · {entry.region} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}{entry.platform && entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
-          {[...(entry.evidence || []), ...(entry.franchiseEvidence || [])].length ? <div className="kd-pilot-quellen"><span>Quellen</span><div className="kd-pilot-quellen-links">
-            {[...(entry.evidence || []), ...(entry.franchiseEvidence || [])].map((item, index) => <a className="kd-pilot-quellen-link" href={item.url}
-              key={`${entry.eventVersionId}-source-${index}`} rel="noopener noreferrer" target="_blank">{item.sourceDomain}</a>)}
-          </div></div> : null}
-          {typeof onRadarPilotReceipt === "function" ? <button type="button" className="kd-entdecken-sekundaer"
-            disabled={receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "accepted_week"}
-            onClick={() => onRadarPilotReceipt({ eventId: entry.eventId, eventVersionId: entry.eventVersionId, status: "accepted_week" })}>
-            {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "accepted_week" ? "Angepinnt" : "Fund anpinnen"}
-          </button> : null}
+          <span>{entry.date} · {ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
         </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine belegte Neuigkeit.{radarAutomaticAvailable ? " Aktive Ziele werden automatisch alle sechs Tage geprüft." : ""}</p>}
-        {personResults.map((result) => {
-          const matches = result.decisions.filter((entry) => entry.status === "matched" && entry.work);
-          return <section className="kd-entdecken-person-result" key={`${result.personExternalId}|${result.role}`}>
-            <h4>{result.name} · {ROLLEN_LABEL[result.role]}</h4>
-            {matches.length ? <ul>{matches.map((entry) => <li key={entry.work.targetId}>
-              <strong>{entry.work.title}</strong><span>{entry.work.year}</span>
-            </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine bestätigten Filme oder Serien.</p>}
-          </section>;
-        })}
       </article>
     </div>
   </section>;
@@ -440,7 +416,6 @@ export function EntdeckenTab({
   onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   onRadarRejectedDismiss,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
-  franchiseRadarAvailable = false, onFranchiseRadarAdd,
   onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
   recommendationPins = [], onRecommendationPinToggle,
 }) {
@@ -483,9 +458,7 @@ export function EntdeckenTab({
       radarAutomaticAvailable={radarAutomaticAvailable} onRadarPilotReceipt={onRadarPilotReceipt}
       onRadarTextAdd={onRadarTextAdd}
       onRadarRejectedDismiss={onRadarRejectedDismiss}
-      personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
-      franchiseRadarAvailable={franchiseRadarAvailable}
-      onFranchiseRadarAdd={onFranchiseRadarAdd} /> : null}
+      personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
       master={master} useLibrary={useLibrary} accountMode={accountMode} onUseLibrary={setUseLibrary}

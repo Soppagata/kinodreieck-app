@@ -538,19 +538,17 @@ try {
   await setControl(starfighterUi.container.querySelector("#kd-radar-target-search"), "Star Wars: Starfighter Kinostart Österreich");
   await act(async () => { button(starfighterUi.container, "Im Radar speichern").click(); await tick(); });
   await settle();
-  await check("Sichtbare Terminfrage speichert nur das kanonische Star-Wars-Ziel", async () => {
+  await check("Sichtbare Terminfrage bleibt unveraendertes Freitextziel", async () => {
     const [subscription] = controllerRef.current.sichtbarerRadarState.subscriptions;
-    assert.equal(subscription.targetType, "franchise");
-    assert.equal(subscription.title, "Star Wars");
-    assert.equal("targetText" in subscription, false);
+    assert.equal(subscription.targetType, "text");
+    assert.equal(subscription.targetText, "Star Wars: Starfighter Kinostart Österreich");
     const targets = [...starfighterUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => /Meine Ziele/.test(entry.textContent));
-    assert.match(targets.textContent, /Star Wars/);
-    assert.doesNotMatch(targets.textContent, /Starfighter|Kinostart Österreich/);
+    assert.match(targets.textContent, /Star Wars: Starfighter Kinostart Österreich/);
   });
   await check("Der kanonische Gastpfad bietet keinen manuellen Suchknopf", async () => {
     assert.equal(button(starfighterUi.container, "Jetzt prüfen"), undefined);
-    assert.doesNotMatch(starfighterUi.container.textContent, /Star Wars: Starfighter/);
+    assert.match(starfighterUi.container.textContent, /Star Wars: Starfighter/);
   });
   await starfighterUi.cleanup();
 
@@ -657,9 +655,13 @@ try {
     assert.equal(button(accountUi.container, "Jetzt prüfen"), undefined);
     assert.match(accountUi.container.textContent, /automatisch alle sechs Tage geprüft/i);
     assert.match(accountUi.container.textContent, /Star Wars: Starfighter/);
-    assert.match(accountUi.container.textContent, /Gefunden für: Star Wars/);
-    assert.match(accountUi.container.textContent, /2027-05-20 · AT · Kinostart in Österreich/);
-    assert.equal(accountUi.container.querySelectorAll("a.kd-pilot-quellen-link").length, 2);
+    assert.doesNotMatch(accountUi.container.textContent, /Gefunden für:/);
+    assert.match(accountUi.container.textContent, /2027-05-20 · Film · Kinostart Österreich/);
+    assert.equal(accountUi.container.querySelectorAll(".kd-pilot-quellen").length, 0);
+    const news = [...accountUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => /Neuigkeiten/.test(entry.textContent));
+    assert.equal(news.querySelectorAll("a").length, 0);
+    assert.equal(news.querySelectorAll("button").length, 0);
     const stored = JSON.parse(localStorage.getItem("kd:radar"));
     assert.equal(stored.pilot.events[0].title, "Star Wars: Starfighter");
   });
@@ -671,7 +673,8 @@ try {
     assert.equal(accountFeedSyncs, 2);
     assert.equal(button(accountReload.container, "Jetzt prüfen"), undefined);
     assert.match(accountReload.container.textContent, /Star Wars: Starfighter/);
-    assert.match(accountReload.container.textContent, /Gefunden für: Star Wars/);
+    assert.doesNotMatch(accountReload.container.textContent, /Gefunden für:/);
+    assert.match(accountReload.container.textContent, /2027-05-20 · Film · Kinostart Österreich/);
   });
   await accountReload.cleanup();
 } finally {

@@ -128,7 +128,12 @@ function rpcEvent(
       workTitle: event.title,
       workYear: event.year,
       checkedAt: textContext.checkedAt,
-      relationEvidence: textContext.relationEvidence,
+      relationEvidence: Array.isArray(textContext.relationEvidence)
+        ? textContext.relationEvidence.map((entry: Record<string, unknown>) => ({
+          sourceId: entry.sourceId,
+          url: entry.url,
+          retrievedAt: entry.retrievedAt,
+        })) : [],
     } : personContext ? {
       personTargetKey: personContext.targetId,
       personExternalId: personContext.personExternalId,

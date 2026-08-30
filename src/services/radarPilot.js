@@ -22,6 +22,7 @@ import { K, captureStorageContext } from "./storage.js";
 
 export const RADAR_PILOT_RPCS = Object.freeze([
   "kd_radar_pilot_set_subscription",
+  "kd_radar_pilot_set_text_subscription",
   "kd_radar_pilot_set_title_group",
   "kd_radar_pilot_set_receipt",
   "kd_radar_pilot_import_event",
@@ -320,10 +321,16 @@ export function createRadarPilotService({
         const operation = current.outbox.find((entry) => entry.operationId === operationId && entry.status === "pending");
         if (!operation) continue;
         const status = operation.action === "remove" ? "removed" : operation.action === "pause" ? "paused" : "active";
+        const textTarget = operation.targetType === "text";
         const titleGroup = operation.targetType === "franchise" && operation.titleGroup;
-        const reply = await callRpc(titleGroup
-          ? "kd_radar_pilot_set_title_group"
-          : "kd_radar_pilot_set_subscription", {
+        const reply = await callRpc(textTarget
+          ? "kd_radar_pilot_set_text_subscription"
+          : titleGroup ? "kd_radar_pilot_set_title_group" : "kd_radar_pilot_set_subscription",
+        textTarget ? {
+          p_target_text: operation.title,
+          p_status: status,
+          p_operation_id: operation.operationId,
+        } : {
           p_target_key: operation.targetId,
           p_scope: operation.scope,
           p_status: status,

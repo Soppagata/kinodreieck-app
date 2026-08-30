@@ -4,11 +4,14 @@ import { K, store } from "../services/storage.js";
 import { useConfirmedStorageState } from "./useConfirmedStorageState.js";
 import {
   changeLocalTextRadarSubscription,
+  createLocalTextRadarTargetId,
   createEmptyLocalRadar,
   decodeLocalRadar,
   discardRejectedAccountRadarChange,
   queueAccountPersonRadarChange,
   queueAccountRadarChange,
+  queueAccountTextRadarChange,
+  queueUnsyncedAccountTextRadarTargets,
   queueAccountRadarPilotImport,
   queueAccountRadarPilotReceipt,
   queueAccountRadarShareChange,
@@ -28,13 +31,7 @@ import {
   resolvePersonRadarCatalogIdentity,
 } from "../lib/personRadarCatalog.js";
 import { projectEntdeckenRadarPilot, radarAutomationAttested } from "../lib/radarPilotContracts.js";
-import { projectVisibleRadarWebsearchEvents, validateRadarWebsearchTarget } from "../lib/radarWebsearchFlow.js";
-import {
-  CANONICAL_FRANCHISE_RADAR_CATALOG,
-  resolveCanonicalFranchiseRadarInput,
-  resolveCanonicalFranchiseRadarTarget,
-  validateTitleGroupMetadata,
-} from "../lib/titleGroupRadar.js";
+import { projectVisibleRadarWebsearchEvents } from "../lib/radarWebsearchFlow.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
 import { RADAR_WEBSEARCH_SINGLE_FILE_DISABLED } from "../services/radarWebsearch.js";
@@ -46,23 +43,6 @@ function neueLokaleOperationId() {
   return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (zeichen) => (
     (Number(zeichen) ^ Math.random() * 16 >> Number(zeichen) / 4).toString(16)
   ));
-}
-
-function katalogFranchiseId(entry) {
-  const direct = String(entry?.franchise_id || entry?.franchiseId || "").trim();
-  if (direct) return direct;
-  for (const raw of Array.isArray(entry?.relevanz_signale) ? entry.relevanz_signale : []) {
-    const core = String(raw || "").trim().replace(/\([^)]*\)\s*$/, "");
-    const splitAt = core.indexOf(":");
-    if (splitAt > 0 && core.slice(0, splitAt).trim().toLowerCase() === "franchise") {
-      return core.slice(splitAt + 1).trim() || null;
-    }
-  }
-  for (const item of Array.isArray(entry?.attribute) ? entry.attribute : []) {
-    const kind = String(item?.art || item?.kind || item?.type || "").trim().toLowerCase();
-    if (kind === "franchise") return String(item?.wert || item?.value || item?.name || "").trim() || null;
-  }
-  return null;
 }
 
 /* Grenze für alle persönlichen Entdecken-/Radar-Mutationen. Ein optional
@@ -77,7 +57,6 @@ export function useEntdeckenRadarController({
   radarWebsearchExecutor = null,
   radarPilotAdapter = radarPilotService,
   radarPilotEnabled = runtimeConfig.radarPilotClientEnabled,
-  franchiseRadarResolver = resolveCanonicalFranchiseRadarTarget,
 }) {
   const radarAuthority = session.mode === "account" ? "account-cache" : "guest";
   const radarPilotClientEnabled = radarPilotEnabled === true;
@@ -172,12 +151,30 @@ export function useEntdeckenRadarController({
           setErr("Der lokale Radar-Stand passt nicht zur aktuellen Anmeldung oder ist beschädigt. Er wurde nicht verändert und bleibt vorsichtshalber ausgeblendet.");
           return;
         }
-        setRadarState(decoded.state);
-        if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) return;
+        if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) {
+          setRadarState(decoded.state);
+          return;
+        }
+        const prepared = queueUnsyncedAccountTextRadarTargets(decoded.state, {
+          createOperationId: neueLokaleOperationId,
+        });
+        if (!prepared.ok) {
+          setRadarState(decoded.state);
+          setRadarPilotSyncStatus("pending");
+          return;
+        }
+        let stateForSync = decoded.state;
+        if (prepared.changed) {
+          const persisted = await schreibeRadarState(prepared.state);
+          if (!aktiv || persisted === false) return;
+          stateForSync = persisted;
+        } else {
+          setRadarState(decoded.state);
+        }
         setRadarPilotSyncStatus("syncing");
         try {
           const status = await radarPilotAdapter.sync({
-            state: decoded.state,
+            state: stateForSync,
             commit: (next) => (aktiv ? setRadarState(next) : false),
           });
           if (!aktiv) return;
@@ -202,7 +199,7 @@ export function useEntdeckenRadarController({
       aktiv = false;
     };
   }, [bootDone, radarAuthority, radarPilotAdapter, radarPilotClientEnabled,
-    remoteKontoAktiv, session.account?.id, setRadarState, setErr]);
+    remoteKontoAktiv, session.account?.id, schreibeRadarState, setRadarState, setErr]);
 
   const aendereSerienBeobachtung = useCallback(async (eintrag, aktiv) => {
     const watchmodeId = eintrag?.watchmode_id ?? eintrag?.watchmodeId;
@@ -247,7 +244,11 @@ export function useEntdeckenRadarController({
     const gespeichert = await schreibeRadarState((prev) => {
       if (prev.authority !== radarAuthority) { grund = "authority-mismatch"; return null; }
       const result = textTarget
-        ? changeLocalTextRadarSubscription(prev, { targetText: targetOrEntry.targetText, action })
+        ? prev.authority === "account-cache"
+          ? queueAccountTextRadarChange(prev, {
+            operationId: neueLokaleOperationId(), action, targetText: targetOrEntry.targetText,
+          })
+          : changeLocalTextRadarSubscription(prev, { targetText: targetOrEntry.targetText, action })
         : prev.authority === "guest"
         ? action === "remove"
           ? removeGuestRadarSubscription(prev, target.targetId)
@@ -259,7 +260,7 @@ export function useEntdeckenRadarController({
       return result.ok ? result.state : null;
     });
     if (
-      !textTarget && radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv
+      radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv
       && gespeichert !== false && gespeichert
     ) {
       await syncRadarPilot(gespeichert);
@@ -282,49 +283,33 @@ export function useEntdeckenRadarController({
   ]);
 
   const fuegeRadarFreitextHinzu = useCallback(async (targetText) => {
+    const normalizedTargetText = String(targetText || "").trim();
     let reason = "text-subscription-invalid";
     const saved = await schreibeRadarState((previous) => {
       if (previous.authority !== radarAuthority) { reason = "authority-mismatch"; return null; }
-      const result = changeLocalTextRadarSubscription(previous, { targetText, action: "upsert" });
+      const result = previous.authority === "account-cache"
+        ? queueAccountTextRadarChange(previous, {
+          operationId: neueLokaleOperationId(), action: "upsert", targetText: normalizedTargetText,
+        })
+        : changeLocalTextRadarSubscription(previous, { targetText: normalizedTargetText, action: "upsert" });
       reason = result.reason;
       return result.ok ? result.state : null;
     });
+    if (saved !== false && radarAuthority === "account-cache") {
+      const synced = await syncRadarPilot(saved);
+      const targetId = createLocalTextRadarTargetId(normalizedTargetText);
+      const active = (synced?.state?.subscriptions || []).some((entry) => (
+        entry.targetId === targetId && entry.targetType === "text"
+          && entry.status === "active" && entry.authority === "server"
+      ));
+      return Object.freeze({ status: active ? "active" : "pending", writes: 1 });
+    }
     if (saved !== false) return Object.freeze({ status: "active", writes: 1 });
     if (reason === "quota-exceeded") {
       setErr("Dein lokaler Radar hat bereits zehn aktive Ziele. Pausiere oder entferne zuerst eines.");
     }
     return Object.freeze({ status: reason === "quota-exceeded" ? "forbidden" : "storage_error", writes: 0 });
-  }, [radarAuthority, schreibeRadarState, setErr]);
-
-  const personRadarCatalog = useMemo(() => {
-    const rows = [
-      ...(Array.isArray(master) ? master.map((entry) => ({
-        watchmodeId: entry.watchmode_id,
-        catalogId: entry.id,
-        title: entry.titel,
-        type: entry.typ,
-        year: Number(entry.jahr),
-        franchiseId: katalogFranchiseId(entry),
-      })) : []),
-      ...[...(streamingKnown?.titel || []), ...(streamingDiscover?.titel || [])].map((entry) => ({
-        watchmodeId: entry.watchmode_id,
-        title: entry.titel,
-        type: entry.typ,
-        year: Number(entry.jahr),
-        franchiseId: katalogFranchiseId(entry),
-      })),
-    ];
-    const byId = new Map();
-    for (const row of rows) {
-      const target = createCatalogRadarTarget(row);
-      if (!target || !Number.isInteger(row.year) || byId.has(target.targetId)) continue;
-      byId.set(target.targetId, Object.freeze({
-        targetId: target.targetId, targetType: target.targetType, title: target.title, year: row.year,
-        franchiseId: row.franchiseId,
-      }));
-    }
-    return Object.freeze([...byId.values()]);
-  }, [master, streamingDiscover, streamingKnown]);
+  }, [radarAuthority, schreibeRadarState, setErr, syncRadarPilot]);
 
   const localPersonRadarAvailable = localRadarWebsearchAvailable
     && typeof radarWebsearchExecutor?.resolvePerson === "function";
@@ -333,9 +318,7 @@ export function useEntdeckenRadarController({
     && radarPilotClientEnabled;
   const personRadarAvailable = localPersonRadarAvailable
     || (accountRadarServerAvailable && session?.capabilities?.personalAi === true);
-  const franchiseRadarAvailable = (localRadarWebsearchAvailable
-    && typeof radarWebsearchExecutor?.resolveFranchise === "function")
-    || (accountRadarServerAvailable && typeof franchiseRadarResolver === "function");
+  const franchiseRadarAvailable = false;
 
   const fuegePersonRadarHinzu = useCallback(async ({ name, role, personExternalId = null } = {}) => {
     if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
@@ -388,63 +371,9 @@ export function useEntdeckenRadarController({
     syncRadarPilot,
   ]);
 
-  const fuegeFranchiseRadarHinzu = useCallback(async ({ name, franchiseId = null, targetId = null } = {}) => {
-    const requestedName = String(name || "").trim();
-    if (!franchiseRadarAvailable || !requestedName) {
-      return Object.freeze({ status: "unavailable", writes: 0 });
-    }
-    let resolved;
-    try {
-      resolved = localRadarWebsearchAvailable
-        ? await radarWebsearchExecutor.resolveFranchise({ name: requestedName })
-        : franchiseRadarResolver({ name: requestedName, catalog: personRadarCatalog });
-    }
-    catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
-    const franchise = localRadarWebsearchAvailable ? resolved : resolved?.franchise;
-    const target = localRadarWebsearchAvailable ? Object.freeze({
-      targetId: franchise?.franchiseId,
-      targetType: "franchise",
-      targetStatus: "active",
-      title: franchise?.title,
-      canonical: true,
-    }) : resolved?.target;
-    const checked = validateRadarWebsearchTarget(franchise);
-    const serverTargetValid = localRadarWebsearchAvailable || (
-      resolved?.status === "ready" && target?.targetType === "franchise"
-      && validateTitleGroupMetadata(target.titleGroup, { targetId: target.targetId, title: target.title })
-    );
-    const requestedTargetValid = targetId == null || (localRadarWebsearchAvailable
-      ? CANONICAL_FRANCHISE_RADAR_CATALOG.some((entry) => (
-        entry.targetId === targetId
-        && entry.franchiseId === franchise?.franchiseId
-        && entry.title === franchise?.title
-        && entry.aliases.some((alias) => alias.localeCompare(requestedName, "de-AT", { sensitivity: "base" }) === 0)
-      ))
-      : target?.targetId === targetId);
-    if (!checked.ok || franchise.kind !== "franchise" || !serverTargetValid
-        || (franchiseId != null && franchise.franchiseId !== franchiseId)
-        || !requestedTargetValid
-        || !franchise.aliases.some((alias) => alias.localeCompare(requestedName, "de-AT", { sensitivity: "base" }) === 0)) {
-      return Object.freeze({ status: resolved?.status === "unavailable" ? "unavailable" : "unresolved", writes: 0 });
-    }
-    const saved = await aendereRadar(target, "upsert");
-    const active = saved && (radarStateRef.current?.subscriptions || []).some((entry) => (
-      entry.targetId === target.targetId && entry.status === "active"
-    ));
-    return Object.freeze(saved
-      ? { status: active || radarAuthority === "guest" ? "active" : "pending", writes: 1, target: franchise }
-      : { status: "storage_error", writes: 0 });
-  }, [aendereRadar, franchiseRadarAvailable, franchiseRadarResolver, localRadarWebsearchAvailable,
-    personRadarCatalog, radarAuthority, radarStateRef, radarWebsearchExecutor]);
-
   const fuegeRadarTextHinzu = useCallback(async (targetText) => {
-    const canonical = resolveCanonicalFranchiseRadarInput(targetText);
-    if (canonical && franchiseRadarAvailable) {
-      const result = await fuegeFranchiseRadarHinzu(canonical);
-      if (!["unavailable", "unresolved", "provider_error", "forbidden"].includes(result?.status)) return result;
-    }
     return fuegeRadarFreitextHinzu(targetText);
-  }, [franchiseRadarAvailable, fuegeFranchiseRadarHinzu, fuegeRadarFreitextHinzu]);
+  }, [fuegeRadarFreitextHinzu]);
 
   const aenderePersonRadar = useCallback(async (identity, action) => {
     if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
@@ -694,7 +623,6 @@ export function useEntdeckenRadarController({
     fuehreRadarPilotSync,
     verwerfeAbgelehnteRadarAenderung,
     franchiseRadarAvailable,
-    fuegeFranchiseRadarHinzu,
     personRadarAvailable,
     fuegePersonRadarHinzu,
     aenderePersonRadar,
