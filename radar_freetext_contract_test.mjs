@@ -19,6 +19,7 @@ import {
 import {
   evaluateTextRadarWebsearchResponse,
   createTextRadarReleaseId,
+  validateRadarWebsearchRequest,
 } from "./supabase/functions/radar-websearch-task/contract.js";
 import { runRadarWebsearchCheck } from "./supabase/functions/radar-websearch-task/runner.js";
 import { validateRadarPilotEvent } from "./src/lib/radarPilotContracts.js";
@@ -200,6 +201,7 @@ check("Providerquery entsteht ausschließlich aus dem gespeicherten Freitext", (
   assert.equal(input.targetText, targetText);
   assert.equal(input.asOf, checkedAt);
   assert.match(input.dateFollowup, /brauchbar.*US/);
+  assert.match(body.system, /evidence ist immer eine nichtleere JSON-Liste von Objekten mit dem Pflichtfeld url/);
   assert.equal(input.discoveryQueries.length, 2);
   assert.ok(input.discoveryQueries.every((query) => query.startsWith(targetText) && !query.includes("Österreich")));
   assert.ok(input.englishFallback.startsWith(targetText));
@@ -323,6 +325,99 @@ check("Providerparser akzeptiert eine wirkliche Toolresult-URL ohne zusätzliche
   assert.equal(invented.envelope.response.candidates.length, 0);
   const empty = parseAnthropicRadarWebsearchResponse(providerMessage([] , []), request, setup, checkedAt);
   assert.equal(empty.envelope.response.status, "no_change");
+});
+
+check("Einzelner Textbeleg als Objekt bleibt bis zum Fachvertrag ein vollständiger Fund", () => {
+  const parsed = parseAnthropicRadarWebsearchResponse(
+    providerMessage([minimal({ evidence: { url: proof.url } })]), request, setup, checkedAt,
+  );
+  const evaluated = evaluateTextRadarWebsearchResponse(parsed.envelope, request, []);
+  assert.equal(evaluated.status, "confirmed", parsed.envelope.warnings.join(","));
+  assert.equal(evaluated.textResult.candidates.length, 1);
+  assert.equal(evaluated.textResult.candidates[0].evidence[0].url, proof.url);
+});
+
+check("TEXT unterstützt explizit Belegliste, Einzelobjekt und exakte URL-Kurzform", () => {
+  for (const [evidence, warning] of [
+    [[{ url: proof.url }], null],
+    [{ url: proof.url }, "text-evidence-object-normalized"],
+    [proof.url, "text-evidence-url-normalized"],
+  ]) {
+    const parsed = parseAnthropicRadarWebsearchResponse(providerMessage([minimal({ evidence })]), request, setup, checkedAt);
+    const evaluated = evaluateTextRadarWebsearchResponse(parsed.envelope, request, []);
+    assert.equal(evaluated.status, "confirmed");
+    assert.equal(evaluated.textResult.candidates[0].evidence.length, 1);
+    assert.equal(evaluated.textResult.candidates[0].evidence[0].url, proof.url);
+    if (warning) assert.ok(parsed.envelope.warnings.includes(warning));
+    assert.ok(!parsed.envelope.warnings.includes("evidence-list-dropped"));
+  }
+});
+
+check("TEXT unterscheidet fehlende, leere, falsche Belegformen und unbelegte URLs ohne Rohwerte", () => {
+  for (const [evidence, warning] of [
+    [undefined, "text-evidence-missing"], [null, "text-evidence-missing"],
+    [[], "text-evidence-empty"], [" ", "text-evidence-empty"],
+    [42, "text-evidence-shape-invalid"], [false, "text-evidence-shape-invalid"],
+    [[null], "text-evidence-item-shape-invalid"], [[proof.url], "text-evidence-item-shape-invalid"],
+    [{}, "text-evidence-url-missing"], [{ url: "" }, "text-evidence-url-missing"],
+    [{ href: proof.url }, "text-evidence-url-missing"],
+    [{ url: {} }, "text-evidence-url-invalid"], ["kein Beleg", "text-evidence-url-invalid"],
+    ["http://press.example/ankuendigung", "text-evidence-url-invalid"],
+    [` ${proof.url}`, "text-evidence-url-invalid"],
+    ["https://foreign.example/unread", "text-evidence-url-not-in-search"],
+    [{ url: "https://foreign.example/unread" }, "text-evidence-url-not-in-search"],
+  ]) {
+    const parsed = parseAnthropicRadarWebsearchResponse(providerMessage([minimal({ evidence })]), request, setup, checkedAt);
+    const evaluated = evaluateTextRadarWebsearchResponse(parsed.envelope, request, []);
+    assert.equal(evaluated.status, "insufficient_evidence");
+    assert.deepEqual(evaluated.textResult.candidates, []);
+    assert.ok(parsed.envelope.warnings.includes(warning), parsed.envelope.warnings.join(","));
+    assert.ok(parsed.envelope.warnings.length <= 8);
+    assert.ok(parsed.envelope.warnings.every((code) => /^[a-z0-9-]{1,64}$/.test(code)));
+    assert.ok(!JSON.stringify(parsed.envelope.warnings).includes("press.example"));
+  }
+});
+
+check("Gemischte Textbelegformen retten gültige Quellen und Kandidaten ohne Feldaliases", () => {
+  const parsed = parseAnthropicRadarWebsearchResponse(providerMessage([
+    minimal({ title: "Objektfund", evidence: { url: proof.url } }),
+    minimal({ title: "Kurzformfund", evidence: proof.url }),
+    minimal({ title: "Listenfund", evidence: [null, { url: "https://foreign.example/unread" }, { url: proof.url }] }),
+    minimal({ title: "Ohne Beleg", evidence: undefined }),
+    minimal({ title: "Ohne Werkdatum", eventDate: undefined, evidence: proof.url }),
+    minimal({ title: "Ohne Kategorie", eventType: "unknown", evidence: proof.url }),
+  ]), request, setup, checkedAt);
+  const evaluated = evaluateTextRadarWebsearchResponse(parsed.envelope, request, []);
+  assert.equal(evaluated.status, "confirmed");
+  assert.deepEqual(evaluated.textResult.candidates.map((item) => item.title).sort(), ["Kurzformfund", "Listenfund", "Objektfund"]);
+  assert.ok(evaluated.textResult.candidates.every((item) => item.evidence.length === 1));
+});
+
+check("Work-, Personen- und Titelgruppen-Parser bleiben strikt bei Beleglisten", () => {
+  const catalog = [
+    { targetId: "imdb:tt1234567", targetType: "work", title: "Erstes Beispielwerk", year: 2026 },
+    { targetId: "imdb:tt1234568", targetType: "work", title: "Zweites Beispielwerk", year: 2026 },
+  ];
+  const requests = [
+    { targetId: catalog[0].targetId, canonicalTitle: catalog[0].title, mediaType: "film", region: "AT", scopes: ["cinema"] },
+    { kind: "person", targetId: "person:imdb:nm1234567:actor", personExternalId: "imdb:nm1234567", canonicalName: "Ada Beispiel", role: "actor", region: "AT", windowStart: "2026-08-30", windowEnd: "2026-09-05", catalog },
+    { kind: "title_group", targetId: "title-group:v1:synthetische-reihe", queryVersion: "title-group-query-v1", queryKey: "synthetische reihe", displayName: "Synthetische Reihe", region: "AT", catalog },
+  ];
+  for (const legacyRequest of requests) {
+    assert.equal(validateRadarWebsearchRequest(legacyRequest).ok, true);
+    const listKey = legacyRequest.kind ? "candidates" : "events";
+    for (const evidence of [[proof], proof, proof.url]) {
+      const message = providerMessage([]);
+      message.content.at(-1).citations = [{ type: "web_search_result_location", url: proof.url }];
+      message.content.at(-1).text = JSON.stringify({ status: "confirmed", [listKey]: [
+        { ...catalog[0], eventType: "kinostart_at", eventDate: "2026-09-01", region: "AT", platform: "-", role: "actor", seasonNumber: null, evidence },
+      ] });
+      const parsed = parseAnthropicRadarWebsearchResponse(message, legacyRequest, setup, checkedAt);
+      assert.equal(parsed.envelope.response[listKey].length, Array.isArray(evidence) ? 1 : 0);
+      if (!Array.isArray(evidence)) assert.ok(parsed.envelope.warnings.includes("evidence-list-dropped"));
+      assert.ok(!parsed.envelope.warnings.some((code) => code.startsWith("text-evidence-")));
+    }
+  }
 });
 
 check("Textbeleg benötigt nur die exakte Tool-URL, interne Metadaten blockieren ihn nicht", () => {

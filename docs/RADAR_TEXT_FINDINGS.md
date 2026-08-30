@@ -14,6 +14,17 @@ Herkunftskennzeichnung, niemals durch ein erfundenes Quellenzitat.
 Ungültiges optionales Publikationsdatum oder eine unbrauchbare optionale
 Plattform wird weggelassen, ohne einen vollständigen Fund zu verwerfen.
 
+Der TEXT-Prompt verlangt `evidence` ausdrücklich als nichtleere Liste von
+Objekten mit `url`. Die eigene JSON-Normalisierung unterstützt außerdem ein
+einzelnes Belegobjekt oder eine direkte HTTPS-URL als Kurzform und überführt
+beides in dieselbe Liste. Keine Feldaliases; Listen enthalten weiterhin
+Objekte. Auch eine Kurzform muss exakt in den tatsächlichen Search-Toolresults
+stehen. Strukturierte Work-/Personen-/Titelgruppenpfade bleiben list-only.
+Begrenzte `text-evidence-*`-Codes unterscheiden `missing`, `empty`,
+`shape-invalid`, `item-shape-invalid`, `url-missing`, `url-invalid` und
+`url-not-in-search`; `object-normalized`/`url-normalized` kennzeichnen die
+beiden unterstützten Kurzformen. Die Codes enthalten keine Rohwerte.
+
 ## Suche und Kosten
 
 Nur `kind=text` nutzt offene Domains: wenige komplementäre Discoveryanfragen,
@@ -81,9 +92,19 @@ Vertragsprüfung, und `usableFindings` als tatsächlich erneut im Feed
 bestätigte Kandidaten. Der Abgleich nutzt Release-ID, Titel, Werkdatum und
 Kategorie/Startart; Titel, URLs und Rohtexte werden nicht geloggt. Ein
 unveränderter bestehender Fund kann somit bei `no_change` und null Writes
-nutzbar sein. Die konkrete Ursache des vorherigen Live-Leerfunds ist ohne
-Rohantwort nicht belegt; die Metadatengrenzen sind lokal reproduzierte
-Robustheitsfehler, keine nachträglich behauptete Live-Diagnose.
+nutzbar sein. Die Metadatengrenzen sind lokal reproduzierte Robustheitsfehler,
+keine nachträglich behauptete Live-Diagnose. Ein späterer Livebefund belegt
+mit `evidence-list-dropped` die Verwerfung einer Nicht-Array-Belegform vor dem
+Fachvalidator. Ob dies ein Objekt, String oder eine andere Form war, bleibt
+ohne Rohantwort unbekannt. Der Einzelobjekt-Defekt wurde gezielt rot
+reproduziert und zusammen mit der URL-Kurzform durch Adapter, Fachvertrag,
+echten lokalen SQL-Upsert und Feedreadback geprüft.
 
 Für diese Robustheitskorrektur ist nur ein erneutes Function-Deployment
 erforderlich; Migration und Frontend aus `ebb9d33` bleiben unverändert.
+
+Schmale Integrationsnaht im lokalen Kino-Test: Die vollständigen Linktupel
+werden beim Verschieben in die Profil-Lane als Multiset verglichen. Damit
+bleiben Text, Ziel, target, rel, Anzahl und Duplikate exakt geprüft, ohne eine
+uhrzeitabhängige globale DOM-Reihenfolge vorauszusetzen. Kein Kino-Produktcode
+und keine Uhrzeitmanipulation wurden dafür geändert.

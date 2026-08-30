@@ -6,8 +6,9 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:
 import { join } from "node:path";
 import { validateRadarPilotFeed } from "./src/lib/radarPilotContracts.js";
 import { createLocalTextRadarTargetId } from "./src/lib/localEventRadar.js";
-import { parseAnthropicRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/anthropicAdapter.js";
+import { createAnthropicRadarWebsearchAdapter, parseAnthropicRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/anthropicAdapter.js";
 import { evaluateTextRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/contract.js";
+import { runRadarWebsearchCheck } from "./supabase/functions/radar-websearch-task/runner.js";
 
 const PG = "/Applications/Postgres.app/Contents/Versions/17/bin";
 const root = mkdtempSync("/private/tmp/kd-text-pg-");
@@ -72,15 +73,18 @@ try {
     modelAlias:"klein",model:"claude-haiku-4-5",maxTokens:2400,taskCapUsdCent:20,searchFeeUsdCent:1,
     globalRequestCapUsdCent:500,timeoutMs:30_000,inputPriceUsdCentPerMtok:100,outputPriceUsdCentPerMtok:500,sourceRegistry:[]};
   const url = "https://press.example/start";
-  const parsed = parseAnthropicRadarWebsearchResponse({model:setup.model,stop_reason:"end_turn",
+  const providerMessage = (evidence) => ({model:setup.model,stop_reason:"end_turn",
     usage:{input_tokens:100,output_tokens:100,server_tool_use:{web_search_requests:1}},content:[
       {type:"server_tool_use",id:"tool1",name:"web_search",input:{}},
       {type:"web_search_tool_result",tool_use_id:"tool1",content:[{type:"web_search_result",url}]},
       {type:"text",text:JSON.stringify({status:"confirmed",candidates:[{
         title:"Synthetischer Morgen",eventType:"serienstart",eventDate:today,category:"special",platform:"Beispiel+",region:"global",
-        evidence:[{url,sourceDomain:"www.press.example",publishedAt:"unknown"}],
-      }]})},
-    ]},request,setup,checkedAt);
+        evidence,
+      },{title:"Unbelegtes Geschwister",eventType:"serienstart",eventDate:today,evidence:null}]})},
+    ]});
+  const parsed = parseAnthropicRadarWebsearchResponse(
+    providerMessage([{url,sourceDomain:"www.press.example",publishedAt:"unknown"}]),request,setup,checkedAt,
+  );
   const evaluated = evaluateTextRadarWebsearchResponse(parsed.envelope,request,[]);
   assert.equal(evaluated.status,"confirmed");
   const candidate = evaluated.textResult.candidates[0];
@@ -107,6 +111,33 @@ try {
   check("Identischer Fund ist no_change mit stabiler Version",() => {
     const again=persist(); assert.equal(again.status,"no_change"); assert.equal(again.eventVersionId,stored.eventVersionId);
   });
+  for (const [form,evidence] of [["Einzelobjekt",{url}],["URL-Kurzform",url]]) {
+    let providerCalls=0,upserts=0;
+    const adapter=createAnthropicRadarWebsearchAdapter({
+      apiKey:"mock-key",loadSetup:async () => setup,now:() => checkedAt,
+      reserveCost:async () => ({ok:true,logId:1}),settleCost:async () => {},
+      fetchImpl:async () => {providerCalls++;return new Response(JSON.stringify(providerMessage(evidence)));},
+    });
+    const result=await runRadarWebsearchCheck({accountId:a,targetId,adapter,repository:{
+      async loadAuthorizedTarget(){return request;},async resolveSources(){return [];},
+      async upsertConfirmedEvent({event}) {
+        upserts++;
+        return persist(a,{targetKey:event.targetKey,textTargetKey:targetId,targetText,
+          workTitle:event.title,workTargetType:event.targetType,category:event.category,
+          eventType:event.eventType,date:event.date,region:event.region,platform:event.platform,
+          seasonNumber:event.seasonNumber,checkedAt,evidence:event.evidence});
+      },
+      async loadFeed(){return feed();},
+    }});
+    check(`${form}: echter Adapter über Fachvertrag und SQL-Upsert bis zum Feed trotz unbelegtem Geschwister`,() => {
+      assert.equal(providerCalls,1);assert.equal(upserts,1);assert.equal(result.status,"no_change");
+      assert.equal(result.textDiagnostics.acceptedCandidates,1);
+      assert.ok(result.warnings.includes("text-evidence-missing"));
+      assert.equal(result.feed.events[0].targetId,result.textResult.candidates[0].targetId);
+      assert.equal(result.feed.events[0].eventVersionId,stored.eventVersionId);
+      assert.equal(validateRadarPilotFeed(result.feed).ok,true);
+    });
+  }
   check("Fremdkonto kann weder fremde Funde lesen noch schreiben",() => {
     assert.equal(feed(b).events.length,0);
     assert.equal(session(b,"select count(*) from public.kd_radar_text_findings"),"0");

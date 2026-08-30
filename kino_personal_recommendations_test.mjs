@@ -137,7 +137,12 @@ try {
     assert.match(after.container.textContent, /Läuft auch, nicht in deiner Liste \(1\)/u);
   });
   check("Bestehende Kino-Linkziele bleiben beim Verschieben bytegleich", () => {
-    assert.deepEqual(linksAfter, linksBefore);
+    // Das Verschieben in die Profil-Lane darf die DOM-Reihenfolge ändern,
+    // nicht aber Linkfelder, Anzahl oder Duplikate.
+    const linkMultiset = (links) => links.map(({ text, href, target, rel }) => (
+      JSON.stringify([text, href, target, rel])
+    )).sort();
+    assert.deepEqual(linkMultiset(linksAfter), linkMultiset(linksBefore));
     assert.ok(linksAfter.every((link) => link.target === "_blank" && link.rel === "noopener noreferrer"));
     assert.equal(networkCalls, 0);
   });

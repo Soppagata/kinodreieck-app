@@ -211,7 +211,7 @@ const TEXT_SYSTEM_PROMPT = [
   "status ist confirmed, insufficient_evidence oder no_change; lasse nur unklare Einzelergebnisse weg, behalte gueltige Geschwister. Maximal sechs Kandidaten.",
   "Pflicht je Kandidat: title, eventDate, eventType und evidence. eventType: kinostart_at, streamingstart_at, serienstart oder staffelstart. Bei streamingstart_at nenne category film, series oder special (alternativ targetType work oder series).",
   "Optional: targetType, region, seasonNumber, category (film, series, season, special) und platform. Behalte erkannte Plattformen auch bei Serien- und Staffelstarts, sonst weglassen. Specials als Kategorie special mit passender Startart. Keine Links fuer die Anzeige noetig.",
-  "evidence braucht url aus der tatsaechlich verwendeten Websuche. Optionale Metadaten: sourceTitle, claim und publishedAt. Wenn claim angegeben ist, benennt er den Starttermin und den Bezug; fehlende Metadaten nie erfinden. sourceDomain wird intern aus der URL abgeleitet.",
+  "evidence ist immer eine nichtleere JSON-Liste von Objekten mit dem Pflichtfeld url, auch bei genau einer Quelle. url ist die exakte HTTPS-URL aus der tatsaechlich verwendeten Websuche. Gib evidence nicht als einzelnes Objekt oder String aus. Optionale Metadaten je Objekt: sourceTitle, claim und publishedAt. Wenn claim angegeben ist, benennt er den Starttermin und den Bezug; fehlende Metadaten nie erfinden. sourceDomain wird intern aus der URL abgeleitet.",
 ].join(" ");
 
 export function buildAnthropicRadarWebsearchBody(request, setupInput, asOf = new Date().toISOString()) {
@@ -374,6 +374,23 @@ function parseProviderText(content, warnings) {
 }
 
 function normalizeEvidenceList(value, resultUrls, citationUrls, warnings, requireCitation = true) {
+  // These three evidence forms belong to our TEXT JSON contract, not the
+  // external search-tool schema. Structured legacy targets remain list-only.
+  if (!requireCitation) {
+    if (value == null) { addWarning(warnings, "text-evidence-missing"); return []; }
+    if (typeof value === "string") {
+      if (!value.trim()) { addWarning(warnings, "text-evidence-empty"); return []; }
+      if (directUrl(value)) addWarning(warnings, "text-evidence-url-normalized");
+      value = [{ url: value }];
+    } else if (plain(value)) {
+      value = [value];
+      addWarning(warnings, "text-evidence-object-normalized");
+    } else if (!Array.isArray(value)) {
+      addWarning(warnings, "text-evidence-shape-invalid");
+      return [];
+    }
+    if (!value.length) { addWarning(warnings, "text-evidence-empty"); return []; }
+  }
   if (!Array.isArray(value)) {
     addWarning(warnings, "evidence-list-dropped");
     return [];
@@ -381,15 +398,23 @@ function normalizeEvidenceList(value, resultUrls, citationUrls, warnings, requir
   const normalized = [];
   for (const entry of value.slice(0, RADAR_WEBSEARCH_MAX_RESULTS)) {
     if (!plain(entry)) {
-      addWarning(warnings, "evidence-item-dropped");
+      addWarning(warnings, requireCitation ? "evidence-item-dropped" : "text-evidence-item-shape-invalid");
       continue;
     }
     const parsedUrl = directUrl(entry.url);
     // TEXT needs the actual returned URL, not a model-authored copy of its metadata.
     // The neutral fallback describes provenance; it is not a source quotation.
     if (!requireCitation) {
-      if (!parsedUrl || !resultUrls.has(entry.url)) {
-        addWarning(warnings, "evidence-item-dropped");
+      if (entry.url == null || (typeof entry.url === "string" && !entry.url.trim())) {
+        addWarning(warnings, "text-evidence-url-missing");
+        continue;
+      }
+      if (!parsedUrl) {
+        addWarning(warnings, "text-evidence-url-invalid");
+        continue;
+      }
+      if (!resultUrls.has(entry.url)) {
+        addWarning(warnings, "text-evidence-url-not-in-search");
         continue;
       }
       const sourceDomain = parsedUrl.hostname.toLowerCase();
