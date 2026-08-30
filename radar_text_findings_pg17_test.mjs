@@ -6,6 +6,8 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:
 import { join } from "node:path";
 import { validateRadarPilotFeed } from "./src/lib/radarPilotContracts.js";
 import { createLocalTextRadarTargetId } from "./src/lib/localEventRadar.js";
+import { parseAnthropicRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/anthropicAdapter.js";
+import { evaluateTextRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/contract.js";
 
 const PG = "/Applications/Postgres.app/Contents/Versions/17/bin";
 const root = mkdtempSync("/private/tmp/kd-text-pg-");
@@ -64,12 +66,29 @@ try {
     insert into public.kd_radar_capabilities(account_id,radar_pilot,radar_review) values
       ('${a}',true,true),('${b}',true,true);`);
   const today = new Date().toISOString().slice(0,10);
+  const checkedAt = new Date().toISOString();
+  const request = {kind:"text",targetId,targetText,region:"AT",scopes:["series_start"]};
+  const setup = {radarEnabled:true,radarProviderEnabled:true,radarSchedulerEnabled:false,providerAllowed:true,
+    modelAlias:"klein",model:"claude-haiku-4-5",maxTokens:2400,taskCapUsdCent:20,searchFeeUsdCent:1,
+    globalRequestCapUsdCent:500,timeoutMs:30_000,inputPriceUsdCentPerMtok:100,outputPriceUsdCentPerMtok:500,sourceRegistry:[]};
+  const url = "https://press.example/start";
+  const parsed = parseAnthropicRadarWebsearchResponse({model:setup.model,stop_reason:"end_turn",
+    usage:{input_tokens:100,output_tokens:100,server_tool_use:{web_search_requests:1}},content:[
+      {type:"server_tool_use",id:"tool1",name:"web_search",input:{}},
+      {type:"web_search_tool_result",tool_use_id:"tool1",content:[{type:"web_search_result",url}]},
+      {type:"text",text:JSON.stringify({status:"confirmed",candidates:[{
+        title:"Synthetischer Morgen",eventType:"serienstart",eventDate:today,category:"special",platform:"Beispiel+",region:"global",
+        evidence:[{url,sourceDomain:"www.press.example",publishedAt:"unknown"}],
+      }]})},
+    ]},request,setup,checkedAt);
+  const evaluated = evaluateTextRadarWebsearchResponse(parsed.envelope,request,[]);
+  assert.equal(evaluated.status,"confirmed");
+  const candidate = evaluated.textResult.candidates[0];
   const payload = {
-    targetKey:"release:v1:0011223344556677", textTargetKey:targetId, targetText,
-    workTitle:"Synthetischer Morgen",workTargetType:"series",category:"special",
-    eventType:"serienstart",date:today,region:"global",platform:"Beispiel+",seasonNumber:null,
-    checkedAt:new Date().toISOString(),evidence:[{url:"https://press.example/start",sourceDomain:"press.example",
-      sourceTitle:"Alte Ankündigung",claim:"Werk startet weltweit am angegebenen Termin."}],
+    targetKey:candidate.targetId, textTargetKey:targetId, targetText,
+    workTitle:candidate.title,workTargetType:candidate.targetType,category:candidate.category,
+    eventType:candidate.eventType,date:candidate.date,region:candidate.region,platform:candidate.platform,seasonNumber:null,
+    checkedAt,evidence:candidate.evidence,
   };
   const persist = (id=a,value=payload) => JSON.parse(session(id,
     `select public.kd_radar_websearch_upsert_text_finding('${id}',gen_random_uuid(),${quote(JSON.stringify(value))}::jsonb)`,"service_role"));
@@ -78,7 +97,7 @@ try {
     ack("active"); assert.equal(feed().subscriptions.length,1); assert.equal(feed().events.length,0);
   });
   let stored;
-  check("Minimaler Fund schreibt und kommt durch echten Feed und Browservalidator",() => {
+  check("URL-only-Beleg mit intern normalisierten Metadaten schreibt durch echten Feed und Browservalidator",() => {
     stored=persist(); assert.equal(stored.status,"confirmed");
     const value=feed(); assert.equal(validateRadarPilotFeed(value).ok,true,JSON.stringify(validateRadarPilotFeed(value).errors));
     assert.equal(value.events.length,1); assert.equal(value.events[0].title,payload.workTitle);

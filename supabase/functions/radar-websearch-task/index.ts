@@ -527,6 +527,10 @@ export function createRadarWebsearchHandler({
       reservationDecision: telemetry.reservationDecision || "unknown",
       ...(result.feed ? { feed: result.feed } : {}),
       ...(result.personResult ? { personResult: result.personResult } : {}),
+      ...(result.textDiagnostics ? {
+        textDiagnostics: result.textDiagnostics,
+        textResult: result.textResult,
+      } : {}),
       ...(result.responseMode ? {
         responseMode: result.responseMode,
         displayText: result.displayText,

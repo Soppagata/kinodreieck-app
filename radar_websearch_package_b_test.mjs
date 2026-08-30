@@ -439,6 +439,8 @@ await check("Freitext-Codeblock rettet einen belegten Fund und verwirft ein kapu
   assert.equal(result.status, "confirmed");
   assert.equal(result.writes, 1);
   assert.equal(result.responseMode, "partial");
+  assert.equal(result.textDiagnostics.acceptedCandidates, 1);
+  assert.equal(result.textResult.candidates.length, 1);
   assert.match(result.displayText, /Nur belegte Funde/);
   assert.ok(result.warnings.includes("json-extracted-from-text"));
   assert.equal(repository.calls.upserts, 1);
@@ -462,6 +464,8 @@ await check("Sicherer unstrukturierter Freitext wird degraded sichtbar und bleib
   assert.equal(result.status, "insufficient_evidence");
   assert.equal(result.writes, 0);
   assert.equal(result.responseMode, "degraded");
+  assert.equal(result.textDiagnostics.normalizedCandidates, 0);
+  assert.equal(result.textDiagnostics.acceptedCandidates, 0);
   assert.equal(result.displayText, safeText);
   assert.equal(repository.calls.upserts, 0);
   assert.equal(harness.fetchCalls.length, 1);
@@ -687,7 +691,11 @@ await check("Radar-Once wählt ausschließlich eigenes Textziel, sucht mehrstufi
     KD_TESTA_USER:"testa",KD_TESTA_PASS:"mock-only-password",KD_MAIL_DOMAIN:"login.kinodreieck.at",
     KD_AI_FUNKTION:"ai-task",KD_ORIGIN:"https://staging.kinodreieck.at",
     [RADAR_WEBSEARCH_ONCE_ENV]:"keychain-budget-guard-v1"};
-  for (const status of ["confirmed","insufficient_evidence"]) {
+  for (const [status, candidatePatch] of [
+    ["confirmed", {}], ["no_change", {}], ["insufficient_evidence", {}],
+    ["no_change", { targetId: "release:v1:9999111122223333" }],
+    ["no_change", { date: "2026-10-11" }], ["no_change", { category: "film" }],
+  ]) {
     let providerCalls=0, feedCalls=0;
     const found={eventId:"01000000-0000-4000-8000-000000000001",eventVersionId:"02000000-0000-4000-8000-000000000002",
       targetId:"release:v1:0000111122223333",title:"Neues Beispielwerk",targetType:"series",category:"special",
@@ -695,7 +703,7 @@ await check("Radar-Once wählt ausschließlich eigenes Textziel, sucht mehrstufi
       evidence:[{sourceId:"web:public.example",sourceDomain:"public.example",url:"https://public.example/start",retrievedAt:"2026-08-30T10:00:00Z"}]};
     const feed=() => ({format:"kd-radar-pilot-feed-v2",revision:1,checksum:"a".repeat(64),reconciledAt:"2026-08-30T10:00:00Z",
       subscriptions:[{targetId:textTarget.targetId,targetType:"text",title:textTarget.targetText,region:"AT",scope:"all",status:"active",updatedAt:"2026-08-30T10:00:00Z"}],
-      events:providerCalls && status==="confirmed" ? [found] : [],receipts:[],operationAcks:[],radarReview:true,personResults:[]});
+      events:status==="no_change" || (providerCalls && status==="confirmed") ? [found] : [],receipts:[],operationAcks:[],radarReview:true,personResults:[]});
     const output=[];
     const result=await runRadarWebsearchOnce({env,ausgabe:(line) => output.push(line),fetchImpl:async (url,options) => {
       if (String(url).includes("/auth/v1/token")) return response({access_token:"mock-session-token"});
@@ -703,12 +711,22 @@ await check("Radar-Once wählt ausschließlich eigenes Textziel, sucht mehrstufi
       if (String(url).endsWith("/rpc/kd_radar_pilot_feed")) {feedCalls++;return response(feed());}
       if (String(url).endsWith("/functions/v1/radar-websearch-task")) {
         providerCalls++; assert.deepEqual(JSON.parse(options.body),{targetId:textTarget.targetId,targetText:textTarget.targetText});
-        return response({ok:true,status,writes:status==="confirmed"?1:0,providerRequests:1,searchRequests:3,feed:feed()});
+        return response({ok:true,status,writes:status==="confirmed"?1:0,providerRequests:1,searchRequests:3,feed:feed(),
+          textResult:{candidates:status==="insufficient_evidence"?[]:[{...found,...candidatePatch}]},
+          textDiagnostics:{normalizedCandidates:2,acceptedCandidates:status==="insufficient_evidence"?0:1,
+            rejectionCodes:["response-text-date-invalid", "https://private.example/do-not-log"]},
+          warnings:["optional-publication-date-dropped", "Private Title", "api_key=private"]});
       }
       throw new Error("unexpected-mock-url");
     }});
     assert.equal(result.status,status);assert.equal(providerCalls,1);assert.equal(feedCalls,2);
-    assert.ok(output.every((line) => !line.includes(textTarget.targetText) && !line.includes(textTarget.targetId)));
+    assert.equal(result.usableFindings,status==="insufficient_evidence" || Object.keys(candidatePatch).length ? 0 : 1);
+    assert.deepEqual(result.diagnostics.rejectionCodes,["response-text-date-invalid"]);
+    assert.deepEqual(result.diagnostics.warnings,["optional-publication-date-dropped"]);
+    assert.match(output[0],/normalizedCandidates=2/);
+    assert.match(output[0],/response-text-date-invalid/);
+    assert.ok(output.every((line) => !line.includes(textTarget.targetText) && !line.includes(textTarget.targetId)
+      && !line.includes(found.title) && !line.includes("private") && !line.includes("Private")));
   }
 });
 

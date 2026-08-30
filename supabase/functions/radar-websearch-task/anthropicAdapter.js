@@ -201,19 +201,20 @@ const TITLE_GROUP_DISCOVERY_SYSTEM_PROMPT = [
 ].join(" ");
 const TEXT_SYSTEM_PROMPT = [
   "Du suchst neue belegte Starttermine, die sich eindeutig auf den unveraenderten Freitext der Nutzerin beziehen.",
+  "asOf ist die aktuelle serverseitige UTC-Zeit; beurteile kommende Starts relativ dazu, nicht relativ zu deinem Wissensstand.",
   "Der Freitext kann eine Person, Titelgruppe, Serie oder ein Werk nennen; rate keine Kategorie und erfinde keine Identitaet.",
   "Nutze offene Websuche in zwei Schritten innerhalb von maximal vier Toolaufrufen: erst wenige komplementaere Discoveryanfragen zu neuen Filmen, Serien, Staffeln und Specials. Nutze englische Suchbegriffe wenn deutsch duenn bleibt, ohne erzwungenes Oesterreich-Keyword in Discovery.",
-  "Danach nur fuer gefundene Titel mit fehlendem Startdatum gezielt Datum nachsuchen. Ist eine gelesene Quelle bereits vollstaendig, uebernimm den Fund sofort ohne Pflicht-Zusatzrunde. Keine Endlossuche, keine Retries. Keine IMDb/TMDB-ID oder Werkjahr erforderlich.",
+  "Danach nur fuer gefundene Titel ohne brauchbaren Starttermin gezielt Datum nachsuchen, auch wenn bisher nur ein US-Datum vorliegt. Ist eine gelesene Quelle bereits vollstaendig, uebernimm den Fund sofort ohne Pflicht-Zusatzrunde. Keine Endlossuche, keine Retries. Keine IMDb/TMDB-ID oder Werkjahr erforderlich.",
   "Ein Websearch-Beleg in evidence darf sowohl Bezug zum Freitext als auch Starttermin belegen. Keine zweite Quelle oder separate relationEvidence erforderlich.",
   "eventDate ist ausschliesslich der explizite Starttag DES WERKS in YYYY-MM-DD, niemals das Publikationsdatum des Artikels. Alte Ankuendigungen duerfen kommende Starts belegen; kein Artikel-Neuheitsfilter. Bevorzuge oesterreichische Termine. US-only Daten niemals als AT ausgeben; solche Funde ohne brauchbaren Termin weglassen. region AT nur mit AT-Beleg, global fuer belegten weltweiten Start, sonst unspecified ohne Laenderbehauptung.",
   "Antworte im letzten Textblock ausschliesslich als JSON mit status und candidates.",
   "status ist confirmed, insufficient_evidence oder no_change; lasse nur unklare Einzelergebnisse weg, behalte gueltige Geschwister. Maximal sechs Kandidaten.",
   "Pflicht je Kandidat: title, eventDate, eventType und evidence. eventType: kinostart_at, streamingstart_at, serienstart oder staffelstart. Bei streamingstart_at nenne category film, series oder special (alternativ targetType work oder series).",
   "Optional: targetType, region, seasonNumber, category (film, series, season, special) und platform. Behalte erkannte Plattformen auch bei Serien- und Staffelstarts, sonst weglassen. Specials als Kategorie special mit passender Startart. Keine Links fuer die Anzeige noetig.",
-  "evidence enthaelt url, sourceDomain, sourceTitle, claim und optional publishedAt. claim benennt den Starttermin und den Bezug; url muss aus der verwendeten Websuche stammen.",
+  "evidence braucht url aus der tatsaechlich verwendeten Websuche. Optionale Metadaten: sourceTitle, claim und publishedAt. Wenn claim angegeben ist, benennt er den Starttermin und den Bezug; fehlende Metadaten nie erfinden. sourceDomain wird intern aus der URL abgeleitet.",
 ].join(" ");
 
-export function buildAnthropicRadarWebsearchBody(request, setupInput) {
+export function buildAnthropicRadarWebsearchBody(request, setupInput, asOf = new Date().toISOString()) {
   const setup = validateRadarWebsearchProviderSetup(setupInput, { textTarget: request.kind === "text" });
   const person = request.kind === "person";
   const titleGroup = request.kind === "title_group";
@@ -222,12 +223,13 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
     && request.discoveryMode === RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE;
   const providerInput = textTarget ? {
     targetText: request.targetText,
+    asOf,
     discoveryQueries: [
       `${request.targetText} neue Filme kommende Projekte`,
       `${request.targetText} neue Serien Staffeln Specials`,
     ],
     englishFallback: `${request.targetText} upcoming movie series season release`,
-    dateFollowup: "Nur fehlende Startdaten gefundener Titel gezielt nachschlagen; AT bevorzugen.",
+    dateFollowup: "Nur ohne brauchbaren Starttermin gezielt nachschlagen, auch bei bisher reinem US-Datum; AT bevorzugen.",
     region: request.region,
     scopes: request.scopes,
   } : person ? {
@@ -330,6 +332,20 @@ function safeWarnings(warnings) {
   return Object.freeze([...warnings].slice(0, PROVIDER_WARNING_MAX));
 }
 
+function optionalText(value, maxLength) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maxLength
+    && !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(normalized)
+    ? normalized : null;
+}
+
+function optionalPublicationDay(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
+}
+
 function parseProviderText(content, warnings) {
   if (content.some((block) => ["thinking", "redacted_thinking"].includes(block?.type))) {
     throw new RadarWebsearchProviderError("provider-output-invalid");
@@ -369,6 +385,24 @@ function normalizeEvidenceList(value, resultUrls, citationUrls, warnings, requir
       continue;
     }
     const parsedUrl = directUrl(entry.url);
+    // TEXT needs the actual returned URL, not a model-authored copy of its metadata.
+    // The neutral fallback describes provenance; it is not a source quotation.
+    if (!requireCitation) {
+      if (!parsedUrl || !resultUrls.has(entry.url)) {
+        addWarning(warnings, "evidence-item-dropped");
+        continue;
+      }
+      const sourceDomain = parsedUrl.hostname.toLowerCase();
+      const sourceTitle = optionalText(entry.sourceTitle, 240) || sourceDomain;
+      const claim = optionalText(entry.claim, 500) || "Verwendete Suchquelle für den Radar-Fund.";
+      const publishedAt = optionalPublicationDay(entry.publishedAt);
+      if (entry.sourceDomain !== sourceDomain || entry.sourceTitle !== sourceTitle || entry.claim !== claim) {
+        addWarning(warnings, "evidence-metadata-normalized");
+      }
+      if (entry.publishedAt != null && !publishedAt) addWarning(warnings, "optional-publication-date-dropped");
+      normalized.push({ url: entry.url, sourceDomain, sourceTitle, claim, ...(publishedAt ? { publishedAt } : {}) });
+      continue;
+    }
     const sourceDomain = typeof entry.sourceDomain === "string" ? entry.sourceDomain : "";
     if (!parsedUrl || parsedUrl.hostname.toLowerCase() !== sourceDomain
         || !resultUrls.has(entry.url) || (requireCitation && !citationUrls.has(entry.url))
@@ -410,9 +444,13 @@ function normalizeFinding(value, kind, request, resultUrls, citationUrls, warnin
     return null;
   }
   if (kind === "text") {
+    const platform = optionalText(value.platform, 80);
+    const knownPlatform = platform && !/^(?:-|unknown|unbekannt|n\/a)$/iu.test(platform) ? platform : null;
+    if (value.platform != null && value.platform !== knownPlatform) addWarning(warnings, "optional-platform-normalized");
     return {
       title: value.title, eventType: value.eventType, eventDate: value.eventDate, evidence,
-      ...Object.fromEntries(["targetId", "targetType", "year", "region", "platform", "seasonNumber", "category"]
+      ...(knownPlatform ? { platform: knownPlatform } : {}),
+      ...Object.fromEntries(["targetId", "targetType", "year", "region", "seasonNumber", "category"]
         .filter((key) => value[key] != null).map((key) => [key, value[key]])),
     };
   }
@@ -721,7 +759,7 @@ export function createAnthropicRadarWebsearchAdapter({
         || typeof fetchImpl !== "function") setupError();
 
     const setup = validateRadarWebsearchProviderSetup(await loadSetup(request), { textTarget: request.kind === "text" });
-    const body = buildAnthropicRadarWebsearchBody(request, setup);
+    const body = buildAnthropicRadarWebsearchBody(request, setup, request.kind === "text" ? now() : undefined);
     const reservationUsdCent = estimateRadarWebsearchReservation(body, setup);
     telemetry.phaseCode = "cost-reservation";
     const providerOperationId = operationId();

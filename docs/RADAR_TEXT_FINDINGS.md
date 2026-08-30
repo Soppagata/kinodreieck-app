@@ -6,12 +6,22 @@ Werk-Starttag und eine Kategorie. Plattform, Katalog-ID, Werkjahr und separate
 Relationsbelege sind keine Pflicht. Eine tatsächlich im Search-Toolresult
 enthaltene HTTPS-Quelle genügt. Quellen bleiben intern nachvollziehbar;
 News-Karten verlangen keine Links. Artikeldaten ersetzen niemals Startdaten.
+Im Textpfad ist nur die exakte, tatsächlich zurückgegebene Search-URL Pflicht
+im Beleg. Die Domain wird daraus abgeleitet, nicht aus einer zweiten
+Modellangabe (etwa mit abweichendem `www`). Fehlender Quellentitel wird intern
+durch die Domain ersetzt, fehlender Claim durch eine neutrale
+Herkunftskennzeichnung, niemals durch ein erfundenes Quellenzitat.
+Ungültiges optionales Publikationsdatum oder eine unbrauchbare optionale
+Plattform wird weggelassen, ohne einen vollständigen Fund zu verwerfen.
 
 ## Suche und Kosten
 
 Nur `kind=text` nutzt offene Domains: wenige komplementäre Discoveryanfragen,
 englische Ergänzung bei dünnen Ergebnissen, danach gezielte Datumsnachsuche
-nur für unvollständige Funde. Vollständige Einzelquellen brauchen keine
+nur für Funde ohne brauchbaren Termin, auch bei bisher reinem US-Datum.
+Die Anfrage enthält die aktuelle serverseitige UTC-Zeit als `asOf`, damit
+„kommend“ nicht relativ zum Modellwissensstand ausgelegt wird.
+Vollständige Einzelquellen brauchen keine
 Zusatzrunde. Kein Neuheitsfilter auf Artikel, kein erzwungenes AT-Suchwort.
 AT wird beim Datum bevorzugt; US-only wird verworfen. `global` und
 `unspecified` erzeugen ausdrücklich keine Österreich-Beschriftung.
@@ -64,3 +74,16 @@ dieser Modus die bereits vorhandene Owner-Credentiallane, sonst TestA.
 Kein Konto-/Capability-Umbau, keine fremden KI-Proben, kein Batch.
 Ein ehrlicher Leerfund ist kein unbekannter Kostenstand und kein belegter
 nutzbarer Fund. Diese Dokumentation autorisiert keinen Remote-/Paid-Lauf.
+
+Die Once-Ausgabe enthält nur begrenzte Warn-/Ablehnungscodes und Zahlen:
+`normalizedCandidates` nach Parsernormalisierung, `acceptedCandidates` nach
+Vertragsprüfung, und `usableFindings` als tatsächlich erneut im Feed
+bestätigte Kandidaten. Der Abgleich nutzt Release-ID, Titel, Werkdatum und
+Kategorie/Startart; Titel, URLs und Rohtexte werden nicht geloggt. Ein
+unveränderter bestehender Fund kann somit bei `no_change` und null Writes
+nutzbar sein. Die konkrete Ursache des vorherigen Live-Leerfunds ist ohne
+Rohantwort nicht belegt; die Metadatengrenzen sind lokal reproduzierte
+Robustheitsfehler, keine nachträglich behauptete Live-Diagnose.
+
+Für diese Robustheitskorrektur ist nur ein erneutes Function-Deployment
+erforderlich; Migration und Frontend aus `ebb9d33` bleiben unverändert.

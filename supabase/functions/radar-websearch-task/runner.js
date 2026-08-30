@@ -107,6 +107,17 @@ export async function runRadarWebsearchCheck({
     });
   }
   const evaluated = evaluateRadarWebsearchResponse(providerEnvelope, request, sources);
+  const textDetails = request.kind === "text" ? {
+    textResult: evaluated.textResult || null,
+    textDiagnostics: Object.freeze({
+      normalizedCandidates: Array.isArray(providerEnvelope?.response?.candidates)
+        ? Math.min(6, providerEnvelope.response.candidates.length) : 0,
+      acceptedCandidates: evaluated.textResult?.candidates?.length || 0,
+      rejectionCodes: Object.freeze([...new Set(evaluated.errors || [])].filter((code) => (
+        typeof code === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(code) && code.length <= 64
+      )).slice(0, 8)),
+    }),
+  } : {};
   if (request.kind === "person" && evaluated.status !== "confirmed") {
     return frozenResult({
       status: evaluated.status,
@@ -133,6 +144,7 @@ export async function runRadarWebsearchCheck({
       feed: await loadFeedSafely(repository, accountId),
       ...presentation,
       ...providerEvidence,
+      ...textDetails,
     });
   }
   if (evaluated.status !== "confirmed") {
@@ -269,5 +281,6 @@ export async function runRadarWebsearchCheck({
       warnings: [...(presentation.warnings || []), "text-finding-storage-dropped"].slice(0, 8),
     } : {}),
     ...providerEvidence,
+    ...textDetails,
   });
 }

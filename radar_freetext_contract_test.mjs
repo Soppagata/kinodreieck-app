@@ -195,9 +195,11 @@ check("Additive Browser-RPC ist auth.uid-gebunden, kontingentiert und providerfr
 });
 
 check("Providerquery entsteht ausschließlich aus dem gespeicherten Freitext", () => {
-  const body = buildAnthropicRadarWebsearchBody(request, setup);
+  const body = buildAnthropicRadarWebsearchBody(request, setup, checkedAt);
   const input = JSON.parse(body.messages[0].content);
   assert.equal(input.targetText, targetText);
+  assert.equal(input.asOf, checkedAt);
+  assert.match(input.dateFollowup, /brauchbar.*US/);
   assert.equal(input.discoveryQueries.length, 2);
   assert.ok(input.discoveryQueries.every((query) => query.startsWith(targetText) && !query.includes("Österreich")));
   assert.ok(input.englishFallback.startsWith(targetText));
@@ -323,6 +325,58 @@ check("Providerparser akzeptiert eine wirkliche Toolresult-URL ohne zusätzliche
   assert.equal(empty.envelope.response.status, "no_change");
 });
 
+check("Textbeleg benötigt nur die exakte Tool-URL, interne Metadaten blockieren ihn nicht", () => {
+  for (const evidence of [
+    { url: proof.url },
+    { ...proof, sourceDomain: "www.press.example", sourceTitle: "", claim: null },
+    { ...proof, sourceTitle: "x".repeat(241), claim: "\u0000" },
+  ]) {
+    const parsed = parseAnthropicRadarWebsearchResponse(providerMessage([minimal({ evidence: [evidence] })]), request, setup, checkedAt);
+    const result = evaluateTextRadarWebsearchResponse(parsed.envelope, request, []);
+    assert.equal(result.status, "confirmed", result.errors.join(","));
+    assert.equal(result.textResult.candidates[0].evidence[0].sourceDomain, "press.example");
+    const normalized = parsed.envelope.response.candidates[0].evidence[0];
+    assert.equal(normalized.sourceTitle, "press.example");
+    assert.equal(normalized.claim, "Verwendete Suchquelle für den Radar-Fund.");
+    assert.ok(parsed.envelope.warnings.includes("evidence-metadata-normalized"));
+  }
+  const invented = { url: proof.url.replace("//press.", "//www.press.") };
+  const parsed = parseAnthropicRadarWebsearchResponse(providerMessage([minimal({ evidence: [invented] })]), request, setup, checkedAt);
+  assert.equal(parsed.envelope.response.candidates.length, 0, "Auch www-URL muss tatsächlich im Toolresult stehen");
+});
+
+check("Ungültiges optionales Artikeldatum oder Plattform verwirft keinen vollständigen Textfund", () => {
+  for (const publishedAt of ["", "2026-02-30", "2026-08-29T12:00:00Z", "unbekannt", {}]) {
+    const parsed = parseAnthropicRadarWebsearchResponse(providerMessage([minimal({ evidence: [{ ...proof, publishedAt }] })]), request, setup, checkedAt);
+    const result = evaluateTextRadarWebsearchResponse(parsed.envelope, request, []);
+    assert.equal(result.status, "confirmed");
+    assert.equal(result.textResult.candidates[0].date, "2026-10-15");
+    assert.equal("publishedAt" in parsed.envelope.response.candidates[0].evidence[0], false);
+  }
+  for (const platform of ["", {}, "x".repeat(81), "\u0000", "unknown"]) {
+    const parsed = parseAnthropicRadarWebsearchResponse(providerMessage([minimal({ platform })]), request, setup, checkedAt);
+    const result = evaluateTextRadarWebsearchResponse(parsed.envelope, request, []);
+    assert.equal(result.status, "confirmed");
+    assert.equal(result.textResult.candidates[0].platform, "-");
+  }
+  const parsed = parseAnthropicRadarWebsearchResponse(providerMessage([minimal({ platform: " Beispiel+ " })]), request, setup, checkedAt);
+  assert.equal(evaluateTextRadarWebsearchResponse(parsed.envelope, request, []).textResult.candidates[0].platform, "Beispiel+");
+});
+
+check("Summarischer Modellstatus blockiert keine gültigen Geschwister; Pflichtdaten bleiben streng", () => {
+  for (const status of ["insufficient_evidence", "no_change", "unknown"]) {
+    const message = providerMessage([
+      minimal({ eventDate: undefined }), minimal({ category: "unknown" }), minimal(),
+    ]);
+    message.content.at(-1).text = JSON.stringify({ status, candidates: JSON.parse(message.content.at(-1).text).candidates });
+    const parsed = parseAnthropicRadarWebsearchResponse(message, request, setup, checkedAt);
+    const result = evaluateTextRadarWebsearchResponse(parsed.envelope, request, []);
+    assert.equal(result.status, "confirmed");
+    assert.equal(result.textResult.candidates.length, 1);
+    assert.ok(parsed.envelope.warnings.includes("status-normalized"));
+  }
+});
+
 {
   const saved = [];
   let calls = 0;
@@ -349,6 +403,10 @@ check("Providerparser akzeptiert eine wirkliche Toolresult-URL ohne zusätzliche
     assert.equal(result.feed.events[0].title, "Zweiter Fund");
     assert.equal(result.feed.subscriptions.length, 1);
     assert.equal(result.feed.subscriptions[0].title, targetText);
+    assert.equal(result.textDiagnostics.normalizedCandidates, 3);
+    assert.equal(result.textDiagnostics.acceptedCandidates, 2);
+    assert.ok(result.textDiagnostics.rejectionCodes.includes("response-text-candidate-shape-invalid"));
+    assert.equal(result.textResult.candidates.length, 2);
   });
 }
 
@@ -356,7 +414,29 @@ check("RPC-Übergabe hält den Werkschlüssel getrennt vom eingegebenen Textziel
   const index = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
   assert.match(index, /targetKey: event\.targetKey/);
   assert.match(index, /textTargetKey: textContext\.targetId/);
+  assert.match(index, /textDiagnostics: result\.textDiagnostics/);
+  assert.match(index, /textResult: result\.textResult/);
 });
+
+{
+  const result = await runRadarWebsearchCheck({
+    accountId: "test-account", targetId: request.targetId,
+    adapter: { async search() { return envelope([minimal({ eventDate: undefined })]); } },
+    repository: {
+      async loadAuthorizedTarget() { return request; }, async resolveSources() { return []; },
+      async upsertConfirmedEvent() { assert.fail("invalid date must never write"); },
+      async loadFeed() { return { events: [] }; },
+    },
+  });
+  check("Leerfund reicht nur begrenzte Ablehnungscodes und Kandidatenzahlen weiter", () => {
+    assert.equal(result.status, "insufficient_evidence");
+    assert.equal(result.textDiagnostics.normalizedCandidates, 1);
+    assert.equal(result.textDiagnostics.acceptedCandidates, 0);
+    assert.ok(result.textDiagnostics.rejectionCodes.includes("response-text-date-invalid"));
+    assert.ok(result.textDiagnostics.rejectionCodes.length <= 8);
+    assert.deepEqual(result.textResult.candidates, []);
+  });
+}
 
 check("Offene mehrstufige Suche liest auch spätere Domains und benötigt keine Zusatzquelle", () => {
   const external = { ...proof, url:"https://independent.example/season", sourceDomain:"independent.example", publishedAt:"2020-01-01" };
@@ -399,10 +479,13 @@ check("Personen-, Franchise- und Staffelsuche bleiben generische Textziele, US-o
     apiKey:"mock-key",loadSetup:async () => currentSetup,
     reserveCost:async (input) => {reserved=input;return {ok:true,logId:4};},
     settleCost:async (input) => {settled=input;},
-    fetchImpl:async () => {fetches++;return new Response(JSON.stringify(providerMessage([minimal()])));},
+    fetchImpl:async (_url, options) => {
+      assert.equal(JSON.parse(JSON.parse(options.body).messages[0].content).asOf, checkedAt);
+      fetches++;return new Response(JSON.stringify(providerMessage([minimal()])));
+    },
     now:() => checkedAt,
   });
-  const body=buildAnthropicRadarWebsearchBody(request,currentSetup);
+  const body=buildAnthropicRadarWebsearchBody(request,currentSetup,checkedAt);
   await adapter.search(request);
   check("Vollständige Einzelquelle beendet den einen Providerrequest innerhalb fester Reservierung",() => {
     assert.equal(fetches,1); assert.equal(reserved.searchRequests,4); assert.ok(reserved.reservationUsdCent<=20);

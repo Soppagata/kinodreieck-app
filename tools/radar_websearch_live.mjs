@@ -50,6 +50,12 @@ function validateFunctionResponse(response, body) {
 
 class RadarProofError extends Error {}
 
+function safeCodes(value) {
+  return Object.freeze([...new Set(Array.isArray(value) ? value : [])].filter((code) => (
+    typeof code === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(code) && code.length <= 64
+  )).slice(0, 8));
+}
+
 export async function runRadarWebsearchOnce({
   env = process.env,
   fetchImpl = fetch,
@@ -148,6 +154,7 @@ export async function runRadarWebsearchOnce({
   }
   if (captureError) throw captureError;
   validateFunctionResponse(response, body);
+  let usableFindings = 0;
   if (textSubscription) {
     const readback = await readFeed();
     const own = readback.subscriptions.find((item) => item.targetId === targetId);
@@ -157,13 +164,30 @@ export async function runRadarWebsearchOnce({
     if (body.writes > 0 && (returned.length < body.writes || returned.some((item) => !readback.events.some((row) => row.eventVersionId === item.eventVersionId)))) {
       throw new RadarProofError("RADAR_FINDING_READBACK_FAILED");
     }
+    const candidates = Array.isArray(body.textResult?.candidates) ? body.textResult.candidates.slice(0, 6) : [];
+    usableFindings = new Set(candidates.filter((candidate) => (
+      /^release:v1:[a-f0-9]{16}$/.test(candidate?.targetId)
+      && readback.events.some((row) => row.targetId === candidate.targetId
+        && row.title === candidate.title && row.date === candidate.date
+        && row.eventType === candidate.eventType && row.category === candidate.category
+        && row.verificationStatus === "confirmed" && row.lifecycleStatus === "scheduled")
+    )).map((candidate) => candidate.targetId)).size;
   }
-  ausgabe(`RADAR-WEBSEARCH-EINMAL: ${body.status} · 1 Providerrequest · ${body.searchRequests} Suchrequests · ${body.writes} Writes${textSubscription ? " · Feed rückgelesen" : ""}`);
+  const count = (value) => Number.isInteger(value) && value >= 0 && value <= 6 ? value : null;
+  const diagnostics = Object.freeze({
+    normalizedCandidates: count(body.textDiagnostics?.normalizedCandidates),
+    acceptedCandidates: count(body.textDiagnostics?.acceptedCandidates),
+    rejectionCodes: safeCodes(body.textDiagnostics?.rejectionCodes),
+    warnings: safeCodes(body.warnings),
+  });
+  ausgabe(`RADAR-WEBSEARCH-EINMAL: ${body.status} · 1 Providerrequest · ${body.searchRequests} Suchrequests · ${body.writes} Writes${textSubscription ? ` · Feed rückgelesen · usableFindings=${usableFindings} · normalizedCandidates=${diagnostics.normalizedCandidates ?? "unknown"} · acceptedCandidates=${diagnostics.acceptedCandidates ?? "unknown"} · rejectionCodes=${diagnostics.rejectionCodes.join(",") || "none"} · warnings=${diagnostics.warnings.join(",") || "none"}` : ""}`);
   return Object.freeze({
     status: body.status,
     providerRequests: body.providerRequests,
     searchRequests: body.searchRequests,
     writes: body.writes,
+    usableFindings,
+    diagnostics,
   });
 }
 
