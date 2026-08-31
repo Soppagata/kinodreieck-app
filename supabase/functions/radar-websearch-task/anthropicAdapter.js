@@ -205,6 +205,7 @@ const TEXT_SYSTEM_PROMPT = [
   "Der Freitext kann eine Person, Titelgruppe, Serie oder ein Werk nennen; rate keine Kategorie und erfinde keine Identitaet.",
   "Nutze offene Websuche auf Deutsch UND Englisch innerhalb von maximal vier Toolaufrufen. discoveryQueries und englishFallback sind Formulierungsvorschlaege zur modellseitigen Auswahl, keine vorgeschriebene Abfolge. Passe sie an die Bedeutung des Freitexts an, ohne starren Laendersuchterm in Discovery.",
   "Suche bei einer Person nach kommenden Beteiligungen, bei einer Serie nach weiteren Staffeln und Ablegern, bei einer grossen Franchise nach Uebersichten angekuendigter Projekte und Veroeffentlichungsplaenen. Beruecksichtige auch die weiter entfernte Zukunft, kein fixes Jahr und keinen Filter nach Artikelalter.",
+  "Behandle grosse Reihen als Projektuebersicht: Kinofilme und TV/Serien/Staffeln sind unterschiedliche Suchrichtungen. Uebernimm daraus verschiedene konkrete Werktitel, auch Untertitel und abweichende Projektnamen, sofern die Quelle ihren Bezug zur Reihe belegt; der Freitext muss nicht woertlich im Werktitel stehen.",
   "Dominiert ein Werk die Treffer, suche ausdruecklich weitere angekuendigte Projekte zum Freitext. Nutze das verbleibende Budget fuer verschiedene Werke statt fuer weitere Belege zum selben Werk.",
   "Danach nur fuer gefundene Titel ohne brauchbaren Starttermin gezielt Datum nachsuchen, auch wenn bisher nur ein US-Datum vorliegt. Ist eine gelesene Quelle bereits vollstaendig, uebernimm den Fund sofort ohne Pflicht-Zusatzrunde. Keine Endlossuche, keine Retries. Keine IMDb/TMDB-ID oder Werkjahr erforderlich.",
   "Ein Websearch-Beleg in evidence darf sowohl Bezug zum Freitext als auch Starttermin belegen. Keine zweite Quelle oder separate relationEvidence erforderlich.",
@@ -213,6 +214,7 @@ const TEXT_SYSTEM_PROMPT = [
   "status ist confirmed, insufficient_evidence oder no_change; lasse nur unklare Einzelergebnisse weg, behalte gueltige Geschwister. Maximal sechs Kandidaten.",
   "Pflicht je Kandidat: title, eventDate, eventType und evidence. eventType: kinostart_at, streamingstart_at, serienstart oder staffelstart. Bei streamingstart_at nenne category film, series oder special (alternativ targetType work oder series).",
   "Optional: targetType, region, seasonNumber, category (film, series, season, special) und platform. Behalte erkannte Plattformen auch bei Serien- und Staffelstarts, sonst weglassen. Specials als Kategorie special mit passender Startart. Keine Links fuer die Anzeige noetig.",
+  "Kennzeichne Staffeln und einzelne Folgen eindeutig im title mit Serienname, Staffelnummer und gegebenenfalls Folgennummer; setze die bekannte seasonNumber. Ein Folgetermin ist kein Staffelstart: Benenne einen Termin ab Folge 2 nicht als Premiere oder Start der ganzen Staffel. Keine Staffel- oder Folgennummer erfinden.",
   "evidence ist immer eine nichtleere JSON-Liste von Objekten mit dem Pflichtfeld url, auch bei genau einer Quelle. url ist die exakte HTTPS-URL aus der tatsaechlich verwendeten Websuche. Gib evidence nicht als einzelnes Objekt oder String aus. Optionale Metadaten je Objekt: sourceTitle, claim und publishedAt. Wenn claim angegeben ist, benennt er den Starttermin und den Bezug; fehlende Metadaten nie erfinden. sourceDomain wird intern aus der URL abgeleitet.",
 ].join(" ");
 
@@ -227,9 +229,9 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput, asOf = new
     targetText: request.targetText,
     asOf,
     discoveryQueries: [
-      `${request.targetText} upcoming movies release schedule`,
-      `${request.targetText} announced TV series new seasons spin-offs`,
-      `${request.targetText} angekündigte Projekte Übersicht`,
+      `${request.targetText} upcoming theatrical movies announced projects release slate`,
+      `${request.targetText} upcoming TV series seasons spin-offs release schedule`,
+      `${request.targetText} weitere angekündigte Filme Serien Projekte Übersicht`,
     ],
     englishFallback: `${request.targetText} upcoming projects announced films series seasons specials`,
     dateFollowup: "Nur ohne brauchbaren Starttermin werkbezogen nachschlagen, auch bei bisher reinem US-Datum; AT bevorzugen. Suchvorschlag zur Auswahl: {gefundener Werktitel} Startdatum Österreich. Vollständige Treffer sofort übernehmen, keine weiteren Belege dafür suchen.",

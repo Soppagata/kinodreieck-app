@@ -343,6 +343,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-quellenblock article { padding:11px 13px; border:1px dashed var(--rauch,#948fa0); border-radius:7px; opacity:.72; }
 .kd-entdecken-quellenblock strong,.kd-entdecken-quellenblock span { display:block; }.kd-entdecken-quellenblock span { margin-top:3px; color:var(--rauch,#948fa0); font-size:12px; }
 .kd-entdecken-radar-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.kd-entdecken-radar-grid li,.kd-radar-folgen { min-width:0; overflow-wrap:anywhere; }
+.kd-radar-folgen { width:100%; margin-top:5px; }
+.kd-radar-folgen summary { min-height:44px; box-sizing:border-box; padding:12px 2px; cursor:pointer; color:var(--wolfram,#e3a63b); }
+.kd-radar-folgen summary:focus-visible { outline:2px solid var(--wolfram,#e3a63b); outline-offset:2px; border-radius:4px; }
+.kd-radar-folgen ol { margin:0; padding:0 0 0 12px; list-style:none; }
+.kd-radar-suchstatus { overflow-wrap:anywhere; }
 .kd-entdecken-radar-add-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
 .kd-entdecken-formzeile { display:grid; gap:7px; }
 .kd-entdecken-formzeile label { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }

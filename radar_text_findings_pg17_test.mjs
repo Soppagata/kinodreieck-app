@@ -58,8 +58,17 @@ try {
     ));
   for (const file of selected) {
     if (file.startsWith("20260825120000")) sql("update public.kd_radar_settings set radar_aktiv=true,radar_provider_aktiv=true");
+    const previousAcl = file.startsWith("20260831120000")
+      ? sql("select proacl::text from pg_proc where oid='public.kd_radar_pilot_feed(uuid[])'::regprocedure") : null;
     try { sql(readFileSync(join("supabase/migrations",file),"utf8")); }
     catch (error) { throw new Error(`${file}: ${error.message}`); }
+    if (previousAcl !== null) check("Additive Feedmigration erhält ACL und Security-definer/search_path ohne neue RPC",() => {
+      assert.equal(sql("select proacl::text from pg_proc where oid='public.kd_radar_pilot_feed(uuid[])'::regprocedure"),previousAcl);
+      assert.equal(sql("select prosecdef and proconfig @> array['search_path=pg_catalog, public'] from pg_proc where oid='public.kd_radar_pilot_feed(uuid[])'::regprocedure"),"t");
+      assert.equal(sql("select has_function_privilege('anon','public.kd_radar_pilot_feed(uuid[])','EXECUTE')"),"f");
+      assert.equal(sql("select has_function_privilege('authenticated','public.kd_radar_pilot_feed(uuid[])','EXECUTE')"),"t");
+      assert.equal(sql("select has_table_privilege('authenticated','public.kd_radar_daily_runs','SELECT')"),"f");
+    });
   }
   sql(`insert into auth.users(id) values ('${a}'),('${b}');
     insert into public.kd_account_access(account_id,role,active,personal_ai) values
@@ -99,6 +108,8 @@ try {
   check("Ohne eigenes aktives Abo scheitert der Schreibpfad",() => assert.throws(() => persist(),/radar_websearch_forbidden/));
   check("Providerfreies Save legt nur ein Textziel an",() => {
     ack("active"); assert.equal(feed().subscriptions.length,1); assert.equal(feed().events.length,0);
+    assert.deepEqual(feed().searchStatuses,[{targetId,status:"never",checkedAt:null}]);
+    assert.deepEqual(feed(b).searchStatuses,[]);
   });
   let stored;
   check("URL-only-Beleg mit intern normalisierten Metadaten schreibt durch echten Feed und Browservalidator",() => {
@@ -176,8 +187,35 @@ try {
     assert.equal(claim().claim,false);
     sql(`update public.kd_radar_capabilities set radar_review=true where account_id='${a}'`);
     const claimed=claim(); assert.equal(claimed.claim,true); assert.equal(claimed.targetId,targetId);
+    check("Feed liest nur eigene neueste Historie und verändert weder Checksums noch Lease",() => {
+      const before=feed();
+      assert.equal(before.searchStatuses[0].status,"searching");
+      assert.ok(Date.parse(before.searchStatuses[0].checkedAt));
+      assert.deepEqual(feed(b).searchStatuses,[]);
+      const original=sql(`select row_to_json(r) from public.kd_radar_daily_runs r where fence_token=${quote(claimed.fenceToken)}`);
+      sql(`update public.kd_radar_daily_runs set claimed_at=now()-interval '4 minutes',lease_expires_at=now()-interval '1 minute' where fence_token=${quote(claimed.fenceToken)}`);
+      const expired=feed();
+      assert.equal(expired.searchStatuses[0].status,"timeout");
+      assert.equal(sql(`select worker_status from public.kd_radar_daily_runs where fence_token=${quote(claimed.fenceToken)}`),"leased");
+      assert.equal(expired.revision,before.revision); assert.equal(expired.checksum,before.checksum);
+      assert.deepEqual(expired.subscriptions,before.subscriptions);
+      const prior=JSON.parse(original);
+      sql(`update public.kd_radar_daily_runs set claimed_at=${quote(prior.claimed_at)},lease_expires_at=${quote(prior.lease_expires_at)} where fence_token=${quote(claimed.fenceToken)}`);
+      assert.equal(validateRadarPilotFeed(expired).ok,true);
+    });
     const finish=JSON.parse(session(a,`select public.kd_radar_daily_finish('${a}',${quote(claimed.targetRowId)},${quote(claimed.viennaDay)},${quote(claimed.fenceToken)},'storage_error')`,"service_role"));
     assert.equal(finish.ok,true); assert.equal(claim().claim,false);
+    assert.equal(feed().searchStatuses[0].status,"storage_error");
+    check("Ältere Historie verliert gegen neuesten Lauf; fehlende UID und Capability bleiben gesperrt",() => {
+      sql(`insert into public.kd_radar_daily_runs(account_id,target_id,vienna_day,worker_status,safe_status,claimed_at,lease_expires_at,terminal_at)
+        values('${a}',${quote(claimed.targetRowId)},current_date-1,'completed','confirmed',now()-interval '1 day',now()-interval '23 hours',now()-interval '23 hours')`);
+      assert.equal(feed().searchStatuses[0].status,"storage_error");
+      assert.throws(() => feed(""),/radar_pilot_forbidden/);
+      sql(`update public.kd_radar_capabilities set radar_review=false,radar_pilot=false where account_id='${a}'`);
+      assert.throws(() => feed(),/radar_pilot_forbidden/);
+      sql(`update public.kd_radar_capabilities set radar_pilot=true,radar_review=true where account_id='${a}';
+        delete from public.kd_radar_daily_runs where account_id='${a}' and vienna_day=current_date-1`);
+    });
     const hours=Number(sql(`select extract(epoch from (s.next_check_at-r.terminal_at))/3600
       from public.kd_radar_subscriptions s join public.kd_radar_daily_runs r using(account_id,target_id)
       where s.account_id='${a}'`));
@@ -189,6 +227,7 @@ try {
   check("Entfernen kaskadiert eigene Funde ohne neue Werkabos",() => {
     ack("removed"); assert.equal(sql(`select count(*) from public.kd_radar_text_findings where account_id='${a}'`),"0");
     assert.equal(feed().subscriptions.length,0);
+    assert.deepEqual(feed().searchStatuses,[]);
   });
   const initial = (id=b,key=targetId,value=targetText) => JSON.parse(session(id,
     `select public.kd_radar_initial_claim('${id}',${quote(key)},${quote(value)})`,"service_role"));
@@ -196,6 +235,7 @@ try {
     assert.throws(() => session(b,`select public.kd_radar_initial_claim('${b}',${quote(targetId)},${quote(targetText)})`),/permission denied/);
     assert.throws(() => initial(),/radar_websearch_forbidden/);
     session(b,`select public.kd_radar_pilot_set_text_subscription(${quote(targetText)},'active',gen_random_uuid())`);
+    assert.deepEqual(feed(b).searchStatuses,[{targetId,status:"never",checkedAt:null}]);
     assert.throws(() => initial(b,targetId,"Fremder Suchtext"),/radar_websearch_forbidden/);
     assert.throws(() => initial(b,"imdb:tt0000001",targetText),/radar_websearch_forbidden/);
   });
@@ -244,6 +284,7 @@ try {
     assert.equal(initialResult.feed.subscriptions[0].title,targetText);
     const finish=JSON.parse(session(b,`select public.kd_radar_daily_finish('${b}',${quote(initialClaim.targetRowId)},${quote(initialClaim.viennaDay)},${quote(initialClaim.fenceToken)},'confirmed')`,"service_role"));
     assert.equal(finish.ok,true);assert.equal(initial().claim,false);
+    assert.equal(feed(b).searchStatuses[0].status,"confirmed");
     assert.equal(Number(sql(`select extract(epoch from(s.next_check_at-r.terminal_at))/3600 from public.kd_radar_subscriptions s join public.kd_radar_daily_runs r using(account_id,target_id) where s.account_id='${b}'`)),144);
   });
   check("Entfernen und Neuanlegen umgeht denselben Tageszaun nicht",() => {

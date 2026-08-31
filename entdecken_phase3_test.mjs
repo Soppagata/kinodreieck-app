@@ -871,6 +871,41 @@ try {
   });
   await targetFoundUi.cleanup();
 
+  const episodeEvents = [6,2,5,3,4].map((number) => ({
+    ...starfighterEvent, eventVersionId:`episode-${number}`, targetId:`release:v1:episode-${number}`,
+    title:`Beispieldorf Staffel 29 Folge ${number}${number === 4 ? ": Nacht" : ""}`,
+    category:"series",targetType:"series",seasonNumber:29,eventType:"staffelstart",
+    date:`2099-09-0${number}`,platform:number === 3 ? "-" : "Beispiel+",region:"global",
+  }));
+  let detailRequests=0;
+  const seasonUi=await mount(EntdeckenTab,{
+    ...baseProps,accountMode:true,
+    radarState:{...targetFoundState,pilot:{searchStatuses:[{
+      targetId:starWarsTarget.targetId,status:"no_change",checkedAt:now,
+    }]}},
+    radarPilotEvents:episodeEvents,onRadarPilotSync:() => { detailRequests++; },
+  });
+  await act(async () => { button(seasonUi.container,"Radar").click(); await tick(); });
+  check("Radar zeigt fünf Folgen als eine Staffelkarte mit nativer Detailsteuerung und Suchstatus",() => {
+    const list=seasonUi.container.querySelector(".kd-radar-neuigkeiten");
+    assert.equal(list.children.length,1);
+    assert.match(list.firstElementChild.querySelector("strong").textContent,/Beispieldorf · Staffel 29/);
+    assert.match(list.firstElementChild.querySelector("span").textContent,/2099-09-02 · Staffel · Nächste Folge/);
+    assert.doesNotMatch(list.firstElementChild.querySelector("span").textContent,/Beispiel\+|Staffelstart/);
+    assert.equal(list.querySelector("summary").textContent,"5 Folgen anzeigen");
+    assert.equal(list.querySelectorAll("details ol li").length,5);
+    assert.match(list.querySelector("details").textContent,/Folge 4 · Nacht/);
+    assert.match(seasonUi.container.querySelector(".kd-radar-suchstatus").textContent,/Zuletzt gesucht.*keine neuen Treffer/);
+  });
+  await act(async () => { seasonUi.container.querySelector("summary").click(); await tick(); });
+  check("Aufklappen bleibt requestfrei und zeigt Datum/optionale Plattform je Folge",() => {
+    const details=seasonUi.container.querySelector("details");
+    assert.equal(details.open,true); assert.equal(detailRequests,0);
+    assert.match(details.querySelector("li").textContent,/Folge 2.*2099-09-02.*Beispiel\+/);
+    assert.doesNotMatch(details.querySelectorAll("li")[1].textContent,/Beispiel\+|unknown/);
+  });
+  await seasonUi.cleanup();
+
   const targetFoundReload = decodeLocalRadar(JSON.stringify(targetFoundState), { authority: "guest" });
   const targetFoundReloadUi = await mount(EntdeckenTab, {
     ...baseProps, radarState: targetFoundReload.state, radarPilotEvents: [starfighterEvent],

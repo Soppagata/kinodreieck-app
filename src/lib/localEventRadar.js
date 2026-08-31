@@ -26,6 +26,7 @@ import {
   projectRadarPilotPersonResult,
   validateRadarPilotEvent,
   validateRadarPilotFeed,
+  validateRadarSearchStatuses,
   validateRadarPilotImportPayload,
   validateRadarPilotImportResult,
   validateRadarPilotSubscriptionAck,
@@ -192,10 +193,11 @@ function validatePilotImportOutbox(entry) {
   return errors;
 }
 
-function validateAccountRadarPilot(pilot) {
+function validateAccountRadarPilot(pilot, targetIds) {
   const errors = [];
   const keys = ["status", "events", "serverReceipts", "receiptOutbox", "importOutbox", "radarReview"];
-  if (!exactPilotKeys(pilot, keys)) return result(["pilot-state-shape-invalid"]);
+  if (!exactPilotKeys(pilot, pilot?.searchStatuses === undefined ? keys : [...keys, "searchStatuses"])) return result(["pilot-state-shape-invalid"]);
+  if (pilot.searchStatuses !== undefined) errors.push(...validateRadarSearchStatuses(pilot.searchStatuses, targetIds).errors);
   if (!["idle", "ready", "pilot-unavailable"].includes(pilot.status)) errors.push("pilot-status-invalid");
   if (typeof pilot.radarReview !== "boolean") errors.push("pilot-review-invalid");
   if (!Array.isArray(pilot.events)) errors.push("pilot-events-invalid");
@@ -460,7 +462,10 @@ export function validateLocalRadarState(state) {
   if (!LOCAL_RADAR_AUTHORITIES.includes(state.authority)) errors.push("radar-authority-invalid");
   if (state.pilot !== undefined) {
     if (state.authority !== "account-cache") errors.push("guest-pilot-state-forbidden");
-    errors.push(...validateAccountRadarPilot(state.pilot).errors);
+    errors.push(...validateAccountRadarPilot(state.pilot, [
+      ...(Array.isArray(state.subscriptions) ? state.subscriptions.map((entry) => entry?.targetId) : []),
+      ...(Array.isArray(state.personSubscriptions) ? state.personSubscriptions.map((entry) => createPersonRadarTargetId(entry?.personExternalId, entry?.role)) : []),
+    ]).errors);
   }
   if (!Array.isArray(state.subscriptions)) errors.push("radar-subscriptions-invalid");
   if (!Array.isArray(state.outbox) || state.outbox.length > LOCAL_RADAR_MAX_OUTBOX) errors.push("radar-outbox-invalid");
@@ -707,6 +712,7 @@ export function changeLocalTextRadarSubscription(state, {
     if (!existing) return Object.freeze({ ok: true, reason: "already-missing", state, changed: false, createsProviderJob: false });
     const next = clone(state);
     next.subscriptions = next.subscriptions.filter((entry) => entry.targetId !== targetId);
+    if (next.pilot?.searchStatuses) next.pilot.searchStatuses = next.pilot.searchStatuses.filter((entry) => entry.targetId !== targetId);
     return Object.freeze({ ok: true, reason: "removed", state: freezeDeep(next), changed: true, createsProviderJob: false });
   }
   const status = action === "pause" ? "paused" : "active";
@@ -1424,6 +1430,9 @@ export function acknowledgeAccountRadarPilotSubscription(state, operationId, ack
     }
   }
   next.pilot.status = "ready";
+  if (ack.status === "removed" && next.pilot.searchStatuses) {
+    next.pilot.searchStatuses = next.pilot.searchStatuses.filter((entry) => entry.targetId !== ack.targetId);
+  }
   const stateCheck = validateLocalRadarState(next);
   if (!stateCheck.ok) return Object.freeze({ ok: false, reason: "pilot-subscription-result-invalid", state, changed: false });
   return Object.freeze({ ok: true, reason: "acknowledged", state: freezeDeep(next), changed: true });
@@ -1553,6 +1562,8 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     !confirmedReceiptKeys.has(`${entry.eventVersionId}|${entry.status}`)
   ));
   next.pilot.events = clone(feed.events);
+  if (feed.searchStatuses === undefined) delete next.pilot.searchStatuses;
+  else next.pilot.searchStatuses = clone(feed.searchStatuses);
   next.pilot.serverReceipts = feed.receipts.map((entry) => ({
     ...entry,
     updatedAt: normalizedInstant(entry.updatedAt),

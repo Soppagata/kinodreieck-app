@@ -12,6 +12,8 @@ import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { VERSIONED_DISCOVERY_FEED_FORMAT } from "../lib/webDiscoveryFeed.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
+import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel } from "../lib/radarNews.js";
+import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -21,6 +23,7 @@ const ANSICHTEN = Object.freeze([
 
 const ROLLEN_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
 function ereignisLabel(entry) {
+  if (radarEpisodeIdentity(entry)?.episodeNumber) return "Staffel · Folge";
   if (entry?.targetId?.startsWith("release:v1:")) {
     const category = { film: "Film", series: "Serie", season: "Staffel", special: "Special" }[entry.category] || "Film/Serie";
     return `${category} · Start${entry.region === "AT" ? " Österreich" : entry.region === "global" ? " weltweit" : ""}`;
@@ -346,12 +349,8 @@ function RadarView({
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
   const syncProblem = radarSyncProblem(radarState?.outbox, syncStatus);
-  const events = useMemo(() => (radarPilotEvents || [])
-    .filter((entry) => entry.verificationStatus === "confirmed"
-      && typeof entry.title === "string" && !!entry.title.trim())
-    .map((entry) => ({ ...entry, title: entry.title.trim() }))
-    .sort((a, b) => `${a.date}|${a.title}`.localeCompare(`${b.date}|${b.title}`, "de-AT")),
-  [radarPilotEvents]);
+  const events = useMemo(() => projectRadarNews(radarPilotEvents, localCalendarDay()), [radarPilotEvents]);
+  const searchStatuses = accountMode ? radarState?.pilot?.searchStatuses : undefined;
 
   const addTarget = async (event) => {
     event.preventDefault();
@@ -401,18 +400,27 @@ function RadarView({
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
           <span>{entry.status === "active" ? "Aktiv" : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
+          {accountMode ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, entry.targetId)}</span> : null}
         </li>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
           <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</span>
+          {accountMode ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, createPersonRadarTargetId(entry.personExternalId, entry.role))}</span> : null}
         </li>)}</ul> : null}
         <RadarRejectedChanges radarState={radarState} onDismiss={onRadarRejectedDismiss} />
         {syncProblem ? <RadarSyncProblem problem={syncProblem} onRetry={onRadarPilotSync} /> : null}
       </article>
       <article className="kd-entdecken-panel">
         <h3>Neuigkeiten</h3>
-        {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
+        {events.length ? <ul className="kd-radar-neuigkeiten">{events.map((entry) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
-          <span>{entry.date} · {ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
+          <span>{entry.date} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
+          {entry.kind === "season" ? <details className="kd-radar-folgen">
+            <summary>{entry.episodes.length} Folgen anzeigen</summary>
+            <ol>{entry.episodes.map((episode) => <li key={episode.eventVersionId}>
+              <strong>Folge {episode.episodeNumber}{episode.episodeTitle ? ` · ${episode.episodeTitle}` : ""}</strong>
+              <span>{episode.date}{episode.region === "AT" ? " · Österreich" : episode.region === "global" ? " · weltweit" : ""}{sichtbarePlattform(episode.platform) ? ` · ${sichtbarePlattform(episode.platform)}` : ""}</span>
+            </li>)}</ol>
+          </details> : null}
         </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine belegte Neuigkeit. Dein Radar zeigt hier gefundene Starttermine.</p>}
       </article>
     </div>

@@ -158,3 +158,57 @@ Diese Etappe benötigt genau die neue Migration, den aktualisierten
 `radar-websearch-task` und Frontendbuild. Keine Änderungen an Modell, Prompt,
 Budget, Provideradapter, JWT-Konfiguration oder Schedulerworkflow. Die lokale
 Mock-/PG-Abnahme ist kein bezahlter oder praktischer PWA-Livebeleg.
+
+## Staffelprojektion, eigener Suchstatus und generische Projektübersicht (31.08.)
+
+`radarNews.js` bündelt ausschließlich eindeutig markierte Episodentitel
+derselben Serie und Staffel (Staffel/Folge, Season/Episode, SxxExx).
+Staffelnummer allein oder gemeinsamer Suchtext sind kein Gruppenschlüssel.
+Widersprüchliche Nummern, Mehrfachmarker und Folgenspannen bleiben einzeln;
+Filme und Specials werden nicht gebündelt. Keine fuzzy Zuordnung oder
+Werkdatenbank. Die Projektion verändert oder entfernt keine gespeicherten
+Funde. Ab zwei Folgen gibt es eine Staffelkarte mit nativen `details/summary`
+und allen nummerierten Folgen, jeweiligem Datum und optionaler Plattform.
+Das Ausklappen ist requestfrei; lange Titel umbrechen auch im schmalen Grid.
+Nur expliziter Staffelstart oder Folge 1 erlaubt die Beschriftung
+„Staffelstart“. Sonst zeigt die Karte die nächste noch passende Folge;
+sind alle Termine vergangen, heißt es „Letzte Folge“. Unterschiedliche oder
+fehlende Plattformen/Regionen werden nicht auf die Gruppe verallgemeinert.
+
+Die einzige neue Migration `20260831120000_radar_search_status.sql` ersetzt
+`public.kd_radar_pilot_feed(uuid[])` additiv per `create or replace`.
+Die bisherigen Events und Capabilityprüfungen bleiben bestehen. Das optionale
+Rootfeld `searchStatuses` enthält pro zurückgegebenem eigenen Ziel nur
+`targetId`, `status`, `checkedAt`. Sowohl Subscription- als auch neue
+Laufhistorienreads sind an `auth.uid()` gebunden. Der neueste vorhandene
+Lauf bestimmt den Status; fehlende Historie ergibt `never` mit null-Zeit.
+Ein abgelaufenes Lease wird lesend als `timeout` projiziert, ohne Laufwrite.
+`searching` wird cachefest als „Suche gestartet …“ angezeigt, nicht als
+zeitlich unbegrenztes „läuft“. Terminale Zustände zeigen „Zuletzt gesucht …“
+mit Treffer-, Leerfund- oder Fehlerhinweis. Ein alter Feed ohne Zusatzfeld
+zeigt „Suchstatus nicht verfügbar“, niemals eine erfundene fehlende Suche.
+Das Feld wird separat im Accountcache gespeichert; kanonische Subscriptions,
+Revisionen und Checksums bleiben unverändert. Keine Tabelle, Wrapper-RPC,
+RLS-/ACL-Änderung, neuen Timer oder manuelle Suchtaste.
+
+Der Textprompt behandelt große Reihen als Projektübersicht mit getrennten
+Film- und TV-/Staffel-Suchrichtungen. Generische DE-/EN-Formulierungen lassen
+das Modell konkrete Titel samt Untertiteln oder abweichenden Projektnamen
+aus belegtem Reihenbezug erschließen. Dominierende Einzelwerke sollen nicht
+das restliche Suchbudget binden. Nur fehlende Termine werden werkbezogen
+nachgesucht; vollständige Treffer bleiben sofort erhalten. Die Vorschläge
+sind keine programmierte Queryabfolge. Staffel/Folge wird im bestehenden
+`title`/`seasonNumber` kenntlich; ein Folgetermin ist kein Staffelstart.
+Unverändert: Freitext, Modell, ein Providerrequest, vier Toolaufrufe, sechs
+Kandidaten, 2400 Ausgabetokens, 20-Cent-Taskdeckel und alle Aufnahmegates.
+
+Lokale Prüfungen: `npm run test:radar-news`, bestehender Freitextvertrag,
+React/JSDOM in `entdecken_phase3_test.mjs` und
+`npm run test:radar-search-status-pg17`. Letzterer nutzt synthetische Konten
+und eine temporäre lokale PG17-Datenbank: echte Migrationskette, aktuelle und
+abgelaufene Leases, neuester Verlauf, fremdes Konto beim selben Ziel,
+fehlende UID/Capability, unveränderte ACL und Checksums sowie bestehende
+SQL-Persistenz-/Feed-Roundtrips. Keine Anbieter- oder Remoteprüfung.
+Aus Mocks folgt keine praktische Franchise-Suchvollständigkeit. Eine spätere
+Lieferung benötigt diese Migration, Function-Prompt und Frontend; die
+praktische PWA-Abnahme bleibt davon getrennt.

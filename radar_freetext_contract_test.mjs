@@ -203,9 +203,9 @@ check("Providerquery entsteht ausschließlich aus dem gespeicherten Freitext", (
   assert.match(input.dateFollowup, /brauchbar.*US/);
   assert.match(body.system, /evidence ist immer eine nichtleere JSON-Liste von Objekten mit dem Pflichtfeld url/);
   assert.deepEqual(input.discoveryQueries, [
-    `${targetText} upcoming movies release schedule`,
-    `${targetText} announced TV series new seasons spin-offs`,
-    `${targetText} angekündigte Projekte Übersicht`,
+    `${targetText} upcoming theatrical movies announced projects release slate`,
+    `${targetText} upcoming TV series seasons spin-offs release schedule`,
+    `${targetText} weitere angekündigte Filme Serien Projekte Übersicht`,
   ]);
   assert.ok(input.discoveryQueries.every((query) => query.startsWith(targetText) && !query.includes("Österreich")));
   assert.ok(input.englishFallback.startsWith(targetText));
@@ -232,6 +232,11 @@ check("TEXT-Prompt steuert Suchauswahl, Zukunft und Werkvielfalt statt einer fes
     assert.match(body.system, /grossen Franchise.*Uebersichten angekuendigter Projekte und Veroeffentlichungsplaenen/);
     assert.match(body.system, /weiter entfernte Zukunft.*kein fixes Jahr/);
     assert.match(body.system, /Dominiert ein Werk.*weitere angekuendigte Projekte/);
+    assert.match(body.system, /Kinofilme und TV\/Serien\/Staffeln sind unterschiedliche Suchrichtungen/);
+    assert.match(body.system, /Untertitel und abweichende Projektnamen.*Quelle.*Bezug/);
+    assert.match(body.system, /Folgetermin ist kein Staffelstart/);
+    assert.match(body.system, /title mit Serienname, Staffelnummer.*Folgennummer.*seasonNumber/);
+    assert.doesNotMatch(body.system, /Star Wars|South Park|Starfighter|Nicolas Cage|One Piece|Lego/iu);
     assert.match(body.system, /Budget fuer verschiedene Werke statt fuer weitere Belege zum selben Werk/);
     assert.match(body.system, /vollstaendig.*sofort ohne Pflicht-Zusatzrunde/);
     assert.match(body.system, /kein Artikel-Neuheitsfilter/);

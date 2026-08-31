@@ -47,6 +47,10 @@ export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
 ]);
 export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber", "title", "targetType", "category"]);
 export const RADAR_PILOT_RECEIPT_KEYS = Object.freeze(["eventVersionId", "status", "updatedAt"]);
+export const RADAR_SEARCH_STATUSES = Object.freeze([
+  "never", "searching", "confirmed", "no_change", "insufficient_evidence",
+  "provider_error", "storage_error", "forbidden", "unavailable", "timeout",
+]);
 
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHECKSUM_FORM = /^[a-f0-9]{64}$/;
@@ -381,11 +385,28 @@ export function projectRadarPilotPersonResult(value, subscriptions = []) {
   });
 }
 
+export function validateRadarSearchStatuses(value, targetIds = []) {
+  if (!Array.isArray(value)) return result(["feed-search-statuses-invalid"]);
+  const errors = [];
+  const seen = new Set();
+  for (const entry of value) {
+    if (!exactKeys(entry, ["targetId", "status", "checkedAt"])
+        || !validTargetKey(entry.targetId) || !targetIds.includes(entry.targetId)
+        || !RADAR_SEARCH_STATUSES.includes(entry.status)
+        || (entry.status === "never" ? entry.checkedAt !== null : !validInstant(entry.checkedAt))) {
+      errors.push("feed-search-status-invalid");
+    }
+    if (seen.has(entry?.targetId)) errors.push("feed-search-status-duplicate");
+    seen.add(entry?.targetId);
+  }
+  return result(errors);
+}
+
 export function validateRadarPilotFeed(value) {
   const v2 = value?.format === RADAR_PILOT_FEED_FORMAT;
   const v1 = value?.format === RADAR_PILOT_LEGACY_FEED_FORMAT;
   const shapeValid = v2
-    ? exactKeysWithOptional(value, RADAR_PILOT_FEED_V2_KEYS, ["automation"])
+    ? exactKeysWithOptional(value, RADAR_PILOT_FEED_V2_KEYS, ["automation", "searchStatuses"])
     : exactKeys(value, RADAR_PILOT_FEED_KEYS);
   if ((!v2 && !v1) || !shapeValid) {
     return result(["feed-shape-invalid"]);
@@ -398,6 +419,9 @@ export function validateRadarPilotFeed(value) {
   if (value.automation !== undefined && !radarAutomationAttested(value.automation, { allowInactive: true })) {
     errors.push("feed-automation-invalid");
   }
+  if (value.searchStatuses !== undefined) errors.push(...validateRadarSearchStatuses(
+    value.searchStatuses, (Array.isArray(value.subscriptions) ? value.subscriptions : []).map((entry) => entry?.targetId),
+  ).errors);
   if (!Array.isArray(value.subscriptions)) errors.push("feed-subscriptions-invalid");
   else {
     const seen = new Set();
