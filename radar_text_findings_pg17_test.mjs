@@ -35,7 +35,8 @@ const targetId = createLocalTextRadarTargetId(targetText);
 const quote = (value) => `'${String(value).replaceAll("'","''")}'`;
 const session = (id,query,role="authenticated") => sql(`begin; set local role ${role}; select set_config('request.jwt.claim.sub',${quote(id)},true); select set_config('request.jwt.claim.role',${quote(role)},true); ${query}; commit;`).split("\n").at(-1);
 const ack = (status) => session(a,`select public.kd_radar_pilot_set_text_subscription(${quote(targetText)},${quote(status)},gen_random_uuid())`);
-const feed = (id=a) => JSON.parse(session(id,"select public.kd_radar_pilot_feed('{}'::uuid[])"));
+const feed = (id=a) => JSON.parse(session(id,"select public.kd_radar_pilot_feed('{}'::uuid[],true)"));
+const legacyFeed = (id=a) => JSON.parse(session(id,"select public.kd_radar_pilot_feed('{}'::uuid[])"));
 function check(name,fn) { fn(); checks++; console.log(`✓ ${name}`); }
 try {
   run("initdb",["--no-locale","--encoding=UTF8","--auth=trust","--username=postgres","--pgdata",data]);
@@ -60,13 +61,19 @@ try {
     if (file.startsWith("20260825120000")) sql("update public.kd_radar_settings set radar_aktiv=true,radar_provider_aktiv=true");
     const previousAcl = file.startsWith("20260831120000")
       ? sql("select proacl::text from pg_proc where oid='public.kd_radar_pilot_feed(uuid[])'::regprocedure") : null;
+    const previousDefinition = previousAcl !== null
+      ? sql("select pg_get_functiondef('public.kd_radar_pilot_feed(uuid[])'::regprocedure)") : null;
     try { sql(readFileSync(join("supabase/migrations",file),"utf8")); }
     catch (error) { throw new Error(`${file}: ${error.message}`); }
-    if (previousAcl !== null) check("Additive Feedmigration erhält ACL und Security-definer/search_path ohne neue RPC",() => {
+    if (previousAcl !== null) check("Opt-in-Überladung erhält Alt-RPC bytegenau und schützt neue Signatur ohne Default",() => {
       assert.equal(sql("select proacl::text from pg_proc where oid='public.kd_radar_pilot_feed(uuid[])'::regprocedure"),previousAcl);
-      assert.equal(sql("select prosecdef and proconfig @> array['search_path=pg_catalog, public'] from pg_proc where oid='public.kd_radar_pilot_feed(uuid[])'::regprocedure"),"t");
-      assert.equal(sql("select has_function_privilege('anon','public.kd_radar_pilot_feed(uuid[])','EXECUTE')"),"f");
-      assert.equal(sql("select has_function_privilege('authenticated','public.kd_radar_pilot_feed(uuid[])','EXECUTE')"),"t");
+      assert.equal(sql("select pg_get_functiondef('public.kd_radar_pilot_feed(uuid[])'::regprocedure)"),previousDefinition);
+      assert.equal(sql("select prosecdef and proconfig @> array['search_path=pg_catalog, public'] and pronargdefaults=0 from pg_proc where oid='public.kd_radar_pilot_feed(uuid[],boolean)'::regprocedure"),"t");
+      for(const signature of ["uuid[]","uuid[],boolean"]){
+        assert.equal(sql(`select has_function_privilege('anon','public.kd_radar_pilot_feed(${signature})','EXECUTE')`),"f");
+        assert.equal(sql(`select has_function_privilege('authenticated','public.kd_radar_pilot_feed(${signature})','EXECUTE')`),"t");
+        assert.equal(sql(`select has_function_privilege('service_role','public.kd_radar_pilot_feed(${signature})','EXECUTE')`),"t");
+      }
       assert.equal(sql("select has_table_privilege('authenticated','public.kd_radar_daily_runs','SELECT')"),"f");
     });
   }
@@ -110,6 +117,18 @@ try {
     ack("active"); assert.equal(feed().subscriptions.length,1); assert.equal(feed().events.length,0);
     assert.deepEqual(feed().searchStatuses,[{targetId,status:"never",checkedAt:null}]);
     assert.deepEqual(feed(b).searchStatuses,[]);
+  });
+  check("Alte/geöffnete Clients auf neuer DB erhalten keinen neuen Root-Key; false/null sind opt-out",() => {
+    const old=legacyFeed(); const current=feed();
+    assert.equal(Object.hasOwn(old,"searchStatuses"),false);
+    assert.equal(validateRadarPilotFeed(old).ok,true);
+    assert.equal(current.revision,old.revision); assert.equal(current.checksum,old.checksum);
+    assert.deepEqual(Object.keys(current).filter(key=>key!=="searchStatuses").sort(),Object.keys(old).sort());
+    for(const flag of ["false","null"]){
+      const optedOut=JSON.parse(session(a,`select public.kd_radar_pilot_feed('{}'::uuid[],${flag})`));
+      assert.equal(Object.hasOwn(optedOut,"searchStatuses"),false);
+      assert.deepEqual(optedOut.subscriptions,old.subscriptions);
+    }
   });
   let stored;
   check("URL-only-Beleg mit intern normalisierten Metadaten schreibt durch echten Feed und Browservalidator",() => {

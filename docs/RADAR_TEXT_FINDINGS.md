@@ -175,10 +175,11 @@ Nur expliziter Staffelstart oder Folge 1 erlaubt die Beschriftung
 sind alle Termine vergangen, heißt es „Letzte Folge“. Unterschiedliche oder
 fehlende Plattformen/Regionen werden nicht auf die Gruppe verallgemeinert.
 
-Die einzige neue Migration `20260831120000_radar_search_status.sql` ersetzt
-`public.kd_radar_pilot_feed(uuid[])` additiv per `create or replace`.
-Die bisherigen Events und Capabilityprüfungen bleiben bestehen. Das optionale
-Rootfeld `searchStatuses` enthält pro zurückgegebenem eigenen Ziel nur
+Die einzige neue Migration `20260831120000_radar_search_status.sql` ergänzt
+die Überladung `public.kd_radar_pilot_feed(uuid[], boolean)` ohne Defaultwert.
+Sie ruft den bytegenau unveränderten Ein-Parameter-Feed auf, einschließlich
+seiner Events und Capabilityprüfungen. Nur explizites `true` ergänzt das
+Rootfeld `searchStatuses`. Es enthält pro zurückgegebenem eigenen Ziel nur
 `targetId`, `status`, `checkedAt`. Sowohl Subscription- als auch neue
 Laufhistorienreads sind an `auth.uid()` gebunden. Der neueste vorhandene
 Lauf bestimmt den Status; fehlende Historie ergibt `never` mit null-Zeit.
@@ -188,8 +189,15 @@ zeitlich unbegrenztes „läuft“. Terminale Zustände zeigen „Zuletzt gesuch
 mit Treffer-, Leerfund- oder Fehlerhinweis. Ein alter Feed ohne Zusatzfeld
 zeigt „Suchstatus nicht verfügbar“, niemals eine erfundene fehlende Suche.
 Das Feld wird separat im Accountcache gespeichert; kanonische Subscriptions,
-Revisionen und Checksums bleiben unverändert. Keine Tabelle, Wrapper-RPC,
-RLS-/ACL-Änderung, neuen Timer oder manuelle Suchtaste.
+Revisionen und Checksums bleiben unverändert. Alte/geöffnete PWAs bekommen
+über den Ein-Parameter-Aufruf kein unbekanntes Rootfeld. Der neue Client
+sendet `p_include_search_status: true`, ohne obligatorischen Zusatzrequest.
+Nur bei einer fehlenden Überladung auf einem alten Backend erlaubt er einen
+Legacy-Read; Auth-, Server- und Netzwerkfehler werden nicht erneut versucht.
+Beide Reads bleiben am bestehenden Kontofence gebunden. Die neue Signatur
+ist wie der alte Feed ausschließlich für authenticated/service_role ausführbar.
+Keine neue Tabelle, kein neuer RPC-Name, keine Änderung bestehender RLS/ACL,
+keine neuen Timer und keine manuelle Suchtaste.
 
 Der Textprompt behandelt große Reihen als Projektübersicht mit getrennten
 Film- und TV-/Staffel-Suchrichtungen. Generische DE-/EN-Formulierungen lassen
@@ -207,7 +215,8 @@ React/JSDOM in `entdecken_phase3_test.mjs` und
 `npm run test:radar-search-status-pg17`. Letzterer nutzt synthetische Konten
 und eine temporäre lokale PG17-Datenbank: echte Migrationskette, aktuelle und
 abgelaufene Leases, neuester Verlauf, fremdes Konto beim selben Ziel,
-fehlende UID/Capability, unveränderte ACL und Checksums sowie bestehende
+fehlende UID/Capability, bytegleiche Alt-RPC samt ACL, abgesicherte Opt-in-ACL,
+Altclient-Kompatibilität und unveränderte Checksums sowie bestehende
 SQL-Persistenz-/Feed-Roundtrips. Keine Anbieter- oder Remoteprüfung.
 Aus Mocks folgt keine praktische Franchise-Suchvollständigkeit. Eine spätere
 Lieferung benötigt diese Migration, Function-Prompt und Frontend; die

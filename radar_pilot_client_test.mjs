@@ -419,6 +419,54 @@ await check("Pilot-Sync reicht nur die exakt validierte Feed-Attestation an den 
   assert.deepEqual(result.automation, automation);
 });
 
+await check("Neuer Client fordert eigene Suchstatus in genau einem opt-in Feedread an", async () => {
+  const bodies=[];
+  const searchStatuses=[{targetId,status:"no_change",checkedAt:instant}];
+  const h=harness({state:R.createEmptyLocalRadar({authority:"account-cache"}),
+    fetchImpl:async(url,init)=>{
+      assert.ok(url.endsWith("kd_radar_pilot_feed"));bodies.push(JSON.parse(init.body));
+      return response(200,v2Feed({searchStatuses}));
+    },
+  });
+  const result=await h.service.sync({state:h.state,commit:h.commit});
+  assert.equal(result.status,"ready");
+  assert.deepEqual(bodies,[{p_operation_ids:[],p_include_search_status:true}]);
+  assert.deepEqual(h.state.pilot.searchStatuses,searchStatuses);
+});
+
+await check("Nur fehlende Überladung erlaubt einen Altserver-Read ohne erfundene Suchhistorie", async () => {
+  const bodies=[];
+  const h=harness({state:R.createEmptyLocalRadar({authority:"account-cache"}),
+    fetchImpl:async(_url,init)=>{
+      const body=JSON.parse(init.body);bodies.push(body);
+      return body.p_include_search_status===true
+        ? response(404,{code:"PGRST202",message:"function not found"}) : response(200,v2Feed());
+    },
+  });
+  const result=await h.service.sync({state:h.state,commit:h.commit});
+  assert.equal(result.status,"ready");
+  assert.deepEqual(bodies,[{p_operation_ids:[],p_include_search_status:true},{p_operation_ids:[]}]);
+  assert.equal(h.state.pilot.searchStatuses,undefined);
+});
+
+await check("Opt-in liest bei Auth-/Server-/Netzfehler nicht erneut und wahrt den Kontofence", async () => {
+  for(const failure of [response(403,{code:"42501",message:"radar_pilot_forbidden"}),
+    response(503,{code:"unavailable"}),null]){
+    let calls=0;
+    const h=harness({state:R.createEmptyLocalRadar({authority:"account-cache"}),
+      fetchImpl:async()=>{calls++;if(!failure)throw new Error("network");return failure;}});
+    const result=await h.service.sync({state:h.state,commit:h.commit});
+    assert.equal(result.status,"pending");assert.equal(calls,1);
+    assert.equal(h.writes("account-driver-a"),0);
+  }
+  let calls=0;
+  const h=harness({state:R.createEmptyLocalRadar({authority:"account-cache"}),
+    fetchImpl:async()=>{calls++;return response(404,{code:"PGRST202",message:"function not found"},
+      {bodyHook:()=>h.changeAccount()});}});
+  assert.equal((await h.service.sync({state:h.state,commit:h.commit})).status,"context-changed");
+  assert.equal(calls,1);assert.equal(h.writes("account-driver-a"),0);
+});
+
 await check("Gast erzeugt null Aufrufe aller Pilot-RPCs", async () => {
   const h = harness({ mode: "guest" });
   const result = await h.service.sync({ state: h.state, commit: h.commit });

@@ -279,6 +279,7 @@ export function createRadarPilotService({
 
     let current = state;
     let automation = null;
+    let includeSearchStatus = true;
     const importedEventVersionIds = new Set();
     let rejected = false;
     const runSubscriptionIds = state.outbox.filter((entry) => entry.status === "pending").map((entry) => entry.operationId);
@@ -289,7 +290,16 @@ export function createRadarPilotService({
 
     try {
       const reconcileFeed = async (operationIds = []) => {
-        const response = await callRpc("kd_radar_pilot_feed", { p_operation_ids: operationIds }, fence, token);
+        let response = await callRpc("kd_radar_pilot_feed", {
+          p_operation_ids: operationIds,
+          ...(includeSearchStatus ? { p_include_search_status: true } : {}),
+        }, fence, token);
+        // Only an absent overload permits one legacy read, never a retry for
+        // auth, network or server errors. New servers need no extra request.
+        if (includeSearchStatus && response.kind === "pilot-unavailable") {
+          includeSearchStatus = false;
+          response = await callRpc("kd_radar_pilot_feed", { p_operation_ids: operationIds }, fence, token);
+        }
         if (response.kind === "pilot-unavailable") {
           return Object.freeze({ kind: "pilot-unavailable", state: current });
         }
