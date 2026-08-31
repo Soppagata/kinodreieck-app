@@ -2,6 +2,14 @@
    provider calls, inferred identity or changes to stored findings. */
 const SERIES_CATEGORIES = new Set(["series", "season"]);
 const MARKER = /\b(?:staffel|season|folge|episode)\s*\d|\bS\d+\s*E\d+/iu;
+const VIENNA_DAY = new Intl.DateTimeFormat("en", {
+  timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+export function radarViennaDay(now = new Date()) {
+  const parts = Object.fromEntries(VIENNA_DAY.formatToParts(now).map(({ type, value }) => [type, value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
 
 export function radarEpisodeIdentity(entry) {
   if (!SERIES_CATEGORIES.has(entry.category)
@@ -35,23 +43,26 @@ export function projectRadarNews(events, today) {
     if (event.verificationStatus !== "confirmed" || typeof event.title !== "string" || !event.title.trim()) continue;
     const entry = { ...event, title: event.title.trim() };
     const identity = radarEpisodeIdentity(entry);
-    if (!identity) { singles.push(entry); continue; }
+    if (!identity) { if (entry.date >= today) singles.push(entry); continue; }
     const group = seasons.get(identity.key) || [];
     group.push({ ...entry, ...identity });
     seasons.set(identity.key, group);
   }
   for (const [key, entries] of seasons) {
-    const episodes = entries.filter((entry) => entry.episodeNumber !== null)
+    // Determine the existing group before filtering: its last upcoming episode
+    // stays in the season card without changing or pruning the stored cache.
+    const wasGrouped = entries.filter((entry) => entry.episodeNumber !== null).length >= 2;
+    const upcoming = entries.filter((entry) => entry.date >= today);
+    const episodes = upcoming.filter((entry) => entry.episodeNumber !== null)
       .sort((a, b) => a.episodeNumber - b.episodeNumber || byDate(a, b));
-    if (episodes.length < 2) { singles.push(...entries); continue; }
+    if (!wasGrouped || !episodes.length) { singles.push(...upcoming); continue; }
     const chronological = [...episodes].sort(byDate);
-    const premiere = entries.filter((entry) => entry.episodeNumber === null || entry.episodeNumber === 1).sort(byDate)[0];
-    const next = chronological.find((entry) => entry.date >= today);
-    const dated = premiere || next || chronological.at(-1);
+    const premiere = upcoming.filter((entry) => entry.episodeNumber === null || entry.episodeNumber === 1).sort(byDate)[0];
+    const dated = premiere || chronological[0];
     singles.push({ kind: "season", eventVersionId: `season:${key}`,
       title: `${entries[0].seriesTitle} · Staffel ${entries[0].seasonNumber}`,
-      date: dated.date, dateLabel: premiere ? "Staffelstart" : next ? "Nächste Folge" : "Letzte Folge",
-      category: "season", platform: unanimous(entries, "platform"), region: unanimous(entries, "region"),
+      date: dated.date, dateLabel: premiere ? "Staffelstart" : "Nächste Folge",
+      category: "season", platform: unanimous(upcoming, "platform"), region: unanimous(upcoming, "region"),
       episodes,
     });
   }

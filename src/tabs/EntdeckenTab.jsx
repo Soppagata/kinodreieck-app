@@ -12,7 +12,7 @@ import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { VERSIONED_DISCOVERY_FEED_FORMAT } from "../lib/webDiscoveryFeed.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
-import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel } from "../lib/radarNews.js";
+import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "../lib/radarNews.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
 
 const ANSICHTEN = Object.freeze([
@@ -349,7 +349,8 @@ function RadarView({
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
   const syncProblem = radarSyncProblem(radarState?.outbox, syncStatus);
-  const events = useMemo(() => projectRadarNews(radarPilotEvents, localCalendarDay()), [radarPilotEvents]);
+  const radarDay = radarViennaDay();
+  const events = useMemo(() => projectRadarNews(radarPilotEvents, radarDay), [radarPilotEvents, radarDay]);
   const searchStatuses = accountMode ? radarState?.pilot?.searchStatuses : undefined;
 
   const addTarget = async (event) => {
@@ -415,7 +416,7 @@ function RadarView({
           <strong>{entry.title}</strong>
           <span>{entry.date} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
           {entry.kind === "season" ? <details className="kd-radar-folgen">
-            <summary>{entry.episodes.length} Folgen anzeigen</summary>
+            <summary>{entry.episodes.length} {entry.episodes.length === 1 ? "Folge" : "Folgen"} anzeigen</summary>
             <ol>{entry.episodes.map((episode) => <li key={episode.eventVersionId}>
               <strong>Folge {episode.episodeNumber}{episode.episodeTitle ? ` · ${episode.episodeTitle}` : ""}</strong>
               <span>{episode.date}{episode.region === "AT" ? " · Österreich" : episode.region === "global" ? " · weltweit" : ""}{sichtbarePlattform(episode.platform) ? ` · ${sichtbarePlattform(episode.platform)}` : ""}</span>

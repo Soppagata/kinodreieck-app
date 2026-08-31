@@ -45,6 +45,7 @@ import {
 } from "./src/lib/radarTargetSearch.js";
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
+import { radarViennaDay } from "./src/lib/radarNews.js";
 import "./radar_websearch_mvp_test.mjs";
 
 let checks = 0;
@@ -790,7 +791,7 @@ try {
   });
   const confirmedEvent = {
     eventId, eventVersionId, targetId: workTarget.targetId, title: "Passender Film",
-    eventType: "kinostart_at", date: "2026-09-03",
+    eventType: "kinostart_at", date: radarViennaDay(),
     region: "AT", platform: "-", lifecycleStatus: "scheduled", verificationStatus: "confirmed",
     evidence: [{ sourceId: "film-at", sourceDomain: "film.at", url: "https://film.at/start", retrievedAt: now }],
   };
@@ -798,7 +799,7 @@ try {
   await workUi.render(renderWorkProps());
   check("Bestätigter Film-Treffer zeigt nur Titel, Inhaltsdatum und Typ", () => {
     assert.match(workUi.container.textContent, /Passender Film/);
-    assert.match(workUi.container.textContent, /2026-09-03/);
+    assert.ok(workUi.container.textContent.includes(confirmedEvent.date));
     assert.match(workUi.container.textContent, /Film · Kinostart Österreich/);
     const news = [...workUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
@@ -815,7 +816,7 @@ try {
   await act(async () => { button(workReloadUi.container, "Radar").click(); await tick(); });
   check("Film-Titel und validiertes Feed-Ereignis bleiben nach Reload sichtbar", () => {
     assert.match(workReloadUi.container.textContent, /Passender Film/);
-    assert.match(workReloadUi.container.textContent, /2026-09-03/);
+    assert.ok(workReloadUi.container.textContent.includes(confirmedEvent.date));
     assert.doesNotMatch(workReloadUi.container.textContent, /watchmode:|fixture:|work:/i);
   });
   await workReloadUi.cleanup();
@@ -838,7 +839,7 @@ try {
     targetId: "imdb:tt12345678",
     title: "Star Wars: Starfighter",
     eventType: "kinostart_at",
-    date: "2027-05-26",
+    date: radarViennaDay(),
     region: "AT",
     platform: "-",
     verificationStatus: "confirmed",
@@ -905,6 +906,57 @@ try {
     assert.doesNotMatch(details.querySelectorAll("li")[1].textContent,/Beispiel\+|unknown/);
   });
   await seasonUi.cleanup();
+
+  const RealDate=globalThis.Date;
+  let radarClock="2099-09-05T21:59:59.000Z";
+  let dayUi=null;
+  try {
+    globalThis.Date=class extends RealDate {
+      constructor(...args){super(...(args.length?args:[radarClock]));}
+      static now(){return new RealDate(radarClock).getTime();}
+    };
+    const stableEvents=[...episodeEvents,
+      {...episodeEvents[0],eventVersionId:"premiere",title:"Beispieldorf Staffel 29",date:"2099-09-01"},
+      {...starfighterEvent,eventVersionId:"old-film",title:"Vergangener Film",date:"2099-09-04"},
+      {...starfighterEvent,eventVersionId:"today-film",title:"Film heute",date:"2099-09-05"},
+      {...starfighterEvent,eventVersionId:"future-film",title:"Ferner Film",date:"2200-01-01"},
+    ];
+    const radarState={...targetFoundState,pilot:{searchStatuses:[{
+      targetId:starWarsTarget.targetId,status:"no_change",checkedAt:now,
+    }]}};
+    const originalEvents=JSON.stringify(stableEvents),originalState=JSON.stringify(radarState);
+    let dayRequests=0;
+    const props={...baseProps,accountMode:true,radarState,radarPilotEvents:stableEvents,
+      onRadarPilotSync:()=>{dayRequests++;},onRadarTextAdd:()=>{dayRequests++;}};
+    dayUi=await mount(EntdeckenTab,props);
+    await act(async()=>{button(dayUi.container,"Radar").click();await tick();});
+    check("Wiener Tag blendet Altcache aus, lässt heute/ferne Zukunft und nur kommende Staffeldetails stehen",()=>{
+      const news=dayUi.container.querySelector(".kd-radar-neuigkeiten");
+      assert.equal(news.children.length,3);
+      assert.match(news.textContent,/Film heute|Ferner Film/);
+      assert.doesNotMatch(news.textContent,/Vergangener Film|2099-09-0[1234]|Staffelstart/);
+      assert.equal(news.querySelector("summary").textContent,"2 Folgen anzeigen");
+      assert.deepEqual([...news.querySelectorAll("details li strong")].map(node=>node.textContent),["Folge 5","Folge 6"]);
+    });
+    radarClock="2099-09-05T22:00:00.000Z";
+    await dayUi.render(props);
+    check("Identische Eventreferenz nach Wiener Mitternacht projiziert neu und hält letzte Folge gebündelt",()=>{
+      const news=dayUi.container.querySelector(".kd-radar-neuigkeiten");
+      assert.equal(news.children.length,2);
+      assert.doesNotMatch(news.textContent,/Film heute|2099-09-05/);
+      assert.match(news.textContent,/2099-09-06 · Staffel · Nächste Folge/);
+      assert.equal(news.querySelector("summary").textContent,"1 Folge anzeigen");
+      assert.equal(news.querySelectorAll("details li").length,1);
+      assert.match(news.textContent,/Ferner Film/);
+      assert.equal(dayRequests,0);
+      assert.equal(JSON.stringify(stableEvents),originalEvents);
+      assert.equal(JSON.stringify(radarState),originalState);
+      assert.match(dayUi.container.querySelector(".kd-radar-suchstatus").textContent,/keine neuen Treffer/);
+    });
+  } finally {
+    globalThis.Date=RealDate;
+    if(dayUi)await dayUi.cleanup();
+  }
 
   const targetFoundReload = decodeLocalRadar(JSON.stringify(targetFoundState), { authority: "guest" });
   const targetFoundReloadUi = await mount(EntdeckenTab, {

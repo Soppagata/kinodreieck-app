@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel } from "./src/lib/radarNews.js";
+import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "./src/lib/radarNews.js";
 import { validateRadarPilotFeed, RADAR_PILOT_FEED_FORMAT } from "./src/lib/radarPilotContracts.js";
 import { createEmptyLocalRadar, createLocalTextRadarTargetId, reconcileAccountRadarPilotFeed,
   decodeLocalRadar, changeLocalTextRadarSubscription, validateLocalRadarState,
@@ -54,7 +54,41 @@ check("Nur belegte Premiere oder Folge 1 erlaubt Staffelstart; sonst nächster T
   assert.equal(projectRadarNews([premiere,...five],today)[0].date,"2026-09-01");
   assert.equal(projectRadarNews([premiere,...five],today)[0].episodes.length,5);
   assert.equal(projectRadarNews(five,"2026-09-04")[0].date,"2026-09-04");
-  assert.equal(projectRadarNews(five,"2026-10-01")[0].dateLabel,"Letzte Folge");
+  assert.deepEqual(projectRadarNews(five,"2026-10-01"),[]);
+});
+check("Wiener Kalendertag berücksichtigt UTC-Grenze sowie Sommer- und Winterzeit", () => {
+  for(const [instant,day] of [
+    ["2026-08-31T21:59:59.999Z","2026-08-31"], ["2026-08-31T22:00:00.000Z","2026-09-01"],
+    ["2026-12-31T22:59:59.999Z","2026-12-31"], ["2026-12-31T23:00:00.000Z","2027-01-01"],
+  ]) assert.equal(radarViennaDay(new Date(instant)),day);
+});
+check("Nur Werkdatum zählt: gestern weg, heute/morgen/ferne Zukunft ohne Obergrenze sichtbar", () => {
+  const events=["2026-08-30","2026-08-31","2026-09-01","2099-12-31"].map((date,index)=>episode(index+1,{
+    title:`Film ${index}`,targetType:"work",category:"film",date,
+    checkedAt:index===0?"2026-09-01T10:00:00Z":"2020-01-01T10:00:00Z",
+    evidence:[{publishedAt:index===0?"2026-09-01":"2020-01-01"}],
+  }));
+  const original=JSON.stringify(events);
+  assert.deepEqual(projectRadarNews(events,today).map(entry=>entry.date),["2026-08-31","2026-09-01","2099-12-31"]);
+  assert.equal(JSON.stringify(events),original);
+});
+check("Gemischte Altstaffel behält genau eine kommende Folge gebündelt, ohne alte Premiere/Details", () => {
+  const cached=[episode(0,{title:"Beispieldorf Staffel 29",date:"2026-08-01"}),
+    episode(1,{date:"2026-08-01"}),episode(2,{date:"2026-08-30"}),episode(3,{date:today})];
+  const original=JSON.stringify(cached);
+  const [group]=projectRadarNews(cached,today);
+  assert.equal(group.kind,"season");assert.equal(group.date,today);
+  assert.equal(group.dateLabel,"Nächste Folge");
+  assert.deepEqual(group.episodes.map(entry=>entry.episodeNumber),[3]);
+  assert.deepEqual(projectRadarNews(cached,"2026-09-01"),[]);
+  assert.equal(JSON.stringify(cached),original);
+});
+check("Uneindeutige ungruppierte Folgen werden ebenfalls nur ab heute angezeigt", () => {
+  const ambiguous=[episode(2,{title:"Beispieldorf Folge 2",date:"2026-08-30"}),
+    episode(3,{title:"Beispieldorf Folge 3",date:today})];
+  const shown=projectRadarNews(ambiguous,today);
+  assert.equal(shown.length,1);assert.equal(shown[0].title,"Beispieldorf Folge 3");
+  assert.equal(shown[0].kind,undefined);
 });
 check("Plattform- oder Regionswiderspruch wird nicht auf die Staffel verallgemeinert", () => {
   for (const extra of [{platform:"Andere+"},{platform:undefined},{region:"global"}]) {
@@ -70,6 +104,21 @@ const subscription={targetId,targetType:"text",title:targetText,region:"AT",scop
 const feed={format:RADAR_PILOT_FEED_FORMAT,revision:1,checksum:"a".repeat(64),reconciledAt:now,
   subscriptions:[subscription],events:[],receipts:[],operationAcks:[],personResults:[],radarReview:true};
 const status = (value="no_change") => ({targetId,status:value,checkedAt:value==="never"?null:now});
+check("Bestehender Altcache bleibt bytegleich gespeichert, während alte Neuigkeit ausgeblendet wird", () => {
+  const event={eventId:"a1000000-0000-4000-8000-000000000001",eventVersionId:"a1000000-0000-4000-8000-000000000002",
+    targetId:"release:v1:1122334455667788",title:"Alter Film",category:"film",targetType:"work",
+    eventType:"kinostart_at",date:"2026-08-05",region:"AT",platform:"-",lifecycleStatus:"scheduled",verificationStatus:"confirmed",
+    evidence:[{sourceId:"web:press.example",sourceDomain:"press.example",url:"https://press.example/start",retrievedAt:now}]};
+  const state=reconcileAccountRadarPilotFeed(createEmptyLocalRadar({authority:"account-cache"}),{
+    ...feed,events:[event],searchStatuses:[status()],
+  }).state;
+  const serialized=JSON.stringify(state);
+  const decoded=decodeLocalRadar(serialized,{authority:"account-cache"});
+  assert.deepEqual(projectRadarNews(decoded.state.pilot.events,today),[]);
+  assert.equal(JSON.stringify(decoded.state),serialized);
+  assert.deepEqual(decoded.state.pilot.searchStatuses,[status()]);
+  assert.equal(decoded.state.subscriptions.length,1);
+});
 check("Alter Feed bleibt kompatibel und wird nie als nie gesucht ausgegeben", () => {
   assert.equal(validateRadarPilotFeed(feed).ok,true);
   const result=reconcileAccountRadarPilotFeed(createEmptyLocalRadar({authority:"account-cache"}),feed);

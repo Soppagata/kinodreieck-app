@@ -172,7 +172,7 @@ und allen nummerierten Folgen, jeweiligem Datum und optionaler Plattform.
 Das Ausklappen ist requestfrei; lange Titel umbrechen auch im schmalen Grid.
 Nur expliziter Staffelstart oder Folge 1 erlaubt die Beschriftung
 „Staffelstart“. Sonst zeigt die Karte die nächste noch passende Folge;
-sind alle Termine vergangen, heißt es „Letzte Folge“. Unterschiedliche oder
+sind alle Termine vergangen, verschwindet die Karte. Unterschiedliche oder
 fehlende Plattformen/Regionen werden nicht auf die Gruppe verallgemeinert.
 
 Die einzige neue Migration `20260831120000_radar_search_status.sql` ergänzt
@@ -221,3 +221,15 @@ SQL-Persistenz-/Feed-Roundtrips. Keine Anbieter- oder Remoteprüfung.
 Aus Mocks folgt keine praktische Franchise-Suchvollständigkeit. Eine spätere
 Lieferung benötigt diese Migration, Function-Prompt und Frontend; die
 praktische PWA-Abnahme bleibt davon getrennt.
+
+### Anzeige ab dem heutigen Wiener Kalendertag
+
+Neuigkeiten und Staffeldetails zeigen ausschließlich `event.date >= heute`
+in `Europe/Vienna`; heute und beliebig entfernte Zukunft bleiben sichtbar.
+Such- und Artikeldatum beeinflussen diesen Filter nicht. Vergangene Funde
+bleiben unverändert im Cache. Eine bestehende Staffelgruppe bleibt auch mit
+nur einer kommenden Folge gebündelt; eine vergangene Premiere wird durch
+„Nächste Folge“ mit zukünftigem/aktuellem Termin ersetzt. Der beim Rendern
+berechnete Wiener Tag ist eine Memo-Dependency, sodass ein erneutes Anzeigen
+nach Mitternacht auch bei identischen Events aktualisiert. Keine Timer,
+Requests, Datenlöschungen oder Änderungen an Zielen, Suchstatus oder Backend.
