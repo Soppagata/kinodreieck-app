@@ -313,10 +313,9 @@ export async function kontoUebernehmen(_inventurWerte, { accountBindung = null }
   }
 }
 
-/* Nach einem Login ist keine zusätzliche Handarbeit nötig, wenn die Richtung
-   eindeutig und verlustfrei ist: leeres Gerät -> Konto, beide leer oder bereits
-   bitgleich. Sobald lokale und entfernte Daten voneinander abweichen, bleibt
-   der bestehende Übernahme-Assistent die einzige entscheidende Stelle. */
+/* Nach einem Login zeigt das Gerät ausschließlich den gebundenen Kontostand.
+   `kontoUebernehmen` bindet davor den bytegenauen Gast-Rückholpunkt und lädt nur
+   Remote→lokal; der frühere Gaststand wird weder gemergt noch hochgeladen. */
 export async function kontoSicherAutomatischLaden(accountId, deps = {}) {
   const inventur = deps.inventur || inventurLaden;
   const inv = await inventur(accountId);
@@ -324,29 +323,11 @@ export async function kontoSicherAutomatischLaden(accountId, deps = {}) {
     || ((werte) => kontoUebernehmen(werte, { accountBindung: inv.accountBindung }));
   const bestaetigen = deps.bestaetigen
     || ((id) => uebernahmeBestaetigen(id, inv.accountBindung));
-  const pull = deps.pull
-    || (() => kontoUebernehmen(inv.lokaleWerte, { accountBindung: inv.accountBindung }));
   if (inv?.ok === false || inv?.erreichbar === false) {
     throw new Error("Kontostand ist gerade nicht erreichbar.");
   }
-  const belegt = inv.vorschau.filter((zeile) => zeile.status !== "beide-leer");
-  const identisch = belegt.length > 0 && belegt.every((zeile) => zeile.status === "identisch");
-
-  if (inv.fall === "nur-konto") {
-    const geladen = await kontoLaden(inv.lokaleWerte);
-    if (geladen?.ok === false) throw new Error("Kontostand konnte nicht geladen werden.");
-    await bestaetigen(accountId);
-    return { automatisch: true, grund: "konto-geladen" };
-  }
-  if (inv.fall === "beide-leer") {
-    await bestaetigen(accountId);
-    return { automatisch: true, grund: "beide-leer" };
-  }
-  if (identisch) {
-    const geladen = await pull();
-    if (geladen?.ok === false) throw new Error("Kontostand konnte nicht aktualisiert werden.");
-    await bestaetigen(accountId);
-    return { automatisch: true, grund: "identisch" };
-  }
-  return { automatisch: false, grund: "entscheidung-noetig", inventur: inv };
+  const geladen = await kontoLaden(inv.lokaleWerte);
+  if (geladen?.ok === false) throw new Error("Kontostand konnte nicht geladen werden.");
+  await bestaetigen(accountId);
+  return { automatisch: true, grund: "konto-geladen" };
 }

@@ -1,7 +1,19 @@
-/* Automatischer Kontodownload nach Login: nur eindeutige, verlustfreie Fälle
-   laufen ohne Assistent. Abweichende lokale Daten bleiben entscheidungspflichtig. */
+/* Automatischer Kontodownload nach Login: Der Gaststand bleibt als lokaler
+   Rückholpunkt getrennt, sichtbar wird ausschließlich kd_personal. */
 
 const { kontoSicherAutomatischLaden } = await import("./src/services/uebernahme.js");
+const {
+  sichereGebundenenGastRueckholpunkt,
+  stelleGaststandNachAbmeldungWiederHer,
+} = await import("./src/lib/uebernahme.js");
+const { PERSONAL_DATA_KEYS } = await import("./src/lib/personalDataRegistry.js");
+
+const speicher = new Map();
+globalThis.localStorage = {
+  getItem: (key) => speicher.has(key) ? speicher.get(key) : null,
+  setItem: (key, value) => speicher.set(key, String(value)),
+  removeItem: (key) => speicher.delete(key),
+};
 
 let ok = 0;
 function check(name, value) {
@@ -46,21 +58,22 @@ function inventur(fall, stati) {
   const calls = [];
   const ergebnis = await kontoSicherAutomatischLaden("konto-A", {
     inventur: inventur("beide-leer", ["beide-leer"]),
+    kontoLaden: async () => { calls.push("laden"); return { ok: true }; },
     bestaetigen: (id) => calls.push(id),
   });
-  check("Zwei leere Bestände aktivieren den Kontospeicher ohne Zwischenfrage",
-    ergebnis.grund === "beide-leer" && calls[0] === "konto-A");
+  check("Auch zwei leere Bestände durchlaufen dieselbe gebundene Downloadgrenze",
+    ergebnis.grund === "konto-geladen" && calls.join("|") === "laden|konto-A");
 }
 
 {
   const calls = [];
   const ergebnis = await kontoSicherAutomatischLaden("konto-A", {
     inventur: inventur("beide-belegt", ["identisch", "beide-leer"]),
-    pull: async () => { calls.push("pull"); return { ok: true }; },
+    kontoLaden: async () => { calls.push("laden"); return { ok: true }; },
     bestaetigen: () => calls.push("bestaetigen"),
   });
-  check("Bitgleiche Bestände werden aktualisiert und danach aktiviert",
-    ergebnis.grund === "identisch" && calls.join("|") === "pull|bestaetigen");
+  check("Bitgleiche Bestände verwenden denselben Remote→lokal-Pfad",
+    ergebnis.grund === "konto-geladen" && calls.join("|") === "laden|bestaetigen");
 }
 
 {
@@ -68,11 +81,50 @@ function inventur(fall, stati) {
   const ergebnis = await kontoSicherAutomatischLaden("konto-A", {
     inventur: inventur("beide-belegt", ["unterschiedlich"]),
     kontoLaden: async () => { calls.push("laden"); return { ok: true }; },
-    pull: async () => { calls.push("pull"); return { ok: true }; },
     bestaetigen: () => calls.push("bestaetigen"),
+    merge: () => calls.push("merge"),
+    upload: () => calls.push("upload"),
   });
-  check("Abweichende Bestände werden niemals automatisch überschrieben",
-    !ergebnis.automatisch && calls.length === 0);
+  check("Abweichender Gaststand zeigt ohne Merge oder Upload direkt kd_personal",
+    ergebnis.automatisch && ergebnis.grund === "konto-geladen"
+    && calls.join("|") === "laden|bestaetigen");
+}
+
+{
+  speicher.clear();
+  const gastMaster = '{"filme":[{"id":"gast","titel":"Gast bleibt bytegleich"}],"notiz":"äöü"}';
+  const gastArtikel = '{"artikel":[{"id":"gast-artikel","titel":"Lokal"}]}';
+  const kontoMaster = '{"filme":[{"id":"konto","titel":"kd_personal"}]}';
+  localStorage.setItem("kd:master", gastMaster);
+  localStorage.setItem("kd:artikel", gastArtikel);
+  const gastVorher = Object.fromEntries(PERSONAL_DATA_KEYS.map((key) => [key, localStorage.getItem(key)]));
+  const effekte = [];
+  const ergebnis = await kontoSicherAutomatischLaden("konto-A", {
+    inventur: async () => ({
+      ok: true, erreichbar: true, fall: "beide-belegt",
+      lokaleWerte: gastVorher, vorschau: [{ status: "unterschiedlich" }],
+    }),
+    kontoLaden: async () => {
+      const snap = sichereGebundenenGastRueckholpunkt("konto-A");
+      if (!snap?.werte) return { ok: false };
+      effekte.push("pull");
+      for (const key of PERSONAL_DATA_KEYS) localStorage.removeItem(key);
+      localStorage.setItem("kd:master", kontoMaster);
+      return { ok: true };
+    },
+    bestaetigen: () => effekte.push("bestaetigen"),
+    merge: () => effekte.push("merge"),
+    upload: () => effekte.push("upload"),
+  });
+  check("Login zeigt ausschließlich den synthetischen kd_personal-Stand",
+    ergebnis.automatisch && localStorage.getItem("kd:master") === kontoMaster
+    && localStorage.getItem("kd:artikel") === null
+    && effekte.join("|") === "pull|bestaetigen");
+  const restore = stelleGaststandNachAbmeldungWiederHer("konto-A");
+  check("Logout stellt jeden Gasttopf bytegleich wieder her",
+    restore.ok && PERSONAL_DATA_KEYS.every((key) => localStorage.getItem(key) === gastVorher[key])
+    && localStorage.getItem("kd:master") === gastMaster
+    && localStorage.getItem("kd:artikel") === gastArtikel);
 }
 
 {
