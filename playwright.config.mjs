@@ -8,7 +8,7 @@ const testUrl = `http://127.0.0.1:${testPort}`;
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: "mobile-layout.spec.mjs",
+  testMatch: ["mobile-layout.spec.mjs", "kino-mobile-filter.spec.mjs", "private-release-login.spec.mjs"],
   fullyParallel: false,
   workers: 1,
   // GitHub-Runner verlieren WebKit gelegentlich komplett ("Target crashed").

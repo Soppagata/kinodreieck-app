@@ -2770,14 +2770,15 @@ test("KD-OBS-001 filtert das Kinoprogramm bei 320 px nach Datum und Kino", async
   await expect(page.locator(".kd-bereichshero h1")).toHaveText("Kino");
   const datumSelect = page.getByRole("combobox", { name: "Datum im Kinoprogramm" });
   const kinoSelect = page.getByRole("combobox", { name: "Kino im Kinoprogramm" });
-  const reset = page.getByRole("button", { name: "Programmfilter zurücksetzen" }).first();
+  const reset = page.getByRole("button", { name: "Filter zurücksetzen", exact: true });
   await expect(datumSelect).toBeVisible();
   await expect(kinoSelect).toBeVisible();
   await expect(datumSelect).toHaveJSProperty("tagName", "SELECT");
   await datumSelect.focus();
   await expect(datumSelect).toBeFocused();
-  const touchhoehen = await page.locator(".kd-kino-programmfilter select, .kd-kino-programmfilter-reset")
+  const touchhoehen = await page.locator(".kd-kino-programmfilter select, .kd-kino-filterzeile button")
     .evaluateAll((elemente) => elemente.map((element) => element.getBoundingClientRect().height));
+  expect(touchhoehen.length).toBeGreaterThanOrEqual(3);
   expect(touchhoehen.every((hoehe) => hoehe >= 44)).toBe(true);
 
   await datumSelect.selectOption(tagEins.key);
@@ -2804,18 +2805,19 @@ test("KD-OBS-001 filtert das Kinoprogramm bei 320 px nach Datum und Kino", async
   await expect(datumSelect).toHaveValue("");
   await expect(kinoSelect).toHaveValue("");
   await expect(page.locator(".kd-kino-programmfilter-status")).toHaveText("Alle Programmtage und Kinos");
+  await expect(reset).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Läuft auch, nicht in deiner Liste (4)" })).toBeVisible();
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(datumSelect).toBeVisible();
   await expect(kinoSelect).toBeVisible();
   const lokaleSuche = page.getByPlaceholder("Programm durchsuchen …");
-  await expect(lokaleSuche).toBeVisible();
-  await lokaleSuche.fill("Filtereins");
+  await expect(lokaleSuche).toHaveCount(0);
   await kinoSelect.selectOption({ label: "Apollo" });
+  await expect(reset).toBeVisible();
   await reset.click();
-  await expect(lokaleSuche).toHaveValue("Filtereins");
   await expect(kinoSelect).toHaveValue("");
+  await expect(reset).toHaveCount(0);
   await keineDokumentUeberbreite(page);
 });
 
