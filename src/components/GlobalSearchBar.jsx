@@ -71,7 +71,7 @@ export function GlobalSearchBar({
     onAntwortSchliessen?.();
     requestAnimationFrame(() => {
       fokussiereOhneBrowserScroll(eingabeRef.current);
-      viewportEndRef.current();
+      // Die Eingabe bleibt aktiv; erst die Tastaturschließung löst die Sperre.
       viewportUpdateRef.current();
     });
   };
@@ -108,16 +108,36 @@ export function GlobalSearchBar({
     let fokusIntent = false;
     let fokusBestaetigt = false;
     let fokusScrollY = 0;
+    let touchY = null;
     let aktiv = true;
     let basis = {
       height: Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height),
       width: viewport.width,
+    };
+    const merkeTouchStart = (event) => {
+      touchY = event.touches.length === 1 ? event.touches[0].clientY : null;
+    };
+    const sperreHintergrundWischen = (event) => {
+      if (event.touches.length !== 1) { touchY = null; return; }
+      const y = event.touches[0].clientY;
+      const deltaY = touchY === null ? 0 : y - touchY;
+      touchY = y;
+      const ergebnisse = dialogRef.current;
+      /* Nur die Trefferliste darf die Geste übernehmen. Auch an ihren Rändern
+         darf iOS das Wischen nicht an den Tastatur-Viewport weiterreichen. */
+      if (ergebnisse?.contains(event.target)
+        && ((deltaY > 0 && ergebnisse.scrollTop > 0)
+          || (deltaY < 0 && ergebnisse.scrollTop + ergebnisse.clientHeight < ergebnisse.scrollHeight - 1))) return;
+      if (event.cancelable) event.preventDefault();
     };
     const aktualisiereBasis = () => {
       const layoutHeight = Math.max(window.innerHeight, document.documentElement.clientHeight);
       basis = { height: Math.max(layoutHeight, viewport.height), width: viewport.width };
     };
     const loeseScrollsperre = () => {
+      document.removeEventListener("touchstart", merkeTouchStart, true);
+      document.removeEventListener("touchmove", sperreHintergrundWischen, true);
+      touchY = null;
       const entsperren = entsperreScroll;
       entsperreScroll = null;
       entsperren?.();
@@ -196,6 +216,8 @@ export function GlobalSearchBar({
           entsperreScroll = sperreDokumentScroll({
             scrollY: fokusIntent ? fokusScrollY : window.scrollY || 0,
           });
+          document.addEventListener("touchstart", merkeTouchStart, { passive: true, capture: true });
+          document.addEventListener("touchmove", sperreHintergrundWischen, { passive: false, capture: true });
           fokusIntent = false;
         }
         phase = "keyboard-open";

@@ -1777,6 +1777,18 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     const rect = element.getBoundingClientRect();
     return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
   });
+  const wischVerhindert = (ziel, deltaY, finger = 1) => ziel.evaluate((element, { deltaY, finger }) => {
+    const sende = (typ, clientY) => {
+      const event = new Event(typ, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "touches", {
+        value: Array.from({ length: finger }, (_, identifier) => ({ identifier, target: element, clientX: 100, clientY })),
+      });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    sende("touchstart", 100);
+    return sende("touchmove", 100 + deltaY);
+  }, { deltaY, finger });
 
   const touchStand = await eingabe.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -1846,11 +1858,14 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     position: document.body.style.position,
     top: Number.parseFloat(document.body.style.top) || 0,
   }))).toEqual({ position: "fixed", top: gesperrterTop });
+  expect(await wischVerhindert(page.locator("body"), -30)).toBe(true);
+  expect(await wischVerhindert(page.locator("body"), -30, 2)).toBe(false);
 
   await eingabe.blur();
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 852, offsetTop: 0 }));
   await expect(suche).not.toHaveClass(/tastatur-offen/);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(seitenstand);
+  expect(await wischVerhindert(page.locator("body"), -30)).toBe(false);
   await page.touchscreen.tap(touchStand.punkt.x, touchStand.punkt.y);
   await expect(eingabe).toBeFocused();
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
@@ -1919,8 +1934,15 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
   expect(scrollStand.overflowY).toBe("auto");
   expect(scrollStand.touchAction).toBe("pan-y");
   expect(scrollStand.scrollHeight).toBeGreaterThan(scrollStand.clientHeight);
+  /* Innerhalb der Trefferliste bleibt die freie Scrollrichtung nutzbar;
+     am Rand darf die Geste nicht an die Hintergrundseite weiterlaufen. */
+  await antwort.evaluate((element) => { element.scrollTop = 0; });
+  expect(await wischVerhindert(antwort, 30)).toBe(true);
+  expect(await wischVerhindert(antwort, -30)).toBe(false);
   await antwort.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect.poll(() => antwort.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await wischVerhindert(antwort, -30)).toBe(true);
+  expect(await wischVerhindert(antwort, 30)).toBe(false);
   await antwort.evaluate((element) => { element.scrollTop = 0; });
 
   await eingabe.focus();
@@ -1932,7 +1954,8 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
   await expect.poll(() => page.evaluate(() => ({
     position: document.body.style.position,
     overflow: document.body.style.overflow,
-  }))).toEqual({ position: "", overflow: "" });
+  }))).toEqual({ position: "fixed", overflow: "hidden" });
+  expect(await wischVerhindert(page.locator("main"), 30)).toBe(true);
 
   await eingabe.blur();
   await eingabe.focus();
