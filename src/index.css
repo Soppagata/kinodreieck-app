@@ -491,7 +491,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     background:rgba(28,26,30,.94); box-shadow:0 9px 30px rgba(0,0,0,.62); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); }
   .kd-globalsuche.menue-offen { opacity:0; visibility:hidden; pointer-events:none; }
   .kd-globalsuche.tastatur-offen { left:var(--kd-suche-viewport-left); right:auto; width:var(--kd-suche-viewport-width); max-width:none;
-    transition:none; transform:translate3d(0,var(--kd-suche-viewport-shift,0px),0); will-change:transform; }
+    top:var(--kd-suche-viewport-top); bottom:auto; transition:none; }
   .kd-globalsuche input,.kd-globalsuche button { min-height:44px; box-sizing:border-box; border-radius:11px; }
   .kd-globalsuche input { flex:1 1 90px; min-width:0; width:100%; padding:0 11px; border:1px solid #6f6878; background:#17151a; color:#ece8df; font:calc(17px * var(--kd-schriftfaktor,1)) 'Space Grotesk',sans-serif; }
   .kd-globalsuche input:focus { outline:2px solid #e3a63b; outline-offset:-1px; }

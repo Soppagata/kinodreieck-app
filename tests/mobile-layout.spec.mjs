@@ -1823,13 +1823,38 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
       ? false
       : element.hasPointerCapture(window.__kdTouchStand.pointerId),
   }))).toEqual({ pointerdown: 2, pointerup: 2, click: 2, trusted: 6, remainingCapture: false });
+
+  /* WebKit kann nach dem Fokus zuerst das Dokument ans Ende verschieben und
+     erst danach die kleinere Tastaturgeometrie melden. Danach muss die Leiste
+     ohne korrigierendes Scrollen erreichbar sein. */
+  const nativerSeitenstand = await page.evaluate(() => new Promise((resolve) => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    requestAnimationFrame(() => resolve(window.scrollY));
+  }));
+  expect(nativerSeitenstand).toBeGreaterThan(seitenstand);
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
   await expect(suche).toHaveClass(/tastatur-offen/);
   await expect.poll(anker).toBe(-8);
+  await expect.poll(() => eingabe.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    return rect.top >= viewport.offsetTop
+      && rect.bottom <= viewport.offsetTop + viewport.height
+      && document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2) === element;
+  })).toBe(true);
   await expect.poll(() => page.evaluate(() => ({
     position: document.body.style.position,
     top: Number.parseFloat(document.body.style.top) || 0,
   }))).toEqual({ position: "fixed", top: gesperrterTop });
+
+  await eingabe.blur();
+  await page.evaluate(() => window.__kdSetVisualViewport({ height: 852, offsetTop: 0 }));
+  await expect(suche).not.toHaveClass(/tastatur-offen/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(seitenstand);
+  await page.touchscreen.tap(touchStand.punkt.x, touchStand.punkt.y);
+  await expect(eingabe).toBeFocused();
+  await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
+  await expect.poll(anker).toBe(-8);
 
   /* Ein Button-/Trefferfokus darf die erkannte Keyboard-Phase nicht räumen,
      solange der Browser den Visual Viewport noch verkleinert meldet. */

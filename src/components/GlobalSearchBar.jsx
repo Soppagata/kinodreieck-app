@@ -13,7 +13,7 @@ const LABELS = Object.freeze({
 });
 
 const VIEWPORT_STYLE_VARIABLEN = [
-  "--kd-suche-viewport-shift",
+  "--kd-suche-viewport-top",
   "--kd-suche-viewport-left",
   "--kd-suche-viewport-width",
   "--kd-suche-ergebnis-maxhoehe",
@@ -201,32 +201,24 @@ export function GlobalSearchBar({
         phase = "keyboard-open";
 
         const safeAreaInsets = liesSafeAreaInsets(form);
-        const vorab = berechneSuchleistenGeometrie({
-          height: viewport.height,
-          width: viewport.width,
-          offsetTop: viewport.offsetTop,
-          offsetLeft: viewport.offsetLeft,
-          basisUnterkante: 0,
-          suchleistenHoehe: 0,
-          safeAreaInsets,
-        });
-        form.style.setProperty("--kd-suche-viewport-left", `${vorab.links}px`);
-        form.style.setProperty("--kd-suche-viewport-width", `${vorab.breite}px`);
-        form.style.setProperty("--kd-suche-viewport-shift", "0px");
-        form.classList.add("tastatur-offen");
-
-        const rect = form.getBoundingClientRect();
+        const suchleistenHoehe = form.offsetHeight;
         const geometrie = berechneSuchleistenGeometrie({
           height: viewport.height,
           width: viewport.width,
           offsetTop: viewport.offsetTop,
           offsetLeft: viewport.offsetLeft,
-          basisUnterkante: rect.bottom,
-          suchleistenHoehe: rect.height,
+          suchleistenHoehe,
           safeAreaInsets,
         });
-        form.style.setProperty("--kd-suche-viewport-shift", `${geometrie.shiftY}px`);
+        /* Direkt am sichtbaren Viewport verankern. Die bisherige Position der
+           Leiste kann während des nativen iOS-Fokusscrolls noch veraltet sein;
+           sie darf deshalb nicht die Grundlage der nächsten Korrektur sein. */
+        const oben = viewport.offsetTop + viewport.height - geometrie.raender.unten - suchleistenHoehe;
+        form.style.setProperty("--kd-suche-viewport-left", `${geometrie.links}px`);
+        form.style.setProperty("--kd-suche-viewport-width", `${geometrie.breite}px`);
+        form.style.setProperty("--kd-suche-viewport-top", `${oben}px`);
         form.style.setProperty("--kd-suche-ergebnis-maxhoehe", `${geometrie.ergebnisMaxHoehe}px`);
+        form.classList.add("tastatur-offen");
       });
     };
     const stabilisiereFokusphase = () => {
