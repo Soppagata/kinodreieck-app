@@ -4,7 +4,6 @@ import { MasterImport } from "../components/MasterImport.jsx";
 import { IconDelete, IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
 import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
-import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { StapelImport } from "../components/StapelImport.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
@@ -42,7 +41,8 @@ export function DatenTab({
   katalogVerbunden = false, onKatalogVerbinden, onKatalogRefresh, onTechnikKatalogRefresh,
   programmInfo = null,
   ungesichertMaster = false, ungesichertArtikel = false,
-  einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt,
+  einstellungen = {}, setzeEinstellung, waehleModus,
+  sicherheitskopieGeraet, kontoExportVollstaendig,
   /* Etappe 7: Der KI-Schalter liegt NICHT in `einstellungen` (das ist ein
      Sync-Topf), sondern in `kd:ki`. Stand und Setter kommen deshalb als
      eigene Props von App. */
@@ -310,14 +310,14 @@ export function DatenTab({
         <div style={kasten}>
           <h2 style={h2}>Zwischen Handy und Rechner</h2>
           <KontoBereich demoAktiv={demoAktiv}
-            onDatenGeaendert={onKontoDatenGeaendert} onBackupWunsch={backupGesamt} />
+            onDatenGeaendert={onKontoDatenGeaendert} onBackupWunsch={sicherheitskopieGeraet} />
         </div>
       </Klappe>
 
       {kontoModus && <Klappe titel="Konto löschen">
         <div style={kasten}>
           <KontoLoeschung accountActive={kontoAktiv} accountId={kontoId} accountEmail={kontoEmail}
-            exportBeforeDelete={backupGesamt} onAccountDeleted={onKontoGeloescht} />
+            exportBeforeDelete={kontoExportVollstaendig} onAccountDeleted={onKontoGeloescht} />
         </div>
       </Klappe>}
 
@@ -353,21 +353,18 @@ export function DatenTab({
       </Klappe>
       </div>
 
-      {/* 4 — Backup */}
-      <Klappe id="gesamt-backup" titel="Gesamt-Backup" offen={sicherungOffen}
+      {/* 4 — gebundene Sicherheitskopie dieses Geräts */}
+      <Klappe id="gesamt-backup" titel="Sicherheitskopie dieses Geräts" offen={sicherungOffen}
         markiert={sicherungOffen} status={sicherungOffen ? "Sicherung offen" : null}>
         <div style={kasten}>
           {sicherungOffen && (
             <p role="status" data-tour="daten-waechter" style={{ color: T.wolfram, fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
-              Es gibt ungesicherte Änderungen im Browser. Ein Gesamt-Backup schützt Mediathek, Blog, Listen und Settings gemeinsam.
+              Es gibt ungesicherte Änderungen im Browser. Die Sicherheitskopie hält Mediathek, Blog, Listen und Settings dieses Geräts gemeinsam in einer Datei fest.
             </p>
           )}
-          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den vollständigen persönlichen App-Stand als Datei herunter. Der gemeinsame Kino- und Streamingkatalog wird nicht dupliziert.</p>
-          {backupGesamt && <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={backupGesamt}><IconExport size={16} />Gesamt-Backup herunterladen</button>}
-          <FeldHinweis feld="backup" />
-          {/* Der Download ist gerade am Handy wichtig; nur das riskantere
-              vollständige Einspielen einer Datei bleibt Desktop-Wartung. */}
-          <div className="kd-nur-desktop" style={{ marginTop: 14 }}><RestoreImport ohneKopf /></div>
+          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den gebundenen persönlichen App-Stand dieses Browsers als portable JSON-Datei herunter. Serverweite Konto-Eigendaten und der gemeinsame Kino- und Streamingkatalog sind nicht enthalten.</p>
+          {sicherheitskopieGeraet && <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={sicherheitskopieGeraet}><IconExport size={16} />Sicherheitskopie dieses Geräts herunterladen</button>}
+          <FeldHinweis feld="backup" text="Enthält den gebundenen persönlichen App-Stand dieses Geräts, aber keine serverweiten Konto-Eigendaten." />
         </div>
       </Klappe>
 

@@ -104,6 +104,7 @@ import { BereichsHero } from "./components/BereichsHero.jsx";
 import { GlobalSearchBar } from "./components/GlobalSearchBar.jsx";
 import { GlobalErrorQueue } from "./components/GlobalErrorQueue.jsx";
 import { oeffneEinstiegsLogin } from "./components/EinstiegsGate.jsx";
+import { LocalDataSafety } from "./components/LocalDataSafety.jsx";
 import { RadarSubscriptionPreview } from "./components/RadarSubscriptionPreview.jsx";
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { useEntdeckenPins } from "./controllers/useEntdeckenPins.js";
@@ -1060,7 +1061,13 @@ export default function App() {
   /* ---- Export-Wächter: ungesicherte Browser-Änderungen sichtbar machen ----
      Browser-Speicher ist kein Backup. Sobald der Storage-Stand jünger ist
      als der letzte Export, markiert Settings den zuständigen Backup-Bereich. */
-  const { markiereExport, backupGesamt, ungesichertMaster, ungesichertArtikel } = useBackupExportController({
+  const {
+    markiereExport,
+    sicherheitskopieGeraet,
+    kontoExportVollstaendig,
+    ungesichertMaster,
+    ungesichertArtikel,
+  } = useBackupExportController({
     masterHerkunft,
     artikelListe,
     artikelGespeichertAm,
@@ -2077,6 +2084,10 @@ export default function App() {
           />
         )}
 
+        {tab === "mediathek" && bootDone && session.mode === "guest" && (
+          <LocalDataSafety markiereExport={markiereExport} />
+        )}
+
         {remoteKontoAktiv && tab === "blog" && (
           <EntdeckenTab datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
@@ -2184,7 +2195,8 @@ export default function App() {
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
             setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
-            backupGesamt={backupGesamt} vokabular={vokabular} saveVokabular={saveVokabular}
+            sicherheitskopieGeraet={sicherheitskopieGeraet} kontoExportVollstaendig={kontoExportVollstaendig}
+            vokabular={vokabular} saveVokabular={saveVokabular}
             offeneFlags={offeneFlags} migriereMustwatch={ownerTechnikBestaetigt ? migriereMustwatch : undefined} migrationsBericht={migrationsBericht}
             importiereBesitz={ownerTechnikBestaetigt ? importiereBesitz : undefined} besitzImportBericht={besitzImportBericht}
             onKontoDatenGeaendert={() => { try { location.reload(); } catch { setStartTick((t) => t + 1); } }} kontoAktiv={session.mode === "account" && session.state === "ready"} kontoModus={session.mode === "account"} kontoId={session.account?.id || ""} kontoEmail={session.account?.email || ""} ownerTechnikBestaetigt={ownerTechnikBestaetigt} onKontoGeloescht={async () => { await sessionCoordinator.finalizeDeletedAccount(); try { location.reload(); } catch { setStartTick((t) => t + 1); } }}

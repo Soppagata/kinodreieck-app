@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   istArtikelUngesichert,
   istMasterUngesichert,
@@ -9,6 +10,10 @@ import { naechsteLokaleMasterHerkunft } from "./src/controllers/masterOriginCont
 import { brauchtArtikelRevisionMigration } from "./src/controllers/useArticleController.js";
 import { baueBackup } from "./src/lib/backup.js";
 import { setStorageDriver } from "./src/lib/storage.js";
+import {
+  ladeGebundeneSicherheitskopieHerunter,
+  ladeVollstaendigenKontoexportHerunter,
+} from "./src/controllers/useBackupExportController.js";
 
 let checks = 0;
 const ok = (bedingung, text) => {
@@ -135,5 +140,91 @@ loeseMasterRead();
 await assert.rejects(wechselBackup, (error) => error?.code === "STORAGE_CONTEXT_CHANGED");
 ok(true, "Treiberwechsel während eines blockierten Reads bricht das gesamte Backup fail-closed ab");
 setStorageDriver(null);
+
+const gebundenerKontext = {
+  generation: 3,
+  name: "lokal",
+  owner: "guest-local",
+  isCurrent: () => true,
+};
+const lokalerDownloadAblauf = [];
+const lokalerDownload = await ladeGebundeneSicherheitskopieHerunter({
+  storageContext: gebundenerKontext,
+  async buildBackup({ storageContext, remoteOwnData }) {
+    assert.equal(storageContext, gebundenerKontext);
+    assert.equal(remoteOwnData, null);
+    return { format: "kinodreieck-backup", version: 1, _exportStaende: { master: 41 } };
+  },
+  markiereExport: (feld, stand) => lokalerDownloadAblauf.push(`mark:${feld}:${stand}`),
+  createBlob: (text) => { lokalerDownloadAblauf.push("blob"); return text; },
+  createObjectURL: () => { lokalerDownloadAblauf.push("url"); return "blob:lokal"; },
+  revokeObjectURL: () => lokalerDownloadAblauf.push("revoke"),
+  createAnchor: () => ({ click: () => lokalerDownloadAblauf.push("click") }),
+  now: () => new Date("2026-09-01T08:00:00.000Z"),
+});
+ok(lokalerDownload.clicked === true
+  && lokalerDownload.dateiname === "kinodreieck_sicherheitskopie_geraet_2026-09-01.json"
+  && !Object.prototype.hasOwnProperty.call(lokalerDownload.backup, "konto_serverdaten")
+  && lokalerDownloadAblauf.join("|") === "blob|url|click|mark:master:41|revoke",
+"Geräte-Sicherheitskopie bleibt serverdatenfrei und bestätigt den Stand erst nach dem Anchor-Klick");
+
+const blockierterLokalerDownload = [];
+await assert.rejects(() => ladeGebundeneSicherheitskopieHerunter({
+  storageContext: gebundenerKontext,
+  buildBackup: async () => ({ format: "kinodreieck-backup", version: 1, _exportStaende: { master: 42 } }),
+  markiereExport: () => blockierterLokalerDownload.push("mark"),
+  createBlob: (text) => text,
+  createObjectURL: () => "blob:blockiert",
+  revokeObjectURL: () => blockierterLokalerDownload.push("revoke"),
+  createAnchor: () => ({ click() { blockierterLokalerDownload.push("click"); throw new Error("anchor blockiert"); } }),
+}), /anchor blockiert/);
+ok(blockierterLokalerDownload.join("|") === "click|revoke",
+  "Blockierter Anchor-Klick gibt weder Löschfreigabe noch Exportmarkierung vor");
+
+let ownDataCalls = 0;
+await assert.rejects(() => ladeVollstaendigenKontoexportHerunter({
+  aktiviert: false,
+  storageContext: gebundenerKontext,
+  getValidatedOwnData: async () => { ownDataCalls++; return {}; },
+}), (error) => error?.code === "ACCOUNT_EXPORT_DISABLED");
+ok(ownDataCalls === 0, "Deaktivierter vollständiger Kontoexport fragt den Own-Data-Endpunkt nicht an");
+
+await assert.rejects(() => ladeVollstaendigenKontoexportHerunter({
+  aktiviert: true,
+  storageContext: gebundenerKontext,
+  getValidatedOwnData: async () => ({ personal: [] }),
+}), (error) => error?.code === "ACCOUNT_EXPORT_NOT_VALIDATED");
+ok(true, "Unvollständige Own-Data-Antwort erzeugt keine als vollständig bezeichnete Datei");
+
+const validierteOwnData = {
+  auth: {}, access: {}, personal: [], aiLogs: [], seriesWatch: [], sharedArticles: [],
+  sharedClaims: [], radar: {}, retention: [], deletion: {},
+};
+let kontoDownloadKlicks = 0;
+const kontoDownload = await ladeVollstaendigenKontoexportHerunter({
+  aktiviert: true,
+  storageContext: gebundenerKontext,
+  getValidatedOwnData: async () => validierteOwnData,
+  async buildBackup({ remoteOwnData }) {
+    assert.equal(remoteOwnData, validierteOwnData);
+    return { format: "kinodreieck-backup", version: 1, konto_serverdaten: remoteOwnData };
+  },
+  createBlob: (text) => text,
+  createObjectURL: () => "blob:konto",
+  revokeObjectURL: () => {},
+  createAnchor: () => ({ click: () => { kontoDownloadKlicks++; } }),
+  now: () => new Date("2026-09-01T08:00:00.000Z"),
+});
+ok(kontoDownload.clicked === true && kontoDownloadKlicks === 1
+  && kontoDownload.backup.konto_serverdaten === validierteOwnData
+  && kontoDownload.dateiname === "kinodreieck_kontoexport_2026-09-01.json",
+"Vollständiger Kontoexport entsteht nur aus aktivem, validiertem Own-Data-Stand");
+
+const datenTabQuelle = readFileSync(new URL("./src/tabs/DatenTab.jsx", import.meta.url), "utf8");
+ok(!datenTabQuelle.includes("RestoreImport")
+  && datenTabQuelle.includes('titel="Sicherheitskopie dieses Geräts"')
+  && datenTabQuelle.includes("Serverweite Konto-Eigendaten")
+  && datenTabQuelle.includes("sind nicht enthalten"),
+"Privatrelease-UI zeigt nur den präzisen Geräte-Download und keinen Restore-Einstieg");
 
 console.log(`\nBACKUP-EXPORT-TEST BESTANDEN (${checks}/${checks})`);

@@ -5,7 +5,9 @@ import { JSDOM } from "jsdom";
 const html = readFileSync(process.argv[2] || "dist-single/Kinodreieck.html", "utf8");
 const warte = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const requests = [];
+const downloads = [];
 let cacheZugriffe = 0;
+let confirmAufrufe = 0;
 const gastMaster = JSON.stringify({
   meta: { name: "Lokaler Test" },
   filme: [{ id: "lokal-1", typ: "film", titel: "Eigener Lokalfilm", jahr: 2024 }],
@@ -17,7 +19,7 @@ const dom = new JSDOM(html, {
   pretendToBeVisual: true,
   beforeParse(window) {
     window.scrollTo = () => {};
-    window.confirm = () => true;
+    window.confirm = () => { confirmAufrufe++; return true; };
     window.TextEncoder = TextEncoder;
     window.matchMedia ||= () => ({
       matches: false, addEventListener() {}, removeEventListener() {},
@@ -25,6 +27,9 @@ const dom = new JSDOM(html, {
     });
     window.URL.createObjectURL ||= () => "blob:test";
     window.URL.revokeObjectURL ||= () => {};
+    window.HTMLAnchorElement.prototype.click = function click() {
+      downloads.push({ href: this.href, download: this.download });
+    };
     window.fetch = async (url) => {
       requests.push(String(url));
       throw new Error("Netz im Localmodus gesperrt (Test)");
@@ -76,6 +81,24 @@ check("Lokale Eintragsfunktionen bleiben erreichbar",
   [...document.querySelectorAll("button")].some((button) => /Eintrag|Film hinzufügen|Neu/.test(button.textContent)));
 check("Localmodus erzeugt keine Katalog-, Programm- oder Cache-Requests",
   requests.length === 0 && cacheZugriffe === 0);
+const lokaleSicherheitskopie = [...document.querySelectorAll("button")]
+  .find((button) => button.textContent.trim() === "Lokale Sicherheitskopie herunterladen");
+check("Localmodus zeigt die kompakte Sicherheitsfläche direkt bei der Mediathek",
+  !!document.querySelector('[data-local-data-safety="guest-only"]')
+  && !!lokaleSicherheitskopie
+  && document.body.textContent.includes("kein Server- oder Kontoexport"));
+check("Lokale Löschung bleibt vor dem erfolgreichen Download-Aufruf unsichtbar",
+  ![...document.querySelectorAll("button")]
+    .some((button) => button.textContent.trim() === "Eigene lokale Inhalte löschen"));
+lokaleSicherheitskopie.click();
+await warte(250);
+check("Sicherheitskopie erreicht den Anchor-Klick mit präzisem Gerätenamen",
+  downloads.length === 1
+  && /^kinodreieck_sicherheitskopie_geraet_\d{4}-\d{2}-\d{2}\.json$/.test(downloads[0].download));
+check("Erst danach erscheint die sichtbare, getrennte Löschbestätigung ohne confirm-Dialog",
+  [...document.querySelectorAll("button")]
+    .some((button) => button.textContent.trim() === "Eigene lokale Inhalte löschen")
+  && confirmAufrufe === 0);
 const masterVorLogin = dom.window.localStorage.getItem("kd:master");
 const anmelden = [...document.querySelectorAll("button")]
   .find((button) => button.textContent.trim() === "Anmelden");
