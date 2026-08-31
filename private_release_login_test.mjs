@@ -1,0 +1,148 @@
+import assert from "node:assert/strict";
+import { build, stop } from "esbuild";
+import { JSDOM } from "jsdom";
+
+const dom = new JSDOM("<!doctype html><div id='root'></div>", { url: "https://local.invalid/" });
+for (const key of ["window", "document", "navigator", "HTMLElement", "localStorage", "Event", "MouseEvent"]) {
+  Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true });
+}
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
+const sources = {
+  sessionCoordinator: `
+    let session = { mode: "guest", state: "ready", account: null };
+    let storageState = "guest";
+    const listeners = new Set();
+    export const harness = {
+      calls: 0, login: async () => { throw new Error("synthetic-login-failure"); },
+      set(next, state) { session = next; storageState = state; for (const f of listeners) f(next); },
+    };
+    export const sessionCoordinator = {
+      getSnapshot: () => session, getStorageState: () => storageState,
+      subscribe(f) { listeners.add(f); return () => listeners.delete(f); },
+      signIn(...args) { harness.calls++; return harness.login(...args); },
+      async signOut() { harness.set({ mode: "guest", state: "ready" }, "guest"); },
+      async refresh() {},
+    };
+  `,
+  storage: `
+    export const K = { start: "kd:start", einstieg: "kd:einstieg", startVersion: "kd:start-version" };
+    export const storageOwnerKennung = () => "account:test";
+    export const subscribeStorageContext = () => () => {};
+  `,
+  catalog: 'export const catalogService = { storedVariant: () => "demo" };',
+  personalDataRegistry: 'export const PERSONAL_DATA_KEYS = ["kd:master"];',
+  errors: 'export const errorText = () => "Anmeldung nicht möglich. Bitte erneut versuchen.";',
+};
+const result = await build({
+  stdin: {
+    contents: `
+      export { default as React, act } from "react";
+      export { createRoot } from "react-dom/client";
+      export { EinstiegsGate } from "./src/components/EinstiegsGate.jsx";
+      export { harness } from "./src/services/sessionCoordinator.js";
+    `,
+    sourcefile: "login-test-entry.jsx", resolveDir: process.cwd(), loader: "jsx",
+  },
+  write: false, bundle: true, platform: "node", format: "esm", jsx: "automatic",
+  plugins: [{
+    name: "local-only-boundaries",
+    setup(builder) {
+      builder.onResolve({ filter: /\/(sessionCoordinator|storage|catalog|personalDataRegistry|errors)\.js$/ }, (args) => {
+        const name = args.path.split("/").at(-1).replace(".js", "");
+        return { path: name, namespace: "login-mocks" };
+      });
+      builder.onLoad({ filter: /.*/, namespace: "login-mocks" }, (args) => ({ contents: sources[args.path], loader: "js" }));
+    },
+  }],
+});
+const { React, act, createRoot, EinstiegsGate, harness } = await import(
+  "data:text/javascript;base64," + Buffer.from(result.outputFiles[0].text).toString("base64")
+);
+let root;
+let checks = 0;
+async function mount() {
+  if (root) await act(async () => root.unmount());
+  localStorage.clear();
+  harness.calls = 0;
+  harness.set({ mode: "guest", state: "ready", account: null }, "guest");
+  root = createRoot(document.getElementById("root"));
+  await act(async () => root.render(React.createElement(EinstiegsGate, null,
+    React.createElement("p", { "data-child": "app" }, "Synthetic app"))));
+}
+const buttons = () => [...document.querySelectorAll("button")];
+const button = (name) => buttons().find((node) => node.textContent === name);
+async function click(node) { await act(async () => node.click()); }
+function check(name, callback) { callback(); checks++; console.log("✓ " + name); }
+
+await mount();
+check("Minimaler Erstlogin ohne Demo, Installation, Einführung oder KI-Auswahl", () => {
+  assert.deepEqual([...document.querySelectorAll("label")].map((n) => n.textContent), ["Benutzername", "Passwort"]);
+  assert.equal(document.querySelectorAll("a").length, 1);
+  assert.equal(document.querySelector("h1").textContent, "Kinodreieck");
+  assert.ok(document.querySelector("#datenschutz-rechtliches").hidden);
+  assert.doesNotMatch(document.querySelector('[aria-label="Anmeldung"]').textContent, /Demo|Registrier|Install|Mit KI|Einführung/);
+});
+const link = document.querySelector("a");
+await click(link);
+check("Legal erhält Fokus und bleibt klar Entwurf", () => {
+  assert.equal(document.activeElement.id, "datenschutz-rechtliches");
+  assert.match(document.activeElement.textContent, /ENTWURF/);
+  assert.ok(document.querySelector('[aria-label="Anmeldung"]').hidden);
+});
+await click(button("Zurück zum Login"));
+check("Rückkehr fokussiert genau den einzigen Legal-Link", () => assert.equal(document.activeElement, link));
+await click(button("Ohne Konto fortfahren"));
+check("Lokaler Einstieg wird bestätigt gespeichert, ohne KI-/Tutorialwrite", () => {
+  assert.ok(document.querySelector("[data-child]"));
+  assert.equal(localStorage.getItem("kd:start"), "clean");
+  assert.equal(JSON.parse(localStorage.getItem("kd:einstieg")).abgeschlossen, true);
+  assert.equal(localStorage.getItem("kd:ki"), null);
+  assert.equal(localStorage.getItem("kd:tutorial"), null);
+});
+
+await mount();
+const originalSet = dom.window.Storage.prototype.setItem;
+dom.window.Storage.prototype.setItem = function(key, value) {
+  if (key === "kd:einstieg") throw new Error("synthetic-storage-failure");
+  return originalSet.call(this, key, value);
+};
+await click(button("Ohne Konto fortfahren"));
+check("Storagefehler behauptet keinen fertigen Einstieg", () => {
+  assert.ok(!document.querySelector("[data-child]"));
+  assert.match(document.querySelector('[role="alert"]').textContent, /nicht gespeichert/);
+});
+dom.window.Storage.prototype.setItem = originalSet;
+
+await mount();
+let rejectLogin;
+harness.login = () => new Promise((_resolve, reject) => { rejectLogin = reject; });
+await act(async () => {
+  const form = document.querySelector("form");
+  form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+});
+check("Parallele Submits starten nur eine Anmeldung und sperren den Gastweg", () => {
+  assert.equal(harness.calls, 1);
+  assert.ok(button("Ohne Konto fortfahren").disabled);
+  assert.ok(document.querySelector('[role="status"]'));
+});
+await act(async () => rejectLogin(new Error("synthetic-private-payload")));
+check("Loginfehler bleibt neutral und zeigt keine Backenddetails", () => {
+  assert.match(document.querySelector('[role="alert"]').textContent, /Anmeldung nicht möglich/);
+  assert.doesNotMatch(document.body.textContent, /synthetic-private-payload/);
+});
+await act(async () => harness.set({ mode: "account", state: "ready", account: { id: "test" }, capabilities: { remoteStorage: true } }, "account-awaiting-adoption"));
+check("Noch blockierter Kontoübergang zeigt weder Gastdaten noch Erfolg", () => {
+  assert.ok(!document.querySelector("[data-child]"));
+  assert.match(document.body.textContent, /Kontostand ist noch nicht verfügbar/);
+  assert.doesNotMatch(document.body.textContent, /übernehmen|zusammenführen|importieren/i);
+});
+await act(async () => harness.set({ mode: "account", state: "ready", account: { id: "test" }, capabilities: { remoteStorage: true } }, "account-ready"));
+check("Bereits sicher gebundenes Konto erhält die bestehende App", () => assert.ok(document.querySelector("[data-child]")));
+await act(async () => root.unmount());
+dom.window.close();
+console.log(`private_release_login_test: ${checks} Checks bestanden (nur Mocks).`);
+stop();
+/* Reacts gebündelter Node-Scheduler kann einen MessagePort offen halten. */
+process.exit(0);

@@ -4,12 +4,12 @@
 
 import { K } from "../services/storage.js";
 import {
-  PERSONAL_DATA_KEYS, bereinigeVeralteteImportSnapshots,
+  PERSONAL_DATA_KEYS,
 } from "../lib/personalDataRegistry.js";
 import { catalogService } from "../services/catalog.js";
 
-export const START_WAHL_VERSION = "demo-v1";
-export const EINSTIEG_VERSION = "mobile-v1";
+export const START_WAHL_VERSION = "local-v1";
+export const EINSTIEG_VERSION = "private-v1";
 
 function lokalerSpeicher() {
   try { return typeof localStorage !== "undefined" ? localStorage : null; }
@@ -42,10 +42,12 @@ export function speichereEinstieg({ abgeschlossen, weg, grund } = {}) {
     ...(grund ? { grund } : {}),
   };
   if (storage) {
-    try { storage.setItem(K.einstieg, JSON.stringify(zustand)); }
-    catch { /* blockierter Gerätespeicher: Zustand bleibt für diese Sitzung nutzbar */ }
+    try {
+      storage.setItem(K.einstieg, JSON.stringify(zustand));
+      return { ...zustand, gespeichert: storage.getItem(K.einstieg) === JSON.stringify(zustand) };
+    } catch { /* Ein gescheiterter Write darf keinen bestätigten Einstieg vortäuschen. */ }
   }
-  return zustand;
+  return { ...zustand, gespeichert: false };
 }
 
 export function schliesseEinstieg(weg) {
@@ -72,23 +74,10 @@ export function einstiegNoetig(session) {
   return true;
 }
 
-export function liesStartWahl() {
-  try {
-    const url = (typeof location !== "undefined") ? location.search + location.hash : "";
-    const m = /[?&#]start=(demo|clean)/.exec(url);
-    if (m) return m[1];
-  } catch { /* */ }
-  try {
-    const v = localStorage.getItem(K.start);
-    if (v === "demo" || v === "clean") return v;
-  } catch { /* */ }
-  return null;
-}
+export function liesStartWahl() { return "clean"; }
 
 export function startWahlBestaetigt() {
   try {
-    const url = (typeof location !== "undefined") ? location.search + location.hash : "";
-    if (/[?&#]start=(demo|clean)(?:[&#]|$)/.test(url)) return true;
     return localStorage.getItem(K.startVersion) === START_WAHL_VERSION;
   } catch { return false; }
 }
@@ -107,48 +96,16 @@ export function pruefeFrischenStartUrl(url) {
   return { art: "auftrag", start: startMatch[1], token };
 }
 
-let frischerStartMemo;
 let frischerStartWarnungMemo = "";
 export function liesFrischenStartWarnung() { return frischerStartWarnungMemo; }
 export function verbraucheFrischenStart() {
-  if (frischerStartMemo !== undefined) return frischerStartMemo;
-  frischerStartMemo = null;
-  frischerStartWarnungMemo = "";
+  /* Historische Reset-URLs sind keine Autorisierung für eine Gesamtlöschung. */
   try {
-    const url = (typeof location !== "undefined") ? location.search + location.hash : "";
-    const pruefung = pruefeFrischenStartUrl(url);
-    if (pruefung.art === "keiner") return null;
-    if (pruefung.art === "ungueltig") {
-      frischerStartWarnungMemo = `Der Reset-Link ist ungültig (${pruefung.grund}); es wurden keine Daten gelöscht.`;
-      return null;
-    }
-    const { token, start } = pruefung;
-    if (localStorage.getItem(K.startAuftrag) === token) return null;
-
-    /* Den Auftrag vor dem Löschen verbrauchen: ein Reload derselben URL darf
-       keinen danach neu aufgebauten Stand erneut vernichten. */
-    localStorage.setItem(K.startAuftrag, token);
-    localStorage.setItem(K.start, start);
-    /* Beta-Total-Reset: neben den persönlichen Töpfen auch die Gerätemarken
-       räumen, die sonst als Restzustand weiterwirkten (Demo-Seed, Programm-
-       Cache, Einstiegs-/Tutorial-/Setup-Marken). Effekt: beim nächsten Boot
-       ohne ?start= kommt das EinstiegsGate wieder — gewünscht. kd:ki bleibt
-       BEWUSST stehen: die KI-Wahl ist eine Grundsatzentscheidung über einen
-       bezahlten Pfad, kein Testrest. */
-    const geraetemarken = [K.demoSeed, K.programm, K.einstieg, "kd:tutorial", "kd:setup", "kd:setup-done"];
-    if (!bereinigeVeralteteImportSnapshots(localStorage)) {
-      throw new Error("Veraltete Import-Sicherungen konnten nicht entfernt werden.");
-    }
-    for (const key of [...PERSONAL_DATA_KEYS, K.exportStand, ...geraetemarken]) {
-      localStorage.removeItem(key);
-    }
-    frischerStartMemo = start;
-  } catch {
-    frischerStartWarnungMemo = "Der Reset-Link konnte nicht vollständig ausgeführt werden. Prüfe deinen Datenstand und lade im Zweifel dein letztes Backup wiederher; einzelne lokale Daten können bereits entfernt worden sein.";
-    /* Storage kann erst mitten in der sequenziellen Bereinigung ausfallen.
-       Deshalb weder vollständigen Erfolg noch einen unveränderten Stand behaupten. */
-  }
-  return frischerStartMemo;
+    const url = typeof location !== "undefined" ? location.search + location.hash : "";
+    frischerStartWarnungMemo = /[?&#]fresh=/.test(url)
+      ? "Reset-Links sind deaktiviert; es wurden keine Daten gelöscht." : "";
+  } catch { /* keine URL verfügbar */ }
+  return null;
 }
 
 export function tutorialFrei() {
@@ -156,10 +113,4 @@ export function tutorialFrei() {
   catch { return false; }
 }
 
-export function snapshotsFrei() {
-  /* Die Doppelklick-Datei bringt ihren geprüften Archiv-/Demo-Bestand selbst
-     mit. Sie darf deshalb nicht an denselben Zugangsschlüssel-Gate geraten wie
-     der Online-Katalog; dessen Live-Daten bleiben weiterhin verbindungsgebunden. */
-  const einzeldatei = typeof location !== "undefined" && location.protocol === "file:";
-  return einzeldatei || catalogService.hasConnection();
-}
+export function snapshotsFrei() { return catalogService.storedVariant() === "live"; }

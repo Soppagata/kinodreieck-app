@@ -58,15 +58,15 @@ check("Reset-Linkprüfung unterscheidet normalen Start, ungültigen und gültige
   && onboarding.pruefeFrischenStartUrl("?fresh=zu-kurz").art === "ungueltig"
   && onboarding.pruefeFrischenStartUrl("?start=clean&fresh=abcdefgh").art === "auftrag");
 location.protocol = "file:";
-check("Einzeldatei gibt ihre eingebetteten Offline-Snapshots ohne DB-Schlüssel frei",
-  () => onboarding.snapshotsFrei());
+check("Einzeldatei umgeht die Kontofreigabe nicht",
+  () => !onboarding.snapshotsFrei());
 location.protocol = "https:";
 frisch();
 localStorage.setItem(K.master, JSON.stringify({ filme: [{ id: "bleibt" }] }));
 location.search = "?start=clean&fresh=kurz";
 check("Ungültiges fresh bleibt nicht still und löscht keine Daten", () =>
   onboarding.verbraucheFrischenStart() === null
-  && /Reset-Link ist ungültig/.test(onboarding.liesFrischenStartWarnung())
+  && /Reset-Links sind deaktiviert/.test(onboarding.liesFrischenStartWarnung())
   && localStorage.getItem(K.master)?.includes("bleibt"));
 location.search = "";
 
@@ -77,10 +77,10 @@ for (const key of VERALTETE_IMPORT_SNAPSHOT_KEYS) {
 }
 location.search = "?start=clean&fresh=abcdefgh";
 const freshReset = await import(`./src/controllers/onboardingController.js?freshreset=${Date.now()}`);
-check("Gültiger Fresh-Start entfernt auch veraltete Import-Rohsnapshots", () =>
-  freshReset.verbraucheFrischenStart() === "clean"
-  && localStorage.getItem(K.master) === null
-  && VERALTETE_IMPORT_SNAPSHOT_KEYS.every((key) => localStorage.getItem(key) === null));
+check("Auch ein gültiger alter Fresh-Link löscht keine persönlichen Daten", () =>
+  freshReset.verbraucheFrischenStart() === null
+  && localStorage.getItem(K.master)?.includes("konto-alt")
+  && VERALTETE_IMPORT_SNAPSHOT_KEYS.every((key) => localStorage.getItem(key) !== null));
 location.search = "";
 
 class AbbrechenderStorage extends MemoryStorage {
@@ -95,13 +95,11 @@ localStorage.setItem(K.master, "wird-vorher-entfernt");
 localStorage.setItem(K.artikel, "bleibt-nach-fehler");
 location.search = "?start=clean&fresh=abcdefgh";
 const teilreset = await import(`./src/controllers/onboardingController.js?teilreset=${Date.now()}`);
-check("Teilweise gescheiterter Reset behauptet keinen unveränderten Datenstand", () =>
+check("Deaktivierter Reset startet auch bei fehlerhaftem Storage keinen Löschvorgang", () =>
   teilreset.verbraucheFrischenStart() === null
-  && localStorage.getItem(K.master) === null
+  && localStorage.getItem(K.master) === "wird-vorher-entfernt"
   && localStorage.getItem(K.artikel) === "bleibt-nach-fehler"
-  && /nicht vollständig/.test(teilreset.liesFrischenStartWarnung())
-  && /einzelne lokale Daten können bereits entfernt/.test(teilreset.liesFrischenStartWarnung())
-  && !/keine Daten gelöscht/.test(teilreset.liesFrischenStartWarnung()));
+  && /keine Daten gelöscht/.test(teilreset.liesFrischenStartWarnung()));
 globalThis.localStorage = normalerStorage;
 location.search = "";
 
@@ -114,21 +112,21 @@ const css = readFileSync(new URL("./src/index.css", import.meta.url), "utf8");
 const konto = readFileSync(new URL("./src/components/KontoBereich.jsx", import.meta.url), "utf8");
 const main = readFileSync(new URL("./src/main.jsx", import.meta.url), "utf8");
 
-check("Erste Seite vereint Login, Gastweg, Installation und Einzeldatei", () =>
-  /Anmelden/.test(gate) && /Ohne Konto fortfahren/.test(gate) && /InstallationCard/.test(gate) && /Einzeldatei/.test(readFileSync(new URL("./src/components/InstallationCard.jsx", import.meta.url), "utf8")));
-check("Startwahl und zwei kurze Erklärschritte liegen im neuen Gate", () =>
-  /Demo ansehen/.test(gate) && /Leer starten/.test(gate) && /Drei Wege zu deinem Film/.test(gate) && /Du entscheidest über KI/.test(gate));
-check("Die KI-Wahl enthält kein zweites Loginformular", () => {
-  const kiSeite = gate.slice(gate.indexOf('titel="Du entscheidest über KI"'), gate.indexOf("function EntryPage"));
-  return kiSeite.length > 0 && !/kd-entry-login|Benutzername|Passwort/.test(kiSeite);
-});
-check("Loginfehler bleiben im Einstieg sichtbar und schließen ihn nicht", () => /catch \(err\)[\s\S]+setFehler\(errorText\(err\)\)/.test(gate) && /role="alert"/.test(gate));
+check("Erste Seite enthält nur Login, lokalen Einstieg und einen Legal-Link", () =>
+  /Anmelden/.test(gate) && /Ohne Konto fortfahren/.test(gate)
+  && /Datenschutz &amp; Rechtliches/.test(gate) && !/InstallationCard|Demo ansehen|KurzeEinfuehrung/.test(gate));
+check("Legal ist verborgen, fokussierbar und mit Rückfokus verbunden", () =>
+  /hidden=\{!legalOffen\}/.test(gate) && /tabIndex=\{-1\}/.test(gate)
+  && /legalLinkRef\.current\?\.focus\(\)/.test(gate) && /ENTWURF/.test(gate));
+check("Loginfehler bleiben sichtbar", () =>
+  /setFehler\(errorText\(error\)\)/.test(gate) && /role="alert"/.test(gate));
+check("Noch nicht gebundene Konten werden nicht als fertiger Kontostand dargestellt", () =>
+  /storageState === "account-ready"/.test(gate)
+  && /Kontostand ist noch nicht verfügbar/.test(gate) && !/kontoSicherAutomatischLaden/.test(gate));
 check("Abmelden räumt zuerst den Kontokontext und öffnet danach den Einstieg", () => /sessionCoordinator\.signOut\(\)[\s\S]+fordereEinstiegNachAbmeldung\(\)/.test(konto));
 check("Abmelden lädt den wiederhergestellten Gaststand unmittelbar neu", () => /async function abmelden[\s\S]+onDatenGeaendert\?\.\(\)/.test(konto));
 check("Boot bereinigt veraltete Rohsnapshots vor der Sitzungsausrichtung", () =>
   /bereinigeVeralteteImportSnapshots\(\)[\s\S]+sessionCoordinator\.initialize\(\)/.test(main));
-check("Einstieg und Einstellungen laden eindeutige Kontostände automatisch", () =>
-  /kontoSicherAutomatischLaden/.test(gate) && /kontoSicherAutomatischLaden/.test(konto) && /onDatenGeaendert/.test(konto));
 check("Desktop-Suche ist ein eigener Bereich, mobil bleibt die globale Leiste ohne redundanten Menüpunkt", () =>
   /kd-globalsuche-menu/.test(globalSuche) && /id: "finder"[\s\S]*desktopOnly: true/.test(nav)
   && /NAVIGATION\.filter\(\(eintrag\) => !eintrag\.desktopOnly\)\.map/.test(nav)

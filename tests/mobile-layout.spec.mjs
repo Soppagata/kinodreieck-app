@@ -344,19 +344,12 @@ for (const viewport of VIEWPORTS) {
     await blockiereFremdnetz(page);
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "Willkommen bei Kinodreieck" })).toBeVisible();
-    await expect(page.getByText("Kinodreieck installieren", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kinodreieck", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Datenschutz & Rechtliches" })).toBeVisible();
+    await expect(page.getByText("Kinodreieck installieren", { exact: true })).toHaveCount(0);
     await keineDokumentUeberbreite(page);
 
     await page.getByRole("button", { name: "Ohne Konto fortfahren" }).click();
-    await expect(page.getByRole("heading", { name: "Wie möchtest du starten?" })).toBeVisible();
-    await keineDokumentUeberbreite(page);
-    await page.getByRole("button", { name: "Leer starten" }).click();
-    await expect(page.getByRole("heading", { name: "Drei Wege zu deinem Film" })).toBeVisible();
-    await page.getByRole("button", { name: "Weiter" }).click();
-    await expect(page.getByRole("heading", { name: "Du entscheidest über KI" })).toBeVisible();
-    await expect(page.locator(".kd-entry-login")).toHaveCount(0);
-    await page.getByRole("button", { name: "Ohne KI" }).click();
     await expect(page.getByRole("button", { name: "Menü öffnen" })).toBeVisible();
     await keineDokumentUeberbreite(page);
   });
