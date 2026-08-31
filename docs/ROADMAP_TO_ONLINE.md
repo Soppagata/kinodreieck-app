@@ -1,5 +1,23 @@
 # Kinodreieck: Roadmap zum sicheren Online-Produkt
 
+## Aktueller Einstieg: privater Release (31.08.2026)
+
+Die bisherige Produktarbeit ist von Max abgeschlossen. Für die jetzt
+beauftragte lokale Road-to-Live-Umsetzung gilt ausschließlich der
+[aktualisierte Privatrelease-Etappenplan](zukunft/NAECHSTER_MASTERCHAT_PRIVATRELEASE_ETAPPENPLAN.md)
+mit [Baufolge](zukunft/NAECHSTER_MASTERCHAT_PRIVATRELEASE_ETAPPENPLAN.md#3-baufolge-und-paketgrenzen)
+und [vollständiger Master-Pflichtliste / einzigem Register](zukunft/NAECHSTER_MASTERCHAT_PRIVATRELEASE_ETAPPENPLAN.md#4-master-pflichtliste-und-einziges-fortschrittsregister).
+Die [kurze Topographie](privatrelease/TOPOGRAPHIE.md) beschreibt die
+read-only bestätigte Staging-Baubasis `31f37f61e9da8f766489b99eab8565aa14ec1d81`.
+
+Ziel ist `kinodreieck.at` für kontrolliert eingeladene Konten sowie ein leerer
+Localmodus für eigene Einträge. Keine Demo, öffentliche Registrierung oder
+neue Produktetappe. Externe Wirkungen benötigen weiterhin konkrete Freigaben.
+Die folgenden älteren Stufen sind historischer Hintergrund, kein konkurrierender
+Arbeitsauftrag und keine Aufforderung zu wiederholten Produktprüfungen.
+
+## Historischer Stand bis 09.08.2026
+
 Stand: 09. August 2026 — technischer Audit/Cleanup, finaler KI-Testblock und
 Rollen-v1 sind geliefert. Der nächste Liefergegenstand ist eine **private
 Demo**, nicht die formale Etappe 9c. Der Privatpilot-Abschluss mit Konto-,

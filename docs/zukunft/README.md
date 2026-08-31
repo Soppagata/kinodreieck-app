@@ -1,5 +1,19 @@
 # Kinodreieck: Zukunftsplanungen nach der privaten Demo
 
+## Aktiver Auftrag seit 31.08.2026
+
+Der [Road-to-Live-Etappenplan](NAECHSTER_MASTERCHAT_PRIVATRELEASE_ETAPPENPLAN.md)
+ist durch Max' ausdrücklichen Abschluss- und Bauauftrag aktiviert. Sein
+[Masterregister](NAECHSTER_MASTERCHAT_PRIVATRELEASE_ETAPPENPLAN.md#4-master-pflichtliste-und-einziges-fortschrittsregister)
+ist der einzige aktuelle Fortschrittsstand für den privaten Release.
+Diese gezielte Ausnahme erlaubt lokale Umsetzung in isolierten Worktrees;
+sie aktiviert keine anderen Zukunftspläne und keine externen Wirkungen.
+Die folgenden Datums-, Demo-, Prüf- und Statusangaben sind historische
+Herkunft und werden für diesen Auftrag vom aktuellen Plan und
+Orchestrierungsskill überstimmt.
+
+## Historische Ablagegrenze
+
 Stand: 09.08.2026
 Erstellungsreferenz: `7a51ce7` auf `codex/rollenlogik-private-demo`
 Planungsfortschreibung: `staging`/`origin/staging` `65a92df`, Produktion `3898152`
