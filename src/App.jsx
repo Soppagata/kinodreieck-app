@@ -113,6 +113,7 @@ import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
+const LOCAL_NAVIGATION = Object.freeze(NAVIGATION.filter((eintrag) => eintrag.id === "mediathek"));
 export const LEERER_MEDIATHEK_MASTER = Object.freeze([]);
 export default function App() {
   /* Lokale Animationswerkstatt: nur der Vite-Entwicklungsserver wertet den
@@ -132,7 +133,8 @@ export default function App() {
   const [frischerStartWarnung] = useState(() => liesFrischenStartWarnung());
   const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
     frischerStartWarnung ? [{ scope: ERROR_SCOPE.FRISCHER_START, text: frischerStartWarnung }] : []);
-  const [tab, setTab] = useState("start");
+  const [tab, setTab] = useState(() => remoteKontoAktiv ? "start" : "mediathek");
+  const sichtbareNavigation = remoteKontoAktiv ? NAVIGATION : LOCAL_NAVIGATION;
   /* Der offene Tab als Ref: Effekte, die nicht bei jedem Tabwechsel neu laufen
      sollen, dürfen ihn trotzdem lesen (z. B. „ist der Streaming-Tab offen?"). */
   const tabRef = useRef(tab);
@@ -161,11 +163,15 @@ export default function App() {
     }));
   }, []);
   const navigiere = useCallback((id) => {
+    if (!remoteKontoAktiv && id !== "mediathek") return;
     scrollProBereichRef.current.set(tabRef.current, aktuelleScrolltiefe());
     setTab(id);
     setMehrOffen(false);
     stelleScrolltiefeHer(id);
-  }, [aktuelleScrolltiefe, stelleScrolltiefeHer]);
+  }, [aktuelleScrolltiefe, remoteKontoAktiv, stelleScrolltiefeHer]);
+  useEffect(() => {
+    if (!remoteKontoAktiv && tab !== "mediathek") setTab("mediathek");
+  }, [remoteKontoAktiv, tab]);
   const nachObenAusMenu = useCallback(() => {
     scrollProBereichRef.current.set(tabRef.current, 0);
     setMehrOffen(false);
@@ -212,8 +218,7 @@ export default function App() {
   const [loading, setLoading] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
-  /* Der Wochenfeed ist global/accountlos; Profil, Seen-Stand und Dienste bleiben im lokalen Matching. */
-  const webDiscoveryState = useWebDiscoveryFeed(bootDone && tab === "blog");
+  const webDiscoveryState = useWebDiscoveryFeed(remoteKontoAktiv && bootDone && tab === "blog");
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
   /* Der Storage-Boot gehört ausschließlich zum ersten Render. Gast/Konto-
@@ -585,7 +590,7 @@ export default function App() {
         // automatisch Echtdaten laden). demo lädt die bereinigte Liste (nicht
         // persistiert bis Bearbeitung), clean bleibt leer, keine Wahl -> Modal.
         const wahl = frischerStart || (startWahlBestaetigt() ? liesStartWahl() : null);
-        if (wahl === "demo") {
+        if (wahl === "demo" && remoteKontoAktiv) {
           try {
             const d = await demoLadung();
             m = d.filme; meta = d.meta; herkunft = d.herkunft;
@@ -626,7 +631,7 @@ export default function App() {
           }
         } else if (wahl === "clean") {
           try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
-        } else if (session.mode !== "account") {
+        } else if (remoteKontoAktiv) {
           startModalNoetig = true;
         }
       }
@@ -687,7 +692,9 @@ export default function App() {
           if (e.modus === "nerv") e.modus = "neon-noir";        // veröffentlichbarer Ersatz bewahrt die dunkle Egg-Wahl
           setEinstellungenState(e);
           setzeTheme(e.modus || e.theme);                        // Spezialmodus überschreibt die Basis-Palette
-          if (e.startTab && e.startTab !== "start" && NAVIGATION.some((n) => n.id === e.startTab)) setTab(e.startTab); // Nur weiterhin angebotene Navigationsziele als Startbereich übernehmen
+          if (e.startTab && e.startTab !== "start"
+            && (remoteKontoAktiv || e.startTab === "mediathek")
+            && NAVIGATION.some((n) => n.id === e.startTab)) setTab(e.startTab);
           if (hatteVeralteteEinstellung) await store.set(K.einstellungen, JSON.stringify(e));
         }
       } catch { /* Defaults */ }
@@ -1898,12 +1905,12 @@ export default function App() {
         + (deepSpaceSichtbar ? " kd-deep-space-horror" : "")}>
       <ModusFx modus={effektiverModus} deepSpaceTest={deepSpaceTestmodusAktiv} />
       <div className="kd-app" data-session-mode={session.mode}>
-      {startModalOffen && (
+      {remoteKontoAktiv && startModalOffen && (
         <StartWahl onWaehle={waehleStart}
           aktuelle={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
           onClose={startWahlBestaetigt() ? () => setStartModalOffen(false) : undefined} />
       )}
-      {katalogZugangOffen && !startModalOffen && (
+      {remoteKontoAktiv && katalogZugangOffen && !startModalOffen && (
         <KatalogZugang zwingend={!catalogService.hasConnection()}
           onAbbrechen={() => setKatalogZugangOffen(false)}
           onFertig={() => {
@@ -1933,13 +1940,13 @@ export default function App() {
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "calc(34px * var(--kd-schriftfaktor, 1))", letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
             Kinodreieck
           </h1>
-          <div className="kd-syncchip-head" style={{ marginLeft: "auto" }}><SyncStatusChip /></div>
+          {remoteKontoAktiv && <div className="kd-syncchip-head" style={{ marginLeft: "auto" }}><SyncStatusChip /></div>}
         </div>
         <div style={{ height: 1, background: "linear-gradient(90deg, " + T.wolfram + ", transparent 70%)", marginTop: 14 }} />
       </header>
       <nav className="kd-menu" style={{ position: "sticky", top: 0, background: T.saal, borderBottom: "1px solid " + T.saalHoch }} aria-label="Hauptnavigation">
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {NAVIGATION.map(({ id, label }) => (
+          {sichtbareNavigation.map(({ id, label }) => (
             <button key={id} className={tab === id ? "kd-nav-aktiv" : undefined}
               aria-label={id === "daten" && sicherungOffen ? label : undefined}
               aria-description={id === "daten" && sicherungOffen ? "Sicherung offen" : undefined}
@@ -1966,7 +1973,7 @@ export default function App() {
         {tab !== "start" && <BereichsHero bereich={tab} />}
         <GlobalErrorQueue errors={errors} onDismiss={dismissError} />
 
-        {bootDone && loading === "programm" && !progStand && (
+        {remoteKontoAktiv && bootDone && loading === "programm" && !progStand && (
           <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontSize: "calc(14px * var(--kd-schriftfaktor, 1))", color: T.leinwandTief, lineHeight: 1.6 }}>
             <strong style={{ color: T.wolfram }}>Erststart —</strong> Kinoprogramm und Streaming-Kataloge werden frisch geladen.
             Das kann einen Moment dauern; bitte nicht abbrechen. Die App füllt sich, sobald die Daten da sind.
@@ -1985,7 +1992,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {tab === "start" && bootDone && (
+        {remoteKontoAktiv && tab === "start" && bootDone && (
           <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={() => setHilfeOffen(true)}
             entdeckenPins={entdeckenPins} webDiscoveryFeed={webDiscoveryState.feed} onEntdeckenPinsBereinigen={bereinigeEntdeckenPins} onSpringeZuEntdecken={() => navigiere("blog")}
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
@@ -2007,7 +2014,7 @@ export default function App() {
             progStand={progStand} programmInfo={programmInfo} streamingInfo={streamingInfo} />
         )}
 
-        {tab === "kino" && bootDone && (
+        {remoteKontoAktiv && tab === "kino" && bootDone && (
           <KinoTab
             programm={programm} progStand={progStand} master={master}
             geschmacksprofil={aktuellesProfil}
@@ -2067,7 +2074,7 @@ export default function App() {
           />
         )}
 
-        {tab === "blog" && (
+        {remoteKontoAktiv && tab === "blog" && (
           <EntdeckenTab datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
             master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryState.feed} webDiscoveryStatus={webDiscoveryState}
@@ -2091,7 +2098,7 @@ export default function App() {
           />
         )}
 
-        {tab === "streaming" && (
+        {remoteKontoAktiv && tab === "streaming" && (
           <StreamingTab
             bekannt={streamingBekannt} entdecken={streamingEntdecken}
             addFilm={addFilm} master={master} updateFilm={updateFilm}
@@ -2120,7 +2127,7 @@ export default function App() {
           />
         )}
 
-        {tab === "finder" && (
+        {remoteKontoAktiv && tab === "finder" && (
           <FinderTab
             vokabular={vokabular} saveVokabular={saveVokabular}
             master={finderMaster || []} kinoMatches={kinoMatches}
@@ -2144,7 +2151,7 @@ export default function App() {
           />
         )}
 
-        {tab === "daten" && (
+        {remoteKontoAktiv && tab === "daten" && (
           <DatenTab
             master={master} masterMeta={masterMeta} masterHerkunft={masterHerkunft}
             nachtragCount={nachtragSichtbar.length}
@@ -2181,17 +2188,17 @@ export default function App() {
           />
         )}
       </main>
-      <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} sicherungOffen={sicherungOffen} onMehr={toggleMehr}
-        onNavigate={navigiereAusGlobalemMenu} onNachOben={nachObenAusMenu} />
-      <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche}
+      {remoteKontoAktiv && <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} sicherungOffen={sicherungOffen} onMehr={toggleMehr}
+        onNavigate={navigiereAusGlobalemMenu} onNachOben={nachObenAusMenu} />}
+      {remoteKontoAktiv && <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche}
         antwort={globaleSuchantwort}
         onAntwortSchliessen={() => setGlobaleSuchantwort(null)}
         onTreffer={oeffneGlobalenTreffer}
         onSuchaktion={fuehreGlobaleSuchaktionAus} beobachteteIds={beobachteteWatchmodeIds} radarTargetIds={radarTargetIds}
         onAlleErgebnisse={oeffneAusfuehrlicheSuche}
-        menuOffen={mehrOffen} onMenu={toggleGlobalesMenu} />
+        menuOffen={mehrOffen} onMenu={toggleGlobalesMenu} />}
       </div>{/* .kd-app */}
-      {radarPreviewTarget && (<RadarSubscriptionPreview target={radarPreviewTarget} radarState={sichtbarerRadarState}
+      {remoteKontoAktiv && radarPreviewTarget && (<RadarSubscriptionPreview target={radarPreviewTarget} radarState={sichtbarerRadarState}
           accountMode={radarAuthority === "account-cache"} accountActive={remoteKontoAktiv} onConfirm={bestaetigeRadarVorschau} onClose={schliesseRadarPreview} />
       )}
       {EGGS_ENABLED && toasts.length > 0 && (

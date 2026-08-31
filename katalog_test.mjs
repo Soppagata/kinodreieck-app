@@ -265,10 +265,9 @@ await verwerfeKatalogCache();
 check("Demo-Snapshot mit gueltig_bis in der Zukunft gilt nicht als abgelaufen",
   (await ladeKatalogAsset("programm_demo")).abgelaufen === false);
 
-/* ============ Etappe 4: Auswahl live/demo an der Grenze (services/catalog.js) ============
-   Erst ab hier wird die Fassade geladen; ihr Modulstart ersetzt den Token-Provider
-   durch den echten Auth-Treiber. Der liest sein Token aus localStorage — eine
-   gesetzte Sitzung ist damit „angemeldet", eine gelöschte „Gast". */
+/* ============ Privatrelease-Grenze (services/catalog.js) ====================
+   Die Bibliothekstests oben halten Cache und Payloadverträge fest. Die
+   produktive Fassade liefert sie nur an fachlich freigegebene Konten. */
 setKatalogTokenProvider(null);
 const {
   createCatalogService, katalogTokenErlaubt, katalogVarianteAusSession,
@@ -325,10 +324,22 @@ abmelden();
 await verwerfeKatalogCache();
 fetchCalls = [];
 check("Gast: activeVariant() meldet „demo“", (await catalogService.activeVariant()) === "demo");
-const gastBereich = await catalogService.loadArea("programm");
-check("Gast lädt die Demo-Zeile programm_demo",
-  gastBereich.asset === "programm_demo" && gastBereich.variante === "demo" && gastBereich.payload.demo === true);
-check("Gast-Request trägt kein Authorization", !fetchCalls.at(-1)?.headers?.Authorization);
+let gastBereichFehler = null;
+try { await catalogService.loadArea("programm"); } catch (error) { gastBereichFehler = error; }
+check("Gast lädt weder Live- noch Demo-Zeile",
+  gastBereichFehler?.code === ERROR_CODES.FORBIDDEN && gastBereichFehler?.reason === "remoteStorage");
+const gastSonderwege = [];
+for (const lauf of [
+  () => catalogService.loadArea("programm", { variante: "demo" }),
+  () => catalogService.loadAsset("programm_demo"),
+  () => catalogService.loadDemo(),
+  () => catalogService.testConnection(),
+]) {
+  try { await lauf(); gastSonderwege.push(null); } catch (error) { gastSonderwege.push(error); }
+}
+check("Gast erreicht auch Alt-Demo, Demo-Seed und Verbindung nicht",
+  gastSonderwege.every((error) => error?.code === ERROR_CODES.FORBIDDEN));
+check("Gast endet vor HTTP und Cache", fetchCalls.length === 0 && cacheSpeicher.size === 0);
 
 anmelden();
 await verwerfeKatalogCache();
@@ -339,9 +350,10 @@ check("Angemeldet lädt die Live-Zeile programm",
   liveBereich.asset === "programm" && liveBereich.variante === "live" && !liveBereich.payload.demo);
 check("Live-Request trägt das Sitzungstoken als Bearer",
   fetchCalls.at(-1)?.headers?.Authorization === "Bearer " + SITZUNGSTOKEN);
+check("Kino-Normalisierung bleibt struktur- und reihenfolgeidentisch",
+  JSON.stringify(liveBereich.payload) === JSON.stringify(KATALOG_ZEILEN.programm.payload));
 
-/* Eine vorhandene technische Sitzung ohne fachliche Freigabe bleibt auf dem
-   öffentlichen Pfad. Der Demo-Read ist dabei auch tokenfrei. */
+/* Eine vorhandene technische Sitzung ohne fachliche Freigabe bleibt gesperrt. */
 katalogSession = {
   mode: "account", state: "ready", account: { id: "test-konto" },
   capabilities: { remoteStorage: false, personalAi: false },
@@ -350,10 +362,10 @@ await verwerfeKatalogCache();
 fetchCalls = [];
 check("Inaktives Konto: activeVariant() meldet fail-closed „demo“",
   (await catalogService.activeVariant()) === "demo");
-const inaktiverBereich = await catalogService.loadArea("programm");
-check("Inaktives Konto lädt nur programm_demo und sendet kein Sitzungstoken",
-  inaktiverBereich.asset === "programm_demo" && inaktiverBereich.variante === "demo"
-  && !fetchCalls.at(-1)?.headers?.Authorization);
+let inaktiverBereichFehler = null;
+try { await catalogService.loadArea("programm"); } catch (error) { inaktiverBereichFehler = error; }
+check("Inaktives Konto lädt weder Demo noch Live und sendet keinen Request",
+  inaktiverBereichFehler?.code === ERROR_CODES.FORBIDDEN && fetchCalls.length === 0);
 
 fetchCalls = [];
 let erzwungenLive = null;
@@ -436,6 +448,13 @@ check("Entdecken-Read lädt erst auf eigenen Aufruf die große getrennte Zeile",
   entdeckenBereich.asset === "streaming_entdecken"
   && entdeckenBereich.payload.titel[0]?.titel === "Entdecken live"
   && fetchCalls.length === 2);
+const streamingRoh = { bekannt: bekanntBereich.payload, entdecken: entdeckenBereich.payload };
+const vergleichsMaster = [{ watchmode_id: 10, titel: "Bereits bekannt" }];
+check("Streaming-Normalisierung bleibt struktur- und reihenfolgeidentisch",
+  JSON.stringify(catalogService.buildStreamingViews(streamingRoh, vergleichsMaster))
+  === JSON.stringify(baueStreamingAnsichten(streamingRoh, vergleichsMaster)));
+check("Berechtigte Streaming-Reads verwenden keine Demo-Zeile",
+  !fetchCalls.some((call) => /_demo/.test(call.url)));
 
 /* --- Rollen-v1: Ein expliziter Live-Wunsch ohne Freigabe endet VOR Netz. --- */
 abmelden();
@@ -491,18 +510,19 @@ check("F4: echter Server-401 bleibt INVALID_KEY; fehlende Freigabe endet früher
 abmelden();
 await verwerfeKatalogCache();
 netz.status401 = Infinity;
+fetchCalls = [];
 let gastSchluessel = null;
 try { await catalogService.loadArea("programm"); } catch (e) { gastSchluessel = e; }
 netz.status401 = 0;
 check("F4: auch im Gastbetrieb ist ein dauerhafter 401 ein abgelehnter Schlüssel, kein fehlender Demo-Stand",
-  gastSchluessel?.code === ERROR_CODES.INVALID_KEY && gastSchluessel?.code !== ERROR_CODES.NO_DEMO_DATA);
+  gastSchluessel?.code === ERROR_CODES.FORBIDDEN && fetchCalls.length === 0);
 
 /* Springt der Cache ein, ist der Direkt-Read trotzdem gescheitert — sein Grund
    muss als stabiler `code` mitreisen, sonst hört derselbe Tester nur „Datenbank
    nicht erreichbar". */
-abmelden();
+anmelden();
 await verwerfeKatalogCache();
-await catalogService.loadArea("programm");            // programm_demo in den Cache legen
+await catalogService.loadArea("programm");            // geschützte Live-Zeile in den Cache legen
 netz.status401 = Infinity;
 const cacheNach401 = await catalogService.loadArea("programm");
 netz.status401 = 0;
@@ -520,14 +540,14 @@ try { await catalogService.loadArea("programm", { variante: "live" }); } catch (
 check("Ein früherer Live-Cache ist ohne Freigabe weder per Netz noch per Cache erreichbar",
   cacheOhneAnmeldung?.code === ERROR_CODES.FORBIDDEN && fetchCalls.length === 0);
 
-/* ================= F5: fehlende Demo-Zeile ist ein eigener Zustand =================
-   Die *_demo-Zeilen sind für alle lesbar. Fehlen sie, ist schlicht noch nichts
-   veröffentlicht — weder eine „ungültige Antwort" noch „melde dich an". */
+/* ================= F5: Low-Level-Payloadvertrag =============================
+   Die Bibliothek klassifiziert fehlende Alt-Demo-Zeilen weiter stabil. Die
+   produktive Servicehülle oben macht diese Reads für Gäste unerreichbar. */
 abmelden();
 netz.fehlend.add("programm_demo");
 await verwerfeKatalogCache();
 let demoFehlt = null;
-try { await catalogService.loadArea("programm"); } catch (e) { demoFehlt = e; }
+try { await ladeKatalogAsset("programm_demo"); } catch (e) { demoFehlt = e; }
 netz.fehlend.delete("programm_demo");
 check("F5: fehlende Demo-Zeile programm_demo ergibt NO_DEMO_DATA", demoFehlt?.code === ERROR_CODES.NO_DEMO_DATA);
 check("F5: fehlende Demo-Zeile ist weder INVALID_RESPONSE noch UNAUTHENTICATED — und trägt die Demo-Marke",
@@ -538,7 +558,7 @@ check("F5: NO_DEMO_DATA ist nicht wiederholbar — Warten ändert nichts", demoF
 netz.fehlend.add("streaming_demo");
 await verwerfeKatalogCache();
 let streamingDemoFehlt = null;
-try { await catalogService.loadArea("streaming"); } catch (e) { streamingDemoFehlt = e; }
+try { await ladeKatalogAsset("streaming_demo"); } catch (e) { streamingDemoFehlt = e; }
 netz.fehlend.delete("streaming_demo");
 check("F5: fehlende Demo-Zeile streaming_demo ergibt ebenfalls NO_DEMO_DATA",
   streamingDemoFehlt?.code === ERROR_CODES.NO_DEMO_DATA);
@@ -558,7 +578,7 @@ await verwerfeKatalogCache();
 netz.nichtJson = true;
 fetchCalls = [];
 let htmlAntwort = null;
-try { await catalogService.loadArea("programm"); } catch (e) { htmlAntwort = e; }
+try { await ladeKatalogAsset("programm_demo"); } catch (e) { htmlAntwort = e; }
 const statiHtml = fetchCalls.map((c) => c.status);
 netz.nichtJson = false;
 check("P4: HTTP 200 mit nicht-JSON-Körper ergibt INVALID_RESPONSE",
@@ -585,7 +605,7 @@ netz.fehlend.add("programm_demo");
 await verwerfeKatalogCache();
 fetchCalls = [];
 let echtLeerDemo = null;
-try { await catalogService.loadArea("programm"); } catch (e) { echtLeerDemo = e; }
+try { await ladeKatalogAsset("programm_demo"); } catch (e) { echtLeerDemo = e; }
 const statiLeerDemo = fetchCalls.map((c) => c.status);
 netz.fehlend.delete("programm_demo");
 check("P4-Gegenprobe: das echte leere Array bleibt auf der Demo-Zeile NO_DEMO_DATA",
@@ -661,8 +681,9 @@ check("P5: er betritt die Erneuerungsmaschinerie des Treibers nicht — dessen Z
   authDriver.getZustand() === zustandVorher);
 /* Eichung des Zählers: derselbe fetchCalls zählt sehr wohl, wenn wirklich
    gelesen wird — „0 Requests" ist damit ein Befund und kein toter Zähler. */
+anmelden();
 await verwerfeKatalogCache();
-await catalogService.loadArea("programm", { variante: "demo" });
+await catalogService.loadArea("programm");
 check("P5-Eichung: derselbe Zähler erfasst einen echten Katalog-Read", fetchCalls.length >= 1);
 /* Und die Scharfprobe: dieselbe Sitzung schickt activeVariant() in die
    Erneuerung — sichtbar am gewechselten Treiberzustand. */
@@ -675,18 +696,23 @@ await catalogService.activeVariant();
 check("P5-Scharfprobe: bei genau dieser Sitzung geht activeVariant() in die Erneuerung (Zustand wechselt)",
   authDriver.getZustand() !== zustandVorher);
 
-/* --- Demo-Seed ist ein normaler öffentlicher Katalogvertrag ---------------- */
+/* --- Alt-Demo-Seed bleibt intern kompatibel, aber kontogebunden ------------ */
 abmelden();
 const oeffentlicherKopf = publicSupabaseHeaders(publishable);
 check("Leitplanke: publicSupabaseHeaders bleibt bei gesetztem Token-Provider unverändert (nur apikey)",
   oeffentlicherKopf.apikey === publishable && !oeffentlicherKopf.Authorization && Object.keys(oeffentlicherKopf).join() === "apikey");
 fetchCalls = [];
+let gastDemoSeedFehler = null;
+try { await catalogService.loadDemo(); } catch (error) { gastDemoSeedFehler = error; }
+check("Gast erreicht den Alt-Demo-Seed weder per HTTP noch Cache",
+  gastDemoSeedFehler?.code === ERROR_CODES.FORBIDDEN && fetchCalls.length === 0);
+anmelden();
 const demoSeed = await catalogService.loadDemo();
 const demoRuf = fetchCalls.find((c) => c.url.includes("/rest/v1/kd_catalog") && c.url.includes("name=eq.demo_seed"));
-check("Demo-Seed kommt aus kd_catalog und besteht den gemeinsamen Vertrag",
+check("Kontogebundener Alt-Demo-Seed besteht weiter den Payloadvertrag",
   demoSeed.format === 1 && demoSeed.master.filme[0].titel === "Demo-Basis" && !!demoRuf);
-check("Gast liest demo_seed nur mit Publishable-Key",
-  !demoRuf.headers.Authorization && demoRuf.headers.apikey === publishable);
+check("Alt-Demo-Seed wird nur mit Sitzungstoken gelesen",
+  demoRuf.headers.Authorization === "Bearer " + SITZUNGSTOKEN);
 check("Aktiver Katalogpfad ruft für den Demo-Seed kd_store nicht mehr auf",
   !fetchCalls.some((c) => c.url.includes("/rest/v1/kd_store")));
 
@@ -721,11 +747,13 @@ anmelden();
 setKatalogZugang({ url: "https://fremd-projekt.supabase.co", key: publishable });
 await verwerfeKatalogCache();
 fetchCalls = []; f6Aufrufe = [];
-const fremdesProjekt = await ladeKatalogAsset("programm_demo", { erwarteteKontoId: "test-konto" });
+let fremdesProjektFehler = null;
+try { await ladeKatalogAsset("programm", { erwarteteKontoId: "test-konto" }); }
+catch (error) { fremdesProjektFehler = error; }
 check("F6-Durchstich (produktiver Provider aus baueKatalogTokenProvider): fremde Katalog-URL ⇒ Request ohne Authorization",
   fetchCalls.length === 1 && !fetchCalls[0].headers.Authorization && fetchCalls[0].headers.apikey === publishable);
-check("F6-Durchstich: der Read läuft trotzdem durch — anon statt Abbruch",
-  fremdesProjekt.quelle === "datenbank" && fremdesProjekt.payload.demo === true);
+check("F6-Durchstich: ohne Token werden keine geschützten Programmdaten geliefert",
+  fremdesProjektFehler?.reason === KATALOG_GRUENDE.ANMELDUNG);
 check("F6-Durchstich: die gespeicherte Sitzung bleibt dabei bestehen (keine Abmeldung)",
   !!localStorage.getItem(AUTH_SESSION_KEY));
 check("F6: holeToken reicht die Katalog-URL an den produktiven Provider durch — ohne sie greift der Guard ins Leere",

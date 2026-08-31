@@ -1,12 +1,8 @@
-/* Gemeinsames read-only Film-/Programmwissen. Diese Grenze verwendet nur die
-   öffentliche Katalogkonfiguration und sendet niemals persönliche Sync-Keys.
-
-   Etappe 4/Rollen-v1: Hier — und nur hier — fällt die Entscheidung live vs.
-   demo. Eine technisch angemeldete Sitzung genügt nicht: Nur ein bereites
-   Konto mit der fachlichen Capability `remoteStorage === true` darf die
-   Live-Zeilen lesen. Gast, inaktiv, fehlend, unbekannt oder degradiert lesen
-   ausschließlich die öffentlichen Demo-Zeilen. Die Oberfläche fragt nach dem
-   Bereich, nicht nach dem Zeilennamen.
+/* Gemeinsames read-only Film-/Programmwissen. Eine technisch angemeldete
+   Sitzung genügt nicht: Nur ein bereites Konto mit der fachlichen Capability
+   `remoteStorage === true` darf bereitgestellte Katalogzeilen lesen. Gast,
+   inaktiv, fehlend, unbekannt oder degradiert enden vor HTTP und Cache. Die
+   Oberfläche fragt nach dem Bereich, nicht nach dem Zeilennamen.
 
    Fehlerzustände dieses Pfads (stabile Codes aus services/errors.js):
      UNAUTHENTICATED  Live-Zeile ohne Sitzung  -> „melde dich an"
@@ -63,8 +59,8 @@ function remoteKonto(auth = authService) {
   } catch { return null; }
 }
 
-/* Exportierte reine Projektion für Regressionstests: Alle alten oder
-   unvollständigen Sitzungsformen fallen auf Demo zurück. */
+/* Exportierte reine Projektion für Regressionstests. "demo" ist nur noch das
+   tokenfreie Urteil "nicht freigegeben"; es autorisiert keinen Demo-Read. */
 export function katalogVarianteAusSession(snapshot) {
   const kontoId = String(snapshot?.account?.id || "").trim();
   return snapshot?.mode === "account" && snapshot?.state === "ready" && !!kontoId
@@ -171,16 +167,18 @@ export function createCatalogService({ auth = authService, driver = authDriver }
     return accountId;
   };
   const variante = async (verlangt = null) => {
-    if (verlangt === "demo") return Object.freeze({ name: "demo", accountId: null });
-    const konto = await aktiveLiveFreigabe(auth, driver);
-    if (verlangt === "live" && !konto) {
+    if (verlangt && verlangt !== "live") {
       throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
         source: "catalog", operation: "variant.require-live", reason: "remoteStorage",
       });
     }
-    return konto
-      ? Object.freeze({ name: "live", accountId: konto.id })
-      : Object.freeze({ name: "demo", accountId: null });
+    const konto = await aktiveLiveFreigabe(auth, driver);
+    if (!konto) {
+      throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
+        source: "catalog", operation: "variant.require-live", reason: "remoteStorage",
+      });
+    }
+    return Object.freeze({ name: "live", accountId: konto.id });
   };
 
   return Object.freeze({
@@ -197,16 +195,12 @@ export function createCatalogService({ auth = authService, driver = authDriver }
       const auswahl = await variante(options.variante);
       const b = bereichOder(options.bereich || "programm");
       const ctx = { source: "catalog", operation: "connection.test" };
-      const erwarteteKontoId = auswahl.name === "live"
-        ? fordereGebundeneFreigabe(auswahl.accountId, "connection.test.before")
-        : null;
+      const erwarteteKontoId = fordereGebundeneFreigabe(auswahl.accountId, "connection.test.before");
       const result = await testeKatalogZugang({
-        asset: auswahl.name === "live" ? b.live : b.demo,
+        asset: b.live,
         erwarteteKontoId,
       });
-      if (auswahl.name === "live") {
-        fordereGebundeneFreigabe(auswahl.accountId, "connection.test.after");
-      }
+      fordereGebundeneFreigabe(auswahl.accountId, "connection.test.after");
       if (result?.ok) {
         const a = result.asset;
         if (!a || a.ok) return { ...result, variante: auswahl.name };
@@ -236,23 +230,16 @@ export function createCatalogService({ auth = authService, driver = authDriver }
   buildStreamingViews: baueStreamingAnsichten,
   /* Bereich laden ("programm" | "streamingBekannt" |
      "streamingEntdecken"; "streaming" bleibt Übergangskompatibilität).
-     Die Zeile wählt die Betriebsart.
-     Bleibt die LIVE-Zeile für eine angemeldete Sitzung leer, ist das ein echter
-     Fehler (Asset fehlt) — kein stiller Rückfall auf die Demo-Zeile. Fehlt die
-     DEMO-Zeile, ist das dagegen NO_DEMO_DATA: noch nichts veröffentlicht. */
+     Berechtigte Konten behalten unverändert die bisherigen Live-Zeilen. */
   async loadArea(bereich, options = {}) {
     const b = bereichOder(bereich);
     const auswahl = await variante(options.variante);
-    const name = auswahl.name === "live" ? b.live : b.demo;
+    const name = b.live;
     const ctx = { source: "catalog", operation: "area.load" };
     try {
-      const erwarteteKontoId = auswahl.name === "live"
-        ? fordereGebundeneFreigabe(auswahl.accountId, "area.load.before")
-        : null;
+      const erwarteteKontoId = fordereGebundeneFreigabe(auswahl.accountId, "area.load.before");
       const r = await ladeKatalogAsset(name, { ...options, erwarteteKontoId });
-      if (auswahl.name === "live") {
-        fordereGebundeneFreigabe(auswahl.accountId, "area.load.after");
-      }
+      fordereGebundeneFreigabe(auswahl.accountId, "area.load.after");
       /* Sprang der Cache ein, ist der Direkt-Read trotzdem gescheitert. Sein
          Grund reist als stabiler `code` mit — sonst hörte ein Tester mit
          abgelehntem Schlüssel nur „Datenbank nicht erreichbar". */
@@ -263,19 +250,16 @@ export function createCatalogService({ auth = authService, driver = authDriver }
   },
   /* Roher Zeilenzugriff (Name statt Bereich) — für Sonderfälle wie das Manifest. */
   async loadAsset(name, options) {
-    const live = Object.values(BEREICHE).some((b) => b.live === name);
-    const konto = live ? await aktiveLiveFreigabe(auth, driver) : null;
-    if (live && !konto) {
+    const konto = await aktiveLiveFreigabe(auth, driver);
+    if (!konto) {
       throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
         source: "catalog", operation: "asset.load", reason: "remoteStorage",
       });
     }
-    const erwarteteKontoId = live
-      ? fordereGebundeneFreigabe(konto.id, "asset.load.before")
-      : null;
+    const erwarteteKontoId = fordereGebundeneFreigabe(konto.id, "asset.load.before");
     try {
       const result = await ladeKatalogAsset(name, { ...(options || {}), erwarteteKontoId });
-      if (live) fordereGebundeneFreigabe(konto.id, "asset.load.after");
+      fordereGebundeneFreigabe(konto.id, "asset.load.after");
       return result;
     }
     catch (error) { throw katalogFehler(error, { source: "catalog", operation: "asset.load" }); }
@@ -296,7 +280,18 @@ export function createCatalogService({ auth = authService, driver = authDriver }
     } catch (error) { throw normalizeBoundaryError(error, { source: "catalog", operation: "cache.discard" }); }
   },
   async loadDemo() {
-    try { return (await ladeKatalogAsset("demo_seed")).payload; }
+    const konto = await aktiveLiveFreigabe(auth, driver);
+    if (!konto) {
+      throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
+        source: "catalog", operation: "demo.load", reason: "remoteStorage",
+      });
+    }
+    const erwarteteKontoId = fordereGebundeneFreigabe(konto.id, "demo.load.before");
+    try {
+      const result = await ladeKatalogAsset("demo_seed", { erwarteteKontoId });
+      fordereGebundeneFreigabe(konto.id, "demo.load.after");
+      return result.payload;
+    }
     catch (error) { throw katalogFehler(error, { source: "catalog", operation: "demo.load" }); }
   },
   });
