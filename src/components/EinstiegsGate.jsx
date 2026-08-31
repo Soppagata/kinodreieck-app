@@ -10,6 +10,14 @@ import {
   schliesseEinstieg,
 } from "../controllers/onboardingController.js";
 
+const EINSTIEGS_LOGIN_OEFFNEN = "kd:einstieg:login-oeffnen";
+
+export function oeffneEinstiegsLogin() {
+  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return false;
+  window.dispatchEvent(new Event(EINSTIEGS_LOGIN_OEFFNEN));
+  return true;
+}
+
 /* Gastdaten sind nie ein vorläufiger Kontostand und werden nie hochgeladen.
    Erst die bestätigte Kontobindung hängt die persönliche App wieder ein. */
 export function EinstiegsGate({ children }) {
@@ -30,6 +38,18 @@ export function EinstiegsGate({ children }) {
     const stopSession = sessionCoordinator.subscribe(aktualisiere);
     const stopStorage = subscribeStorageContext(aktualisiere);
     return () => { stopSession(); stopStorage(); };
+  }, []);
+  useEffect(() => {
+    const oeffneLogin = () => {
+      const aktuell = sessionCoordinator.getSnapshot();
+      if (aktuell?.mode !== "guest" || sessionCoordinator.getStorageState() !== "guest"
+        || loginLaeuftRef.current) return;
+      setLegalOffen(false);
+      setFehler("");
+      setOffen(true);
+    };
+    window.addEventListener(EINSTIEGS_LOGIN_OEFFNEN, oeffneLogin);
+    return () => window.removeEventListener(EINSTIEGS_LOGIN_OEFFNEN, oeffneLogin);
   }, []);
   const konto = session?.mode === "account";
   const freigegeben = konto && session.state === "ready" && session.capabilities?.remoteStorage === true;

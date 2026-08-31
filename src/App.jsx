@@ -103,6 +103,7 @@ import { CageAlphabet } from "./components/CageAlphabet.jsx";
 import { BereichsHero } from "./components/BereichsHero.jsx";
 import { GlobalSearchBar } from "./components/GlobalSearchBar.jsx";
 import { GlobalErrorQueue } from "./components/GlobalErrorQueue.jsx";
+import { oeffneEinstiegsLogin } from "./components/EinstiegsGate.jsx";
 import { RadarSubscriptionPreview } from "./components/RadarSubscriptionPreview.jsx";
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { useEntdeckenPins } from "./controllers/useEntdeckenPins.js";
@@ -1940,7 +1941,9 @@ export default function App() {
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "calc(34px * var(--kd-schriftfaktor, 1))", letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
             Kinodreieck
           </h1>
-          {remoteKontoAktiv && <div className="kd-syncchip-head" style={{ marginLeft: "auto" }}><SyncStatusChip /></div>}
+          {remoteKontoAktiv
+            ? <div className="kd-syncchip-head" style={{ marginLeft: "auto" }}><SyncStatusChip /></div>
+            : <button type="button" className="kd-secondary" style={{ marginLeft: "auto" }} onClick={oeffneEinstiegsLogin}>Anmelden</button>}
         </div>
         <div style={{ height: 1, background: "linear-gradient(90deg, " + T.wolfram + ", transparent 70%)", marginTop: 14 }} />
       </header>

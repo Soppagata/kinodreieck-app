@@ -76,6 +76,26 @@ check("Lokale Eintragsfunktionen bleiben erreichbar",
   [...document.querySelectorAll("button")].some((button) => /Eintrag|Film hinzufügen|Neu/.test(button.textContent)));
 check("Localmodus erzeugt keine Katalog-, Programm- oder Cache-Requests",
   requests.length === 0 && cacheZugriffe === 0);
+const masterVorLogin = dom.window.localStorage.getItem("kd:master");
+const anmelden = [...document.querySelectorAll("button")]
+  .find((button) => button.textContent.trim() === "Anmelden");
+check("Localmodus bietet einen schlichten sichtbaren Anmelden-Weg", !!anmelden);
+anmelden.click();
+await warte(100);
+check("Anmelden öffnet den bestehenden Minimal-Login",
+  !!document.querySelector(".kd-entry-login")
+  && !!document.querySelector('input[autocomplete="username"]')
+  && !!document.querySelector('input[autocomplete="current-password"]'));
+const loginText = document.querySelector(".kd-entry")?.textContent || "";
+check("Der wieder geöffnete Login legt keine Settings-, Sync- oder Backup-Technik frei",
+  !loginText.includes("Settings")
+  && !loginText.includes("Backup")
+  && !loginText.includes("Sicherung")
+  && !document.querySelector(".kd-syncchip-head"));
+check("Re-Entry verändert persönliche Localdaten nicht und bleibt requestfrei",
+  dom.window.localStorage.getItem("kd:master") === masterVorLogin
+  && masterVorLogin === gastMaster
+  && requests.length === 0 && cacheZugriffe === 0);
 
 dom.window.close();
 console.log(`PRIVATE-RELEASE-LOCALMODUS-TEST BESTANDEN (${checks}/${checks})`);

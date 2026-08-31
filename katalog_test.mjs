@@ -549,19 +549,21 @@ await verwerfeKatalogCache();
 let demoFehlt = null;
 try { await ladeKatalogAsset("programm_demo"); } catch (e) { demoFehlt = e; }
 netz.fehlend.delete("programm_demo");
-check("F5: fehlende Demo-Zeile programm_demo ergibt NO_DEMO_DATA", demoFehlt?.code === ERROR_CODES.NO_DEMO_DATA);
-check("F5: fehlende Demo-Zeile ist weder INVALID_RESPONSE noch UNAUTHENTICATED — und trägt die Demo-Marke",
-  demoFehlt?.code !== ERROR_CODES.INVALID_RESPONSE && demoFehlt?.code !== ERROR_CODES.UNAUTHENTICATED
-  && demoFehlt?.reason === KATALOG_GRUENDE.DEMO_FEHLT);
-check("F5: NO_DEMO_DATA ist nicht wiederholbar — Warten ändert nichts", demoFehlt?.retryable === false);
+check("F5: fehlende Demo-Zeile programm_demo trägt den stabilen Low-Level-Grund",
+  demoFehlt?.reason === KATALOG_GRUENDE.DEMO_FEHLT);
+check("F5: fehlende Demo-Zeile ist weder Schlüssel- noch Anmeldungsfehler",
+  demoFehlt?.status == null && demoFehlt?.reason !== KATALOG_GRUENDE.SCHLUESSEL
+  && demoFehlt?.reason !== KATALOG_GRUENDE.ANMELDUNG);
+check("F5: der Low-Level-Fehler benennt die unveröffentlichte Demo-Zeile",
+  demoFehlt?.message?.includes("noch nichts veröffentlicht"));
 
 netz.fehlend.add("streaming_demo");
 await verwerfeKatalogCache();
 let streamingDemoFehlt = null;
 try { await ladeKatalogAsset("streaming_demo"); } catch (e) { streamingDemoFehlt = e; }
 netz.fehlend.delete("streaming_demo");
-check("F5: fehlende Demo-Zeile streaming_demo ergibt ebenfalls NO_DEMO_DATA",
-  streamingDemoFehlt?.code === ERROR_CODES.NO_DEMO_DATA);
+check("F5: fehlende Demo-Zeile streaming_demo trägt denselben stabilen Low-Level-Grund",
+  streamingDemoFehlt?.reason === KATALOG_GRUENDE.DEMO_FEHLT);
 
 check("F5-Gegenprobe: die fehlende LIVE-Zeile trotz Token bleibt INVALID_RESPONSE und wird nicht zu NO_DEMO_DATA",
   fehlt?.code === ERROR_CODES.INVALID_RESPONSE && fehlt?.reason !== KATALOG_GRUENDE.DEMO_FEHLT);
@@ -581,12 +583,12 @@ let htmlAntwort = null;
 try { await ladeKatalogAsset("programm_demo"); } catch (e) { htmlAntwort = e; }
 const statiHtml = fetchCalls.map((c) => c.status);
 netz.nichtJson = false;
-check("P4: HTTP 200 mit nicht-JSON-Körper ergibt INVALID_RESPONSE",
-  htmlAntwort?.code === ERROR_CODES.INVALID_RESPONSE);
-check("P4: eine HTML-Seite mit Status 200 wird NICHT zu „noch nichts veröffentlicht“ (NO_DEMO_DATA)",
-  htmlAntwort?.code !== ERROR_CODES.NO_DEMO_DATA && htmlAntwort?.reason == null);
+check("P4: HTTP 200 mit nicht-JSON-Körper bleibt ein ungültiger Low-Level-Response",
+  htmlAntwort?.message?.includes("keine gültige JSON-Antwort"));
+check("P4: eine HTML-Seite mit Status 200 wird NICHT zu „noch nichts veröffentlicht“",
+  htmlAntwort?.reason !== KATALOG_GRUENDE.DEMO_FEHLT);
 check("P4: sie wird auch weder zu „Anmeldung nötig“ noch zu „Schlüssel abgelehnt“",
-  htmlAntwort?.code !== ERROR_CODES.UNAUTHENTICATED && htmlAntwort?.code !== ERROR_CODES.INVALID_KEY);
+  htmlAntwort?.status == null && htmlAntwort?.reason == null);
 
 /* Derselbe Körper auf der fachlich erlaubten LIVE-Zeile: er darf auch dort
    nicht als lautloser RLS-Filter durchgehen. */
@@ -608,8 +610,8 @@ let echtLeerDemo = null;
 try { await ladeKatalogAsset("programm_demo"); } catch (e) { echtLeerDemo = e; }
 const statiLeerDemo = fetchCalls.map((c) => c.status);
 netz.fehlend.delete("programm_demo");
-check("P4-Gegenprobe: das echte leere Array bleibt auf der Demo-Zeile NO_DEMO_DATA",
-  echtLeerDemo?.code === ERROR_CODES.NO_DEMO_DATA);
+check("P4-Gegenprobe: das echte leere Array bleibt auf der Demo-Zeile beim Demo-fehlt-Grund",
+  echtLeerDemo?.reason === KATALOG_GRUENDE.DEMO_FEHLT);
 await verwerfeKatalogCache();
 fetchCalls = [];
 let echtLeerLive = null;
@@ -626,12 +628,12 @@ check("P4-Gegenprobe: leere Live-Zeile trotz gültiger Freigabe bleibt INVALID_R
    alle drei Läufe wirklich HTTP 200 gesehen haben; sonst unterschiede die App
    womöglich am Status statt am Körper, und niemand würde es merken. */
 const p4Stati = [...statiHtml, ...statiLeerDemo, ...statiLeerLive];
-check("P4: HTTP 200 mit HTML bleibt ungültig; nur echtes leeres Demo-Array wird NO_DEMO_DATA",
+check("P4: HTTP 200 mit HTML bleibt ungültig; nur echtes leeres Demo-Array trägt Demo-fehlt",
   p4Stati.length >= 3 && p4Stati.every((s) => s === 200)
-  && htmlAntwort?.code === ERROR_CODES.INVALID_RESPONSE
+  && htmlAntwort?.message?.includes("keine gültige JSON-Antwort")
   && htmlLive?.code === ERROR_CODES.INVALID_RESPONSE
   && echtLeerLive?.code === ERROR_CODES.INVALID_RESPONSE
-  && echtLeerDemo?.code === ERROR_CODES.NO_DEMO_DATA);
+  && echtLeerDemo?.reason === KATALOG_GRUENDE.DEMO_FEHLT);
 
 /* ============ P5: storedVariant() urteilt synchron und ohne Token ============
    Der Boot fragt nur eines: „passt der gespeicherte Programm-Topf zur
