@@ -1,5 +1,5 @@
-/* Regressionstest der login-freien Tester-PWA: Erstwahl, Katalog-Gate,
-   aufgeräumte Einstellungen, versteckte Modi und geschlossene Betriebspfade. */
+/* Regressionstest des begrenzten Minimal-Login-Checkpoints sowie bestehender
+   persönlicher Funktionen. Kein Nachweis vollständiger Konto-/Inhaltsgrenzen. */
 import { readFileSync } from "node:fs";
 import { TextEncoder } from "node:util";
 import { JSDOM } from "jsdom";
@@ -286,18 +286,18 @@ function setWert(dom, el, wert) {
 
 function seedKatalog(w, start = "clean") {
   w.localStorage.setItem("kd:start", start);
-  w.localStorage.setItem("kd:start-version", "demo-v1");
+  w.localStorage.setItem("kd:start-version", "local-v1");
   w.localStorage.setItem("kd:katalog:url", "https://test.supabase.co");
   w.localStorage.setItem("kd:katalog:key", "x".repeat(30));
   w.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: ["kino", "pinboard", "mediathek", "eintrag", "streaming", "entdecken", "blog", "vokabular", "streaming-quellen", "erweitert", "waechter"] }));
 }
 
-/* A — die produktive PWA beginnt mit dem gemeinsamen Einstieg. Erst nach der
-   bewussten Gastwahl folgt für frische Gäste die Demo-/Leer-Entscheidung. Der
-   Single-File-Kompatibilitätspfad selbst startet absichtlich ohne Netzdialog;
-   der Web-Build wird zusätzlich im Browsertest geprüft. */
+/* A — Minimal-Login: Ohne Konto führt direkt in den lokalen Einstieg, ohne
+   Demo-/Intro-/KI-Entscheidung. Noch vorhandene Legacy-Katalogpfade im Bundle
+   sind ausdrücklich kein Beleg der vollständigen Privatrelease-Grenze. */
 {
-  check("A: Build enthält Clean- und Demo-Entscheidung", html.includes("Leer starten") && html.includes("Demo ansehen"));
+  check("A: Build enthält Minimal-Login und Legal-Link", html.includes("Ohne Konto fortfahren")
+    && html.includes("Datenschutz & Rechtliches") && html.includes("Zurück zum Login"));
   check("A: Build enthält den DB-Leseschlüssel-Dialog", html.includes("Programmdaten verbinden") && html.includes("Mitgeschickter Leseschlüssel"));
   check("A: kein Terminal-Installer mehr erwähnt", !/Installation-(Mac|Windows)|Terminal-Installation/.test(html));
   check("A: Build enthält keine sichtbaren NERV-Texte, -Klassen oder Referenzassets",
@@ -313,17 +313,44 @@ function seedKatalog(w, start = "clean") {
   check("A: alter stiller Clean-Wert überspringt den neuen Ersteinstieg nicht",
     !!a.knopf(/^Ohne Konto fortfahren$/) && !a.knopf(/^Leer starten$/) && !a.knopf(/^Demo ansehen$/));
   a.knopf(/^Ohne Konto fortfahren$/)?.click(); await warte(1000);
-  const startwahlDa = !!a.knopf(/^Leer starten/) && !!a.knopf(/^Demo ansehen/);
-  check("A: nach der bewussten Gastwahl folgt die Startwahl", startwahlDa);
+  check("A: bewusste Gastwahl führt direkt in die App, ohne zweiten Entscheidungsschritt",
+    !!a.doc.querySelector(".kd-app") && !a.doc.querySelector(".kd-entry")
+    && !a.knopf(/^Leer starten/) && !a.knopf(/^Demo ansehen/)
+    && !/Drei Wege zu deinem Film|Du entscheidest über KI/.test(a.text()));
+  check("A: lokaler Einstieg wird bestätigt, ohne Demo-Seed oder KI-Wahl zu erzeugen",
+    alt.window.localStorage.getItem("kd:start") === "clean"
+    && JSON.parse(alt.window.localStorage.getItem("kd:einstieg") || "{}").abgeschlossen === true
+    && alt.window.localStorage.getItem("kd:demo-seed") === null
+    && alt.window.localStorage.getItem("kd:ki") === null);
   alt.window.close();
 
   const leer = baueDom();
   await warte(1200);
   const l = hilfen(leer);
-  check("A: vollständig leerer Browser zeigt zuerst Login, Gastweg und Installation",
-    !!l.knopf(/^Ohne Konto fortfahren$/) && /Kinodreieck installieren/.test(l.text())
+  check("A: vollständig leerer Browser zeigt Minimal-Login ohne Installation oder Startauswahl",
+    !!l.knopf(/^Ohne Konto fortfahren$/) && !!l.knopf(/^Anmelden$/)
+    && !/Kinodreieck installieren/.test(l.text())
     && !l.knopf(/^Leer starten$/) && !l.knopf(/^Demo ansehen$/));
+  check("A: Legal ist separat verborgen und besitzt genau einen Einstiegslink",
+    l.doc.querySelector("#datenschutz-rechtliches")?.hidden === true
+    && l.doc.querySelectorAll('a[href="#datenschutz-rechtliches"]').length === 1);
   leer.window.close();
+
+  const vorher = JSON.stringify({ filme: [{ id: "lokal-bleibt", titel: "Eigener Testeintrag", jahr: 2024, typ: "film", notiz: "unverändert" }] });
+  const bestand = baueDom((w) => {
+    w.localStorage.setItem("kd:master", vorher);
+    w.localStorage.setItem("kd:einstieg", JSON.stringify({
+      version: "private-v1", abgeschlossen: false, weg: "gast", grund: "abmeldung",
+    }));
+  });
+  await warte(1200);
+  const b = hilfen(bestand);
+  check("A: explizit offener Einstieg lässt vorhandenen persönlichen Stand unverändert",
+    !!b.knopf(/^Ohne Konto fortfahren$/) && bestand.window.localStorage.getItem("kd:master") === vorher);
+  b.knopf(/^Ohne Konto fortfahren$/)?.click(); await warte(1000);
+  check("A: direkter lokaler Einstieg bewahrt persönliche Daten bytegenau",
+    !!b.doc.querySelector(".kd-app") && bestand.window.localStorage.getItem("kd:master") === vorher);
+  bestand.window.close();
 }
 
 /* B — Settings-Reihenfolge und die namenlosen Max-Modi. */

@@ -3,7 +3,12 @@ import { Logo } from "./ui.jsx";
 import { sessionCoordinator } from "../services/sessionCoordinator.js";
 import { storageOwnerKennung, subscribeStorageContext, K } from "../services/storage.js";
 import { errorText } from "../services/errors.js";
-import { EINSTIEG_VERSION, einstiegNoetig, schliesseEinstieg } from "../controllers/onboardingController.js";
+import {
+  EINSTIEG_VERSION,
+  START_WAHL_VERSION,
+  einstiegNoetig,
+  schliesseEinstieg,
+} from "../controllers/onboardingController.js";
 
 /* Gastdaten sind nie ein vorläufiger Kontostand und werden nie hochgeladen.
    Erst die bestätigte Kontobindung hängt die persönliche App wieder ein. */
@@ -38,7 +43,9 @@ export function EinstiegsGate({ children }) {
     if (loginLaeuftRef.current || konto) return;
     try {
       localStorage.setItem(K.start, "clean");
-      if (localStorage.getItem(K.start) !== "clean") throw new Error();
+      localStorage.setItem(K.startVersion, START_WAHL_VERSION);
+      if (localStorage.getItem(K.start) !== "clean"
+        || localStorage.getItem(K.startVersion) !== START_WAHL_VERSION) throw new Error();
       if (!schliesseEinstieg("gast").gespeichert) throw new Error();
       setOffen(false);
     } catch { setFehler("Der lokale Start konnte nicht gespeichert werden. Bitte prüfe den Browser-Speicher."); }

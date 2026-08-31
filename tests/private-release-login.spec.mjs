@@ -27,5 +27,10 @@ for (const width of [320, 393, 1280]) {
     await page.getByRole("button", { name: "Zurück zum Login", exact: true }).click();
     await expect(link).toBeFocused();
     await expect(page.locator("#datenschutz-rechtliches")).toBeHidden();
+    await page.getByRole("button", { name: "Ohne Konto fortfahren", exact: true }).click();
+    await expect(page.locator(".kd-app")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Leer starten", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Demo ansehen", exact: true })).toHaveCount(0);
+    await expect(page.getByText(/Einführung|Installieren|Startmodus wählen/)).toHaveCount(0);
   });
 }

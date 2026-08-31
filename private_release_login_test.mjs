@@ -96,6 +96,7 @@ await click(button("Ohne Konto fortfahren"));
 check("Lokaler Einstieg wird bestätigt gespeichert, ohne KI-/Tutorialwrite", () => {
   assert.ok(document.querySelector("[data-child]"));
   assert.equal(localStorage.getItem("kd:start"), "clean");
+  assert.equal(localStorage.getItem("kd:start-version"), "local-v1");
   assert.equal(JSON.parse(localStorage.getItem("kd:einstieg")).abgeschlossen, true);
   assert.equal(localStorage.getItem("kd:ki"), null);
   assert.equal(localStorage.getItem("kd:tutorial"), null);
@@ -103,14 +104,17 @@ check("Lokaler Einstieg wird bestätigt gespeichert, ohne KI-/Tutorialwrite", ()
 
 await mount();
 const originalSet = dom.window.Storage.prototype.setItem;
+const personalVorFehler = JSON.stringify({ filme: [{ id: "bleibt-lokal" }] });
+localStorage.setItem("kd:master", personalVorFehler);
 dom.window.Storage.prototype.setItem = function(key, value) {
-  if (key === "kd:einstieg") throw new Error("synthetic-storage-failure");
+  if (key === "kd:start-version") throw new Error("synthetic-storage-failure");
   return originalSet.call(this, key, value);
 };
 await click(button("Ohne Konto fortfahren"));
 check("Storagefehler behauptet keinen fertigen Einstieg", () => {
   assert.ok(!document.querySelector("[data-child]"));
   assert.match(document.querySelector('[role="alert"]').textContent, /nicht gespeichert/);
+  assert.equal(localStorage.getItem("kd:master"), personalVorFehler);
 });
 dom.window.Storage.prototype.setItem = originalSet;
 
