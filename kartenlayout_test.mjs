@@ -36,14 +36,30 @@ check("Kinotickets bleiben dem Kinoprogramm vorbehalten", () => {
 check("Kino-Programmfilter bleiben sichtbar, beschriftet und mobil kompakt", () => {
   const kino = lies("./src/tabs/KinoTab.jsx");
   const css = lies("./src/index.css");
+  const filterCss = lies("./src/styles/kino-filter.css");
   assert.match(kino, /className=\{`kd-kino-programmfilter/);
   assert.match(kino, /aria-label="Datum im Kinoprogramm"[\s\S]*Alle Programmtage/);
   assert.match(kino, /aria-label="Kino im Kinoprogramm"[\s\S]*Alle Kinos/);
-  assert.match(kino, /const resetProgrammfilter[\s\S]*setKinoF\(""\); setTagF\(null\); setAboFilter\("alle"\); setFassungF\(null\)/);
-  assert.doesNotMatch(kino, /resetProgrammfilter[\s\S]{0,180}setSucheK/);
+  const programmReset = kino.match(/const resetProgrammfilter = \(\) => \{([\s\S]*?)\n  \};/)?.[1];
+  assert.ok(programmReset, "Datum/Kino/Abo/Fassung besitzen weiterhin einen gemeinsamen Reset");
+  assert.match(programmReset, /setKinoF\(""\); setTagF\(null\); setAboFilter\("alle"\); setFassungF\(null\)/);
+  const alleReset = kino.match(/const resetAlleFilter = \(\) => \{([\s\S]*?)\n  \};/)?.[1];
+  assert.ok(alleReset, "Der sichtbare Reset löst sämtliche aktiven Einschränkungen");
+  assert.match(alleReset, /resetProgrammfilter\(\);\s*setSucheK\(""\);\s*setZeigeAlles\(true\);/);
+  assert.doesNotMatch(alleReset, /saveZeitgrenze|setZeitgrenze/, "Die gespeicherte Uhrzeit bleibt erhalten");
+  assert.match(kino, /aktiveFilterAnzahl = \[kinoF, tagF, aboFilter !== "alle", fassungF, sucheK, !zeigeAlles\]\.filter\(Boolean\)\.length/);
+  assert.match(kino, /\{aktiveFilterAnzahl > 0 && \(\s*<button type="button" onClick=\{resetAlleFilter\}>Filter zurücksetzen<\/button>/);
+  assert.match(kino, /Filter\{aktiveFilterAnzahl > 0 \? ` · \$\{aktiveFilterAnzahl\}` : ""\}/);
+  assert.match(kino, /className="kd-kino-filter-toggle"[\s\S]*?aria-expanded=\{filterMenueOffen\} aria-controls=\{filterPanelId\}/);
+  assert.match(kino, /id=\{filterPanelId\} hidden=\{!filterMenueOffen\} className="kd-kino-filterpanel"/);
+  assert.doesNotMatch(kino, /kd-seitensuche|Programm durchsuchen/, "Keine lokale Suchzeile versteckt die Zusatzfilter mobil");
+  assert.match(kino, /setSucheK\(fokusTreffer\.titel \|\| ""\)/, "Der globale Suchfokus bleibt erhalten");
   assert.match(kino, /zeitenGefiltert[\s\S]*if \(tagF\)[\s\S]*if \(kinoF\)/);
   assert.match(css, /\.kd-kino-programmfilter select \{[^}]*min-height:44px/);
   assert.match(css, /@media \(max-width:760px\)[\s\S]*\.kd-kino-programmfilter \{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(kino, /import "\.\.\/styles\/kino-filter\.css"/);
+  assert.match(filterCss, /\.kd-kino-tab \.kd-kino-filteroptionen \{[^}]*flex-wrap: wrap/);
+  assert.match(filterCss, /\.kd-kino-tab \.kd-kino-zusatzfilter input \{[^}]*min-height: 44px;[^}]*min-width: 44px/);
 });
 
 check("Mobiler Kino-Fehler verweist nicht auf einen dort unsichtbaren Notfallimport", () => {
@@ -202,7 +218,9 @@ check("Blog-Bearbeitung und versteckte Modi tragen die kurzen neuen Namen", () =
 });
 
 check("Icon-only Lösch- und Schließen-Aktionen sind zugänglich beschriftet", () => {
-  assert.match(lies("./src/tabs/KinoTab.jsx"), /aria-label="Kinosuche leeren"/);
+  // Die lokale Kinosuche ist entfernt; die weiterhin vorhandene Icon-only-
+  // Pin-Aktion muss ihren konkreten zugänglichen Namen behalten.
+  assert.match(lies("./src/tabs/KinoTab.jsx"), /aria-label=\{`Pin für \$\{p\.t\} lösen`\}/);
   assert.match(lies("./src/tabs/MediathekTab.jsx"), /aria-label="Mediatheksuche leeren"/);
   assert.match(lies("./src/tabs/BlogTab.jsx"), /aria-label=\{`Referenz \$\{i \+ 1\} entfernen`\}/);
 });
