@@ -255,7 +255,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>
             Zu groß für die Datenbank: {status.zuGross.map(topfLabel).join(", ")}.
             Dieser Bereich wird nicht mehr abgeglichen, bis er kleiner ist. Der lokale Stand bleibt vollständig
-            erhalten — sichere ihn über das Gesamt-Backup und räume dann auf.
+            erhalten — lade die Sicherheitskopie dieses Geräts herunter und räume dann auf.
           </p>
         </div>
       )}

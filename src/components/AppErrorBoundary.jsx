@@ -46,19 +46,19 @@ export class AppErrorBoundary extends Component {
   }
 
   async notfallBackup() {
-    this.setState({ backupStatus: "Backup wird vorbereitet …" });
+    this.setState({ backupStatus: "Lokale Sicherheitskopie wird vorbereitet …" });
     try {
       const backup = await baueBackup({ pull: false });
       ladeJsonHerunter(
-        "kinodreieck_notfall_backup_"
+        "kinodreieck_notfall_sicherheitskopie_geraet_"
           + new Date().toISOString().slice(0, 10)
           + ".json",
         backup,
       );
-      this.setState({ backupStatus: "Backup wurde heruntergeladen." });
+      this.setState({ backupStatus: "Die Sicherheitskopie dieses Geräts wurde als Download ausgelöst." });
     } catch {
       this.setState({
-        backupStatus: "Das Backup konnte leider nicht erstellt werden.",
+        backupStatus: "Die Sicherheitskopie dieses Geräts konnte leider nicht erstellt werden.",
       });
     }
   }
@@ -95,12 +95,12 @@ export class AppErrorBoundary extends Component {
           </h1>
           <p style={{ color: "#c8c2ce", lineHeight: 1.6 }}>
             Deine gespeicherten Daten wurden dadurch nicht absichtlich
-            verändert. Versuche zuerst ein lokales Gesamt-Backup und lade die
-            App anschließend neu.
+            verändert. Versuche zuerst, eine Sicherheitskopie dieses Geräts
+            herunterzuladen, und lade die App anschließend neu.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             <button type="button" onClick={() => this.notfallBackup()}>
-              Gesamt-Backup versuchen
+              Sicherheitskopie dieses Geräts versuchen
             </button>
             <button type="button" onClick={() => location.reload()}>
               App neu laden

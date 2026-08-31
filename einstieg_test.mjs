@@ -138,8 +138,8 @@ check("Bereiche merken ihre eigene Scrolltiefe und starten beim ersten Besuch ob
   && /onNachOben=\{nachObenAusMenu\}/.test(app));
 check("Riskante Datei- und Wartungswerkzeuge bleiben mobil verborgen, Backup-Download nicht", () =>
   /className="kd-nur-desktop">\s*<Klappe titel="Masterliste"/.test(daten)
-  && !/className="kd-nur-desktop">\s*<Klappe titel="Gesamt-Backup"/.test(daten)
-  && /className="kd-nur-desktop"[^>]*><RestoreImport ohneKopf/.test(daten)
+  && /<Klappe id="gesamt-backup" titel="Sicherheitskopie dieses Geräts"/.test(daten)
+  && !/RestoreImport/.test(daten)
   && /className="kd-nur-desktop" data-tour="erweitert"/.test(daten));
 check("Der alte Seitengriff und die Bedienhand-Spiegelung bleiben entfernt", () =>
   !/Bedienhand|linkshaender/.test(daten) && !/kd-links/.test(css)

@@ -313,14 +313,14 @@ const datenTab = knopf(/^settings$/i);
 check("Tab heißt Settings", !!datenTab);
 if (datenTab) { datenTab.click(); await warte(600); }
 check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()));
-const gesamtBackupSummary = [...doc.querySelectorAll("summary")]
-  .find((summary) => /^Gesamt-Backup/.test((summary.textContent || "").trim()));
-const gesamtBackupDetails = gesamtBackupSummary?.parentElement;
-check("Settings-Marker führt direkt zum offenen Gesamt-Backup",
+const sicherheitskopieSummary = [...doc.querySelectorAll("summary")]
+  .find((summary) => /^Sicherheitskopie dieses Geräts/.test((summary.textContent || "").trim()));
+const sicherheitskopieDetails = sicherheitskopieSummary?.parentElement;
+check("Settings-Marker führt direkt zur offenen Sicherheitskopie dieses Geräts",
   dom.window.__kdLetztesScrollziel === "gesamt-backup"
-  && gesamtBackupDetails?.open
-  && gesamtBackupDetails.classList.contains("kd-klappe-markiert")
-  && /Sicherung offen/.test(gesamtBackupSummary.textContent || ""));
+  && sicherheitskopieDetails?.open
+  && sicherheitskopieDetails.classList.contains("kd-klappe-markiert")
+  && /Sicherung offen/.test(sicherheitskopieSummary.textContent || ""));
 check("Desktop-Settings kennzeichnet den offenen Sicherungsstand dezent",
   datenTab?.getAttribute("aria-label") === "Settings"
   && datenTab?.getAttribute("aria-description") === "Sicherung offen");
@@ -352,14 +352,14 @@ check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
 if (maxLink) { maxLink.click(); await warte(200); }
 check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Classix|Schon kuhl)$/));
 check("KI-Vokabular vorhanden", /KI-Vokabular/.test(text()));
-const gesamtBackupKnopf = knopf(/Gesamt-Backup herunterladen/i);
-check("Backup-Knopf vorhanden", !!gesamtBackupKnopf);
-if (gesamtBackupKnopf) {
-  gesamtBackupKnopf.click(); await warte(400);
-  check("Erfolgreiches Gesamt-Backup räumt Bereichs- und Navigationsmarker weg",
+const sicherheitskopieKnopf = knopf(/Sicherheitskopie dieses Geräts herunterladen/i);
+check("Knopf für die Sicherheitskopie dieses Geräts vorhanden", !!sicherheitskopieKnopf);
+if (sicherheitskopieKnopf) {
+  sicherheitskopieKnopf.click(); await warte(400);
+  check("Erfolgreiche Sicherheitskopie räumt Bereichs- und Navigationsmarker weg",
     dom.window.__kdDownloadKlicks > 0
-    && !gesamtBackupDetails.classList.contains("kd-klappe-markiert")
-    && !/Sicherung offen/.test(gesamtBackupSummary.textContent || "")
+    && !sicherheitskopieDetails.classList.contains("kd-klappe-markiert")
+    && !/Sicherung offen/.test(sicherheitskopieSummary.textContent || "")
     && datenTab?.getAttribute("aria-description") !== "Sicherung offen");
 }
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));

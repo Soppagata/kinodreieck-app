@@ -18,7 +18,9 @@ function check(name, wert) {
 check("Die Fehlergrenze umschließt die gesamte App",
   /<AppErrorBoundary[\s\S]*ownerDiagnosticsConfirmed=[\s\S]*>[\s\S]*<App \/>[\s\S]*<\/AppErrorBoundary>/.test(main));
 check("Renderfehler zeigen Neuladen und Notfall-Backup",
-  /Gesamt-Backup versuchen/.test(boundary)
+  /Sicherheitskopie dieses Geräts versuchen/.test(boundary)
+  && /wurde als Download ausgelöst/.test(boundary)
+  && !/wurde heruntergeladen/.test(boundary)
   && /App neu laden/.test(boundary)
   && /baueBackup\(\{ pull: false \}\)/.test(boundary));
 check("Die Oberfläche zeigt nur eine technische ID, nie den Fehlertext",

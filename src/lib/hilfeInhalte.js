@@ -129,7 +129,7 @@ const BEREICHE = [
     titel: "Settings",
     kurztext: "Darstellung, Konto, Sicherung, Quellen und optionale Funktionen einstellen.",
     details: [
-      "In Settings verwaltest du Darstellung und Verhalten, Konto und Geräte-Sync, Masterliste, Gesamt-Backup, Streaming-Quellen, Suchvokabular und optionale KI-Funktionen.",
+      "In Settings verwaltest du Darstellung und Verhalten, Konto und Geräte-Sync, Masterliste, die Sicherheitskopie dieses Geräts, Streaming-Quellen, Suchvokabular und optionale KI-Funktionen.",
       "Katalog- und Cache-Werkzeuge liegen in ihren eigenen Settings-Abschnitten. Nutze sie nur für den dort beschriebenen Zweck.",
       "Die rechtlichen Hinweise bleiben ausschließlich im bestehenden Abschnitt Über & Rechtliches außerhalb dieser Anleitung.",
     ],
@@ -170,7 +170,7 @@ const AKTIONEN = [
   {
     id: "daten-sichern",
     titel: "Daten sichern",
-    text: "Öffne Settings → Gesamt-Backup.",
+    text: "Öffne Settings → Sicherheitskopie dieses Geräts.",
     suchwoerter: ["backup", "sicherung", "daten sichern", "gesamt backup", "backup erstellen", "sicherung erstellen", "wiederherstellen"],
     direkteSuchwoerter: ["daten sichern", "gesamt backup", "backup erstellen", "sicherung erstellen"],
     bereichId: "daten",

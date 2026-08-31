@@ -361,7 +361,7 @@ function seedKatalog(w, start = "clean") {
   check("B: Clean bootet ins leere Dashboard mit DB-Katalog", /Dein Abend/.test(text()) && !/Programmdaten verbinden/.test(text()));
   knopf(/^Settings$/i)?.click(); await warte(400);
   const summaries = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
-  const ids = ["Darstellung & Verhalten", "Masterliste", "Gesamt-Backup", "Streaming-Quellen", "KI-Vokabular", "Über & Rechtliches"]
+  const ids = ["Darstellung & Verhalten", "Masterliste", "Sicherheitskopie dieses Geräts", "Streaming-Quellen", "KI-Vokabular", "Über & Rechtliches"]
     .map((x) => summaries.findIndex((s) => s.startsWith(x)));
   check("B: normale Gast-Settings bleiben vollständig und verständlich geordnet",
     ids.every((x) => x >= 0) && ids.every((x, i) => i === 0 || x > ids[i - 1]));

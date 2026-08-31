@@ -1382,7 +1382,7 @@ export default function App() {
     const istWechsel = startWahlBestaetigt() && aktuelle && aktuelle !== wahl;
     const brauchtGekoppelteLeerung = istWechsel || hatPersoenlicheDaten;
     if (brauchtGekoppelteLeerung && hatPersoenlicheDaten
-      && !window.confirm("Startmodus wechseln?\n\nDabei wird die aktuelle Mediathek im Browser verworfen. Lade vorher ein Gesamt-Backup herunter, wenn du sie behalten möchtest.")) return;
+      && !window.confirm("Startmodus wechseln?\n\nDabei wird die aktuelle Mediathek im Browser verworfen. Lade vorher die Sicherheitskopie dieses Geräts herunter, wenn du sie behalten möchtest.")) return;
     if (brauchtGekoppelteLeerung) {
       if (!mustwatchGeladen || !artikelGeladen) {
         setErr("Startmodus kann erst gewechselt werden, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert.");
