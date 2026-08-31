@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useId } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { matchFilm, norm } from "../lib/match.js";
 import { istImAbo } from "../lib/kinos.js";
 import { store, K } from "../services/storage.js";
 import { ERROR_CODES } from "../services/errors.js";
-import { Chip, ChipReihe, IconClose, IconDelete, KinoTicket } from "../components/ui.jsx";
+import { IconDelete, KinoTicket } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { KinoLinks } from "../components/KinoLinks.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -12,6 +12,7 @@ import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import { formatiereTermin } from "../lib/programm.js";
 import { filtereAktiveKinoPins } from "../lib/libraryProjection.js";
 import { rankKinoProgramRecommendations } from "../lib/kinoRecommendations.js";
+import "../styles/kino-filter.css";
 
 /* ================= KINO (Dashboard) =================
    Programmquellen: public/programm.json (Job) · Nonstop-HTML-Import ·
@@ -42,6 +43,7 @@ export function KinoTab({
   fokusTreffer = null, onFokusVerbraucht,
 }) {
   const bereichRef = useRef(null);
+  const filterPanelId = useId();
   const istGepinnt = (t, z) => kinoPins.some((p) => p.t === t && p.z === z);
   /* Pins chronologisch: Monat/Tag/Uhrzeit aus dem Terminstring */
   const pinSort = (p) => {
@@ -58,7 +60,7 @@ export function KinoTab({
   const aboCycle = () => setAboFilter((v) => (v === "alle" ? "nonstop" : v === "nonstop" ? "kein" : "alle"));
   const [fassungF, setFassungF] = useState(null);
   const [zeigeMehr, setZeigeMehr] = useState(false);
-  /* Filtermenü auf/zu — Default ZUGEKLAPPT. Suche bleibt sichtbar.
+  /* Filtermenü auf/zu — Default ZUGEKLAPPT. Die Filterzeile bleibt sichtbar.
      Seit Etappe 3 eine dauerhafte Sicht-Präferenz im Datentopf (vorher nur
      sessionStorage): so überlebt sie den App-Neustart und wandert bei
      angemeldetem Konto auf die anderen Geräte mit. */
@@ -215,9 +217,17 @@ export function KinoTab({
   const resetProgrammfilter = () => {
     setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null);
   };
+  // Die Zeitgrenze wirkt bereits im Elternteil auf „Läuft auch“. Beim Reset
+  // bleibt die gespeicherte Uhrzeit erhalten, ihre Einschränkung wird gelöst.
+  const aktiveFilterAnzahl = [kinoF, tagF, aboFilter !== "alle", fassungF, sucheK, !zeigeAlles].filter(Boolean).length;
+  const resetAlleFilter = () => {
+    resetProgrammfilter();
+    setSucheK("");
+    setZeigeAlles(true);
+  };
 
   return (
-    <section ref={bereichRef}>
+    <section ref={bereichRef} className="kd-kino-tab">
       {programm?.status?.archiviert && (
         <p className="kd-inline-meldung" role="status">
           <strong>Archiviertes Offline-Beispiel.</strong> Die Termine sind synthetisch und zeigen kein aktuelles Kinoprogramm. Den dokumentierten Stand findest du unter Settings → Kinoprogramm-Status.
@@ -287,8 +297,8 @@ export function KinoTab({
 
       {programm && (
         <>
-          {/* Datum und Kino sind der immer sichtbare primäre Programmfilter.
-              Die lokale Textsuche bleibt davon unabhängig und mobil bewusst verborgen. */}
+          {/* Datum und Kino bleiben primär sichtbar; die Textsuche gehört
+              der globalen Suche. Ihr Fokusauftrag nutzt weiterhin sucheK. */}
           <div className={`kd-kino-programmfilter${programmFilterAktiv ? " aktiv" : ""}`} role="group" aria-label="Kinoprogramm filtern">
             <label>
               <span>Datum</span>
@@ -304,53 +314,47 @@ export function KinoTab({
                 {kinos.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             </label>
-            <button type="button" className="kd-kino-programmfilter-reset" disabled={!programmFilterAktiv}
-              onClick={resetProgrammfilter}>Programmfilter zurücksetzen</button>
             <span className="kd-kino-programmfilter-status" role="status" aria-live="polite">
               {programmFilterStatus || "Alle Programmtage und Kinos"}
             </span>
           </div>
 
-          {/* ---- Suche (immer sichtbar) & Filter (einklappbar, P1.4) ---- */}
-          <div data-tour="kino-filter" className="kd-kompakt kd-seitensuche" style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <input value={sucheK} onChange={(e) => setSucheK(e.target.value)} placeholder="Programm durchsuchen …"
-              style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
-            {sucheK && <button type="button" aria-label="Kinosuche leeren" title="Kinosuche leeren"
-              style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSucheK("")}><IconClose /></button>}
-            <button onClick={toggleFilterMenue} title={filterMenueOffen ? "Filter einklappen" : "Filter ausklappen"}
-              style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
-              {filterMenueOffen ? "▾ Filter" : "▸ Filter"}
-            </button>
-          </div>
-          {filterMenueOffen && (
-            <>
-              <ChipReihe>
-                <Chip active={aboFilter !== "alle"} onClick={aboCycle}>{aboLabel}</Chip>
+          <div data-tour="kino-filter" className="kd-kino-zusatzfilter">
+            <div className="kd-kino-filterzeile">
+              <button type="button" className="kd-kino-filter-toggle" onClick={toggleFilterMenue}
+                aria-expanded={filterMenueOffen} aria-controls={filterPanelId}>
+                <span aria-hidden="true">{filterMenueOffen ? "▾ " : "▸ "}</span>
+                Filter{aktiveFilterAnzahl > 0 ? ` · ${aktiveFilterAnzahl}` : ""}
+              </button>
+              {aktiveFilterAnzahl > 0 && (
+                <button type="button" onClick={resetAlleFilter}>Filter zurücksetzen</button>
+              )}
+            </div>
+            {(sucheK || !zeigeAlles) && (
+              <p className="kd-kino-filterhinweis" role="status">
+                {[sucheK ? `Suchfokus: ${sucheK}` : "", !zeigeAlles ? `Läuft auch: Rest ab ${zeitgrenze}` : ""].filter(Boolean).join(" · ")}
+              </p>
+            )}
+            <div id={filterPanelId} hidden={!filterMenueOffen} className="kd-kino-filterpanel">
+              <div className="kd-kino-filteroptionen" role="group" aria-label="Abo und Fassung">
+                <button type="button" aria-pressed={aboFilter !== "alle"} onClick={aboCycle}>{aboLabel}</button>
                 {fassungenDa && ["OmU", "OV", "DF"].map((fs) => (
-                  <Chip key={fs} active={fassungF === fs} onClick={() => setFassungF(fassungF === fs ? null : fs)}>{fs}</Chip>
+                  <button type="button" key={fs} aria-pressed={fassungF === fs}
+                    onClick={() => setFassungF(fassungF === fs ? null : fs)}>{fs}</button>
                 ))}
-              </ChipReihe>
-              <ChipReihe style={{ gap: 6 }}>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}
+              </div>
+              <div className="kd-kino-filteroptionen">
+                <label className="kd-kino-zeitgrenze"
                   title='Zeitgrenze für „Läuft auch": Filme ohne Vorstellung ab dieser Uhrzeit werden ausgeblendet. Deine Treffer sind nie betroffen.'>
                   Rest ab
-                  <input value={zeitgrenze} onChange={(e) => saveZeitgrenze(e.target.value)} placeholder="14:00"
-                    style={{ ...inputStyle, width: 52, padding: "5px 7px", fontFamily: "'Space Mono', monospace", fontSize: 12, textAlign: "center" }} />
+                  <input value={zeitgrenze} onChange={(e) => saveZeitgrenze(e.target.value)} placeholder="14:00" />
                 </label>
-                <button
-                  style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", borderColor: zeigeAlles ? T.wolfram : T.rauch, color: zeigeAlles ? T.wolfram : T.leinwand }}
-                  onClick={() => setZeigeAlles(!zeigeAlles)}>
+                <button type="button" onClick={() => setZeigeAlles(!zeigeAlles)}>
                   {zeigeAlles ? "Zeitfilter an" : "Ganzes Tagesprogramm"}
                 </button>
-                {programmFilterAktiv && (
-                  <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}
-                    onClick={resetProgrammfilter}>
-                    Programmfilter zurücksetzen
-                  </button>
-                )}
-              </ChipReihe>
-            </>
-          )}
+              </div>
+            </div>
+          </div>
 
           {/* Pin-Hinweis, solange noch nichts gepinnt ist (Entdeckbarkeit) */}
           {pinsSortiert.length === 0 && (

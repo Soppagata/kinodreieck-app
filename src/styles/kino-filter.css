@@ -1,0 +1,64 @@
+/* Nur Kino: unabhängig von der mobil verborgenen lokalen Suchzeile. */
+.kd-kino-tab .kd-kino-programmfilter {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.kd-kino-tab .kd-kino-zusatzfilter {
+  margin-bottom: 12px;
+  padding: 9px 10px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--rauch, #948fa0) 42%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--saal-hoch, #211e26) 82%, transparent);
+}
+.kd-kino-tab .kd-kino-filterzeile,
+.kd-kino-tab .kd-kino-filteroptionen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.kd-kino-tab .kd-kino-filter-toggle { margin-right: auto; }
+.kd-kino-tab .kd-kino-zusatzfilter button,
+.kd-kino-tab .kd-kino-zusatzfilter input {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rauch, #948fa0);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--leinwand, #ece8df);
+  font: 600 14px/1.3 'Barlow Condensed', sans-serif;
+  overflow-wrap: anywhere;
+}
+.kd-kino-tab .kd-kino-zusatzfilter button { cursor: pointer; }
+.kd-kino-tab .kd-kino-zusatzfilter button[aria-pressed="true"],
+.kd-kino-tab .kd-kino-filter-toggle[aria-expanded="true"] {
+  border-color: var(--wolfram, #e3a63b);
+  color: var(--wolfram, #e3a63b);
+}
+.kd-kino-tab .kd-kino-zusatzfilter :is(button, input):focus-visible {
+  outline: 2px solid var(--wolfram, #e3a63b);
+  outline-offset: 2px;
+}
+.kd-kino-tab .kd-kino-filterpanel:not([hidden]) { display: grid; gap: 8px; margin-top: 10px; }
+.kd-kino-tab .kd-kino-filterhinweis {
+  margin: 8px 0 0;
+  color: var(--wolfram, #e3a63b);
+  font: 12px/1.5 'Space Mono', monospace;
+  overflow-wrap: anywhere;
+}
+.kd-kino-tab .kd-kino-zeitgrenze {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--rauch, #948fa0);
+  font: 12px/1.3 'Space Mono', monospace;
+}
+.kd-kino-tab .kd-kino-zeitgrenze input {
+  width: 86px;
+  font-size: 16px;
+  text-align: center;
+}
