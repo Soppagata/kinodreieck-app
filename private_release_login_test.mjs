@@ -33,6 +33,12 @@ const sources = {
   catalog: 'export const catalogService = { storedVariant: () => "demo" };',
   personalDataRegistry: 'export const PERSONAL_DATA_KEYS = ["kd:master"];',
   errors: 'export const errorText = () => "Anmeldung nicht möglich. Bitte erneut versuchen.";',
+  runtime: `
+    let environment = "local";
+    export const APP_ENVIRONMENTS = Object.freeze({ LOCAL: "local", STAGING: "staging", PRODUCTION: "production" });
+    export const runtimeConfig = { get appEnvironment() { return environment; } };
+    export const runtimeHarness = { set(next) { environment = next; } };
+  `,
 };
 const result = await build({
   stdin: {
@@ -41,6 +47,7 @@ const result = await build({
       export { createRoot } from "react-dom/client";
       export { EinstiegsGate } from "./src/components/EinstiegsGate.jsx";
       export { harness } from "./src/services/sessionCoordinator.js";
+      export { runtimeHarness } from "./src/config/runtime.js";
     `,
     sourcefile: "login-test-entry.jsx", resolveDir: process.cwd(), loader: "jsx",
   },
@@ -48,7 +55,7 @@ const result = await build({
   plugins: [{
     name: "local-only-boundaries",
     setup(builder) {
-      builder.onResolve({ filter: /\/(sessionCoordinator|storage|catalog|personalDataRegistry|errors)\.js$/ }, (args) => {
+      builder.onResolve({ filter: /\/(sessionCoordinator|storage|catalog|personalDataRegistry|errors|runtime)\.js$/ }, (args) => {
         const name = args.path.split("/").at(-1).replace(".js", "");
         return { path: name, namespace: "login-mocks" };
       });
@@ -56,16 +63,25 @@ const result = await build({
     },
   }],
 });
-const { React, act, createRoot, EinstiegsGate, harness } = await import(
+const { React, act, createRoot, EinstiegsGate, harness, runtimeHarness } = await import(
   "data:text/javascript;base64," + Buffer.from(result.outputFiles[0].text).toString("base64")
 );
 let root;
 let checks = 0;
-async function mount() {
+async function mount({
+  environment = "local",
+  url = "http://localhost/",
+  session = { mode: "guest", state: "ready", account: null },
+  storageState = "guest",
+  storage = {},
+} = {}) {
   if (root) await act(async () => root.unmount());
+  dom.reconfigure({ url });
   localStorage.clear();
+  for (const [key, value] of Object.entries(storage)) localStorage.setItem(key, value);
   harness.calls = 0;
-  harness.set({ mode: "guest", state: "ready", account: null }, "guest");
+  runtimeHarness.set(environment);
+  harness.set(session, storageState);
   root = createRoot(document.getElementById("root"));
   await act(async () => root.render(React.createElement(EinstiegsGate, null,
     React.createElement("p", { "data-child": "app" }, "Synthetic app"))));
@@ -100,6 +116,44 @@ check("Lokaler Einstieg wird bestätigt gespeichert, ohne KI-/Tutorialwrite", ()
   assert.equal(JSON.parse(localStorage.getItem("kd:einstieg")).abgeschlossen, true);
   assert.equal(localStorage.getItem("kd:ki"), null);
   assert.equal(localStorage.getItem("kd:tutorial"), null);
+});
+
+const gastMasterOnline = JSON.stringify({ filme: [{ id: "bleibt-unsichtbar", titel: "Gastbestand" }] });
+const abgeschlossenerGastmarker = JSON.stringify({ version: "private-v1", abgeschlossen: true, weg: "gast" });
+for (const environment of ["staging", "production"]) {
+  await mount({
+    environment,
+    url: `https://${environment}.kinodreieck.test/`,
+    storage: { "kd:master": gastMasterOnline, "kd:einstieg": abgeschlossenerGastmarker },
+  });
+  check(`${environment}: alter Gastmarker öffnet ausschließlich den Login`, () => {
+    assert.ok(document.querySelector(".kd-entry-login"));
+    assert.ok(!document.querySelector("[data-child]"));
+    assert.equal(button("Ohne Konto fortfahren"), undefined);
+    assert.equal(localStorage.getItem("kd:master"), gastMasterOnline);
+    assert.equal(localStorage.getItem("kd:einstieg"), abgeschlossenerGastmarker);
+  });
+}
+
+await mount({
+  environment: "production",
+  url: "https://kinodreieck.test/",
+  session: { mode: "account", state: "ready", account: { id: "test" }, capabilities: { remoteStorage: true } },
+  storageState: "account-ready",
+});
+check("Online erhält ein sicher gebundenes Konto unverändert die bestehende App", () => {
+  assert.ok(document.querySelector("[data-child]"));
+  assert.ok(!document.querySelector(".kd-entry-login"));
+});
+
+await mount({
+  environment: "production",
+  url: "file:///tmp/Kinodreieck.html",
+  storage: { "kd:master": gastMasterOnline, "kd:einstieg": abgeschlossenerGastmarker },
+});
+check("Heruntergeladene file-Einzeldatei behält den bisherigen Localmodus", () => {
+  assert.ok(document.querySelector("[data-child]"));
+  assert.equal(localStorage.getItem("kd:master"), gastMasterOnline);
 });
 
 await mount();
