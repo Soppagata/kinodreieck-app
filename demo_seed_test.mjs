@@ -41,16 +41,21 @@ for (const [name, kaputt] of [
   check("Vertrag weist " + name + " ab", geworfen);
 }
 
-const sidecarSource = fs.readFileSync("public/Programmdateien/System/demo_masterliste.js", "utf8");
+const fixturePfad = "tools/fixtures/demo_masterliste.js";
+const fixtureSource = fs.readFileSync(fixturePfad, "utf8");
 const sandbox = { window: {} };
-vm.runInNewContext(sidecarSource, sandbox);
-const sidecar = sandbox.window.__KD_DEMO_SEED__;
+vm.runInNewContext(fixtureSource, sandbox);
+const fixture = sandbox.window.__KD_DEMO_SEED__;
 check("Lokale Beilage liefert denselben Format-1-Vertrag",
-  pruefeDemoSeed(sidecar) === sidecar && sidecar.master.filme.length > 0);
+  pruefeDemoSeed(fixture) === fixture && fixture.master.filme.length > 0);
 check("Legacy-Global zeigt nur auf den Master desselben Seeds",
-  sandbox.window.__KD_DEMO_MASTER__ === sidecar.master);
+  sandbox.window.__KD_DEMO_MASTER__ === fixture.master);
 check("Getrennte Einzeldatei-Beilage enthaelt weiterhin eine echte Filmbasis",
-  sidecar.master.filme.every((film) => !!film.id && !!film.titel));
+  fixture.master.filme.every((film) => !!film.id && !!film.titel));
+check("Build-Fixture ist nicht mehr als oeffentliches Sidecar erreichbar",
+  fs.existsSync(fixturePfad)
+  && !fs.existsSync("public/Programmdateien/System/demo_masterliste.js")
+  && !/<\/script/i.test(fixtureSource));
 
 const serviceSource = fs.readFileSync("src/services/catalog.js", "utf8");
 const appSource = fs.readFileSync("src/App.jsx", "utf8");
@@ -84,7 +89,8 @@ const singleBuilder = fs.readFileSync("build-single.mjs", "utf8");
 check("Nur der ausdrueckliche Einzeldatei-Build behaelt die eingebettete Beilage",
   /__KD_SINGLE_FILE__: 'true'/.test(singleConfig)
   && /data-kd-einzeldatei-seed/.test(singleBuilder)
-  && /demo_masterliste\.js/.test(singleBuilder)
+  && /join\(ROOT, "tools", "fixtures", "demo_masterliste\.js"\)/.test(singleBuilder)
+  && !/join\(ROOT, "public", "Programmdateien", "System", "demo_masterliste\.js"\)/.test(singleBuilder)
   && /__KD_DEMO_SEED__/.test(controllerSource));
 
 const migration = fs.readFileSync("supabase/migrations/20260731140000_demo_seed_catalog.sql", "utf8");
