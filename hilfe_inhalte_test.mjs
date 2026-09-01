@@ -273,7 +273,7 @@ check("Fallback enthält exakt 5 Pflichtfelder", HILFE_FALLBACK
   && ["id", "titel", "text", "bereichId", "ziel"]
     .every((feld) => Object.hasOwn(HILFE_FALLBACK, feld)));
 
-check("direkte Suchbegriffe sind vollständig", DIREKTE_AKTIONEN.length === 51);
+check("direkte Suchbegriffe sind vollständig", DIREKTE_AKTIONEN.length === 54);
 check("direkte Suchbegriffe sind eindeutig", DIREKTE_TERME_EINDEUTIG.size === DIREKTE_AKTIONEN.length);
 
 for (const bereich of HILFE_BEREICHE) {
@@ -451,7 +451,7 @@ for (const probe of OVERLAP_BELEGSFALTE) {
   check(`Overlap-Beleg (${probe.id}) bleibt spezifisch`, antwortSchemaSicher(antwortVon(probe.query), probe.expected));
 }
 
-check("Mehraktions-Matrix nutzt alle 13 Aktions-IDs", KANONISCHE_AKTIONEN.length === 13);
+check("Mehraktions-Matrix nutzt alle 14 Aktions-IDs", KANONISCHE_AKTIONEN.length === 14);
 check("Mehraktions-Matrix nutzt eindeutig kanonische Direktbegriffe",
   new Set(KANONISCHE_AKTIONEN.map((eintrag) => eintrag.id)).size === KANONISCHE_AKTIONEN.length
     && new Set(KANONISCHE_AKTIONEN.map((eintrag) => eintrag.term)).size === KANONISCHE_AKTIONEN.length,

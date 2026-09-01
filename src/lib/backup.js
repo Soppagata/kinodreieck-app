@@ -53,7 +53,7 @@ export async function baueBackup({
   // JSON- oder Formfehler werden im Backup sichtbar protokolliert.
   const backup = {
     format: "kinodreieck-backup", version: 1, erstellt: new Date().toISOString(),
-    hinweis: "Wiederherstellen: über Settings → Backup wiederherstellen (oder masterliste/artikel einzeln über die Import-Felder).",
+    hinweis: "Portable JSON-Sicherheitskopie dieses Geräts zur eigenen Aufbewahrung; dieser Release bietet dafür keinen Restore- oder Reimportweg.",
   };
   const exportStaende = {};
   for (const entry of PERSONAL_DATA_ENTRIES) {

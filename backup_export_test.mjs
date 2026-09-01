@@ -9,6 +9,10 @@ import {
 import { naechsteLokaleMasterHerkunft } from "./src/controllers/masterOriginController.js";
 import { brauchtArtikelRevisionMigration } from "./src/controllers/useArticleController.js";
 import { baueBackup } from "./src/lib/backup.js";
+import {
+  ACCOUNT_EXPORT_REQUIRED_SCOPE,
+  ACCOUNT_EXPORT_SCOPE_VERSION,
+} from "./src/lib/privatePilotOps.js";
 import { setStorageDriver } from "./src/lib/storage.js";
 import {
   ladeGebundeneSicherheitskopieHerunter,
@@ -62,6 +66,9 @@ loeseArtikel();
 const backup = await backupLauf;
 ok(backup.masterliste.filme[0].id === "alt" && backup._exportStaende.master === 10,
   "Backup liefert die Revision des tatsächlich gelesenen Masters");
+ok(backup.hinweis.includes("keinen Restore- oder Reimportweg")
+  && !backup.hinweis.includes("Backup wiederherstellen"),
+"Gerätesicherheitsdatei verspricht keinen im Release verborgenen Restore- oder Reimportweg");
 
 const exportStand = { master: 0, artikel: 0 };
 starteGesamtBackupDownload({ click() {} }, (feld, stand) => {
@@ -192,6 +199,35 @@ ok(ownDataCalls === 0, "Deaktivierter vollständiger Kontoexport fragt den Own-D
 await assert.rejects(() => ladeVollstaendigenKontoexportHerunter({
   aktiviert: true,
   storageContext: gebundenerKontext,
+  getValidatedOwnData: async () => { ownDataCalls++; return {}; },
+}), (error) => error?.code === "ACCOUNT_EXPORT_SCOPE_UNPROVEN");
+ok(ownDataCalls === 0, "Unbelegter Releaseumfang stoppt vor dem Own-Data-Endpunkt trotz aktivem Runtime-Flag");
+
+const vollstaendigerVertrag = Object.freeze({
+  schemaVersion: ACCOUNT_EXPORT_SCOPE_VERSION,
+  status: "VERIFIED",
+  dataClasses: Object.freeze(ACCOUNT_EXPORT_REQUIRED_SCOPE.map((entry) => entry.id)),
+});
+for (const [name, dataClasses] of [
+  ["fehlender Klasse", vollstaendigerVertrag.dataClasses.slice(0, -1)],
+  ["zusätzlicher Klasse", [...vollstaendigerVertrag.dataClasses, "unbelegte-zusatzklasse"]],
+]) {
+  await assert.rejects(() => ladeVollstaendigenKontoexportHerunter({
+    aktiviert: true,
+    vollstaendigkeitsVertrag: {
+      ...vollstaendigerVertrag,
+      dataClasses,
+    },
+    storageContext: gebundenerKontext,
+    getValidatedOwnData: async () => { ownDataCalls++; return {}; },
+  }), (error) => error?.code === "ACCOUNT_EXPORT_SCOPE_UNPROVEN");
+  ok(ownDataCalls === 0, `Umfangsvertrag mit ${name} bleibt vor jedem Own-Data-Aufruf geschlossen`);
+}
+
+await assert.rejects(() => ladeVollstaendigenKontoexportHerunter({
+  aktiviert: true,
+  vollstaendigkeitsVertrag: vollstaendigerVertrag,
+  storageContext: gebundenerKontext,
   getValidatedOwnData: async () => ({ personal: [] }),
 }), (error) => error?.code === "ACCOUNT_EXPORT_NOT_VALIDATED");
 ok(true, "Unvollständige Own-Data-Antwort erzeugt keine als vollständig bezeichnete Datei");
@@ -203,6 +239,7 @@ const validierteOwnData = {
 let kontoDownloadKlicks = 0;
 const kontoDownload = await ladeVollstaendigenKontoexportHerunter({
   aktiviert: true,
+  vollstaendigkeitsVertrag: vollstaendigerVertrag,
   storageContext: gebundenerKontext,
   getValidatedOwnData: async () => validierteOwnData,
   async buildBackup({ remoteOwnData }) {

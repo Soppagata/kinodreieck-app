@@ -3,6 +3,51 @@ import { PERSONAL_DATA_ENTRIES } from "./personalDataRegistry.js";
 export const PRIVATE_OPS_SCHEMA_VERSION = 1;
 export const LEGAL_REVIEW_REQUIRED = "LEGAL_OR_PROVIDER_REVIEW_REQUIRED";
 
+/* Ein freigeschalteter Endpoint und eine formal valide Antwort belegen noch
+   keinen vollständigen Kontoexport. Der sichtbare Releaseweg braucht
+   zusätzlich diesen versionierten Umfangsvertrag. Die aktuelle
+   Releasekonfiguration bleibt bewusst UNPROVEN: Der bestehende Own-Data-
+   Vertrag ist gegenüber den später ergänzten Kontoflächen nicht als
+   vollständig abgenommen. Ein Runtime-Flag kann diese Codegrenze nicht
+   überstimmen. */
+export const ACCOUNT_EXPORT_SCOPE_VERSION = "kinodreieck-account-export-release-v1";
+export const ACCOUNT_EXPORT_REQUIRED_SCOPE = Object.freeze([
+  Object.freeze({ id: "auth-account", label: "Anmeldung und Kontokennung" }),
+  Object.freeze({ id: "account-access", label: "Kontofreigabe und Rolle" }),
+  Object.freeze({ id: "personal-sync-pots", label: "alle registrierten persönlichen Sync-Töpfe" }),
+  Object.freeze({ id: "ai-operation-logs", label: "kontobezogene KI-Betriebsnachweise" }),
+  Object.freeze({ id: "series-watch", label: "Serienbeobachtung" }),
+  Object.freeze({ id: "shared-articles", label: "eigene geteilte Artikel" }),
+  Object.freeze({ id: "shared-claims", label: "eigene Artikelübernahmen" }),
+  Object.freeze({ id: "radar-capabilities-state", label: "Radar-Rechte und Kontostand" }),
+  Object.freeze({ id: "radar-subscriptions-receipts-shares", label: "Radar-Ziele, Bestätigungen und Freigaben" }),
+  Object.freeze({ id: "radar-operations-reviews", label: "kontobezogene Radar-Vorgänge und Prüfungen" }),
+  Object.freeze({ id: "radar-text-findings", label: "persönliche Radar-Textfunde" }),
+  Object.freeze({ id: "retention-information", label: "Aufbewahrungsinformationen" }),
+  Object.freeze({ id: "deletion-status", label: "Status einer Kontolöschanfrage" }),
+]);
+
+export const ACCOUNT_EXPORT_RELEASE_CONTRACT = Object.freeze({
+  schemaVersion: ACCOUNT_EXPORT_SCOPE_VERSION,
+  status: "UNPROVEN",
+  dataClasses: Object.freeze([]),
+});
+
+export function istKontoExportVertragVollstaendig(
+  contract = ACCOUNT_EXPORT_RELEASE_CONTRACT,
+) {
+  if (!contract || typeof contract !== "object" || Array.isArray(contract)) return false;
+  const keys = Object.keys(contract).sort();
+  if (keys.length !== 3 || keys.join("|") !== "dataClasses|schemaVersion|status") return false;
+  if (contract.schemaVersion !== ACCOUNT_EXPORT_SCOPE_VERSION || contract.status !== "VERIFIED") return false;
+  if (!Array.isArray(contract.dataClasses)) return false;
+  const required = ACCOUNT_EXPORT_REQUIRED_SCOPE.map((entry) => entry.id);
+  const included = contract.dataClasses;
+  return included.length === required.length
+    && new Set(included).size === required.length
+    && required.every((id) => included.includes(id));
+}
+
 export const RETENTION_CLASSES = Object.freeze({
   NONE: Object.freeze({ id: "none", days: 0, label: "nicht gespeichert" }),
   TRANSIENT_7: Object.freeze({ id: "transient-7", days: 7, label: "7 Tage" }),
@@ -51,10 +96,10 @@ export const PRIVATE_DATA_INVENTORY = Object.freeze([
     legalStatus: "INTERNAL_PERSONAL_DATA",
   })),
   Object.freeze({ id: "local_diagnostics", label: "Lokale technische Fehlerdiagnose", purpose: "Owner-aktivierte, inhaltsfreie Fehlercodes mit groben Laufzeitmetadaten", owner: "lokales Gerät", locations: Object.freeze(["Browser"]), recipients: Object.freeze([]), export: "bewusster Export über Supportdaten", deleteTrigger: "manuelles Leeren oder automatische 7-Tage-TTL", retention: RETENTION_CLASSES.TRANSIENT_7.id, featureFlag: null, legalStatus: "LOCAL_ONLY_NO_CONTENT" }),
-  Object.freeze({ id: "auth_session", label: "Anmeldesitzung", purpose: "Authentifizierung", owner: "angemeldetes Konto", locations: Object.freeze(["Browser", "Supabase Auth"]), recipients: Object.freeze(["Supabase"]), export: "serverseitige Eigendatenauskunft", deleteTrigger: "Logout oder Kontolöschung", retention: RETENTION_CLASSES.PURPOSE_BOUND.id, featureFlag: "private_pilot_access", legalStatus: "AUTH_REQUIRED" }),
-  Object.freeze({ id: "local_rollback", label: "lokale Rückholpunkte", purpose: "sicherer Restore und Kontowechsel", owner: "lokales Gerät", locations: Object.freeze(["Browser"]), recipients: Object.freeze([]), export: "nicht im Backup; nur kurzfristige Sicherheitskopie", deleteTrigger: "TTL, Rücknahme oder Reset", retention: RETENTION_CLASSES.TRANSIENT_7.id, featureFlag: null, legalStatus: "LOCAL_ONLY" }),
-  Object.freeze({ id: "ops_terminal", label: "terminale Betriebsdetails", purpose: "Idempotenz, Fehlerabschluss und zeitlich begrenzte Supportdiagnose", owner: "technischer Betrieb", locations: Object.freeze(["Browser", "Supabase"]), recipients: Object.freeze(["Supabase bei serverseitigen Operationen"]), export: "serverseitige Eigendatenauskunft soweit kontobezogen", deleteTrigger: "30-Tage-TTL-Purge", retention: RETENTION_CLASSES.OPERATIONS_30.id, featureFlag: "private_ops_aktiv", legalStatus: "NO_CONTENT_PAYLOAD" }),
-  Object.freeze({ id: "ops_metadata", label: "inhaltsfreie Betriebsmetadaten", purpose: "Run-, Kosten-, Review- und Capability-Nachweis", owner: "technischer Betrieb", locations: Object.freeze(["Supabase", "GitHub Actions"]), recipients: Object.freeze(["Supabase", "GitHub"]), export: "serverseitige Eigendatenauskunft soweit kontobezogen", deleteTrigger: "90-Tage-TTL-Purge", retention: RETENTION_CLASSES.AUDIT_90.id, featureFlag: "private_ops_aktiv", legalStatus: "NO_CONTENT_PAYLOAD" }),
+  Object.freeze({ id: "auth_session", label: "Anmeldesitzung", purpose: "Authentifizierung", owner: "angemeldetes Konto", locations: Object.freeze(["Browser", "Supabase Auth"]), recipients: Object.freeze(["Supabase"]), export: "manueller Rechteweg; kein freigeschalteter Self-Service-Kontoexport", deleteTrigger: "Logout oder Kontolöschung", retention: RETENTION_CLASSES.PURPOSE_BOUND.id, featureFlag: "private_pilot_access", legalStatus: "AUTH_REQUIRED" }),
+  Object.freeze({ id: "local_rollback", label: "lokale Rückholpunkte", purpose: "technischer Schutz bei lokalen Übergängen und Kontowechsel", owner: "lokales Gerät", locations: Object.freeze(["Browser"]), recipients: Object.freeze([]), export: "nicht im Backup; nur kurzfristige Sicherheitskopie", deleteTrigger: "TTL, Rücknahme oder Reset", retention: RETENTION_CLASSES.TRANSIENT_7.id, featureFlag: null, legalStatus: "LOCAL_ONLY" }),
+  Object.freeze({ id: "ops_terminal", label: "terminale Betriebsdetails", purpose: "Idempotenz, Fehlerabschluss und zeitlich begrenzte Supportdiagnose", owner: "technischer Betrieb", locations: Object.freeze(["Browser", "Supabase"]), recipients: Object.freeze(["Supabase bei serverseitigen Operationen"]), export: "manueller Rechteweg soweit kontobezogen", deleteTrigger: "30-Tage-TTL-Purge", retention: RETENTION_CLASSES.OPERATIONS_30.id, featureFlag: "private_ops_aktiv", legalStatus: "NO_CONTENT_PAYLOAD" }),
+  Object.freeze({ id: "ops_metadata", label: "inhaltsfreie Betriebsmetadaten", purpose: "Run-, Kosten-, Review- und Capability-Nachweis", owner: "technischer Betrieb", locations: Object.freeze(["Supabase", "GitHub Actions"]), recipients: Object.freeze(["Supabase", "GitHub"]), export: "manueller Rechteweg soweit kontobezogen", deleteTrigger: "90-Tage-TTL-Purge", retention: RETENTION_CLASSES.AUDIT_90.id, featureFlag: "private_ops_aktiv", legalStatus: "NO_CONTENT_PAYLOAD" }),
 ]);
 
 export function providerActivationDecision({ registryRow, featureEnabled, now = Date.now() }) {

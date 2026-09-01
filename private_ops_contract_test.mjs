@@ -1355,14 +1355,13 @@ expect(
     && /Deno\.env\.get\("KD_ACCOUNT_DELETE_ALLOWLIST_SHA256"\)/.test(edgeFunctionSql),
 );
 expect(
-  "Self-Delete-UI erzwingt Export, frische Passwortbestätigung und lokale Trennung erst nach Servererfolg",
-  privateOpsUiSql.includes("runExportBeforeAccountDeletion")
-    && privateOpsUiSql.includes("runCurrentAccountDeletion")
-    && privateOpsUiSql.includes("!serverExportDone")
-    && privateOpsUiSql.includes("localFinalizationPending")
-    && privateOpsControllerSql.indexOf("await reauthenticate(password)") < privateOpsControllerSql.indexOf("await deleteRemote")
-    && privateOpsControllerSql.indexOf("await deleteRemote") < privateOpsControllerSql.indexOf("await finalizeLocal()")
-    && authDriverSql.includes("async function reauthenticate(passwort)"),
+  "Release-UI lässt den alten Self-Delete trotz vorhandenem Backendpfad vollständig aus",
+  !privateOpsUiSql.includes("runExportBeforeAccountDeletion")
+    && !privateOpsUiSql.includes("runCurrentAccountDeletion")
+    && !privateOpsUiSql.includes("deleteCurrentAccount")
+    && !privateOpsUiSql.includes('type="password"')
+    && !privateOpsUiSql.includes("Konto endgültig löschen")
+    && privateOpsUiSql.includes("ManuellerDatenrechteWeg"),
 );
 
 const privateGrantBlock = compatMigrationSql.match(/grant execute on function public\.kd_private_mark_operation_ttl[\s\S]*?to service_role;/i) || [];
