@@ -873,9 +873,8 @@ await check("Alter Tagesfeed bleibt als stale lesbar, erzeugt aber keinen zweite
   assert.equal(result.feed.format, 3);
 });
 
-await check("Browserdienst sendet accountlos genau einen bodylosen GET", async () => {
+await check("Browserdienst ohne Kontositzung bleibt unautorisiert und sendet keine privaten Daten", async () => {
   const calls = [];
-  const feed = evaluated();
   const service = createEntdeckenDailyFeedService({
     config: {
       entdeckenDailyFeedEnabled: true,
@@ -885,14 +884,13 @@ await check("Browserdienst sendet accountlos genau einen bodylosen GET", async (
     currentDay: () => "2026-08-20",
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
-      return { ok: true, async json() {
-        return { ok: true, status: "fresh", feed, writes: 0, providerRequests: 0, searchRequests: 0,
-          refresh: { requested: false, mode: "read", status: "read_only", attemptCount: 1, maxAttempts: 3 } };
+      return { ok: false, status: 403, async json() {
+        return { ok: false, status: "disabled", feed: null };
       } };
     },
   });
   const result = await service.load();
-  assert.equal(result.status, "fresh");
+  assert.equal(result.status, "unavailable");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].options.method, "GET");
   assert.equal("body" in calls[0].options, false);
@@ -920,13 +918,19 @@ await check("GET bleibt read-only; nur explizites scheduled-/owner-POST darf cla
   assert.match(functionSource, /requestHasForbiddenBody\(req\)/);
   assert.match(functionSource, /scheduledAuthorized = requestMode === "scheduled"/);
   assert.match(functionSource, /req\.headers\.get\("apikey"\) === serviceKey && bearerToken === serviceKey/);
-  assert.match(functionSource, /publicKeyAuthorized = requestMode !== "scheduled"/);
+  assert.match(functionSource, /browserKeyAuthorized = requestMode !== "scheduled"/);
+  assert.match(functionSource, /req\.headers\.get\("apikey"\) === publishableKey/);
   assert.match(functionSource, /requestMode = req\.method === "GET"[\s\S]*"read"/);
   assert.match(functionSource, /SCHEDULED_REFRESH_VALUE/);
   assert.match(functionSource, /OWNER_REFRESH_VALUE/);
+  assert.match(functionSource, /requestMode === "read" \|\| requestMode === "owner"/);
+  assert.match(functionSource, /user\.auth\.getClaims\(token\)/);
   assert.match(functionSource, /user\.auth\.getUser\(token\)/);
+  assert.match(functionSource, /claims\?\.role !== "authenticated"/);
   assert.match(functionSource, /\.from\("kd_account_access"\)/);
-  assert.match(functionSource, /access\?\.role !== "owner"/);
+  assert.match(functionSource, /access\?\.role === "member" \|\| access\?\.role === "owner"/);
+  assert.match(functionSource, /access\?\.active === true/);
+  assert.match(functionSource, /access\?\.role !== "owner" \|\| access\?\.personal_ai !== true/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_feed_status"\)/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_refresh_claim"/);
   assert.match(functionSource, /PROVIDER_DIAGNOSTIC_ENV/);
@@ -1078,13 +1082,14 @@ await check("Quellen-v2 erweitert fail-closed auf exakt vier Domains und behaelt
   assert.doesNotMatch(code, /on\s+conflict|update\s+public\.kd_ai_limits|staging_owner_refresh_override\s*=|create\s+extension|scheduler|cron\./i);
 });
 
-await check("App ruft den globalen Feed ohne Owner-Gate auf und behaelt lokale Daten lokal", () => {
-  assert.match(appSource, /useWebDiscoveryFeed\(bootDone && tab === "blog"\)/);
+await check("App aktiviert den unveraenderten Fallback nur fuer aktive Konten und behaelt lokale Daten lokal", () => {
+  assert.match(appSource, /useWebDiscoveryFeed\(remoteKontoAktiv && bootDone && tab === "blog"\)/);
   assert.doesNotMatch(appSource, /webDiscoveryOwnerFreigegeben/);
   assert.match(controllerSource, /!active \|\| laufRef\.current/);
   assert.match(controllerSource, /feed: result\.feed \|\| current\.feed/);
   assert.match(appSource, /webDiscoveryFeed=\{webDiscoveryState\.feed\}/);
   assert.match(appSource, /webDiscoveryStatus=\{webDiscoveryState\}/);
+  assert.match(clientSource, /fallbackFeed: ENTDECKEN_MARKET_POOL_50/);
   assert.doesNotMatch(clientSource, /getAccessToken|hatBestaetigteOwnerRolle|Authorization|profile|seen|selectedServices|radar/);
 });
 
