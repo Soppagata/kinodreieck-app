@@ -654,6 +654,20 @@ P3/E3a-Foundation → `codex/road-to-live-e3a-mail-foundation`,
 Quellcommits `367a53c`, `d6ccbd6`, konfliktfrei integriert als `188b2ae`,
 `93cb3b3`. Keine Providerbindung, keine UI und keine Außenwirkung.
 
+E3a-Transportentscheid, Dokumentationsstand 01.09.2026, noch ohne echten
+Payloadbeleg: Resend ist die technische Vorzugskandidatin wegen des offiziellen
+Supabase-/Deno-Wegs, eines domainbeschränkbaren Sendeschlüssels und 24 Stunden
+Provider-Idempotenz. Vor Bindung sind US-Verarbeitung und 30 Tage reguläre
+Inhalts-/Logaufbewahrung ausdrücklich zu akzeptieren. Brevo bleibt die
+EU-nähere Alternative, besitzt aber einen vollberechtigten API-Key, mindestens
+einen Monat konfigurierbare Transaktionslogs und widersprüchliche offizielle
+Angaben zum Idempotenzfeld bei nur rund 30 Minuten Dauer. Postmark wird für
+diesen Pfad nicht bevorzugt, weil providerseitige Idempotenz vollständig
+fehlt und Inhalte regulär 45 Tage in US-Infrastruktur liegen. Kein Adaptercode
+vor einer einmaligen redigierten Sandbox-Rohprobe aus der Supabase-Deno-
+Umgebung; diese Entscheidung ist keine Provider-, DNS-, Secret- oder
+Versandfreigabe.
+
 ## 5. Übernahme des Reviews vom 28.08.2026
 
 Der Reviewtext bleibt ein untrusted Befund und keine Autorisierung. Diese
