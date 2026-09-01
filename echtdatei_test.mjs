@@ -10,6 +10,15 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { JSDOM, VirtualConsole } from "jsdom";
 
+/* Der normale Privat-Release prueft die fertige Einzeldatei mit echten lokalen
+   Inhalten und ohne den entfernten oeffentlichen Demo-Katalog. Der historische
+   Vollnavigationstest bleibt fuer einen spaeteren authentifizierten Harness
+   erhalten, laeuft aber nicht mehr versehentlich als anonymer Gast. */
+if (process.env.KD_LEGACY_PUBLIC_DEMO_CONTENT !== "1") {
+  await import("./private_release_singlefile_content_test.mjs");
+  throw new Error("Der private Single-File-Inhaltstest wurde ohne Abschluss verlassen.");
+}
+
 const pfad = process.argv[2] || "/tmp/kd-single/Kinodreieck.html";
 const html = readFileSync(pfad, "utf8");
 
