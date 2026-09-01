@@ -634,8 +634,12 @@ check("Must-Watch speichert keinen Verfügbarkeitsstatus und rät keine Titel",
   !/verfuegbar(?:keit)?:/.test(mustwatchController)
   && !/mustwatchVerfuegbarkeit/.test(mustwatchController)
   && !/norm\(k\.titel\)[\s\S]{0,80}verknuepfung/.test(mustwatchListe));
-check("Demo-Boot bestätigt Must-Watch erst nach erfolgreichem lokalem Schreiben",
-  /localStorage\.setItem\(K\.mustwatch,[^\n]+\); setMustwatch\(mw\)/.test(app));
+check("App besitzt keinen Demo-seitigen Must-Watch-Seed; normales Laden und Schreiben bleiben bestaetigt",
+  !/demoLadung/.test(app)
+  && !/localStorage\.setItem\(K\.mustwatch/.test(app)
+  && /ladeKontext\.get\(K\.mustwatch\)[\s\S]*parseMustwatchSicher\(r\.value\)[\s\S]*uebernehmeState\(liste\)/.test(mustwatchController)
+  && /await kontext\.set\(K\.mustwatch, payload\)[\s\S]*return true/.test(mustwatchController)
+  && /if \(!await persistMustwatch\(next, auftragKontext\)\) return false;[\s\S]*uebernehmeState\(next\)/.test(mustwatchController));
 check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",
   /master: ensureIds\(aktuell\.map/.test(app)
   && (app.match(/ensureIds\(\[\{ \.\.\.film, id \}\]\)\[0\]/g) || []).length === 2
