@@ -234,7 +234,7 @@ ok(true, "Unvollständige Own-Data-Antwort erzeugt keine als vollständig bezeic
 
 const validierteOwnData = {
   auth: {}, access: {}, personal: [], aiLogs: [], seriesWatch: [], sharedArticles: [],
-  sharedClaims: [], radar: {}, retention: [], deletion: {},
+  sharedClaims: [], radar: { textFindings: [] }, retention: [], deletion: {},
 };
 let kontoDownloadKlicks = 0;
 const kontoDownload = await ladeVollstaendigenKontoexportHerunter({
