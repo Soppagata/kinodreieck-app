@@ -22,7 +22,7 @@ const {
 const { createAiService } = await import("./src/services/ai.js");
 const { publicSupabaseHeaders, istSupabaseProjektUrl } = await import("./src/lib/supabasePublic.js");
 const { storageService } = await import("./src/services/storage.js");
-const { catalogService } = await import("./src/services/catalog.js");
+const { catalogService, createCatalogService } = await import("./src/services/catalog.js");
 
 let ok = 0;
 const check = (name, value) => {
@@ -168,15 +168,37 @@ catalogService.setConnection({
   url: "https://architekturtest.supabase.co",
   key: "sb_publishable_architekturtest",
 });
-globalThis.fetch = async () => ({
-  ok: false,
-  status: 500,
-  json: async () => ({ message: "INTERNAL_TABLE_DETAIL" }),
+let katalogFetches = 0;
+globalThis.fetch = async () => {
+  katalogFetches++;
+  return {
+    ok: false,
+    status: 500,
+    json: async () => ({ message: "INTERNAL_TABLE_DETAIL" }),
+  };
+};
+let anonymerCatalogError = null;
+try { await catalogService.testConnection(); } catch (error) { anonymerCatalogError = error; }
+check("Anonymer Katalog-Verbindungstest endet vor Fetch fail-closed",
+  anonymerCatalogError?.code === ERROR_CODES.FORBIDDEN && katalogFetches === 0);
+check("Anonyme Katalogsperre leakt keine Backenddetails",
+  !errorText(anonymerCatalogError).includes("INTERNAL_TABLE_DETAIL")
+  && !anonymerCatalogError.message.includes("INTERNAL_TABLE_DETAIL"));
+
+const freigegebeneKatalogSession = {
+  mode: "account",
+  state: "ready",
+  account: { id: "architektur-konto" },
+  capabilities: { remoteStorage: true, personalAi: false },
+};
+const berechtigterCatalogService = createCatalogService({
+  auth: { getSnapshot: () => freigegebeneKatalogSession },
+  driver: { getAccessToken: async () => "architektur-token" },
 });
 let catalogError = null;
-try { await catalogService.testConnection(); } catch (error) { catalogError = error; }
+try { await berechtigterCatalogService.testConnection(); } catch (error) { catalogError = error; }
 check("Katalog-Service normalisiert Result-Envelopes zu BoundaryError",
-  catalogError?.code === ERROR_CODES.SERVER);
+  catalogError?.code === ERROR_CODES.SERVER && katalogFetches === 1);
 check("Katalog-Verbindungsfehler leakt keine Backenddetails in UI-Texte",
   !errorText(catalogError).includes("INTERNAL_TABLE_DETAIL")
   && !catalogError.message.includes("INTERNAL_TABLE_DETAIL"));
@@ -212,7 +234,7 @@ function anzeigbareTexte(wert, tiefe = 0, gesehen = new Set()) {
   }
   return raus;
 }
-const assetPruefung = await catalogService.testConnection({ bereich: "programm", variante: "demo" });
+const assetPruefung = await berechtigterCatalogService.testConnection({ bereich: "programm", variante: "live" });
 const assetTexte = anzeigbareTexte(assetPruefung.asset);
 check("Katalog-Assetprüfung meldet den Fehlzustand überhaupt (sonst prüfte der Leak-Check nichts)",
   assetPruefung.ok === true && assetPruefung.asset?.ok === false
