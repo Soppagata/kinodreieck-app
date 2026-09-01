@@ -4,6 +4,16 @@
 import { readFileSync } from "node:fs";
 import { JSDOM, VirtualConsole } from "jsdom";
 
+/* Der fruehere Vollnavigationstest startet ueber den inzwischen entfernten
+   oeffentlichen Demo-Katalog. Im normalen Release-Gate prueft die gebaute
+   Einzeldatei deshalb den echten requestfreien Localmodus. Der alte Block
+   bleibt als Referenz fuer einen spaeteren, sauber authentifizierten Harness
+   erhalten und kann bis dahin nur ausdruecklich aufgerufen werden. */
+if (process.env.KD_LEGACY_PUBLIC_DEMO_STRUCTURE !== "1") {
+  await import("./private_release_localmode_test.mjs");
+  throw new Error("Der Localmodus-Strukturtest wurde ohne Abschluss verlassen.");
+}
+
 const pfad = process.argv[2] || "/tmp/kd-single/Kinodreieck.html";
 const fehlerKonsole = [];
 process.on("uncaughtException", (e) => fehlerKonsole.push("uncaught: " + String((e && e.message) || e).slice(0, 200)));
