@@ -19,7 +19,6 @@ import { T, btnStyle, setzeTheme } from "./lib/tokens.js";
 import { initSetup, setupUeberspringen } from "./lib/tutorial.js";
 import { ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
-import { StartWahl } from "./components/StartWahl.jsx";
 import { KatalogZugang } from "./components/KatalogZugang.jsx";
 import {
   store, K, PROGRAMM_TTL_MS, storageService, storageOwnerKennung,
@@ -30,17 +29,13 @@ import { hatBestaetigteOwnerRolle } from "./lib/accountAccess.js";
 import { sharedArticlesService } from "./services/sharedArticles.js";
 import { errorText, ERROR_CODES } from "./services/errors.js";
 import {
-  liesStartWahl,
-  startWahlBestaetigt,
   verbraucheFrischenStart,
   liesFrischenStartWarnung,
   snapshotsFrei,
-  START_WAHL_VERSION,
 } from "./controllers/onboardingController.js";
 import {
   zeitpunkt,
   IMPORT_INFO,
-  demoLadung,
   streamingPayloadMitMetadaten,
   ladeEntdeckenBeilage,
   streamingBekanntSnapshot,
@@ -58,7 +53,7 @@ import { starteEinzelExportDownload } from "./controllers/backupExportController
 import { naechsteLokaleMasterHerkunft } from "./controllers/masterOriginController.js";
 import { useConfirmedStorageState } from "./controllers/useConfirmedStorageState.js";
 import { ERROR_SCOPE } from "./controllers/appErrorScopes.js";
-import { bereiteStartwahlVor, erstellePersonalDataTransactionController } from "./controllers/personalDataTransactionController.js";
+import { erstellePersonalDataTransactionController } from "./controllers/personalDataTransactionController.js";
 import {
   gueltigerArtikel,
   baueRefUniversum,
@@ -115,6 +110,8 @@ import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
+const EINZELDATEI_BUILD = typeof __KD_SINGLE_FILE__ !== "undefined"
+  && __KD_SINGLE_FILE__ === true;
 const LOCAL_NAVIGATION = Object.freeze(NAVIGATION.filter((eintrag) => eintrag.id === "mediathek"));
 export const LEERER_MEDIATHEK_MASTER = Object.freeze([]);
 export default function App() {
@@ -131,8 +128,10 @@ export default function App() {
      ausdrücklich nicht optimistisch freigeschaltet. */
   const remoteKontoAktiv = session.mode === "account" && session.state === "ready" && session.capabilities?.remoteStorage === true;
   const ownerTechnikBestaetigt = hatBestaetigteOwnerRolle(session);
-  const [frischerStart] = useState(() => verbraucheFrischenStart());
-  const [frischerStartWarnung] = useState(() => liesFrischenStartWarnung());
+  const [frischerStartWarnung] = useState(() => {
+    verbraucheFrischenStart();
+    return liesFrischenStartWarnung();
+  });
   const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
     frischerStartWarnung ? [{ scope: ERROR_SCOPE.FRISCHER_START, text: frischerStartWarnung }] : []);
   const [tab, setTab] = useState(() => remoteKontoAktiv ? "start" : "mediathek");
@@ -432,17 +431,10 @@ export default function App() {
   }, [merkliste, persistMerk]);
 
   /* ---- Herkunft der geladenen Liste ----
-     typ: "storage" | "demo" | "manuell" · zeit: ms oder Datums-String · basis: optionaler Vermerk */
-  const demoAktiv = useMemo(() => {
-    if (masterHerkunft?.typ === "demo") return true;
-    try { return !!localStorage.getItem(K.demoSeed); } catch { return false; }
-  }, [masterHerkunft, startTick]);
-  /* Startwahl-Modal (Beta): sichtbar, wenn beim Erststart weder Storage-Stand
-     noch frühere Wahl noch ?start-Parameter vorliegt. Boot entscheidet. */
-  const [startModalOffen, setStartModalOffen] = useState(false);
+     typ: "storage" | "manuell" · zeit: ms oder Datums-String · basis: optionaler Vermerk */
 
   /* ---- Master persistieren: innerster Lock der Mehrtopf-Reihenfolge ---- */
-  const { mutiereMaster, transaktionMaster, loescheMaster } = useMasterPersistenceController({
+  const { mutiereMaster, transaktionMaster } = useMasterPersistenceController({
     setErr, masterRef, commitMaster,
   });
 
@@ -498,11 +490,11 @@ export default function App() {
       /* Auch der FEHLER gehört zur alten Betriebsart: sonst überschriebe ein
          spät eintreffendes „Anmeldung nötig" die Meldung des neuen Standes. */
       if (veraltet()) return false;
-      const dateiNetz = typeof location !== "undefined" && location.protocol === "file:"
-        && programmSnapshot && (Array.isArray(programmSnapshot.filme) || (programmSnapshot.data && Array.isArray(programmSnapshot.data.filme)));
+      const dateiNetz = EINZELDATEI_BUILD
+        && typeof location !== "undefined" && location.protocol === "file:"
+        && programmSnapshot && (Array.isArray(programmSnapshot.filme)
+          || (programmSnapshot.data && Array.isArray(programmSnapshot.data.filme)));
       if (!manuell && dateiNetz) {
-        // Autoload gescheitert (nur file://) -> eingebetteter Snapshot vom Bauzeitpunkt.
-        // Bewusst NICHT gecached, damit ein späterer fetch/Import gewinnt.
         try {
           const d = normalisiereProgramm(programmSnapshot);
           const stand = zeitpunkt(programmSnapshot.erstellt);
@@ -512,7 +504,7 @@ export default function App() {
           setProgrammInfo({ art: "snapshot", variante: null, stand, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
           resolveError(ERROR_SCOPE.PROGRAMM);
           return false;
-        } catch { /* Snapshot unbrauchbar — dann eben der ehrliche Fehler unten */ }
+        } catch { /* Lokale Beilage unbrauchbar — ehrlicher Fehler unten. */ }
       }
       /* B6: Auch der stille Autoload meldet jetzt. Ein leerer Kino-Tab ohne
          jede Erklärung war der eigentliche Fehler. Jeder Zustand bekommt seinen
@@ -577,7 +569,7 @@ export default function App() {
     if (storageBootGestartet.current) return undefined;
     storageBootGestartet.current = true;
     (async () => {
-      let m = null, meta = null, herkunft = null, cachedProg = null, startModalNoetig = false;
+      let m = null, meta = null, herkunft = null, cachedProg = null;
       try {
         const r = await store.get(K.master);
         if (r) {
@@ -587,55 +579,10 @@ export default function App() {
           herkunft = { typ: "storage", zeit: p.gespeichertAm || Date.now(), basis: p.herkunft && p.herkunft.basis };
         }
       } catch { /* kein Master im Storage */ }
-      if (!m) {
-        // Kein Storage-Stand -> Beta-Startwahl entscheidet (§6.1: NICHT mehr
-        // automatisch Echtdaten laden). demo lädt die bereinigte Liste (nicht
-        // persistiert bis Bearbeitung), clean bleibt leer, keine Wahl -> Modal.
-        const wahl = frischerStart || (startWahlBestaetigt() ? liesStartWahl() : null);
-        if (wahl === "demo" && remoteKontoAktiv) {
-          try {
-            const d = await demoLadung();
-            m = d.filme; meta = d.meta; herkunft = d.herkunft;
-            try {
-              localStorage.setItem("kd:start", "demo");
-              const seed = { masterIds: d.filme.map((f) => f.id), artikelIds: [], geladenAm: new Date().toISOString() };
-              if (d.streaming && Array.isArray(d.streaming.quellen)) {
-                localStorage.setItem(K.streamingDienste, JSON.stringify(d.streaming));
-                setAuswahlRoh(d.streaming.quellen);
-                if (typeof d.streaming.heuristik === "boolean") setHeuristikAn(d.streaming.heuristik);
-                seed.streamingQuellen = [...d.streaming.quellen];
-              }
-              if (d.artikel) {
-                const al = normalisiereArtikelTypen(Array.isArray(d.artikel) ? d.artikel : d.artikel.artikel || []);
-                artikelListeRef.current = al;
-                setArtikelListe(al);
-                localStorage.setItem(K.artikel, JSON.stringify({ artikel: al, gespeichertAm: Date.now() }));
-                seed.artikelIds = al.map((a) => a.id);
-              }
-              if (Array.isArray(d.pins)) {
-                setKinoPins(d.pins); localStorage.setItem(K.kinoPins, JSON.stringify(d.pins));
-                seed.pinKeys = d.pins.map((p) => String(p.t || "") + "|" + String(p.z || ""));
-              }
-              if (d.mustwatch) {
-                const mw = parseMustwatch(JSON.stringify(d.mustwatch));
-                localStorage.setItem(K.mustwatch, JSON.stringify({ eintraege: mw, gespeichertAm: Date.now() })); setMustwatch(mw);
-                seed.mustwatchIds = mw.map((e) => e.id);
-              }
-              if (Array.isArray(d.merkliste)) {
-                setMerkliste(d.merkliste); localStorage.setItem(K.merkliste, JSON.stringify(d.merkliste));
-                seed.merklisteIds = d.merkliste.map((m) => String(m.watchmode_id));
-              }
-              localStorage.setItem(K.demoSeed, JSON.stringify(seed));
-            } catch { /* Seed-State bleibt mindestens in React erhalten */ }
-          } catch (e) {
-            setErr("Demo-Daten nicht ladbar: " + e.message);
-            setKatalogZugangOffen(true);
-          }
-        } else if (wahl === "clean") {
-          try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
-        } else if (remoteKontoAktiv) {
-          startModalNoetig = true;
-        }
+      /* Fehlender Kontostand ist ein leerer Kontostand, niemals ein Anlass,
+         alte Gast-/Demo-Marker oder eine bereitgestellte Beilage zu laden. */
+      if (!m && !remoteKontoAktiv) {
+        try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
       }
       try {
         const r = await store.get(K.programm);
@@ -753,11 +700,10 @@ export default function App() {
         }
         catch { /* Cache unbrauchbar — Autoload übernimmt */ }
       }
-      setStartModalOffen(startModalNoetig);
       setBootDone(true);
     })();
     return undefined;
-  }, [frischerStart, session.mode]);
+  }, [session.mode]);
 
   /* ---- Autoload: ohne frischen Cache einmalig programm.json probieren ----
      Zusätzlicher Anlass: der Boot hat zwar etwas angezeigt, es aber als
@@ -1358,158 +1304,6 @@ export default function App() {
     setErr,
   });
 
-  /* ---- Startwahl treffen/ändern (Modal & Einstellungen-Tab) ----
-     Schreibt kd:start und lädt entsprechend. "Startart wechseln" (Einstellungen-Tab)
-     verwirft dabei den Browser-Stand — beide Wege ohne Datei-Gefummel. */
-  const waehleStart = useCallback(async (wahl) => {
-    if (wahl !== "clean" && wahl !== "demo") return;
-    /* Etappe 3: Im Kontobetrieb würde ein Startart-Wechsel den lokalen Bestand
-       leeren — der nächste Abgleich holte ihn aber sofort aus dem Konto zurück.
-       Statt dieses verwirrende Hin und Her: sauber sperren und erklären. */
-    if (session.mode === "account") {
-      setErr("Startart wechseln geht nur ohne Konto. Melde dich unter Settings → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
-      setStartModalOffen(false);
-      return;
-    }
-    let aktuelle = null;
-    try { aktuelle = localStorage.getItem(K.start); } catch { /* */ }
-    if (startWahlBestaetigt() && aktuelle === wahl) {
-      setStartModalOffen(false);
-      if (!snapshotsFrei()) setKatalogZugangOffen(true);
-      return;
-    }
-    const hatPersoenlicheDaten = !!((master && master.length) || artikelListe.length || mustwatch.length || merkliste.length || kinoPins.length);
-    const istWechsel = startWahlBestaetigt() && aktuelle && aktuelle !== wahl;
-    const brauchtGekoppelteLeerung = istWechsel || hatPersoenlicheDaten;
-    if (brauchtGekoppelteLeerung && hatPersoenlicheDaten
-      && !window.confirm("Startmodus wechseln?\n\nDabei wird die aktuelle Mediathek im Browser verworfen. Lade vorher die Sicherheitskopie dieses Geräts herunter, wenn du sie behalten möchtest.")) return;
-    if (brauchtGekoppelteLeerung) {
-      if (!mustwatchGeladen || !artikelGeladen) {
-        setErr("Startmodus kann erst gewechselt werden, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert.");
-        return;
-      }
-    }
-    const startwahl = bereiteStartwahlVor({
-      storage: localStorage, wahl,
-      startKey: K.start, versionKey: K.startVersion, seedKey: K.demoSeed,
-      version: START_WAHL_VERSION,
-    });
-    if (!startwahl.ok) {
-      setErr("Startmodus konnte auf diesem Gerät nicht gespeichert werden. Es wurde nichts verändert.");
-      return;
-    }
-    const grunddatenOk = brauchtGekoppelteLeerung
-      ? await personalDataTransaktionen.ersetzeMaster([], {
-        meta: null, herkunft: null, loeschen: true,
-      })
-      : await loescheMaster();
-    if (!grunddatenOk) {
-      startwahl.rollback();
-      setErr(brauchtGekoppelteLeerung
-        ? "Startmodus konnte nicht sicher gewechselt werden. Der bisherige Stand bleibt soweit möglich erhalten."
-        : "Startmodus konnte nicht sicher vorbereitet werden.");
-      return;
-    }
-    try { setupUeberspringen(); } catch { /* Einstieg bleibt im Zweifel sichtbar. */ }
-    setStartModalOffen(false);
-    if (!snapshotsFrei()) {
-      setKatalogZugangOffen(true);
-      return;
-    }
-    /* Ein Reload hält den Start atomar: Demo-Seeds werden vor allen übrigen
-       Storage-Effekten geladen, Clean startet garantiert ohne Alt-Master. */
-    try { location.reload(); } catch { setSnapshotFreigabe(true); setStartTick((t) => t + 1); }
-  }, [
-    artikelGeladen, artikelListe, kinoPins, loescheMaster, master, merkliste,
-    mustwatch, mustwatchGeladen, personalDataTransaktionen, session.mode,
-  ]);
-  const oeffneStartWahl = useCallback(() => setStartModalOffen(true), []);
-
-  /* Entfernt ausschließlich die beim Demo-Start protokollierten Beilagen.
-     Standardisiertes Kino-/Streamingprogramm und spätere Tester-Einträge bleiben. */
-  const entferneDemoDaten = useCallback(async () => {
-    /* Wie beim Startart-Wechsel: lokales Entfernen käme beim nächsten Abgleich
-       aus dem Konto zurück. Erst abmelden, dann aufräumen. */
-    if (session.mode === "account") {
-      setErr("Demo-Daten entfernen geht nur ohne Konto. Melde dich unter Settings → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
-      return;
-    }
-    if (!mustwatchGeladen || !artikelGeladen) {
-      setErr("Demo-Daten können erst entfernt werden, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert.");
-      return;
-    }
-    let seed = {};
-    try { seed = JSON.parse(localStorage.getItem(K.demoSeed) || "{}"); } catch { /* */ }
-    /* Kompatibilität mit einem kurz ausgelieferten Seed-Format, das diese drei
-       Bereiche nur als Boolean protokollierte: Demo erneut read-only laden und
-       daraus exakte IDs bilden. Scheitert das Netz, wird lieber zu wenig als ein
-       später vom Tester ergänzter Eintrag gelöscht. */
-    const legacyPins = seed.pins && !Array.isArray(seed.pinKeys);
-    const legacyMerkliste = seed.merkliste && !Array.isArray(seed.merklisteIds);
-    const legacyStreaming = seed.streaming && !Array.isArray(seed.streamingQuellen);
-    if (legacyPins || legacyMerkliste || legacyStreaming) {
-      try {
-        const alt = await demoLadung();
-        if (legacyPins) {
-          if (!Array.isArray(alt.pins)) throw new Error("Demo-Pins fehlen");
-          seed.pinKeys = alt.pins.map((p) => String(p.t || "") + "|" + String(p.z || ""));
-        }
-        if (legacyMerkliste) {
-          if (!Array.isArray(alt.merkliste)) throw new Error("Demo-Merkliste fehlt");
-          seed.merklisteIds = alt.merkliste.map((m) => String(m.watchmode_id));
-        }
-        if (legacyStreaming) {
-          if (!Array.isArray(alt.streaming?.quellen)) throw new Error("Demo-Streamingdienste fehlen");
-          seed.streamingQuellen = [...alt.streaming.quellen];
-        }
-      } catch {
-        setErr("Alte Demo-Daten können gerade nicht sicher zugeordnet werden. Bitte Datenbankverbindung prüfen und erneut versuchen; es wurde nichts gelöscht.");
-        return;
-      }
-    }
-    const masterIds = new Set(seed.masterIds || []);
-    const mwIds = new Set(seed.mustwatchIds || []);
-    const artIds = new Set(seed.artikelIds || []);
-    const grunddatenOk = await personalDataTransaktionen.transformiereGrunddaten({
-      berechneMaster: (liste) => liste.filter((film) => !masterIds.has(film.id)),
-      berechneMustwatch: (liste) => liste.filter((eintrag) => !mwIds.has(eintrag.id)),
-      berechneArtikel: (liste) => liste.filter((artikel) => !artIds.has(artikel.id)),
-      meta: masterMeta,
-      herkunft: (next) => next.length
-        ? { typ: "storage", zeit: Date.now(), basis: "Clean nach Demo" }
-        : null,
-    });
-    if (!grunddatenOk) return;
-    if (Array.isArray(seed.pinKeys)) {
-      const demoPins = new Set(seed.pinKeys.map(String));
-      const nextPins = kinoPins.filter((p) => !demoPins.has(String(p.t || "") + "|" + String(p.z || "")));
-      setKinoPins(nextPins);
-      persistPins(nextPins);
-    }
-    if (Array.isArray(seed.merklisteIds)) {
-      const demoMerker = new Set(seed.merklisteIds.map(String));
-      const nextMerkliste = merkliste.filter((m) => !demoMerker.has(String(m.watchmode_id)));
-      setMerkliste(nextMerkliste);
-      persistMerk(nextMerkliste);
-    }
-    if (Array.isArray(seed.streamingQuellen)) {
-      const demoQuellen = new Set(seed.streamingQuellen.map(String));
-      const nextAuswahl = auswahl.filter((q) => !demoQuellen.has(String(q)));
-      setAuswahlRoh(nextAuswahl);
-      store.set(K.streamingDienste, JSON.stringify({ quellen: nextAuswahl, heuristik: true })).catch(() => {});
-      setHeuristikAn(true);
-    }
-    try {
-      localStorage.setItem(K.start, "clean");
-      localStorage.setItem(K.startVersion, START_WAHL_VERSION);
-      localStorage.removeItem(K.demoSeed);
-    } catch { /* */ }
-    setErr(""); setStartTick((t) => t + 1);
-  }, [
-    session.mode, masterMeta, artikelListe, artikelGeladen, mustwatchGeladen, kinoPins, merkliste, auswahl,
-    persistPins, persistMerk, personalDataTransaktionen,
-  ]);
-
   /* ---- Master-Export (hält Max' Datei synchron) ---- */
   const exportMaster = useCallback(() => {
     const meta = { ...(masterMeta || {}), export_am: new Date().toISOString().slice(0, 10), anzahl_eintraege: master.length };
@@ -1672,23 +1466,25 @@ export default function App() {
       } catch (e) {
         if (veraltet()) return;
         streamingGeladen.current = false;
-        const file = typeof location !== "undefined" && location.protocol === "file:";
-        if (!file) { meldeFehler(e, ERROR_SCOPE.STREAMING_KNOWN); return; }
-        const dateiEntdecken = (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot;
-        const dateiRoh = {
-          bekannt: streamingBekanntSnapshot, entdecken: dateiEntdecken,
-          entdeckenUmfang: dateiEntdecken === streamingEntdeckenSnapshot ? "begrenzt" : "voll",
-        };
-        if (veraltet()) return;
-        streamingRohRef.current = dateiRoh;
-        streamingGeladen.current = true;
-        entdeckenGeladen.current = true;
-        const a = catalogService.buildStreamingViews(dateiRoh, master || []);
-        setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
-        setStreamingInfo({ art: "snapshot", variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
-        resolveError(ERROR_SCOPE.STREAMING_KNOWN);
-        resolveError(ERROR_SCOPE.STREAMING_DISCOVER);
-        return a;
+        if (EINZELDATEI_BUILD && typeof location !== "undefined" && location.protocol === "file:") {
+          const dateiEntdecken = (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot;
+          const dateiRoh = {
+            bekannt: streamingBekanntSnapshot, entdecken: dateiEntdecken,
+            entdeckenUmfang: dateiEntdecken === streamingEntdeckenSnapshot ? "begrenzt" : "voll",
+          };
+          if (veraltet()) return;
+          streamingRohRef.current = dateiRoh;
+          streamingGeladen.current = true;
+          entdeckenGeladen.current = true;
+          const a = catalogService.buildStreamingViews(dateiRoh, master || []);
+          setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
+          setStreamingInfo({ art: "snapshot", variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
+          resolveError(ERROR_SCOPE.STREAMING_KNOWN);
+          resolveError(ERROR_SCOPE.STREAMING_DISCOVER);
+          return a;
+        }
+        meldeFehler(e, ERROR_SCOPE.STREAMING_KNOWN);
+        return;
       }
     }
 
@@ -1709,7 +1505,10 @@ export default function App() {
 
     const hatGeladenenEntdeckenStand = entdeckenGeladen.current && !!roh.entdecken;
     const anzeigeRoh = {
-      bekannt: roh.bekannt, entdecken: hatGeladenenEntdeckenStand ? roh.entdecken : streamingEntdeckenSnapshot,
+      bekannt: roh.bekannt,
+      entdecken: hatGeladenenEntdeckenStand
+        ? roh.entdecken
+        : EINZELDATEI_BUILD ? streamingEntdeckenSnapshot : { titel: [] },
       entdeckenUmfang: hatGeladenenEntdeckenStand && roh.entdeckenUmfang === "voll" ? "voll" : "begrenzt",
     };
     const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
@@ -1758,8 +1557,8 @@ export default function App() {
      außerhalb des Streaming-Tabs -> am Boot nachladen (KD-031: ohne Voll-Katalog). */
   useEffect(() => { if (bootDone && snapshotFreigabe) ladeStreamingDateien(); }, [bootDone, snapshotFreigabe, ladeStreamingDateien]);
 
-  /* ---- Betriebsart-Wechsel (Demo ↔ fachlich aktives Konto): Katalog neu laden ----
-     An-/Abmelden, Freischaltung und Widerruf ändern, welche Zeile der
+  /* ---- Betriebsart-Wechsel (gesperrt ↔ fachlich aktives Konto): Katalog neu laden ----
+     An-/Abmelden, Freischaltung und Widerruf ändern, ob der private
      Katalogpfad überhaupt lesen darf.
      Ohne dieses Nachladen bliebe der Stand der alten Betriebsart stehen — nach
      dem Anmelden stünde im Kino-Tab weiter „Anmeldung nötig", nach dem Abmelden
@@ -1768,11 +1567,6 @@ export default function App() {
      Wechsels stillgelegt, damit nicht zweimal geladen wird.
 
      Dieser Effekt LÖSCHT NICHTS. Das ist bewusst und war früher anders:
-       · Der Katalog-Cache ist nach ZEILENNAMEN geschlüsselt (cacheUrl(name) in
-         lib/katalog.js) — `programm` und `programm_demo` liegen unter
-         verschiedenen Einträgen und können sich gar nicht überlagern. Ein
-         Demo-Read fällt also nie auf einen Live-Cache zurück; das Verwerfen
-         beim Wechsel wäre reiner Verlust.
        · Der gespeicherte Programm-Topf wird beim nächsten Start ohnehin gegen
          die dann geltende Betriebsart geprüft (Varianten-Abgleich im Boot) und
          als Anzeigestand verworfen, wenn er nicht passt. Ihn hier zu löschen
@@ -1782,16 +1576,15 @@ export default function App() {
          Fall, dass die Datenbank nicht liefert.
      Ehrlich bleibt der Wechsel trotzdem: die ANZEIGE wird zurückgesetzt, der
      Nutzer sieht nach dem Wechsel nie mehr den Stand der alten Betriebsart.
-     Scheitert das Nachladen (heutiger Produktionsfall: die Zeilen
-     programm_demo/streaming_demo sind noch nicht veröffentlicht), sieht er den
-     ehrlichen Fehlertext — und nichts ist unwiederbringlich weg.
+     Scheitert das Nachladen, sieht er den ehrlichen Fehlertext — und nichts ist
+     unwiederbringlich weg.
 
      Rollen-v1 hält dafür nur noch eine Wahrheit: `remoteStorage === true` in
      einer bereiten Account-Session. Degradiert, inaktiv, fehlend und unbekannt
-     sind wie im Service der öffentliche Demo-Pfad. */
+     bleiben gesperrt. */
   useEffect(() => {
     if (!bootDone) return undefined;
-    const jetzt = remoteKontoAktiv ? "live" : "demo";
+    const jetzt = remoteKontoAktiv ? "live" : "blocked";
     if (letzteBetriebsart.current === null) { letzteBetriebsart.current = jetzt; return undefined; }
     if (letzteBetriebsart.current === jetzt) return undefined;
     letzteBetriebsart.current = jetzt;
@@ -1858,7 +1651,7 @@ export default function App() {
     auswahl,
     bootDone,
     setupWarnung,
-    startModalOffen,
+    startModalOffen: false,
     setTab,
     springeZuFilm,
   });
@@ -1913,12 +1706,7 @@ export default function App() {
         + (deepSpaceSichtbar ? " kd-deep-space-horror" : "")}>
       <ModusFx modus={effektiverModus} deepSpaceTest={deepSpaceTestmodusAktiv} />
       <div className="kd-app" data-session-mode={session.mode}>
-      {remoteKontoAktiv && startModalOffen && (
-        <StartWahl onWaehle={waehleStart}
-          aktuelle={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
-          onClose={startWahlBestaetigt() ? () => setStartModalOffen(false) : undefined} />
-      )}
-      {remoteKontoAktiv && katalogZugangOffen && !startModalOffen && (
+      {remoteKontoAktiv && katalogZugangOffen && (
         <KatalogZugang zwingend={!catalogService.hasConnection()}
           onAbbrechen={() => setKatalogZugangOffen(false)}
           onFertig={() => {
@@ -2176,9 +1964,9 @@ export default function App() {
             kiStand={kiStand} onKiGlobal={setzeKiGlobal} onKiFunktion={setzeKiFunktion}
             kiProfilFaehig={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true}
-            startWahl={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
-            demoAktiv={demoAktiv}
-            onStartWahl={ownerTechnikBestaetigt ? oeffneStartWahl : undefined}
+            startWahl="clean"
+            demoAktiv={false}
+            onStartWahl={undefined}
             katalogVerbunden={snapshotFreigabe}
             programmInfo={programmInfo}
             onKatalogVerbinden={() => setKatalogZugangOffen(true)}

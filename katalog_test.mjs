@@ -698,7 +698,7 @@ await catalogService.activeVariant();
 check("P5-Scharfprobe: bei genau dieser Sitzung geht activeVariant() in die Erneuerung (Zustand wechselt)",
   authDriver.getZustand() !== zustandVorher);
 
-/* --- Alt-Demo-Seed bleibt intern kompatibel, aber kontogebunden ------------ */
+/* --- Privatrelease: Alt-Demo-Seed bleibt auch mit Konto geschlossen -------- */
 abmelden();
 const oeffentlicherKopf = publicSupabaseHeaders(publishable);
 check("Leitplanke: publicSupabaseHeaders bleibt bei gesetztem Token-Provider unverändert (nur apikey)",
@@ -709,14 +709,14 @@ try { await catalogService.loadDemo(); } catch (error) { gastDemoSeedFehler = er
 check("Gast erreicht den Alt-Demo-Seed weder per HTTP noch Cache",
   gastDemoSeedFehler?.code === ERROR_CODES.FORBIDDEN && fetchCalls.length === 0);
 anmelden();
-const demoSeed = await catalogService.loadDemo();
-const demoRuf = fetchCalls.find((c) => c.url.includes("/rest/v1/kd_catalog") && c.url.includes("name=eq.demo_seed"));
-check("Kontogebundener Alt-Demo-Seed besteht weiter den Payloadvertrag",
-  demoSeed.format === 1 && demoSeed.master.filme[0].titel === "Demo-Basis" && !!demoRuf);
-check("Alt-Demo-Seed wird nur mit Sitzungstoken gelesen",
-  demoRuf.headers.Authorization === "Bearer " + SITZUNGSTOKEN);
-check("Aktiver Katalogpfad ruft für den Demo-Seed kd_store nicht mehr auf",
-  !fetchCalls.some((c) => c.url.includes("/rest/v1/kd_store")));
+fetchCalls = [];
+let kontoDemoSeedFehler = null;
+try { await catalogService.loadDemo(); } catch (error) { kontoDemoSeedFehler = error; }
+check("Auch ein aktives Konto kann den entfernten Alt-Demo-Seed nicht laden",
+  kontoDemoSeedFehler?.code === ERROR_CODES.FORBIDDEN
+  && kontoDemoSeedFehler?.reason === "private-release-no-demo");
+check("Alt-Demo-Seed endet vor Token-, HTTP-, Cache- und kd_store-Zugriff",
+  fetchCalls.length === 0 && !fetchCalls.some((c) => c.url.includes("/rest/v1/kd_store")));
 
 /* ================= F6: das Sitzungstoken gilt nur fürs eigene Projekt =================
    Die Regel selbst ist eine reine Funktion (ohne Netz prüfbar) … */

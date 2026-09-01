@@ -1,8 +1,8 @@
-/* Globaler Entdecken-Wochenfeed auf dem kompatiblen Tagesfeed-Endpoint.
-   Der accountlose Browser uebergibt weder Token noch Suchtext oder lokale
-   Daten; GET liest ausschliesslich. Nur das explizite scheduled-POST darf den
-   begrenzten Produktclaim samt Fencing-Lease beanspruchen; der Ownerpfad
-   bleibt ausschliesslich fuer die getrennte Legacy-Diagnose erhalten. */
+/* Privater Entdecken-Wochenfeed auf dem kompatiblen Tagesfeed-Endpoint.
+   GET liest ausschliesslich und uebergibt weder Suchtext noch lokale Daten,
+   verlangt aber eine verifizierte aktive Kontofreigabe. Nur das explizite
+   scheduled-POST darf den begrenzten Produktclaim samt Fencing-Lease
+   beanspruchen; der Ownerpfad bleibt fuer die getrennte Diagnose erhalten. */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requestHasForbiddenBody, validateEntdeckenDailyFeed } from "./contract.js";
@@ -192,10 +192,10 @@ export function createEntdeckenDailyHandler({
     const bearerToken = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
     const scheduledAuthorized = requestMode === "scheduled"
       && req.headers.get("apikey") === serviceKey && bearerToken === serviceKey;
-    const publicKeyAuthorized = requestMode !== "scheduled"
+    const browserKeyAuthorized = requestMode !== "scheduled"
       && req.headers.get("apikey") === publishableKey;
     if (!supabaseUrl || !publishableKey || !serviceKey
-        || (!scheduledAuthorized && !publicKeyAuthorized)) {
+        || (!scheduledAuthorized && !browserKeyAuthorized)) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
     }
 
@@ -209,7 +209,7 @@ export function createEntdeckenDailyHandler({
       enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
       owner: false,
     });
-    if (requestMode === "owner") {
+    if (requestMode === "read" || requestMode === "owner") {
       const token = bearerToken;
       const user = createClient(supabaseUrl, publishableKey, {
         auth: { persistSession: false, autoRefreshToken: false },
@@ -230,12 +230,20 @@ export function createEntdeckenDailyHandler({
         .select("role,active,personal_ai")
         .eq("account_id", accountId)
         .maybeSingle();
-      if (accessError || access?.role !== "owner" || access?.active !== true
-          || access?.personal_ai !== true) {
+      const roleValid = access?.role === "member" || access?.role === "owner";
+      const accessValid = !accessError && roleValid && access?.active === true
+        && typeof access?.personal_ai === "boolean";
+      if (!accessValid || (requestMode === "owner"
+          && (access?.role !== "owner" || access?.personal_ai !== true))) {
         return json({ ok: false, status: "disabled", feed: null }, 403, origin);
       }
-      ownerRefreshConfirmed = true;
+      /* Keine fachliche Aenderung am Feed: nach bestaetigter Freigabe laeuft
+         exakt derselbe read-only Repositorypfad wie bisher. */
       ownerRefreshAccountId = accountId;
+    }
+    if (requestMode === "owner") {
+      ownerRefreshConfirmed = true;
+      /* Die Kontokennung wurde im gemeinsamen Browser-Authblock gesetzt. */
       providerDiagnostic = providerDiagnosticAccess({
         headerValue: providerDiagnosticHeader,
         enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",

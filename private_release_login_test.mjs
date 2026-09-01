@@ -146,6 +146,23 @@ check("Online erhält ein sicher gebundenes Konto unverändert die bestehende Ap
   assert.ok(!document.querySelector(".kd-entry-login"));
 });
 
+for (const session of [
+  { mode: "account", state: "ready", account: { id: "test" }, capabilities: { remoteStorage: false }, access: { status: "missing" } },
+  { mode: "account", state: "degraded", account: { id: "test" }, capabilities: { remoteStorage: false }, access: { status: "unavailable" } },
+]) {
+  await mount({
+    environment: "production",
+    url: "https://kinodreieck.test/",
+    session,
+    /* Ein alter lokaler Ready-Marker darf die Serverfreigabe nicht ersetzen. */
+    storageState: "account-ready",
+  });
+  check(`Kontorecht ${session.access.status} bleibt trotz altem Storage-Marker fail-closed`, () => {
+    assert.ok(!document.querySelector("[data-child]"));
+    assert.match(document.body.textContent, /nicht freigegeben/);
+  });
+}
+
 await mount({
   environment: "production",
   url: "file:///tmp/Kinodreieck.html",
