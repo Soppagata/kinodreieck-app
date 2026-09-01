@@ -24,7 +24,6 @@ export const PRIVATE_MAIL_LIMITS = Object.freeze({
   messageHtmlBytes: 16 * 1024,
   taskIdCodePoints: 80,
   errorCodePoints: 80,
-  detailCodePoints: 240,
 });
 
 export const PRIVATE_MAIL_ERROR_CODES = Object.freeze({
@@ -33,6 +32,10 @@ export const PRIVATE_MAIL_ERROR_CODES = Object.freeze({
   UNAUTHENTICATED: "unauthenticated",
   FORBIDDEN: "forbidden",
   RATE_LIMITED: "rate-limited",
+  IDEMPOTENCY_CONFLICT: "idempotency-conflict",
+  REQUEST_IN_PROGRESS: "request-in-progress",
+  DELIVERY_REJECTED: "delivery-rejected",
+  DELIVERY_STATUS_UNKNOWN: "delivery-status-unknown",
   UNAVAILABLE: "unavailable",
 });
 

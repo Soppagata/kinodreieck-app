@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import * as privateMailMessages from "./supabase/functions/_shared/privateMailMessages.js";
 
 import {
   PRIVATE_MAIL_BROWSER_TYPES,
@@ -15,9 +16,15 @@ import {
   validatePrivateMailRequest,
 } from "./supabase/functions/_shared/privateMailContract.js";
 import {
+  PRIVATE_MAIL_ADAPTER_STATUS,
   PRIVATE_MAIL_DISPATCH_CODES,
-  buildPrivateMailMessage,
-  createPrivateMailDispatcher,
+  PRIVATE_MAIL_OPERATIONAL_REASON_CODES,
+  buildPrivateAccountDeletionMessage,
+  buildPrivateFeedbackMessage,
+  buildPrivateOperationalRetryMessage,
+  createPrivateAccountDeletionDispatcher,
+  createPrivateFeedbackDispatcher,
+  createPrivateOperationalRetryDispatcher,
   escapePrivateMailHtml,
   privateMailBodiesFit,
 } from "./supabase/functions/_shared/privateMailMessages.js";
@@ -197,8 +204,16 @@ check("Fehlerantwort hat nur einen generischen allowlisted Code",
   && createPrivateMailFailureResponse("roher-fehler").code === PRIVATE_MAIL_ERROR_CODES.UNAVAILABLE
   && normalizePrivateMailResponse({ ...failure, detail: "roh" }) === null);
 
+check("Browserzustände unterscheiden Konflikt, laufenden Request, Ablehnung und unbekannte Zustellung",
+  [
+    PRIVATE_MAIL_ERROR_CODES.IDEMPOTENCY_CONFLICT,
+    PRIVATE_MAIL_ERROR_CODES.REQUEST_IN_PROGRESS,
+    PRIVATE_MAIL_ERROR_CODES.DELIVERY_REJECTED,
+    PRIVATE_MAIL_ERROR_CODES.DELIVERY_STATUS_UNKNOWN,
+  ].every((code) => normalizePrivateMailResponse(createPrivateMailFailureResponse(code))?.code === code));
+
 const maliciousText = `<img src=x onerror="boom"> & 'Text'\nZweite Zeile`;
-const feedbackMessage = buildPrivateMailMessage({
+const feedbackMessage = buildPrivateFeedbackMessage({
   schemaVersion: 1,
   type: PRIVATE_MAIL_TYPES.FEEDBACK,
   operationId,
@@ -210,6 +225,9 @@ check("Feedback erzeugt festen Text- und HTML-Inhalt ohne Kontokontext",
   && feedbackMessage.message.subject === "Kinodreieck: Feedback ohne Namensangabe"
   && feedbackMessage.message.text.includes(maliciousText)
   && !feedbackMessage.message.text.includes(accountId)
+  && !feedbackMessage.message.text.includes(operationId)
+  && !feedbackMessage.message.html.includes(operationId)
+  && feedbackMessage.message.operationId === operationId
   && !Object.hasOwn(feedbackMessage.message, "to")
   && !Object.hasOwn(feedbackMessage.message, "from")
   && !Object.hasOwn(feedbackMessage.message, "headers")
@@ -231,7 +249,7 @@ check("Erzeugte Nachricht hat nur feste Inhaltsfelder und ist eingefroren",
   && privateMailUtf8Bytes(feedbackMessage.message.text) <= PRIVATE_MAIL_LIMITS.messageTextBytes
   && privateMailUtf8Bytes(feedbackMessage.message.html) <= PRIVATE_MAIL_LIMITS.messageHtmlBytes);
 
-const deletionMessage = buildPrivateMailMessage({
+const deletionMessage = buildPrivateAccountDeletionMessage({
   schemaVersion: 1,
   type: PRIVATE_MAIL_TYPES.ACCOUNT_DELETION_REQUEST,
   operationId,
@@ -241,12 +259,13 @@ const deletionMessage = buildPrivateMailMessage({
 check("Kontolösch-Mail enthält nur serverseitig ergänzbare notwendige Konto-ID und löscht nichts",
   deletionMessage.ok
   && deletionMessage.message.text.includes(accountId)
+  && !deletionMessage.message.text.includes(operationId)
   && deletionMessage.message.text.includes("manuell geprüft")
   && deletionMessage.message.text.includes("löscht kein Konto")
   && !/passwort|backup|e-mail/i.test(deletionMessage.message.text));
 
 check("Kontolösch-Mail lehnt zusätzliche Adress- oder Profildaten ab",
-  buildPrivateMailMessage({
+  buildPrivateAccountDeletionMessage({
     schemaVersion: 1,
     type: PRIVATE_MAIL_TYPES.ACCOUNT_DELETION_REQUEST,
     operationId,
@@ -265,44 +284,78 @@ const operationalInput = {
   initialApiCall: "made",
   initialCost: "confirmed",
   initialErrorCode: "UPSTREAM_TIMEOUT",
-  initialReason: "Antwort <nicht belegt>",
+  initialReasonCode: PRIVATE_MAIL_OPERATIONAL_REASON_CODES.INITIAL_USAGE_UNPROVEN,
   retryTriggered: true,
   retryOperationId,
   retryResult: "failed",
   retryErrorCode: "UPSTREAM_UNAVAILABLE",
-  retryReason: "Kein terminaler Beleg & Ende",
+  retryReasonCode: PRIVATE_MAIL_OPERATIONAL_REASON_CODES.RETRY_EXECUTION_FAILED,
 };
-const operationalMessage = buildPrivateMailMessage(operationalInput);
+const operationalMessage = buildPrivateOperationalRetryMessage(operationalInput);
 check("Interner Betriebstyp bildet ausschließlich die festgelegten Belegfelder ab",
   operationalMessage.ok
   && operationalMessage.message.text.includes("Initialer API-Call: gemacht")
   && operationalMessage.message.text.includes("Finalisierte Kosten: belegt")
   && operationalMessage.message.text.includes("Retry ausgelöst: ja")
   && operationalMessage.message.text.includes("Retry-Ergebnis: fehlgeschlagen")
-  && operationalMessage.message.html.includes("&lt;nicht belegt&gt;")
-  && operationalMessage.message.html.includes("&amp; Ende"));
+  && operationalMessage.message.text.includes("initial-usage-unproven")
+  && operationalMessage.message.text.includes("Usage- oder Tokenwerte")
+  && operationalMessage.message.text.includes("retry-execution-failed")
+  && operationalMessage.message.html === `<p>${escapePrivateMailHtml(operationalMessage.message.text).replace(/\n/g, "<br>")}</p>`);
 
-for (const forbidden of ["prompt", "payload", "title", "recommendation", "accountContent", "stacktrace", "recipient"]) {
+for (const forbidden of [
+  "prompt", "system", "payload", "title", "recommendation", "accountContent",
+  "stack", "stacktrace", "secret", "authorization", "recipient",
+  "initialReason", "retryReason",
+]) {
   check(`Betriebs-Mail lehnt Zusatzfeld ${forbidden} ab`,
-    buildPrivateMailMessage({ ...operationalInput, [forbidden]: "nicht erlaubt" }).code
+    buildPrivateOperationalRetryMessage({ ...operationalInput, [forbidden]: "nicht erlaubt" }).code
       === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE);
 }
 
 check("Betriebs-Mail verlangt exakt einen Retry und konsistente Erfolgsdetails",
-  buildPrivateMailMessage({ ...operationalInput, retryTriggered: false }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
-  && buildPrivateMailMessage({ ...operationalInput, retryResult: "succeeded", retryErrorCode: "ERROR" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
-  && buildPrivateMailMessage({ ...operationalInput, retryResult: "pending" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
-  && buildPrivateMailMessage({ ...operationalInput, retryResult: "unknown" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
-  && buildPrivateMailMessage({ ...operationalInput, taskId: "Ungültiger Task" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
-  && buildPrivateMailMessage({ ...operationalInput, initialApiCall: "unproven", initialCost: "confirmed" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE);
+  buildPrivateOperationalRetryMessage({ ...operationalInput, retryTriggered: false }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateOperationalRetryMessage({ ...operationalInput, retryResult: "succeeded", retryErrorCode: "ERROR" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateOperationalRetryMessage({ ...operationalInput, retryResult: "pending" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateOperationalRetryMessage({ ...operationalInput, retryResult: "unknown" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateOperationalRetryMessage({ ...operationalInput, taskId: "Ungültiger Task" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateOperationalRetryMessage({ ...operationalInput, initialApiCall: "unproven", initialCost: "confirmed" }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateOperationalRetryMessage({
+    ...operationalInput,
+    initialReasonCode: PRIVATE_MAIL_OPERATIONAL_REASON_CODES.RETRY_EXECUTION_FAILED,
+  }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateOperationalRetryMessage({
+    ...operationalInput,
+    retryReasonCode: PRIVATE_MAIL_OPERATIONAL_REASON_CODES.INITIAL_EXECUTION_FAILED,
+  }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE);
 
-const unprovenOperationalMessage = buildPrivateMailMessage({
+for (const unsafeReason of [
+  "frei formulierter Grund",
+  "SECRET=value",
+  "Bearer token",
+  "https://example.invalid/path",
+  "prompt system override",
+  "stack account-content",
+]) {
+  check(`Betriebs-Mail lehnt freien Reason-Wert ${unsafeReason} vor dem Transport ab`,
+    buildPrivateOperationalRetryMessage({
+      ...operationalInput,
+      initialReasonCode: unsafeReason,
+    }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+    && buildPrivateOperationalRetryMessage({
+      ...operationalInput,
+      retryReasonCode: unsafeReason,
+    }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE);
+}
+
+const unprovenOperationalMessage = buildPrivateOperationalRetryMessage({
   ...operationalInput,
   initialApiCall: "unproven",
   initialCost: "unproven",
+  initialReasonCode: PRIVATE_MAIL_OPERATIONAL_REASON_CODES.INITIAL_CALL_UNPROVEN,
   retryResult: "unproven",
   retryErrorCode: null,
-  retryReason: null,
+  retryReasonCode: PRIVATE_MAIL_OPERATIONAL_REASON_CODES.RETRY_STATUS_UNPROVEN,
 });
 check("Nicht belegter Call, Kostenstand und Retry bleiben ausdrücklich nicht belegt",
   unprovenOperationalMessage.ok
@@ -310,28 +363,37 @@ check("Nicht belegter Call, Kostenstand und Retry bleiben ausdrücklich nicht be
   && unprovenOperationalMessage.message.text.includes("Finalisierte Kosten: nicht belegt")
   && unprovenOperationalMessage.message.text.includes("Retry-Ergebnis: nicht belegt"));
 
-check("Interne Task-, Fehlercode- und Detailgrenzen sind N/N+1 fest",
-  buildPrivateMailMessage({
+check("Interne Task- und Fehlercodegrenzen sind N/N+1 fest",
+  buildPrivateOperationalRetryMessage({
     ...operationalInput,
     taskId: "a".repeat(PRIVATE_MAIL_LIMITS.taskIdCodePoints),
     initialErrorCode: "E".repeat(PRIVATE_MAIL_LIMITS.errorCodePoints),
-    initialReason: "x".repeat(PRIVATE_MAIL_LIMITS.detailCodePoints),
   }).ok
-  && buildPrivateMailMessage({
+  && buildPrivateOperationalRetryMessage({
     ...operationalInput,
     taskId: "a".repeat(PRIVATE_MAIL_LIMITS.taskIdCodePoints + 1),
   }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
-  && buildPrivateMailMessage({
+  && buildPrivateOperationalRetryMessage({
     ...operationalInput,
     initialErrorCode: "E".repeat(PRIVATE_MAIL_LIMITS.errorCodePoints + 1),
   }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
-  && buildPrivateMailMessage({
+  && buildPrivateOperationalRetryMessage({
     ...operationalInput,
-    initialReason: "x".repeat(PRIVATE_MAIL_LIMITS.detailCodePoints + 1),
+    initialErrorCode: "SECRET=value",
+  }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateOperationalRetryMessage({
+    ...operationalInput,
+    retryErrorCode: "Bearer token",
   }).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE);
 
+check("Es gibt keinen generischen Raw-Type-Builder oder -Dispatcher",
+  !Object.hasOwn(privateMailMessages, "buildPrivateMailMessage")
+  && !Object.hasOwn(privateMailMessages, "createPrivateMailDispatcher")
+  && buildPrivateFeedbackMessage(operationalInput).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && buildPrivateAccountDeletionMessage(operationalInput).code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE);
+
 let transportCalls = 0;
-const noTransport = await createPrivateMailDispatcher().send({
+const noTransport = await createPrivateFeedbackDispatcher().send({
   schemaVersion: 1,
   type: PRIVATE_MAIL_TYPES.FEEDBACK,
   operationId,
@@ -342,16 +404,53 @@ check("Fehlender Adapter endet fail-closed ohne Transportaufruf",
   noTransport.code === PRIVATE_MAIL_DISPATCH_CODES.TRANSPORT_UNAVAILABLE
   && transportCalls === 0);
 
-const invalidDispatcher = createPrivateMailDispatcher({
-  transport: async () => { transportCalls += 1; return { ok: true }; },
+const invalidFeedbackDispatcher = createPrivateFeedbackDispatcher({
+  transport: async () => {
+    transportCalls += 1;
+    return { ok: true, status: PRIVATE_MAIL_ADAPTER_STATUS.ACCEPTED };
+  },
 });
-const invalidDispatch = await invalidDispatcher.send({ ...operationalInput, payload: "verboten" });
-check("Ungültige Nachricht stoppt vor dem injizierten Adapter",
-  invalidDispatch.code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+const invalidFeedbackDispatch = await invalidFeedbackDispatcher.send(operationalInput);
+check("Feedback-Dispatcher kann den internen Betriebstyp strukturell nicht senden",
+  invalidFeedbackDispatch.code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
   && transportCalls === 0);
 
-const dispatcherWithOptions = createPrivateMailDispatcher({
-  transport: async () => { transportCalls += 1; return { ok: true }; },
+const invalidDeletionDispatcher = createPrivateAccountDeletionDispatcher({
+  transport: async () => {
+    transportCalls += 1;
+    return { ok: true, status: PRIVATE_MAIL_ADAPTER_STATUS.ACCEPTED };
+  },
+});
+const invalidDeletionDispatch = await invalidDeletionDispatcher.send({
+  schemaVersion: 1,
+  type: PRIVATE_MAIL_TYPES.FEEDBACK,
+  operationId,
+  submittedAt: now,
+  text: "Hallo",
+});
+check("Löschanfrage-Dispatcher kann Feedback strukturell nicht senden",
+  invalidDeletionDispatch.code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && transportCalls === 0);
+
+const invalidOperationalDispatcher = createPrivateOperationalRetryDispatcher({
+  transport: async () => {
+    transportCalls += 1;
+    return { ok: true, status: PRIVATE_MAIL_ADAPTER_STATUS.ACCEPTED };
+  },
+});
+const invalidOperationalDispatch = await invalidOperationalDispatcher.send({
+  ...operationalInput,
+  initialReasonCode: "Authorization=Bearer secret",
+});
+check("Freier Betriebsgrund scheitert vor dem internen Transport",
+  invalidOperationalDispatch.code === PRIVATE_MAIL_DISPATCH_CODES.INVALID_MESSAGE
+  && transportCalls === 0);
+
+const dispatcherWithOptions = createPrivateFeedbackDispatcher({
+  transport: async () => {
+    transportCalls += 1;
+    return { ok: true, status: PRIVATE_MAIL_ADAPTER_STATUS.ACCEPTED };
+  },
   headers: { "x-not-allowed": "value" },
 });
 const optionsDispatch = await dispatcherWithOptions.send({
@@ -366,11 +465,11 @@ check("Transport-Injektion nimmt keine freien Header oder Optionen an",
   && transportCalls === 0);
 
 let deliveredMessage = null;
-const dispatcher = createPrivateMailDispatcher({
+const dispatcher = createPrivateFeedbackDispatcher({
   transport: async (message) => {
     transportCalls += 1;
     deliveredMessage = message;
-    return { ok: true };
+    return { ok: true, status: PRIVATE_MAIL_ADAPTER_STATUS.ACCEPTED };
   },
 });
 const delivered = await dispatcher.send({
@@ -382,13 +481,18 @@ const delivered = await dispatcher.send({
 });
 check("Ein send-Aufruf startet keinen versteckten Transport-Retry",
   delivered.ok
+  && delivered.status === PRIVATE_MAIL_ADAPTER_STATUS.ACCEPTED
   && delivered.type === PRIVATE_MAIL_TYPES.FEEDBACK
   && delivered.operationId === operationId
   && transportCalls === 1
   && Object.isFrozen(deliveredMessage));
 
-const malformedTransport = await createPrivateMailDispatcher({
-  transport: async () => ({ ok: true, raw: "verboten" }),
+const malformedTransport = await createPrivateFeedbackDispatcher({
+  transport: async () => ({
+    ok: true,
+    status: PRIVATE_MAIL_ADAPTER_STATUS.ACCEPTED,
+    raw: "verboten",
+  }),
 }).send({
   schemaVersion: 1,
   type: PRIVATE_MAIL_TYPES.FEEDBACK,
@@ -396,10 +500,10 @@ const malformedTransport = await createPrivateMailDispatcher({
   submittedAt: now,
   text: "Hallo",
 });
-check("Adapterantworten mit Roh- oder Zusatzdaten werden verworfen",
-  malformedTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_FAILED);
+check("Adapterantworten mit Roh- oder Zusatzdaten werden als unbekannt verworfen",
+  malformedTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_STATUS_UNKNOWN);
 
-const pendingTransport = await createPrivateMailDispatcher({
+const pendingTransport = await createPrivateFeedbackDispatcher({
   transport: async () => ({ ok: true, status: "pending" }),
 }).send({
   schemaVersion: 1,
@@ -408,12 +512,8 @@ const pendingTransport = await createPrivateMailDispatcher({
   submittedAt: now,
   text: "Hallo",
 });
-check("Pending oder unbekannt gilt an der Transportgrenze nie als Erfolg",
-  pendingTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_FAILED);
-
-let failedCalls = 0;
-const failedTransport = await createPrivateMailDispatcher({
-  transport: async () => { failedCalls += 1; throw new Error("roher Transportfehler"); },
+const unstatedTransport = await createPrivateFeedbackDispatcher({
+  transport: async () => ({ ok: true }),
 }).send({
   schemaVersion: 1,
   type: PRIVATE_MAIL_TYPES.FEEDBACK,
@@ -421,8 +521,52 @@ const failedTransport = await createPrivateMailDispatcher({
   submittedAt: now,
   text: "Hallo",
 });
-check("Transportfehler werden generisch und ohne automatischen Retry abgeschlossen",
-  failedTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_FAILED
+const unknownTransport = await createPrivateFeedbackDispatcher({
+  transport: async () => ({ ok: false, status: "unknown" }),
+}).send({
+  schemaVersion: 1,
+  type: PRIVATE_MAIL_TYPES.FEEDBACK,
+  operationId,
+  submittedAt: now,
+  text: "Hallo",
+});
+check("Pending oder unbekannt bleibt ein unbekannter Zustellstatus",
+  pendingTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_STATUS_UNKNOWN
+  && unstatedTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_STATUS_UNKNOWN
+  && unknownTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_STATUS_UNKNOWN);
+
+const rejectedTransport = await createPrivateFeedbackDispatcher({
+  transport: async () => ({
+    ok: false,
+    status: PRIVATE_MAIL_ADAPTER_STATUS.REJECTED,
+  }),
+}).send({
+  schemaVersion: 1,
+  type: PRIVATE_MAIL_TYPES.FEEDBACK,
+  operationId,
+  submittedAt: now,
+  text: "Hallo",
+});
+check("Nur die exakte Adapter-Rejection gilt als sichere Ablehnung",
+  rejectedTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_REJECTED);
+
+let failedCalls = 0;
+const failedTransport = await createPrivateFeedbackDispatcher({
+  transport: async () => {
+    failedCalls += 1;
+    const timeout = new Error("roher Timeout");
+    timeout.name = "TimeoutError";
+    throw timeout;
+  },
+}).send({
+  schemaVersion: 1,
+  type: PRIVATE_MAIL_TYPES.FEEDBACK,
+  operationId,
+  submittedAt: now,
+  text: "Hallo",
+});
+check("Throw oder Timeout bleibt unbekannt und startet keinen automatischen Retry",
+  failedTransport.code === PRIVATE_MAIL_DISPATCH_CODES.DELIVERY_STATUS_UNKNOWN
   && failedCalls === 1
   && !Object.hasOwn(failedTransport, "cause"));
 
