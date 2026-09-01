@@ -19,6 +19,7 @@ const jsDatei = assets.find((f) => f.endsWith(".js"));
 const cssDatei = assets.find((f) => f.endsWith(".css"));
 const js = jsDatei ? readFileSync(join(DIST, "assets", jsDatei), "utf8") : "";
 const css = cssDatei ? readFileSync(join(DIST, "assets", cssDatei), "utf8") : "";
+const viteConfig = readFileSync("vite.config.js", "utf8");
 const headers = existsSync(join(DIST, "_headers")) ? readFileSync(join(DIST, "_headers"), "utf8") : "";
 const downloadSeitePfad = join(DIST, "download", "index.html");
 const downloadInstallPfad = join(DIST, "download", "install.js");
@@ -203,10 +204,17 @@ check("Ausgelieferte Einzeldatei hat keine versteckte Programmdateien-Abhängigk
 check("Einzeldatei bezeichnet den alten Programmstand als Archiv statt als live",
   downloadHtml.includes("Archiviertes synthetisches Offline-Beispiel")
   && downloadHtml.includes("kein aktuelles Kinoprogramm"));
-check("Web-Build behält seine bisherigen Sidecar-Kompatibilitätswege getrennt vom Download",
-  js.includes("Programmdateien/System/demo_masterliste.js")
-  && js.includes("Programmdateien/System/streaming_entdecken.js")
-  && existsSync(join(DIST, "Programmdateien", "System", "demo_masterliste.js")));
+check("Web-Build entfernt Offline-Sidecars; nur der Download behält seine eingebetteten Beilagen",
+  !js.includes("Programmdateien/System/demo_masterliste.js")
+  && !js.includes("Programmdateien/System/streaming_entdecken.js")
+  && !js.includes("window.__KD_DEMO_SEED__")
+  && !js.includes("data-kd-einzeldatei-seed")
+  && !existsSync(join(DIST, "Programmdateien", "System", "demo_masterliste.js"))
+  && !existsSync(join(DIST, "Programmdateien", "System", "streaming_entdecken.js"))
+  && /define:\s*\{\s*__KD_SINGLE_FILE__:\s*['"]false['"]\s*\}/.test(viteConfig)
+  && js.includes("kd_catalog") && js.includes("/rest/v1/")
+  && (downloadHtml.match(/data-kd-einzeldatei-seed/g) || []).length === 1
+  && downloadHtml.includes("window.__KD_DEMO_SEED__"));
 const auslieferung = indexHtml + "\n" + js + "\n" + downloadHtml
   + "\n" + downloadSeite + "\n" + downloadInstall + "\n" + downloadDiagnose;
 const secretMuster = [
