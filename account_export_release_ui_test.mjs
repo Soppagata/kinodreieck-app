@@ -13,7 +13,7 @@ const result = await build({
     contents: `
       export { default as React, act } from "react";
       export { createRoot } from "react-dom/client";
-      export { KontoDatenrechte } from "./src/components/PrivatePilotOps.jsx";
+      export { DatenschutzUebersicht, KontoDatenrechte } from "./src/components/PrivatePilotOps.jsx";
       export {
         ACCOUNT_EXPORT_REQUIRED_SCOPE,
         ACCOUNT_EXPORT_SCOPE_VERSION,
@@ -34,6 +34,7 @@ const {
   React,
   act,
   createRoot,
+  DatenschutzUebersicht,
   KontoDatenrechte,
   ACCOUNT_EXPORT_REQUIRED_SCOPE,
   ACCOUNT_EXPORT_SCOPE_VERSION,
@@ -59,13 +60,17 @@ let checks = 0;
 
 async function render(extra = {}) {
   await act(async () => {
-    root.render(React.createElement(KontoDatenrechte, {
+    const props = {
       ...konto,
       config: configAn,
       exportAccountData,
       selfService,
       ...extra,
-    }));
+    };
+    root.render(React.createElement(React.Fragment, null,
+      React.createElement(KontoDatenrechte, props),
+      React.createElement(DatenschutzUebersicht, props),
+    ));
     await Promise.resolve();
   });
 }
@@ -89,6 +94,7 @@ check("Beide Runtime-Flags öffnen ohne belegten Releaseumfang keinen Export- od
 check("Statt eines Zukunftsbuttons ist der ehrliche manuelle Rechteweg sichtbar", () => {
   const weg = document.querySelector('[data-manual-data-rights="private-contact"]');
   assert.ok(weg);
+  assert.equal(document.querySelectorAll('[data-manual-data-rights="private-contact"]').length, 1);
   assert.match(weg.textContent, /Auskunft/);
   assert.match(weg.textContent, /privaten Kontaktweg/);
   assert.match(weg.textContent, /keine Anfrage automatisch/);
@@ -101,14 +107,24 @@ check("Ein nur teilweise belegter Umfang bleibt unsichtbar und nicht ausführbar
   assert.equal(exportCalls, 0);
 });
 
-await render({
-  config: { privateSelfServiceEnabled: true, accountDeleteEnabled: false },
-  accountExportContract: exakt,
-});
-check("Der exakte Umfang ersetzt keines der beiden bestehenden Runtime-Flags", () => {
-  assert.equal(buttonMit("Kontoexport herunterladen"), undefined);
-  assert.equal(exportCalls, 0);
-});
+const failClosedMatrix = [
+  ["Flags false/false", { config: { privateSelfServiceEnabled: false, accountDeleteEnabled: false } }],
+  ["Flags false/true", { config: { privateSelfServiceEnabled: false, accountDeleteEnabled: true } }],
+  ["Flags true/false", { config: { privateSelfServiceEnabled: true, accountDeleteEnabled: false } }],
+  ["inaktivem Konto", { accountActive: false }],
+  ["fehlendem Exporthandler", { exportAccountData: undefined }],
+];
+for (const [name, extra] of failClosedMatrix) {
+  await render({ accountExportContract: exakt, ...extra });
+  check(`VERIFIED bleibt fail-closed bei ${name}`, () => {
+    assert.equal(buttonMit("Kontoexport herunterladen"), undefined);
+    assert.equal(buttonMit("Konto endgültig löschen"), undefined);
+    assert.ok(document.querySelector('[data-account-rights-location="privacy-overview"]'));
+    assert.equal(document.querySelectorAll('[data-manual-data-rights="private-contact"]').length, 1);
+    assert.equal(exportCalls, 0);
+    assert.equal(deleteCalls, 0);
+  });
+}
 
 await render({ accountExportContract: exakt });
 check("Nur Flags plus exakter Vertrag zeigen den vollständigen Umfang und den Exportknopf", () => {
@@ -120,6 +136,7 @@ check("Nur Flags plus exakter Vertrag zeigen den vollständigen Umfang und den E
   assert.ok(buttonMit("Vollständigen Kontoexport herunterladen"));
   const rechteWeg = document.querySelector('[data-manual-data-rights="private-contact"]');
   assert.ok(rechteWeg);
+  assert.equal(document.querySelectorAll('[data-manual-data-rights="private-contact"]').length, 1);
   assert.match(rechteWeg.textContent, /unten separat verfügbar/);
   assert.doesNotMatch(rechteWeg.textContent, /nicht als Self-Service freigeschaltet/);
 });

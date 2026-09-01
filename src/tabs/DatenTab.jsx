@@ -491,7 +491,9 @@ export function DatenTab({
           </div>
           <details style={{ marginTop: 18 }}>
             <summary style={{ minHeight: 44, display: "flex", alignItems: "center", cursor: "pointer", color: T.rauch, fontSize: 13 }}>Datenschutz & Datenübersicht</summary>
-            <div style={{ marginTop: 10 }}><DatenschutzUebersicht accountActive={kontoAktiv} /></div>
+            <div style={{ marginTop: 10 }}>
+              <DatenschutzUebersicht accountActive={kontoAktiv} exportAccountData={kontoExportVollstaendig} />
+            </div>
           </details>
         </div>
       </Klappe>

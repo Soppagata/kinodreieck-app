@@ -99,14 +99,21 @@ check("Nur der exakt vollständige versionierte Umfangsvertrag öffnet die dritt
   && !istKontoExportVertragVollstaendig({ ...exakt, schemaVersion: "alt" }));
 
 check("Vollständiger Exportwortlaut liegt nur hinter Flags und exakter Umfangsprüfung",
-  selfService.includes("config.privateSelfServiceEnabled === true")
+  selfService.includes("function kontoExportIstFreigegeben")
+  && selfService.includes("config.privateSelfServiceEnabled === true")
   && selfService.includes("config.accountDeleteEnabled === true")
-  && selfService.includes("accountExportComplete")
   && selfService.includes("accountExportEnabled")
   && selfService.includes("istKontoExportVertragVollstaendig(accountExportContract)")
   && selfService.includes("Exakten Exportumfang anzeigen")
   && selfService.includes("ACCOUNT_EXPORT_REQUIRED_SCOPE.map")
   && selfService.includes("{accountExportEnabled && ("));
+
+check("Nur die Datenschutzübersicht erhält den tatsächlichen Exportstatus für den manuellen Rechteweg",
+  (selfService.match(/<ManuellerDatenrechteWeg/g) || []).length === 1
+  && (selfService.match(/Der Kontoexport ist in diesem Release nicht als Self-Service freigeschaltet/g) || []).length === 1
+  && selfService.includes("<ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />")
+  && selfService.includes('data-account-rights-location="privacy-overview"')
+  && sichtbar.datenTab.includes("<DatenschutzUebersicht accountActive={kontoAktiv} exportAccountData={kontoExportVollstaendig} />"));
 
 check("Belegter Exportvertrag reaktiviert keinen alten Konto-Self-Delete",
   !selfService.includes("deleteCurrentAccount")

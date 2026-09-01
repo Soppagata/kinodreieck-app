@@ -17,7 +17,30 @@ import {
 import { T, btnStyle } from "../lib/tokens.js";
 import { runtimeConfig } from "../config/runtime.js";
 
-export function DatenschutzUebersicht({ accountActive = false }) {
+function kontoExportIstFreigegeben({
+  accountActive,
+  config,
+  accountExportContract,
+  exportAccountData,
+}) {
+  return accountActive && config.privateSelfServiceEnabled === true
+    && config.accountDeleteEnabled === true
+    && istKontoExportVertragVollstaendig(accountExportContract)
+    && typeof exportAccountData === "function";
+}
+
+export function DatenschutzUebersicht({
+  accountActive = false,
+  config = runtimeConfig,
+  accountExportContract = ACCOUNT_EXPORT_RELEASE_CONTRACT,
+  exportAccountData,
+}) {
+  const accountExportEnabled = kontoExportIstFreigegeben({
+    accountActive,
+    config,
+    accountExportContract,
+    exportAccountData,
+  });
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <p style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
@@ -49,7 +72,7 @@ export function DatenschutzUebersicht({ accountActive = false }) {
           ))}
         </ul>
       </details>
-      <ManuellerDatenrechteWeg />
+      <ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />
     </div>
   );
 }
@@ -155,10 +178,12 @@ export function KontoDatenrechte({
 }) {
   const [exportRunning, setExportRunning] = useState(false);
   const [exportStatus, setExportStatus] = useState("");
-  const accountExportComplete = istKontoExportVertragVollstaendig(accountExportContract);
-  const accountExportEnabled = accountActive && config.privateSelfServiceEnabled === true
-    && config.accountDeleteEnabled === true && accountExportComplete
-    && typeof exportAccountData === "function";
+  const accountExportEnabled = kontoExportIstFreigegeben({
+    accountActive,
+    config,
+    accountExportContract,
+    exportAccountData,
+  });
   const downloadAccountData = async () => {
     if (!accountExportEnabled || exportRunning) return;
     setExportRunning(true);
@@ -176,7 +201,12 @@ export function KontoDatenrechte({
   };
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      <ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />
+      {!accountExportEnabled && (
+        <p data-account-rights-location="privacy-overview" style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
+          Den tatsächlichen Exportstatus und den manuellen Rechteweg findest du unter
+          Über &amp; Rechtliches → Datenschutz &amp; Datenübersicht.
+        </p>
+      )}
       {accountExportEnabled && (
         <section data-account-export="verified" style={{ display: "grid", gap: 10, maxWidth: 520 }}>
           <strong style={{ color: T.leinwand, fontSize: 13 }}>Vollständiger Kontoexport</strong>
