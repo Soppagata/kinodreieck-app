@@ -1,6 +1,7 @@
 import { runtimeConfig } from "../config/runtime.js";
 import { ENTDECKEN_MARKET_POOL_50 } from "../data/entdeckenMarketPool50.js";
 import { validateWebDiscoveryFeed } from "../lib/webDiscoveryFeed.js";
+import { authDriver, authService } from "./auth.js";
 
 export const ENTDECKEN_DAILY_ENDPOINT = "entdecken-daily-task";
 export const ENTDECKEN_DAILY_CLIENT_STATUSES = Object.freeze([
@@ -122,10 +123,14 @@ function exactResult(value, today) {
 }
 
 /* Der versionierte Staging-Fallback startet keinen GET. Ohne Fallback startet
-   ein App-Lauf hoechstens einen accountlosen GET. Body, Sitzung, Profil,
-   Seen-Stand, Dienste und Katalogdaten bleiben vollstaendig lokal. */
+   nur ein aktiv freigeschaltetes, waehrend Token- und Requestphase identisches
+   Konto einen GET. Body, Profil, Seen-Stand, Dienste und Katalogdaten bleiben
+   vollstaendig lokal. */
 export function createEntdeckenDailyFeedService({
   config = runtimeConfig,
+  auth = authService,
+  getAccount = authDriver.konto,
+  getAccessToken = authDriver.getAccessToken,
   fetchImpl = globalThis.fetch,
   currentDay = () => viennaDay(new Date()),
   fallbackFeed = null,
@@ -144,22 +149,41 @@ export function createEntdeckenDailyFeedService({
     if (config.entdeckenDailyFeedEnabled !== true || typeof fetchImpl !== "function") {
       return frozen("disabled");
     }
+    const session = auth?.getSnapshot?.();
+    const accountId = text(session?.account?.id);
+    if (session?.mode !== "account" || session?.state !== "ready"
+        || session?.capabilities?.remoteStorage !== true || !accountId
+        || text(getAccount?.()?.id) !== accountId) {
+      return frozen("disabled");
+    }
     const basis = text(config.supabaseUrl).replace(/\/+$/, "");
     const publishableKey = text(config.supabasePublishableKey);
     if (!basis || !publishableKey) return frozen("unavailable");
+
+    let token;
+    try { token = await getAccessToken({ erwarteteKontoId: accountId }); }
+    catch { return frozen("unavailable"); }
+    const accountUnchanged = () => (
+      auth.getSnapshot() === session && text(getAccount()?.id) === accountId
+    );
+    if (!token || !accountUnchanged()) return frozen("disabled");
+
     let response;
     try {
       response = await fetchImpl(`${basis}/functions/v1/${ENTDECKEN_DAILY_ENDPOINT}`, {
         method: "GET",
         headers: {
+          Authorization: `Bearer ${token}`,
           apikey: publishableKey,
           Accept: "application/json",
         },
       });
     } catch { return frozen("unavailable"); }
+    if (!accountUnchanged()) return frozen("disabled");
     let payload;
     try { payload = await response.json(); }
     catch { return frozen("invalid_response"); }
+    if (!accountUnchanged()) return frozen("disabled");
     const checked = exactResult(payload, currentDay());
     if (!response.ok || !checked) return frozen(response.ok ? "invalid_response" : "unavailable");
     return checked;

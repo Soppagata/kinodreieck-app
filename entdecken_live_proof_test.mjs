@@ -688,12 +688,20 @@ await check("Manipulierter Readback oder nicht korrelierte Kosten fallen geschlo
 });
 
 await check("Browser akzeptiert dieselbe normale Beleg-Huelle und behaelt Belege ausserhalb des UI-State", async () => {
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001", role: "member" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
   const service = createEntdeckenDailyFeedService({
     config: {
       entdeckenDailyFeedEnabled: true,
       supabaseUrl: "https://project.supabase.co",
       supabasePublishableKey: "public-key",
     },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => "account-token",
     currentDay: () => "2026-08-20",
     fetchImpl: async () => ({ ok: true, async json() { return independentResponse; } }),
   });
