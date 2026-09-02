@@ -1078,8 +1078,8 @@ await check("Quellen-v2 erweitert fail-closed auf exakt vier Domains und behaelt
   assert.doesNotMatch(code, /on\s+conflict|update\s+public\.kd_ai_limits|staging_owner_refresh_override\s*=|create\s+extension|scheduler|cron\./i);
 });
 
-await check("App ruft den globalen Feed ohne Owner-Gate auf und behaelt lokale Daten lokal", () => {
-  assert.match(appSource, /useWebDiscoveryFeed\(bootDone && tab === "blog"\)/);
+await check("App aktiviert den globalen Feed nur fuer aktive Konten und behaelt lokale Daten lokal", () => {
+  assert.match(appSource, /useWebDiscoveryFeed\(remoteKontoAktiv && bootDone && tab === "blog"\)/);
   assert.doesNotMatch(appSource, /webDiscoveryOwnerFreigegeben/);
   assert.match(controllerSource, /!active \|\| laufRef\.current/);
   assert.match(controllerSource, /feed: result\.feed \|\| current\.feed/);
