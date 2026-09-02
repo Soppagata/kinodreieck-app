@@ -32,3 +32,9 @@ verify_jwt = false
 # oeffentlichen Projekt-Key selbst. GET bleibt ein reiner Readback; nur der
 # explizite service-role-/Owner-POST darf den gezaunten Wochenrefresh claimen.
 verify_jwt = false
+
+[functions.private-mail-request]
+# Der Browserweg ist ausschliesslich fuer angemeldete Konten bestimmt. Die
+# Plattform prueft das Sitzungstoken vor dem Handler; der Handler prueft Claims,
+# User-ID und aktiven Accountzugang zusaetzlich selbst.
+verify_jwt = true

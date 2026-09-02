@@ -20,8 +20,21 @@ if (config.supabasePublishableKey.length < 20) {
 if (!config.buildVersion || config.buildVersion === "dev") {
   throw new Error("VITE_BUILD_VERSION muss den ausgelieferten Commit bezeichnen.");
 }
+if (ziel === "staging"
+    && (config.privateMailEnabled !== true
+      || config.privateMailEndpointName !== "private-mail-request")) {
+  throw new Error("Staging muss den privaten Mailweg über private-mail-request aktivieren.");
+}
+if (ziel === "production"
+    && (config.privateMailEnabled !== false || config.privateMailEndpointName !== "")) {
+  throw new Error("Production muss den privaten Mailweg ohne nutzbaren Endpoint deaktivieren.");
+}
 
-const ERLAUBTE_VITE_KEIN_SECRET = new Set(["VITE_PRIVATE_SELF_SERVICE_ENABLED"]);
+const ERLAUBTE_VITE_KEIN_SECRET = new Set([
+  "VITE_PRIVATE_SELF_SERVICE_ENABLED",
+  "VITE_PRIVATE_MAIL_ENABLED",
+  "VITE_PRIVATE_MAIL_ENDPOINT_NAME",
+]);
 const verboteneViteNamen = Object.keys(process.env).filter((name) =>
   name.startsWith("VITE_")
   && !ERLAUBTE_VITE_KEIN_SECRET.has(name)

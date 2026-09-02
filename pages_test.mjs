@@ -97,11 +97,16 @@ check("Staging-Deploy setzt Private-Self-Service exakt auf exaktes STAGING-Flag"
   /VITE_PRIVATE_SELF_SERVICE_ENABLED:\s*\$\{\{\s*vars\.STAGING_PRIVATE_SELF_SERVICE_ENABLED\s*==\s*'true'\s*&&\s*'true'\s*\|\|\s*'false'\s*\}\}/.test(deployStagingBlock));
 check("Staging-Deploy sperrt Account-Delete hart auf false",
   /VITE_ACCOUNT_DELETE_ENABLED:\s*"false"/.test(deployStagingBlock));
-check("Production-Deploy enthält harte false-Werte für alle vier Flags",
+check("Staging-Deploy aktiviert privaten Mailweg mit festem Function-Namen",
+  /VITE_PRIVATE_MAIL_ENABLED:\s*"true"/.test(deployStagingBlock)
+  && /VITE_PRIVATE_MAIL_ENDPOINT_NAME:\s*"private-mail-request"/.test(deployStagingBlock));
+check("Production-Deploy enthält harte false-Werte für alle fünf Flags und keinen Mail-Endpoint",
   /VITE_RADAR_PILOT_CLIENT_ENABLED:\s*"false"/.test(deployProductionBlock)
     && /VITE_ENTDECKEN_DAILY_FEED_ENABLED:\s*"false"/.test(deployProductionBlock)
     && /VITE_PRIVATE_SELF_SERVICE_ENABLED:\s*"false"/.test(deployProductionBlock)
     && /VITE_ACCOUNT_DELETE_ENABLED:\s*"false"/.test(deployProductionBlock)
+    && /VITE_PRIVATE_MAIL_ENABLED:\s*"false"/.test(deployProductionBlock)
+    && /VITE_PRIVATE_MAIL_ENDPOINT_NAME:\s*""/.test(deployProductionBlock)
     && !/STAGING_RADAR_PILOT_CLIENT_ENABLED/.test(deployProductionBlock)
     && !/STAGING_ENTDECKEN_DAILY_FEED_ENABLED/.test(deployProductionBlock)
     && !/STAGING_PRIVATE_SELF_SERVICE_ENABLED/.test(deployProductionBlock));

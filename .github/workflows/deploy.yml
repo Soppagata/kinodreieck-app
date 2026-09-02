@@ -111,6 +111,8 @@ jobs:
       VITE_ENTDECKEN_DAILY_FEED_ENABLED: ${{ vars.STAGING_ENTDECKEN_DAILY_FEED_ENABLED == 'true' && 'true' || 'false' }}
       VITE_PRIVATE_SELF_SERVICE_ENABLED: ${{ vars.STAGING_PRIVATE_SELF_SERVICE_ENABLED == 'true' && 'true' || 'false' }}
       VITE_ACCOUNT_DELETE_ENABLED: "false"
+      VITE_PRIVATE_MAIL_ENABLED: "true"
+      VITE_PRIVATE_MAIL_ENDPOINT_NAME: "private-mail-request"
       VITE_BUILD_VERSION: ${{ github.sha }}
       EXPECTED_BUILD_VERSION: ${{ github.sha }}
     steps:
@@ -171,6 +173,8 @@ jobs:
       VITE_ENTDECKEN_DAILY_FEED_ENABLED: "false"
       VITE_PRIVATE_SELF_SERVICE_ENABLED: "false"
       VITE_ACCOUNT_DELETE_ENABLED: "false"
+      VITE_PRIVATE_MAIL_ENABLED: "false"
+      VITE_PRIVATE_MAIL_ENDPOINT_NAME: ""
       VITE_BUILD_VERSION: ${{ github.sha }}
       EXPECTED_BUILD_VERSION: ${{ github.sha }}
     steps:
