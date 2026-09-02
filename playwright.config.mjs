@@ -5,10 +5,17 @@ import { defineConfig, devices } from "@playwright/test";
    isolierter Port über KD_TEST_PORT gewählt werden. */
 const testPort = process.env.KD_TEST_PORT || "4174";
 const testUrl = `http://127.0.0.1:${testPort}`;
+const privateReleaseTests = ["kino-mobile-filter.spec.mjs", "private-release-login.spec.mjs"];
+const testMatch = process.env.KD_LEGACY_PUBLIC_MOBILE === "1"
+  ? ["mobile-layout.spec.mjs", ...privateReleaseTests]
+  : privateReleaseTests;
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["mobile-layout.spec.mjs", "kino-mobile-filter.spec.mjs", "private-release-login.spec.mjs"],
+  // Der historische Layout-Harness setzt den entfernten öffentlichen
+  // Gast-Vollmodus voraus. Der Privat-Release hält stattdessen Login und den
+  // unveränderten Kino-Filter in beiden Browsern im normalen CI-Gate.
+  testMatch,
   fullyParallel: false,
   workers: 1,
   // GitHub-Runner verlieren WebKit gelegentlich komplett ("Target crashed").
