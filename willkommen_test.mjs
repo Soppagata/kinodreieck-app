@@ -229,19 +229,19 @@ const steuer = {};
 
 /* =========================================================================
    G — GATE-ZUSICHERUNGEN (Quelltext; vorher Teil von W5)
-   Der alte Willkommen-Dialog ist entfernt; der Vollseiten-Einstieg markiert
-   die Erklärung erst nach erfolgreich gespeicherter KI-Wahl.
+   Der alte Willkommen-Dialog und seine KI-/Demo-Auswahl sind entfernt. Der
+   lokale Weg speichert nur den clean-Marker und bleibt bewusst auswählbar.
    ========================================================================= */
 abschnitt("G", async () => {
 console.log("\n--- G: Gate-Zusicherungen (Quelltext) ---");
 
 check("G", "App.jsx montiert den alten Willkommen-Dialog nicht mehr", () => !/<Willkommen\b/.test(APP_TEXT));
-check("G", "der neue Einstieg stoppt bei einer nicht gespeicherten KI-Wahl",
-  () => /gespeichert === false\)[\s\S]+setFehler[\s\S]+return;/.test(EINSTIEG_TEXT));
-check("G", "setWillkommen(true) liegt im erfolgreichen Abschluss des Vollseiten-Einstiegs",
-  () => /const abschliessen = \(kiAn\)[\s\S]+setWillkommen\(true\)/.test(EINSTIEG_TEXT));
-check("G", "erst nach dem Markieren wird der Einstieg geschlossen",
-  () => /setWillkommen\(true\)[\s\S]+schliesseEinstieg\(weg\)[\s\S]+onFertig\(\)/.test(EINSTIEG_TEXT));
+check("G", "Minimal-Einstieg bietet keine Demo-, Startwahl- oder KI-Auswahl",
+  () => !/Demo ansehen|StartWahl|setWillkommen|kiAn/.test(EINSTIEG_TEXT));
+check("G", "lokaler Einstieg speichert nur clean und schliesst danach das Gate",
+  () => /localStorage\.setItem\(K\.start, "clean"\)[\s\S]+schliesseEinstieg\("gast"\)[\s\S]+setOffen\(false\)/.test(EINSTIEG_TEXT));
+check("G", "Minimal-Einstieg bietet den bewussten Localmodus an",
+  () => /<button[\s\S]+onClick=\{ohneKonto\}[\s\S]+Ohne Konto fortfahren/.test(EINSTIEG_TEXT));
 });
 
 /* =========================================================================
