@@ -56,7 +56,10 @@ export function EinstiegsGate({ children }) {
 
   useEffect(() => { if (legalOffen) legalRef.current?.focus(); }, [legalOffen]);
 
-  if (konto && storageState === "account-ready") return <div key={storageOwnerKennung()}>{children}</div>;
+  /* Der Storage-Marker ist nur eine zweite, lokale Zustandsquelle. Er darf eine
+     fehlende, inaktive oder unlesbare serverseitige Kontofreigabe niemals
+     ueberstimmen. Erst beide Grenzen zusammen haengen die App ein. */
+  if (freigegeben && storageState === "account-ready") return <div key={storageOwnerKennung()}>{children}</div>;
   if (!konto && !offen && storageState === "guest") return <div key="local">{children}</div>;
 
   const ohneKonto = () => {

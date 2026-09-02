@@ -31,6 +31,7 @@ import {
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import { createEntdeckenRecommendations } from "./src/lib/entdeckenUi.js";
 import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
+import { ENTDECKEN_MARKET_POOL_50 } from "./src/data/entdeckenMarketPool50.js";
 
 let checks = 0;
 async function check(name, fn) {
@@ -631,12 +632,20 @@ await check("Unparsebarer sicherer Text ersetzt den Feed nicht; spaeterer GET li
   assert.deepEqual(run.feed, endToEndFeed);
   assert.deepEqual(failures, [{ code: "invalid_response", fenceToken: 82 }]);
 
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001", role: "member" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
   const service = createEntdeckenDailyFeedService({
     config: {
       entdeckenDailyFeedEnabled: true,
       supabaseUrl: "https://project.supabase.co",
       supabasePublishableKey: "public-key",
     },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => "account-token",
     currentDay: () => "2026-08-20",
     fetchImpl: async () => ({ ok: true, async json() {
       return { ok: true, status: run.status, feed: run.feed, writes: 0,
@@ -873,31 +882,141 @@ await check("Alter Tagesfeed bleibt als stale lesbar, erzeugt aber keinen zweite
   assert.equal(result.feed.format, 3);
 });
 
-await check("Browserdienst sendet accountlos genau einen bodylosen GET", async () => {
+await check("Browserdienst ohne Kontositzung bleibt vor Token und privatem GET fail-closed", async () => {
   const calls = [];
-  const feed = evaluated();
+  let tokenCalls = 0;
   const service = createEntdeckenDailyFeedService({
     config: {
       entdeckenDailyFeedEnabled: true,
       supabaseUrl: "https://project.supabase.co",
       supabasePublishableKey: "public-key",
     },
+    auth: { getSnapshot: () => ({ mode: "guest", state: "ready", account: null }) },
+    getAccount: () => null,
+    getAccessToken: async () => { tokenCalls += 1; return "forbidden-token"; },
+    currentDay: () => "2026-08-20",
+    fetchImpl: async (...args) => { calls.push(args); throw new Error("network-forbidden"); },
+  });
+  const result = await service.load();
+  assert.equal(result.status, "disabled");
+  assert.equal(tokenCalls, 0);
+  assert.equal(calls.length, 0);
+});
+
+await check("Aktives identisches Konto liest denselben Feed mit Bearer und apikey", async () => {
+  const calls = [];
+  const feed = evaluated();
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001", role: "member" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
+  const service = createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://project.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async ({ erwarteteKontoId }) => {
+      assert.equal(erwarteteKontoId, session.account.id);
+      return "account-token";
+    },
     currentDay: () => "2026-08-20",
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
-      return { ok: true, async json() {
-        return { ok: true, status: "fresh", feed, writes: 0, providerRequests: 0, searchRequests: 0,
-          refresh: { requested: false, mode: "read", status: "read_only", attemptCount: 1, maxAttempts: 3 } };
-      } };
+      return { ok: true, status: 200, async json() { return {
+        ok: true, status: "fresh", feed,
+        writes: 0, providerRequests: 0, searchRequests: 0,
+        refresh: {
+          requested: false, mode: "read", status: "read_only",
+          attemptCount: 0, maxAttempts: 3,
+        },
+      }; } };
     },
   });
   const result = await service.load();
   assert.equal(result.status, "fresh");
+  assert.deepEqual(result.feed, feed);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].options.method, "GET");
   assert.equal("body" in calls[0].options, false);
-  assert.deepEqual(Object.keys(calls[0].options.headers).sort(), ["Accept", "apikey"]);
-  assert.doesNotMatch(JSON.stringify(calls[0]), /authorization|bearer|account|profile|seen|dienst|radar/i);
+  assert.deepEqual(Object.keys(calls[0].options.headers).sort(), ["Accept", "Authorization", "apikey"]);
+  assert.equal(calls[0].options.headers.Authorization, "Bearer account-token");
+  assert.equal(calls[0].options.headers.apikey, "public-key");
+  assert.doesNotMatch(JSON.stringify(calls[0]), /profile|seen|gesehen|dienst|radar/i);
+});
+
+await check("Kontowechsel waehrend Token oder Request bleibt fail-closed", async () => {
+  const accountA = "00000000-0000-4000-8000-000000000001";
+  const accountB = "00000000-0000-4000-8000-000000000002";
+  const sessionA = {
+    mode: "account", state: "ready", account: { id: accountA },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
+  const sessionB = {
+    mode: "account", state: "ready", account: { id: accountB },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
+  let session = sessionA;
+  let tokenPhaseFetches = 0;
+  const tokenPhase = createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://project.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => { session = sessionB; return "old-account-token"; },
+    fetchImpl: async () => { tokenPhaseFetches += 1; throw new Error("network-forbidden"); },
+  });
+  assert.equal((await tokenPhase.load()).status, "disabled");
+  assert.equal(tokenPhaseFetches, 0);
+
+  session = sessionA;
+  let requestPhaseFetches = 0;
+  const requestPhase = createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://project.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => "account-token",
+    fetchImpl: async () => {
+      requestPhaseFetches += 1;
+      session = sessionB;
+      return { ok: true, status: 200, async json() { throw new Error("must-not-read"); } };
+    },
+  });
+  assert.equal((await requestPhase.load()).status, "disabled");
+  assert.equal(requestPhaseFetches, 1);
+});
+
+await check("Aktives Konto behaelt den eingebetteten Default-Fallback ohne Token oder GET", async () => {
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
+  let tokenCalls = 0;
+  let fetchCalls = 0;
+  const result = await createEntdeckenDailyFeedService({
+    fallbackFeed: ENTDECKEN_MARKET_POOL_50,
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => { tokenCalls += 1; return "account-token"; },
+    currentDay: () => "2026-08-29",
+    fetchImpl: async () => { fetchCalls += 1; throw new Error("network-forbidden"); },
+  }).load();
+  assert.equal(result.status, "fresh");
+  assert.deepEqual(result.feed, ENTDECKEN_MARKET_POOL_50);
+  assert.equal(result.feed.items.length, 50);
+  assert.equal(tokenCalls, 0);
+  assert.equal(fetchCalls, 0);
 });
 
 const migration = fs.readFileSync("./supabase/migrations/20260822190000_entdecken_weekly_feed.sql", "utf8");
@@ -920,13 +1039,19 @@ await check("GET bleibt read-only; nur explizites scheduled-/owner-POST darf cla
   assert.match(functionSource, /requestHasForbiddenBody\(req\)/);
   assert.match(functionSource, /scheduledAuthorized = requestMode === "scheduled"/);
   assert.match(functionSource, /req\.headers\.get\("apikey"\) === serviceKey && bearerToken === serviceKey/);
-  assert.match(functionSource, /publicKeyAuthorized = requestMode !== "scheduled"/);
+  assert.match(functionSource, /browserKeyAuthorized = requestMode !== "scheduled"/);
+  assert.match(functionSource, /req\.headers\.get\("apikey"\) === publishableKey/);
   assert.match(functionSource, /requestMode = req\.method === "GET"[\s\S]*"read"/);
   assert.match(functionSource, /SCHEDULED_REFRESH_VALUE/);
   assert.match(functionSource, /OWNER_REFRESH_VALUE/);
+  assert.match(functionSource, /requestMode === "read" \|\| requestMode === "owner"/);
+  assert.match(functionSource, /user\.auth\.getClaims\(token\)/);
   assert.match(functionSource, /user\.auth\.getUser\(token\)/);
+  assert.match(functionSource, /claims\?\.role !== "authenticated"/);
   assert.match(functionSource, /\.from\("kd_account_access"\)/);
-  assert.match(functionSource, /access\?\.role !== "owner"/);
+  assert.match(functionSource, /access\?\.role === "member" \|\| access\?\.role === "owner"/);
+  assert.match(functionSource, /access\?\.active === true/);
+  assert.match(functionSource, /access\?\.role !== "owner" \|\| access\?\.personal_ai !== true/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_feed_status"\)/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_refresh_claim"/);
   assert.match(functionSource, /PROVIDER_DIAGNOSTIC_ENV/);
@@ -1085,7 +1210,13 @@ await check("App aktiviert den globalen Feed nur fuer aktive Konten und behaelt 
   assert.match(controllerSource, /feed: result\.feed \|\| current\.feed/);
   assert.match(appSource, /webDiscoveryFeed=\{webDiscoveryState\.feed\}/);
   assert.match(appSource, /webDiscoveryStatus=\{webDiscoveryState\}/);
-  assert.doesNotMatch(clientSource, /getAccessToken|hatBestaetigteOwnerRolle|Authorization|profile|seen|selectedServices|radar/);
+  assert.match(clientSource, /fallbackFeed: ENTDECKEN_MARKET_POOL_50/);
+  assert.match(clientSource, /auth = authService/);
+  assert.match(clientSource, /getAccessToken = authDriver\.getAccessToken/);
+  assert.match(clientSource, /session\?\.capabilities\?\.remoteStorage !== true/);
+  assert.match(clientSource, /getAccessToken\(\{ erwarteteKontoId: accountId \}\)/);
+  assert.match(clientSource, /Authorization: `Bearer \$\{token\}`/);
+  assert.doesNotMatch(clientSource, /hatBestaetigteOwnerRolle|profile|seen|selectedServices|radar/);
 });
 
 console.log(`\n${checks}/${checks} Entdecken-Wochenserver-Checks bestanden.`);

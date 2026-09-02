@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { PRIVATE_DATA_INVENTORY, PRIVATE_PROVIDER_REGISTRY, RETENTION_CLASSES } from "../lib/privatePilotOps.js";
+import { useMemo, useState } from "react";
+import {
+  ACCOUNT_EXPORT_RELEASE_CONTRACT,
+  ACCOUNT_EXPORT_REQUIRED_SCOPE,
+  PRIVATE_DATA_INVENTORY,
+  PRIVATE_PROVIDER_REGISTRY,
+  RETENTION_CLASSES,
+  istKontoExportVertragVollstaendig,
+} from "../lib/privatePilotOps.js";
 import { supportBundleText } from "../lib/supportBundle.js";
 import {
   clearLocalDiagnostics,
@@ -9,18 +16,31 @@ import {
 } from "../lib/localDiagnostics.js";
 import { T, btnStyle } from "../lib/tokens.js";
 import { runtimeConfig } from "../config/runtime.js";
-import { accountSelfService } from "../services/accountSelfService.js";
-import { sessionCoordinator } from "../services/sessionCoordinator.js";
-import {
-  accountSelfServiceKey,
-  expectedAccountDeleteConfirmation,
-  exportReceiptMatchesAccount,
-  finalizeDeletedAccountLocally,
-  runCurrentAccountDeletion,
-  runExportBeforeAccountDeletion,
-} from "../controllers/accountSelfServiceController.js";
 
-export function DatenschutzUebersicht({ accountActive = false }) {
+function kontoExportIstFreigegeben({
+  accountActive,
+  config,
+  accountExportContract,
+  exportAccountData,
+}) {
+  return accountActive && config.privateSelfServiceEnabled === true
+    && config.accountDeleteEnabled === true
+    && istKontoExportVertragVollstaendig(accountExportContract)
+    && typeof exportAccountData === "function";
+}
+
+export function DatenschutzUebersicht({
+  accountActive = false,
+  config = runtimeConfig,
+  accountExportContract = ACCOUNT_EXPORT_RELEASE_CONTRACT,
+  exportAccountData,
+}) {
+  const accountExportEnabled = kontoExportIstFreigegeben({
+    accountActive,
+    config,
+    accountExportContract,
+    exportAccountData,
+  });
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <p style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
@@ -52,7 +72,24 @@ export function DatenschutzUebersicht({ accountActive = false }) {
           ))}
         </ul>
       </details>
+      <ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />
     </div>
+  );
+}
+
+export function ManuellerDatenrechteWeg({ kontoExportFreigegeben = false }) {
+  return (
+    <section data-manual-data-rights="private-contact" style={{ display: "grid", gap: 6 }}>
+      <strong style={{ color: T.leinwand, fontSize: 13 }}>Datenrechte manuell anfragen</strong>
+      <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
+        {kontoExportFreigegeben
+          ? "Der vollständige Kontoexport ist unten separat verfügbar. Für weitere Auskunft, "
+          : "Der Kontoexport ist in diesem Release nicht als Self-Service freigeschaltet. Für Auskunft, "}
+        Berichtigung, Übertragbarkeit oder die Löschung deines Kontos nutzt du, falls du einen Kontozugang
+        von Max erhalten hast, denselben privaten Kontaktweg. Die App veröffentlicht dafür keine private
+        Adresse und versendet keine Anfrage automatisch. Die Sicherheitskopie dieses Geräts ist kein Kontoexport.
+      </p>
+    </section>
   );
 }
 
@@ -133,148 +170,60 @@ export function SupportDaten({ ownerBestaetigt = false }) {
   return <BestaetigteSupportDaten ownerBestaetigt={ownerBestaetigt} />;
 }
 
-export function KontoLoeschung({
+export function KontoDatenrechte({
   accountActive = false,
-  accountId = "",
-  accountEmail = "",
   config = runtimeConfig,
-  exportBeforeDelete,
-  selfService = accountSelfService,
-  reauthenticate = (password) => sessionCoordinator.reauthenticate(password),
-  onAccountDeleted = () => sessionCoordinator.finalizeDeletedAccount(),
-  createOperationId = () => globalThis.crypto?.randomUUID?.(),
+  accountExportContract = ACCOUNT_EXPORT_RELEASE_CONTRACT,
+  exportAccountData,
 }) {
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [exportReceipt, setExportReceipt] = useState(null);
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [deleteStatus, setDeleteStatus] = useState("");
-  const [runningAction, setRunningAction] = useState("");
-  const [serverDeleted, setServerDeleted] = useState(false);
-  const [localFinalizationPending, setLocalFinalizationPending] = useState(false);
-  const operationRef = useRef(null);
-  const account = { accountId, accountEmail };
-  const accountKey = accountSelfServiceKey(account);
-  const accountKeyRef = useRef(accountKey);
-  accountKeyRef.current = accountKey;
-  const serverExportDone = exportReceiptMatchesAccount(exportReceipt, account);
-  const deleteEnabled = accountActive && config.privateSelfServiceEnabled === true
-    && config.accountDeleteEnabled === true && !!accountKey && typeof exportBeforeDelete === "function";
-  const expectedConfirmation = expectedAccountDeleteConfirmation(accountEmail);
-  const operationRunning = !!runningAction;
-  useEffect(() => {
-    setExportReceipt(null);
-    setPassword("");
-    setConfirmation("");
-    setDeleteStatus("");
-    setServerDeleted(false);
-    setLocalFinalizationPending(false);
-  }, [accountKey]);
-  const beginOperation = (kind) => {
-    if (operationRef.current) return null;
-    const token = Symbol(kind);
-    operationRef.current = token;
-    setRunningAction(kind);
-    return token;
-  };
-  const finishOperation = (token) => {
-    if (operationRef.current !== token) return;
-    operationRef.current = null;
-    setRunningAction("");
-  };
-  const downloadOwnData = async () => {
-    const token = beginOperation("export");
-    if (!token) return;
-    const startedFor = accountKey;
-    setDeleteStatus("");
-    setExportReceipt(null);
+  const [exportRunning, setExportRunning] = useState(false);
+  const [exportStatus, setExportStatus] = useState("");
+  const accountExportEnabled = kontoExportIstFreigegeben({
+    accountActive,
+    config,
+    accountExportContract,
+    exportAccountData,
+  });
+  const downloadAccountData = async () => {
+    if (!accountExportEnabled || exportRunning) return;
+    setExportRunning(true);
+    setExportStatus("");
     try {
-      const receipt = await runExportBeforeAccountDeletion({
-        account,
-        exportPersonalData: exportBeforeDelete,
-        readCurrentAccountKey: () => accountKeyRef.current,
-      });
-      if (accountKeyRef.current !== startedFor) return;
-      setExportReceipt(receipt);
-      setDeleteStatus("Vollständiges Gesamt-Backup wurde heruntergeladen. Prüfe die Datei vor der Löschung.");
+      const exported = await exportAccountData();
+      setExportStatus(exported === true
+        ? "Vollständiger Kontoexport wurde heruntergeladen. Prüfe und verwahre die Datei selbst."
+        : "Der vollständige Kontoexport konnte nicht erstellt werden.");
     } catch {
-      if (accountKeyRef.current !== startedFor) return;
-      setDeleteStatus("Server-Eigendaten konnten nicht vollständig exportiert werden. Die Löschung bleibt gesperrt.");
-    } finally { finishOperation(token); }
-  };
-  const deleteAccount = async () => {
-    if (!deleteEnabled || serverDeleted || !serverExportDone || confirmation !== expectedConfirmation || !password) return;
-    const token = beginOperation("delete");
-    if (!token) return;
-    const startedFor = accountKey;
-    const submittedPassword = password;
-    setPassword("");
-    setDeleteStatus("");
-    try {
-      await runCurrentAccountDeletion({
-        account,
-        exportReceipt,
-        password: submittedPassword,
-        confirmation,
-        reauthenticate,
-        deleteRemote: (input) => selfService.deleteCurrentAccount(input),
-        finalizeLocal: onAccountDeleted,
-        createOperationId,
-        readCurrentAccountKey: () => accountKeyRef.current,
-      });
-      if (accountKeyRef.current !== startedFor) return;
-      setServerDeleted(true);
-      setLocalFinalizationPending(false);
-      setExportReceipt(null);
-      setDeleteStatus("Konto serverseitig gelöscht und lokale Sitzung getrennt.");
-    } catch (error) {
-      if (accountKeyRef.current !== startedFor) return;
-      if (error?.serverDeleted === true) {
-        setServerDeleted(true);
-        setLocalFinalizationPending(true);
-        setExportReceipt(null);
-        setDeleteStatus("Serverlöschung bestätigt. Die lokale Sitzung konnte noch nicht getrennt werden; bitte lokale Trennung erneut ausführen.");
-      } else {
-        setDeleteStatus("Kontolöschung serverseitig nicht bestätigt. Die lokale Sitzung und Daten bleiben unangetastet.");
-      }
-    } finally { finishOperation(token); }
-  };
-  const retryLocalFinalization = async () => {
-    if (!serverDeleted) return;
-    const token = beginOperation("local");
-    if (!token) return;
-    setDeleteStatus("");
-    try {
-      await finalizeDeletedAccountLocally(onAccountDeleted);
-      setLocalFinalizationPending(false);
-      setDeleteStatus("Lokale Sitzung und Kontodaten wurden getrennt.");
-    } catch {
-      setLocalFinalizationPending(true);
-      setDeleteStatus("Das Konto ist serverseitig gelöscht. Die lokale Trennung ist weiterhin offen; bitte erneut versuchen.");
-    } finally { finishOperation(token); }
+      setExportStatus("Der vollständige Kontoexport konnte nicht erstellt werden.");
+    } finally {
+      setExportRunning(false);
+    }
   };
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      {!deleteEnabled && <p style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
-        Die Kontolöschung ist derzeit nicht freigeschaltet. Bis zur abgeschlossenen Wegwerfkonto-Abnahme bleibt der Self-Service geschlossen.
-      </p>}
-      {deleteEnabled && (
-        <details open={deleteOpen} onToggle={(event) => setDeleteOpen(event.currentTarget.open)}>
-          <summary style={{ cursor: "pointer", color: T.gefahr, fontSize: 13 }}>Konto und Serverdaten endgültig löschen</summary>
-          <div style={{ display: "grid", gap: 10, marginTop: 10, maxWidth: 520 }}>
-            <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>Zuerst ist ein vollständiges Gesamt-Backup mit lokalen und Server-Eigendaten Pflicht. Danach bestätigst du dein aktuelles Passwort und den exakten Löschsatz. Lokale Kontodaten und Sitzung werden erst nach bestätigter Serverlöschung getrennt.</p>
-            <button type="button" style={btnStyle(false)} disabled={operationRunning || serverDeleted} onClick={downloadOwnData}>{runningAction === "export" ? "Gesamt-Backup wird erstellt …" : "Vollständiges Gesamt-Backup herunterladen"}</button>
-            {!serverDeleted && <label style={{ color: T.rauch, fontSize: 12 }}>Aktuelles Passwort
-              <input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }} />
-            </label>}
-            {!serverDeleted && <label style={{ color: T.rauch, fontSize: 12 }}>Zur Bestätigung exakt eingeben: <code>{expectedConfirmation}</code>
-              <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }} />
-            </label>}
-            {!serverDeleted && <button type="button" style={btnStyle(false)} disabled={operationRunning || !serverExportDone || !password || confirmation !== expectedConfirmation} onClick={deleteAccount}>{runningAction === "delete" ? "Löschung wird geprüft …" : "Konto endgültig löschen"}</button>}
-            {serverDeleted && localFinalizationPending && <button type="button" style={btnStyle(false)} disabled={operationRunning} onClick={retryLocalFinalization}>{runningAction === "local" ? "Lokale Trennung läuft …" : "Lokale Sitzung jetzt trennen"}</button>}
-            {deleteStatus && <p role="status" style={{ margin: 0, color: T.rauch, fontSize: 12 }}>{deleteStatus}</p>}
-          </div>
-        </details>
+      {!accountExportEnabled && (
+        <p data-account-rights-location="privacy-overview" style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
+          Den tatsächlichen Exportstatus und den manuellen Rechteweg findest du unter
+          Über &amp; Rechtliches → Datenschutz &amp; Datenübersicht.
+        </p>
+      )}
+      {accountExportEnabled && (
+        <section data-account-export="verified" style={{ display: "grid", gap: 10, maxWidth: 520 }}>
+          <strong style={{ color: T.leinwand, fontSize: 13 }}>Vollständiger Kontoexport</strong>
+          <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
+            Dieser Export ist vom lokalen Geräte-Download getrennt und umfasst exakt die folgenden Kontodaten:
+          </p>
+            <details>
+              <summary style={{ cursor: "pointer", color: T.rauch, fontSize: 12 }}>Exakten Exportumfang anzeigen</summary>
+              <ul data-account-export-scope="verified" style={{ margin: "8px 0 0", paddingLeft: 20, color: T.rauch, fontSize: 11, lineHeight: 1.5 }}>
+                {ACCOUNT_EXPORT_REQUIRED_SCOPE.map((entry) => <li key={entry.id}>{entry.label}</li>)}
+              </ul>
+            </details>
+          <button type="button" style={btnStyle(false)} disabled={exportRunning} onClick={downloadAccountData}>
+            {exportRunning ? "Kontoexport wird erstellt …" : "Vollständigen Kontoexport herunterladen"}
+          </button>
+          {exportStatus && <p role="status" style={{ margin: 0, color: T.rauch, fontSize: 12 }}>{exportStatus}</p>}
+        </section>
       )}
     </div>
   );

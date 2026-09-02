@@ -302,6 +302,10 @@ const radarMigrationSql = fs.readFileSync(
   "supabase/migrations/20260809180000_event_radar_local_basis.sql",
   "utf8",
 );
+const radarTextFindingsMigrationSql = fs.readFileSync(
+  "supabase/migrations/20260830140000_radar_text_findings.sql",
+  "utf8",
+);
 const retentionFixSql = fs.readFileSync(
   "supabase/migrations/20260810120000_private_pilot_retention_fix.sql",
   "utf8",
@@ -503,6 +507,12 @@ expect(
     && !hasExactKeySet(ownDataKeySets, [
       "actor_id", "operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at",
     ]),
+);
+expect(
+  "Aktuelle Own-Data-Projektion ergänzt persönliche Radar-Textfunde ohne Account-ID",
+  /jsonb_set\(v_result,'\{radar,textFindings\}'/i.test(radarTextFindingsMigrationSql)
+    && /from public\.kd_radar_text_findings f\s+where f\.account_id=p_account_id/i.test(radarTextFindingsMigrationSql)
+    && /to_jsonb\(f\)-'account_id'/i.test(radarTextFindingsMigrationSql),
 );
 
 const compatRetentionSql = extractFunction(compatMigrationSql, "kd_private_retention_run");
@@ -758,6 +768,28 @@ expect(
     && !bundleText.includes("localStorage"),
 );
 
+const validRadarTextFinding = {
+  finding_id: "11111111-1111-4111-8111-111111111111",
+  event_version_id: "22222222-2222-4222-8222-222222222222",
+  text_target_id: "33333333-3333-4333-8333-333333333333",
+  release_key: "release:v1:0123456789abcdef",
+  title: "Beispiel",
+  target_type: "work",
+  category: "film",
+  event_type: "kinostart_at",
+  event_date: "2026-10-01",
+  region: "AT",
+  platform: "Kino",
+  season_number: null,
+  source_url: "https://example.invalid/beleg",
+  source_domain: "example.invalid",
+  source_title: "Beleg",
+  source_claim: "Start am 1. Oktober",
+  checked_at: "2026-09-01T12:00:00Z",
+  created_at: "2026-09-01T12:00:00Z",
+  updated_at: "2026-09-01T12:00:00Z",
+};
+
 const validOwnData = {
   ok: true,
   schemaVersion: 1,
@@ -784,6 +816,7 @@ const validOwnData = {
       shareOperations: [],
       importOperations: [],
       reviews: [],
+      textFindings: [validRadarTextFinding],
     },
     retention: [],
     deletion: { enabled: false, lastStatus: null },
@@ -795,6 +828,7 @@ expect(
     const normalized = validateOwnData(validOwnData);
     return normalized.auth.createdAt === validOwnData.data.auth.createdAt
       && normalized.access === validOwnData.data.access
+      && normalized.radar.textFindings[0] === validRadarTextFinding
       && Object.isFrozen(normalized);
   })(),
 );
@@ -815,6 +849,54 @@ const invalidOwnDataRadarNull = expectBoundaryError(
   () => validateOwnData({ ...validOwnData, data: { ...validOwnData.data, radar: null } }),
 );
 expect("Radar:null wird als invalid-response statt TypeError abgelehnt", invalidOwnDataRadarNull.code === ERROR_CODES.INVALID_RESPONSE);
+
+const invalidOwnDataMissingTextFindings = expectBoundaryError(
+  "Fehlende Radar-Textfunde in aktuellen Eigendaten werden verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: (() => {
+        const { textFindings, ...rest } = validOwnData.data.radar;
+        return rest;
+      })(),
+    },
+  }),
+);
+expect("Fehlende textFindings-Projektion bricht den vollständigen Export", invalidOwnDataMissingTextFindings.code === ERROR_CODES.INVALID_RESPONSE);
+
+const invalidOwnDataTextFindingShape = expectBoundaryError(
+  "Unvollständige Radar-Textfundzeile wird verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        textFindings: [(() => {
+          const { source_claim, ...rest } = validRadarTextFinding;
+          return rest;
+        })()],
+      },
+    },
+  }),
+);
+expect("Falsch geformte textFindings-Zeile bricht den vollständigen Export", invalidOwnDataTextFindingShape.code === ERROR_CODES.INVALID_RESPONSE);
+
+const invalidOwnDataTextFindingLeak = expectBoundaryError(
+  "Radar-Textfund mit Account-ID wird verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        textFindings: [{ ...validRadarTextFinding, account_id: "44444444-4444-4444-8444-444444444444" }],
+      },
+    },
+  }),
+);
+expect("Zusatzfeld in textFindings bricht den vollständigen Export", invalidOwnDataTextFindingLeak.code === ERROR_CODES.INVALID_RESPONSE);
 
 const validImportOperation = {
   operation_id: "11111111-1111-4111-8111-111111111111",
@@ -1355,14 +1437,13 @@ expect(
     && /Deno\.env\.get\("KD_ACCOUNT_DELETE_ALLOWLIST_SHA256"\)/.test(edgeFunctionSql),
 );
 expect(
-  "Self-Delete-UI erzwingt Export, frische Passwortbestätigung und lokale Trennung erst nach Servererfolg",
-  privateOpsUiSql.includes("runExportBeforeAccountDeletion")
-    && privateOpsUiSql.includes("runCurrentAccountDeletion")
-    && privateOpsUiSql.includes("!serverExportDone")
-    && privateOpsUiSql.includes("localFinalizationPending")
-    && privateOpsControllerSql.indexOf("await reauthenticate(password)") < privateOpsControllerSql.indexOf("await deleteRemote")
-    && privateOpsControllerSql.indexOf("await deleteRemote") < privateOpsControllerSql.indexOf("await finalizeLocal()")
-    && authDriverSql.includes("async function reauthenticate(passwort)"),
+  "Release-UI lässt den alten Self-Delete trotz vorhandenem Backendpfad vollständig aus",
+  !privateOpsUiSql.includes("runExportBeforeAccountDeletion")
+    && !privateOpsUiSql.includes("runCurrentAccountDeletion")
+    && !privateOpsUiSql.includes("deleteCurrentAccount")
+    && !privateOpsUiSql.includes('type="password"')
+    && !privateOpsUiSql.includes("Konto endgültig löschen")
+    && privateOpsUiSql.includes("ManuellerDatenrechteWeg"),
 );
 
 const privateGrantBlock = compatMigrationSql.match(/grant execute on function public\.kd_private_mark_operation_ttl[\s\S]*?to service_role;/i) || [];

@@ -1,0 +1,5 @@
+# Privatrelease: historische Download- und Demo-Beilagen fuehren nur noch zum
+# bestehenden Login. Cloudflare Pages wertet Redirects vor statischen Assets aus.
+/download / 302
+/download/* / 302
+/Programmdateien/System/* / 302

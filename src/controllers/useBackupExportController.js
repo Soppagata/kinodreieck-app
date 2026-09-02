@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { baueBackup } from "../lib/backup.js";
 import { runtimeConfig } from "../config/runtime.js";
+import {
+  ACCOUNT_EXPORT_RELEASE_CONTRACT,
+  istKontoExportVertragVollstaendig,
+} from "../lib/privatePilotOps.js";
 import { accountSelfService } from "../services/accountSelfService.js";
 import {
   K,
@@ -87,12 +91,13 @@ export async function ladeGebundeneSicherheitskopieHerunter({
   });
 }
 
-/* Der getrennte Kontoexport bleibt fail-closed. `getOwnData()` validiert die
-   vollständige Endpoint-Antwort bereits streng; hier wird zusätzlich die
-   erwartete, vollständige Top-Level-Projektion verlangt, bevor eine Datei
-   überhaupt erzeugt wird. */
+/* Der getrennte Kontoexport bleibt fail-closed. Vor dem ersten Request muss
+   der versionierte Releaseumfang exakt belegt sein. `getOwnData()` validiert
+   danach die Endpoint-Form streng; hier wird zusätzlich die erwartete
+   Top-Level-Projektion verlangt, bevor eine Datei überhaupt erzeugt wird. */
 export async function ladeVollstaendigenKontoexportHerunter({
   aktiviert = runtimeConfig.privateSelfServiceEnabled === true,
+  vollstaendigkeitsVertrag = ACCOUNT_EXPORT_RELEASE_CONTRACT,
   storageContext = captureStorageContext(),
   getValidatedOwnData = () => accountSelfService.getOwnData(),
   buildBackup = baueBackup,
@@ -102,6 +107,9 @@ export async function ladeVollstaendigenKontoexportHerunter({
 } = {}) {
   if (aktiviert !== true) {
     throw exportFehler("ACCOUNT_EXPORT_DISABLED", "Der vollständige Kontoexport ist nicht freigeschaltet.");
+  }
+  if (!istKontoExportVertragVollstaendig(vollstaendigkeitsVertrag)) {
+    throw exportFehler("ACCOUNT_EXPORT_SCOPE_UNPROVEN", "Der vollständige Umfang des Kontoexports ist für diesen Release nicht belegt.");
   }
   const remoteOwnData = await getValidatedOwnData();
   if (storageContext.isCurrent?.() !== true) {

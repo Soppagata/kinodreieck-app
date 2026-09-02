@@ -55,6 +55,7 @@ export function LocalDataSafety({ markiereExport = NICHT_MARKIEREN, controller =
       </h2>
       <p style={{ margin: "0 0 12px", color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
         Die Datei enthält den gebundenen persönlichen App-Stand in diesem Browser. Sie ist kein Server- oder Kontoexport.
+        Dieser Release bietet dafür keinen Restore- oder Reimportweg.
       </p>
       <button type="button" style={btnStyle(true)} disabled={laeuft} onClick={download}>
         {aktion === "download" ? "Sicherheitskopie wird erstellt …" : "Lokale Sicherheitskopie herunterladen"}

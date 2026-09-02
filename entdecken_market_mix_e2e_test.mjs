@@ -207,14 +207,22 @@ await checkAsync("Netflix-Prefixgrenze stoppt auch einen einzelnen übergroßen 
   assert.equal(adapter.telemetry().sourceRequests, 1);
 });
 
-await checkAsync("Accountloser Client liest Format 6 bodylos und unverändert", async () => {
+await checkAsync("Aktiver Client liest Format 6 authentifiziert, bodylos und unverändert", async () => {
   const calls = [];
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001", role: "member" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
   const service = createEntdeckenDailyFeedService({
     config: {
       entdeckenDailyFeedEnabled: true,
       supabaseUrl: "https://fixture.supabase.co",
       supabasePublishableKey: "fixture-public-key",
     },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => "fixture-token",
     currentDay: () => "2026-08-27",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
@@ -232,6 +240,8 @@ await checkAsync("Accountloser Client liest Format 6 bodylos und unverändert", 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].init.method, "GET");
   assert.equal("body" in calls[0].init, false);
+  assert.equal(calls[0].init.headers.Authorization, "Bearer fixture-token");
+  assert.equal(calls[0].init.headers.apikey, "fixture-public-key");
   assert.doesNotMatch(JSON.stringify(calls[0]), /profile|seen|gesehen|dienst|account/i);
 });
 

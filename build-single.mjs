@@ -29,13 +29,12 @@ html = html.replace(/<link rel="modulepreload"[^>]*>\s*/g, "");
    Prüfung unten auslösen → hier entfernen. */
 html = html.replace(/<link rel="manifest"[^>]*>\s*/g, "");
 html = html.replace(/<link rel="apple-touch-icon"[^>]*>\s*/g, "");
-/* Die öffentliche Demo-Beilage bleibt für alte/externe Web-Pakete ein
-   klassisches Sidecar. In der Doppelklick-Datei muss derselbe geprüfte Seed
-   aber VOR dem App-Bundle vorhanden sein: ein relativer script.src würde vom
-   Ablageort der heruntergeladenen HTML-Datei abhängen und ist kein
-   Einzeldatei-Vertrag. */
+/* Die Offline-Beilage liegt ausschließlich als Build-Fixture außerhalb von
+   public. In der Doppelklick-Datei muss derselbe geprüfte Seed VOR dem
+   App-Bundle vorhanden sein: ein relativer script.src würde vom Ablageort der
+   heruntergeladenen HTML-Datei abhängen und ist kein Einzeldatei-Vertrag. */
 const demoSeedQuelle = readFileSync(
-  join(ROOT, "public", "Programmdateien", "System", "demo_masterliste.js"),
+  join(ROOT, "tools", "fixtures", "demo_masterliste.js"),
   "utf8",
 );
 if (!/window\.__KD_DEMO_SEED__\s*=/.test(demoSeedQuelle)

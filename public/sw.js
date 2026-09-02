@@ -3,16 +3,20 @@
    - HTML/Navigation: network-first → neue Deploys (mit neuen Asset-Hashes) laden
      sofort; offline fällt es auf die zwischengespeicherte Shell zurück.
    - .json-Datendateien (programm.json, streaming_*.json — ungehasht, ändern sich
-     bei jedem Daten-Job): ebenfalls network-first. Cache-first würde sie nach dem
-     ersten Fetch dauerhaft einfrieren.
+     bei jedem Daten-Job): network-only. Geschuetzte Daten gehoeren weder in die
+     App-Shell noch in einen oeffentlich weiterlebenden Worker-Cache.
    - Statische Assets (content-hashed, immutable): cache-first, sonst holen+cachen.
-   Kein API-, Auth- oder Download-Cache. Fremde App-Caches (zum Beispiel der
-   getrennte Katalog-Fallback) werden beim Update nicht gelöscht.
+   Kein API-, Auth-, Download- oder Daten-Cache. Der Privatrelease loescht beim
+   Aktivieren auch alte getrennte Katalog-Fallbacks, damit frueher oeffentlich
+   lesbare Demo-/Livepayloads nicht hinter dem neuen Login fortbestehen.
    Cache-Name wird beim Online-Build an den Commit gebunden: jeder Deploy hat
    genau eine App-Shell, alte Shells werden beim Aktivieren entfernt. */
-const CACHE_PREFIX = "kd-shell-";
 const BUILD_VERSION = "__KD_BUILD_VERSION__";
 const CACHE = `kd-shell-v3-${BUILD_VERSION}`;
+const PRIVATE_RELEASE_CACHE_PREFIXES = Object.freeze([
+  "kd-shell-",
+  "kinodreieck-katalog-",
+]);
 /* Nutzerinitiierte Android-Diagnose: Diese eine markierte Anfrage darf das
    Netzwerk absichtlich nicht berühren. So wird nach einem erfolgreichen
    Online-Lauf geprüft, ob die aufgelöste Start-URL wirklich aus der App-Shell
@@ -41,7 +45,9 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE).map((k) => caches.delete(k)));
+    await Promise.all(keys.filter((k) => (
+      k !== CACHE && PRIVATE_RELEASE_CACHE_PREFIXES.some((prefix) => k.startsWith(prefix))
+    )).map((k) => caches.delete(k)));
     await self.clients.claim();
     const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     fenster.forEach((client) => client.postMessage({
@@ -63,6 +69,7 @@ self.addEventListener("fetch", (e) => {
   const istDaten = url.pathname.endsWith(".json"); // ungehashte Datendateien
   const istBuildMeta = url.pathname.endsWith("/build-meta.json");
   const istNetzwerkNur = istBuildMeta
+    || istDaten
     || /\/(?:api|auth|download)\//.test(url.pathname)
     || req.headers.has("authorization")
     || req.headers.has("apikey")
@@ -81,7 +88,7 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(fetch(req));
     return;
   }
-  if (istHTML || istDaten) {
+  if (istHTML) {
     e.respondWith((async () => {
       try {
         const res = await fetch(req);

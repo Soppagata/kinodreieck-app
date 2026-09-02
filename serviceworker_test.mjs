@@ -80,10 +80,10 @@ speicher.set("kinodreieck-katalog-v1", new FakeCache());
 let aktivierung;
 listeners.activate({ waitUntil(p) { aktivierung = Promise.resolve(p); } });
 await aktivierung;
-check("Activate löscht nur alte App-Shell-Caches",
+check("Activate löscht alte App-Shell-Caches und bewahrt nur den aktuellen Build",
   !speicher.has("kd-shell-v2-alt") && speicher.has(AKTUELLER_CACHE));
-check("Activate bewahrt den getrennten Katalog-Fallback",
-  speicher.has("kinodreieck-katalog-v1"));
+check("Activate entwertet den alten öffentlichen Katalog-Fallback",
+  !speicher.has("kinodreieck-katalog-v1"));
 check("Activate übernimmt Clients und meldet die aktive Build-Version",
   claimAufrufe === 1 && clientNachrichten.length === 1
   && clientNachrichten[0].type === "KD_BUILD_ACTIVATED"
@@ -94,11 +94,15 @@ const jsonReq = anfrage("https://kino.example/programm.json");
 await shell.put(jsonReq, new Response('{"stand":"alt"}'));
 fetchImpl = async () => new Response('{"stand":"neu"}', { status: 200 });
 let res = await fetchEvent(jsonReq);
-check("Aktuelle JSON-Daten sind network-first", (await res.json()).stand === "neu");
+check("Aktuelle JSON-Daten sind network-only", (await res.json()).stand === "neu");
+check("JSON-Antworten überschreiben keinen historischen Shell-Eintrag",
+  (await (await shell.match(jsonReq)).json()).stand === "alt");
 
 fetchImpl = async () => { throw new Error("offline"); };
-res = await fetchEvent(jsonReq);
-check("JSON fällt offline auf den letzten gültigen Stand zurück", (await res.json()).stand === "neu");
+let jsonOfflineFehler = null;
+try { await fetchEvent(jsonReq); } catch (error) { jsonOfflineFehler = error; }
+check("JSON fällt offline nicht auf einen alten öffentlichen Cache zurück",
+  jsonOfflineFehler?.message === "offline");
 
 const metaReq = anfrage("https://kino.example/build-meta.json?kd-check=1");
 await shell.put(metaReq, new Response('{"buildVersion":"alt"}'));

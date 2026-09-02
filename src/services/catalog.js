@@ -280,19 +280,12 @@ export function createCatalogService({ auth = authService, driver = authDriver }
     } catch (error) { throw normalizeBoundaryError(error, { source: "catalog", operation: "cache.discard" }); }
   },
   async loadDemo() {
-    const konto = await aktiveLiveFreigabe(auth, driver);
-    if (!konto) {
-      throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
-        source: "catalog", operation: "demo.load", reason: "remoteStorage",
-      });
-    }
-    const erwarteteKontoId = fordereGebundeneFreigabe(konto.id, "demo.load.before");
-    try {
-      const result = await ladeKatalogAsset("demo_seed", { erwarteteKontoId });
-      fordereGebundeneFreigabe(konto.id, "demo.load.after");
-      return result.payload;
-    }
-    catch (error) { throw katalogFehler(error, { source: "catalog", operation: "demo.load" }); }
+    /* PR-02 besitzt keinen ausgelieferten Demo-Bestand mehr. Die Methode bleibt
+       nur als fail-closed Kompatibilitaetsnaht fuer alten Clientcode erhalten
+       und endet vor Token-, HTTP- und Cachezugriff. */
+    throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
+      source: "catalog", operation: "demo.load", reason: "private-release-no-demo",
+    });
   },
   });
 }

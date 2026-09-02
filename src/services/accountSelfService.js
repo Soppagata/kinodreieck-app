@@ -67,6 +67,12 @@ const importRows = (value) => rowWithExactKeysAndTypes(
     created_at: (value) => iso8601TimestampWithOffset(value),
   },
 );
+const radarTextFindingRows = (value) => rows(value, [
+  "finding_id", "event_version_id", "text_target_id", "release_key", "title",
+  "target_type", "category", "event_type", "event_date", "region", "platform",
+  "season_number", "source_url", "source_domain", "source_title", "source_claim",
+  "checked_at", "created_at", "updated_at",
+]);
 
 export function validateOwnData(value) {
   if (!fixedObject(value) || value.ok !== true || value.schemaVersion !== 1 || !fixedObject(value.data)) {
@@ -76,7 +82,7 @@ export function validateOwnData(value) {
   if (!exactKeys(value.data, allowed)) {
     throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "account-self-service", operation: "own-data.validate", reason: "unknown-field" });
   }
-  const radarKeys = ["capabilities", "accountState", "subscriptions", "receipts", "shares", "operations", "shareOperations", "reviews", "importOperations"];
+  const radarKeys = ["capabilities", "accountState", "subscriptions", "receipts", "shares", "operations", "shareOperations", "reviews", "importOperations", "textFindings"];
   const radarCapabilitiesWithType = fixedObject(value.data.radar) && ((value.data.radar.capabilities === null) || (
     exactKeys(value.data.radar.capabilities, ["radar_unlimited", "radar_review", "radar_pilot", "updated_at"])
     && typeof value.data.radar.capabilities.radar_unlimited === "boolean"
@@ -106,6 +112,7 @@ export function validateOwnData(value) {
     && rows(value.data.radar.shareOperations, ["operation_id", "request_hash", "result", "created_at", "terminal_at", "expires_at"])
     && importRows(value.data.radar.importOperations)
     && rows(value.data.radar.reviews, ["review_id", "event_version_id", "decision", "reason", "source_id", "created_at"])
+    && radarTextFindingRows(value.data.radar.textFindings)
     && rows(value.data.retention, ["data_class", "retention_days", "purpose_bound", "purge_trigger"])
     && exactKeys(value.data.deletion, ["enabled", "lastStatus"])
     && typeof value.data.deletion.enabled === "boolean"
