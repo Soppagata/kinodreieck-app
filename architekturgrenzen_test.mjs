@@ -41,6 +41,8 @@ const runDeployEnvCheck = (overrides) => {
       VITE_SUPABASE_URL: "https://projekt.supabase.co/",
       VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xxxxxxxxxxxxxxxxxxxx",
       VITE_AI_ENDPOINT_NAME: "ai-v1",
+      VITE_PRIVATE_MAIL_ENABLED: "true",
+      VITE_PRIVATE_MAIL_ENDPOINT_NAME: "private-mail-request",
       VITE_BUILD_VERSION: "abc123",
       ...overrides,
     },
