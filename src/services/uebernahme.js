@@ -317,17 +317,25 @@ export async function kontoUebernehmen(_inventurWerte, { accountBindung = null }
    `kontoUebernehmen` bindet davor den bytegenauen Gast-Rückholpunkt und lädt nur
    Remote→lokal; der frühere Gaststand wird weder gemergt noch hochgeladen. */
 export async function kontoSicherAutomatischLaden(accountId, deps = {}) {
-  const inventur = deps.inventur || inventurLaden;
-  const inv = await inventur(accountId);
-  const kontoLaden = deps.kontoLaden
-    || ((werte) => kontoUebernehmen(werte, { accountBindung: inv.accountBindung }));
-  const bestaetigen = deps.bestaetigen
-    || ((id) => uebernahmeBestaetigen(id, inv.accountBindung));
-  if (inv?.ok === false || inv?.erreichbar === false) {
-    throw new Error("Kontostand ist gerade nicht erreichbar.");
+  try {
+    const inventur = deps.inventur || inventurLaden;
+    const inv = await inventur(accountId);
+    const kontoLaden = deps.kontoLaden
+      || ((werte) => kontoUebernehmen(werte, { accountBindung: inv.accountBindung }));
+    const bestaetigen = deps.bestaetigen
+      || ((id) => uebernahmeBestaetigen(id, inv.accountBindung));
+    if (inv?.ok === false || inv?.erreichbar === false) {
+      throw new Error("Kontostand ist gerade nicht erreichbar.");
+    }
+    const geladen = await kontoLaden(inv.lokaleWerte);
+    if (geladen?.ok === false) throw new Error("Kontostand konnte nicht geladen werden.");
+    await bestaetigen(accountId);
+    return { automatisch: true, grund: "konto-geladen" };
+  } catch (error) {
+    if (error?.code === "PERSONAL_DATA_PRIVACY_LOCKED") throw error;
+    const sicher = new Error("Der Kontostand konnte nicht sicher geladen werden. Bitte versuche es erneut.");
+    sicher.code = "ACCOUNT_LOAD_FAILED";
+    sicher.cause = error;
+    throw sicher;
   }
-  const geladen = await kontoLaden(inv.lokaleWerte);
-  if (geladen?.ok === false) throw new Error("Kontostand konnte nicht geladen werden.");
-  await bestaetigen(accountId);
-  return { automatisch: true, grund: "konto-geladen" };
 }

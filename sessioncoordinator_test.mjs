@@ -5,6 +5,7 @@
 
 const { createSessionCoordinator, STORAGE_SESSION_STATES } =
   await import("./src/services/sessionCoordinator.js");
+const { kontoSicherAutomatischLaden } = await import("./src/services/uebernahme.js");
 
 let ok = 0;
 function check(name, value) {
@@ -43,6 +44,7 @@ function aufbau({
   initializeThrows = false,
   hasOpenChanges = false,
   maskedStart = false,
+  autoLoad = null,
   syncStatus = { pending: [], conflict: [], zuGross: [] },
 } = {}) {
   let snapshot = start;
@@ -124,6 +126,13 @@ function aufbau({
     storage,
     adoption: {
       isConfirmed: (id) => confirmed.includes(id),
+      loadAccount: autoLoad
+        ? (id) => autoLoad(id, {
+          calls, confirmed, storage,
+          setAuthSnapshot(next) { snapshot = next; },
+          setOwner(next) { owner = next; },
+        })
+        : undefined,
       restoreGuest: (id) => {
         calls.push(["restore", id]);
         if (restoreThrows) throw new Error("gaststand-quota");
@@ -138,6 +147,126 @@ function aufbau({
     },
   });
   return { coordinator, calls, storage, auth };
+}
+
+{
+  const confirmed = [];
+  const a = aufbau({
+    start: session(), signInTo: session("konto-A"), confirmed,
+    autoLoad: async (id, context) => {
+      context.calls.push(["auto-load", id]);
+      context.setOwner(id);
+      confirmed.push(id);
+      await context.storage.confirm(id);
+    },
+  });
+  const angemeldet = await a.coordinator.signIn("a", "pw");
+  check("Login lädt den gebundenen Remote-Kontostand und verlässt awaiting-adoption",
+    angemeldet.account?.id === "konto-A"
+    && JSON.stringify(a.calls) === JSON.stringify([
+      ["prepare", "konto-A"], ["auto-load", "konto-A"], ["confirm", "konto-A"],
+    ])
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.READY);
+}
+
+{
+  let fehler;
+  try {
+    await kontoSicherAutomatischLaden("konto-A", {
+      inventur: async () => { throw new Error("synthetischer-rohfehler-mit-internen-details"); },
+    });
+  } catch (error) { fehler = error; }
+  check("Automatischer Kontolader gibt bei echten Fehlern nur eine wiederholbare neutrale Meldung weiter",
+    fehler?.code === "ACCOUNT_LOAD_FAILED"
+    && /erneut/.test(fehler.message)
+    && !/internen-details/.test(fehler.message));
+}
+
+{
+  const confirmed = [];
+  let versuche = 0;
+  const a = aufbau({
+    start: session(), signInTo: session("konto-A"), refreshTo: session("konto-A"), confirmed,
+    autoLoad: async (id, context) => {
+      versuche++;
+      context.calls.push(["auto-load", id]);
+      if (versuche === 1) {
+        const error = new Error("neutral");
+        error.code = "ACCOUNT_LOAD_FAILED";
+        throw error;
+      }
+      context.setOwner(id);
+      confirmed.push(id);
+      await context.storage.confirm(id);
+    },
+  });
+  const ersterFehler = await rejects(a.coordinator.signIn("a", "pw"));
+  const zwischenstand = a.coordinator.getSnapshot().account?.id === "konto-A"
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.AWAITING_ADOPTION;
+  await a.coordinator.refresh();
+  check("Fehlgeschlagener Erstdownload bleibt fail-closed und ist ohne neue Anmeldung wiederholbar",
+    ersterFehler && zwischenstand && versuche === 2
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.READY);
+}
+
+{
+  const confirmed = [];
+  const a = aufbau({
+    initializeTo: session("konto-A"), confirmed,
+    autoLoad: async (id, context) => {
+      context.calls.push(["auto-load", id]);
+      context.setOwner(id);
+      confirmed.push(id);
+      await context.storage.confirm(id);
+    },
+  });
+  await a.coordinator.initialize();
+  check("Gespeicherte Sitzung setzt denselben sicheren Kontolader beim Reload fort",
+    JSON.stringify(a.calls) === JSON.stringify([
+      ["prepare", "konto-A"], ["auto-load", "konto-A"], ["confirm", "konto-A"],
+    ])
+    && a.coordinator.getSnapshot().account?.id === "konto-A"
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.READY);
+}
+
+{
+  const confirmed = [];
+  let ladeAufrufe = 0;
+  const a = aufbau({
+    start: session("konto-A"), refreshTo: session("konto-A"), confirmed,
+    autoLoad: async (id, context) => {
+      ladeAufrufe++;
+      context.calls.push(["auto-load", id]);
+      await Promise.resolve();
+      context.setOwner(id);
+      confirmed.push(id);
+      await context.storage.confirm(id);
+    },
+  });
+  await Promise.all([a.coordinator.refresh(), a.coordinator.refresh()]);
+  check("Parallele Wiederaufnahme startet die Konto-Adoption nur einmal",
+    ladeAufrufe === 1
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.READY);
+}
+
+{
+  const confirmed = [];
+  const a = aufbau({
+    start: session(), signInTo: session("konto-A"), confirmed,
+    autoLoad: async (id, context) => {
+      context.calls.push(["auto-load", id]);
+      context.setOwner(id);
+      confirmed.push(id);
+      await context.storage.confirm(id);
+      context.setAuthSnapshot(session("konto-B"));
+    },
+  });
+  const geworfen = await rejects(a.coordinator.signIn("a", "pw"));
+  check("Kontowechsel während des Downloads veröffentlicht nie den Stand des alten Kontos",
+    geworfen
+    && a.coordinator.getSnapshot().mode === "guest"
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.PRIVACY_LOCKED
+    && a.calls.at(-1)?.[0] === "mask");
 }
 
 {

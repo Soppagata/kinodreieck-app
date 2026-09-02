@@ -3,7 +3,6 @@ import { Logo } from "./ui.jsx";
 import { sessionCoordinator } from "../services/sessionCoordinator.js";
 import { storageOwnerKennung, subscribeStorageContext, K } from "../services/storage.js";
 import { errorText } from "../services/errors.js";
-import { APP_ENVIRONMENTS, runtimeConfig } from "../config/runtime.js";
 import {
   EINSTIEG_VERSION,
   START_WAHL_VERSION,
@@ -12,15 +11,6 @@ import {
 } from "../controllers/onboardingController.js";
 
 const EINSTIEGS_LOGIN_OEFFNEN = "kd:einstieg:login-oeffnen";
-
-export function onlineGastGesperrt(
-  appEnvironment = runtimeConfig.appEnvironment,
-  protokoll = globalThis.location?.protocol || globalThis.window?.location?.protocol || "",
-) {
-  const onlineBuild = appEnvironment === APP_ENVIRONMENTS.STAGING
-    || appEnvironment === APP_ENVIRONMENTS.PRODUCTION;
-  return onlineBuild && ["http:", "https:"].includes(String(protokoll).toLowerCase());
-}
 
 export function oeffneEinstiegsLogin() {
   if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return false;
@@ -32,7 +22,7 @@ export function oeffneEinstiegsLogin() {
    Erst die bestätigte Kontobindung hängt die persönliche App wieder ein. */
 export function EinstiegsGate({ children }) {
   const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
-  const [offen, setOffen] = useState(() => onlineGastGesperrt() || einstiegNoetig(session));
+  const [offen, setOffen] = useState(() => einstiegNoetig(session));
   const [storageState, setStorageState] = useState(() => sessionCoordinator.getStorageState());
   const [benutzer, setBenutzer] = useState("");
   const [passwort, setPasswort] = useState("");
@@ -63,15 +53,14 @@ export function EinstiegsGate({ children }) {
   }, []);
   const konto = session?.mode === "account";
   const freigegeben = konto && session.state === "ready" && session.capabilities?.remoteStorage === true;
-  const onlineLoginPflicht = onlineGastGesperrt();
 
   useEffect(() => { if (legalOffen) legalRef.current?.focus(); }, [legalOffen]);
 
   if (konto && storageState === "account-ready") return <div key={storageOwnerKennung()}>{children}</div>;
-  if (!konto && !onlineLoginPflicht && !offen && storageState === "guest") return <div key="local">{children}</div>;
+  if (!konto && !offen && storageState === "guest") return <div key="local">{children}</div>;
 
   const ohneKonto = () => {
-    if (onlineLoginPflicht || loginLaeuftRef.current || konto) return;
+    if (loginLaeuftRef.current || konto) return;
     try {
       localStorage.setItem(K.start, "clean");
       localStorage.setItem(K.startVersion, START_WAHL_VERSION);
@@ -87,8 +76,23 @@ export function EinstiegsGate({ children }) {
     loginLaeuftRef.current = true;
     setLaeuft(true); setFehler("");
     try { await sessionCoordinator.signIn(benutzer, passwort); setPasswort(""); }
-    catch (error) { setFehler(errorText(error)); }
+    catch (error) {
+      setFehler(errorText(error));
+      if (error?.code === "ACCOUNT_LOAD_FAILED") {
+        setFehler("Der Kontostand konnte nicht sicher geladen werden. Bitte versuche es erneut.");
+      }
+    }
     finally { loginLaeuftRef.current = false; setLaeuft(false); }
+  };
+  const kontoLadenWiederholen = async () => {
+    if (laeuft) return;
+    setLaeuft(true); setFehler("");
+    try { await sessionCoordinator.refresh(); }
+    catch (error) {
+      setFehler(error?.code === "PERSONAL_DATA_PRIVACY_LOCKED"
+        ? "Der Kontostand konnte nicht sicher geladen werden. Persönliche Daten bleiben geschützt. Bitte versuche es erneut."
+        : "Der Kontostand konnte nicht sicher geladen werden. Bitte versuche es erneut.");
+    } finally { setLaeuft(false); }
   };
   const abmelden = async () => {
     if (laeuft) return;
@@ -108,10 +112,11 @@ export function EinstiegsGate({ children }) {
               <label>Passwort<input type="password" value={passwort} onChange={(e) => setPasswort(e.target.value)} autoComplete="current-password" required /></label>
               <button className="kd-primary" type="submit" disabled={laeuft || !benutzer || !passwort}>{laeuft ? "Meldet an …" : "Anmelden"}</button>
             </form>
-            {!onlineLoginPflicht && <button className="kd-secondary kd-entry-skip" type="button" onClick={ohneKonto} disabled={laeuft}>Ohne Konto fortfahren</button>}
+            <button className="kd-secondary kd-entry-skip" type="button" onClick={ohneKonto} disabled={laeuft}>Ohne Konto fortfahren</button>
           </> : <>
             <p role="status">{laeuft ? "Kontostand wird geladen …" : !freigegeben ? "Angemeldet. Der Kontozugriff ist derzeit nicht freigegeben. Persönliche Daten bleiben geschützt." : "Angemeldet. Der Kontostand ist noch nicht verfügbar."}</p>
             {!freigegeben && <button className="kd-primary" disabled={laeuft} onClick={() => sessionCoordinator.refresh().catch(() => setFehler("Die Kontofreigabe konnte nicht geprüft werden."))}>Freigabe erneut prüfen</button>}
+            {freigegeben && storageState !== "account-ready" && <button className="kd-primary" disabled={laeuft} onClick={kontoLadenWiederholen}>Kontostand erneut laden</button>}
             <button className="kd-secondary kd-entry-skip" disabled={laeuft} onClick={abmelden}>Abmelden</button>
           </>}
           {!konto && laeuft && <p role="status">Anmeldung läuft …</p>}

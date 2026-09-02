@@ -14,7 +14,9 @@ const sources = {
     let storageState = "guest";
     const listeners = new Set();
     export const harness = {
-      calls: 0, login: async () => { throw new Error("synthetic-login-failure"); },
+      calls: 0, refreshCalls: 0,
+      login: async () => { throw new Error("synthetic-login-failure"); },
+      refresh: async () => {},
       set(next, state) { session = next; storageState = state; for (const f of listeners) f(next); },
     };
     export const sessionCoordinator = {
@@ -22,7 +24,7 @@ const sources = {
       subscribe(f) { listeners.add(f); return () => listeners.delete(f); },
       signIn(...args) { harness.calls++; return harness.login(...args); },
       async signOut() { harness.set({ mode: "guest", state: "ready" }, "guest"); },
-      async refresh() {},
+      refresh(...args) { harness.refreshCalls++; return harness.refresh(...args); },
     };
   `,
   storage: `
@@ -80,6 +82,8 @@ async function mount({
   localStorage.clear();
   for (const [key, value] of Object.entries(storage)) localStorage.setItem(key, value);
   harness.calls = 0;
+  harness.refreshCalls = 0;
+  harness.refresh = async () => {};
   runtimeHarness.set(environment);
   harness.set(session, storageState);
   root = createRoot(document.getElementById("root"));
@@ -124,14 +128,33 @@ for (const environment of ["staging", "production"]) {
   await mount({
     environment,
     url: `https://${environment}.kinodreieck.test/`,
-    storage: { "kd:master": gastMasterOnline, "kd:einstieg": abgeschlossenerGastmarker },
   });
-  check(`${environment}: alter Gastmarker öffnet ausschließlich den Login`, () => {
+  check(`${environment}: frischer Online-Gast sieht zuerst ausschließlich den Minimal-Login`, () => {
     assert.ok(document.querySelector(".kd-entry-login"));
     assert.ok(!document.querySelector("[data-child]"));
-    assert.equal(button("Ohne Konto fortfahren"), undefined);
+    assert.ok(button("Ohne Konto fortfahren"));
+    assert.equal(localStorage.getItem("kd:master"), null);
+    assert.equal(localStorage.getItem("kd:einstieg"), null);
+  });
+  await click(button("Ohne Konto fortfahren"));
+  check(`${environment}: bewusster Gastklick öffnet nur den bestehenden lokalen Stand`, () => {
+    assert.ok(document.querySelector("[data-child]"));
+    assert.equal(localStorage.getItem("kd:master"), null);
+    assert.equal(localStorage.getItem("kd:start"), "clean");
+    assert.equal(localStorage.getItem("kd:start-version"), "local-v1");
+    assert.equal(JSON.parse(localStorage.getItem("kd:einstieg")).weg, "gast");
+  });
+  const bestaetigteWahl = {
+    "kd:master": gastMasterOnline,
+    "kd:start": "clean",
+    "kd:start-version": "local-v1",
+    "kd:einstieg": abgeschlossenerGastmarker,
+  };
+  await mount({ environment, url: `https://${environment}.kinodreieck.test/`, storage: bestaetigteWahl });
+  check(`${environment}: bestätigter Localmodus überlebt den Reload ohne erneuten Login-Gate`, () => {
+    assert.ok(document.querySelector("[data-child]"));
+    assert.ok(!document.querySelector(".kd-entry-login"));
     assert.equal(localStorage.getItem("kd:master"), gastMasterOnline);
-    assert.equal(localStorage.getItem("kd:einstieg"), abgeschlossenerGastmarker);
   });
 }
 
@@ -194,10 +217,36 @@ await act(async () => harness.set({ mode: "account", state: "ready", account: { 
 check("Noch blockierter Kontoübergang zeigt weder Gastdaten noch Erfolg", () => {
   assert.ok(!document.querySelector("[data-child]"));
   assert.match(document.body.textContent, /Kontostand ist noch nicht verfügbar/);
+  assert.ok(button("Kontostand erneut laden"));
   assert.doesNotMatch(document.body.textContent, /übernehmen|zusammenführen|importieren/i);
 });
-await act(async () => harness.set({ mode: "account", state: "ready", account: { id: "test" }, capabilities: { remoteStorage: true } }, "account-ready"));
-check("Bereits sicher gebundenes Konto erhält die bestehende App", () => assert.ok(document.querySelector("[data-child]")));
+harness.refresh = async () => harness.set(
+  { mode: "account", state: "ready", account: { id: "test" }, capabilities: { remoteStorage: true } },
+  "account-ready",
+);
+await click(button("Kontostand erneut laden"));
+check("Wiederholter sicherer Ladevorgang verlässt awaiting-adoption und zeigt die App", () => {
+  assert.equal(harness.refreshCalls, 1);
+  assert.ok(document.querySelector("[data-child]"));
+});
+
+await mount({
+  session: { mode: "account", state: "ready", account: { id: "test" }, capabilities: { remoteStorage: true } },
+  storageState: "account-awaiting-adoption",
+});
+harness.refresh = async () => {
+  const error = new Error("synthetic-private-remote-payload");
+  error.code = "ACCOUNT_LOAD_FAILED";
+  throw error;
+};
+await click(button("Kontostand erneut laden"));
+check("Fehlgeschlagenes Nachladen bleibt ehrlich, neutral und wiederholbar", () => {
+  assert.equal(harness.refreshCalls, 1);
+  assert.match(document.querySelector('[role="alert"]').textContent, /nicht sicher geladen/);
+  assert.doesNotMatch(document.body.textContent, /synthetic-private-remote-payload/);
+  assert.ok(button("Kontostand erneut laden"));
+  assert.ok(!document.querySelector("[data-child]"));
+});
 await act(async () => root.unmount());
 dom.window.close();
 console.log(`private_release_login_test: ${checks} Checks bestanden (nur Mocks).`);

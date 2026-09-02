@@ -34,7 +34,8 @@ import {
   warteAccountTransitionZaun,
 } from "./storage.js";
 import {
-  gaststandNachKontoAbmeldung, istUebernommen, quarantaeneKontodatenNachAbmeldung,
+  gaststandNachKontoAbmeldung, istUebernommen, kontoSicherAutomatischLaden,
+  quarantaeneKontodatenNachAbmeldung,
 } from "./uebernahme.js";
 import { ACCT_KEYS } from "../lib/accountStorageKeys.js";
 import { AUTH_SESSION_KEY } from "../lib/authDriver.js";
@@ -76,6 +77,7 @@ export function createSessionCoordinator({
   },
   adoption = {
     isConfirmed: istUebernommen,
+    loadAccount: kontoSicherAutomatischLaden,
     restoreGuest: gaststandNachKontoAbmeldung,
     quarantine: quarantaeneKontodatenNachAbmeldung,
   },
@@ -297,7 +299,34 @@ export function createSessionCoordinator({
 
     if (storage.prepare.length >= 2) storage.prepare(id, { remoteStorage: true });
     else storage.prepare(id);
-    if (!isConfirmed(id)) return STORAGE_SESSION_STATES.AWAITING_ADOPTION;
+    if (!isConfirmed(id)) {
+      if (typeof adoption.loadAccount !== "function") {
+        return STORAGE_SESSION_STATES.AWAITING_ADOPTION;
+      }
+      try {
+        await adoption.loadAccount(id);
+      } catch (error) {
+        /* Auth ist bereits erfolgreich. Die Konto-Sitzung bleibt sichtbar,
+           aber der App-Baum bleibt bis zu einem erneuten sicheren Ladeversuch
+           ausgehängt; der Gaststand wird dadurch nie als Kontostand gezeigt. */
+        if (accountId(auth.getSnapshot?.()) === id) publish(session);
+        throw error;
+      }
+      const aktuelleAuthSession = auth.getSnapshot?.();
+      if (accountId(aktuelleAuthSession) !== id || !remoteStorageFreigegeben(aktuelleAuthSession)) {
+        storage.mask?.(); emit();
+        const error = new Error("Der Kontokontext hat sich während des Ladens geändert.");
+        error.code = "ACCOUNT_CONTEXT_CHANGED";
+        throw error;
+      }
+      if (!isConfirmed(id) || !storage.active?.() || storage.preparedAccountId?.() !== id) {
+        const error = new Error("Der Kontostand konnte nicht sicher aktiviert werden.");
+        error.code = "ACCOUNT_LOAD_FAILED";
+        publish(session);
+        throw error;
+      }
+      return STORAGE_SESSION_STATES.READY;
+    }
 
     if (storage.confirm.length >= 2) await storage.confirm(id, { remoteStorage: true });
     else await storage.confirm(id);
