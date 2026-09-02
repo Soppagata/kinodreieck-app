@@ -378,13 +378,17 @@ test("Requesthash und Subject-Bucket binden die serverseitige Kontoidentitaet", 
   assert.notEqual(first.p_subject_bucket_sha256, other.p_subject_bucket_sha256);
 });
 
-test("Runtime integriert nur Claims/User/Access und die beiden exakten RPCs, aber keinen Provider", () => {
+test("Runtime bindet Claims/User/Access, die exakten RPCs und den serverseitigen Resend-Adapter", () => {
   const source = fs.readFileSync("supabase/functions/private-mail-request/index.ts", "utf8");
   assert.match(source, /getClaims\(token\)/);
   assert.match(source, /getUser\(token\)/);
   assert.match(source, /\.from\("kd_account_access"\)/);
   assert.match(source, /\.rpc\("kd_private_mail_request_begin", args\)/);
   assert.match(source, /\.rpc\("kd_private_mail_request_finish", args\)/);
-  assert.match(source, /transport:\s*null/);
-  assert.doesNotMatch(source, /resend|api\.resend|fetch\(/i);
+  assert.match(source, /createResendPrivateMailTransport\(\{/);
+  assert.match(source, /Deno\.env\.get\("RESEND_API_KEY"\)/);
+  assert.match(source, /Deno\.env\.get\("KD_PRIVATE_MAIL_SENDER"\)/);
+  assert.match(source, /Deno\.env\.get\("KD_PRIVATE_MAIL_RECIPIENT"\)/);
+  assert.doesNotMatch(source, /@(?:hotmail|kinodreieck)/i);
+  assert.doesNotMatch(source, /api\.resend|fetch\(/i);
 });
