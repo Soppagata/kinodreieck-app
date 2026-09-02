@@ -52,8 +52,8 @@ check("Lokale Demo bringt auch ohne Konto/Netz eine echte Filmbasis mit",
 const serviceSource = fs.readFileSync("src/services/catalog.js", "utf8");
 const appSource = fs.readFileSync("src/App.jsx", "utf8");
 const controllerSource = fs.readFileSync("src/controllers/catalogController.js", "utf8");
-check("Aktiver Demo-Service lädt demo_seed über die Kataloggrenze",
-  /ladeKatalogAsset\("demo_seed"\)/.test(serviceSource));
+check("Aktiver Demo-Service lädt demo_seed nur mit gebundener Konto-ID",
+  /ladeKatalogAsset\("demo_seed",\s*\{\s*erwarteteKontoId\s*\}\)/.test(serviceSource));
 check("Aktiver Demo-Service importiert den kd_store-Adapter nicht mehr",
   !/catalogPublic|ladeDemoBlobs|kd_store/.test(serviceSource));
 check("Online und Datei werden in genau dieselbe App-Ladungsform projiziert",
