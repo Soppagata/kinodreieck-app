@@ -535,8 +535,8 @@ check("Onboarding-Reset verwendet das PersonalDataRegistry statt einer zweiten 1
 check("Datenhaltende Controller verwenden die isolierten Projektionen",
   /lib\/libraryProjection\.js/.test(libraryController)
   && /lib\/catalogProjection\.js/.test(catalogController));
-check("App.jsx liegt innerhalb der E14-Zeilenobergrenze von 2215",
-  app.split("\n").length <= 2215);
+check("App.jsx bleibt inklusive der späteren Login-Integration unter 2240 Zeilen",
+  app.split("\n").length <= 2240);
 check("Master- und Artikelimport persistieren keine ungenutzten Rohdaten-Snapshots",
   !/kd:import:vorher/.test(app)
   && !/schreibeImportSnapshot/.test(app)
