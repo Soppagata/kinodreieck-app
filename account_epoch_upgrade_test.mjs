@@ -131,8 +131,11 @@ function check(name, pruefung) {
 
 {
   const r = szenario({ confirmed: false });
-  check("Unbestätigter Same-Owner-Bestand bleibt im Übernahme-Assistenten und erhält keine Epoch",
-    !r.error && r.storageState === "account-awaiting-adoption"
+  check("Unbestätigter Same-Owner-Bestand bleibt bei gesperrtem Remote-Laden geschützt und erhält keine Epoch",
+    r.error?.code === "ACCOUNT_LOAD_FAILED"
+      && /erneut/.test(r.error.message) && !/Netz im Upgrade-Test/.test(r.error.message)
+      && r.auth?.account?.id === "konto-A"
+      && r.storageState === "account-awaiting-adoption"
       && r.epochRaw === null && r.bindingRaw === null && r.transitionRaw === null);
 }
 

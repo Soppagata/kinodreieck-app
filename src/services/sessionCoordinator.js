@@ -392,7 +392,18 @@ export function createSessionCoordinator({
         await align(session, { pullWhenReady: true });
         return publish(session);
       } catch (error) {
-        if (storage.cacheOwner?.() || storage.currentTransition?.()) {
+        /* Ein neutral gemeldeter Remote-Ladefehler vor der Adoption hat weder
+           Owner noch Haupttöpfe verändert. `align` hat die Konto-Sitzung
+           bereits veröffentlicht; awaiting-adoption hängt den App-Baum aus
+           und bleibt über refresh wiederholbar. Echte Privacy-/Markerfehler
+           werden weiterhin hart maskiert. */
+        const fehlerKontoId = accountId(auth.getSnapshot?.());
+        const fehlerOwner = String(storage.cacheOwner?.() || "");
+        const fehlerTransition = storage.currentTransition?.() || null;
+        const wiederholbarerLadefehler = error?.code === "ACCOUNT_LOAD_FAILED"
+          && !!fehlerKontoId && (!fehlerOwner || fehlerOwner === fehlerKontoId)
+          && !fehlerTransition && !isConfirmed(fehlerKontoId);
+        if (!wiederholbarerLadefehler && (fehlerOwner || fehlerTransition)) {
           storage.mask?.(); emit();
         }
         throw error;
