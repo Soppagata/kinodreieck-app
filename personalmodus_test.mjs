@@ -4,6 +4,14 @@ import { readFileSync } from "node:fs";
 import { TextEncoder } from "node:util";
 import { JSDOM } from "jsdom";
 
+/* Der historische Volltest setzt den entfernten öffentlichen Demo-Einstieg
+   voraus. Im Privat-Release prüft der Standardlauf stattdessen den fertigen
+   Single-File-Localmodus mit echten lokalen Inhalten und ohne Netzverkehr. */
+if (process.env.KD_LEGACY_PUBLIC_PERSONALMODE !== "1") {
+  await import("./private_release_personalmodus_test.mjs");
+  throw new Error("Der private Personalmodus-Test wurde ohne Abschluss verlassen.");
+}
+
 const pfad = process.argv[2] || "dist-single/Kinodreieck.html";
 const htmlRoh = readFileSync(pfad, "utf8");
 /* Der Doppelklick-Build ist absichtlich ohne Online-Runtime konfiguriert. Die
