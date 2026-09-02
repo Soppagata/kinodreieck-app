@@ -55,6 +55,8 @@ const config = createRuntimeConfig({
   VITE_SUPABASE_URL: "https://projekt.supabase.co/",
   VITE_SUPABASE_PUBLISHABLE_KEY: " sb_publishable_test ",
   VITE_AI_ENDPOINT_NAME: "ai-v1",
+  VITE_PRIVATE_MAIL_ENABLED: "true",
+  VITE_PRIVATE_MAIL_ENDPOINT_NAME: "private-mail",
   VITE_BUILD_VERSION: "abc123",
 });
   check("Runtime-Konfiguration enthält den vollständigen öffentlichen Vertrag",
@@ -63,6 +65,8 @@ const config = createRuntimeConfig({
     && config.supabaseUrl === "https://projekt.supabase.co"
     && config.supabasePublishableKey === "sb_publishable_test"
     && config.aiEndpointName === "ai-v1"
+    && config.privateMailEnabled === true
+    && config.privateMailEndpointName === "private-mail"
     && config.radarPilotClientEnabled === false
     && config.entdeckenDailyFeedEnabled === false
     && config.privateSelfServiceEnabled === false
@@ -96,6 +100,31 @@ const privateServiceWhitespace = createRuntimeConfig({ VITE_PRIVATE_SELF_SERVICE
 check("Self-Service-Flag bleibt bei abweichendem Wert false", privateServiceWhitespace.privateSelfServiceEnabled === false);
 const privateServiceTrue = createRuntimeConfig({ VITE_PRIVATE_SELF_SERVICE_ENABLED: "true" });
 check("Self-Service-Flag wird nur bei exakt 'true' true", privateServiceTrue.privateSelfServiceEnabled === true);
+
+const privateMailMissing = createRuntimeConfig({});
+check("Private-Mail bleibt ohne Flag und Endpoint geschlossen",
+  privateMailMissing.privateMailEnabled === false && privateMailMissing.privateMailEndpointName === "");
+const privateMailWrongCase = createRuntimeConfig({
+  VITE_PRIVATE_MAIL_ENABLED: "TRUE",
+  VITE_PRIVATE_MAIL_ENDPOINT_NAME: "private-mail",
+});
+check("Private-Mail-Flag wird nur bei exakt 'true' aktiviert", privateMailWrongCase.privateMailEnabled === false);
+const privateMailInvalidEndpoint = createRuntimeConfig({
+  VITE_PRIVATE_MAIL_ENABLED: "true",
+  VITE_PRIVATE_MAIL_ENDPOINT_NAME: "../private-mail",
+});
+check("Aktives Private-Mail verlangt einen sicheren expliziten Endpointnamen",
+  privateMailInvalidEndpoint.privateMailEnabled === true
+  && privateMailInvalidEndpoint.privateMailEndpointName === ""
+  && !validateRuntimeConfig(privateMailInvalidEndpoint).ok);
+const privateMailReady = createRuntimeConfig({
+  VITE_PRIVATE_MAIL_ENABLED: "true",
+  VITE_PRIVATE_MAIL_ENDPOINT_NAME: "private-mail",
+});
+check("Private-Mail ist nur mit exakt wahrem Flag und gültigem Endpoint konfigurierbar",
+  privateMailReady.privateMailEnabled === true
+  && privateMailReady.privateMailEndpointName === "private-mail"
+  && validateRuntimeConfig(privateMailReady).ok);
 
 const privateServiceDeployCheck = runDeployEnvCheck({
   VITE_PRIVATE_SELF_SERVICE_ENABLED: "false",

@@ -16,6 +16,11 @@ import {
 } from "../lib/localDiagnostics.js";
 import { T, btnStyle } from "../lib/tokens.js";
 import { runtimeConfig } from "../config/runtime.js";
+import {
+  FeedbackOhneNamensangabe,
+  Kontoloeschanfrage,
+  PrivateMailPrivacyNote,
+} from "./PrivateMailRequests.jsx";
 
 function kontoExportIstFreigegeben({
   accountActive,
@@ -73,6 +78,8 @@ export function DatenschutzUebersicht({
         </ul>
       </details>
       <ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />
+      <PrivateMailPrivacyNote config={config} />
+      <FeedbackOhneNamensangabe accountActive={accountActive} config={config} />
     </div>
   );
 }
@@ -225,6 +232,7 @@ export function KontoDatenrechte({
           {exportStatus && <p role="status" style={{ margin: 0, color: T.rauch, fontSize: 12 }}>{exportStatus}</p>}
         </section>
       )}
+      <Kontoloeschanfrage accountActive={accountActive} config={config} />
     </div>
   );
 }

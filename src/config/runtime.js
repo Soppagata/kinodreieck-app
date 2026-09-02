@@ -16,8 +16,10 @@ const STANDARD = Object.freeze({
   supabasePublishableKey: "",
   aiEndpointName: "ai-task",
   accountSelfServiceEndpointName: "account-self-service",
+  privateMailEndpointName: "",
   privateSelfServiceEnabled: false,
   accountDeleteEnabled: false,
+  privateMailEnabled: false,
   radarPilotClientEnabled: false,
   entdeckenDailyFeedEnabled: false,
   buildVersion: "dev",
@@ -34,6 +36,7 @@ function endpoint(wert) {
 export function createRuntimeConfig(env = {}) {
   const aiWert = text(env.VITE_AI_ENDPOINT_NAME);
   const selfServiceWert = text(env.VITE_ACCOUNT_SELF_SERVICE_ENDPOINT_NAME);
+  const privateMailWert = text(env.VITE_PRIVATE_MAIL_ENDPOINT_NAME);
   return Object.freeze({
     appEnvironment: text(env.VITE_APP_ENV) || STANDARD.appEnvironment,
     appUrl: url(env.VITE_APP_URL),
@@ -41,8 +44,10 @@ export function createRuntimeConfig(env = {}) {
     supabasePublishableKey: text(env.VITE_SUPABASE_PUBLISHABLE_KEY),
     aiEndpointName: aiWert ? endpoint(aiWert) : STANDARD.aiEndpointName,
     accountSelfServiceEndpointName: selfServiceWert ? endpoint(selfServiceWert) : STANDARD.accountSelfServiceEndpointName,
+    privateMailEndpointName: privateMailWert ? endpoint(privateMailWert) : STANDARD.privateMailEndpointName,
     privateSelfServiceEnabled: text(env.VITE_PRIVATE_SELF_SERVICE_ENABLED) === "true",
     accountDeleteEnabled: text(env.VITE_ACCOUNT_DELETE_ENABLED) === "true",
+    privateMailEnabled: text(env.VITE_PRIVATE_MAIL_ENABLED) === "true",
     radarPilotClientEnabled: text(env.VITE_RADAR_PILOT_CLIENT_ENABLED) === "true",
     entdeckenDailyFeedEnabled: text(env.VITE_ENTDECKEN_DAILY_FEED_ENABLED) === "true",
     buildVersion: text(env.VITE_BUILD_VERSION) || STANDARD.buildVersion,
@@ -66,6 +71,10 @@ export function validateRuntimeConfig(config = STANDARD) {
   if (config.supabaseUrl && !/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(config.supabaseUrl)) fehler.push({ feld: "supabaseUrl", code: "invalid-url" });
   if (!/^[a-z0-9][a-z0-9_-]*$/i.test(config.aiEndpointName || "")) fehler.push({ feld: "aiEndpointName", code: "invalid-endpoint" });
   if (!/^[a-z0-9][a-z0-9_-]*$/i.test(config.accountSelfServiceEndpointName || "")) fehler.push({ feld: "accountSelfServiceEndpointName", code: "invalid-endpoint" });
+  if (config.privateMailEnabled === true
+      && !/^[a-z0-9][a-z0-9_-]*$/i.test(config.privateMailEndpointName || "")) {
+    fehler.push({ feld: "privateMailEndpointName", code: "invalid-endpoint" });
+  }
   if (Number(config.schemaVersion) !== RUNTIME_SCHEMA_VERSION) fehler.push({ feld: "schemaVersion", code: "unsupported-schema" });
   return Object.freeze({ ok: fehler.length === 0, fehler: Object.freeze(fehler) });
 }
