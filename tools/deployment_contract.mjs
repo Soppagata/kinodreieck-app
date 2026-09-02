@@ -50,14 +50,29 @@ export function serviceWorkerBuildFehler(quelltext, erwarteteVersion = "") {
   return null;
 }
 
-export function demoKatalogFehler(sichtbar) {
-  if (!Array.isArray(sichtbar)) return "unerwartete Katalog-Sicht";
+export function privateReleaseLoginFehler(indexHtml, bundleText) {
+  const html = String(indexHtml || "");
+  const bundle = String(bundleText || "");
+  if (!/<div\s+id=["']root["']><\/div>/.test(html)) {
+    return "React-Einstiegspunkt fehlt in index.html";
+  }
   const fehlend = [
-    "programm_demo", "streaming_demo",
-    "streaming_bekannt_demo", "streaming_entdecken_demo",
-  ]
-    .filter((name) => !sichtbar.includes(name));
+    "Benutzername", "Passwort", "Anmelden", "Ohne Konto fortfahren",
+    "Datenschutz & Rechtliches", "datenschutz-rechtliches", "kd-entry-login",
+  ].filter((anker) => !bundle.includes(anker));
   return fehlend.length
-    ? `Demo-Zeilen fehlen für anon: ${fehlend.join(", ")}`
+    ? `Minimal-Login fehlt im ausgelieferten Bundle: ${fehlend.join(", ")}`
+    : null;
+}
+
+export function privateReleaseAnonKatalogFehler({ status, code = "", daten = null } = {}) {
+  if ((status === 401 || status === 403) && code === "42501") return null;
+  if (status !== 200) {
+    return `unerwarteter Katalogstatus HTTP ${status || 0}, Code ${code || "-"}`;
+  }
+  if (!Array.isArray(daten)) return "unerwartete Antwortform von kd_catalog";
+  const sichtbar = daten.map((zeile) => zeile?.name).filter(Boolean);
+  return sichtbar.length
+    ? `anon sieht private Katalogzeilen: ${sichtbar.join(", ")}`
     : null;
 }

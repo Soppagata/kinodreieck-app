@@ -4,7 +4,8 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   buildMetaFehler,
-  demoKatalogFehler,
+  privateReleaseAnonKatalogFehler,
+  privateReleaseLoginFehler,
   serviceWorkerBuildFehler,
   serviceWorkerRevalidiert,
 } from "./tools/deployment_contract.mjs";
@@ -151,15 +152,20 @@ check("Remote-Smoke erkennt eine feste Domain mit falschem Commit",
   && buildMetaFehler({ format: 1, buildVersion: "neu" }, "neu") === null
   && serviceWorkerBuildFehler('const BUILD_VERSION = "alt";\nconst CACHE = `kd-shell-v3-${BUILD_VERSION}`;', "neu") !== null
   && serviceWorkerBuildFehler('const BUILD_VERSION = "neu";\nconst CACHE = `kd-shell-v3-${BUILD_VERSION}`;', "neu") === null);
-check("Remote-Smoke stoppt ein Release ohne beide öffentlichen Demo-Zeilen",
-  demoKatalogFehler(["manifest"])?.includes("programm_demo, streaming_demo")
-  && demoKatalogFehler(["manifest", "programm_demo"])?.includes("streaming_demo")
-  && demoKatalogFehler([
-    "manifest", "programm_demo", "streaming_demo",
-    "streaming_bekannt_demo", "streaming_entdecken_demo",
-  ]) === null
-  && remoteSmoke.includes("const demoFehler = demoKatalogFehler(sichtbar);")
-  && remoteSmoke.includes("if (demoFehler) {"));
+check("Remote-Smoke liest den ausgelieferten Minimal-Login statt nur eine leere Shell",
+  privateReleaseLoginFehler(indexHtml, js) === null
+  && privateReleaseLoginFehler(indexHtml, js.replace("Ohne Konto fortfahren", ""))?.includes("Ohne Konto fortfahren")
+  && remoteSmoke.includes("const entryBundle = await")
+  && remoteSmoke.includes("privateReleaseLoginFehler(loginStartText, entryBundle)")
+  && remoteSmoke.includes("verifizierterSwText.includes(entryUrl.pathname.slice(1))"));
+check("Remote-Smoke verlangt für anon den privaten Leer- oder echten Rechtestopp",
+  privateReleaseAnonKatalogFehler({ status: 200, daten: [] }) === null
+  && privateReleaseAnonKatalogFehler({ status: 401, code: "42501" }) === null
+  && privateReleaseAnonKatalogFehler({ status: 403, code: "42501" }) === null
+  && privateReleaseAnonKatalogFehler({ status: 200, daten: [{ name: "manifest" }] })?.includes("manifest")
+  && privateReleaseAnonKatalogFehler({ status: 200, daten: [{ name: "programm_demo" }] })?.includes("programm_demo")
+  && privateReleaseAnonKatalogFehler({ status: 401, code: "PGRST301" })?.includes("PGRST301")
+  && remoteSmoke.includes("privateReleaseAnonKatalogFehler({ status: res.status, code, daten })"));
 
 /* 5) Single-File bleibt ein getrennter Download und wird nicht versehentlich gecacht. */
 check("Öffentliche Distributionsseite vorhanden", Boolean(downloadSeite));

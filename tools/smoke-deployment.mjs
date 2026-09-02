@@ -1,6 +1,7 @@
 import {
   buildMetaFehler,
-  demoKatalogFehler,
+  privateReleaseAnonKatalogFehler,
+  privateReleaseLoginFehler,
   serviceWorkerBuildFehler,
   serviceWorkerRevalidiert,
 } from "./deployment_contract.mjs";
@@ -26,6 +27,7 @@ for (const direktive of ["default-src 'self'", "frame-ancestors 'none'", "object
 }
 if (start.headers.get("x-content-type-options") !== "nosniff") throw new Error("X-Content-Type-Options fehlt.");
 if (start.headers.get("x-frame-options") !== "DENY") throw new Error("X-Frame-Options fehlt.");
+await start.text();
 
 await hole("/manifest.webmanifest", "application/manifest+json");
 const sw = await hole("/sw.js", "javascript");
@@ -47,6 +49,7 @@ await hole("/download/", "text/html");
 // Smoke streng, vermeiden aber einen Fehlalarm während dieser Propagation.
 const metaVersuche = domainRetry ? 12 : 1;
 let metaFehler = "nicht geprüft";
+let verifizierterSwText = ersterSwText;
 for (let versuch = 1; versuch <= metaVersuche; versuch++) {
   try {
     const parameter = new URLSearchParams();
@@ -60,6 +63,7 @@ for (let versuch = 1; versuch <= metaVersuche; versuch++) {
         ? ersterSwText
         : await (await hole(`/sw.js?${parameter}`, "javascript")).text();
       metaFehler = serviceWorkerBuildFehler(swText, erwarteteVersion || meta?.buildVersion);
+      if (!metaFehler) verifizierterSwText = swText;
     }
   } catch (fehler) {
     metaFehler = fehler instanceof Error ? fehler.message : String(fehler);
@@ -69,26 +73,42 @@ for (let versuch = 1; versuch <= metaVersuche; versuch++) {
 }
 if (metaFehler) throw new Error(`Build-Auslieferung: ${metaFehler}.`);
 
-/* --- Katalog-Sichtprüfung als anon ---------------------------------------
-   Die Prüfungen oben belegen nur, dass Dateien und Header ausgeliefert werden —
-   eine funktional leere App käme damit grün durch. Diese Prüfung fragt den
-   Katalog so ab, wie ihn ein nicht angemeldeter Besucher sieht.
+/* Erst nach dem finalen Build-/SW-Readback erneut die Startseite lesen. Das
+   Entry-Asset muss zugleich im Precache genau dieses verifizierten Workers
+   stehen; so kann Domainpropagation keinen alten Login mit neuem Build-Meta
+   zu einem gemischten grünen Ergebnis verbinden. */
+const loginStartText = await (await hole("/", "text/html")).text();
+const entrySrc = (loginStartText.match(/<script\b[^>]*\bsrc=["']([^"']+\.js(?:\?[^"']*)?)["'][^>]*>/i) || [])[1];
+if (!entrySrc) throw new Error("Login-Readback: gehashtes Entry-Bundle fehlt in index.html.");
+const entryUrl = new URL(entrySrc, basis + "/");
+if (entryUrl.origin !== new URL(basis).origin || !/^\/assets\/[^/]+\.js$/.test(entryUrl.pathname)) {
+  throw new Error("Login-Readback: Entry-Bundle liegt nicht als eigenes gehashtes Asset vor.");
+}
+if (!verifizierterSwText.includes(entryUrl.pathname.slice(1))) {
+  throw new Error("Login-Readback: Entry-Bundle gehört nicht zum verifizierten Service Worker.");
+}
+const entryBundle = await (await hole(entryUrl.pathname + entryUrl.search, "javascript")).text();
+const loginFehler = privateReleaseLoginFehler(loginStartText, entryBundle);
+if (loginFehler) throw new Error(`Login-Readback: ${loginFehler}.`);
 
-   ZENTRAL: PostgREST liefert bei RLS-Filterung HTTP 200 mit LEEREM Array, nie
-   einen 403. Geprüft wird deshalb ausschließlich der Zeileninhalt.
+/* --- Private Kataloggrenze als anon --------------------------------------
+   Build, Service Worker und Minimal-Login werden oben aus der echten
+   Auslieferung gelesen. Diese Prüfung fragt zusätzlich den Katalog so ab, wie
+   ihn ein nicht angemeldeter Besucher nach der Private-Release-Migration sieht.
 
-   Erwartung seit Etappe 4 (Migration 20260725220000, 25.07.2026):
-     manifest                      → muss da sein (sonst ist der Katalog tot)
-     programm_demo, streaming_demo sowie die zwei getrennten Demo-Streamingteile
-       → müssen für den öffentlichen Auftritt da sein
-     programm, streaming und die getrennten Live-Streamingteile
-       → dürfen für anon NIE sichtbar sein
+   Zulässig sind ausschließlich zwei äquivalente private Zustände:
+     - PostgREST/RLS liefert HTTP 200 mit leerem Array;
+     - das entzogene Tabellenrecht stoppt mit HTTP 401/403 und SQLSTATE 42501.
+   Eine ungültige API-Konfiguration oder irgendeine sichtbare Zeile bleibt rot.
+
+   Erwartung seit der Private-Release-Access-Migration 20260901193000:
+     manifest, Demo- und Livezeilen sind sämtlich privat und für anon unsichtbar.
 
    Konfiguration über Umgebungsvariablen (keine Werte im Code):
      VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY  (so heißen sie im
      Deploy-Job) oder ersatzweise KD_SB_URL / KD_SB_ANON für Läufe von Hand.
    Fehlt eine davon, wird die Prüfung sichtbar ÜBERSPRUNGEN statt den Deploy
-   zu brechen. */
+   zu brechen; der bereits geprüfte Login-Readback bleibt davon unberührt. */
 
 const sbUrl = String(process.env.VITE_SUPABASE_URL || process.env.KD_SB_URL || "").trim().replace(/\/+$/, "");
 const sbKey = String(process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.KD_SB_ANON || "").trim();
@@ -98,49 +118,28 @@ if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(sbUrl) || !sbKey) {
   console.warn("!! ÜBERSPRUNGEN: Katalog-Sichtprüfung als anon.");
   console.warn("   Grund: VITE_SUPABASE_URL und/oder VITE_SUPABASE_PUBLISHABLE_KEY sind in diesem");
   console.warn("   Schritt nicht gesetzt (alternativ KD_SB_URL / KD_SB_ANON).");
-  console.warn("   Solange das so bleibt, prüft der Smoke-Test NUR Auslieferung und Header —");
-  console.warn("   eine funktional leere App käme grün durch.");
+  console.warn("   Build, Service Worker und Minimal-Login sind geprüft; die anonyme DB-Grenze nicht.");
   console.warn("");
 } else {
   const kopf = { apikey: sbKey, "Cache-Control": "no-cache" };
   if (/^eyJ/.test(sbKey)) kopf.Authorization = "Bearer " + sbKey;
 
   const res = await fetch(`${sbUrl}/rest/v1/kd_catalog?select=name&order=name`, { headers: kopf });
+  let daten = null;
+  let code = "";
   if (!res.ok) {
     // Kein Key/keine URL im Text: nur Status und Fehlercode der Datenbank.
     const rohtext = await res.text().catch(() => "");
-    const code = (rohtext.match(/"code"\s*:\s*"([^"]{0,20})"/) || [])[1] || "-";
-    throw new Error(`Katalog-Sichtprüfung: kd_catalog nicht abrufbar (HTTP ${res.status}, Code ${code}).`);
+    code = (rohtext.match(/"code"\s*:\s*"([^"]{0,20})"/) || [])[1] || "";
+  } else {
+    daten = await res.json().catch(() => null);
   }
 
-  const daten = await res.json().catch(() => null);
-  if (!Array.isArray(daten)) throw new Error("Katalog-Sichtprüfung: unerwartete Antwortform von kd_catalog.");
-  const sichtbar = daten.map((zeile) => zeile?.name).filter(Boolean);
-
-  // Harter Fehlschlag: die Rechte-Regression, gegen die Etappe 4 gebaut wurde.
-  const geleakt = ["programm", "streaming", "streaming_bekannt", "streaming_entdecken"]
-    .filter((name) => sichtbar.includes(name));
-  if (geleakt.length) {
-    throw new Error(
-      `Katalog-Sichtprüfung FEHLGESCHLAGEN: anon sieht Live-Zeilen ${geleakt.join(", ")}. `
-      + "Der getrennte Lesezugriff aus Migration 20260725220000 ist nicht (mehr) aktiv.");
-  }
-
-  // Harter Fehlschlag: ohne manifest ist der Katalog für Besucher tot.
-  if (!sichtbar.includes("manifest")) {
-    throw new Error(
-      `Katalog-Sichtprüfung FEHLGESCHLAGEN: anon sieht die Zeile manifest nicht (sichtbar: ${sichtbar.join(", ") || "nichts"}).`);
-  }
-
-  // Etappe 9a: Ohne beide Demo-Zeilen wäre der öffentliche Einstieg funktional leer.
-  const demoFehler = demoKatalogFehler(sichtbar);
-  if (demoFehler) {
-    throw new Error(
-      `Katalog-Sichtprüfung FEHLGESCHLAGEN: ${demoFehler}. `
-      + "Der öffentliche Einstieg darf nicht ohne Programm- und Streaming-Demo ausgeliefert werden.");
-  }
-
-  console.log(`Katalog-Sichtprüfung als anon bestanden (sichtbar: ${sichtbar.join(", ")}).`);
+  const katalogFehler = privateReleaseAnonKatalogFehler({ status: res.status, code, daten });
+  if (katalogFehler) throw new Error(`Private Kataloggrenze FEHLGESCHLAGEN: ${katalogFehler}.`);
+  console.log(res.ok
+    ? "Private Kataloggrenze als anon bestanden (sichtbar: nichts)."
+    : `Private Kataloggrenze als anon bestanden (HTTP ${res.status}, Code ${code}).`);
 }
 
-console.log(`HTTPS-Smoke-Test und Sicherheitsheader bestanden: ${basis}`);
+console.log(`HTTPS-Smoke-Test, Build-/SW-/Login-Readback und Sicherheitsheader bestanden: ${basis}`);

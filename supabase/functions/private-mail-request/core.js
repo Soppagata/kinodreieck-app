@@ -16,9 +16,7 @@ import {
 } from "../_shared/privateMailMessages.js";
 
 export const PRIVATE_MAIL_ALLOWED_ORIGINS = Object.freeze([
-  "https://kinodreieck.at",
   "https://staging.kinodreieck.at",
-  "http://localhost:5173",
 ]);
 
 export const PRIVATE_MAIL_RATE_LIMITS = Object.freeze({

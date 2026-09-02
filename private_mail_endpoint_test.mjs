@@ -7,7 +7,7 @@ import {
   createPrivateMailRequestHandler,
 } from "./supabase/functions/private-mail-request/core.js";
 
-const origin = "https://kinodreieck.at";
+const origin = "https://staging.kinodreieck.at";
 const operationId = "80a8b9b9-2c52-42d5-8e0e-08fecee9ca43";
 const accountId = "3c0b70fd-0b50-41c4-8b23-959532495476";
 const otherAccountId = "42745d70-3fd1-4f69-ab70-f391ccfa2bec";
@@ -105,31 +105,36 @@ async function body(response) {
   return JSON.parse(await response.text());
 }
 
-test("CORS erlaubt nur Production, Staging und den exakten localhost-Origin", async () => {
-  assert.deepEqual(PRIVATE_MAIL_ALLOWED_ORIGINS, [
-    "https://kinodreieck.at",
-    "https://staging.kinodreieck.at",
-    "http://localhost:5173",
-  ]);
-  for (const allowed of PRIVATE_MAIL_ALLOWED_ORIGINS) {
-    const { handler } = fixture();
-    const response = await handler(new Request("https://example.invalid", {
-      method: "OPTIONS",
-      headers: {
-        Origin: allowed,
-        "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "authorization, content-type",
-      },
-    }));
-    assert.equal(response.status, 204);
-    assert.equal(response.headers.get("Access-Control-Allow-Origin"), allowed);
-    assert.equal(response.headers.get("Access-Control-Allow-Methods"), "POST, OPTIONS");
-  }
+test("CORS erlaubt vor E6 ausschließlich den exakten Staging-Origin", async () => {
+  assert.deepEqual(PRIVATE_MAIL_ALLOWED_ORIGINS, [origin]);
+
   const { handler } = fixture();
-  const rejected = await handler(post(feedback(), { origin: "https://evil.invalid" }));
-  assert.equal(rejected.status, 403);
-  assert.equal(rejected.headers.get("Access-Control-Allow-Origin"), null);
-  assert.deepEqual(await body(rejected), { ok: false, schemaVersion: 1, code: "forbidden" });
+  const response = await handler(new Request("https://example.invalid", {
+    method: "OPTIONS",
+    headers: {
+      Origin: origin,
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "authorization, content-type",
+    },
+  }));
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), origin);
+  assert.equal(response.headers.get("Access-Control-Allow-Methods"), "POST, OPTIONS");
+
+  for (const rejectedOrigin of [
+    "https://kinodreieck.at",
+    "http://localhost:5173",
+    "https://evil.invalid",
+  ]) {
+    const fixtureResult = fixture();
+    const rejected = await fixtureResult.handler(post(feedback(), { origin: rejectedOrigin }));
+    assert.equal(rejected.status, 403);
+    assert.equal(rejected.headers.get("Access-Control-Allow-Origin"), null);
+    assert.deepEqual(await body(rejected), { ok: false, schemaVersion: 1, code: "forbidden" });
+    assert.equal(fixtureResult.calls.claims.length, 0);
+    assert.equal(fixtureResult.calls.begin.length, 0);
+    assert.equal(fixtureResult.calls.transport.length, 0);
+  }
 });
 
 test("Methoden, Content-Type und Preflight-Header failen geschlossen", async () => {
