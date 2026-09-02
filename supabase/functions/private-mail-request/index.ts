@@ -1,9 +1,10 @@
-/* Providerunabhaengiger Browser-Endpunkt fuer private Mailanforderungen.
-   Authentisierung, Accountfreigabe, HMAC und RPCs liegen serverseitig. Bis ein
-   separat belegter Transport integriert UND durch ein Server-Secret aktiviert
-   ist, bleibt jeder gueltige Request ohne Claim/Send sicher unavailable. */
+/* Serverendpunkt fuer private Mailanforderungen. Authentisierung,
+   Accountfreigabe, HMAC, Provideradressen und Resend-Zugang liegen
+   ausschliesslich serverseitig. Unvollstaendige oder abweichende Secrets
+   lassen den Transport vor Claim/Send fail-closed unavailable. */
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createPrivateMailRequestHandler } from "./core.js";
+import { createResendPrivateMailTransport } from "./resendAdapter.js";
 
 function envKey(newName, legacyName) {
   const raw = Deno.env.get(newName);
@@ -27,14 +28,17 @@ function runtimeDependencies() {
   const admin = url && serviceKey
     ? createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     : null;
+  const transport = createResendPrivateMailTransport({
+    apiKey: Deno.env.get("RESEND_API_KEY") || null,
+    sender: Deno.env.get("KD_PRIVATE_MAIL_SENDER") || null,
+    recipient: Deno.env.get("KD_PRIVATE_MAIL_RECIPIENT") || null,
+  });
 
   return {
     hmacSecret: Deno.env.get("KD_PRIVATE_MAIL_HMAC_SECRET") || null,
     transportActivationSecret:
       Deno.env.get("KD_PRIVATE_MAIL_TRANSPORT_ACTIVATION_SECRET") || null,
-    // Absichtlich kein Transport: Adapterintegration folgt erst auf belegten
-    // Providervertrag. Ein Aktivierungssecret allein kann niemals senden.
-    transport: null,
+    transport,
     getClaims: (token) => user
       ? user.auth.getClaims(token)
       : Promise.resolve({ data: null, error: new Error("auth-unavailable") }),
