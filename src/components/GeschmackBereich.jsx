@@ -66,6 +66,7 @@ export function GeschmackBereich({
   vokabular = [],
   kontoId = "",
   onVokabularSpeichern,
+  blogProfilAnalyseSichtbar = true,
   /* Nur für Tests und den Demo-Modus: erlaubt, die Speicher-Schicht zu
      ersetzen, ohne das echte `store` zu berühren. */
   speicher = null,
@@ -377,7 +378,7 @@ export function GeschmackBereich({
             kiWegOffen={kiWegOffen}
             onKiErheben={() => { setMeldung(null); setExtrakt(null); setExtraktFehler(null); setFrage(true); }}
           />
-          <BlogProfilAnalyse
+          {blogProfilAnalyseSichtbar && <BlogProfilAnalyse
             artikelListe={artikelListe}
             bekannteGenres={bekannteGenres}
             bekannteTags={bekannteTags}
@@ -389,7 +390,7 @@ export function GeschmackBereich({
             onProfilSpeichern={(neu) => onProfilSchreiben(neu, "Blogprofil gespeichert.")}
             onVokabularSpeichern={vokabularWriter}
             onFehler={onFehlerText}
-          />
+          />}
         </>
       )}
       {meldung && <p aria-live="polite" style={{ ...klein, marginTop: 12 }}>{meldung}</p>}

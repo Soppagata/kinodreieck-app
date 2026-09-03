@@ -1927,10 +1927,10 @@ feld = () => document.getElementById("wurzel");
 
 
 /* =========================================================================
-   N — BLOGDIALOG-INTEGRATION (E17A)
+   N — BLOGDIALOG-CODE BLEIBT ERHALTEN, RELEASE-EINSTIEG IST ENTFERNT
    ========================================================================= */
 abschnitt("N", async () => {
-console.log("\n--- N: Blogdialog in Einstellungen ---");
+console.log("\n--- N: Blogdialog außerhalb der Release-Einstellungen ---");
 
 const bereichText = QUELLEN.bereich.text;
 const datentabText = QUELLEN.datentab.text;
@@ -1967,6 +1967,11 @@ check("N", "Blog-Pfad bleibt auf KI-, Konto-, Profil-Geltigkeit und Writer-Exist
     && blogAktivAusdruck.includes("profilGueltig()")
     && blogAktivAusdruck.includes("typeof onVokabularSpeichern === \"function\""));
 
+check("N", "DatenTab bindet den Blogdialog an die geschlossene Release-Projektion",
+  () => datentabText.includes("const RELEASE_NEBENWEGE_SICHTBAR = false")
+    && datentabText.includes("blogProfilAnalyseSichtbar={RELEASE_NEBENWEGE_SICHTBAR}")
+    && bereichText.includes("{blogProfilAnalyseSichtbar && <BlogProfilAnalyse"));
+
 dom.window.localStorage.setItem(TOPF.geschmacksprofil, JSON.stringify(P.erteileEinwilligung(LEER(), "2026-08-17T00:00:00.000Z")));
 feld = () => document.getElementById("tabwurzel");
 await act(async () => { tabWurzel.render(h(DatenTab, {
@@ -1990,13 +1995,9 @@ await act(async () => { tabWurzel.render(h(DatenTab, {
   onKontoDatenGeaendert: () => {},
 })) });
 await ruhe();
-check("N", "Der Blogdialog sitzt tatsächlich im geschachtelten Settings-Pfad", () =>
-  text().includes("Eigene Blogartikel für dein Profil auswerten"));
-check("N", "Ohne Vokabular-Writer bleibt der kostenpflichtige Pfad im Dialog geschlossen",
-  () => {
-    const blog = document.getElementById("tabwurzel").querySelector(".kd-blogprofilanalyse");
-    return !!blog && !blog.querySelector('input[type="checkbox"]');
-  });
+check("N", "Der Blogdialog fehlt selbst bei erfüllten KI-/Konto-/Profilbedingungen in der Release-DOM", () =>
+  !text().includes("Eigene Blogartikel für dein Profil auswerten")
+    && !document.getElementById("tabwurzel").querySelector(".kd-blogprofilanalyse"));
 
 await act(async () => { tabWurzel.render(null); });
 dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
@@ -2004,10 +2005,10 @@ feld = () => document.getElementById("wurzel");
 });
 
 /* =========================================================================
-   O — VOKABULAR-SPEICHERN UND BLOGANALYSE HAPPYPATH (E17A)
+   O — VOKABULAR-SPEICHERN UND VERBORGENER BLOGANALYSE-EINSTIEG
    ========================================================================= */
 abschnitt("O", async () => {
-console.log("\n--- O: Vokabularwrite-Contracts & nested Bloganalyse-Happy-Path ---");
+console.log("\n--- O: Vokabularwrite-Contracts & geschlossene Bloganalyse-Projektion ---");
 
 const mockStorage = () => {
   const map = new Map();
@@ -2315,7 +2316,7 @@ await act(async () => { tabWurzel.render(h(BlogHarness)); });
 feld = () => document.getElementById("tabwurzel");
 await ruhe();
 const blog = () => document.getElementById("tabwurzel").querySelector(".kd-blogprofilanalyse");
-check("O", "Nested Bloganalyse-Container ist eingebunden", () => !!blog());
+check("O", "Nested Bloganalyse-Container ist in den Release-Settings nicht eingebunden", () => !blog());
 const k = blog();
 if (k) {
   const cb = k.querySelector('input[type="checkbox"]');
@@ -2480,8 +2481,8 @@ const TITEL_GRUPPEN = {
   K: "Fehler beim Schreiben",
   L: "Ansehen, korrigieren, entfernen",
   M: "Erreichbarkeit ohne KI",
-  N: "Blogdialog in Einstellungen verdrahtet",
-  O: "Vokabular-Speichern + nested Bloganalyse-Happy-Path",
+  N: "Blogdialog-Code erhalten, Release-Einstieg entfernt",
+  O: "Vokabular-Speichern + geschlossene Blogprojektion",
 };
 let ok = 0, schlecht = 0;
 console.log("\n===========================================================");

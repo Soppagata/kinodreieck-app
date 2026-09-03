@@ -20,6 +20,10 @@ import { ERROR_CODES } from "../services/errors.js";
 import { errorText } from "../services/errors.js";
 import { aiService } from "../services/ai.js";
 
+/* UI-onlyer Privatrelease-Schalter: Altwerkzeuge und ihre Handler bleiben
+   unveraendert erhalten, werden aber nicht in die Release-DOM projiziert. */
+const RELEASE_NEBENWEGE_SICHTBAR = false;
+
 const normalisiereAnzeige = (wert) => {
   if (typeof wert !== "string") return "";
   return wert.trim();
@@ -200,11 +204,10 @@ export function DatenTab({
         </Klappe>
       )}
 
-      {/* Betriebsdetails existieren nur für die frisch serverbestätigte
-          Ownerrolle. Die frühere Demo-Löschfläche wird nicht mehr projiziert;
-          normale Nutzer erhalten bei einem echten Fehler ausschließlich einen
-          kleinen, verständlichen Recoveryweg. */}
-      {ownerTechnikBestaetigt && <Klappe titel="Datenmodus & Verbindung">
+      {/* Der historische Betriebszweig bleibt an die frisch serverbestätigte
+          Ownerrolle gebunden und zusätzlich aus der Release-DOM geschlossen.
+          Ein echter Fehler behält den kleinen, verständlichen Recoveryweg. */}
+      {RELEASE_NEBENWEGE_SICHTBAR && ownerTechnikBestaetigt && <Klappe titel="Datenmodus & Verbindung">
         <div style={kasten}>
           <h2 style={h2}>{demoAktiv || startWahl === "demo" ? "Demo-Modus" : "Clean Mode"}</h2>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
@@ -217,7 +220,7 @@ export function DatenTab({
           </div>
         </div>
       </Klappe>}
-      {!ownerTechnikBestaetigt && verbindungBrauchtHilfe && <Klappe titel="Verbindung wiederherstellen">
+      {(!ownerTechnikBestaetigt || !RELEASE_NEBENWEGE_SICHTBAR) && verbindungBrauchtHilfe && <Klappe titel="Verbindung wiederherstellen">
         <div style={kasten}>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
             Das Kinoprogramm ist derzeit <strong style={{ color: T.gefahr }}>{programmStatus.text}</strong>. Deine persönlichen Inhalte bleiben davon unberührt.
@@ -294,6 +297,7 @@ export function DatenTab({
             vokabular={vokabular}
             kontoId={kontoId}
             onVokabularSpeichern={saveVokabular}
+            blogProfilAnalyseSichtbar={RELEASE_NEBENWEGE_SICHTBAR}
             speicher={speicher}
             ai={ai}
             kiAktiv={kiProfilFaehig
@@ -320,7 +324,7 @@ export function DatenTab({
         </div>
       </Klappe>}
 
-      <Klappe titel="Stapelimport" tour="ki-ingestion">
+      {RELEASE_NEBENWEGE_SICHTBAR && <Klappe titel="Stapelimport" tour="ki-ingestion">
         <div style={kasten}>
           <h2 style={h2}>Eigene Mediathek stapelweise erfassen</h2>
           <StapelImport master={master || []}
@@ -328,10 +332,10 @@ export function DatenTab({
             kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.stapelimport !== false}
             setErr={setErr} />
         </div>
-      </Klappe>
+      </Klappe>}
 
       {/* 3 — Masterliste */}
-      <div className="kd-nur-desktop">
+      {RELEASE_NEBENWEGE_SICHTBAR && <div className="kd-nur-desktop">
       <Klappe titel="Masterliste" tour="daten-export">
         <div style={kasten}>
           <h2 style={h2}>Deine Mediathek als Rohdaten</h2>
@@ -350,7 +354,7 @@ export function DatenTab({
             labelNeu="Masterliste importieren" labelErsetzen="Masterliste ersetzen" />
         </div>
       </Klappe>
-      </div>
+      </div>}
 
       {/* 4 — gebundene Sicherheitskopie dieses Geräts */}
       <Klappe id="gesamt-backup" titel="Sicherheitskopie dieses Geräts" offen={sicherungOffen}
@@ -388,9 +392,9 @@ export function DatenTab({
         </Klappe>
       )}
 
-      {/* Technische DOM-Zweige entstehen ausschließlich für die bestätigte
-          Ownerrolle; bloßes Verbergen per CSS wäre keine Rechteprojektion. */}
-      {ownerTechnikBestaetigt && <>
+      {/* Historische Technikzweige bleiben zusätzlich zur Ownerbindung aus der
+          Release-DOM geschlossen; sie werden nicht bloß per CSS versteckt. */}
+      {RELEASE_NEBENWEGE_SICHTBAR && ownerTechnikBestaetigt && <>
       <Klappe titel="Technik & Support">
         <div style={kasten}><SupportDaten ownerBestaetigt={ownerTechnikBestaetigt} /></div>
       </Klappe>
@@ -477,12 +481,14 @@ export function DatenTab({
         <div style={kasten}>
           <p style={{ fontSize: 12, color: T.rauch, lineHeight: 1.7, margin: 0 }}>
             Kinodreieck — privates, nicht-kommerzielles Projekt. Persönliche Daten liegen lokal und bei aktiviertem Kontospeicher zusätzlich im eigenen Konto; die App verwendet keine allgemeine Telemetrie. Programmdaten: film.at &amp; nonstopkino.at · Streaming-Kataloge: Watchmode. Alle Angaben ohne Gewähr — verbindlich sind die Kino- bzw. Anbieterseiten. Bewertungen und Texte sind persönliche Meinungen ihrer Autoren.
-            <br />© {new Date().getFullYear()} <span onClick={() => setEggOffen((v) => !v)} title="…" style={{ color: T.wolfram, cursor: "pointer", textDecorationLine: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}>Max</span> — Nutzung auf eigene Verantwortung.
+            <br />© {new Date().getFullYear()} {RELEASE_NEBENWEGE_SICHTBAR
+              ? <span onClick={() => setEggOffen((v) => !v)} title="…" style={{ color: T.wolfram, cursor: "pointer", textDecorationLine: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}>Max</span>
+              : <span style={{ color: T.wolfram }}>Max</span>} — Nutzung auf eigene Verantwortung.
           </p>
-          {eggOffen && waehleModus && <div style={{ marginTop: 12 }}><button onClick={eggToggle} style={btnStyle(eggAktiv)}>{eggLabel}</button></div>}
+          {RELEASE_NEBENWEGE_SICHTBAR && eggOffen && waehleModus && <div style={{ marginTop: 12 }}><button onClick={eggToggle} style={btnStyle(eggAktiv)}>{eggLabel}</button></div>}
           <div style={{ marginTop: 14 }}>
             <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => setUeberOffen((v) => !v)}>{ueberOffen ? "Anleitung zuklappen" : "Über Kinodreieck & Anleitung"}</button>
-            {typeof location !== "undefined" && location.protocol !== "file:" && (
+            {RELEASE_NEBENWEGE_SICHTBAR && typeof location !== "undefined" && location.protocol !== "file:" && (
               <a className="kd-nur-desktop" href={import.meta.env.BASE_URL + "download/"} style={{ ...btnStyle(false), display: "inline-block", marginLeft: 8, fontSize: 13, textDecoration: "none" }}>
                 Einzeldatei herunterladen
               </a>
