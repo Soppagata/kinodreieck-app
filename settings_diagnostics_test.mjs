@@ -1,5 +1,5 @@
-/* KD-OBS-015–018: echte React-DOM-Projektion der normalen Settings und der
-   serverbestätigten Owner-Diagnostik. Alle Netzwerkprimitiven sind Wurffallen. */
+/* KD-OBS-015–018: echte React-DOM-Projektion der normalen Release-Settings
+   und des begrenzten Recoverywegs. Alle Netzwerkprimitiven sind Wurffallen. */
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -101,7 +101,7 @@ const memberMitOwnerIdentitaet = {
   access: { status: "resolved", role: "member" },
   capabilities: { remoteStorage: true, personalAi: true },
 };
-check("Serverbestätigte Ownerrolle öffnet die Technikprojektion", hatBestaetigteOwnerRolle(ownerSession));
+check("Rollenfunktion erkennt die serverbestätigte Ownerrolle", hatBestaetigteOwnerRolle(ownerSession));
 check("Name und E-Mail stufen ein Member nicht zum Owner hoch", !hatBestaetigteOwnerRolle(memberMitOwnerIdentitaet));
 check("Unbekannte, degradierte und Gastrollen fallen geschlossen aus",
   !hatBestaetigteOwnerRolle({ ...ownerSession, access: { status: "unavailable", role: null } })
@@ -215,33 +215,23 @@ await render({
   kontoEmail: ownerSession.account.email, demoAktiv: true, startWahl: "demo",
   einzeldatei: false, ownerTechnikBestaetigt: hatBestaetigteOwnerRolle(ownerSession),
 });
-check("Bestätigter Owner sieht Datenmodus, Status, Wartung und Support als echte DOM-Zweige",
-  summary("Datenmodus & Verbindung") && !button("Demo-Daten entfernen")
-    && summary("Technik & Support") && summary("Kinoprogramm-Status")
-    && summary("Katalog-Status") && summary("Erweitert — manuelle Aktualisierung & Wartung")
-    && button("Supportdaten kopieren") && button("Supportdatei herunterladen")
-    && button("Programm-Cache leeren") && button("Katalog jetzt neu laden"));
-check("Support benennt Fehlerdiagnose auf Anfrage und den inaktiven DB-Vertrag ehrlich",
-  /ausschließlich der Fehlerdiagnose auf Anfrage/.test(text())
-    && /späterer DB-Transport/.test(text())
-    && /ohne bestätigte Servercapability, separates Flag und Adapter ist er inaktiv/.test(text())
-    && /wird nie automatisch versendet/.test(text()));
-check("Lokale Diagnose ist standardmäßig aus und zeigt nur den allowlisteten Eintrag",
-  diagnoseToggle()?.checked === false && /UI_RENDER_CRASH/.test(text()) && /2×/.test(text()));
-check("Owner-Diagnoseschalter besitzt ein 44-Pixel-Touchziel",
-  diagnoseToggle()?.closest("label")?.style.minHeight === "44px");
-await act(async () => { diagnoseToggle().click(); });
-check("Nur der bestätigte Owner kann die lokale Diagnose bewusst aktivieren",
-  diagnoseToggle().checked === true && localStorage.getItem("kd:local-diagnostics-enabled:v1") === "1");
-await act(async () => { button("Lokale Diagnosen leeren").click(); });
-check("Owner kann den lokalen Diagnosepuffer vollständig leeren",
-  localStorage.getItem("kd:local-diagnostics:v1") === null
-    && button("Lokale Diagnosen leeren").disabled === true);
-await act(async () => {
-  button("Programm-Cache leeren").click();
-  button("Katalog jetzt neu laden").click();
+check("Bestätigter Owner erhält dieselbe bereinigte Releasefläche ohne Technikprojektion",
+  keineTechnik() && !summary("Verbindung wiederherstellen"));
+check("Verborgene Diagnostik verändert den vorhandenen lokalen Puffer nicht",
+  /UI_RENDER_CRASH/.test(localStorage.getItem("kd:local-diagnostics:v1") || "")
+    && localStorage.getItem("kd:local-diagnostics-enabled:v1") === null);
+
+await render({
+  kontoModus: true, kontoAktiv: true, kontoId: ownerSession.account.id,
+  kontoEmail: ownerSession.account.email, katalogVerbunden: false,
+  programmInfo: { fehler: true }, einzeldatei: false,
+  ownerTechnikBestaetigt: hatBestaetigteOwnerRolle(ownerSession),
 });
-check("Owner-Technik erreicht ihre getrennten Handler", cacheRufe === 1 && technikRefreshRufe === 1);
+check("Auch ein bestätigter Owner behält bei echtem Fehler den begrenzten Recoveryweg",
+  summary("Verbindung wiederherstellen") && button("Katalog neu laden") && keineTechnik());
+await act(async () => { button("Katalog neu laden").click(); });
+check("Owner-Recovery nutzt denselben begrenzten Handler ohne Technikmutation",
+  recoveryRufe === 2 && cacheRufe === 0 && technikRefreshRufe === 0);
 
 const appQuelle = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
 const mainQuelle = fs.readFileSync(path.join(WURZEL, "src/main.jsx"), "utf8");

@@ -203,18 +203,17 @@ check("KI-Prognose ordnet ihre ausgeschriebenen Aktionen mobil untereinander an"
   assert.match(css, /@media \(max-width:760px\)[\s\S]*\.kd-prognose-aktionen[\s\S]*grid-template-columns:minmax\(0,1fr\)/);
 });
 
-check("Blog-Datenwerkzeuge bleiben mobil verborgen", () => {
-  assert.match(lies("./src/tabs/BlogTab.jsx"), /className="kd-blog-daten kd-nur-desktop"/);
-  assert.match(lies("./src/index.css"), /@media \(max-width: 760px\) \{ \.kd-nur-desktop \{ display: none !important; \} \}/);
+check("Blog-Datenwerkzeuge sind aus der Release-Oberfläche entfernt", () => {
+  assert.doesNotMatch(lies("./src/tabs/BlogTab.jsx"), /kd-blog-daten|MasterImport|Artikel exportieren|Artikel importieren/);
 });
 
-check("Blog-Bearbeitung und versteckte Modi tragen die kurzen neuen Namen", () => {
+check("Blog-Bearbeitung bleibt knapp und Altmodi sind an die geschlossene Release-Projektion gebunden", () => {
   const blog = lies("./src/tabs/BlogTab.jsx");
   const daten = lies("./src/tabs/DatenTab.jsx");
   assert.match(blog, /vorlage \? "Speichern" : "Erstellen"/);
   assert.doesNotMatch(blog, /Speichern & neu abgleichen/i);
-  assert.match(daten, /eggZiel === "showa" \? "Classix" : "Schon kuhl"/);
-  assert.doesNotMatch(daten, /Back to the Roots|Dauerburner/);
+  assert.match(daten, /const RELEASE_NEBENWEGE_SICHTBAR = false/);
+  assert.match(daten, /RELEASE_NEBENWEGE_SICHTBAR && eggOffen && waehleModus/);
 });
 
 check("Icon-only Lösch- und Schließen-Aktionen sind zugänglich beschriftet", () => {

@@ -250,28 +250,12 @@ if (einstellungenTab) { einstellungenTab.click(); await warte(500); }
 const klappen = [...doc.querySelectorAll("details.kd-klappe")];
 check("Etappe 2: Einstellungen-Accordions (kd-klappe), Darstellung startet offen",
   klappen.length >= 6 && klappen.some((d) => d.open && /Darstellung & Verhalten/.test((d.querySelector("summary") || {}).textContent || "")));
-// Easter-Egg-Modi: unter dem "Max"-Link versteckt, theme-abhängiger Toggle-Knopf
-const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
-check("Easter-Egg 'Max'-Link vorhanden", !!maxLink);
-if (maxLink) {
-  maxLink.click(); await warte(200);
-  const egg = [...doc.querySelectorAll("button")].find((b) => /^(Classix|Schon kuhl)$/.test((b.textContent || "").trim()));
-  check("Unklar beschrifteter Easter-Egg-Knopf erscheint", !!egg && !/(Showa|Neon Noir|NERV)/.test(egg.textContent || ""));
-  if (egg) {
-    egg.click(); await warte(300);
-    check("Modus-Klasse am Wrapper aktiv", /kd-(showa|neon-noir)/.test(wrapper().className || ""));
-    if (wrapper().classList.contains("kd-neon-noir")) {
-      const neonOverlay = doc.querySelector('.kd-fx-neon-noir[aria-hidden="true"]');
-      check("Neon Noir setzt das globale Theme-Attribut", !!doc.querySelector('[data-kd-theme="neon-noir"]'));
-      check("Neon-Noir-Overlay blockiert und fokussiert nichts", !!neonOverlay
-        && dom.window.getComputedStyle(neonOverlay).pointerEvents === "none"
-        && !neonOverlay.querySelector('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'));
-    }
-    const egg2 = [...doc.querySelectorAll("button")].find((b) => /^(Classix|Schon kuhl)$/.test((b.textContent || "").trim()));
-    if (egg2) { egg2.click(); await warte(200); }
-    check("Modus wieder aus (Toggle)", !/kd-(showa|neon-noir|nerv)/.test(wrapper().className || ""));
-  }
-}
+// Der Legal-Name bleibt Text und öffnet im Privatrelease keinen versteckten Modus.
+const maxName = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max");
+check("Legal-Name 'Max' besitzt keinen Easter-Egg-Einstieg",
+  !!maxName && maxName.style?.cursor !== "pointer"
+    && !knopf(/^(Classix|Schon kuhl)$/)
+    && !/kd-(showa|neon-noir|nerv)/.test(wrapper().className || ""));
 // Schriftgröße: Zustandsklasse statt mobilem Layout-Zoom
 const gross = knopf(/^Groß$/);
 if (gross) {
@@ -304,17 +288,22 @@ const einstellTexte = [...doc.querySelectorAll("summary")].map((s) => (s.textCon
 const darstellungIndex = einstellTexte.findIndex((s) => /^Darstellung & Verhalten/.test(s));
 const modusIndex = einstellTexte.findIndex((s) => /^Datenmodus & Verbindung/.test(s));
 const masterIndex = einstellTexte.findIndex((s) => /^Masterliste/.test(s));
-const backupIndex = einstellTexte.findIndex((s) => /^Gesamt-Backup/.test(s));
+const stapelIndex = einstellTexte.findIndex((s) => /^Stapelimport/.test(s));
+const profilIndex = einstellTexte.findIndex((s) => /^Geschmacksprofil/.test(s));
+const kontoIndex = einstellTexte.findIndex((s) => /^Konto & Geräte-Sync/.test(s));
+const backupIndex = einstellTexte.findIndex((s) => /^Sicherheitskopie dieses Geräts/.test(s));
 const streamingIndex = einstellTexte.findIndex((s) => /^Streaming-Quellen/.test(s));
 const vokIndex = einstellTexte.findIndex((s) => /^KI-Vokabular/.test(s));
 const statusIndex = einstellTexte.findIndex((s) => /^Katalog-Status/.test(s));
 const erweitertIndex = einstellTexte.findIndex((s) => /^Erweitert — manuelle Aktualisierung & Wartung/.test(s));
 const rechtIndex = einstellTexte.findIndex((s) => /^Über & Rechtliches/.test(s));
-check("Demo: feste Reihenfolge der normalen Gastflächen",
-  darstellungIndex >= 0 && darstellungIndex < masterIndex && masterIndex < backupIndex
-    && backupIndex < streamingIndex && streamingIndex < vokIndex && vokIndex < rechtIndex);
-check("Gast: allgemeiner Datenmodus und Owner-Technik fehlen vollständig",
-  modusIndex === -1 && statusIndex === -1 && erweitertIndex === -1
+check("Privatrelease: feste Reihenfolge der sichtbaren Kernflächen",
+  darstellungIndex >= 0 && darstellungIndex < profilIndex && profilIndex < kontoIndex
+    && kontoIndex < backupIndex && backupIndex < streamingIndex
+    && streamingIndex < vokIndex && vokIndex < rechtIndex);
+check("Gast: Rohimport, Stapelimport, Datenmodus und Owner-Technik fehlen vollständig",
+  masterIndex === -1 && stapelIndex === -1 && modusIndex === -1
+    && statusIndex === -1 && erweitertIndex === -1
     && !einstellTexte.some((s) => /^(Technik & Support|Kinoprogramm-Status)/.test(s))
     && !knopf(/^Demo-Daten entfernen$/) && !knopf(/^Supportdaten kopieren$/)
     && !knopf(/^Programm-Cache leeren$/));
@@ -323,7 +312,7 @@ check("Gast: Datenschutz liegt unter Über & Rechtliches",
 check("Teilen & Tauschen aus Einstellungen entfernt", !einstellTexte.some((s) => /Teilen & Tauschen/.test(s)));
 check("Phase 2: Restore nicht mehr als eigene Hauptklappe", !einstellTexte.some((s) => s === "Backup wiederherstellen"));
 // Backup-Knopf crasht nicht
-const backup = knopf(/Gesamt-Backup herunterladen/);
+const backup = knopf(/Sicherheitskopie dieses Geräts herunterladen/);
 check("Backup-Knopf vorhanden", !!backup);
 if (backup) { backup.click(); await warte(400); check("Backup-Klick ohne Fehler", true); }
 // Die frühere allgemeine Wartungsfläche ist vollständig ownergeschützt.
