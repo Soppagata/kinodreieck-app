@@ -9,20 +9,15 @@ function focusableElements(root) {
   ) || [])].filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true");
 }
 
-/* Bestätigungsgrenze für „Ins Radar“: Bis zum Klick auf „Bestätigen“ wird
+/* Bestätigungsgrenze für „Ins Radar aufnehmen“: Bis zum Klick wird
    weder der persönliche Radar-Topf verändert noch ein Outbox-Eintrag erzeugt. */
 export function RadarSubscriptionPreview({
-  target, radarState, accountMode = false, accountActive = false, onConfirm, onClose,
+  target, radarState, accountMode = false, onConfirm, onClose,
 }) {
   const dialogRef = useRef(null);
-  const [shareEnabled, setShareEnabled] = useState(false);
   const [speichert, setSpeichert] = useState(false);
   const [fehler, setFehler] = useState("");
   const activeCount = (radarState?.subscriptions || []).filter((entry) => entry.status === "active").length;
-  const serverSubscriptionActive = accountMode && (radarState?.subscriptions || []).some((entry) => (
-    entry.targetId === target?.targetId && entry.status === "active" && entry.authority === "server"
-  ));
-  const shareAllowed = accountActive && serverSubscriptionActive;
   const alreadyActive = (radarState?.subscriptions || []).some((entry) => (
     entry.targetId === target?.targetId && entry.status === "active"
   ));
@@ -67,7 +62,7 @@ export function RadarSubscriptionPreview({
     if (speichert) return;
     setSpeichert(true); setFehler("");
     try {
-      const ok = await onConfirm?.(target, { shareEnabled: shareAllowed && shareEnabled });
+      const ok = await onConfirm?.(target, { shareEnabled: false });
       if (ok) onClose?.();
       else setFehler("Die Radar-Änderung wurde nicht bestätigt gespeichert.");
     } catch (error) {
@@ -82,7 +77,7 @@ export function RadarSubscriptionPreview({
         <header className="kd-entdecken-dialog-kopf">
           <div>
             <span>Vorschau · noch nicht gespeichert</span>
-            <h2 id={headingId}>Ins Radar</h2>
+            <h2 id={headingId}>Ins Radar aufnehmen</h2>
           </div>
           <button type="button" className="kd-entdecken-schliessen" aria-label="Radar-Vorschau schließen" onClick={onClose}>×</button>
         </header>
@@ -91,26 +86,16 @@ export function RadarSubscriptionPreview({
           <span>{targetType} · Österreich · alle bestätigten Ereignistypen</span>
         </div>
         <dl className="kd-entdecken-fakten">
-          <div><dt>Status</dt><dd>{alreadyActive ? "Bereits aktiv; Bestätigung aktualisiert den Eintrag" : "Wird erst nach deiner Bestätigung aktiv"}</dd></div>
+          <div><dt>Status</dt><dd>{alreadyActive ? "Im Radar; Bestätigung aktualisiert den Eintrag" : "Wird erst nach deiner Bestätigung ins Radar aufgenommen"}</dd></div>
           <div><dt>Kapazität</dt><dd>{quotaText}</dd></div>
           <div><dt>Kosten</dt><dd>Diese lokale Phase startet keinen Provider-Aufruf und keine Routine.</dd></div>
-          <div><dt>Privatsphäre</dt><dd>Standardmäßig bleibt das Ziel privat. Geteilt werden nie Bewertungen oder Profilsignale.</dd></div>
+          <div><dt>Privatsphäre</dt><dd>Das Ziel bleibt privat. Bewertungen und Profilsignale werden nicht geteilt.</dd></div>
         </dl>
-        <label className={`kd-entdecken-share${shareAllowed ? "" : " gesperrt"}`}>
-          <input type="checkbox" checked={shareEnabled} disabled={!shareAllowed}
-            onChange={(event) => setShareEnabled(event.target.checked)} />
-          <span><strong>Ohne meinen Namen für „Von anderen entdeckt“ teilen</strong>
-            <small>{shareAllowed
-              ? "Explizites Opt-in für dieses bereits serverbestätigte Radarziel."
-              : accountMode
-                ? "Erst nach einem serverbestätigten aktiven Radarziel verfügbar."
-                : "Nur mit aktivem Konto und serverbestätigtem Radarziel verfügbar."}</small></span>
-        </label>
         {fehler ? <p className="kd-entdecken-fehler" role="alert">{fehler}</p> : null}
         <div className="kd-entdecken-dialog-aktionen">
           <button type="button" className="kd-entdecken-sekundaer" disabled={speichert} onClick={onClose}>Abbrechen</button>
           <button type="button" className="kd-entdecken-primaer" disabled={speichert || (!accountMode && !alreadyActive && activeCount >= RADAR_NORMAL_ACTIVE_LIMIT)}
-            onClick={() => void bestaetigen()}>{speichert ? "Speichert …" : alreadyActive ? "Aktiv lassen" : "Ins Radar bestätigen"}</button>
+            onClick={() => void bestaetigen()}>{speichert ? "Speichert …" : alreadyActive ? "Im Radar" : "Ins Radar aufnehmen"}</button>
         </div>
       </section>
     </div>,

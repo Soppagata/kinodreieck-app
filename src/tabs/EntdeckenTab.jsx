@@ -51,7 +51,7 @@ function focusableElements(root) {
 
 function ManageDialog({
   radarState, seriesCatalog, entdeckenStatus, master, useLibrary, accountMode,
-  onUseLibrary, onObserveToggle, onRadarChange, onPersonRadarChange, onShareChange,
+  onUseLibrary, onObserveToggle, onRadarChange, onPersonRadarChange,
   syncStatus, onRadarPilotSync, onBlog, onClose, returnFocusRef,
 }) {
   const dialogRef = useRef(null);
@@ -110,23 +110,18 @@ function ManageDialog({
           <section>
             <h3>Mein Radar</h3>
             <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Diese Ziele bleiben auf diesem Gerät."}</p>
-            {subscriptions.length ? <ul className="kd-entdecken-verwalten-liste">{subscriptions.map((entry) => {
-              const shared = (radarState?.shares || []).some((share) => share.targetId === entry.targetId && share.status === "active");
-              return <li key={entry.targetId}>
-                <span><strong>{localRadarTargetLabel(entry, { master })}</strong><small>{entry.status === "active" ? "Aktiv" : "Pausiert"} · Österreich</small></span>
+            {subscriptions.length ? <ul className="kd-entdecken-verwalten-liste">{subscriptions.map((entry) => <li key={entry.targetId}>
+                <span><strong>{localRadarTargetLabel(entry, { master })}</strong><small>{entry.status === "active" ? "Im Radar" : "Pausiert"} · Österreich</small></span>
                 <div>
                   <button type="button" onClick={() => onRadarChange?.(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button>
-                  <button type="button" onClick={() => onRadarChange?.(entry, "remove")}>Entfernen</button>
-                  {accountMode && entry.authority === "server" ? <button type="button" aria-pressed={shared}
-                    onClick={() => onShareChange?.(entry.targetId, !shared)}>{shared ? "Nicht mehr teilen" : "Anonym teilen"}</button> : null}
+                  <button type="button" onClick={() => onRadarChange?.(entry, "remove")}>Aus dem Radar entfernen</button>
                 </div>
-              </li>;
-            })}</ul> : <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p>}
+              </li>)}</ul> : <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p>}
             {people.length ? <ul className="kd-entdecken-verwalten-liste">{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
-              <span><strong>{entry.name}</strong><small>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</small></span>
+              <span><strong>{entry.name}</strong><small>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Im Radar" : "Pausiert"}</small></span>
               {onPersonRadarChange ? <div>
                 {entry.authority === "local" ? <button type="button" onClick={() => onPersonRadarChange(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button> : null}
-                <button type="button" onClick={() => onPersonRadarChange(entry, "remove")}>Entfernen</button>
+                <button type="button" onClick={() => onPersonRadarChange(entry, "remove")}>Aus dem Radar entfernen</button>
               </div> : <small>Änderung derzeit nicht verfügbar.</small>}
             </li>)}</ul> : null}
             {syncProblem ? <RadarSyncProblem problem={syncProblem} onRetry={onRadarPilotSync} /> : null}
@@ -160,7 +155,7 @@ function RadarSyncProblem({ problem, onRetry }) {
 }
 
 function rejectedActionLabel(action) {
-  return ({ upsert: "Ziel speichern", pause: "Ziel pausieren", remove: "Ziel entfernen" })[action]
+  return ({ upsert: "Ins Radar aufnehmen", pause: "Pausieren", remove: "Aus dem Radar entfernen" })[action]
     || "Radarziel ändern";
 }
 
@@ -381,7 +376,7 @@ function RadarView({
           : "Deine Ziele bleiben auf diesem Gerät; eine automatische Prüfung ist im Gastmodus nicht verfügbar."} Neuigkeiten zeigen passende Werke mit Titel, Startdatum und Kategorie. Eine erkannte Plattform steht dabei.</p>
     </div>
     <article className="kd-entdecken-panel kd-radar-zielsuche">
-      <h3>Radarziel hinzufügen</h3>
+      <h3>Ins Radar aufnehmen</h3>
       <form className="kd-entdecken-formzeile" onSubmit={addTarget}>
         <label htmlFor="kd-radar-target-search">Wonach soll dein Radar suchen?</label>
         <input id="kd-radar-target-search" type="search" value={targetQuery} maxLength={160} disabled={targetAddBusy}
@@ -389,7 +384,7 @@ function RadarView({
           onChange={(event) => { setTargetQuery(event.target.value); setMessage(null); }} />
         <small>Dein Suchtext bleibt unter „Meine Ziele“. Gefundene Werke erscheinen unter „Neuigkeiten“.</small>
         <button type="submit" className="kd-entdecken-primaer"
-          disabled={targetAddBusy || !targetQuery.trim()}>{targetAddBusy ? message?.status === "searching" ? "Suche läuft…" : "Wird gespeichert…" : "Im Radar speichern"}</button>
+          disabled={targetAddBusy || !targetQuery.trim()}>{targetAddBusy ? message?.status === "searching" ? "Suche läuft…" : "Wird gespeichert…" : "Ins Radar aufnehmen"}</button>
       </form>
     </article>
     {message ? <p className={isErrorStatus(message.status) ? "kd-entdecken-fehler" : "kd-entdecken-pending"}
@@ -400,11 +395,11 @@ function RadarView({
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
+          <span>{entry.status === "active" ? "Im Radar" : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
           {accountMode ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, entry.targetId)}</span> : null}
         </li>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
-          <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</span>
+          <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Im Radar" : "Pausiert"}</span>
           {accountMode ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, createPersonRadarTargetId(entry.personExternalId, entry.role))}</span> : null}
         </li>)}</ul> : null}
         <RadarRejectedChanges radarState={radarState} onDismiss={onRadarRejectedDismiss} />
@@ -436,7 +431,7 @@ export function EntdeckenTab({
   onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   onRadarRejectedDismiss,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
-  onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
+  onObserveToggle, onRadarChange, onRadarPreview,
   recommendationPins = [], onRecommendationPinToggle,
 }) {
   const [ansicht, setAnsicht] = useState(fokusId ? "meinungen" : "empfehlungen");
@@ -483,7 +478,7 @@ export function EntdeckenTab({
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
       master={master} useLibrary={useLibrary} accountMode={accountMode} onUseLibrary={setUseLibrary}
       onObserveToggle={onObserveToggle} onRadarChange={onRadarChange} onPersonRadarChange={onPersonRadarChange}
-      onShareChange={onShareChange} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
+      syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
       onBlog={openBlog} onClose={closeManage} returnFocusRef={manageButtonRef} /> : null}
   </section>;
 }

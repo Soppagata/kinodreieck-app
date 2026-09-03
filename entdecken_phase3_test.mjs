@@ -742,7 +742,7 @@ try {
   });
   await setControl(workPicker.container.querySelector("#kd-radar-target-search"), "Passender Film");
   await act(async () => {
-    button(workPicker.container, "Im Radar speichern").click();
+    button(workPicker.container, "Ins Radar aufnehmen").click();
     await tick();
   });
   check("Radar speichert den unveränderten Freitext ohne lokalen Katalogpicker", () => {
@@ -759,9 +759,9 @@ try {
   });
   check("Radarziel entsteht erst nach expliziter Bestätigung", () => {
     assert.equal(previewConfirmed, 0);
-    assert.equal(document.querySelector('.kd-radar-preview input[type="checkbox"]').disabled, true);
+    assert.doesNotMatch(document.querySelector(".kd-radar-preview").textContent, /anonym|teilen|Von anderen entdeckt/i);
   });
-  await act(async () => { button(document, "Ins Radar bestätigen").click(); await tick(); });
+  await act(async () => { button(document, "Ins Radar aufnehmen").click(); await tick(); });
   check("Bestätigung ruft genau einen gekapselten Write auf", () => assert.equal(previewConfirmed, 1));
   await preview.cleanup();
 
@@ -986,7 +986,7 @@ try {
   await act(async () => { button(rejectedUi.container, "Radar").click(); await tick(); });
   check("Terminale Nicolas-Ablehnung nennt Ziel, Vorgang und gemappten Grund statt globalem Banner", () => {
     assert.match(rejectedUi.container.textContent, /Nicolas Cage/);
-    assert.match(rejectedUi.container.textContent, /Vorgang: Ziel speichern/);
+    assert.match(rejectedUi.container.textContent, /Vorgang: Ins Radar aufnehmen/);
     assert.match(rejectedUi.container.textContent, /auf dem Server nicht mehr in der erwarteten Form verfügbar/);
     assert.doesNotMatch(rejectedUi.container.textContent, /Radar-Änderung abgelehnt|Entdecken verwalten/);
     assert.doesNotMatch(rejectedUi.container.innerHTML, /wikidata:Q42869|radar_person_target_unavailable/);
@@ -1072,11 +1072,11 @@ try {
   });
   const serverPersonRow = [...document.querySelectorAll(".kd-entdecken-verwalten-liste li")]
     .find((entry) => /Beispiel Person/.test(entry.textContent));
-  check("Serverbestätigte Person bietet in Entdecken verwalten ausschließlich Entfernen an", () => {
+  check("Serverbestätigte Person bietet in Entdecken verwalten ausschließlich Radar-Entfernen an", () => {
     assert.ok(serverPersonRow);
-    assert.deepEqual([...serverPersonRow.querySelectorAll("button")].map((entry) => entry.textContent), ["Entfernen"]);
+    assert.deepEqual([...serverPersonRow.querySelectorAll("button")].map((entry) => entry.textContent), ["Aus dem Radar entfernen"]);
   });
-  await act(async () => { button(serverPersonRow, "Entfernen").click(); await tick(); });
+  await act(async () => { button(serverPersonRow, "Aus dem Radar entfernen").click(); await tick(); });
   check("Serverbestätigte Person löst genau einen remove-Aufruf derselben Identity ohne Providerarbeit aus", () => {
     assert.equal(serverPersonChanges.length, 1);
     assert.equal(serverPersonChanges[0].action, "remove");
@@ -1111,7 +1111,7 @@ try {
   await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
   check("Bestehende Person bleibt mit Name und Rolle, aber ohne Roh-ID sichtbar", () => {
     assert.match(personUi.container.textContent, /Nicolas Cage/);
-    assert.match(personUi.container.textContent, /Schauspiel · Aktiv/);
+    assert.match(personUi.container.textContent, /Schauspiel · Im Radar/);
     assert.doesNotMatch(personUi.container.textContent, /tägliche Prüfung|täglichen Prüfungen/i);
     assert.doesNotMatch(personUi.container.innerHTML, /wikidata:Q42869/);
     assert.equal(button(personUi.container, "Jetzt prüfen"), undefined);
@@ -1120,10 +1120,10 @@ try {
     personUi.container.querySelector('button[aria-label="Entdecken verwalten"]').click();
     await tick();
   });
-  check("Lokale Person behält Pausieren und Entfernen in Entdecken verwalten", () => {
+  check("Lokale Person behält Pausieren und Radar-Entfernen in Entdecken verwalten", () => {
     const row = [...document.querySelectorAll(".kd-entdecken-verwalten-liste li")]
       .find((entry) => /Nicolas Cage/.test(entry.textContent));
-    assert.deepEqual([...row.querySelectorAll("button")].map((entry) => entry.textContent), ["Pausieren", "Entfernen"]);
+    assert.deepEqual([...row.querySelectorAll("button")].map((entry) => entry.textContent), ["Pausieren", "Aus dem Radar entfernen"]);
   });
   await act(async () => {
     document.querySelector('button[aria-label="Entdecken verwalten schließen und zurück"]').click();
@@ -1175,7 +1175,7 @@ try {
   await act(async () => { button(franchiseUi.container, "Radar").click(); await tick(); });
   await setControl(franchiseUi.container.querySelector("#kd-radar-target-search"), "Star Wars");
   await act(async () => {
-    button(franchiseUi.container, "Im Radar speichern").click();
+    button(franchiseUi.container, "Ins Radar aufnehmen").click();
     await tick();
   });
   check("Reihenname bleibt Freitext und erzeugt keine zweite Zielauflösung", () => {
