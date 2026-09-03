@@ -38,3 +38,8 @@ verify_jwt = false
 # Plattform prueft das Sitzungstoken vor dem Handler; der Handler prueft Claims,
 # User-ID und aktiven Accountzugang zusaetzlich selbst.
 verify_jwt = true
+
+[functions.automatic-ai-check]
+# New API Keys sind keine JWTs. Der periodische Checker akzeptiert deshalb nur
+# seinen bodylosen Serverrequest mit exaktem Header und passendem sb_secret_-Key.
+verify_jwt = false

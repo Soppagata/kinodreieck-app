@@ -1,0 +1,70 @@
+name: Automatic AI six-hour checker
+
+on:
+  schedule:
+    - cron: "37 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kinodreieck-automatic-ai-check
+  cancel-in-progress: false
+
+jobs:
+  due-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Einen faelligen automatischen KI-Job pruefen
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_RADAR_SCHEDULER: ${{ secrets.SUPABASE_RADAR_SCHEDULER }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_RADAR_SCHEDULER" ]; then
+            echo "::error::Checker-Konfiguration fehlt."
+            exit 1
+          fi
+          case "$SUPABASE_URL" in
+            https://*.supabase.co) ;;
+            *) echo "::error::Checker-URL ist ungueltig."; exit 1 ;;
+          esac
+          case "$SUPABASE_RADAR_SCHEDULER" in
+            sb_secret_*) ;;
+            *) echo "::error::Checker-Key hat nicht das erwartete Format."; exit 1 ;;
+          esac
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          response_meta="$(
+            curl --silent --show-error --fail-with-body \
+              --request POST \
+              --connect-timeout 10 \
+              --max-time 240 \
+              --output "$response_file" \
+              --write-out "%{http_code} %{content_type}" \
+              "${SUPABASE_URL%/}/functions/v1/automatic-ai-check" \
+              --header "apikey: ${SUPABASE_RADAR_SCHEDULER}" \
+              --header "x-kd-automatic-check: scheduled-v1"
+          )"
+          http_status="${response_meta%% *}"
+          content_type="${response_meta#* }"
+          if [ "$http_status" != "200" ] || [[ "$content_type" != application/json* ]]; then
+            echo "::error::Automatic-AI-Checker lieferte keinen sicheren Erfolg (HTTP ${http_status})."
+            exit 1
+          fi
+          if ! outcome="$(node -e '
+            const { readFileSync } = require("node:fs");
+            let body;
+            try { body = JSON.parse(readFileSync(process.argv[1], "utf8")); }
+            catch { process.exit(2); }
+            const keys = Object.keys(body || {}).sort().join(",");
+            const codes = new Set(["idle", "initial-succeeded", "retry-finished"]);
+            if (keys !== "code,ok" || body.ok !== true || !codes.has(body.code)) process.exit(3);
+            process.stdout.write(body.code);
+          ' "$response_file")"; then
+            echo "::error::Automatic-AI-Checker lieferte keinen gueltigen Antwortvertrag."
+            exit 1
+          fi
+          echo "Automatic-AI-Checker: ${outcome}."
