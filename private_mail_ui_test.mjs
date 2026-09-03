@@ -61,8 +61,8 @@ function serviceWith(fetchImpl, extra = {}) {
   });
 }
 
-check("Der feste Client-Timeout beträgt 20 Sekunden", () => {
-  assert.equal(PRIVATE_MAIL_TIMEOUT_MS, 20_000);
+check("Der feste Client-Timeout lässt dem 20-Sekunden-Serverweg Abschlussluft", () => {
+  assert.equal(PRIVATE_MAIL_TIMEOUT_MS, 30_000);
 });
 
 let fetches = 0;
@@ -94,6 +94,7 @@ check("Feedback nutzt Route, Token, no-store und das exakte v1-Browserschema", (
   assert.equal(feedbackCall.options.cache, "no-store");
   assert.equal(feedbackCall.options.headers.Authorization, "Bearer session-token");
   assert.equal(feedbackCall.options.headers.apikey, "sb_publishable_test");
+  assert.equal(Object.hasOwn(feedbackCall.options.headers, "Cache-Control"), false);
   assert.ok(feedbackCall.options.signal instanceof AbortSignal);
   assert.deepEqual(feedbackCall.body, {
     schemaVersion: PRIVATE_MAIL_SCHEMA_VERSION,

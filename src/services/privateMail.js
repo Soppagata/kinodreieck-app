@@ -16,7 +16,7 @@ export const PRIVATE_MAIL_CLIENT_STATUS = Object.freeze({
   UNAVAILABLE: "unavailable",
 });
 
-export const PRIVATE_MAIL_TIMEOUT_MS = 20_000;
+export const PRIVATE_MAIL_TIMEOUT_MS = 30_000;
 
 const UNKNOWN_CODES = new Set([
   PRIVATE_MAIL_ERROR_CODES.IDEMPOTENCY_CONFLICT,
@@ -97,7 +97,6 @@ export function createPrivateMailService({
             apikey: text(config.supabasePublishableKey),
             Accept: "application/json",
             "Content-Type": "application/json",
-            "Cache-Control": "no-store",
           },
           body: JSON.stringify(checked.request),
         },
