@@ -27,6 +27,10 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 const RADAR_REFRESH_HEADER = "x-kd-radar-refresh";
 const SCHEDULED_REFRESH_VALUE = "scheduled-144h-v1";
+const RETRY_REFRESH_VALUE = "retry-6h-v1";
+const RETRY_JOB_HEADER = "x-kd-automatic-job-id";
+const RETRY_OPERATION_HEADER = "x-kd-radar-retry-operation";
+const AUTOMATIC_RETRY_TASK_ID = "radar-websearch-task";
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VIENNA_DAY_FORM = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
@@ -210,17 +214,26 @@ export function createRadarWebsearchHandler({
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const refreshHeader = req.headers.get(RADAR_REFRESH_HEADER);
     const scheduledMode = refreshHeader === SCHEDULED_REFRESH_VALUE;
-    if (!supabaseUrl || (refreshHeader !== null && !scheduledMode)) {
+    const retryMode = refreshHeader === RETRY_REFRESH_VALUE;
+    const automaticMode = scheduledMode || retryMode;
+    const retryJobHeader = req.headers.get(RETRY_JOB_HEADER);
+    const retryOperationHeader = req.headers.get(RETRY_OPERATION_HEADER);
+    if (!supabaseUrl || (refreshHeader !== null && !automaticMode)
+        || (!retryMode && (retryJobHeader !== null || retryOperationHeader !== null))) {
       return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
     }
 
     const secretKeysRaw = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
     let publishableKey = "";
     let serviceKey = "";
-    if (scheduledMode) {
+    if (automaticMode) {
+      if (retryMode && (!UUID_FORM.test(retryJobHeader || "")
+          || !UUID_FORM.test(retryOperationHeader || ""))) {
+        return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+      }
       const scheduledAccess = authorizeScheduledRadarRequest({
         refreshHeader,
-        expectedRefreshHeader: SCHEDULED_REFRESH_VALUE,
+        expectedRefreshHeader: retryMode ? RETRY_REFRESH_VALUE : SCHEDULED_REFRESH_VALUE,
         apiKey: req.headers.get("apikey"),
         authorizationHeaderPresent: req.headers.has("Authorization"),
         bodyPresent: await scheduledRequestHasNonEmptyBody(req),
@@ -248,13 +261,25 @@ export function createRadarWebsearchHandler({
     let targetId = "";
     let rawTargetText: string | null = null;
     let initialMode = false;
+    let providerOperationId: string | null = null;
+    let initialAutomaticJob: {
+      logicalJobId: string;
+      providerOperationId: string;
+      targetRowId: string;
+      viennaDay: string;
+    } | null = null;
+    let retryBinding: {
+      logicalJobId: string;
+      providerOperationId: string;
+      request: Record<string, unknown>;
+    } | null = null;
     let dailyClaim: {
       targetRowId: string;
       viennaDay: string;
       fenceToken: string;
     } | null = null;
 
-    if (!scheduledMode) {
+    if (!automaticMode) {
       const authenticatedRequest = await accountFromRequest(req, supabaseUrl, publishableKey);
       if (!authenticatedRequest) return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
       accountId = authenticatedRequest.accountId;
@@ -283,7 +308,41 @@ export function createRadarWebsearchHandler({
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    if (scheduledMode) {
+    if (retryMode) {
+      const logicalJobId = retryJobHeader || "";
+      const retryProviderOperationId = retryOperationHeader || "";
+      const { data: binding, error: bindingError } = await admin.rpc(
+        "kd_radar_automatic_retry_context",
+        {
+          p_logical_job_id: logicalJobId,
+          p_retry_provider_operation_id: retryProviderOperationId,
+        },
+      );
+      const request = binding?.request;
+      accountId = typeof binding?.accountId === "string" ? binding.accountId : "";
+      targetId = typeof binding?.targetId === "string" ? binding.targetId : "";
+      rawTargetText = binding?.targetText === null ? null
+        : typeof binding?.targetText === "string" ? binding.targetText : "";
+      if (bindingError || binding?.ok !== true || binding?.code !== "retry-bound"
+          || binding?.logicalJobId !== logicalJobId
+          || binding?.retryProviderOperationId !== retryProviderOperationId
+          || !UUID_FORM.test(accountId) || !UUID_FORM.test(binding?.targetRowId || "")
+          || !VIENNA_DAY_FORM.test(binding?.radarViennaDay || "")
+          || !targetId || targetId.length > 160
+          || !request || typeof request !== "object" || Array.isArray(request)
+          || request.targetId !== targetId
+          || (rawTargetText !== null
+            && (!rawTargetText.trim() || rawTargetText.length > 160
+              || request.targetText !== rawTargetText))) {
+        return json({ ok: false, status: "failed" }, 500, origin);
+      }
+      providerOperationId = retryProviderOperationId;
+      retryBinding = {
+        logicalJobId,
+        providerOperationId: retryProviderOperationId,
+        request,
+      };
+    } else if (scheduledMode) {
       const { data: claim, error: claimError } = await admin.rpc("kd_radar_daily_claim");
       if (claimError) return json({ ok: false, status: "failed" }, 500, origin);
       if (claim?.claim !== true) {
@@ -309,6 +368,19 @@ export function createRadarWebsearchHandler({
         return json({ ok: false, status: "failed" }, 500, origin);
       }
       dailyClaim = { targetRowId, viennaDay, fenceToken };
+      const logicalJobId = crypto.randomUUID();
+      const initialProviderOperationId = crypto.randomUUID();
+      if (!UUID_FORM.test(logicalJobId) || !UUID_FORM.test(initialProviderOperationId)
+          || logicalJobId === initialProviderOperationId) {
+        return json({ ok: false, status: "failed" }, 500, origin);
+      }
+      providerOperationId = initialProviderOperationId;
+      initialAutomaticJob = {
+        logicalJobId,
+        providerOperationId: initialProviderOperationId,
+        targetRowId,
+        viennaDay,
+      };
     }
     let providerDiagnostic = providerDiagnosticAccess({
       headerValue: providerDiagnosticHeader,
@@ -331,7 +403,7 @@ export function createRadarWebsearchHandler({
         return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
       }
     }
-    const user = scheduledMode ? null : createClient(supabaseUrl, publishableKey, {
+    const user = automaticMode ? null : createClient(supabaseUrl, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: `Bearer ${userToken}` } },
     });
@@ -354,7 +426,17 @@ export function createRadarWebsearchHandler({
       }
       dailyClaim = { targetRowId: claim.targetRowId, viennaDay: claim.viennaDay, fenceToken: claim.fenceToken };
     }
-    const assertDailyLease = async () => {
+    const assertExecutionFence = async () => {
+      if (retryBinding) {
+        const { data, error } = await admin.rpc("kd_radar_automatic_retry_assert", {
+          p_logical_job_id: retryBinding.logicalJobId,
+          p_retry_provider_operation_id: retryBinding.providerOperationId,
+        });
+        if (error || data?.ok !== true || data?.code !== "retry-claimed") {
+          throw error || new Error("radar-automatic-retry-invalid");
+        }
+        return;
+      }
       if (!dailyClaim) return;
       const { data, error } = await admin.rpc("kd_radar_daily_assert_lease", {
         p_account_id: accountId,
@@ -385,6 +467,12 @@ export function createRadarWebsearchHandler({
       async loadAuthorizedTarget({
         accountId: actor, targetId: key, targetText: rawText = null,
       }: { accountId: string; targetId: string; targetText?: string | null }) {
+        if (retryBinding) {
+          if (actor !== accountId || key !== targetId || rawText !== rawTargetText) {
+            throw new Error("radar-automatic-retry-context-drift");
+          }
+          return retryBinding.request;
+        }
         const rpc = rawText === null ? "kd_radar_websearch_context" : "kd_radar_websearch_prepare_text";
         const { data, error } = await admin.rpc(rpc, rawText === null ? {
           p_account_id: actor, p_target_key: key,
@@ -406,7 +494,7 @@ export function createRadarWebsearchHandler({
         titleGroupContext?: Record<string, unknown> | null;
         textContext?: Record<string, unknown> | null;
       }) {
-        await assertDailyLease();
+        await assertExecutionFence();
         const { data, error } = await admin.rpc(
           textContext
             ? "kd_radar_websearch_upsert_text_finding"
@@ -431,6 +519,7 @@ export function createRadarWebsearchHandler({
         return data;
       },
     };
+    const fixedProviderOperationId = providerOperationId;
     const productAdapter = adapter ?? createAnthropicRadarWebsearchAdapter({
       apiKey: Deno.env.get("ANTHROPIC_API_KEY") || "",
       fetchImpl,
@@ -488,7 +577,10 @@ export function createRadarWebsearchHandler({
       async reserveCost({ operationId, reservationUsdCent, searchRequests }: {
         operationId: string; reservationUsdCent: number; searchRequests: number;
       }) {
-        await assertDailyLease();
+        if (providerOperationId && operationId !== providerOperationId) {
+          throw new Error("radar-automatic-provider-operation-drift");
+        }
+        await assertExecutionFence();
         const { data, error } = await admin.rpc("kd_radar_websearch_auftrag_starten", {
           p_account_id: accountId,
           p_target_key: targetId,
@@ -497,15 +589,59 @@ export function createRadarWebsearchHandler({
           p_search_requests: searchRequests,
         });
         if (error) throw error;
+        const logId = Number(data?.log_id);
+        const automaticJob = initialAutomaticJob;
+        if (automaticJob && data?.ok === true) {
+          let begin: Record<string, unknown> | null = null;
+          let beginError: unknown = null;
+          try {
+            const response = await admin.rpc(
+              "kd_automatic_ai_retry_job_begin",
+              {
+                p_logical_job_id: automaticJob.logicalJobId,
+                p_task_id: AUTOMATIC_RETRY_TASK_ID,
+                p_account_id: accountId,
+                p_target_id: automaticJob.targetRowId,
+                p_radar_vienna_day: automaticJob.viennaDay,
+                p_initial_provider_operation_id: automaticJob.providerOperationId,
+              },
+            );
+            begin = response.data;
+            beginError = response.error;
+          } catch (error) {
+            beginError = error;
+          }
+          if (beginError || begin?.ok !== true || begin?.replay !== false
+              || begin?.status !== "pending"
+              || begin?.logicalJobId !== automaticJob.logicalJobId
+              || !Number.isInteger(logId) || logId <= 0) {
+            if (Number.isInteger(logId) && logId > 0) {
+              try {
+                const { error: abortError } = await admin.rpc("kd_ai_auftrag_beenden", {
+                  p_id: logId,
+                  p_status: "fehler",
+                  p_modell: null,
+                  p_input_tokens: null,
+                  p_output_tokens: null,
+                  p_kosten: null,
+                  p_fehlerklasse: "automatic-retry-bind-failed",
+                });
+                if (abortError) throw abortError;
+              } catch { /* Best-effort: der Anbieterpfad bleibt trotzdem gesperrt. */ }
+            }
+            return { ok: false, logId, decision: "server" };
+          }
+        }
         return {
           ok: data?.ok === true,
-          logId: data?.log_id,
+          logId,
           decision: data?.ok === true ? "accepted" : normalizeRadarReservationDecision(data?.code),
         };
       },
       async settleCost({
         logId, status, model, inputTokens, outputTokens, costUsdCent, errorClass,
       }: Record<string, unknown>) {
+        if (retryBinding) await assertExecutionFence();
         const { error } = await admin.rpc("kd_ai_auftrag_beenden", {
           p_id: logId,
           p_status: status,
@@ -517,6 +653,7 @@ export function createRadarWebsearchHandler({
         });
         if (error) throw error;
       },
+      operationId: fixedProviderOperationId ? () => fixedProviderOperationId : undefined,
     });
     let result;
     try {
@@ -524,7 +661,7 @@ export function createRadarWebsearchHandler({
         accountId, targetId, targetText: rawTargetText, adapter: productAdapter, repository,
       });
     } catch (error) {
-      if (!scheduledMode && !initialMode) throw error;
+      if (!automaticMode && !initialMode) throw error;
       result = { status: "unavailable", writes: 0 };
     }
     if (dailyClaim) {
@@ -543,6 +680,32 @@ export function createRadarWebsearchHandler({
         return json({ ok: false, status: scheduledMode ? "failed" : "storage_error", writes: result.writes || 0 }, 500, origin);
       }
       if (scheduledMode) return json({ ok: true, status: "processed" }, 200, origin);
+    }
+    if (retryBinding) {
+      const telemetry = typeof productAdapter.telemetry === "function"
+        ? productAdapter.telemetry() : {};
+      const providerRequests = typeof telemetry.providerRequests === "number"
+        ? telemetry.providerRequests : Number.NaN;
+      const websearchRequests = typeof telemetry.searchRequests === "number"
+        ? telemetry.searchRequests : Number.NaN;
+      const { data: proof, error: proofError } = await admin.rpc(
+        "kd_radar_automatic_retry_result_proven",
+        {
+          p_logical_job_id: retryBinding.logicalJobId,
+          p_retry_provider_operation_id: retryBinding.providerOperationId,
+        },
+      );
+      if (proofError || proof?.ok !== true || proof?.code !== "retry-succeeded"
+          || !Number.isInteger(providerRequests) || providerRequests < 0 || providerRequests > 1
+          || !Number.isInteger(websearchRequests) || websearchRequests < 0 || websearchRequests > 4) {
+        return json({ ok: false, code: "retry-unproven" }, 500, origin);
+      }
+      return json({
+        ok: true,
+        code: "retry-finished",
+        providerRequests,
+        websearchRequests,
+      }, 200, origin);
     }
     const status = result.status;
     const httpStatus = status === "forbidden" ? 403 : 200;

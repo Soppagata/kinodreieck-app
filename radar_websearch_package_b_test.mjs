@@ -1163,6 +1163,10 @@ const sixDayMigration = fs.readFileSync(
   "./supabase/migrations/20260830120000_radar_six_day_schedule.sql",
   "utf8",
 );
+const automaticRetryBindingMigration = fs.readFileSync(
+  "./supabase/migrations/20260903213000_radar_automatic_retry_binding.sql",
+  "utf8",
+);
 const sharedSixDayWorkflow = fs.readFileSync("./.github/workflows/entdecken-six-day.yml", "utf8");
 const radarJobStart = sharedSixDayWorkflow.indexOf("  radar-six-day-trigger:");
 const entdeckenJobStart = sharedSixDayWorkflow.indexOf("  entdecken-six-day-trigger:");
@@ -1341,7 +1345,7 @@ await check("Daily-Aktivierung stoppt bei Settings-Drift und behaelt alle besteh
   assert.match(dailyMigration, /set radar_scheduler_aktiv = true/);
   assert.match(dailyMigration, /radar_aktiv is true[\s\S]*?radar_provider_aktiv is true[\s\S]*?radar_scheduler_aktiv is false/);
   assert.doesNotMatch(dailyMigration, /kd_ai_limits|task_max_reservierung|anbieter_request_max/i);
-  assert.match(functionIndex, /await assertDailyLease\(\);[\s\S]*?kd_radar_websearch_auftrag_starten/);
+  assert.match(functionIndex, /await assertExecutionFence\(\);[\s\S]*?kd_radar_websearch_auftrag_starten/);
   assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
   assert.match(migration, /return public\.kd_ai_auftrag_starten\(/);
 });
@@ -1364,6 +1368,103 @@ await check("Scheduled-Function ist bodylos, Secret-Key-only und antwortet ohne 
   assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_finish"/);
   assert.match(functionIndex, /json\(\{ ok: true, status: "processed" \}, 200, origin\)/);
   assert.doesNotMatch(functionIndex, /console\.(?:log|error)/);
+});
+
+await check("+6h-Retry akzeptiert nur die bodylose apikey-Seam und bindet keine fachlichen Header", () => {
+  assert.match(functionIndex, /const RETRY_REFRESH_VALUE = "retry-6h-v1"/);
+  assert.match(functionIndex, /const RETRY_JOB_HEADER = "x-kd-automatic-job-id"/);
+  assert.match(functionIndex, /const RETRY_OPERATION_HEADER = "x-kd-radar-retry-operation"/);
+  assert.match(functionIndex, /const retryMode = refreshHeader === RETRY_REFRESH_VALUE/);
+  assert.match(functionIndex, /retryMode && \(!UUID_FORM\.test\(retryJobHeader \|\| ""\)[\s\S]*!UUID_FORM\.test\(retryOperationHeader \|\| ""\)/);
+  assert.match(functionIndex, /expectedRefreshHeader: retryMode \? RETRY_REFRESH_VALUE : SCHEDULED_REFRESH_VALUE/);
+  assert.match(functionIndex, /authorizationHeaderPresent: req\.headers\.has\("Authorization"\)/);
+  assert.match(functionIndex, /bodyPresent: await scheduledRequestHasNonEmptyBody\(req\)/);
+  assert.match(functionIndex, /originPresent: origin !== null/);
+  assert.doesNotMatch(functionIndex, /x-kd-(?:automatic-account|radar-account|radar-target)/i);
+  const contextCall = functionIndex.indexOf('"kd_radar_automatic_retry_context"');
+  const providerRun = functionIndex.indexOf("result = await runRadarWebsearchCheck");
+  assert.ok(contextCall >= 0 && contextCall < providerRun);
+  assert.match(functionIndex, /p_logical_job_id: logicalJobId,[\s\S]*p_retry_provider_operation_id: retryProviderOperationId/);
+  assert.doesNotMatch(
+    functionIndex.slice(functionIndex.indexOf("if (retryMode)"), providerRun),
+    /req\.json\(|targetId\s*=\s*req\.|accountId\s*=\s*req\./,
+  );
+});
+
+await check("Scheduler bindet genau eine feste Provideroperation nach Kostenclaim und vor Providerfetch", () => {
+  const dailyClaim = functionIndex.indexOf('admin.rpc("kd_radar_daily_claim")');
+  const logicalId = functionIndex.indexOf("const logicalJobId = crypto.randomUUID()", dailyClaim);
+  const initialOperation = functionIndex.indexOf("const initialProviderOperationId = crypto.randomUUID()", logicalId);
+  const reserve = functionIndex.indexOf('admin.rpc("kd_radar_websearch_auftrag_starten"');
+  const begin = functionIndex.indexOf('"kd_automatic_ai_retry_job_begin"', reserve);
+  const adapterReserve = adapterSource.indexOf("reservation = await reserveCost");
+  const adapterFetch = adapterSource.indexOf("response = await fetchImpl", adapterReserve);
+  assert.ok(dailyClaim >= 0 && dailyClaim < logicalId && logicalId < initialOperation);
+  assert.ok(reserve >= 0 && reserve < begin);
+  assert.ok(adapterReserve >= 0 && adapterReserve < adapterFetch);
+  assert.match(functionIndex, /const fixedProviderOperationId = providerOperationId/);
+  assert.match(functionIndex, /operationId: fixedProviderOperationId \? \(\) => fixedProviderOperationId : undefined/);
+  assert.match(functionIndex, /p_task_id: AUTOMATIC_RETRY_TASK_ID/);
+  assert.match(functionIndex, /p_target_id: automaticJob\.targetRowId/);
+  assert.match(functionIndex, /p_radar_vienna_day: automaticJob\.viennaDay/);
+  assert.match(functionIndex, /p_initial_provider_operation_id: automaticJob\.providerOperationId/);
+  assert.match(functionIndex, /beginError \|\| begin\?\.ok !== true \|\| begin\?\.replay !== false/);
+  assert.match(functionIndex, /p_status: "fehler"[\s\S]*p_fehlerklasse: "automatic-retry-bind-failed"/);
+});
+
+await check("Retry nutzt den normalen Adapter mit Assertions vor Kosten- und Ergebniswrites", () => {
+  assert.match(functionIndex, /admin\.rpc\("kd_radar_automatic_retry_assert"/);
+  const reserveMethod = functionIndex.indexOf("async reserveCost");
+  const reserveAssert = functionIndex.indexOf("await assertExecutionFence();", reserveMethod);
+  const reserveRpc = functionIndex.indexOf('admin.rpc("kd_radar_websearch_auftrag_starten"', reserveAssert);
+  const settleMethod = functionIndex.indexOf("async settleCost", reserveRpc);
+  const settleAssert = functionIndex.indexOf("if (retryBinding) await assertExecutionFence();", settleMethod);
+  const settleRpc = functionIndex.indexOf('admin.rpc("kd_ai_auftrag_beenden"', settleAssert);
+  const upsertMethod = functionIndex.indexOf("async upsertConfirmedEvent");
+  const upsertAssert = functionIndex.indexOf("await assertExecutionFence();", upsertMethod);
+  const upsertRpc = functionIndex.indexOf("kd_radar_websearch_upsert_", upsertAssert);
+  assert.ok(reserveAssert >= 0 && reserveAssert < reserveRpc);
+  assert.ok(settleAssert >= 0 && settleAssert < settleRpc);
+  assert.ok(upsertAssert >= 0 && upsertAssert < upsertRpc);
+  assert.match(adapterSource, /export const RADAR_TEXT_MAX_USES = 4/);
+  assert.match(adapterSource, /max_uses: textTarget \? RADAR_TEXT_MAX_USES : 1/);
+  assert.doesNotMatch(functionIndex, /maxSearchRequests/);
+  assert.equal((adapterSource.match(/\bfetchImpl\(/g) || []).length, 1);
+});
+
+await check("Retry-Erfolg ist exakt klein, logbelegt und ohne Daily-Finish oder Mail", () => {
+  const retryResultStart = functionIndex.indexOf("if (retryBinding) {", functionIndex.indexOf("if (dailyClaim)"));
+  const manualResultStart = functionIndex.indexOf("const status = result.status", retryResultStart);
+  const retryResult = functionIndex.slice(retryResultStart, manualResultStart);
+  assert.match(retryResult, /kd_radar_automatic_retry_result_proven/);
+  assert.match(retryResult, /proof\?\.code !== "retry-succeeded"/);
+  assert.match(retryResult, /providerRequests < 0 \|\| providerRequests > 1/);
+  assert.match(retryResult, /websearchRequests < 0 \|\| websearchRequests > 4/);
+  assert.match(retryResult, /ok: true,[\s\S]*code: "retry-finished",[\s\S]*providerRequests,[\s\S]*websearchRequests/);
+  assert.doesNotMatch(retryResult, /accountId|targetId|targetText|feed|title|displayText|providerReceipt/);
+  assert.doesNotMatch(retryResult, /kd_radar_daily_finish|kd_automatic_ai_retry_finish|mail/i);
+  assert.match(automaticRetryBindingMigration, /log\.vorgang_id = job\.retry_provider_operation_id/);
+  assert.match(automaticRetryBindingMigration, /log\.status = 'fertig'/);
+  assert.match(automaticRetryBindingMigration, /log\.kosten_usd_cent > 0/);
+  assert.match(automaticRetryBindingMigration, /log\.input_tokens is not null[\s\S]*log\.output_tokens is not null/);
+});
+
+await check("Bindungs-Migration ist additiv, inhaltsfrei gespeichert und nur service-role-ausfuehrbar", () => {
+  for (const signature of [
+    "kd_radar_automatic_retry_context(uuid,uuid)",
+    "kd_radar_automatic_retry_assert(uuid,uuid)",
+    "kd_radar_automatic_retry_result_proven(uuid,uuid)",
+  ]) {
+    assert.match(automaticRetryBindingMigration, new RegExp(`revoke all on function public\\.${signature.replace(/[()[\]]/g, "\\$&")}`));
+  }
+  assert.equal((automaticRetryBindingMigration.match(/to service_role;/g) || []).length, 3);
+  assert.doesNotMatch(automaticRetryBindingMigration, /create\s+table|alter\s+table\s+public\.kd_automatic_ai_retry_jobs\s+add/i);
+  assert.doesNotMatch(automaticRetryBindingMigration, /insert\s+into\s+public\.kd_automatic_ai_retry_jobs|update\s+public\.kd_automatic_ai_retry_jobs/i);
+  assert.doesNotMatch(automaticRetryBindingMigration, /http_post|net\.http|cron\.|resend/i);
+  assert.match(automaticRetryBindingMigration, /job\.logical_job_id = p_logical_job_id/);
+  assert.match(automaticRetryBindingMigration, /job\.retry_provider_operation_id = p_retry_provider_operation_id/);
+  assert.match(automaticRetryBindingMigration, /job\.retry_consumed is true/);
+  assert.match(automaticRetryBindingMigration, /job\.retry_status = 'claimed'/);
 });
 
 await check("Daily-Workflow laeuft nur per Zeitplan, seriell hoechstens zehnmal und loggt keine Antwort", () => {
@@ -1390,8 +1491,8 @@ await check("Daily-Workflow laeuft nur per Zeitplan, seriell hoechstens zehnmal 
   assert.equal(workflowContract, "scheduled-144h-v1");
   assert.equal(workflowContract, functionContract);
   assert.notEqual(workflowContract, "scheduled-v1");
-  assert.match(functionIndex, /\(refreshHeader !== null && !scheduledMode\)\) \{[\s\S]*?return json\(\{ ok: false, status: "forbidden", writes: 0 \}, 403, origin\);/u);
-  const rejectsScheduledHeaderBeforeClient = functionIndex.indexOf("(refreshHeader !== null && !scheduledMode)");
+  assert.match(functionIndex, /\(refreshHeader !== null && !automaticMode\)[\s\S]*?return json\(\{ ok: false, status: "forbidden", writes: 0 \}, 403, origin\);/u);
+  const rejectsScheduledHeaderBeforeClient = functionIndex.indexOf("(refreshHeader !== null && !automaticMode)");
   assert.ok(rejectsScheduledHeaderBeforeClient >= 0);
   assert.ok(rejectsScheduledHeaderBeforeClient < functionIndex.indexOf("createClient(supabaseUrl, serviceKey"));
   assert.ok(rejectsScheduledHeaderBeforeClient < functionIndex.indexOf('admin.rpc("kd_radar_daily_claim")'));

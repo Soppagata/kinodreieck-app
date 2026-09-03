@@ -55,7 +55,7 @@ try {
     ('task_modell','{}'),('task_max_tokens','{}'),('task_max_reservierung_usd_cent','{}');`);
   const selected = readdirSync("supabase/migrations").filter((file) =>
     file.endsWith(".sql") && file >= "20260809180000" && (
-      /radar|event_radar|private_pilot|private_export/.test(file)
+      /radar|event_radar|private_pilot|private_export|automatic_ai_retry/.test(file)
     ));
   for (const file of selected) {
     if (file.startsWith("20260825120000")) sql("update public.kd_radar_settings set radar_aktiv=true,radar_provider_aktiv=true");
