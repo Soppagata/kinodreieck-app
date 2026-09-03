@@ -1,8 +1,8 @@
 # Road to Live: Etappenplan zum privaten Release
 
-Stand: 31.08.2026
+Stand: 03.09.2026
 
-Status: `E3B_STAGING_AUSGELIEFERT`; P5/E5 lokal vorbereitet,
+Status: `E5_LOCAL_GREEN_STAGING_CANDIDATE`; E3b auf Staging ausgeliefert,
 `main`/Production unverändert.
 
 Ziel: ein einfaches, stabiles privates Produkt auf `kinodreieck.at`.
@@ -621,14 +621,13 @@ konkrete fehlende Entscheidung/Wirkung. Teilbelege in einer Zeile erledigen
 nicht still deren übrige Muss-Anforderungen. Die vollständigen Muss-Sätze in
 Abschnitt 2 sind verbindlicher Bestandteil der jeweils genannten Zeile.
 
-### Aktueller Meisterstand und E3b-Stagingkandidat – 03.09.2026
+### Aktueller Meisterstand und E5-Stagingkandidat – 03.09.2026
 
-Gemeinsamer E3b-Integrationskandidat ist
-`6688031` auf `codex/road-to-live-integration-20260902`. Er führt den auf
-`staging` und `main` ausgelieferten Login-/Konto-Recovery-Stand `24bbddc` mit
-den vorbereiteten E1-, E2- und E3a-Grundlagen sowie dem integrierten
-Resend-Adapter, Legal-Abschluss, Release-Wiring und der additiven automatischen
-Radar-Nachprüfung zusammen. Der Primärcheckout
+Gemeinsamer E5-Produktkandidat ist `0044769` auf
+`codex/road-to-live-integration-20260902`. Er führt den auf `staging` und
+`main` ausgelieferten Login-/Konto-Recovery-Stand `24bbddc`, die E1-/E2-
+Grundlagen, E3a-Mail/Legal und die auf Staging ausgelieferte E3b-Nachprüfung
+mit der binär bereinigten privaten Release-Oberfläche zusammen. Der Primärcheckout
 `03ff280` samt fremden Änderungen bleibt unberührt.
 
 | Meilenstein | Nutzerergebnis | Zustand | Kandidat / offen |
@@ -637,7 +636,7 @@ Radar-Nachprüfung zusammen. Der Primärcheckout
 | M2 | Konten und Revisionen bleiben getrennt; Sicherheitsdownload und Kontoexport behaupten nur belegte Umfänge | GEBAUT | `2a50386`; der inhaltsfreie Messweg ist als `2fd5674` integriert, die einmalige reale Größenmessung und Praxis auf zwei Geräten bleiben offen |
 | M3 | Feedback ohne Namensangabe und authentifizierte Löschanfrage laufen über einen begrenzten, servergebundenen Mailweg | AUF STAGING AUSGELIEFERT; PHYSISCHES IPHONE OFFEN | Staging `54b4f299fb453629128cb40950c5874d4b81f542`: Migrationen, digestgebundene Secrets, `ACTIVE` Function v2 mit `verify_jwt=true`, fünfdateilige Source-Closure, Staging-CORS, Cloudflare-DNS und Resend-Domain sind belegt. Genau ein synthetischer Staging-Request endete ohne Retry mit HTTP 200 `accepted`; der inhaltsfreie Ledger zeigt eine akzeptierte Operation und zwei Rate-Buckets, Resend meldet `delivered`. GitHub-Lauf `33724772325` ist vollständig grün einschließlich `npm test`, Function-Tests, Chromium, WebKit, atomarer Deployment-URL und fester Staging-Domain. Der unabhängige frische Browserkontext belegt Minimal-Login, Legal-Fläche, exakte Build-Version und aktiven Service Worker. `main` blieb auf `24bbddc`; nur die physische iPhone-PWA-Abnahme bleibt offen |
 | M4 | Nur tatsächlich aktive automatische KI-Jobs erhalten genau eine Nachprüfung nach sechs Stunden und höchstens einen Retry | AUF STAGING AUSGELIEFERT; AKTIVER +6H-BETRIEBSBELEG OFFEN | Scheduler-Authentifizierung ist korrigiert. GitHub-Lauf `33599267721`, Attempt 3, belegt genau ein fälliges Werkziel, einen Anthropic-Request, einen Websearch und 3,0078 US-Cent. Die service-only Migrationen `20260903193000`/`20260903213000` sind atomar angewandt und rückgelesen: leeres RLS-Ledger, fünf Ledger- und drei Radar-RPCs nur für `service_role`. `radar-websearch-task` v58 und `automatic-ai-check` v1 sind `ACTIVE`, ihre gebündelten Verträge rückgelesen und keine der Functions wurde nach dem Beleglauf aufgerufen. Staging `e828083` und GitHub-Lauf `33792056461` sind grün; die feste Domain liefert dieselbe Buildversion. Der stündliche GitHub-Schedule läuft technisch erst vom Default-Branch `main`; deshalb aktiviert die reine Staging-Lieferung noch keinen +6h-Checker und `main` bleibt unverändert |
-| M5 | Bereinigter, integrierter Privatrelease-Kandidat mit einem gemeinsamen Abschlusslauf | P5/E5 VORBEREITET | E3b ist auf Staging `e828083` mit grünem CI-/Deploy-/Domain-Readback ausgeliefert. P5/E5 entfernt als Nächstes nur nicht freigegebene sichtbare Nebenwege und vereinheitlicht Texte; Radar, Entdecken, Kino, Streaming, Suche, persönliche Inhalte und Kontodaten bleiben funktional erhalten |
+| M5 | Bereinigter, integrierter Privatrelease-Kandidat mit einem gemeinsamen Abschlusslauf | E5 LOKAL GRÜN; STAGING-KANDIDAT | Produktkandidat `0044769`: Settings-, Radar-/Entdecken- und Blog-Pakete samt Master-Nähten integriert. Nicht freigegebene sichtbare Nebenwege fehlen, während Konto, Datenrechte, Sicherheitsdownload, Streamingquellen, eigene Blogartikel, Radarziele und -funde erhalten bleiben. `npm test` ist auf dem gemeinsamen Kandidaten vollständig grün (Mocks, Browserpfade sowie Production-/Pages-Build); keine echten KI-, Mail- oder Provideraufrufe. Staging-Auslieferung und praktische PWA-Abnahme noch offen |
 
 W2 ist eine `PARALLEL_WAVE` auf exakt `2a50386`; Meister-Worktree und
 Zielbranch bleiben `/private/tmp/kd-road-to-live-integration-20260902` und
@@ -744,7 +743,7 @@ aktiviert ihn wegen GitHubs Default-Branch-Regel aber noch nicht. Ein echter
 +6h-Retry samt genau einer Betriebs-Mail bleibt deshalb praktische E6-Abnahme,
 nicht ein weiterer Testlauf dieser Etappe.
 
-P5/E5 startet als `PARALLEL_WAVE W4` auf exakt `e828083`. Die Bereinigung
+P5/E5 wurde als `PARALLEL_WAVE W4` auf exakt `e828083` gebaut. Die Bereinigung
 ändert keine Datenmodelle, Serverpfade, Radar-/Entdecken-Ergebnisse, Kino- oder
 Streaminglogik. Sichtbare Kernwege werden behalten; nicht freigegebene
 Veröffentlichungs-, Import-/Restore-, externe Foto-KI-, Blogprofilanalyse-,
@@ -752,17 +751,19 @@ Wartungs-, Download- und Easter-Egg-Einstiege werden nur aus der Release-
 Oberfläche entfernt. Bestehende persönliche Daten oder Serverzustände werden
 nicht gelöscht oder umgeschrieben.
 
-| Paket | Nutzerergebnis | Exklusive Write-Fläche | Eingefrorene Grenze |
+| Paket | Nutzerergebnis | Exklusive Write-Fläche | Eingefrorene Grenze / Zustand |
 |---|---|---|---|
-| K / Einstellungen | Settings zeigt Darstellung, KI-Wahl, Geschmacksprofil, Konto-/Sync, Datenrechte, Sicherheitsdownload, Streamingquellen und Legal; keine Rohdatenimporte, externe Foto-KI, Blogprofilanalyse, Owner-Wartung, Einzeldatei oder versteckten Modi | `src/tabs/DatenTab.jsx`, `src/components/GeschmackBereich.jsx`, neuer fokussierter Test | keine App-/Sync-/KI-/Kataloglogik; persönliche Daten bleiben bytegleich |
-| L / Radar & Entdecken | bestehende Empfehlungen, Zielsuche, Ziel-/Funde-Trennung, Personen/Reihen/Staffeln, Status und Verwaltung bleiben; Radarwortlaut ist konsistent und es gibt kein öffentliches Share-Opt-in | `src/tabs/EntdeckenTab.jsx`, `src/components/RadarSubscriptionPreview.jsx`, neuer fokussierter Test | keine Radar-RPCs, Stores, Such-, Ergebnis- oder Datumslogik; `onConfirm` bleibt kompatibel mit `shareEnabled:false` |
-| M / Persönlicher Blog | eigene Artikel bleiben erstell-, abgleich-, les-, bearbeit- und löschbar; neue öffentliche Veröffentlichung, öffentliche Blogsuche und Rohimport sind im Privatrelease nicht sichtbar | `src/tabs/BlogTab.jsx`, neuer fokussierter Test | bestehende Artikel-/Syncdaten unverändert; kein Serverwrite im Test, sichere Altartikel-Löschung bleibt möglich |
+| K / Einstellungen | Settings zeigt Darstellung, KI-Wahl, Geschmacksprofil, Konto-/Sync, Datenrechte, Sicherheitsdownload, Streamingquellen und Legal; keine Rohdatenimporte, externe Foto-KI, Blogprofilanalyse, Owner-Wartung, Einzeldatei oder versteckten Modi | `src/tabs/DatenTab.jsx`, `src/components/GeschmackBereich.jsx`, neuer fokussierter Test | keine App-/Sync-/KI-/Kataloglogik; persönliche Daten bleiben bytegleich; geliefert `93c8454`, integriert `621db12` |
+| L / Radar & Entdecken | bestehende Empfehlungen, Zielsuche, Ziel-/Funde-Trennung, Personen/Reihen/Staffeln, Status und Verwaltung bleiben; Radarwortlaut ist konsistent und es gibt kein öffentliches Share-Opt-in | `src/tabs/EntdeckenTab.jsx`, `src/components/RadarSubscriptionPreview.jsx`, neuer fokussierter Test | keine Radar-RPCs, Stores, Such-, Ergebnis- oder Datumslogik; `onConfirm` bleibt kompatibel mit `shareEnabled:false`; geliefert `0cd31d0`, integriert `a12d6f9` |
+| M / Persönlicher Blog | eigene Artikel bleiben erstell-, abgleich-, les-, bearbeit- und löschbar; neue öffentliche Veröffentlichung, öffentliche Blogsuche und Rohimport sind im Privatrelease nicht sichtbar | `src/tabs/BlogTab.jsx`, neuer fokussierter Test | bestehende Artikel-/Syncdaten unverändert; kein Serverwrite im Test, sichere Altartikel-Löschung bleibt möglich; geliefert `08d5920`, integriert `be2ff5d` |
 
-Integration folgt K → L → M. Gemeinsame `package.json`-/App-/Style-Flächen
-bleiben beim Meister; die drei Pakettests laufen direkt und werden erst nach
-Integration einmal in den gemeinsamen Abschluss-Gate eingeordnet. Erst dieser
-grüne Kandidat darf später wieder nach Staging; `main` bleibt bis zur eigenen
-Production-Etappe unberührt.
+Die disjunkten Lieferungen trafen in der Reihenfolge M → L → K ein und wurden
+ohne Dateikonflikt integriert. Der Meister schloss ausschließlich die lokale
+Blog-Publikationsnaht (`72b2aaf`) und band die drei Paketverträge sowie die
+angepassten Bestandsverträge als `f96ad93`, `cdafa7e` und `0044769` ein.
+Das gemeinsame `npm test` einschließlich Production-/Pages-Build ist grün;
+`git diff --check` ist leer. `main` bleibt bis zur eigenen Production-Etappe
+unberührt.
 
 Historischer Vorbereitungsstand auf `4731c0c`: Die vollständige lokale `npm test`-Suite ist
 grün. Remote sind die Access- und Mail-Ledger-Migration einschließlich
@@ -797,8 +798,8 @@ Scheduler-403, nicht der Bau eines Retries auf Verdacht.
 | PR-07 Feedback/Löschanfrage / P3, E3a | Feedback ohne Namensangabe, kein mailto; fester Domainabsender/privater Serverempfänger/fester Betreff; keine freien Header/Adressen/Anhänge/fremdes HTML; escaped Text + HTML; keine App-DB-Ablage/Konto-/Profil-/Diagnose-/Browseranreicherung oder Sitzungsverknüpfung im Inhalt/Produktlog; Text-/Rate-/Originlimits, kein Relay; ehrliche Erfolgs-/Fehleranzeige ohne Rohfehler, Text erhalten/kopierbar; technische Zustellmetadaten erklären; Domain-Onboarding/Absenderauth/Transportverfügbarkeit fokussiert; separater authentifizierter Löschanfragetyp mit notwendiger Kontoidentität und manueller Folgeaktion | Meister bis Dispatch Datenschutz/Mail | AUF STAGING `54b4f29` AUSGELIEFERT: fokussierte Abschlussprüfungen, Migrationen, digestgebundene Secrets, bytegleiche `ACTIVE`-Function v2/JWT, Staging-CORS, Cloudflare-DNS und Resend-Domain sind belegt. Genau ein synthetischer Send endete ohne Retry mit HTTP 200 `accepted`, passendem inhaltsfreien Ledger und Resend `delivered`. CI `33724772325`, feste Domain und frischer PWA-Login/Legal/SW-Readback sind grün; physische iPhone-Praxis bleibt OFFEN |
 | PR-07 Betriebs-Mail / P4, E3b | Dritter interner Typ auf gebundenem Transport, nie Frontendempfänger; genau einmal nach Retry; ausschließlich Zeitpunkt, Funktion/Task, Initialoperation, Call gemacht/nicht belegt, Kosten belegt/nicht belegt (kein Null=0), Fehlercode/knapper gespeicherter Grund, Retry-Markierung/-Operation/-Ergebnis/ggf. Fehlergrund; keine Analyse/Empfehlung/Prompts/Titel/Kontoinhalte/Payloads/Rohantworten/Stacktraces/Secrets/Adressen; Versand startet keine KI oder Prüfschleife | Meister bis Dispatch KI-Nachprüfung | GEBAUT UND DEPLOYT: interner Builder/Dispatcher `05fe0b3`, einmaliger DB-Mailclaim und Checkerbindung sind gemeinsam aktiv; Browser besitzt keinen Raw-Type-/Empfängerweg, technische Reason-Codes bleiben allowlistet. Kein Testversand und keine Betriebs-Mail in dieser Lieferung; reale Einmalzustellung erst nach einem später tatsächlich nötigen, aktivierten Retry |
 | PR-08 / P5, E4 | Nur angemeldeter Kinopfad; bestehende Kino-/Datum-/NonStop-/OmU-/OV-/DF-/Rest-ab-/Tagesprogrammfilter wiederverwenden; Datum/Kino primär sichtbar; Zusatzfilter eigene mobil sichtbare Zeile; lokale Suche weg, globale Suche bleibt; aktive Anzahl/Zustand, Reset nur wenn aktiv; mindestens 44px, 320/393/Desktop umbrechend; kein Abend-/Genrefilter | Baumeister Kino | GEBAUT: `12b0d2d`, integriert als `6741b9b`; DOM 11/11, Empfehlungen 5/5, Paketbrowser 6/6. Im integrierten Stand erneut 6/6 Chromium/WebKit bei 320/393/1280; echter iPhone-Einsatz OFFEN |
-| PR-09 / P5, E5 | Nur klare Textfehler in Buttons/Überschriften/Hilfe/Leerzuständen/Onboarding/Tooltips/Fehlern/Beschriftung; Radar-Wortwahl Ins Radar aufnehmen/Im Radar/Aus dem Radar entfernen; binär alle sichtbaren Wege funktionierend oder Einstieg entfernt; ausdrücklich Sharing/Pakete/Masterimport P2/Foto-Text-Filmscan/Bloganalyse/Serienradar-Watchmode/Pilot-/Wartungs-/Owner-/technische Radarwege/masterlist-enrichment/alte Doppelwege; Radar/Entdecken aktiv+belegt oder unsichtbar, kein leerer Hard-false-Tab; Kontoexport vollständig oder verborgen; Self-Delete aus, nur funktionierende Mailanfrage; keine Zukunftsbuttons/Redesign-/Easter-Egg-Projekte | Meister bis Dispatch Release-Bereinigung | OFFEN; abgeschlossene Radar-/Entdecken-/globale Sucharbeit erhalten; endgültige Flächenentscheidung vor P2 |
-| PR-10 / P6, E6 | Ein exakter integrierter RC: vollständige Mocksuite/Production-Build/finaler Diff-/Secret-/Bundlecheck; anonyme Daten-/Demo-/Backup-/Mapgrenze; relevante RLS/Kontotrennung/Readbacks, Backup/Restore nur an nötiger Mutation; eine Praxismatrix Login/Legal/leer lokal/Eintrag+Refresh/Login ohne Merge/Gast nach Logout/A-B-Grenze/Sync+zweites Gerät+Konflikt+defekter Cache/Sicherheitsdownload+Bestätigung/Export oder manuelle Rechte/Löschmail/Feedback/Kinomobil/Radar+Entdecken/KI-aus+Anbieterausfall/aktiver 6h-Checker/PWA+Safari/iPhone+Tastatur+320/393/Desktop; bestehende Belege übernehmen; schmaler Betrieb für Sync/Functions/Mail/Kosten/Support/Cache/Rollback; keine neue Featurelogik in E6; RC/Push/CI/Backend/Deploy/Praxis/Release-Tag getrennt; private Lieferung kinodreieck.at nur autorisiert, keine Ankündigung/Demo/Registrierung, höchstens 15 Einladungen | Meister / Integrationsowner | E3b-BACKEND-ZWISCHENSTAND: E3a-Stagingbelege bleiben erhalten; E3b-Mocks, Production-/Pages-Build und 334 Function-Tests sind grün, beide Migrationen sowie Radar v58/Checker v1 remote rückgelesen. Noch kein vollständiger RC. Aktiver +6h-Checker, realer Max-Datenbeleg, physisches zweites Gerät/iPhone, E5, OSS-Beleg und übrige Praxis bleiben OFFEN; `main`/Production unverändert |
+| PR-09 / P5, E5 | Nur klare Textfehler in Buttons/Überschriften/Hilfe/Leerzuständen/Onboarding/Tooltips/Fehlern/Beschriftung; Radar-Wortwahl Ins Radar aufnehmen/Im Radar/Aus dem Radar entfernen; binär alle sichtbaren Wege funktionierend oder Einstieg entfernt; ausdrücklich Sharing/Pakete/Masterimport P2/Foto-Text-Filmscan/Bloganalyse/Serienradar-Watchmode/Pilot-/Wartungs-/Owner-/technische Radarwege/masterlist-enrichment/alte Doppelwege; Radar/Entdecken aktiv+belegt oder unsichtbar, kein leerer Hard-false-Tab; Kontoexport vollständig oder verborgen; Self-Delete aus, nur funktionierende Mailanfrage; keine Zukunftsbuttons/Redesign-/Easter-Egg-Projekte | Meister bis Dispatch Release-Bereinigung | LOKAL GEBAUT UND GRÜN bis `0044769`: Settings zeigt ausschließlich die freigegebenen Kernwege; Radarwortlaut ist vereinheitlicht und Share-Opt-in entfernt; der persönliche Blog behält seine privaten Artikelwege ohne öffentliche Suche/Publikation/Rohimport. Code, Handler und Daten der verborgenen Settings-Wege bleiben erhalten. Radar/Entdecken-Ziel-/Fundlogik, Kino- und Streaminglogik unverändert; Paketverträge und vollständiges `npm test` grün. Staging- und physische PWA-Abnahme offen |
+| PR-10 / P6, E6 | Ein exakter integrierter RC: vollständige Mocksuite/Production-Build/finaler Diff-/Secret-/Bundlecheck; anonyme Daten-/Demo-/Backup-/Mapgrenze; relevante RLS/Kontotrennung/Readbacks, Backup/Restore nur an nötiger Mutation; eine Praxismatrix Login/Legal/leer lokal/Eintrag+Refresh/Login ohne Merge/Gast nach Logout/A-B-Grenze/Sync+zweites Gerät+Konflikt+defekter Cache/Sicherheitsdownload+Bestätigung/Export oder manuelle Rechte/Löschmail/Feedback/Kinomobil/Radar+Entdecken/KI-aus+Anbieterausfall/aktiver 6h-Checker/PWA+Safari/iPhone+Tastatur+320/393/Desktop; bestehende Belege übernehmen; schmaler Betrieb für Sync/Functions/Mail/Kosten/Support/Cache/Rollback; keine neue Featurelogik in E6; RC/Push/CI/Backend/Deploy/Praxis/Release-Tag getrennt; private Lieferung kinodreieck.at nur autorisiert, keine Ankündigung/Demo/Registrierung, höchstens 15 Einladungen | Meister / Integrationsowner | E5-STAGING-KANDIDAT: E3a-/E3b-Stagingbelege bleiben erhalten; die bereinigte Release-Oberfläche ist integriert und das gemeinsame normale Testgate samt Production-/Pages-Build grün. Noch offen sind Staging-Readback dieses Kandidaten, aktiver +6h-Checker, realer Max-Datenbeleg, physisches zweites Gerät/iPhone, OSS-Beleg und übrige Praxis; `main`/Production unverändert |
 | PR-11 / P6, E7 | Erst nach abgeschlossenem Privatrelease kurzer read-only LAB-Anker; heutige Staging-Schreibpfade/Auth/Kontogrenze/strukturierte Eingaben/kleinste Anschlussstelle/Kopplung zu Production nennen; später Access Max-only vor Assets/Daten, ggf. getrennte widerrufbare Maschinenidentität nur benennen; Hostname nicht absolut geheim; keine Assistentenarchitektur/Modelle/Credentials/Migration/Maschinenwrites/Praxisprobe | Meister nach Release | OFFEN, ausdrücklich NICHT releaseblockierend; keine Umsetzung beauftragt |
 
 W1-Zuordnung (Teil dieses Registers, keine zweite Fortschrittsliste):
