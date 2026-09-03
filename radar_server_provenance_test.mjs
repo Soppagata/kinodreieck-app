@@ -414,7 +414,7 @@ await check("Nur explizites neues Textsave startet initial; Boot und gefenceter 
   assert.match(source.slice(start,end), /if \(!canSearch\) return[\s\S]*\.checkNow\(targetId, normalizedTargetText, \{ initial: true \}\)/);
   assert.match(functionSource, /admin\.rpc\("kd_radar_initial_claim"/);
   assert.match(functionSource, /admin\.rpc\("kd_radar_daily_claim"\)/);
-  assert.match(functionSource, /await assertDailyLease\(\)/);
+  assert.match(functionSource, /await assertExecutionFence\(\)/);
   assert.match(functionSource, /runRadarWebsearchCheck\(/);
   assert.match(functionSource, /admin\.rpc\("kd_radar_daily_finish"/);
 });
