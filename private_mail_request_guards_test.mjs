@@ -31,8 +31,7 @@ let checks = 0;
 assert.ok(PG, `PostgreSQL server binaries are required (${requiredPgBinaries.join(", ")})`);
 
 const pgEnv = {
-  ...process.env,
-  PATH: `${PG}:${process.env.PATH || "/usr/bin:/bin"}`,
+  PATH: `${PG}:/usr/bin:/bin`,
   LANG: "C",
   LC_ALL: "C",
 };
