@@ -84,6 +84,19 @@ check("_headers: aktiver Client darf nur zur eigenen Supabase-Instanz verbinden"
 
 const workflow = readFileSync(join(".github", "workflows", "deploy.yml"), "utf8");
 const remoteSmoke = readFileSync(join("tools", "smoke-deployment.mjs"), "utf8");
+const remoteRetryStart = remoteSmoke.indexOf("for (let versuch = 1; versuch <= metaVersuche; versuch++)");
+const remoteRetryEnd = remoteSmoke.indexOf("if (metaFehler) throw", remoteRetryStart);
+const remoteRetryBlock = remoteSmoke.slice(remoteRetryStart, remoteRetryEnd);
+const remoteRetryOrder = [
+  "buildMetaFehler(meta, erwarteteVersion)",
+  "const swAntwort = await hole",
+  "serviceWorkerRevalidiert(swCache, swSharedCache)",
+  "serviceWorkerBuildFehler(swText",
+  "hole(`/?${parameter}`, \"text/html\")",
+  "swText.includes(entryUrl.pathname.slice(1))",
+  "const entryBundle = await",
+  "privateReleaseLoginFehler(loginStartText, entryBundle)",
+].map((marker) => remoteRetryBlock.indexOf(marker));
 const deployStagingBlock = workflow.match(/deploy-staging:[\s\S]*?^\s{2}deploy-production:/m)?.[0] || "";
 const deployProductionBlock = workflow.match(/deploy-production:[\s\S]*$/m)?.[0] || "";
 check("CI trennt Suiten und beide Mobile-Browser, behält aber den stabilen Test-Gate-Namen",
@@ -139,6 +152,13 @@ check("Feste Domains werden gegen den erwarteten Commit geprüft",
 check("Feste Domains erhalten ein ausreichendes Propagationsfenster",
   remoteSmoke.includes("const metaVersuche = domainRetry ? 12 : 1;")
   && remoteSmoke.includes("setTimeout(resolve, 5000)"));
+check("Custom-Domain-Retry koppelt Build, Service Worker und Login je Versuch",
+  remoteRetryStart >= 0
+  && remoteRetryEnd > remoteRetryStart
+  && remoteRetryOrder.every((position, index) => (
+    position >= 0 && (index === 0 || position > remoteRetryOrder[index - 1])
+  ))
+  && !remoteSmoke.includes("ersterSwText"));
 check("Remote-Smoke weist den gemessenen Vier-Stunden-Cache von sw.js zurück",
   !serviceWorkerRevalidiert("public, max-age=14400, must-revalidate")
   && !serviceWorkerRevalidiert("")
@@ -155,9 +175,10 @@ check("Remote-Smoke erkennt eine feste Domain mit falschem Commit",
 check("Remote-Smoke liest den ausgelieferten Minimal-Login statt nur eine leere Shell",
   privateReleaseLoginFehler(indexHtml, js) === null
   && privateReleaseLoginFehler(indexHtml, js.replace("Ohne Konto fortfahren", ""))?.includes("Ohne Konto fortfahren")
-  && remoteSmoke.includes("const entryBundle = await")
-  && remoteSmoke.includes("privateReleaseLoginFehler(loginStartText, entryBundle)")
-  && remoteSmoke.includes("verifizierterSwText.includes(entryUrl.pathname.slice(1))"));
+  && remoteRetryBlock.includes("hole(`/?${parameter}`, \"text/html\")")
+  && remoteRetryBlock.includes("const entryBundle = await")
+  && remoteRetryBlock.includes("privateReleaseLoginFehler(loginStartText, entryBundle)")
+  && remoteRetryBlock.includes("swText.includes(entryUrl.pathname.slice(1))"));
 check("Remote-Smoke verlangt für anon den privaten Leer- oder echten Rechtestopp",
   privateReleaseAnonKatalogFehler({ status: 200, daten: [] }) === null
   && privateReleaseAnonKatalogFehler({ status: 401, code: "42501" }) === null

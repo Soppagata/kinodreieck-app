@@ -30,18 +30,6 @@ if (start.headers.get("x-frame-options") !== "DENY") throw new Error("X-Frame-Op
 await start.text();
 
 await hole("/manifest.webmanifest", "application/manifest+json");
-const sw = await hole("/sw.js", "javascript");
-const swCache = (sw.headers.get("cache-control") || "").toLowerCase();
-const swSharedCache = [
-  sw.headers.get("cloudflare-cdn-cache-control"),
-  sw.headers.get("cdn-cache-control"),
-].filter(Boolean);
-if (!serviceWorkerRevalidiert(swCache, swSharedCache)) {
-  throw new Error(
-    `/sw.js: Browsercache ist nicht kurzlebig (${swCache || "Header fehlt"}). `
-    + "Cloudflare muss die _headers-Regel respektieren; sonst bleiben PWA-Updates bis zum TTL-Ablauf liegen.");
-}
-const ersterSwText = await sw.text();
 await hole("/download/", "text/html");
 
 // Eine feste Cloudflare-Custom-Domain kann dem bereits grünen atomaren
@@ -49,7 +37,6 @@ await hole("/download/", "text/html");
 // Smoke streng, vermeiden aber einen Fehlalarm während dieser Propagation.
 const metaVersuche = domainRetry ? 12 : 1;
 let metaFehler = "nicht geprüft";
-let verifizierterSwText = ersterSwText;
 for (let versuch = 1; versuch <= metaVersuche; versuch++) {
   try {
     const parameter = new URLSearchParams();
@@ -59,11 +46,34 @@ for (let versuch = 1; versuch <= metaVersuche; versuch++) {
     const meta = await metaAntwort.json().catch(() => null);
     metaFehler = buildMetaFehler(meta, erwarteteVersion);
     if (!metaFehler) {
-      const swText = versuch === 1
-        ? ersterSwText
-        : await (await hole(`/sw.js?${parameter}`, "javascript")).text();
+      const swAntwort = await hole(`/sw.js?${parameter}`, "javascript");
+      const swCache = (swAntwort.headers.get("cache-control") || "").toLowerCase();
+      const swSharedCache = [
+        swAntwort.headers.get("cloudflare-cdn-cache-control"),
+        swAntwort.headers.get("cdn-cache-control"),
+      ].filter(Boolean);
+      if (!serviceWorkerRevalidiert(swCache, swSharedCache)) {
+        throw new Error(
+          `/sw.js: Browsercache ist nicht kurzlebig (${swCache || "Header fehlt"}). `
+          + "Cloudflare muss die _headers-Regel respektieren; sonst bleiben PWA-Updates bis zum TTL-Ablauf liegen.");
+      }
+      const swText = await swAntwort.text();
       metaFehler = serviceWorkerBuildFehler(swText, erwarteteVersion || meta?.buildVersion);
-      if (!metaFehler) verifizierterSwText = swText;
+      if (!metaFehler) {
+        const loginStartText = await (await hole(`/?${parameter}`, "text/html")).text();
+        const entrySrc = (loginStartText.match(/<script\b[^>]*\bsrc=["']([^"']+\.js(?:\?[^"']*)?)["'][^>]*>/i) || [])[1];
+        if (!entrySrc) throw new Error("Login-Readback: gehashtes Entry-Bundle fehlt in index.html.");
+        const entryUrl = new URL(entrySrc, basis + "/");
+        if (entryUrl.origin !== new URL(basis).origin || !/^\/assets\/[^/]+\.js$/.test(entryUrl.pathname)) {
+          throw new Error("Login-Readback: Entry-Bundle liegt nicht als eigenes gehashtes Asset vor.");
+        }
+        if (!swText.includes(entryUrl.pathname.slice(1))) {
+          throw new Error("Login-Readback: Entry-Bundle gehört nicht zum verifizierten Service Worker.");
+        }
+        const entryBundle = await (await hole(entryUrl.pathname + entryUrl.search, "javascript")).text();
+        const loginFehler = privateReleaseLoginFehler(loginStartText, entryBundle);
+        if (loginFehler) throw new Error(`Login-Readback: ${loginFehler}.`);
+      }
     }
   } catch (fehler) {
     metaFehler = fehler instanceof Error ? fehler.message : String(fehler);
@@ -73,23 +83,9 @@ for (let versuch = 1; versuch <= metaVersuche; versuch++) {
 }
 if (metaFehler) throw new Error(`Build-Auslieferung: ${metaFehler}.`);
 
-/* Erst nach dem finalen Build-/SW-Readback erneut die Startseite lesen. Das
-   Entry-Asset muss zugleich im Precache genau dieses verifizierten Workers
-   stehen; so kann Domainpropagation keinen alten Login mit neuem Build-Meta
-   zu einem gemischten grünen Ergebnis verbinden. */
-const loginStartText = await (await hole("/", "text/html")).text();
-const entrySrc = (loginStartText.match(/<script\b[^>]*\bsrc=["']([^"']+\.js(?:\?[^"']*)?)["'][^>]*>/i) || [])[1];
-if (!entrySrc) throw new Error("Login-Readback: gehashtes Entry-Bundle fehlt in index.html.");
-const entryUrl = new URL(entrySrc, basis + "/");
-if (entryUrl.origin !== new URL(basis).origin || !/^\/assets\/[^/]+\.js$/.test(entryUrl.pathname)) {
-  throw new Error("Login-Readback: Entry-Bundle liegt nicht als eigenes gehashtes Asset vor.");
-}
-if (!verifizierterSwText.includes(entryUrl.pathname.slice(1))) {
-  throw new Error("Login-Readback: Entry-Bundle gehört nicht zum verifizierten Service Worker.");
-}
-const entryBundle = await (await hole(entryUrl.pathname + entryUrl.search, "javascript")).text();
-const loginFehler = privateReleaseLoginFehler(loginStartText, entryBundle);
-if (loginFehler) throw new Error(`Login-Readback: ${loginFehler}.`);
+/* Build-Meta, Service Worker, Startseite, Entry-Asset und Minimal-Login wurden
+   im selben erfolgreichen Versuch gelesen. Dadurch kann die verzögerte
+   Custom-Domain-Propagation keinen gemischten grünen Readback erzeugen. */
 
 /* --- Private Kataloggrenze als anon --------------------------------------
    Build, Service Worker und Minimal-Login werden oben aus der echten
