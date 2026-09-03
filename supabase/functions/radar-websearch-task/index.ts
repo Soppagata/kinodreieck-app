@@ -173,6 +173,23 @@ function rpcEvent(
   };
 }
 
+async function scheduledRequestHasNonEmptyBody(req: Request): Promise<boolean> {
+  if (req.body === null) return false;
+  const reader = req.body.getReader();
+  try {
+    for (let emptyChunks = 0; emptyChunks < 8; emptyChunks += 1) {
+      const chunk = await reader.read();
+      if (chunk.done) return false;
+      if (!(chunk.value instanceof Uint8Array) || chunk.value.byteLength > 0) return true;
+    }
+    return true;
+  } catch {
+    return true;
+  } finally {
+    try { await reader.cancel(); } catch { /* fail-closed result above */ }
+  }
+}
+
 export function createRadarWebsearchHandler({
   adapter = null,
   fetchImpl = fetch,
@@ -206,7 +223,7 @@ export function createRadarWebsearchHandler({
         expectedRefreshHeader: SCHEDULED_REFRESH_VALUE,
         apiKey: req.headers.get("apikey"),
         authorizationHeaderPresent: req.headers.has("Authorization"),
-        bodyPresent: req.body !== null,
+        bodyPresent: await scheduledRequestHasNonEmptyBody(req),
         originPresent: origin !== null,
         providerDiagnosticPresent: providerDiagnosticHeader !== null,
         secretKeysRaw,

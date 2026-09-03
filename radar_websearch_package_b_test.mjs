@@ -1229,6 +1229,44 @@ await check("Moderner Scheduler-Key ist strikt apikey-only und alle Negativpfade
   assert.doesNotMatch(contractSource, /SUPABASE_SERVICE_ROLE_KEY|Deno\.env/);
 });
 
+await check("Scheduler akzeptiert null und null Byte, weist aber jeden echten Body fail-closed ab", async () => {
+  const start = functionIndex.indexOf("async function scheduledRequestHasNonEmptyBody");
+  const end = functionIndex.indexOf("\n\nexport function createRadarWebsearchHandler", start);
+  assert.ok(start >= 0 && end > start);
+  const source = functionIndex.slice(start, end)
+    .replace("(req: Request): Promise<boolean>", "(req)");
+  const bodyPresent = Function(`${source}; return scheduledRequestHasNonEmptyBody;`)();
+
+  assert.equal(await bodyPresent(new Request("https://scheduler.invalid", {
+    method: "POST",
+  })), false);
+  const zeroBytePost = new Request("https://scheduler.invalid", {
+    method: "POST",
+    body: new Uint8Array(0),
+  });
+  assert.notEqual(zeroBytePost.body, null);
+  assert.equal(await bodyPresent(zeroBytePost), false);
+  assert.equal(await bodyPresent(new Request("https://scheduler.invalid", {
+    method: "POST",
+    body: new Uint8Array([0]),
+  })), true);
+  assert.equal(await bodyPresent(new Request("https://scheduler.invalid", {
+    method: "POST",
+    body: "{}",
+  })), true);
+
+  const delayedByte = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(0));
+      controller.enqueue(new Uint8Array([1]));
+    },
+  });
+  assert.equal(await bodyPresent({ body: delayedByte }), true);
+  assert.equal(await bodyPresent({
+    body: new ReadableStream({ pull() { throw new Error("synthetic read failure"); } }),
+  }), true);
+});
+
 await check("Function-Konfiguration delegiert JWT-Prüfung an den Handler und Produktcode enthält keine Rohlogs", () => {
   assert.match(config, /\[functions\.radar-websearch-task\][\s\S]*?verify_jwt\s*=\s*false/);
   assert.match(functionIndex, /client\.auth\.getClaims\(token\)[\s\S]*?claims\?\.role === "authenticated"/);
@@ -1316,7 +1354,7 @@ await check("Scheduled-Function ist bodylos, Secret-Key-only und antwortet ohne 
   assert.match(functionIndex, /secretKeysRaw = Deno\.env\.get\("SUPABASE_SECRET_KEYS"\) \|\| ""/);
   assert.match(functionIndex, /apiKey: req\.headers\.get\("apikey"\)/);
   assert.match(functionIndex, /authorizationHeaderPresent: req\.headers\.has\("Authorization"\)/);
-  assert.match(functionIndex, /bodyPresent: req\.body !== null/);
+  assert.match(functionIndex, /bodyPresent: await scheduledRequestHasNonEmptyBody\(req\)/);
   assert.match(functionIndex, /serviceKey = scheduledAccess\.serviceKey/);
   assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_claim"\)/);
   assert.match(functionIndex, /claim\?\.claim !== false \|\| !\["idle", "disabled"\]\.includes\(claim\?\.status\)/);
