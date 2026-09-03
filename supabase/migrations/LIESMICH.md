@@ -6,8 +6,8 @@ Gezielte neue Dateien dürfen auch über die verknüpfte Management-API laufen:
 
 `supabase db query --linked --file <genau-eine-migration.sql>`
 
-Die belegte Remote-Migrationswahrheit reicht exakt bis einschliesslich
-`20260816010000_radar_deferred_trigger_privilege_fix.sql`; damit sind auch
+Die historisch durchgehend abgeglichene Remote-Migrationswahrheit reicht bis
+einschliesslich `20260816010000_radar_deferred_trigger_privilege_fix.sql`; damit sind auch
 `20260814120000` und `20260815120000` remote bestaetigt. Daraus werden weder
 Datum, Ausfuehrer noch Objektwerte oder Counts abgeleitet. Die vorgeschriebene
 Forward-Kette fuer den Private-Pilot ist:
@@ -23,6 +23,8 @@ ist. `20260809220000_private_pilot_ops.sql` ist lokal auf Blob-ID
 `2143d36957f5be56e9973e15584d02769b9c4222` verifiziert.
 Der Ledgerstand belegt keine darueber hinausgehenden Objektwerte, Flags oder
 Counts; solche Zustaende werden hier nur mit eigenstaendigem Beleg aufgefuehrt.
+Spätere gezielt atomar angewandte und separat rückgelesene Migrationen stehen
+deshalb einzeln im Laufprotokoll, ohne eine lückenlose Zwischenkette zu behaupten.
 Für nicht-E17B-Pfade bleibt der kontrollierte Weg über
 `./node_modules/.bin/supabase db query --linked --file <genau-eine-migration.sql>` erhalten.
 E17B ist hiervon explizit ausgeschlossen: dort werden die committeden SQL-Inhalte als
@@ -81,6 +83,8 @@ die Statusautorität für den Remote-Lauf.
 | `20260815120000_private_export_radar_pilot_compat.sql` | `bscjgwcntapobyxsiyce` | | | remote bestätigt |
 | `20260816010000_radar_deferred_trigger_privilege_fix.sql` | `bscjgwcntapobyxsiyce` | | | remote bestätigt |
 | `20260817120000_blog_profile_extract_config.sql` | | | | Source-only; `REMOTE_PAYLOAD_PENDING`, Ledger-Zielzeile erst nach atomarem E17B-Lauf |
+| `20260903193000_automatic_ai_retry_jobs.sql` | `bscjgwcntapobyxsiyce` | 2026-09-03 | Codex über verknüpfte Management-API | erfolgreich atomar angewandt und rückgelesen; leeres service-only/RLS-Ledger, keine Browserrechte, fünf RPCs ausschließlich für `service_role`, +6h- und Einmalzustände vorhanden; Budgetwerte unverändert |
+| `20260903213000_radar_automatic_retry_binding.sql` | `bscjgwcntapobyxsiyce` | 2026-09-03 | Codex über verknüpfte Management-API | erfolgreich atomar nach dem Retry-Ledger angewandt und rückgelesen; drei exakte Radar-Retry-RPCs ausschließlich für `service_role`, keine Browserrechte und weiter null Ledgerzeilen |
 
 ## Entscheidung zum Beta-Tageslimit (08.08.2026)
 
