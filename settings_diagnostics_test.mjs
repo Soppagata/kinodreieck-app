@@ -181,7 +181,10 @@ await render({
   ownerTechnikBestaetigt: hatBestaetigteOwnerRolle(memberMitOwnerIdentitaet),
 });
 check("Member mit Owner-Namen sieht keine Technik oder Supportdaten", keineTechnik());
-check("Kontolöschung bleibt als eigener Kontoweg erreichbar", !!summary("Konto löschen"));
+check("Datenrechte bleiben als eigener Kontoweg ohne alten Self-Delete erreichbar",
+  !!summary("Datenrechte & Konto")
+    && /manuellen Rechteweg/.test(text())
+    && !summary("Konto löschen"));
 
 await render({
   kontoModus: true, kontoAktiv: true, katalogVerbunden: false,
