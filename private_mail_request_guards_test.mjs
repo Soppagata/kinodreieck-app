@@ -6,7 +6,18 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-const PG = "/Applications/Postgres.app/Contents/Versions/17/bin";
+const pgConfig = spawnSync("pg_config", ["--bindir"], { encoding: "utf8" });
+const pgCandidates = [
+  process.env.KD_TEST_PG_BIN,
+  "/Applications/Postgres.app/Contents/Versions/17/bin",
+  pgConfig.status === 0 ? pgConfig.stdout.trim() : null,
+  "/usr/lib/postgresql/17/bin",
+  "/usr/lib/postgresql/16/bin",
+].filter(Boolean);
+const requiredPgBinaries = ["initdb", "pg_ctl", "postgres", "psql"];
+const PG = [...new Set(pgCandidates)].find((candidate) => (
+  requiredPgBinaries.every((binary) => existsSync(join(candidate, binary)))
+));
 const MIGRATION = "supabase/migrations/20260902090000_private_mail_request_guards.sql";
 const root = mkdtempSync("/private/tmp/kd-private-mail-guards-");
 const data = join(root, "data");
@@ -17,9 +28,14 @@ mkdirSync(socket);
 let running = false;
 let checks = 0;
 
-assert.equal(existsSync(join(PG, "postgres")), true, "Postgres.app 17 is required for this focused test");
+assert.ok(PG, `PostgreSQL server binaries are required (${requiredPgBinaries.join(", ")})`);
 
-const pgEnv = { PATH: `${PG}:/usr/bin:/bin`, LANG: "C", LC_ALL: "C" };
+const pgEnv = {
+  ...process.env,
+  PATH: `${PG}:${process.env.PATH || "/usr/bin:/bin"}`,
+  LANG: "C",
+  LC_ALL: "C",
+};
 function run(binary, args, input) {
   const result = spawnSync(join(PG, binary), args, {
     input,
