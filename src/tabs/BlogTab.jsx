@@ -1,9 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { MasterImport } from "../components/MasterImport.jsx";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
-import { sharedArticlesService } from "../services/sharedArticles.js";
-import { errorText } from "../services/errors.js";
 import { SHARED_PUBLICATION_STATUS, publicationState } from "../lib/sharedPublication.js";
 import { hatDreieck, ALLE_TYPEN, normalisiereTyp } from "../lib/typen.js";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -21,13 +18,11 @@ import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js
 const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", get color() { return T.wolfram; }, margin: "0 0 10px" };
 const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, get color() { return T.rauch; } };
 /* ---------- Eingabemaske ---------- */
-export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen, angemeldet }) {
+export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   const [titel, setTitel] = useState(vorlage ? vorlage.titel : "");
   const [autor, setAutor] = useState(vorlage ? vorlage.autor : "Max");
   const [text, setText] = useState(vorlage ? vorlage.text : "");
   const [geordnet, setGeordnet] = useState(vorlage ? !!vorlage.geordnet : false);
-  const gezogen = !!(vorlage && vorlage.herkunft === "gezogen");
-  const [geteilt, setGeteilt] = useState(vorlage ? !!vorlage.geteilt : false);
   const [liste, setListe] = useState(vorlage ? vorlage.liste.map((l) => ({ eingabe: l.eingabe, jahr: l.jahr ? String(l.jahr) : "", typ: l.typ ? normalisiereTyp(l.typ) : "" })) : []);
   const [fehler, setFehler] = useState("");
   const [speichert, setSpeichert] = useState(false);
@@ -42,7 +37,11 @@ export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen, angemeldet }) 
     }));
     speichertRef.current = true; setSpeichert(true); setFehler("");
     try {
-      const id = await onErstellen({ titel: titel.trim(), autor: autor.trim(), text, geordnet, geteilt, liste: l });
+      const id = await onErstellen({
+        titel: titel.trim(), autor: autor.trim(), text, geordnet,
+        geteilt: vorlage ? !!vorlage.geteilt : false,
+        liste: l,
+      });
       if (!id) setFehler("Artikel konnte nicht bestätigt gespeichert werden; deine Eingabe bleibt erhalten.");
     } catch (error) { setFehler(error?.message || "Artikel konnte nicht gespeichert werden."); }
     finally { speichertRef.current = false; setSpeichert(false); }
@@ -61,12 +60,6 @@ export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen, angemeldet }) 
         <input type="checkbox" checked={geordnet} onChange={() => setGeordnet(!geordnet)} />
         Liste ist eine Reihenfolge (nummeriert — z.B. Watch-Order) statt einer Sammlung
       </label>
-      {!gezogen && angemeldet && (
-        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.wolfram, cursor: "pointer" }}>
-          <input type="checkbox" checked={geteilt} onChange={() => setGeteilt(!geteilt)} />
-          Shared — bei Freigabe im geteilten Ordner „Blogs für alle“ veröffentlichen
-        </label>
-      )}
       <div style={mono}>Referenzen ({liste.length}/{MAX_LISTE}) — Titel Pflicht, Typ/Jahr optional. Der Abgleich läuft nach „Erstellen“.</div>
       {liste.map((z, i) => (
         <div key={i} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -262,135 +255,9 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
   );
 }
 
-/* ---------- "Blogs entdecken": geteilte Blogs aus dem DB-Ordner ---------- */
-function EntdeckenAnsicht({ vorhandene, angemeldet, onZiehe, onZurueck }) {
-  const [zustand, setZustand] = useState({ lade: true, fehler: "", blogs: [] });
-  const [offen, setOffen] = useState(null);            // aufgeklappter Blog-Key
-  const [gezogenLokal, setGezogenLokal] = useState({}); // frisch gezogene (key -> true)
-  const [ziehend, setZiehend] = useState({});
-  const [aktionsFehler, setAktionsFehler] = useState({});
-
-  useEffect(() => {
-    let ab = false;
-    sharedArticlesService.list().then((r) => {
-      if (ab) return;
-      if (!r.ok) setZustand({ lade: false, fehler: "Der geteilte Bereich ist in dieser Ausgabe nicht eingerichtet.", blogs: [] });
-      else setZustand({ lade: false, fehler: "", blogs: r.blogs || [] });
-    }).catch((e) => { if (!ab) setZustand({ lade: false, fehler: errorText(e), blogs: [] }); });
-    return () => { ab = true; };
-  }, []);
-
-  const schonLokal = useMemo(() => {
-    const schluessel = new Set();
-    const tokens = new Set();
-    const publikationen = new Set();
-    for (const a of vorhandene || []) {
-      if (a.herkunft === "gezogen" && a.db_key) {
-        schluessel.add((a.db_owner || "") + "|" + a.db_key);
-        tokens.add(a.db_key);
-      }
-      if (a.herkunft === "gezogen" && a.source_publication_id) {
-        publikationen.add(a.source_publication_id);
-      }
-      const publikation = publicationState(a);
-      if (publikation.shareToken) tokens.add(publikation.shareToken);
-      if (publikation.publicationId) publikationen.add(publikation.publicationId);
-    }
-    return { schluessel, tokens, publikationen };
-  }, [vorhandene]);
-
-  const zieheBlog = async (blog, key) => {
-    if (ziehend[key] || gezogenLokal[key]) return;
-    setZiehend((alt) => ({ ...alt, [key]: true }));
-    setAktionsFehler((alt) => ({ ...alt, [key]: "" }));
-    try {
-      let quelle = blog;
-      if (angemeldet) {
-        const result = await sharedArticlesService.claim(blog.share_token);
-        if (!result.claimed) {
-          setGezogenLokal((alt) => ({ ...alt, [key]: true }));
-          return;
-        }
-        quelle = result.blog;
-      }
-      const id = await onZiehe(quelle);
-      if (!id) throw new Error("Der Artikel konnte nicht bestätigt gespeichert werden.");
-      setGezogenLokal((alt) => ({ ...alt, [key]: true }));
-    } catch (error) {
-      setAktionsFehler((alt) => ({ ...alt, [key]: errorText(error) }));
-    } finally {
-      setZiehend((alt) => ({ ...alt, [key]: false }));
-    }
-  };
-
-  return (
-    <section>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-        <h2 style={{ ...h2, margin: 0 }}>Blogs entdecken{zustand.blogs.length ? " (" + zustand.blogs.length + ")" : ""}</h2>
-        <button style={btnStyle(false)} onClick={onZurueck}>← Blog</button>
-      </div>
-      {zustand.lade && <p style={{ color: T.rauch, fontSize: 14 }}>Lade geteilte Blogs …</p>}
-      {zustand.fehler && <p style={{ color: T.gefahr, fontSize: 13 }}>{zustand.fehler}</p>}
-      {!zustand.lade && !zustand.fehler && zustand.blogs.length === 0 && (
-        <p style={{ color: T.rauch, fontSize: 14 }}>Noch keine geteilten Blogs im Ordner.</p>
-      )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {zustand.blogs.map((b) => {
-          const key = (b.db_owner || "") + "|" + b.db_key;
-          const q = b.artikel || {};
-          const auf = offen === key;
-          const drin = schonLokal.schluessel.has(key)
-            || schonLokal.tokens.has(b.share_token)
-            || schonLokal.publikationen.has(b.publication_id)
-            || !!gezogenLokal[key];
-          const laeuft = !!ziehend[key];
-          return (
-            <div key={key} style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px" }}>
-              <div onClick={() => setOffen(auf ? null : key)} style={{ cursor: "pointer" }}>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 19, textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                  {q.titel || "(ohne Titel)"}
-                </div>
-                <div style={{ ...mono, marginTop: 3 }}>
-                  {b.author}{b.updated_at ? " · " + String(b.updated_at).slice(0, 10) : ""} · {(q.liste || []).length} Referenzen{drin ? " · bereits übernommen" : ""}
-                </div>
-              </div>
-              {auf && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, lineHeight: 1.7 }}>
-                    {(q.text || "").split(/\n\s*\n/).map((abs, i) => <p key={i} style={{ margin: "0 0 12px" }}>{abs}</p>)}
-                  </div>
-                  {(q.liste || []).length > 0 && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                      {q.liste.map((le, i) => (
-                        <span key={i} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, padding: "2px 7px", borderRadius: 3, border: "1px solid " + T.rauch, color: T.rauch }}>
-                          {le.eingabe}{le.jahr ? " (" + le.jahr + ")" : ""}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px", opacity: drin || laeuft ? 0.5 : 1, cursor: drin || laeuft ? "default" : "pointer" }}
-                      disabled={drin || laeuft}
-                      onClick={() => void zieheBlog(b, key)}>
-                      {laeuft ? "Wird übernommen …" : drin ? "✓ Bereits übernommen" : "In meine Mediathek ziehen"}
-                    </button>
-                    <span style={mono}>Referenzen, die du nicht hast, werden zu Rotlinks.</span>
-                  </div>
-                  {aktionsFehler[key] && <div style={{ color: T.gefahr, fontSize: 12, marginTop: 8 }}>{aktionsFehler[key]}</div>}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 /* ---------- Haupt-Tab ---------- */
 export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
-  onErstellen, onAktualisieren, onSetzeRef, onFreigeben, onLoeschen, onAddFilm, onSpringeZuFilm,
-  exportArtikel, importArtikel, onZiehe, onRetryPublication, angemeldet = false }) {
+  onErstellen, onAktualisieren, onSetzeRef, onFreigeben, onLoeschen, onAddFilm, onSpringeZuFilm }) {
   const [ansicht, setAnsicht] = useState({ typ: "liste" });
   const [offenId, setOffenId] = useState(null); // aufgeklappte Karte in der Hub-Liste
   const [loeschFuer, setLoeschFuer] = useState(null); // Artikel-ID mit offener Lösch-Bestätigung
@@ -419,7 +286,6 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
 
   if (ansicht.typ === "maske") {
     return <ArtikelMaske vorlage={ansicht.id ? aktiv(ansicht.id) : null}
-      angemeldet={angemeldet}
       onErstellen={async (daten) => {
         const id = await (ansicht.id ? onAktualisieren(ansicht.id, daten) : onErstellen(daten));
         if (id) setAnsicht({ typ: "popup", id });
@@ -432,7 +298,11 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
     if (!a) return null; // KD-029: Reset läuft im Effekt, hier nur nichts rendern
     return <AbgleichPopup artikel={a} master={master}
       onSetzeRef={onSetzeRef}
-      onFreigeben={async (id) => { if (await onFreigeben(id)) setAnsicht({ typ: "lese", id }); }}
+      onFreigeben={async (id) => {
+        if (await onFreigeben(id, { synchronisierePublikation: false })) {
+          setAnsicht({ typ: "lese", id });
+        }
+      }}
       onLoeschen={async (id) => { if (await onLoeschen(id)) setAnsicht({ typ: "liste" }); }}
       onSchliessen={() => setAnsicht({ typ: "liste" })}
       onAddFilm={onAddFilm} />;
@@ -445,10 +315,6 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
       onBearbeiten={(id) => setAnsicht({ typ: "maske", id })}
       onSpringeZuFilm={onSpringeZuFilm} onAddFilm={onAddFilm} onSetzeRef={onSetzeRef} />;
   }
-  if (ansicht.typ === "entdecken") {
-    return <EntdeckenAnsicht vorhandene={artikel} angemeldet={angemeldet} onZiehe={onZiehe} onZurueck={() => setAnsicht({ typ: "liste" })} />;
-  }
-
   /* Liste — der Hub: Karten klappen auf (Auszug + Referenz-Chips), erst der
      zweite Klick öffnet Lesen/Abgleich. Hält den Bereich bei vielen Artikeln
      überschaubar. */
@@ -457,7 +323,6 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
       <div data-tour="blog" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
         <h2 style={{ ...h2, margin: 0 }}>Blog ({artikel.length})</h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={btnStyle(false)} onClick={() => setAnsicht({ typ: "entdecken" })}>Blogs entdecken</button>
           <button style={btnStyle(true)} onClick={() => setAnsicht({ typ: "maske" })}>+ Neuer Artikel</button>
         </div>
       </div>
@@ -523,12 +388,6 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                           ? "Die öffentliche Kopie konnte nicht bestätigt werden."
                           : "Die öffentliche Kopie konnte nicht entfernt werden. Der lokale Artikel bleibt deshalb erhalten."}
                       </div>
-                      {onRetryPublication && (
-                        <button style={{ ...btnStyle(false), marginTop: 7, fontSize: 12, padding: "5px 10px", borderColor: T.gefahr, color: T.gefahr }}
-                          onClick={() => onRetryPublication(a.id)}>
-                          Erneut versuchen
-                        </button>
-                      )}
                     </div>
                   )}
                   {loeschFuer === a.id && (
@@ -567,21 +426,6 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
         })}
       </div>
 
-      {/* ---- Daten-Leiste im Bereich: Artikel sichern/ersetzen (Punkt 6).
-           Pakete (Teilen/Tauschen) liegen in Mediathek & Einstellungen. ---- */}
-      {exportArtikel && (
-        <details className="kd-blog-daten kd-nur-desktop" style={{ marginTop: 26 }}>
-          <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch }}>
-            Daten (Artikel exportieren · importieren)
-          </summary>
-          <div style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", marginTop: 12 }}>
-            <button style={{ ...btnStyle(true), marginBottom: 10 }} onClick={exportArtikel}>Artikel exportieren (JSON)</button>
-            <MasterImport onImport={importArtikel} hasMaster={(artikel || []).length > 0}
-              labelNeu="Artikel importieren" labelErsetzen="Artikel ersetzen (überschreibt!)"
-              hinweis='artikel.json hier einfügen ({"artikel":[…]})' />
-          </div>
-        </details>
-      )}
     </section>
   );
 }
