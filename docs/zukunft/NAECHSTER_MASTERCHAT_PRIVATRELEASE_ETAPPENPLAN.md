@@ -2,7 +2,7 @@
 
 Stand: 31.08.2026
 
-Status: `STAGING_PRIVATRELEASE_AKTIV`; E3b-Stagingkandidat in Lieferung,
+Status: `E3B_STAGING_AUSGELIEFERT`; P5/E5 lokal vorbereitet,
 `main`/Production unverändert.
 
 Ziel: ein einfaches, stabiles privates Produkt auf `kinodreieck.at`.
@@ -636,8 +636,8 @@ Radar-Nachprüfung zusammen. Der Primärcheckout
 | M1 | Login schützt den Online-Einstieg, Kontodaten laden wieder, und „Ohne Konto fortfahren“ öffnet ausschließlich den lokalen Stand | GEBAUT | `2a50386`; vollständiger RC und praktische PWA-Abnahme offen |
 | M2 | Konten und Revisionen bleiben getrennt; Sicherheitsdownload und Kontoexport behaupten nur belegte Umfänge | GEBAUT | `2a50386`; der inhaltsfreie Messweg ist als `2fd5674` integriert, die einmalige reale Größenmessung und Praxis auf zwei Geräten bleiben offen |
 | M3 | Feedback ohne Namensangabe und authentifizierte Löschanfrage laufen über einen begrenzten, servergebundenen Mailweg | AUF STAGING AUSGELIEFERT; PHYSISCHES IPHONE OFFEN | Staging `54b4f299fb453629128cb40950c5874d4b81f542`: Migrationen, digestgebundene Secrets, `ACTIVE` Function v2 mit `verify_jwt=true`, fünfdateilige Source-Closure, Staging-CORS, Cloudflare-DNS und Resend-Domain sind belegt. Genau ein synthetischer Staging-Request endete ohne Retry mit HTTP 200 `accepted`; der inhaltsfreie Ledger zeigt eine akzeptierte Operation und zwei Rate-Buckets, Resend meldet `delivered`. GitHub-Lauf `33724772325` ist vollständig grün einschließlich `npm test`, Function-Tests, Chromium, WebKit, atomarer Deployment-URL und fester Staging-Domain. Der unabhängige frische Browserkontext belegt Minimal-Login, Legal-Fläche, exakte Build-Version und aktiven Service Worker. `main` blieb auf `24bbddc`; nur die physische iPhone-PWA-Abnahme bleibt offen |
-| M4 | Nur tatsächlich aktive automatische KI-Jobs erhalten genau eine Nachprüfung nach sechs Stunden und höchstens einen Retry | BACKEND AUSGEROLLT; STAGING-PUSH/CI UND AKTIVER +6H-BETRIEBSBELEG OFFEN | Scheduler-Authentifizierung ist korrigiert. GitHub-Lauf `33599267721`, Attempt 3, belegt genau ein fälliges Werkziel, einen Anthropic-Request, einen Websearch und 3,0078 US-Cent. Die service-only Migrationen `20260903193000`/`20260903213000` sind atomar angewandt und rückgelesen: leeres RLS-Ledger, fünf Ledger- und drei Radar-RPCs nur für `service_role`. `radar-websearch-task` v58 und `automatic-ai-check` v1 sind `ACTIVE`, ihre gebündelten Verträge rückgelesen und keine der Functions wurde nach dem Beleglauf aufgerufen. Der stündliche GitHub-Schedule läuft technisch erst vom Default-Branch `main`; deshalb aktiviert die beauftragte reine Staging-Lieferung noch keinen +6h-Checker und `main` bleibt unverändert |
-| M5 | Bereinigter, integrierter Privatrelease-Kandidat mit einem gemeinsamen Abschlusslauf | OFFEN | E3a ist auf Staging `54b4f29` mit grünem CI-/Deploy-/PWA-Readback ausgeliefert. Der vollständige RC folgt erst nach M4, E5, physischer Praxis und den übrigen gebundenen Außenwirkungen |
+| M4 | Nur tatsächlich aktive automatische KI-Jobs erhalten genau eine Nachprüfung nach sechs Stunden und höchstens einen Retry | AUF STAGING AUSGELIEFERT; AKTIVER +6H-BETRIEBSBELEG OFFEN | Scheduler-Authentifizierung ist korrigiert. GitHub-Lauf `33599267721`, Attempt 3, belegt genau ein fälliges Werkziel, einen Anthropic-Request, einen Websearch und 3,0078 US-Cent. Die service-only Migrationen `20260903193000`/`20260903213000` sind atomar angewandt und rückgelesen: leeres RLS-Ledger, fünf Ledger- und drei Radar-RPCs nur für `service_role`. `radar-websearch-task` v58 und `automatic-ai-check` v1 sind `ACTIVE`, ihre gebündelten Verträge rückgelesen und keine der Functions wurde nach dem Beleglauf aufgerufen. Staging `e828083` und GitHub-Lauf `33792056461` sind grün; die feste Domain liefert dieselbe Buildversion. Der stündliche GitHub-Schedule läuft technisch erst vom Default-Branch `main`; deshalb aktiviert die reine Staging-Lieferung noch keinen +6h-Checker und `main` bleibt unverändert |
+| M5 | Bereinigter, integrierter Privatrelease-Kandidat mit einem gemeinsamen Abschlusslauf | P5/E5 VORBEREITET | E3b ist auf Staging `e828083` mit grünem CI-/Deploy-/Domain-Readback ausgeliefert. P5/E5 entfernt als Nächstes nur nicht freigegebene sichtbare Nebenwege und vereinheitlicht Texte; Radar, Entdecken, Kino, Streaming, Suche, persönliche Inhalte und Kontodaten bleiben funktional erhalten |
 
 W2 ist eine `PARALLEL_WAVE` auf exakt `2a50386`; Meister-Worktree und
 Zielbranch bleiben `/private/tmp/kd-road-to-live-integration-20260902` und
@@ -733,7 +733,8 @@ technischen Radar-Freigabe geschlossen. Kein Paket verändert Radar-,
 Entdecken-, Kino- oder Streaming-Ergebnisse. Ohne I wird kein unsicherer oder
 potenziell dritter Anbieteraufruf als Ersatz gebaut.
 
-E3b ist lokal bis `6688031` integriert. `npm test` einschließlich Production-
+E3b ist lokal bis `6688031` integriert und mit Dokumentationscommit `e828083`
+force-frei auf Staging geliefert. `npm test` einschließlich Production-
 und Pages-Build sowie `npm run test:function` mit 334/334 Tests sind grün;
 `git diff --check` ist leer. Remote blieben Monatsdeckel 1000, Request-Cap 500
 und Radar-Task-Cap 20 US-Cent unverändert. Nach dem einmaligen F-Beleglauf
@@ -742,6 +743,26 @@ Mailaufrufe 0. Die reine Staging-Lieferung versioniert den periodischen Workflow
 aktiviert ihn wegen GitHubs Default-Branch-Regel aber noch nicht. Ein echter
 +6h-Retry samt genau einer Betriebs-Mail bleibt deshalb praktische E6-Abnahme,
 nicht ein weiterer Testlauf dieser Etappe.
+
+P5/E5 startet als `PARALLEL_WAVE W4` auf exakt `e828083`. Die Bereinigung
+ändert keine Datenmodelle, Serverpfade, Radar-/Entdecken-Ergebnisse, Kino- oder
+Streaminglogik. Sichtbare Kernwege werden behalten; nicht freigegebene
+Veröffentlichungs-, Import-/Restore-, externe Foto-KI-, Blogprofilanalyse-,
+Wartungs-, Download- und Easter-Egg-Einstiege werden nur aus der Release-
+Oberfläche entfernt. Bestehende persönliche Daten oder Serverzustände werden
+nicht gelöscht oder umgeschrieben.
+
+| Paket | Nutzerergebnis | Exklusive Write-Fläche | Eingefrorene Grenze |
+|---|---|---|---|
+| K / Einstellungen | Settings zeigt Darstellung, KI-Wahl, Geschmacksprofil, Konto-/Sync, Datenrechte, Sicherheitsdownload, Streamingquellen und Legal; keine Rohdatenimporte, externe Foto-KI, Blogprofilanalyse, Owner-Wartung, Einzeldatei oder versteckten Modi | `src/tabs/DatenTab.jsx`, `src/components/GeschmackBereich.jsx`, neuer fokussierter Test | keine App-/Sync-/KI-/Kataloglogik; persönliche Daten bleiben bytegleich |
+| L / Radar & Entdecken | bestehende Empfehlungen, Zielsuche, Ziel-/Funde-Trennung, Personen/Reihen/Staffeln, Status und Verwaltung bleiben; Radarwortlaut ist konsistent und es gibt kein öffentliches Share-Opt-in | `src/tabs/EntdeckenTab.jsx`, `src/components/RadarSubscriptionPreview.jsx`, neuer fokussierter Test | keine Radar-RPCs, Stores, Such-, Ergebnis- oder Datumslogik; `onConfirm` bleibt kompatibel mit `shareEnabled:false` |
+| M / Persönlicher Blog | eigene Artikel bleiben erstell-, abgleich-, les-, bearbeit- und löschbar; neue öffentliche Veröffentlichung, öffentliche Blogsuche und Rohimport sind im Privatrelease nicht sichtbar | `src/tabs/BlogTab.jsx`, neuer fokussierter Test | bestehende Artikel-/Syncdaten unverändert; kein Serverwrite im Test, sichere Altartikel-Löschung bleibt möglich |
+
+Integration folgt K → L → M. Gemeinsame `package.json`-/App-/Style-Flächen
+bleiben beim Meister; die drei Pakettests laufen direkt und werden erst nach
+Integration einmal in den gemeinsamen Abschluss-Gate eingeordnet. Erst dieser
+grüne Kandidat darf später wieder nach Staging; `main` bleibt bis zur eigenen
+Production-Etappe unberührt.
 
 Historischer Vorbereitungsstand auf `4731c0c`: Die vollständige lokale `npm test`-Suite ist
 grün. Remote sind die Access- und Mail-Ledger-Migration einschließlich
