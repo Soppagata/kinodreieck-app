@@ -32,7 +32,11 @@ const {createRoot}=await import("react-dom/client");
 const tick=()=>new Promise(r=>setTimeout(r,0));
 const settle=()=>act(async()=>{await tick();await tick();});
 const a="a1000000-0000-4000-8000-000000000001", b="a1000000-0000-4000-8000-000000000002";
-const instant=new Date().toISOString(), day=instant.slice(0,10), query="Synthetische Sternenreihe";
+const now=new Date(), instant=now.toISOString();
+const viennaDayParts=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{
+  timeZone:"Europe/Vienna",year:"numeric",month:"2-digit",day:"2-digit",
+}).formatToParts(now).filter(part=>part.type!=="literal").map(part=>[part.type,part.value]));
+const day=`${viennaDayParts.year}-${viennaDayParts.month}-${viennaDayParts.day}`, query="Synthetische Sternenreihe";
 const targetId=createLocalTextRadarTargetId(query);
 const event={eventId:"b1000000-0000-4000-8000-000000000001",eventVersionId:"b1000000-0000-4000-8000-000000000002",
   targetId:"release:v1:1122334455667788",title:"Ein anderer Werktitel",targetType:"work",category:"film",
