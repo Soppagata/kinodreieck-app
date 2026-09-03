@@ -147,7 +147,7 @@ check(!filmFixture.container.querySelector(".kd-beschreibung-editor") && filmWri
   "FilmCard schließt erst nach erfolgreicher Write-Bestätigung");
 await filmFixture.cleanup();
 
-/* ArtikelMaske: harter Doppelklick-Lock und Login-Gate für Shared. */
+/* ArtikelMaske: harter Doppelklick-Lock und private Release-Schreibgrenze. */
 let artikelResolver = null;
 const artikelWrites = [];
 const geteilterArtikel = {
@@ -178,7 +178,8 @@ await artikelFixture.cleanup();
 const kontoFixture = await mounte(ArtikelMaske, {
   vorlage: null, angemeldet: true, onErstellen: async () => null, onAbbrechen() {},
 });
-check(kontoFixture.container.textContent.includes("Shared —"), "Bereites Konto sieht das Shared-Control");
+check(!kontoFixture.container.textContent.includes("Shared —"),
+  "Auch ein bereites Konto sieht im Privatrelease kein Shared-Control");
 await kontoFixture.cleanup();
 
 /* Kontoaktivierung: async Reject bleibt im Assistenten, serialisiert Klicks

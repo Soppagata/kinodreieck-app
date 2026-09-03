@@ -355,11 +355,10 @@ check("Gast-Settings behalten die Streaming-Auswahl, aber keine Betriebs-/Suppor
 check("Datenschutz liegt erreichbar unter dem letzten Rechtliches-Block",
   !!datenschutzSummary && !!rechtlichesSummary
   && datenschutzSummary.closest("details.kd-klappe") === rechtlichesSummary.parentElement);
-/* Easter-Egg-Modi: versteckt unter dem „Max"-Link in Über & Rechtliches */
+/* Der Legal-Name bleibt im Privatrelease reiner Text. */
 const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
-check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
-if (maxLink) { maxLink.click(); await warte(200); }
-check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Classix|Schon kuhl)$/));
+check("Legal-Name 'Max' besitzt keinen Easter-Egg-Einstieg", !maxLink);
+check("Kein versteckter Modus-Knopf in den Release-Settings", !knopf(/^(Classix|Schon kuhl)$/));
 check("KI-Vokabular vorhanden", /KI-Vokabular/.test(text()));
 const sicherheitskopieKnopf = knopf(/Sicherheitskopie dieses Geräts herunterladen/i);
 check("Knopf für die Sicherheitskopie dieses Geräts vorhanden", !!sicherheitskopieKnopf);
@@ -412,18 +411,19 @@ if (foyer) {
   if (saal) { saal.click(); await warte(400); }
 }
 
-/* Offline-First-Paketaustausch bleibt entfernt. Der externe Fotoprompt und der
-   interne Textimport verwenden denselben vorsichtigen Vorschauweg. */
+/* Offline-First-Paketaustausch und die alten Import-/Foto-KI-Wege bleiben aus
+   der sichtbaren Release-Oberfläche entfernt. */
 check("Teilen & Tauschen aus Einstellungen entfernt", !/Teilen & Tauschen/.test(text()));
 const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelimport/.test((s.textContent || "").trim()));
-if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(200); }
-const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /extern mit GPT, Claude/i.test(s.textContent || ""));
-if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(200); }
 const stapelPrompt = [...doc.querySelectorAll("textarea")].find((t) => /Kinodreieck – Mediathek-Erfassung/.test(t.value || ""));
-check("Externer Markdown-Workflow im Text-Stapelimport vorhanden", !!stapelPrompt);
-check("Stapelimport-Workflow ist kopier- und downloadbar und nimmt KI-JSON entgegen",
-  !!knopf(/^Workflow kopieren$/) && !!knopf(/^Workflow \(\.md\) herunterladen$/)
-    && [...doc.querySelectorAll("textarea")].some((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || "")));
+check("Stapelimport und externer Foto-KI-Workflow sind aus den Release-Settings entfernt",
+  !stapelKlappe && !stapelPrompt && !knopf(/^Workflow kopieren$/)
+    && !knopf(/^Workflow \(\.md\) herunterladen$/)
+    && ![...doc.querySelectorAll("textarea")].some((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || "")));
+check("Roh-Master, Blogprofilanalyse und Einzeldatei-Download sind aus den Release-Settings entfernt",
+  ![...doc.querySelectorAll("summary")].some((s) => /^Masterliste/.test((s.textContent || "").trim()))
+    && !/Eigene Blogartikel für dein Profil auswerten/.test(text())
+    && !/Einzeldatei herunterladen/.test(text()));
 
 /* ---- Mediathek: Apple-Besitz ---- */
 const mediathekTab = knopf(/mediathek/i);

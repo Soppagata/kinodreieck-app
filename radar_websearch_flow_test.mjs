@@ -461,7 +461,7 @@ try {
     assert.equal(textChecks.length, 0);
     assert.equal(textUi.container.querySelectorAll("#kd-radar-target-search").length, 1);
     assert.equal(textUi.container.querySelectorAll("#kd-radar-target-results").length, 0);
-    await act(async () => { button(textUi.container, "Im Radar speichern").click(); await tick(); });
+    await act(async () => { button(textUi.container, "Ins Radar aufnehmen").click(); await tick(); });
     await settle();
     assert.equal(textChecks.length, 0);
     assert.match(textUi.container.textContent, /Mutter Teresa/);
@@ -495,7 +495,7 @@ try {
   await act(async () => { button(degradedUi.container, "Radar").click(); await tick(); });
   await setControl(degradedUi.container.querySelector("#kd-radar-target-search"), "Tommy Wiseau");
   await check("Gast-Freitext bleibt ohne verdeckten Suchaufruf und ohne Fund", async () => {
-    await act(async () => { button(degradedUi.container, "Im Radar speichern").click(); await tick(); });
+    await act(async () => { button(degradedUi.container, "Ins Radar aufnehmen").click(); await tick(); });
     await settle();
     assert.equal(degradedChecks.length, 0);
     assert.equal(button(degradedUi.container, "Jetzt prüfen"), undefined);
@@ -510,7 +510,7 @@ try {
   await act(async () => { button(fallbackUi.container, "Radar").click(); await tick(); });
   const fallbackText = "Star Wars: Starfighter Kinostart Österreich";
   await setControl(fallbackUi.container.querySelector("#kd-radar-target-search"), fallbackText);
-  await act(async () => { button(fallbackUi.container, "Im Radar speichern").click(); await tick(); });
+  await act(async () => { button(fallbackUi.container, "Ins Radar aufnehmen").click(); await tick(); });
   await settle();
   await check("Eindeutige Star-Wars-Terminfrage bleibt Freitext, wenn der strukturierte Pfad fehlt", async () => {
     const [subscription] = controllerRef.current.sichtbarerRadarState.subscriptions;
@@ -536,7 +536,7 @@ try {
   const starfighterUi = await mount(starfighterExecutor);
   await act(async () => { button(starfighterUi.container, "Radar").click(); await tick(); });
   await setControl(starfighterUi.container.querySelector("#kd-radar-target-search"), "Star Wars: Starfighter Kinostart Österreich");
-  await act(async () => { button(starfighterUi.container, "Im Radar speichern").click(); await tick(); });
+  await act(async () => { button(starfighterUi.container, "Ins Radar aufnehmen").click(); await tick(); });
   await settle();
   await check("Sichtbare Terminfrage bleibt unveraendertes Freitextziel", async () => {
     const [subscription] = controllerRef.current.sichtbarerRadarState.subscriptions;

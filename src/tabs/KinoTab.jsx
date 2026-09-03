@@ -230,13 +230,12 @@ export function KinoTab({
     <section ref={bereichRef} className="kd-kino-tab">
       {programm?.status?.archiviert && (
         <p className="kd-inline-meldung" role="status">
-          <strong>Archiviertes Offline-Beispiel.</strong> Die Termine sind synthetisch und zeigen kein aktuelles Kinoprogramm. Den dokumentierten Stand findest du unter Settings → Kinoprogramm-Status.
+          <strong>Archiviertes Offline-Beispiel.</strong> Die Termine sind synthetisch und zeigen kein aktuelles Kinoprogramm.
         </p>
       )}
       {/* Maschinenlesbarer Diagnoseanker: hält Datenzustands-Regressionen und
-          Support-Ausgaben möglich, ohne den technischen Stand wieder in den
-          Kino-Inhalt zu setzen. Sichtbar ist dieselbe Information nur unter
-          Settings → Kinoprogramm-Status. */}
+          Support-Ausgaben möglich, ohne den technischen Stand als sichtbare
+          Release-Funktion in den Kino-Inhalt zu setzen. */}
       <div className="kd-kino-status-anker kd-visually-hidden" aria-hidden="true">
         {progStand ? (
           <span>

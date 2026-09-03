@@ -1093,7 +1093,7 @@ test("Entdecken-Dialog und freies Radarziel bleiben am Desktop lokal und fokussi
 
   await page.getByRole("tab", { name: "Radar" }).click();
   await page.getByLabel("Wonach soll dein Radar suchen?").fill("Passender Film");
-  await page.getByRole("button", { name: "Im Radar speichern", exact: true }).click();
+  await page.getByRole("button", { name: "Ins Radar aufnehmen", exact: true }).click();
   await expect(page.locator('[role="dialog"]')).toHaveCount(0);
   const meineZiele = page.locator(".kd-entdecken-panel").filter({
     has: page.getByRole("heading", { name: "Meine Ziele" }),

@@ -26,6 +26,8 @@ async function ladeEsbuild() {
 
 const datenQuelle = fs.readFileSync(path.join(WURZEL, "src/tabs/DatenTab.jsx"), "utf8");
 const geschmackQuelle = fs.readFileSync(path.join(WURZEL, "src/components/GeschmackBereich.jsx"), "utf8");
+const hilfeQuelle = fs.readFileSync(path.join(WURZEL, "src/lib/hilfeInhalte.js"), "utf8");
+const kinoQuelle = fs.readFileSync(path.join(WURZEL, "src/tabs/KinoTab.jsx"), "utf8");
 check("Release-Nebenwege sind an einer expliziten, geschlossenen DOM-Projektion gebunden",
   datenQuelle.includes("const RELEASE_NEBENWEGE_SICHTBAR = false")
     && datenQuelle.includes("blogProfilAnalyseSichtbar={RELEASE_NEBENWEGE_SICHTBAR}"));
@@ -33,6 +35,12 @@ check("Bloganalyse-Code und Handler bleiben erhalten, nur sein Release-Einstieg 
   geschmackQuelle.includes('import { BlogProfilAnalyse } from "./BlogProfilAnalyse.jsx"')
     && geschmackQuelle.includes("blogProfilAnalyseSichtbar = true")
     && geschmackQuelle.includes("{blogProfilAnalyseSichtbar && <BlogProfilAnalyse"));
+check("Hilfetexte verweisen nicht auf entfernte Settings-Einstiege",
+  !hilfeQuelle.includes("Masterliste und vorgesehene Importe findest du")
+    && !hilfeQuelle.includes("Katalog- und Cache-Werkzeuge liegen")
+    && hilfeQuelle.includes("Ein Rohdatenimport ist in diesem Privatrelease nicht freigeschaltet"));
+check("Kino verweist nicht auf den entfernten technischen Statusbereich",
+  !kinoQuelle.includes("Settings → Kinoprogramm-Status"));
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "kd-private-release-settings-"));
 process.on("exit", () => {

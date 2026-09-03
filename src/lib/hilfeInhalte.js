@@ -129,8 +129,8 @@ const BEREICHE = [
     titel: "Settings",
     kurztext: "Darstellung, Konto, Sicherung, Quellen und optionale Funktionen einstellen.",
     details: [
-      "In Settings verwaltest du Darstellung und Verhalten, Konto und Geräte-Sync, Masterliste, die Sicherheitskopie dieses Geräts, Streaming-Quellen, Suchvokabular und optionale KI-Funktionen.",
-      "Katalog- und Cache-Werkzeuge liegen in ihren eigenen Settings-Abschnitten. Nutze sie nur für den dort beschriebenen Zweck.",
+      "In Settings verwaltest du Darstellung und Verhalten, optionale KI-Funktionen, dein Geschmacksprofil, Konto und Geräte-Sync, Datenrechte, die Sicherheitskopie dieses Geräts, Streaming-Quellen und Suchvokabular.",
+      "Bei einem echten Katalogfehler erscheint dort ausschließlich der begrenzte Bereich Verbindung wiederherstellen.",
       "Die rechtlichen Hinweise bleiben ausschließlich im bestehenden Abschnitt Über & Rechtliches außerhalb dieser Anleitung.",
     ],
     suchwoerter: ["settings", "einstellungen", "darstellung", "konto", "sicherung", "backup", "quellen"],
@@ -223,8 +223,8 @@ const AKTIONEN = [
   },
   {
     id: "daten-importieren",
-    titel: "Daten importieren",
-    text: "Masterliste und vorgesehene Importe findest du in den zugehörigen Abschnitten der Settings.",
+    titel: "Datenimport im Privatrelease",
+    text: "Ein Rohdatenimport ist in diesem Privatrelease nicht freigeschaltet. Neue Einträge legst du direkt in der Mediathek an; für die Sicherung nutzt du Settings → Sicherheitskopie dieses Geräts.",
     suchwoerter: ["import", "masterliste", "programmdatei", "daten importieren", "masterliste importieren", "datei einlesen"],
     direkteSuchwoerter: ["daten importieren", "masterliste importieren", "datei einlesen"],
     bereichId: "daten",
