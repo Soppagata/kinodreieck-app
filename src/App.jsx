@@ -953,7 +953,7 @@ export default function App() {
     }
   }, [schreibeArtikel]);
 
-  const freigebeArtikel = useCallback(async (id) => {
+  const freigebeArtikel = useCallback(async (id, { synchronisierePublikation = true } = {}) => {
     let freigegeben = null;
     const ok = await schreibeArtikel((prev) => prev.map((a) => {
       if (a.id !== id) return a;
@@ -961,6 +961,10 @@ export default function App() {
       return freigegeben;
     }));
     if (!ok || !freigegeben) return false;
+    /* Die Privatrelease-Blogoberfläche speichert Bearbeitungen ausschließlich
+       lokal. Bereits vorhandene Publikationszustände bleiben dabei erhalten,
+       ohne im Hintergrund Publish oder Unpublish auszulösen. */
+    if (!synchronisierePublikation) return true;
     if (freigegeben.herkunft === "gezogen") return true;
     const darfPublizieren = remoteKontoAktiv;
     if (freigegeben.geteilt && darfPublizieren) {

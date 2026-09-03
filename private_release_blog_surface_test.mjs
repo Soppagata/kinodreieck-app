@@ -12,6 +12,7 @@ try { esbuild = requireFromTestEnv("esbuild"); }
 catch { esbuild = requireFromTestEnv("vite/node_modules/esbuild"); }
 const { build } = esbuild;
 const source = fs.readFileSync(path.join(rootDir, "src/tabs/BlogTab.jsx"), "utf8");
+const appSource = fs.readFileSync(path.join(rootDir, "src/App.jsx"), "utf8");
 let checks = 0;
 function check(name, callback) {
   callback();
@@ -28,6 +29,8 @@ check("Die Schreibgrenze legt neue Artikel privat an und bewahrt beim Edit Altzu
   assert.match(source, /geteilt:\s*vorlage\s*\?\s*!!vorlage\.geteilt\s*:\s*false/);
   assert.doesNotMatch(source, /setGeteilt|Shared —|type="checkbox" checked=\{geteilt\}/);
   assert.match(source, /synchronisierePublikation:\s*false/);
+  assert.match(appSource, /freigebeArtikel = useCallback\(async \(id, \{ synchronisierePublikation = true \} = \{\}\)/);
+  assert.match(appSource, /if \(!synchronisierePublikation\) return true;/);
 });
 check("Die bestehende Schutzgrenze für möglicherweise öffentliche Altartikel bleibt erhalten", () => {
   assert.match(source, /needsPublicRemoval\(a, publikation\)/);
