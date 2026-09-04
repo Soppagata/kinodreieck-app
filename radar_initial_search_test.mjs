@@ -62,7 +62,7 @@ function Harness({context}){
     entdeckenStatusRef:statusRef,schreibeEntdeckenStatus:async()=>{},serienKatalog:[],setErr,
     radarPilotEnabled:true,radarPilotAdapter:context.pilot,radarWebsearchAdapter:context.search});
   return h(EntdeckenTab,{datenKontextKey:context.session.account?.id||"guest",radarState:controller.sichtbarerRadarState,
-    accountMode:context.session.mode==="account",radarPilotEvents:controller.radarPilotEvents,
+    accountMode:context.session.mode==="account",radarAvailable:true,radarPilotEvents:controller.radarPilotEvents,
     onRadarTextAdd:controller.fuegeRadarTextHinzu,onRadarChange:controller.aendereRadar,
     blogProps:{artikel:[],master:[]}});
 }
