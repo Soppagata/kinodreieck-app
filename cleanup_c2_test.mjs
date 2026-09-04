@@ -15,8 +15,10 @@ function check(name, callback) {
 }
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const app = source("./src/App.jsx");
+const kino = source("./src/tabs/KinoTab.jsx");
 const streaming = source("./src/tabs/StreamingTab.jsx");
 const navigation = source("./src/components/AppNavigation.jsx");
+const jahrzehntFilter = streaming.match(/function JahrzehntFilter[\s\S]*?\n}\n\nexport function StreamingTab/)?.[0] || "";
 
 check("U-01: Jahrzehnte sind ohne Jahrhundert-Ambiguität beschriftet", () => {
   assert.equal(streamingJahrzehntLabel(1920), "1920er");
@@ -45,6 +47,19 @@ check("U-01: beide Jahrzehntregler erzwingen Jahr aufsteigend", () => {
   assert.match(streaming, /const aendereDekadeE = \(wert\) => \{[\s\S]*?setSortE\("jahr"\);[\s\S]*?setSortRichtungE\("auf"\);[\s\S]*?\};/);
   assert.match(streaming, /wert=\{dekadeP\}[\s\S]*?onChange=\{aendereDekadeP\}/);
   assert.match(streaming, /wert=\{dekadeE\}[\s\S]*?onChange=\{aendereDekadeE\}/);
+});
+
+check("Follow-up 5: die leere Kino-Datumsauswahl heißt Datum", () => {
+  assert.match(kino, /<select aria-label="Datum im Kinoprogramm"[\s\S]*?<option value="">Datum<\/option>/);
+  assert.doesNotMatch(kino, /<select aria-label="Datum im Kinoprogramm"[\s\S]*?<option value="">Alle Programmtage<\/option>/);
+  assert.match(kino, /programmFilterStatus \|\| "Alle Programmtage und Kinos"/);
+});
+
+check("Follow-up 6: Jahrzehntwert bleibt kompakt und ohne Alle-Button", () => {
+  assert.match(jahrzehntFilter, /<strong aria-live="polite">\{bereich \? streamingJahrzehntLabel\(wert\) : "Alle"\}<\/strong>/);
+  assert.doesNotMatch(jahrzehntFilter, /<button[^>]*>Alle<\/button>/);
+  assert.match(jahrzehntFilter, /aria-valuetext=\{bereich \? `\$\{Number\(wert\)\}er: \$\{bereich\.von\} bis \$\{bereich\.bis\}` : "Alle Jahrzehnte"\}/);
+  assert.match(streaming, /function AlphabetFilter[\s\S]*?<button type="button" onClick=\{\(\) => onChange\(null\)\} disabled=\{!wert\}>Alle<\/button>/);
 });
 
 check("U-05/D-05: nur der Streaming-Key entdecken heißt sichtbar Alles", () => {

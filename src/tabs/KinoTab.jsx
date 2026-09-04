@@ -303,7 +303,7 @@ export function KinoTab({
             <label>
               <span>Datum</span>
               <select aria-label="Datum im Kinoprogramm" value={tagF || ""} onChange={(e) => setTagF(e.target.value || null)}>
-                <option value="">Alle Programmtage</option>
+                <option value="">Datum</option>
                 {tage.map((tag) => <option key={tag.key} value={tag.key}>{tag.label}</option>)}
               </select>
             </label>

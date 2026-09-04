@@ -132,8 +132,7 @@ function JahrzehntFilter({ wert, optionen, onChange, name }) {
     <div className="kd-streamfilter-abc kd-streamfilter-dekade" data-aktiv={wert != null ? "1" : "0"}>
       <div className="kd-streamfilter-abc-kopf">
         <span>Jahrzehntbereich</span>
-        <strong aria-live="polite">{bereich ? `${streamingJahrzehntLabel(wert)} · ${bereich.label}` : "Alle"}</strong>
-        <button type="button" onClick={() => onChange(null)} disabled={wert == null}>Alle</button>
+        <strong aria-live="polite">{bereich ? streamingJahrzehntLabel(wert) : "Alle"}</strong>
       </div>
       <input type="range" min="0" max={optionen.length} step="1" value={index}
         onChange={(event) => {
