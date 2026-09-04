@@ -61,12 +61,14 @@ test("Private Ops bindet exakte, fail-closed ausgewählte Umgebungsmatrizen", ()
   assert.match(workflow, /KD_MONITOR_ENVIRONMENT:\s*staging/);
 });
 
-test("R-04 bleibt bis zur Kostenfreigabe bei höchstens einem aktiven Retry", () => {
+test("R-04 verdrahtet höchstens drei serielle Retries ohne Workflow-Retry", () => {
   const core = read("supabase/functions/automatic-ai-check/core.js");
   const runtime = read("supabase/functions/automatic-ai-check/index.ts");
   const workflow = read(".github/workflows/automatic-ai-check.yml");
-  assert.equal((core.match(/await dependencies\.claimDue\(\)/g) || []).length, 1);
-  assert.equal((runtime.match(/createAutomaticAiCheckHandler\(runtimeDependencies\(\)\)/g) || []).length, 1);
+  assert.match(core, /AUTOMATIC_AI_DRAIN_MAX_JOBS = 3/);
+  assert.match(core, /for \(let index = 0; index < maxJobs; index \+= 1\)/);
+  assert.match(core, /const response = await createAutomaticAiCheckHandler/);
+  assert.equal((runtime.match(/createAutomaticAiDrainHandler\(runtimeDependencies\(\)\)/g) || []).length, 1);
   assert.equal((workflow.match(/\bcurl\b/g) || []).length, 1);
   assert.doesNotMatch(workflow, /seq\s+1\s+5|workflow_dispatch|--retry/);
 });

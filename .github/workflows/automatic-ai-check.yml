@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Einen faelligen automatischen KI-Job pruefen
+      - name: Bis zu drei faellige automatische KI-Jobs seriell pruefen
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_RADAR_SCHEDULER: ${{ secrets.SUPABASE_RADAR_SCHEDULER }}
@@ -60,11 +60,40 @@ jobs:
             try { body = JSON.parse(readFileSync(process.argv[1], "utf8")); }
             catch { process.exit(2); }
             const keys = Object.keys(body || {}).sort().join(",");
-            const codes = new Set(["idle", "initial-succeeded", "retry-finished"]);
-            if (keys !== "code,ok" || body.ok !== true || !codes.has(body.code)) process.exit(3);
-            process.stdout.write(body.code);
+            const expected = [
+              "code", "initialSucceededJobs", "maxJobs", "ok", "oldestLagSeconds",
+              "processedJobs", "remainingDueJobs", "retryFinishedJobs", "stopReason", "timeBudgetMs",
+            ].sort().join(",");
+            const codes = new Set(["idle", "drained", "backlog"]);
+            const stopReasons = new Set(["idle", "job_limit", "time_budget"]);
+            const countersValid = Number.isInteger(body?.processedJobs)
+              && body.processedJobs >= 0 && body.processedJobs <= 3
+              && Number.isInteger(body?.initialSucceededJobs) && body.initialSucceededJobs >= 0
+              && Number.isInteger(body?.retryFinishedJobs) && body.retryFinishedJobs >= 0
+              && body.initialSucceededJobs + body.retryFinishedJobs === body.processedJobs
+              && Number.isInteger(body?.remainingDueJobs) && body.remainingDueJobs >= 0
+              && body.remainingDueJobs <= 1000000
+              && (body.oldestLagSeconds === null
+                || (Number.isInteger(body.oldestLagSeconds) && body.oldestLagSeconds >= 0));
+            const stateValid = (body?.remainingDueJobs === 0) === (body?.oldestLagSeconds === null)
+              && (body?.code === "backlog") === (body?.remainingDueJobs > 0)
+              && (body?.code === "idle") === (body?.processedJobs === 0);
+            if (keys !== expected || body.ok !== true || !codes.has(body.code)
+                || !stopReasons.has(body.stopReason) || !countersValid || !stateValid
+                || body.maxJobs !== 3 || body.timeBudgetMs !== 225000) process.exit(3);
+            process.stdout.write(JSON.stringify({
+              code: body.code,
+              processedJobs: body.processedJobs,
+              remainingDueJobs: body.remainingDueJobs,
+              oldestLagSeconds: body.oldestLagSeconds,
+              stopReason: body.stopReason,
+            }));
           ' "$response_file")"; then
             echo "::error::Automatic-AI-Checker lieferte keinen gueltigen Antwortvertrag."
             exit 1
           fi
-          echo "Automatic-AI-Checker: ${outcome}."
+          if [[ "$outcome" == *'"code":"backlog"'* ]]; then
+            echo "::warning::Automatic-AI-Checker: ${outcome}."
+          else
+            echo "Automatic-AI-Checker: ${outcome}."
+          fi

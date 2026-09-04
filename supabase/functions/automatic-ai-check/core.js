@@ -1,5 +1,5 @@
-/* Server-only orchestrator for one due automatic AI check plus an authored,
-   currently unwired bounded-drain wrapper.
+/* Server-only orchestrator for one due automatic AI check plus the active,
+   bounded drain wrapper.
 
    The database owns due/retry/mail idempotency. This handler performs no
    retry of its own: one claimed job can cause at most one bodyless Radar call
@@ -522,8 +522,7 @@ export function createAutomaticAiCheckHandler(dependencies = {}) {
 /* The single-job handler remains the atomic provider/mail boundary. This
    wrapper awaits each complete terminal response before it creates the next
    bodyless request, caps the whole invocation at three jobs, and exposes only
-   aggregate read-only backlog telemetry. It is intentionally not wired to
-   Deno.serve or the workflow until the provider-effect boundary is approved. */
+   aggregate read-only backlog telemetry. */
 export function createAutomaticAiDrainHandler(dependencies = {}, options = {}) {
   const maxJobs = Number.isInteger(options.maxJobs)
       && options.maxJobs > 0

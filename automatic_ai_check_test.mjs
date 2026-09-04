@@ -2,7 +2,10 @@
    Radar-, Provider-, Mail- oder sonstiger Netzwerkzugriff. */
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
@@ -338,6 +341,23 @@ async function drainResponseBody(response, expectedStatus = 200) {
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.match(response.headers.get("content-type") || "", /^application\/json/);
   return response.json();
+}
+
+function runWorkflowResponseParser(body) {
+  const workflow = fs.readFileSync(".github/workflows/automatic-ai-check.yml", "utf8");
+  const parser = workflow.match(/node -e '\n([\s\S]*?)\n\s*' "\$response_file"/)?.[1] || "";
+  assert.ok(parser);
+  const dir = fs.mkdtempSync(join(tmpdir(), "kd-automatic-ai-check-parser-"));
+  const file = join(dir, "response.json");
+  try {
+    fs.writeFileSync(file, typeof body === "string" ? body : JSON.stringify(body), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    return spawnSync(process.execPath, ["-e", parser, file], { encoding: "utf8" });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 test("nur moderne konfigurierte Service-Keys werden akzeptiert", () => {
@@ -771,6 +791,67 @@ test("Wiederholter Mailclaim wird im Drain nie als zweiter Send interpretiert", 
   assert.equal(replay.calls.inspectBacklog, 0);
 });
 
+test("Workflow akzeptiert nur den exakten anonymen Drainvertrag", () => {
+  const base = {
+    ok: true,
+    code: "idle",
+    processedJobs: 0,
+    initialSucceededJobs: 0,
+    retryFinishedJobs: 0,
+    remainingDueJobs: 0,
+    oldestLagSeconds: null,
+    stopReason: "idle",
+    maxJobs: 3,
+    timeBudgetMs: 225_000,
+  };
+  const idle = runWorkflowResponseParser(base);
+  assert.equal(idle.status, 0);
+  assert.equal(idle.stdout, JSON.stringify({
+    code: "idle", processedJobs: 0, remainingDueJobs: 0,
+    oldestLagSeconds: null, stopReason: "idle",
+  }));
+
+  const drained = runWorkflowResponseParser({
+    ...base,
+    code: "drained",
+    processedJobs: 2,
+    initialSucceededJobs: 1,
+    retryFinishedJobs: 1,
+    stopReason: "job_limit",
+  });
+  assert.equal(drained.status, 0);
+
+  const backlog = runWorkflowResponseParser({
+    ...base,
+    code: "backlog",
+    processedJobs: 3,
+    initialSucceededJobs: 1,
+    retryFinishedJobs: 2,
+    remainingDueJobs: 4,
+    oldestLagSeconds: 7_200,
+    stopReason: "job_limit",
+  });
+  assert.equal(backlog.status, 0);
+  assert.equal(backlog.stdout, JSON.stringify({
+    code: "backlog", processedJobs: 3, remainingDueJobs: 4,
+    oldestLagSeconds: 7_200, stopReason: "job_limit",
+  }));
+
+  for (const invalid of [
+    "not-json",
+    { ...base, extra: true },
+    { ...base, code: "drained" },
+    { ...base, processedJobs: 4, code: "drained" },
+    { ...base, processedJobs: 2, initialSucceededJobs: 1, code: "drained" },
+    { ...base, remainingDueJobs: 1, code: "backlog" },
+    { ...base, remainingDueJobs: 1, oldestLagSeconds: 1 },
+    { ...base, maxJobs: 2 },
+    { ...base, timeBudgetMs: 225_001 },
+  ]) {
+    assert.notEqual(runWorkflowResponseParser(invalid).status, 0);
+  }
+});
+
 test("Function, Workflow und Tests bleiben bodylos, seriell und ohne Retryschleife", () => {
   const core = fs.readFileSync("supabase/functions/automatic-ai-check/core.js", "utf8");
   const runtime = fs.readFileSync("supabase/functions/automatic-ai-check/index.ts", "utf8");
@@ -806,8 +887,9 @@ test("Function, Workflow und Tests bleiben bodylos, seriell und ohne Retryschlei
   assert.match(runtime, /\.eq\("initial_evidence_status", "pending"\)/);
   assert.match(runtime, /\.lte\("check_due_at", asOf\)/);
   assert.doesNotMatch(runtime, /select\("(?:account_id|target_id|logical_job_id|initial_provider_operation_id)/);
-  assert.match(runtime, /createAutomaticAiCheckHandler\(runtimeDependencies\(\)\)/);
-  assert.doesNotMatch(runtime, /createAutomaticAiDrainHandler/);
+  assert.match(runtime, /createAutomaticAiDrainHandler\(runtimeDependencies\(\)\)/);
+  assert.doesNotMatch(runtime, /createAutomaticAiCheckHandler/);
+  assert.match(runtimeRadar, /signal: AbortSignal\.timeout\(timeoutMs\)/);
 
   assert.doesNotMatch(workflow, /workflow_dispatch|curl[^\n]*--retry|--data(?:-binary|-raw)?\b/);
   assert.equal((workflow.match(/\bcurl\b/g) || []).length, 1);
@@ -816,6 +898,9 @@ test("Function, Workflow und Tests bleiben bodylos, seriell und ohne Retryschlei
   assert.match(workflow, /--header "apikey: \$\{SUPABASE_RADAR_SCHEDULER\}"/);
   assert.match(workflow, /--header "x-kd-automatic-check: scheduled-v1"/);
   assert.doesNotMatch(workflow, /--header "(?:Authorization|Origin):/i);
+  assert.match(workflow, /const codes = new Set\(\["idle", "drained", "backlog"\]\)/);
+  assert.match(workflow, /body\.maxJobs !== 3 \|\| body\.timeBudgetMs !== 225000/);
+  assert.match(workflow, /::warning::Automatic-AI-Checker/);
 
   assert.match(config, /\[functions\.automatic-ai-check\][\s\S]*?verify_jwt = false/);
   assert.equal(

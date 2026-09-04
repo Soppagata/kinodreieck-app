@@ -1,11 +1,11 @@
-/* Periodischer, serverinterner Checker fuer genau einen faelligen +6h-Claim.
+/* Periodischer, serverinterner Checker fuer bis zu drei faellige +6h-Claims.
    Authentisierung, Ledger, Radar-Retry und Betriebs-Mail bleiben ausschliesslich
    auf serverseitig gebundenen Secrets und geben keine fachlichen Inhalte aus. */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createOperationalRetryMailSender } from "../_shared/operationalRetryMail.js";
 import {
-  createAutomaticAiCheckHandler,
+  createAutomaticAiDrainHandler,
   parseAutomaticAiServiceKeys,
 } from "./core.js";
 
@@ -63,6 +63,7 @@ function runtimeDependencies() {
     invokeRadar: (
       claim: { logicalJobId: string; retryProviderOperationId: string },
       serviceKey: string,
+      { timeoutMs }: { timeoutMs: number },
     ) => fetch(`${supabaseUrl}/functions/v1/radar-websearch-task`, {
       method: "POST",
       headers: {
@@ -72,6 +73,7 @@ function runtimeDependencies() {
         "x-kd-radar-retry-operation": claim.retryProviderOperationId,
       },
       redirect: "error",
+      signal: AbortSignal.timeout(timeoutMs),
     }),
     finishRetry: ({
       logicalJobId,
@@ -137,4 +139,4 @@ function runtimeDependencies() {
   };
 }
 
-Deno.serve((request) => createAutomaticAiCheckHandler(runtimeDependencies())(request));
+Deno.serve((request) => createAutomaticAiDrainHandler(runtimeDependencies())(request));

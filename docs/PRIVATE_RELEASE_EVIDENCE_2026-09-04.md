@@ -29,7 +29,7 @@ im lokalen Kandidaten vorhanden, nicht ausgeliefert.
 | R-01 | `src/controllers/localDataSafetyController.js`, `src/lib/backup.js`, `cleanup_b1_test.mjs` | Vollständigkeitsbeleg sperrt die Löschfreigabe fail-closed; reale Geräte-Recovery offen. |
 | R-02 | `src/config/runtime.js`, `src/App.jsx`, `cleanup_b2_test.mjs` | Radaroberfläche und Runtimefähigkeit nutzen dieselbe Capability; Production-Readback offen. |
 | R-03 | `supabase/functions/entdecken-daily-task/contract.js`, `responseContract.js`, `cleanup_b2_test.mjs` | Function- und Datenvertrag lokal vereinheitlicht; keine Migration oder Function deployt. |
-| R-04 | `supabase/functions/automatic-ai-check/core.js`, Mocktests und read-only Telemetrie | Drain-Core, Mocks und Read-only-Telemetrie authored; Entry-Point-/Workflow-Aktivierung OFFEN wegen fehlender Providerwirkungsfreigabe. |
+| R-04 | `supabase/functions/automatic-ai-check/core.js`, Entry-Point, Workflow, Mocktests und read-only Telemetrie | Drain lokal produktionsfähig verdrahtet: höchstens drei Jobs strikt seriell, aggregierter Backlog/Lag und ein retryfreier Workflow-Aufruf; Push, Deploy, Schedulerlauf und Livewirkung NICHT BELEGT. |
 | R-05 | `src/lib/authDriver.js`, `src/services/sessionCoordinator.js`, `cleanup_b1_test.mjs` | Sitzungsvertrag wird vor Persistenz geprüft; kein echter Login in diesem Paket. |
 | R-06 | `src/components/GlobalSearchBar.jsx`, `src/index.css`, `cleanup_c1_test.mjs` | Globale Suchaktionen besitzen mobile Hitboxen; physische Touchabnahme offen. |
 | R-07 | `src/tabs/BlogTab.jsx`, `private_release_blog_surface_test.mjs`, `tests/cleanup-d2.spec.mjs` | Separater Expand-Button mit Fokus-/ARIA-Beziehung; Chromium/WebKit fokussiert. |
