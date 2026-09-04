@@ -772,16 +772,15 @@ await check("Lokaler Katalog-, Streaming-, Mediathek- und Profilabgleich teilt d
     .some((entry) => entry.title === seenTitle), false);
 });
 
-await check("Bestehende Radar- und Beobachten-Actions bleiben die einzige Verdrahtung", () => {
+await check("Katalogsuche bietet nach der Beobachtet-Ablösung nur den Radar-Intent", () => {
   const actions = createCatalogSearchActions({
     watchmodeId: 7102,
     title: providerItems[1].title,
     type: "tv_series",
   });
   assert.equal(actions.radar.intent, "radar");
-  assert.equal(actions.watch.intent, "watch");
-  assert.equal(actions.radar.setsObserved, false);
-  assert.equal(actions.watch.setsRadar, false);
+  assert.equal("watch" in actions, false);
+  assert.equal(actions.radar.setsRadar, false);
 });
 
 await check("Fehlerhafter Folge-Refresh behaelt den letzten guten Feed ohne Save oder Retry", async () => {

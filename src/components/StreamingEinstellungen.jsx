@@ -2,8 +2,6 @@ import { useMemo, useState } from "react";
 import { T } from "../lib/tokens.js";
 import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
-import { K } from "../services/storage.js";
-import { serienBeobachten } from "../lib/staffeln.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================
@@ -36,12 +34,6 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
     return null;
   })();
   const resetInTagen = resetDatum ? Math.ceil((resetDatum.getTime() - Date.now()) / 86400000) : null;
-  const beobachteteSerien = () => {
-    try {
-      const status = JSON.parse(localStorage.getItem(K.entdeckenStatus) || "{}");
-      return serienBeobachten(status, entdecken && entdecken.titel);
-    } catch { return []; }
-  };
 
   const gruppen = useMemo(() => {
     /* Demo-Snapshots (eingebettete Beispieldaten) dürfen die echte AT-Quellenliste
@@ -148,9 +140,6 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
             </button>
           ))}
         </div>
-        <p style={{ fontSize: 12, color: T.rauch, margin: "8px 0 0", lineHeight: 1.5 }}>
-          {beobachteteSerien().length} ausdrücklich {beobachteteSerien().length === 1 ? "beobachtete Serie wird" : "beobachtete Serien werden"} beim planmäßigen Kataloglauf auf neue Staffel- und Folgenstände geprüft.
-        </p>
       </div>
       </Klappe>}
 

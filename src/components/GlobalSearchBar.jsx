@@ -48,7 +48,7 @@ const fokussiereOhneBrowserScroll = (element) => {
 
 export function GlobalSearchBar({
   bereich, onSuchen, antwort, onAntwortSchliessen, onTreffer, onAlleErgebnisse,
-  menuOffen = false, onMenu, onSuchaktion, beobachteteIds = [], radarTargetIds = [],
+  menuOffen = false, onMenu, onSuchaktion, radarTargetIds = [],
 }) {
   const [text, setText] = useState("");
   const [laeuft, setLaeuft] = useState(false);
@@ -57,7 +57,6 @@ export function GlobalSearchBar({
   const dialogRef = useRef(null);
   const viewportUpdateRef = useRef(() => {});
   const viewportEndRef = useRef(() => {});
-  const beobachtet = new Set((beobachteteIds || []).map(String));
   const imRadar = new Set((radarTargetIds || []).map(String));
   const absenden = async (event) => {
     event.preventDefault();
@@ -349,12 +348,7 @@ export function GlobalSearchBar({
                   <strong>{item.titel}</strong>
                   {item.meta ? <small>{item.meta}</small> : null}
                 </button>
-                {item.searchActions?.watch || item.searchActions?.radar ? <div className="kd-globalsuche-aktionen" aria-label={`Aktionen für ${item.titel}`}>
-                  {item.searchActions.watch ? <button type="button"
-                    aria-label={`${beobachtet.has(String(item.searchActions.watch.watchmodeId)) ? "Beobachtet" : "Beobachten"}: ${item.titel}`}
-                    aria-pressed={beobachtet.has(String(item.searchActions.watch.watchmodeId))}
-                    onClick={(event) => { event.currentTarget.focus(); viewportEndRef.current();
-                      onSuchaktion?.(item, "watch"); }}>{beobachtet.has(String(item.searchActions.watch.watchmodeId)) ? "Beobachtet" : "Beobachten"}</button> : null}
+                {item.searchActions?.radar ? <div className="kd-globalsuche-aktionen" aria-label={`Aktionen für ${item.titel}`}>
                   {item.searchActions.radar ? <button type="button"
                     aria-label={`${imRadar.has(item.searchActions.radar.targetId) ? "Im Radar" : "Ins Radar"}: ${item.titel}`}
                     aria-pressed={imRadar.has(item.searchActions.radar.targetId)}

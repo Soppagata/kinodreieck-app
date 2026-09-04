@@ -318,15 +318,15 @@ const serienKompakt = kompakteFinderTreffer({
   treffer: [],
   entdecken: [{ watchmode_id: 99001, titel: "Synthetische Serie", typ: "tv_series", dienste: ["Testdienst"] }],
 }, "streaming");
-check("G0", "Seriensuchtreffer trägt Beobachten und Ins Radar als getrennte, kreuzschreibfreie Aktionen", () => {
+check("G0", "Seriensuchtreffer trägt nach der Ablösung nur die Radar-Aktion", () => {
   const actions = serienKompakt.items[0]?.searchActions;
-  return actions?.watch?.intent === "watch" && actions?.radar?.intent === "radar"
-    && actions.watch.setsRadar === false && actions.radar.setsObserved === false;
+  return !("watch" in actions) && actions?.radar?.intent === "radar"
+    && actions.radar.setsRadar === false;
 });
 check("G0", "globale Ergebniszeile rendert Zielöffnung und Suchaktionen als getrennte Buttons", () =>
   /kd-globalsuche-ziel/.test(globalLeisteQuelle)
   && /kd-globalsuche-aktionen/.test(globalLeisteQuelle)
-  && /onSuchaktion\?\.\(item, "watch"\)/.test(globalLeisteQuelle)
+  && !/onSuchaktion\?\.\(item, "watch"\)/.test(globalLeisteQuelle)
   && /onSuchaktion\?\.\(item, "radar"\)/.test(globalLeisteQuelle));
 const artikelTitelAntwort = erstelleFinderAntwort({
   text: "Obsession", master: [], kinoMatches: KINO_MATCHES,

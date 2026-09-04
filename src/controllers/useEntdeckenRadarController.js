@@ -32,7 +32,6 @@ import {
 } from "../lib/personRadarCatalog.js";
 import { projectEntdeckenRadarPilot, radarAutomationAttested } from "../lib/radarPilotContracts.js";
 import { projectVisibleRadarWebsearchEvents } from "../lib/radarWebsearchFlow.js";
-import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
 import { RADAR_WEBSEARCH_SINGLE_FILE_DISABLED, radarWebsearchService } from "../services/radarWebsearch.js";
 
@@ -53,7 +52,7 @@ function neueLokaleOperationId() {
    erst nach bestätigtem Storage-Write übernommen. */
 export function useEntdeckenRadarController({
   session, remoteKontoAktiv, bootDone, master, streamingKnown, streamingDiscover,
-  entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
+  setErr,
   radarWebsearchExecutor = null,
   radarPilotAdapter = radarPilotService,
   radarWebsearchAdapter = radarWebsearchService,
@@ -216,28 +215,6 @@ export function useEntdeckenRadarController({
     };
   }, [bootDone, radarAuthority, radarPilotAdapter, radarPilotClientEnabled,
     remoteKontoAktiv, session.account?.id, schreibeRadarState, setRadarState, setErr]);
-
-  const aendereSerienBeobachtung = useCallback(async (eintrag, aktiv) => {
-    const watchmodeId = eintrag?.watchmode_id ?? eintrag?.watchmodeId;
-    if (!Number.isInteger(Number(watchmodeId)) || Number(watchmodeId) <= 0) {
-      setErr("Beobachten braucht eine stabile Watchmode-ID. Es wurde nichts verändert.");
-      return false;
-    }
-    const katalogEintrag = serienKatalog.find((item) => String(item.watchmode_id) === String(watchmodeId));
-    const serie = katalogEintrag || {
-      watchmode_id: Number(watchmodeId),
-      titel: eintrag?.titel || eintrag?.target?.title || "Serie",
-      typ: "tv_series",
-    };
-    const gespeichert = await schreibeEntdeckenStatus((prev) => {
-      const next = { ...(prev || {}) };
-      const wert = setzeSerienBeobachtung(next[watchmodeId], serie, aktiv);
-      if (wert == null) delete next[watchmodeId];
-      else next[watchmodeId] = wert;
-      return next;
-    });
-    return gespeichert !== false;
-  }, [schreibeEntdeckenStatus, serienKatalog, setErr]);
 
   const radarTargetAusEintrag = useCallback((entry) => ({
     targetId: entry.targetId,
@@ -586,10 +563,6 @@ export function useEntdeckenRadarController({
     return true;
   }, [aendereRadar, aendereRadarShare, radarAuthority, radarStateRef, remoteKontoAktiv, setErr]);
 
-  const beobachteteWatchmodeIds = useMemo(
-    () => serienBeobachten(entdeckenStatus, serienKatalog).map((entry) => String(entry.watchmode_id)),
-    [entdeckenStatus, serienKatalog],
-  );
   const radarTargetIds = useMemo(() => {
     if (radarState?.authority !== radarAuthority) return [];
     const ids = new Set((radarState.subscriptions || []).filter((entry) => entry.status === "active").map((entry) => entry.targetId));
@@ -643,15 +616,8 @@ export function useEntdeckenRadarController({
   const fuehreGlobaleSuchaktionAus = useCallback((treffer, intent) => {
     const action = treffer?.searchActions?.[intent];
     if (!action) return;
-    if (intent === "watch") {
-      const aktiv = !istBeobachtet(entdeckenStatusRef.current?.[action.watchmodeId]);
-      void aendereSerienBeobachtung({
-        watchmodeId: action.watchmodeId,
-        titel: treffer.titel,
-        target: action.target,
-      }, aktiv);
-    } else if (intent === "radar" && action.target) setRadarPreviewTarget(action.target);
-  }, [aendereSerienBeobachtung, entdeckenStatusRef]);
+    if (intent === "radar" && action.target) setRadarPreviewTarget(action.target);
+  }, []);
 
   return {
     radarAuthority, sichtbarerRadarState, radarPreviewTarget,
@@ -663,12 +629,10 @@ export function useEntdeckenRadarController({
     radarPilotSyncStatus,
     setRadarPreviewTarget,
     schliesseRadarPreview,
-    aendereSerienBeobachtung,
     aendereRadar,
     fuegeRadarTextHinzu,
     aendereRadarShare,
     bestaetigeRadarVorschau,
-    beobachteteWatchmodeIds,
     radarTargetIds,
     fuehreRadarPilotReceipt,
     fuehreRadarPilotImport,

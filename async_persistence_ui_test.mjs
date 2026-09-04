@@ -10,7 +10,7 @@ import { JSDOM } from "jsdom";
 import { mitBestaetigterStringId } from "./src/controllers/confirmedIdController.js";
 import { erstelleBestaetigtenStateWriter } from "./src/controllers/useConfirmedStorageState.js";
 import {
-  istBeobachtet, mediathekIdVon, setzeSerienBeobachtung, statusVon, toggleGesehenInStatus,
+  mediathekIdVon, statusVon, toggleGesehenInStatus,
 } from "./src/lib/staffeln.js";
 
 const wurzel = path.dirname(fileURLToPath(import.meta.url));
@@ -587,9 +587,9 @@ async function pruefeStatusReihenfolge(erster, zweiter) {
   });
   const aktionen = {
     gesehen: (prev) => toggleGesehenInStatus(prev, titel, new Date("2026-08-08T10:00:00Z")),
-    beobachten: (prev) => ({
+    notiz: (prev) => ({
       ...prev,
-      wm_race: setzeSerienBeobachtung(prev.wm_race, titel, true, new Date("2026-08-08T10:00:00Z")),
+      wm_race: { ...prev.wm_race, lokale_notiz: "bewahrt" },
     }),
   };
   const ersterLauf = writer(aktionen[erster]);
@@ -599,11 +599,11 @@ async function pruefeStatusReihenfolge(erster, zweiter) {
   await Promise.all([ersterLauf, zweiterLauf]);
   return sichtbar.wm_race;
 }
-for (const reihenfolge of [["beobachten", "gesehen"], ["gesehen", "beobachten"]]) {
+for (const reihenfolge of [["notiz", "gesehen"], ["gesehen", "notiz"]]) {
   const endstand = await pruefeStatusReihenfolge(...reihenfolge);
-  check(statusVon(endstand) === "gesehen" && istBeobachtet(endstand)
-    && mediathekIdVon(endstand) === "master_race" && endstand.staffel_alarm_basis === 4,
-  `${reihenfolge.join(" → ")} bewahrt Gesehen-, Beobachten-, Staffel- und Mediathekstatus queue-zeitig`);
+  check(statusVon(endstand) === "gesehen" && endstand.lokale_notiz === "bewahrt"
+    && mediathekIdVon(endstand) === "master_race",
+  `${reihenfolge.join(" → ")} bewahrt Gesehen-, Zusatz- und Mediathekstatus queue-zeitig`);
 }
 
 /* Wochenplan: Die verknüpfte Master-ID gilt erst, wenn der Wochenplanwrite

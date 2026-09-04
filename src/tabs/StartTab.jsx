@@ -1,11 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { T } from "../lib/tokens.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { formatiereTermin } from "../lib/programm.js";
 import { Wochenplan } from "../components/Wochenplan.jsx";
-import { beobachteteSerien, neueStaffeln } from "../lib/staffeln.js";
-import { findeKinoPinImKatalog, folgenstandText } from "../lib/wochenplan.js";
-import { mustwatchVerfuegbarkeit, sortiereMustwatch } from "../lib/mustwatch.js";
+import { findeKinoPinImKatalog } from "../lib/wochenplan.js";
+import { projectDailyMustwatch, viennaCalendarDay } from "../lib/mustwatch.js";
 import { localRecommendationCandidates, webDiscoveryFeedCards } from "../lib/entdeckenUi.js";
 import { resolveEntdeckenPins } from "../lib/entdeckenPins.js";
 import { projectRecentPersonalEntries } from "../lib/personalEntryChronology.js";
@@ -31,13 +30,11 @@ const pinSortWert = (p) => {
    Modul-Reihenfolge und -Zuschnitt: Entscheidung Max 18.07.2026.
    Datenquellen (alles vorhandener App-State, keine neuen Fetches, kein LLM):
    · Vertrauens-Zeile: useSyncStatus (Muster SyncStatusChip) + progStand + streamingBekannt
-   · Pinboard & Radar: Entdecken-Titel + kinoPins + ausdrücklich beobachtete Serien
+   · Pinboard:         Entdecken-Titel + kinoPins
    · Deine Woche:      persönliche Reminder + Kinopins + passende Kinovorschläge
-                       + belegte Beobachtet-Ereignisse, rollierende sieben Tage
-   · Must-Watch:       mustwatch (oberste 5 = Listenreihenfolge)
-   · Zuletzt hinzugefügt: Master + Must-Watch + Merkliste. Neue Master-Einträge
-     tragen `erstellt_am`; Alt-Master ohne Zeitpunkt bleiben in einer getrennt
-     beschrifteten stabilen Einfügereihenfolge, ohne historische Zeit zu erfinden. */
+                       rollierende sieben Tage
+   · Must-Watch:       täglich stabile Auswahl aktuell passender Listeneinträge
+   · Zuletzt hinzugefügt: ausschließlich neue, rollierend markierte Mastereinträge. */
 
 /* Nächster Termin aus den Zeit-Strings eines Programm-Films — gleiche
    Parse-Logik wie KinoTab.terminWert (Jahres-Rollover, 2-Tage-Kulanz). */
@@ -113,25 +110,18 @@ function VertrauensZeile({ progStand, streamingBekannt, programmInfo = null, str
 }
 
 function StartDashboard({
-  kinoPins = [], merkliste = [], onNavigiere, zeigeEintrag,
+  kinoPins = [], onNavigiere, zeigeEintrag,
   entdeckenPins = [], webDiscoveryFeed = null, onEntdeckenPinsBereinigen, onSpringeZuEntdecken,
-  kinoMatches = { matched: [] }, mustwatch = [], mwKandidaten = null,
+  kinoMatches = { matched: [] }, mustwatch = [], mwKandidaten = null, auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
   programmInfo = null, streamingInfo = null, onHilfe,
-  wochenplan, onWochenplanAendern, entdeckenStatus = {}, onEntdeckenStatusAendern,
+  wochenplan, onWochenplanAendern, entdeckenStatus = {},
   master = [], onSpringeZuStreaming, onSpringeZuKino, onFilmAnlegen, toggleKinoPin,
   onStreamingKatalogLaden,
 }) {
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
   const zuEintrag = (id, fallbackTab) => { if (id && zeigeEintrag) zeigeEintrag(id); else if (onNavigiere) onNavigiere(fallbackTab); };
-  const oeffneChronikEintrag = (eintrag) => {
-    if (eintrag.target === "streaming" && onSpringeZuStreaming) {
-      onSpringeZuStreaming({ art: "entdecken", ref: eintrag.ref, titel: eintrag.label });
-      return;
-    }
-    zuEintrag(eintrag.ref, eintrag.target);
-  };
 
   /* Die drei stärksten passenden Filme sitzen nicht mehr in einem eigenen
      Dashboard-Modul, sondern als Vorschläge direkt an ihrem Kalendertag. */
@@ -183,12 +173,24 @@ function StartDashboard({
     });
   }, [kinoPins, kinoKatalog, progStand]);
 
-  /* Must-Watch: dieselbe reine Projektion wie die Vollansicht (aktuell
-     verfügbar, dann zuletzt gemerkt, dann Titel), danach auf fünf gekürzt. */
+  /* Must-Watch: innerhalb eines Wiener Kalendertags stabil, am Tageswechsel
+     neu berechnet. Der Timer liest nur die Uhr und löst keinerlei Außenwirkung aus. */
   const mwKandidatenSicher = useMemo(() => mwKandidaten || {}, [mwKandidaten]);
+  const [mwTag, setMwTag] = useState(() => viennaCalendarDay());
+  useEffect(() => {
+    const aktualisieren = () => setMwTag((bisher) => {
+      const heute = viennaCalendarDay();
+      return heute === bisher ? bisher : heute;
+    });
+    const timer = window.setInterval(aktualisieren, 30000);
+    window.addEventListener("focus", aktualisieren);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", aktualisieren); };
+  }, []);
   const mwTop = useMemo(
-    () => sortiereMustwatch(mustwatch, mwKandidatenSicher).slice(0, 5),
-    [mustwatch, mwKandidatenSicher],
+    () => projectDailyMustwatch({
+      entries: mustwatch, candidates: mwKandidatenSicher, selectedServices: auswahl, day: mwTag,
+    }),
+    [auswahl, mustwatch, mwKandidatenSicher, mwTag],
   );
 
   /* Pinboard: nächster Termin zuerst (Sortierung auf dem formatierten String). */
@@ -222,19 +224,9 @@ function StartDashboard({
     }
   }, [entdeckenPinAufloesung.discardedPinIds, onEntdeckenPinsBereinigen]);
   const titelPins = entdeckenPinAufloesung.resolved;
-  const serienRadar = useMemo(() => neueStaffeln(serienKatalog, entdeckenStatus), [serienKatalog, entdeckenStatus]);
-  const serienRadarMap = useMemo(() => new Map(serienRadar.map((hinweis) => [String(hinweis.watchmode_id), hinweis])), [serienRadar]);
-  const serienPins = useMemo(() => beobachteteSerien(entdeckenStatus, serienKatalog)
-    .map((serie) => ({ ...serie, radar: serienRadarMap.get(String(serie.watchmode_id)) || null }))
-    .sort((a, b) => Number(!!b.radar) - Number(!!a.radar) || String(a.titel).localeCompare(String(b.titel), "de")),
-  [entdeckenStatus, serienKatalog, serienRadarMap]);
-
-  const zuletzt = useMemo(() => projectRecentPersonalEntries({
-    master, mustwatch, merkliste, limit: 5,
-  }), [master, mustwatch, merkliste]);
+  const zuletzt = useMemo(() => projectRecentPersonalEntries({ master, limit: 5 }), [master]);
 
   const datum = formatPresentationDate(new Date(), { format: "long" });
-  const fmtTag = (ms) => formatPresentationDate(ms);
 
   /* Theme-Tokens als CSS-Variablen an die Dashboard-Wurzel (setzeTheme kennt keine
      :root-Vars) — pro Render aus T, damit dunkel/hell/showa/neon-noir korrekt durchschlagen. */
@@ -258,9 +250,9 @@ function StartDashboard({
       <span className="kd-dash-strip" aria-hidden="true" />
 
       <div className="kd-dash-grid">
-        {/* ---- 1 · Gemeinsames Pinboard: Titelpins, Serien-Updates, Kinotermine ---- */}
-        <Modul name="Pinboard & Serienradar" ziel="streaming" linkLabel="Streaming" onNavigiere={onNavigiere} tour="pinboard">
-          {titelPins.length > 0 || serienPins.length > 0 || pins.length > 0 ? (
+        {/* ---- 1 · Gemeinsames Pinboard: Titelpins und Kinotermine ---- */}
+        <Modul name="Pinboard" ziel="streaming" linkLabel="Streaming" onNavigiere={onNavigiere} tour="pinboard">
+          {titelPins.length > 0 || pins.length > 0 ? (
             <div className="kd-dash-karte kd-pinboard-radar">
               {titelPins.map((pin) => (
                 <button key={`entdecken-${pin.pinId}`} className="kd-dash-zeile kd-pinboard-titel" onClick={() => {
@@ -277,24 +269,6 @@ function StartDashboard({
                   <span className="kd-pinboard-kino-meta">{pin.label}</span>
                 </button>
               ))}
-              {serienPins.map((serie) => {
-                const hinweis = serie.radar;
-                const kommendeStaffel = !hinweis && serie.naechste_staffel_am && new Date(serie.naechste_staffel_am).getTime() >= Date.now();
-                const status = hinweis?.staffel_neu ? `Neue Staffel ${hinweis.staffel_verfuegbar}`
-                  : hinweis?.folgen_neu ? `Neue Folge${hinweis.folge_aktuell ? ` ${hinweis.folge_aktuell}` : ""}`
-                    : kommendeStaffel ? `Staffel ab ${formatPresentationDate(serie.naechste_staffel_am)}`
-                      : "Beobachtet";
-                return (
-                  <div key={`serie-${serie.watchmode_id}`} className={`kd-dash-zeile kd-pinboard-serie${hinweis ? " ist-neu" : ""}`}>
-                    <button className="kd-pinboard-ziel" onClick={() => onSpringeZuStreaming?.({ art: "entdecken", ref: serie.watchmode_id, titel: serie.titel })}>
-                      <span className="kd-dash-ztitel">⚑ {serie.titel}</span>
-                      {folgenstandText(serie) && <span className="kd-pinboard-meta">{folgenstandText(serie)}</span>}
-                    </button>
-                    <span className={`kd-dash-badge${hinweis ? " kd-dash-badge--neu" : ""}`}>{status}</span>
-                    {hinweis && <button className="kd-pinboard-bestaetigen" onClick={() => onEntdeckenStatusAendern?.(serie.watchmode_id, hinweis)}>Stand bestätigen</button>}
-                  </div>
-                );
-              })}
               {pins.map((p) => (
                 <button key={`kino-${p.t}|${p.z}`} className="kd-dash-zeile kd-pinboard-kino" onClick={() => {
                   if (p.programm_ref != null) onSpringeZuKino?.({ ...p, titel: p.t });
@@ -312,7 +286,7 @@ function StartDashboard({
               ))}
             </div>
           ) : (
-            <p className="kd-dash-leer">Noch leer. Titel pinnst du in Entdecken mit dem Pin-Symbol; Kinotermine mit ◇ und Serien mit ⚑ Beobachten.</p>
+            <p className="kd-dash-leer">Noch leer. Titel pinnst du in Entdecken mit dem Pin-Symbol; Kinotermine mit ◇.</p>
           )}
         </Modul>
 
@@ -321,7 +295,7 @@ function StartDashboard({
           plan={wochenplan} onPlanAendern={onWochenplanAendern}
           kinoPins={aktiveKinoPins} kinoVorschlaege={kinoVorschlaege} kinoKatalog={kinoKatalog}
           onKinoPinLoeschen={(pin) => toggleKinoPin?.(pin.t, pin.j, pin.z)}
-          katalog={serienKatalog} master={master} entdeckenStatus={entdeckenStatus}
+          katalog={serienKatalog} master={master}
           onStreamingKatalogLaden={onStreamingKatalogLaden}
           onSpringeZuFilm={zeigeEintrag} onSpringeZuStreaming={onSpringeZuStreaming}
           onKinoVorschlagAnsehen={(eintrag) => {
@@ -335,52 +309,31 @@ function StartDashboard({
         <Modul name="Must-Watch" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
           {mwTop.length > 0 ? (
             <div className="kd-dash-karte">
-              {mwTop.map((e, i) => {
-                /* Derselbe abgeleitete Status wie in der Vollansicht — ohne
-                   geladenen Katalog bleibt die Zeile bewusst ohne Aussage. */
-                const status = mustwatchVerfuegbarkeit(e, mwKandidatenSicher);
-                return (
-                  <div key={e.id} className="kd-dash-zeile" onClick={() => zuEintrag(e.id, "mediathek")}>
+              {mwTop.map(({ entry: e, reasons }, i) => (
+                  <button type="button" key={e.id} className="kd-dash-zeile" onClick={() => zuEintrag(e.id, "mediathek")}>
                     <span className="kd-dash-rang">{i + 1}</span>
                     <span className="kd-dash-ztitel">{e.titel}{e.jahr ? " (" + e.jahr + ")" : ""}</span>
-                    {status && <span className={"kd-dash-badge" + (status.aktuell ? " kd-dash-badge--neu" : "")}>{status.label}</span>}
-                    {e.im_besitz && <span className="kd-dash-badge">IM BESITZ</span>}
-                  </div>
-                );
-              })}
+                    {reasons.streaming.map((dienst) => <span key={dienst} className="kd-dash-badge kd-dash-badge--neu">{dienst}</span>)}
+                    {reasons.cinema && <span className="kd-dash-badge kd-dash-badge--neu">IM KINO</span>}
+                    {reasons.owned && <span className="kd-dash-badge">IM BESITZ</span>}
+                  </button>
+              ))}
             </div>
-          ) : <p className="kd-dash-leer">Noch kein Titel auf deiner Must-Watch-Liste.</p>}
+          ) : <p className="kd-dash-leer">Gerade ist kein Must-Watch-Titel bei deinen gewählten Diensten, im Kino oder im Besitz.</p>}
         </Modul>
 
-        {/* ---- 4 · Zuletzt hinzugefügt: belegte Zeiten + ehrlicher Legacy-Fallback ---- */}
+        {/* ---- 4 · Zuletzt hinzugefügt: nur rollierend markierte Neuanlagen ---- */}
         <Modul name="Zuletzt hinzugefügt" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
-          {zuletzt.dated.length > 0 ? (
+          {zuletzt.length > 0 ? (
             <div className="kd-dash-karte">
-              {zuletzt.dated.map((z) => (
-                <div key={z.key} className="kd-dash-zeile kd-dash-log" onClick={() => oeffneChronikEintrag(z)}>
+              {zuletzt.map((z) => (
+                <button type="button" key={z.key} className="kd-dash-zeile kd-dash-log" onClick={() => zuEintrag(z.ref, "mediathek")}>
                   <span className="kd-dash-ztitel">{z.label}</span>
-                  <span className="kd-dash-tag">{fmtTag(z.time)}</span>
-                  <span className="kd-dash-badge">{z.source}</span>
-                </div>
+                  <span className="kd-dash-badge" aria-label={`Ticker ${z.ticker}`}>{z.ticker}</span>
+                </button>
               ))}
             </div>
-          ) : null}
-          {zuletzt.legacyMaster.length > 0 ? (<>
-            <p className="kd-dash-legacyhinweis">
-              Altbestand · stabile Einfügereihenfolge, ohne historischen Zeitstempel
-            </p>
-            <div className="kd-dash-karte">
-              {zuletzt.legacyMaster.map((z) => (
-                <div key={z.key} className="kd-dash-zeile kd-dash-log" onClick={() => oeffneChronikEintrag(z)}>
-                  <span className="kd-dash-ztitel">{z.label}</span>
-                  <span className="kd-dash-badge">MASTER · LEGACY</span>
-                </div>
-              ))}
-            </div>
-          </>) : null}
-          {zuletzt.dated.length === 0 && zuletzt.legacyMaster.length === 0
-            ? <p className="kd-dash-leer">Neue Master-, Must-Watch- und Merkliste-Einträge erscheinen hier.</p>
-            : null}
+          ) : <p className="kd-dash-leer">Die nächsten neu angelegten Mediathek-Einträge erscheinen hier.</p>}
         </Modul>
       </div>
       <footer className="kd-start-service">

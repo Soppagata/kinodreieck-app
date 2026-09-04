@@ -1180,6 +1180,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-dash-karte { padding: 6px 14px; background: var(--kd-leinwand); color: var(--kd-tinte);
   width:100%; min-width:0; max-width:100%; box-sizing:border-box; border-radius:8px; box-shadow:0 3px 14px rgba(0,0,0,.4); cursor:pointer; }
 .kd-dash-zeile { display:flex; align-items:center; gap:10px; min-width:0; max-width:100%; padding:9px 0; }
+.kd-dash-karte button.kd-dash-zeile { appearance:none; width:100%; border:0; background:none; color:inherit; text-align:left; }
 .kd-dash-karte .kd-dash-zeile, .kd-dash-ticket { cursor: pointer; }
 .kd-dash-zeile + .kd-dash-zeile { border-top: 1px solid var(--kd-leinwandTief); }
 .kd-dash-rang { flex: 0 0 auto; width: 24px; text-align: center; font-family: 'Fraunces', Georgia, serif;
@@ -1193,22 +1194,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-dash-jetzt { flex: 0 0 auto; padding: 3px 7px; white-space: nowrap; border-radius: 3px;
   font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
   color: var(--kd-tinte); background: var(--kd-wolfram); }
-.kd-dash-tag { flex: 0 0 auto; font-family: 'Space Mono', monospace; font-size: 11px; color: var(--kd-rauch); }
 .kd-dash-log .kd-dash-ztitel { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 12px;
   letter-spacing: 0; text-transform: none; }
-.kd-dash-legacyhinweis { margin:10px 2px 6px; color:var(--kd-rauch); font:10px/1.45 'Space Mono',monospace;
-  letter-spacing:.025em; }
 
-/* Gemeinsames Pinboard: beobachtete Serien sind echte Pins; neue Staffel-/
-   Folgenstände bekommen die stärkste visuelle Priorität. */
 .kd-pinboard-radar { cursor:default; }
-.kd-pinboard-serie.ist-neu { margin-inline:-14px; padding-inline:14px; background:color-mix(in srgb,var(--kd-wolfram) 16%,transparent); }
-.kd-pinboard-ziel,.kd-pinboard-kino,.kd-pinboard-titel { appearance:none; border:0; background:none; color:inherit; cursor:pointer; text-align:left; }
-.kd-pinboard-ziel { display:flex; flex:1 1 auto; min-width:0; flex-direction:column; gap:2px; padding:0; }
-.kd-pinboard-ziel:hover .kd-dash-ztitel,.kd-pinboard-kino:hover .kd-dash-ztitel,.kd-pinboard-titel:hover .kd-pinboard-kino-name { color:var(--kd-wolfram); }
-.kd-pinboard-meta { color:var(--kd-rauch); font:10px 'Space Mono',monospace; }
+.kd-pinboard-kino,.kd-pinboard-titel { appearance:none; border:0; background:none; color:inherit; cursor:pointer; text-align:left; }
+.kd-pinboard-kino:hover .kd-dash-ztitel,.kd-pinboard-titel:hover .kd-pinboard-kino-name { color:var(--kd-wolfram); }
 .kd-dash-badge--neu { color:var(--kd-tinte); border-color:var(--kd-wolfram); background:var(--kd-wolfram); }
-.kd-pinboard-bestaetigen { flex:0 0 auto; padding:5px 7px; border:1px solid var(--kd-rauch); border-radius:4px; background:transparent; color:var(--kd-tinte); cursor:pointer; font:600 9px 'Space Mono',monospace; }
 .kd-pinboard-kino,.kd-pinboard-titel { display:grid; width:100%; min-width:0; grid-template-columns:minmax(0,1fr); gap:4px; padding:9px 0; }
 .kd-pinboard-kino-titel { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:7px; min-width:0; }
 .kd-pinboard-kino-marker { color:var(--kd-tinte); font:17px/1.18 'Barlow Condensed',sans-serif; }
@@ -1233,11 +1225,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-kino-pin-jahr { color:var(--kd-rauch); font-weight:500; }
 .kd-kino-pin-meta { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--kd-leinwandTief); font:10px/1.4 'Space Mono',monospace; }
 .kd-kino-pin-loeschen { display:grid; place-items:center; width:36px; height:36px; padding:0; border:0; background:none; color:var(--kd-gefahr); cursor:pointer; }
-
-.kd-entdecken-beobachten { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:9px; padding:8px 10px; border:1px dashed color-mix(in srgb,var(--rauch,#948fa0) 70%,transparent); border-radius:5px; }
-.kd-entdecken-beobachten button { border:1px solid var(--rauch,#948fa0); border-radius:999px; background:transparent; color:var(--rauch,#948fa0); padding:5px 10px; cursor:pointer; font:700 10px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
-.kd-entdecken-beobachten button.aktiv { border-color:var(--wolfram,#e3a63b); background:var(--wolfram,#e3a63b); color:var(--tinte,#17151a); }
-.kd-entdecken-beobachten span { flex:1 1 220px; font-size:11px; line-height:1.45; }
 
 .kd-dash-leer { margin: 0; font-size: 13px; line-height: 1.6; color: var(--kd-rauch); }
 

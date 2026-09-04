@@ -68,8 +68,8 @@ import { useEggController } from "./controllers/useEggController.js";
 import { deepSpaceOwnerKey, useDeepSpaceHorror } from "./controllers/useDeepSpaceHorror.js";
 import { ensureIds, slugId } from "./lib/match.js";
 import {
+  markNewPersonalMasterEntries,
   mergePersonalMasterEntry,
-  stampPersonalMasterEntry,
 } from "./lib/personalEntryChronology.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
@@ -107,8 +107,6 @@ import { LocalDataSafety } from "./components/LocalDataSafety.jsx";
 import { RadarSubscriptionPreview } from "./components/RadarSubscriptionPreview.jsx";
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { useEntdeckenPins } from "./controllers/useEntdeckenPins.js";
-import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from "./lib/staffeln.js";
-import { seriesWatchService } from "./services/seriesWatch.js";
 import { useVokabularController } from "./controllers/useVokabularController.js";
 import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
@@ -149,6 +147,7 @@ export default function App() {
   const toggleMehr = useCallback(() => setMehrOffen((offen) => !offen), []);
   const scrollProBereichRef = useRef(new Map());
   const scrollWiederherstellungRef = useRef(0);
+  const scrollTabwechselGestartetRef = useRef(false);
   const aktuelleScrolltiefe = useCallback(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return 0;
     /* Das Popup sperrt iOS-Scroll über einen fixierten Body. In diesem Zustand
@@ -189,8 +188,17 @@ export default function App() {
     scrollProBereichRef.current.set(tabRef.current, aktuelleScrolltiefe());
     setTab(id);
     setMehrOffen(false);
-    stelleScrolltiefeHer(id);
-  }, [aktuelleScrolltiefe, remoteKontoAktiv, stelleScrolltiefeHer]);
+  }, [aktuelleScrolltiefe, remoteKontoAktiv]);
+  /* Erst nach dem gerenderten Tabwechsel restaurieren. So ist auch das
+     Cleanup des mobilen Menü-Overlays bereits eingeplant und dessen
+     Scroll-Unlock kann die neue Bereichsposition nicht mehr überschreiben. */
+  useEffect(() => {
+    if (!scrollTabwechselGestartetRef.current) {
+      scrollTabwechselGestartetRef.current = true;
+      return;
+    }
+    stelleScrolltiefeHer(tab);
+  }, [stelleScrolltiefeHer, tab]);
   const oeffneHilfe = useCallback(() => {
     navigiere("daten");
     setAnleitungAuftrag((auftrag) => auftrag + 1);
@@ -909,13 +917,11 @@ export default function App() {
     try {
       const datei = parseBesitzImport(text);
       let auswertung = null, bestaetigterMaster = null;
-      const erstelltAm = new Date().toISOString();
       const gespeichert = await mutiereMaster((aktuell) => {
-        auswertung = wendeBesitzImportAn(datei, aktuell, erstelltAm);
+        auswertung = wendeBesitzImportAn(datei, aktuell, new Date().toISOString());
         if (!auswertung.neue.length) return { master: aktuell, unveraendert: true };
-        const neueMitZeit = auswertung.neue.map((film) => stampPersonalMasterEntry(film, erstelltAm));
-        auswertung = { ...auswertung, neue: neueMitZeit };
-        bestaetigterMaster = ensureIds([...aktuell, ...neueMitZeit]);
+        bestaetigterMaster = ensureIds(markNewPersonalMasterEntries(aktuell, auswertung.neue));
+        auswertung = { ...auswertung, neue: bestaetigterMaster.slice(-auswertung.neue.length) };
         return { master: bestaetigterMaster, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
       });
       if (!gespeichert || !auswertung) throw new Error("bestätigtes Speichern fehlgeschlagen.");
@@ -1112,14 +1118,12 @@ export default function App() {
   const uebernehmePaket = useCallback(async ({ neueFilme, neueArtikel }) => {
     let neuerMaster = masterRef.current || [];
     if (neueFilme.length) {
-      const erstelltAm = new Date().toISOString();
       const gespeichert = await mutiereMaster((aktuell) => {
         const ids = new Set(aktuell.map((film) => film.id));
         const wirklichNeu = neueFilme
-          .filter((film) => film?.id && !ids.has(film.id) && ids.add(film.id))
-          .map((film) => stampPersonalMasterEntry(film, erstelltAm));
+          .filter((film) => film?.id && !ids.has(film.id) && ids.add(film.id));
         if (!wirklichNeu.length) { neuerMaster = aktuell; return { master: aktuell, unveraendert: true }; }
-        neuerMaster = ensureIds([...aktuell, ...wirklichNeu]);
+        neuerMaster = ensureIds(markNewPersonalMasterEntries(aktuell, wirklichNeu));
         return { master: neuerMaster, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
       });
       if (!gespeichert) return false;
@@ -1135,14 +1139,22 @@ export default function App() {
     });
   }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, schreibeArtikel]);
 
-  /* Kandidaten für den Must-Watch-Verknüpfungs-Picker (explizit, kein Auto-Match):
-     Master (id) · Kinoprogramm (film_at_id — nur Einträge MIT stabiler ID) ·
-     Streaming-Entdecken (watchmode_id). */
+  /* Kandidaten für Picker und lokale Startprojektion: Master, aktuelles
+     Kinoprogramm (stabile ID oder rein lokaler Projektionsschlüssel) sowie
+     beide aktuellen Streaming-Snapshots. */
   const mwKandidaten = useMemo(() => ({
-    master: (master || []).map((f) => ({ id: f.id, titel: f.titel, jahr: f.jahr })),
-    programm: ((programm && programm.filme) || []).filter((pf) => pf.film_at_id).map((pf) => ({ id: pf.film_at_id, titel: pf.t, jahr: pf.j })),
-    streaming: ((streamingEntdecken && streamingEntdecken.titel) || []).map((t) => ({ id: t.watchmode_id, titel: t.titel, jahr: t.jahr })),
-  }), [master, programm, streamingEntdecken]);
+    master: (master || []).map((f) => ({ ...f, id: f.id, titel: f.titel, jahr: f.jahr })),
+    programm: (programmInfo?.abgelaufen ? [] : ((programm && programm.filme) || [])).map((pf) => ({
+      ...pf,
+      id: pf.film_at_id ?? pf.id ?? null,
+      projection_id: pf.film_at_id ?? pf.id ?? `auto:${slugId(pf.t, pf.j)}`,
+      titel: pf.t, originaltitel: pf.ot, jahr: pf.j,
+    })),
+    streaming: (streamingInfo?.abgelaufen ? [] : [
+      ...((streamingBekannt && streamingBekannt.titel) || []),
+      ...((streamingEntdecken && streamingEntdecken.titel) || []),
+    ]).map((t) => ({ ...t, id: t.watchmode_id, titel: t.titel, jahr: t.jahr })),
+  }), [master, programm, programmInfo?.abgelaufen, streamingBekannt, streamingEntdecken, streamingInfo?.abgelaufen]);
 
   /* ---- Navigation zwischen Blog und Mediathek ---- */
   const [blogFokus, setBlogFokus] = useState(null);
@@ -1218,14 +1230,14 @@ export default function App() {
      nur eindeutige Exakt-Treffer, nichts wird geraten. */
   const addFilm = useCallback(async (film) => {
     const id = film.id || slugId(film.titel, film.jahr);
-    const erstelltAm = new Date().toISOString();
     let next = null, doppelt = false;
     const ok = await mutiereMaster((aktuell) => {
       if (aktuell.some((eintrag) => eintrag.id === id)) {
         doppelt = true;
         return { abgebrochen: true };
       }
-      next = [...aktuell, ensureIds([stampPersonalMasterEntry({ ...film, id }, erstelltAm)])[0]];
+      const neu = ensureIds([{ ...film, id }])[0];
+      next = ensureIds(markNewPersonalMasterEntries(aktuell, [neu]));
       return { master: next, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
     });
     if (!ok) {
@@ -1244,7 +1256,6 @@ export default function App() {
 
   const addFilme = useCallback(async (filme) => {
     let next = null, neue = [];
-    const erstelltAm = new Date().toISOString();
     const ok = await mutiereMaster((aktuell) => {
       const ids = new Set(aktuell.map((film) => film.id));
       neue = [];
@@ -1252,10 +1263,11 @@ export default function App() {
         const id = film.id || slugId(film.titel, film.jahr);
         if (!id || ids.has(id)) continue;
         ids.add(id);
-        neue.push(ensureIds([stampPersonalMasterEntry({ ...film, id }, erstelltAm)])[0]);
+        neue.push(ensureIds([{ ...film, id }])[0]);
       }
       if (!neue.length) return { master: aktuell, unveraendert: true };
-      next = [...aktuell, ...neue];
+      next = ensureIds(markNewPersonalMasterEntries(aktuell, neue));
+      neue = next.slice(-neue.length);
       return { master: next, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
     });
     if (!ok) return null;
@@ -1272,48 +1284,15 @@ export default function App() {
     ...((streamingEntdecken && streamingEntdecken.titel) || []),
   ], [streamingBekannt, streamingEntdecken]);
 
-  /* Ausdrücklich beobachtete Serien erhalten den ersten verfügbaren Staffel-/
-     Folgenstand still als Basis. „Gesehen“ allein aktiviert den Radar nicht. */
-  useEffect(() => {
-    if (!serienKatalog.length) return;
-    schreibeEntdeckenStatus((prev) => initialisiereStaffelstaende(prev, serienKatalog));
-  }, [serienKatalog, schreibeEntdeckenStatus]);
-
-  /* Nur bei fachlich aktivem Kontozugriff: deduplizierte Watchmode-IDs für den
-     bestehenden planmäßigen Kataloglauf bereitstellen. Dies ist kein
-     Watchmode-Aufruf und erzeugt weder Radar-Regeln noch Präferenzen. */
-  const letzterSerienWatchSync = useRef("");
-  useEffect(() => {
-    if (!remoteKontoAktiv || !bootDone) return undefined;
-    const expectedAccountId = String(session.account?.id || "");
-    if (!expectedAccountId) return undefined;
-    const ids = serienBeobachten(entdeckenStatus, serienKatalog).map((e) => e.watchmode_id);
-    /* Die Deduplizierung ist kontogebunden: A und B dürfen selbst bei
-       identischen beobachteten IDs niemals denselben Erfolgsmarker teilen. */
-    const signatur = expectedAccountId + "|" + JSON.stringify(ids);
-    if (signatur === letzterSerienWatchSync.current) return undefined;
-    const timer = setTimeout(() => {
-      seriesWatchService.setObserved(ids, expectedAccountId).then((r) => {
-        if (r?.ok) letzterSerienWatchSync.current = signatur;
-      }).catch(() => { /* lokaler Status bleibt; späterer Zustandswechsel versucht erneut */ });
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [remoteKontoAktiv, session.account?.id, bootDone, entdeckenStatus, serienKatalog]);
-
-  const bestaetigeSerienHinweis = useCallback((watchmodeId) => {
-    const t = serienKatalog.find((x) => String(x.watchmode_id) === String(watchmodeId));
-    if (!t) return;
-    schreibeEntdeckenStatus((prev) => ({ ...prev, [watchmodeId]: bestaetigeStaffel(prev[watchmodeId], t) }));
-  }, [serienKatalog, schreibeEntdeckenStatus]);
   const { radarAuthority, sichtbarerRadarState, radarPreviewTarget, setRadarPreviewTarget, schliesseRadarPreview,
-    aendereSerienBeobachtung, aendereRadar, aendereRadarShare, bestaetigeRadarVorschau,
-    beobachteteWatchmodeIds, radarTargetIds, fuehreGlobaleSuchaktionAus,
+    aendereRadar, aendereRadarShare, bestaetigeRadarVorschau,
+    radarTargetIds, fuehreGlobaleSuchaktionAus,
     radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, fuegeRadarTextHinzu,
     radarAutomaticAvailable, fuehreRadarPilotReceipt, fuehreRadarPilotImport,
     fuehreRadarPilotSync, verwerfeAbgelehnteRadarAenderung,
     personRadarAvailable, fuegePersonRadarHinzu, aenderePersonRadar, } = useEntdeckenRadarController({
-    session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
-    entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr, });
+    session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt,
+    streamingDiscover: streamingEntdecken, setErr, });
   /* Sichtbarkeit und Bedienbarkeit besitzen exakt dieselbe Laufzeitgrenze.
      Ein deaktivierter Radarclient darf weder Tab noch Suchaktion anbieten. */
   const radarRuntimeAvailable = radarClientRuntimeAvailable(runtimeConfig, {
@@ -1350,9 +1329,7 @@ export default function App() {
     schreibeArtikel,
     setErr,
   });
-  const addFilmMitPrognose = useCallback((film) => (
-    addFilmMitPrognoseRoh(stampPersonalMasterEntry(film, new Date().toISOString()))
-  ), [addFilmMitPrognoseRoh]);
+  const addFilmMitPrognose = addFilmMitPrognoseRoh;
 
   /* ---- Master-Export (hält Max' Datei synchron) ---- */
   const exportMaster = useCallback(() => {
@@ -1872,10 +1849,10 @@ export default function App() {
         ) : null}
 
         {remoteKontoAktiv && tab === "start" && bootDone && (
-          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={oeffneHilfe}
+          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={oeffneHilfe}
             entdeckenPins={entdeckenPins} webDiscoveryFeed={webDiscoveryState.feed} onEntdeckenPinsBereinigen={bereinigeEntdeckenPins} onSpringeZuEntdecken={() => navigiere("blog")}
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
-            entdeckenStatus={entdeckenStatus} onEntdeckenStatusAendern={bestaetigeSerienHinweis}
+            entdeckenStatus={entdeckenStatus}
             master={master || []} onSpringeZuStreaming={springeZuStreaming} onFilmAnlegen={addFilm}
             onStreamingKatalogLaden={ladeStreamingDateien}
             onSpringeZuKino={(eintrag) => {
@@ -1960,13 +1937,13 @@ export default function App() {
 
         {remoteKontoAktiv && tab === "blog" && (
           <EntdeckenTab datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
-            fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
+            fokusId={blogFokus} radarState={sichtbarerRadarState} entdeckenStatus={entdeckenStatus}
             master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryState.feed} webDiscoveryStatus={webDiscoveryState}
             dailyVariety={einstellungen.entdeckenTaeglich === true}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarAvailable={radarRuntimeAvailable}
             radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}
-            syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
+            syncStatus={radarPilotSyncStatus} onRadarChange={aendereRadar}
             onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
             onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}
             radarAutomaticAvailable={radarAutomaticAvailable} onRadarRejectedDismiss={verwerfeAbgelehnteRadarAenderung}
@@ -2083,7 +2060,7 @@ export default function App() {
         onAntwortSchliessen={() => setGlobaleSuchantwort(null)}
         onTreffer={oeffneGlobalenTreffer}
         onSuchaktion={fuehreGlobaleSuchaktionAus}
-        beobachteteIds={beobachteteWatchmodeIds} radarTargetIds={radarRuntimeAvailable ? radarTargetIds : []}
+        radarTargetIds={radarRuntimeAvailable ? radarTargetIds : []}
         onAlleErgebnisse={oeffneAusfuehrlicheSuche}
         menuOffen={mehrOffen} onMenu={toggleGlobalesMenu} />}
       </div>{/* .kd-app */}

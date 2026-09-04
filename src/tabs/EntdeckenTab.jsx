@@ -11,7 +11,6 @@ import {
 } from "../lib/entdeckenUi.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { VERSIONED_DISCOVERY_FEED_FORMAT } from "../lib/webDiscoveryFeed.js";
-import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "../lib/radarNews.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
@@ -52,16 +51,12 @@ function focusableElements(root) {
 }
 
 function ManageDialog({
-  radarState, seriesCatalog, entdeckenStatus, master, useLibrary, accountMode,
+  radarState, master, useLibrary, accountMode,
   radarAvailable,
-  onUseLibrary, onObserveToggle, onRadarChange, onPersonRadarChange,
+  onUseLibrary, onRadarChange, onPersonRadarChange,
   syncStatus, onRadarPilotSync, onBlog, onClose, returnFocusRef,
 }) {
   const dialogRef = useRef(null);
-  const beobachtet = useMemo(
-    () => serienBeobachten(entdeckenStatus || {}, seriesCatalog || []),
-    [entdeckenStatus, seriesCatalog],
-  );
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
   const pending = radarState?.outbox || [];
@@ -102,14 +97,6 @@ function ManageDialog({
           <button type="button" className="kd-entdecken-schliessen" aria-label="Entdecken verwalten schließen und zurück" onClick={onClose}>×</button>
         </header>
         <div className="kd-entdecken-manage-grid">
-          <section>
-            <h3>Beobachten</h3>
-            <p>Deine beobachteten Serien und Folgenstände.</p>
-            {beobachtet.length ? <ul className="kd-entdecken-verwalten-liste">{beobachtet.map((entry) => (
-              <li key={entry.watchmode_id}><span><strong>{entry.titel}</strong><small>Serie</small></span>
-                <button type="button" onClick={() => onObserveToggle?.(entry, false)}>Beobachtung beenden</button></li>
-            ))}</ul> : <p className="kd-entdecken-leer">Noch keine Serie beobachtet.</p>}
-          </section>
           {radarAvailable ? <section>
             <h3>Mein Radar</h3>
             <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Diese Ziele bleiben auf diesem Gerät."}</p>
@@ -432,7 +419,7 @@ function RadarView({
 }
 
 export function EntdeckenTab({
-  blogProps, fokusId, radarState, datenKontextKey = "local", seriesCatalog = [], entdeckenStatus = {}, master = [],
+  blogProps, fokusId, radarState, datenKontextKey = "local", entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   webDiscoveryFeed = null, webDiscoveryStatus = null, dailyVariety = false, calendarDay = null,
   radarAvailable = false,
@@ -440,7 +427,7 @@ export function EntdeckenTab({
   onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   onRadarRejectedDismiss,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
-  onObserveToggle, onRadarChange, onRadarPreview,
+  onRadarChange, onRadarPreview,
   recommendationPins = [], onRecommendationPinToggle,
 }) {
   const [ansicht, setAnsicht] = useState(fokusId ? "meinungen" : "empfehlungen");
@@ -489,9 +476,9 @@ export function EntdeckenTab({
       onRadarRejectedDismiss={onRadarRejectedDismiss}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd} /> : null}
     {ansicht === "meinungen" ? <div data-entdecken-ansicht="blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
-    {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
+    {manageOffen ? <ManageDialog radarState={radarState}
       master={master} useLibrary={useLibrary} accountMode={accountMode} radarAvailable={radarAvailable} onUseLibrary={setUseLibrary}
-      onObserveToggle={onObserveToggle} onRadarChange={onRadarChange} onPersonRadarChange={onPersonRadarChange}
+      onRadarChange={onRadarChange} onPersonRadarChange={onPersonRadarChange}
       syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
       onBlog={openBlog} onClose={closeManage} returnFocusRef={manageButtonRef} /> : null}
   </section>;

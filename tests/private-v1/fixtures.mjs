@@ -103,9 +103,13 @@ async function seedAccount(page) {
       }],
       gespeichertAm: Date.parse(now),
     }));
-    localStorage.setItem("kd:entdecken-status", JSON.stringify({
-      81004: { beobachtet: true, typ: "tv_series", titel: "Datumserie", staffel_alarm_basis: 2, folgen_alarm_basis: 9, beobachtet_am: now },
-      81005: { beobachtet: true, typ: "tv_series", titel: "Pinboardserie", staffel_alarm_basis: 2, folgen_alarm_basis: 9, beobachtet_am: now },
+    localStorage.setItem("kd:entdecken-status", "{}");
+    localStorage.setItem("kd:mustwatch", JSON.stringify({
+      eintraege: Array.from({ length: 5 }, (_, index) => ({
+        id: `mw_private_${index + 1}`, titel: `Private Must-Watch ${index + 1}`,
+        im_besitz: true, beschreibung: "", notiz: "", verknuepfung: null,
+      })),
+      gespeichertAm: Date.parse(now),
     }));
     localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" }));
     localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true }));
@@ -125,7 +129,7 @@ async function seedAccount(page) {
         typ: "film",
         quelle: "streaming", kategorie: "sehenswert", bewertet_von: "max",
         bewertung: { wie: 3, was: 3, warum: 3 }, genre: ["Drama"], tags: [], begruendung: "", notiz: "",
-        ...(entry.watchmode_id === 81001 ? { erstellt_am: "2026-09-04T07:15:00.000Z" } : {}),
+        ...(entry.watchmode_id === 81001 ? { zuletzt_ticker: 1, erstellt_am: "2026-09-04T07:15:00.000Z" } : {}),
       }));
     }
   }, {
@@ -181,11 +185,6 @@ async function installNetworkFence(page, traffic) {
       if (name === "programm") {
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(row({ stand: "2026-09-04", filme: [] })) });
       }
-      return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
-    }
-    if (url.pathname === "/rest/v1/rpc/kd_set_series_watch") {
-      record("mocked", "series-watch");
-      traffic.contracts.push("series-watch");
       return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
     }
     if (url.pathname === "/rest/v1/rpc/kd_radar_pilot_feed") {

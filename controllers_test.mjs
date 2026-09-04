@@ -624,11 +624,11 @@ check("Must-Watch-Besitzcheckbox toggelt funktional innerhalb der Schreibqueue",
 check("Must-Watch normalisiert optionales Jahr und Typ an der Schreibgrenze",
   /jahr: mustwatchJahr\(daten\.jahr\), typ: mustwatchTyp\(daten\.typ\)/.test(mustwatchController)
   && /normalisiereMetadaten\(berechnet\)/.test(mustwatchController));
-check("Must-Watch-Oberfläche und Dashboard verwenden dieselbe reine Projektion",
+check("Must-Watch-Dashboard verwendet die tägliche lokale Verfügbarkeitsprojektion",
   /projiziereMustwatch/.test(mustwatchListe)
   && /mustwatchVerfuegbarkeit/.test(mustwatchListe)
-  && /sortiereMustwatch\(mustwatch, mwKandidatenSicher\)\.slice\(0, 5\)/.test(startTab)
-  && /mustwatchVerfuegbarkeit\(e, mwKandidatenSicher\)/.test(startTab)
+  && /projectDailyMustwatch/.test(startTab)
+  && /selectedServices: auswahl/.test(startTab)
   && /mwKandidaten=\{mwKandidaten\}/.test(app));
 check("Must-Watch speichert keinen Verfügbarkeitsstatus und rät keine Titel",
   !/verfuegbar(?:keit)?:/.test(mustwatchController)
@@ -642,8 +642,8 @@ check("App besitzt keinen Demo-seitigen Must-Watch-Seed; normales Laden und Schr
   && /if \(!await persistMustwatch\(next, auftragKontext\)\) return false;[\s\S]*uebernehmeState\(next\)/.test(mustwatchController));
 check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",
   /master: ensureIds\(aktuell\.map/.test(app)
-  && (app.match(/ensureIds\(\[stampPersonalMasterEntry\(\{ \.\.\.film, id \}, erstelltAm\)\]\)\[0\]/g) || []).length === 2
-  && /neu = ensureIds\(\[\{ \.\.\.kandidat, id \}\]\)\[0\]/.test(intelligenceController));
+  && (app.match(/markNewPersonalMasterEntries/g) || []).length >= 5
+  && /markNewPersonalMasterEntries\(aktuell, \[prepared\]\)/.test(intelligenceController));
 check("Mehrtopf-Löschungen warten fail-closed auf den sicheren Must-Watch-Ladestand",
   /mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch/.test(app)
   && (app.match(/if \(!mustwatchGeladen \|\| !artikelGeladen\)/g) || []).length >= 2

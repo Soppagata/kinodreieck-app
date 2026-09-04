@@ -106,8 +106,8 @@ export function mustwatchVerfuegbarkeit(eintrag, kandidaten = {}) {
   };
 }
 
-/* Eine einzige Sortierung für Dashboard UND Vollansicht: aktuell verfügbar,
-   dann zuletzt gemerkt, dann Titel. Rein und ohne Mutation der Eingabe. */
+/* Sortierung der vollständigen Listenansicht: aktuell verfügbar, dann zuletzt
+   gemerkt, dann Titel. Rein und ohne Mutation der Eingabe. */
 export function sortiereMustwatch(eintraege, kandidaten = {}) {
   return [...(Array.isArray(eintraege) ? eintraege : [])].sort((a, b) => {
     const ra = mustwatchVerfuegbarkeit(a, kandidaten)?.aktuell ? 0 : 1;
@@ -132,6 +132,153 @@ export function projiziereMustwatch(eintraege, { filter = "alle", suche = "" } =
   const gefiltert = (Array.isArray(eintraege) ? eintraege : []).filter((e) =>
     passtZuMustwatchFilter(e, filter, kandidaten) && passtZuMustwatchSuche(e, suche));
   return sortiereMustwatch(gefiltert, kandidaten);
+}
+
+const candidateType = (entry) => mustwatchTyp(entry?.typ ?? entry?.type);
+const candidateYear = (entry) => mustwatchJahr(entry?.jahr ?? entry?.year);
+const candidateAliases = (entry) => [
+  entry?.titel,
+  entry?.originaltitel,
+  entry?.original_title,
+  ...(Array.isArray(entry?.alternativtitel) ? entry.alternativtitel : []),
+  ...(Array.isArray(entry?.alternate_titles) ? entry.alternate_titles : []),
+].map((value) => norm(String(value ?? ""))).filter(Boolean);
+
+function compatible(entry, candidate) {
+  const wantedYear = mustwatchJahr(entry?.jahr);
+  const actualYear = candidateYear(candidate);
+  if (wantedYear != null && actualYear != null && wantedYear !== actualYear) return false;
+  const wantedType = mustwatchTyp(entry?.typ);
+  const actualType = candidateType(candidate);
+  return !wantedType || !actualType || wantedType === actualType;
+}
+
+function candidateId(target, candidate) {
+  const value = candidate?.id ?? candidate?.watchmode_id ?? candidate?.film_at_id ?? candidate?.projection_id;
+  return value == null ? null : `${target}:${String(value)}`;
+}
+
+function candidateIdentity(candidate) {
+  const aliases = candidateAliases(candidate);
+  return `${aliases[0] || ""}|${candidateYear(candidate) ?? ""}|${candidateType(candidate) || ""}`;
+}
+
+function allCandidates(candidates) {
+  return ["master", "programm", "streaming"].flatMap((target) => (
+    Array.isArray(candidates?.[target]) ? candidates[target] : []
+  ).map((candidate) => ({ target, candidate, ref: candidateId(target, candidate) }))
+    .filter(({ ref }) => ref));
+}
+
+function matchedCandidates(entry, candidates) {
+  const all = allCandidates(candidates);
+  const explicit = entry?.verknuepfung;
+  let anchor = null;
+  if (explicit?.ziel && explicit.id != null) {
+    const ref = `${explicit.ziel}:${String(explicit.id)}`;
+    anchor = all.find((item) => item.ref === ref) || null;
+    /* Eine gesetzte Verknüpfung ist eine bewusste Identitätsentscheidung. Ist
+       ihr Ziel im aktuellen Bestand nicht geladen, wird nicht ersatzweise per
+       Titel auf einen anderen Datensatz gesprungen. */
+    if (!anchor) return [];
+  }
+  if (anchor) {
+    const anchorAliases = new Set(candidateAliases(anchor.candidate));
+    return all.filter(({ candidate }) => compatible(entry, candidate)
+      && candidateAliases(candidate).some((alias) => anchorAliases.has(alias)));
+  }
+  const wantedAliases = new Set(candidateAliases(entry));
+  if (!wantedAliases.size) return [];
+  const exact = all.filter(({ candidate }) => compatible(entry, candidate)
+    && candidateAliases(candidate).some((alias) => wantedAliases.has(alias)));
+  const identities = new Set(exact.map(({ candidate }) => candidateIdentity(candidate)));
+  return identities.size === 1 ? exact : [];
+}
+
+function stableHash(value) {
+  let hash = 2166136261;
+  for (const character of String(value)) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function viennaCalendarDay(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date);
+  const take = (type) => parts.find((part) => part.type === type)?.value;
+  return `${take("year")}-${take("month")}-${take("day")}`;
+}
+
+function dayOrder(entries, day) {
+  return [...entries].sort((left, right) => {
+    const leftScore = stableHash(`${day}|${left.canonicalKey}`);
+    const rightScore = stableHash(`${day}|${right.canonicalKey}`);
+    return leftScore - rightScore || left.canonicalKey.localeCompare(right.canonicalKey, "de");
+  });
+}
+
+/* Tägliche Startauswahl als reine Projektion. Sie liest ausschließlich bereits
+   geladene Kandidaten und die ausdrücklich gewählten Streamingdienste. Es wird
+   weder verknüpft noch gespeichert oder nachgeladen. */
+export function projectDailyMustwatch({
+  entries = [], candidates = {}, selectedServices = [], day = viennaCalendarDay(), limit = 5,
+} = {}) {
+  if (!day) return [];
+  const services = new Set((Array.isArray(selectedServices) ? selectedServices : [])
+    .map((value) => norm(String(value || ""))).filter(Boolean));
+  const eligible = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const titleKey = norm(String(entry?.titel ?? ""));
+    if (!titleKey) continue;
+    const matches = matchedCandidates(entry, candidates);
+    const masterMatches = matches.filter(({ target }) => target === "master");
+    const programMatches = matches.filter(({ target }) => target === "programm");
+    const streamingMatches = matches.filter(({ target }) => target === "streaming");
+    const owned = entry?.im_besitz === true || masterMatches.some(({ candidate }) => (
+      candidate?.im_besitz === true || hatPhysischeQuelle(candidate?.quelle)
+    ));
+    const inCinema = programMatches.length > 0;
+    const streamingServices = [...new Set(streamingMatches.flatMap(({ candidate }) => (
+      Array.isArray(candidate?.dienste) ? candidate.dienste : []
+    )).filter((service) => services.has(norm(String(service || "")))))].sort((a, b) => a.localeCompare(b, "de"));
+    if (!owned && !inCinema && !streamingServices.length) continue;
+    eligible.push({
+      entry,
+      canonicalKey: `${titleKey}|${mustwatchJahr(entry?.jahr) ?? ""}|${mustwatchTyp(entry?.typ) || ""}`,
+      titleKey,
+      reasons: {
+        streaming: streamingServices,
+        cinema: inCinema,
+        owned,
+      },
+    });
+  }
+  /* Gleicher sichtbarer Titel höchstens einmal. Die Wahl zwischen doppelten
+     Must-Watch-Zeilen ist stabil und damit unabhängig von der Eingabereihenfolge. */
+  const unique = new Map();
+  for (const candidate of eligible.sort((a, b) => (
+    a.canonicalKey.localeCompare(b.canonicalKey, "de")
+      || String(a.entry?.id || "").localeCompare(String(b.entry?.id || ""), "de")
+  ))) if (!unique.has(candidate.titleKey)) unique.set(candidate.titleKey, candidate);
+  const pool = [...unique.values()];
+  const safeLimit = Number.isInteger(limit) && limit >= 0 ? Math.min(limit, 5) : 5;
+  if (pool.length >= 12) {
+    /* Zwei stabile, jeweils mindestens sechs Titel große Tagesgruppen wechseln
+       einander ab. Damit sind benachbarte Fenster selbst dann disjunkt, wenn
+       die Eingabereihenfolge wechselt; die Reihenfolge innerhalb der Gruppe
+       wird weiterhin mit dem Wiener Tag deterministisch gemischt. */
+    const parity = Math.abs(Math.floor(Date.parse(`${day}T00:00:00Z`) / 86400000)) % 2;
+    const alternatingPool = [...pool]
+      .sort((left, right) => left.canonicalKey.localeCompare(right.canonicalKey, "de"))
+      .filter((_candidate, index) => index % 2 === parity);
+    return dayOrder(alternatingPool, day).slice(0, safeLimit);
+  }
+  return dayOrder(pool, day).slice(0, safeLimit);
 }
 
 /* ---------- Migration: must_watch-Flag -> Liste (einmalig, idempotent) ----------

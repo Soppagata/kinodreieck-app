@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 import {
+  markNewPersonalMasterEntries,
   mergePersonalMasterEntry,
   projectRecentPersonalEntries,
-  stampPersonalMasterEntry,
 } from "./src/lib/personalEntryChronology.js";
 import { rankCatalogTitleMatches } from "./src/lib/catalogTitleSearch.js";
 import { projectCompactGlobalResults } from "./src/lib/globalSearchProjection.js";
@@ -39,42 +39,47 @@ const master = [
 ];
 const emptyContext = { kinoMatches: { matched: [], rest: [] }, streamingBekannt: { titel: [] } };
 
-await check("Einzel- und Batchanlagen erhalten den echten lokalen Zeitpunkt statt Fremddaten", () => {
-  const at = "2026-09-04T18:30:00.000Z";
-  const stamped = [
-    stampPersonalMasterEntry({ id: "a", erstellt_am: "1999-01-01T00:00:00Z" }, at),
-    stampPersonalMasterEntry({ id: "b" }, at),
-  ];
-  assert.deepEqual(stamped.map((entry) => entry.erstellt_am), [at, at]);
+await check("Einzel- und Batchanlagen rollen ausschließlich Marker 1 bis 5", () => {
+  const first = markNewPersonalMasterEntries([{ id: "legacy", erstellt_am: "1999-01-01T00:00:00Z" }], [
+    { id: "a", zuletzt_ticker: 99 }, { id: "b" },
+  ]);
+  assert.equal("zuletzt_ticker" in first[0], false);
+  assert.deepEqual(first.slice(1).map((entry) => entry.zuletzt_ticker), [2, 1]);
+  const rolled = markNewPersonalMasterEntries(first, [
+    { id: "c" }, { id: "d" }, { id: "e" }, { id: "f" },
+  ]);
+  assert.deepEqual(projectRecentPersonalEntries({ master: rolled }).map((entry) => entry.ref), ["f", "e", "d", "c", "b"]);
+  assert.equal("zuletzt_ticker" in rolled.find((entry) => entry.id === "a"), false);
 });
 
-await check("Bearbeitung bewahrt erstellt_am unveränderlich und erfindet keines für Legacy", () => {
-  const existing = { id: "a", titel: "Alt", erstellt_am: "2026-09-04T18:30:00.000Z" };
+await check("Bearbeitung bewahrt Marker und Bestandsdatum, kann beides aber nicht erfinden", () => {
+  const existing = { id: "a", titel: "Alt", zuletzt_ticker: 3, erstellt_am: "2026-09-04T18:30:00.000Z" };
   assert.deepEqual(mergePersonalMasterEntry(existing, {
-    titel: "Neu", erstellt_am: "2099-01-01T00:00:00Z",
+    titel: "Neu", zuletzt_ticker: 1, erstellt_am: "2099-01-01T00:00:00Z",
   }), { ...existing, titel: "Neu" });
-  assert.equal("erstellt_am" in mergePersonalMasterEntry({ id: "legacy" }, {
-    titel: "Legacy neu", erstellt_am: "2099-01-01T00:00:00Z",
-  }), false);
+  const legacy = mergePersonalMasterEntry({ id: "legacy" }, {
+    titel: "Legacy neu", zuletzt_ticker: 1, erstellt_am: "2099-01-01T00:00:00Z",
+  });
+  assert.equal("erstellt_am" in legacy, false);
+  assert.equal("zuletzt_ticker" in legacy, false);
 });
 
-await check("Zuletzt hinzugefügt sortiert Master, Must-Watch und Merkliste nach belegten Zeiten", () => {
+await check("Zuletzt hinzugefügt zeigt nur markierte Mastereinträge, neueste zuerst", () => {
   const recent = projectRecentPersonalEntries({
-    master: [{ ...obsession, erstellt_am: "2026-09-04T18:35:00Z" }],
+    master: [{ ...obsession, zuletzt_ticker: 2 }, { id: "neu", titel: "Neu", zuletzt_ticker: 1 }],
     mustwatch: [{ id: "mw-a", titel: "Must", erstellt_am: "2026-09-04T18:34:00Z" }],
     merkliste: [{ watchmode_id: 77, titel: "Merk", hinzugefuegt_am: "2026-09-04T18:33:00Z" }],
   });
-  assert.deepEqual(recent.dated.map((entry) => entry.source), ["MASTER", "MUST-WATCH", "MERKLISTE"]);
-  assert.equal(recent.dated[0].label, "Obsession - Du sollst mich lieben (2026)");
+  assert.deepEqual(recent.map((entry) => entry.ref), ["neu", obsession.id]);
+  assert.deepEqual(recent.map((entry) => entry.ticker), [1, 2]);
+  assert.deepEqual(recent.map((entry) => entry.label), ["Neu", obsession.titel]);
 });
 
-await check("Legacy-Master bleibt getrennt und nutzt nur die stabile Einfügereihenfolge", () => {
+await check("Altbestand und Zeitstempel werden weder gesucht noch rückwirkend aufgenommen", () => {
   const recent = projectRecentPersonalEntries({
-    master: [{ id: "alt", titel: "Alt" }, { id: "neu", titel: "Obsession" }],
+    master: [{ id: "alt", titel: "Alt" }, { id: "datiert", titel: "Datiert", erstellt_am: "2099-01-01T00:00:00Z" }],
   });
-  assert.deepEqual(recent.dated, []);
-  assert.deepEqual(recent.legacyMaster.map((entry) => entry.ref), ["neu", "alt"]);
-  assert.equal("time" in recent.legacyMaster[0], false);
+  assert.deepEqual(recent, []);
 });
 
 await check("Obsession wird per ID, Volltitel, Originaltitel und markantem Titelwort gefunden", () => {
@@ -166,7 +171,8 @@ await check("Kompakte Projektion verliert aus der Vollmenge nichts", () => {
 
 await check("App verdrahtet alle Anlagewege, Unveränderlichkeit und das Auswahl-Navigationsgate", () => {
   const source = fs.readFileSync("src/App.jsx", "utf8");
-  assert.ok((source.match(/stampPersonalMasterEntry/g) || []).length >= 6);
+  assert.ok((source.match(/markNewPersonalMasterEntries/g) || []).length >= 5);
+  assert.doesNotMatch(source, /stampPersonalMasterEntry/);
   assert.match(source, /mergePersonalMasterEntry\(film, changes\)/);
   assert.match(source, /Mit „Abbrechen“ bleibt die Auswahl vollständig erhalten/);
   assert.match(source, /onSelectionStateChange=\{meldeMediathekAuswahl\}/);

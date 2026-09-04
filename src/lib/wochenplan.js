@@ -1,6 +1,6 @@
 /* Persönlicher Wochenplan: reine, zeitzonenfeste Kalenderlogik. */
 
-import { beobachteteSerienEreignisse, wienerKalendertag } from "./seriesWatchEvents.js";
+import { viennaCalendarDay as wienerKalendertag } from "./mustwatch.js";
 
 export const WOCHENTAGE = Object.freeze([
   { nr: 1, kurz: "Mo", name: "Montag" },
@@ -536,7 +536,7 @@ export function findeKinoPinImKatalog(pin, kinoKatalog = [], jetzt = new Date())
 
 export function wochenansicht({
   wochenplan, kinoPins = [], kinoVorschlaege = [], kinoKatalog = [], katalog = [], master = [],
-  entdeckenStatus = {}, startdatum = null, wochenstart = null, jetzt = new Date(),
+  startdatum = null, wochenstart = null, jetzt = new Date(),
 } = {}) {
   const plan = normalisiereWochenplan(wochenplan, jetzt);
   /* `wochenstart` bleibt als lesbarer Alt-Parameter erhalten, damit ältere
@@ -552,13 +552,6 @@ export function wochenansicht({
       ...(verknuepfung.verknuepfungFehlt ? { verknuepfungFehlt: true } : {}),
       folgenstand: folgenstandText(verknuepfung.quelle),
     });
-  }
-  /* Serienereignisse bleiben eine flüchtige Projektion des bereits geladenen
-     Katalogs. Sie laufen weder durch die Reminder-Normalisierung noch in den
-     Schreibpfad für `kd:wochenplan`. */
-  for (const ereignis of beobachteteSerienEreignisse(katalog, entdeckenStatus, jetzt)) {
-    const tag = tage.find((eintrag) => eintrag.iso === ereignis.datum);
-    if (tag && !tag.eintraege.some((eintrag) => eintrag.id === ereignis.id)) tag.eintraege.push(ereignis);
   }
   const gepinnteKinoSlots = new Set();
   for (const pin of Array.isArray(kinoPins) ? kinoPins : []) {

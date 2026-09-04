@@ -135,7 +135,7 @@ check("Verfügbarkeit: KEIN Titel-Fuzzy — gleicher Titel ohne passende ID zäh
   M.mustwatchVerfuegbarkeit({ titel: "Stalker", verknuepfung: { ziel: "programm", id: "stalker" } }, kandidaten) === null
   && M.mustwatchVerfuegbarkeit({ titel: "Stalker", verknuepfung: null }, kandidaten) === null);
 
-/* ---------- 9) Sortierung: identisch für Dashboard und Vollansicht ---------- */
+/* ---------- 9) Sortierung der vollständigen Listenprojektion ---------- */
 const mwBestand = [ohneRef, inMediathek, imStream, toteRef, imKino];
 const sortiert = M.sortiereMustwatch(mwBestand, kandidaten);
 check("Sortierung: aktuell verfügbare zuerst",
@@ -150,12 +150,10 @@ const gleichstand = M.sortiereMustwatch([
   { id: "mw_ae", titel: "Ätherwelle", erstellt_am: "2026-08-01T10:00:00Z" },
 ], kandidaten);
 check("Sortierung: bei gleichem Zeitstempel entscheidet der Titel (de)", gleichstand[0].id === "mw_ae");
-/* Dashboard = Vollansicht: dieselbe reine Projektion, das Dashboard schneidet
-   danach lediglich auf fünf Einträge zu. */
 const vollansicht = M.projiziereMustwatch(mwBestand, { filter: "alle", suche: "" }, kandidaten);
-const dashboard = M.sortiereMustwatch(mwBestand, kandidaten).slice(0, 5);
-check("Sortierung: Dashboard und Vollansicht liefern dieselbe Reihenfolge",
-  vollansicht.map((e) => e.id).join(",") === dashboard.map((e) => e.id).join(","));
+const ersteFuenf = M.sortiereMustwatch(mwBestand, kandidaten).slice(0, 5);
+check("Sortierung: Vollansicht und Sortierhelper liefern dieselbe Reihenfolge",
+  vollansicht.map((e) => e.id).join(",") === ersteFuenf.map((e) => e.id).join(","));
 
 /* ---------- 10) Filterprojektion ---------- */
 const mitTypen = [
@@ -192,6 +190,77 @@ check("Projektion: Bestandsfelder inkl. unbekannter Zusatzfelder bleiben unverä
   durchgereicht.im_besitz === true && durchgereicht.beschreibung === "Text"
   && durchgereicht.notiz === "Notiz" && durchgereicht.fremdfeld === 42
   && durchgereicht === altbestand[0]);
+
+/* ---------- 12) Tägliche Startauswahl ---------- */
+const dailyEntries = [
+  { id: "mw_owned", titel: "Owned", im_besitz: true },
+  { id: "mw_cinema", titel: "Cinema", jahr: 2026 },
+  { id: "mw_stream", titel: "Stream", typ: "film" },
+  { id: "mw_other", titel: "Other Stream" },
+];
+const dailyCandidates = {
+  master: [],
+  programm: [{ projection_id: "cinema-auto", titel: "Cinema", jahr: 2026 }],
+  streaming: [
+    { id: 1, titel: "Stream", typ: "movie", dienste: ["MUBI", "Andere"] },
+    { id: 2, titel: "Other Stream", dienste: ["Netflix"] },
+  ],
+};
+const daily = M.projectDailyMustwatch({
+  entries: dailyEntries, candidates: dailyCandidates, selectedServices: ["mubi"], day: "2026-09-05",
+});
+check("Tagesauswahl kombiniert Besitz, Kino ohne stabile film.at-ID und case-sichere Dienstauswahl",
+  daily.length === 3
+  && daily.some((item) => item.entry.id === "mw_owned" && item.reasons.owned)
+  && daily.some((item) => item.entry.id === "mw_cinema" && item.reasons.cinema)
+  && daily.some((item) => item.entry.id === "mw_stream" && item.reasons.streaming[0] === "MUBI")
+  && daily.every((item) => item.entry.id !== "mw_other"));
+check("Leere Anbieterauswahl ist ausdrücklich keine Streamingfreigabe",
+  M.projectDailyMustwatch({ entries: [dailyEntries[2]], candidates: dailyCandidates, selectedServices: [], day: "2026-09-05" }).length === 0);
+
+const ambiguousCandidates = {
+  master: [], programm: [], streaming: [
+    { id: 11, titel: "Signal", jahr: 2020, dienste: ["MUBI"] },
+    { id: 12, titel: "Signal", jahr: 2024, dienste: ["MUBI"] },
+  ],
+};
+check("Unverknüpfter mehrdeutiger Exakttitel wird nicht geraten",
+  M.projectDailyMustwatch({ entries: [{ id: "mw_signal", titel: "Signal" }], candidates: ambiguousCandidates, selectedServices: ["MUBI"], day: "2026-09-05" }).length === 0);
+check("Jahr macht denselben Exakttitel eindeutig",
+  M.projectDailyMustwatch({ entries: [{ id: "mw_signal", titel: "Signal", jahr: 2024 }], candidates: ambiguousCandidates, selectedServices: ["MUBI"], day: "2026-09-05" }).length === 1);
+check("Ein exakter Alternativtitel kann einen unverknüpften Eintrag eindeutig zuordnen",
+  M.projectDailyMustwatch({
+    entries: [{ id: "mw_alt", titel: "Unverbundener Titel", originaltitel: "The Signal", jahr: 2024 }],
+    candidates: { master: [], programm: [], streaming: [{ id: 13, titel: "The Signal", jahr: 2024, dienste: ["MUBI"] }] },
+    selectedServices: ["MUBI"], day: "2026-09-05",
+  }).length === 1);
+check("Eine tote explizite Verknüpfung fällt nicht still auf Titelmatching zurück",
+  M.projectDailyMustwatch({
+    entries: [{ id: "mw_signal", titel: "Signal", jahr: 2024, verknuepfung: { ziel: "streaming", id: 999 } }],
+    candidates: ambiguousCandidates, selectedServices: ["MUBI"], day: "2026-09-05",
+  }).length === 0);
+
+const twelveEntries = Array.from({ length: 12 }, (_, index) => ({ id: `mw_${index}`, titel: `Titel ${index}` }));
+const twelveCandidates = { master: [], programm: [], streaming: twelveEntries.map((entry, index) => ({
+  id: 100 + index, titel: entry.titel, dienste: ["MUBI"],
+})) };
+const dayOne = M.projectDailyMustwatch({ entries: twelveEntries, candidates: twelveCandidates, selectedServices: ["MUBI"], day: "2026-09-05" });
+const dayTwo = M.projectDailyMustwatch({ entries: [...twelveEntries].reverse(), candidates: {
+  ...twelveCandidates, streaming: [...twelveCandidates.streaming].reverse(),
+}, selectedServices: ["MUBI"], day: "2026-09-06" });
+check("Ab zwölf Kandidaten sind zwei Folgetage titel-disjunkt",
+  dayOne.length === 5 && dayTwo.length === 5
+  && dayTwo.every((item) => !new Set(dayOne.map((previous) => previous.titleKey)).has(item.titleKey)));
+const stableOne = M.projectDailyMustwatch({ entries: twelveEntries, candidates: twelveCandidates, selectedServices: ["MUBI"], day: "2026-09-05" });
+const stableTwo = M.projectDailyMustwatch({ entries: [...twelveEntries].reverse(), candidates: {
+  ...twelveCandidates, streaming: [...twelveCandidates.streaming].reverse(),
+}, selectedServices: ["mubi"], day: "2026-09-05" });
+check("Tagesauswahl ist über Eingabereihenfolge und Rerender stabil",
+  stableOne.map((item) => item.entry.id).join(",") === stableTwo.map((item) => item.entry.id).join(","));
+check("Doppelte sichtbare Titel erscheinen höchstens einmal",
+  M.projectDailyMustwatch({ entries: [{ id: "a", titel: "Doppelt", im_besitz: true }, { id: "b", titel: "Doppelt", im_besitz: true }], day: "2026-09-05" }).length === 1);
+check("Wiener Kalendertag folgt Europe/Vienna statt UTC",
+  M.viennaCalendarDay(new Date("2026-09-04T22:30:00Z")) === "2026-09-05");
 
 let ok = true;
 for (const [n, p] of checks) { console.log((p ? "✓ " : "✗ ") + n); if (!p) ok = false; }

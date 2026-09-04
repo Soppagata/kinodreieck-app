@@ -13,6 +13,10 @@ import { ladeProfil } from "../lib/profil.js";
 import { setzePrognoseStatus } from "../lib/prognose.js";
 import { ensureIds, slugId } from "../lib/match.js";
 import { heileRotlinks } from "../lib/artikel.js";
+import {
+  markNewPersonalMasterEntries,
+  mergePersonalMasterEntry,
+} from "../lib/personalEntryChronology.js";
 
 export function istFilmwissenRechercheFreigegeben(session, filmwissenAn) {
   return session?.mode === "account"
@@ -102,7 +106,7 @@ export function useIntelligenceController({
         return { abgebrochen: true };
       }
       return {
-        master: aktuell.map((film) => film.id === id ? { ...film, ...changes } : film),
+        master: aktuell.map((film) => film.id === id ? mergePersonalMasterEntry(film, changes) : film),
         meta: masterMeta, herkunft: naechsteHerkunft(),
       };
     });
@@ -209,8 +213,9 @@ export function useIntelligenceController({
         doppelt = true;
         return { abgebrochen: true };
       }
-      neu = ensureIds([{ ...kandidat, id }])[0];
-      next = [...aktuell, neu];
+      const prepared = ensureIds([{ ...kandidat, id }])[0];
+      next = ensureIds(markNewPersonalMasterEntries(aktuell, [prepared]));
+      neu = next[next.length - 1];
       return { master: next, meta: masterMeta, herkunft: naechsteHerkunft() };
     });
     if (!gespeichert || !kontoIstAktuell(startKonto)) {

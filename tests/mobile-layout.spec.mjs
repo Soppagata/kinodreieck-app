@@ -586,7 +586,7 @@ for (const viewport of VIEWPORTS) {
     expect(box.y).toBeLessThanOrEqual(1);
     expect(box.width).toBeGreaterThanOrEqual(viewport.width - 1);
     expect(box.height).toBeGreaterThanOrEqual(viewport.height - 1);
-    await expect(dialog.getByText("Noch keine Serie beobachtet.", { exact: true })).toBeVisible();
+    await expect(dialog.getByText(/Beobachtet|Beobachten/u)).toHaveCount(0);
     await expect(dialog.getByText("Synthetischer Kinofilm", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => ({
       position: document.body.style.position,
@@ -2299,7 +2299,6 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
     localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix", "Crunchyroll"], heuristik: true }));
     localStorage.setItem("kd:entdecken-status", JSON.stringify({
       51001: { status: "gesehen", gesehen_am: "2026-08-01T20:00:00.000Z" },
-      51002: { beobachtet: true, typ: "tv_series", titel: "Berlin Nights" },
     }));
     localStorage.setItem("kd:katalog:url", "https://abcdefghijklmnopqrst.supabase.co");
     localStorage.setItem("kd:katalog:key", "test-publishable-key-1234567890");
@@ -2360,7 +2359,7 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
   const dekadeP = page.getByRole("slider", { name: "Mein Programm: Jahrzehnt filtern" });
   await expect(dekadeP).toBeVisible();
   await dekadeP.fill("2");
-  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").first()).toHaveText("1988–2002");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").first()).toHaveText("1990er");
   await expect(dekadeP).toHaveAttribute("aria-valuetext", "1990er: 1988 bis 2002");
   await expect(programmKarten).toHaveCount(1);
   await expect(page.locator('[data-streaming-suchtreffer="programm:bravo-unrated"]')).toBeVisible();
@@ -2404,10 +2403,7 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
   await expect(entdeckenKarten).toHaveCount(1);
   await expect(entdeckenKarten).toContainText("Berlin Nights");
   await plattformE.selectOption("");
-  await page.getByRole("button", { name: /Beobachtet \(1\)/ }).click();
-  await expect(entdeckenKarten).toHaveCount(1);
-  await expect(entdeckenKarten).toContainText("Berlin Nights");
-  await page.getByRole("button", { name: /Beobachtet \(1\)/ }).click();
+  await expect(page.getByRole("button", { name: /Beobachtet/u })).toHaveCount(0);
   await page.getByRole("button", { name: /Gesehen \(1\)/ }).click();
   await expect(entdeckenKarten).toHaveCount(1);
   await expect(entdeckenKarten).toContainText("Apollo Road");
@@ -2418,14 +2414,14 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
   const reglerKopfGeometrie = await page.locator(".kd-streamfilter-regler").evaluate((regler) => (
     [...regler.querySelectorAll(".kd-streamfilter-abc-kopf")].map((kopf) => ({
       anzeige: kopf.querySelector("strong").getBoundingClientRect().width,
-      alle: kopf.querySelector("button").getBoundingClientRect().width,
+      hatAlleKnopf: !!kopf.querySelector("button"),
     }))
   ));
   expect(reglerKopfGeometrie).toHaveLength(2);
-  expect(Math.abs(reglerKopfGeometrie[0].anzeige - reglerKopfGeometrie[1].anzeige)).toBeLessThanOrEqual(0.5);
-  expect(Math.abs(reglerKopfGeometrie[0].alle - reglerKopfGeometrie[1].alle)).toBeLessThanOrEqual(0.5);
+  expect(reglerKopfGeometrie[0].hatAlleKnopf).toBe(true);
+  expect(reglerKopfGeometrie[1].hatAlleKnopf).toBe(false);
   await dekadeE.fill("1");
-  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last()).toHaveText("1988–2002");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last()).toHaveText("1990er");
   await expect(dekadeE).toHaveAttribute("aria-valuetext", "1990er: 1988 bis 2002");
   await expect(entdeckenKarten).toHaveCount(1);
   await expect(entdeckenKarten).toContainText("Apollo Road");
@@ -2592,7 +2588,7 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   await page.goto("/");
 
   await expect(page.locator(".kd-dash-kopfname")).toHaveText([
-    "Pinboard & Serienradar",
+    "Pinboard",
     "Must-Watch",
     "Zuletzt hinzugefügt",
   ]);

@@ -63,18 +63,8 @@ check("Ein aktives Ziel muss kanonisch sein", () => {
   assert.ok(invalid.errors.includes("active-target-not-canonical"));
 });
 
-check("Beobachten akzeptiert ausschließlich Serien mit positiver Watchmode-ID", () => {
-  const action = createSearchActionDraft({ intent: "watch", target: target("series"), watchmodeId: 42 });
-  assert.equal(action.ok, true);
-  assert.deepEqual({
-    intent: action.action.intent,
-    targetType: action.action.targetType,
-    setsObserved: action.action.setsObserved,
-    setsRadar: action.action.setsRadar,
-    createsProviderJob: action.action.createsProviderJob,
-  }, { intent: "watch", targetType: "series", setsObserved: true, setsRadar: false, createsProviderJob: false });
-  assert.equal(createSearchActionDraft({ intent: "watch", target: target("work"), watchmodeId: 42 }).ok, false);
-  assert.equal(createSearchActionDraft({ intent: "watch", target: target("series"), watchmodeId: -1 }).ok, false);
+check("Der verworfene Beobachten-Suchintent ist kein gültiger Radarvertrag mehr", () => {
+  assert.equal(createSearchActionDraft({ intent: "watch", target: target("series"), watchmodeId: 42 }).ok, false);
 });
 
 check("Werk, Serie und Franchise teilen den Intent, bleiben intern typisiert", () => {
@@ -85,7 +75,6 @@ check("Werk, Serie und Franchise teilen den Intent, bleiben intern typisiert", (
     assert.equal(draft.action.targetType, type);
     assert.equal(draft.action.requiresConfirmation, true);
     assert.equal(draft.action.shareEnabled, false);
-    assert.equal(draft.action.setsObserved, false);
     assert.equal(draft.action.setsRadar, false);
     assert.equal(draft.action.createsProviderJob, false);
   }

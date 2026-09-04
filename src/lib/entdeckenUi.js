@@ -153,14 +153,11 @@ export function createCatalogRadarTarget({
 
 export function createCatalogSearchActions(input = {}) {
   const target = createCatalogRadarTarget(input);
-  if (!target) return Object.freeze({ target: null, watch: null, radar: null });
+  if (!target) return Object.freeze({ target: null, radar: null });
   const radarDraft = createSearchActionDraft({ intent: "radar", target });
-  const watchmodeId = positiveInteger(input.watchmodeId);
-  const watchDraft = createSearchActionDraft({ intent: "watch", target, watchmodeId });
   return Object.freeze({
     target,
     radar: radarDraft.ok ? Object.freeze({ ...radarDraft.action, target }) : null,
-    watch: watchDraft.ok ? Object.freeze({ ...watchDraft.action, target }) : null,
   });
 }
 

@@ -12,7 +12,8 @@ test("account-ready Boot, Chronik, Obsession-Suche und Auswahl-Sprungschutz", as
   await expect(page.getByRole("heading", { name: "Dein Abend" })).toBeVisible();
   await expect(page.getByText("Zuletzt hinzugefügt", { exact: true })).toBeVisible();
   const chronology = page.locator(".kd-dash-log", { hasText: "Obsession - Du sollst mich lieben" });
-  await expect(chronology).toContainText("04.09.2026");
+  await expect(chronology.getByLabel("Ticker 1")).toHaveText("1");
+  await expect(page.getByText(/Altbestand/u)).toHaveCount(0);
   await chronology.click();
 
   const obsession = page.locator('[data-film-id="obsession-2024"]');
@@ -97,7 +98,13 @@ test("Haupt-Entdecken bleibt leicht; Streaming Alles und beide Jahrzehntregler b
 
 test("Mobile Haupttabs merken Scrollpositionen und Same-tab-Schließen springt nicht", async ({ privateApp }) => {
   const { page } = privateApp;
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.scrollHeight - window.innerHeight
+  ))).toBeGreaterThan(100);
+  await expect.poll(() => page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    return window.scrollY;
+  })).toBeGreaterThan(100);
   const startY = await page.evaluate(() => window.scrollY);
   expect(startY).toBeGreaterThan(100);
 
@@ -174,21 +181,13 @@ test("Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag", asy
   console.log(`[PRIVATE_V1_TOUCH] ${JSON.stringify({ browser: testInfo.project.name, viewport: "393x852", touchBox, helpBox })}`);
 });
 
-test("Beobachtet 2.0 projiziert nur den vollständig belegten Termin und hält datenlose Deltas im Pinboard", async ({ privateApp }) => {
+test("Start zeigt fünf passende Must-Watch-Titel und keine verworfene Beobachtet-Oberfläche", async ({ privateApp }) => {
   const { page, traffic } = privateApp;
   await expect.poll(() => traffic.contracts.filter((entry) => entry === "catalog:streaming_bekannt").length).toBe(1);
-  const pinboard = page.locator(".kd-pinboard-radar");
-  await expect(pinboard).toContainText("Datumserie");
-  await expect(pinboard).toContainText("Pinboardserie");
-  await expect(pinboard.locator(".kd-pinboard-serie", { hasText: "Datumserie" })).toContainText("Neue Folge 10");
-  await expect(pinboard.locator(".kd-pinboard-serie", { hasText: "Pinboardserie" })).toContainText("Neue Folge 10");
-
-  const week = page.locator(".kd-wochen-tagesliste");
-  await expect(week).toContainText("Datumserie");
-  const projectedDay = week.locator(".kd-wochen-tag", { hasText: "Datumserie" });
-  await expect(projectedDay).toContainText("05.09.");
-  await expect(projectedDay).toContainText("Katalogstand geprüft 04.09.2026, 10:00");
-  await expect(week).not.toContainText("Pinboardserie");
-  await expect(week.locator(".kd-wochen-eintrag--beobachtet")).toHaveCount(1);
+  const mustwatch = page.locator(".kd-dash-modul", { has: page.getByText("Must-Watch", { exact: true }) });
+  await expect(mustwatch.locator(".kd-dash-zeile")).toHaveCount(5);
+  await expect(mustwatch).toContainText("IM BESITZ");
+  await expect(page.getByText(/Beobachtet|Beobachten/u)).toHaveCount(0);
+  expect(traffic.contracts).not.toContain("series-watch");
   expect(fullCatalogRequests(traffic)).toHaveLength(0);
 });

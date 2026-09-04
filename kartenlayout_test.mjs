@@ -79,7 +79,7 @@ check("Dashboard folgt der festen Startseiten-Reihenfolge", () => {
   const start = lies("./src/tabs/StartTab.jsx");
   const dashboard = start.slice(start.indexOf('<div className="kd-dash-grid">'));
   const positionen = [
-    dashboard.indexOf('name="Pinboard & Serienradar"'),
+    dashboard.indexOf('name="Pinboard"'),
     dashboard.indexOf("<Wochenplan"),
     dashboard.indexOf('name="Must-Watch"'),
     dashboard.indexOf('name="Zuletzt hinzugefügt"'),
@@ -118,11 +118,9 @@ check("Deine Woche rendert rollierende Kinotickets und verständliche Kalenderak
   assert.match(css, /@media \(max-width:430px\)[\s\S]*\.kd-wochen-datumfeld.*grid-column:1\/-1/);
 });
 
-check("Beobachten ist ein eigener Serien-Pin im ausgeklappten Streaming-Eintrag", () => {
+check("Der verworfene Beobachtet-Pin ist aus dem Streaming-Eintrag entfernt", () => {
   const streaming = lies("./src/tabs/StreamingTab.jsx");
-  assert.match(streaming, /className="kd-entdecken-beobachten"/);
-  assert.match(streaming, /setzeSerienBeobachtung/);
-  assert.match(streaming, /Unabhängig davon, ob du die Serie schon gesehen hast/);
+  assert.doesNotMatch(streaming, /kd-entdecken-beobachten|setzeSerienBeobachtung/);
 });
 
 check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler", () => {
@@ -164,12 +162,12 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.match(streaming, /kd-streamfilter-panel[\s\S]*SortierFilter name="Entdecken"/);
   assert.match(streaming, /className="kd-nur-desktop"[\s\S]*Merkliste \(\{merkliste\.length\}\) exportieren/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*nurBewertet/);
-  assert.match(streaming, /Gesehen \(\{statusAnzahlenE\.gesehen\}\)/);
-  assert.match(streaming, /Beobachtet \(\{statusAnzahlenE\.beobachtet\}\)/);
+  assert.match(streaming, /Gesehen \(\{statusAnzahlenE\}\)/);
+  assert.doesNotMatch(streaming, /Beobachtet \(\{statusAnzahlenE/);
   assert.match(streaming, /type="range"[\s\S]*Anfangsbuchstaben filtern/);
   assert.match(streaming, /Jahrzehntbereich/);
-  assert.match(streaming, /streamingJahrzehntLabel\(wert\).*bereich\.label/);
-  assert.match(streaming, /bereich \? `\$\{streamingJahrzehntLabel\(wert\)\} · \$\{bereich\.label\}` : "Alle"/);
+  assert.match(streaming, /<strong aria-live="polite">\{bereich \? streamingJahrzehntLabel\(wert\) : "Alle"\}<\/strong>/);
+  assert.doesNotMatch(streaming, /streamingJahrzehntLabel\(wert\).*bereich\.label/);
   assert.match(streaming, /aria-valuetext=\{bereich \? `\$\{Number\(wert\)\}er: \$\{bereich\.von\} bis \$\{bereich\.bis\}` : "Alle Jahrzehnte"\}/);
   assert.match(streaming, /Filter &amp; Sortierung/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*optionen=\{dekadenP\}/);

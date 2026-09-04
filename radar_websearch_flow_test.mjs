@@ -357,8 +357,6 @@ try {
     return h(EntdeckenTab, {
       blogProps: emptyBlogProps,
       radarState: controller.sichtbarerRadarState,
-      seriesCatalog: streamingDiscover.titel,
-      entdeckenStatus,
       master: [],
       streamingKnown: null,
       streamingDiscover,
@@ -367,7 +365,6 @@ try {
       radarAvailable: true,
       radarPilotEvents: controller.radarPilotEvents,
       radarAutomaticAvailable: controller.radarAutomaticAvailable,
-      onObserveToggle: controller.aendereSerienBeobachtung,
       onRadarChange: controller.aendereRadar,
       onRadarPreview: (target) => { void controller.bestaetigeRadarVorschau(target); },
       onShareChange: controller.aendereRadarShare,

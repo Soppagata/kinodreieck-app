@@ -15,7 +15,8 @@ import {
    Die Verfügbarkeitsanzeige ist eine reine Ableitung aus dieser expliziten
    Verknüpfung und dem gerade geladenen Kandidatenbestand (src/lib/mustwatch.js);
    es wird kein Status gespeichert. Sortierung und Filter kommen aus derselben
-   reinen Projektion wie das Dashboard.
+   reinen Projektion der Vollansicht. Die Startseite verwendet davon getrennt
+   ihre tägliche lokale Auswahl passender Kandidaten.
    kommtVorIn: Blog-Backlinks (Must-Watch-Einträge sind referenzierbar). */
 
 const ZIEL_LABEL = { master: "Mediathek", programm: "Kinoprogramm", streaming: "Streaming" };
@@ -56,7 +57,7 @@ function VerknuepfungsPicker({ kandidaten, onWaehle, onAbbrechen }) {
     if (!nq) return [];
     const gruppen = [];
     for (const [ziel, liste] of [["master", kandidaten.master], ["programm", kandidaten.programm], ["streaming", kandidaten.streaming]]) {
-      const hits = (liste || []).filter((k) => norm(k.titel).includes(nq)).slice(0, 6);
+      const hits = (liste || []).filter((k) => k?.id != null && norm(k.titel).includes(nq)).slice(0, 6);
       if (hits.length) gruppen.push({ ziel, hits });
     }
     return gruppen;
@@ -158,7 +159,7 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
     const k = liste.find((x) => String(x.id) === String(v.id));
     return k ? k.titel : v.id;
   };
-  /* Genau dieselbe reine Projektion, die auch das Dashboard verwendet. */
+  /* Reine Such-/Filterprojektion der vollständigen Must-Watch-Ansicht. */
   const sichtbar = useMemo(
     () => projiziereMustwatch(eintraege, { filter, suche }, kandidaten),
     [eintraege, filter, suche, kandidaten],

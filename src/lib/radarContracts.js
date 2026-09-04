@@ -10,7 +10,7 @@ export const RADAR_VERIFICATION_STATUSES = Object.freeze(["candidate", "corrobor
 export const RADAR_LIFECYCLE_STATUSES = Object.freeze(["announced", "scheduled", "retracted"]);
 export const RADAR_RECEIPT_STATUSES = Object.freeze(["new", "seen", "dismissed", "accepted_week", "exported_ics"]);
 export const RADAR_SCOPES = Object.freeze(["all", "cinema", "streaming"]);
-export const RADAR_SEARCH_INTENTS = Object.freeze(["watch", "radar"]);
+export const RADAR_SEARCH_INTENTS = Object.freeze(["radar"]);
 export const RADAR_CHECK_WEEKDAYS = Object.freeze(["monday", "friday"]);
 export const RADAR_CAPABILITIES = Object.freeze(["radar_unlimited", "radar_review", "radar_circle"]);
 export const RADAR_NORMAL_ACTIVE_LIMIT = 10;
@@ -55,34 +55,13 @@ export function validateRadarTarget(target, { allowFixture = true } = {}) {
 
 /* Ein sichtbarer „Titel“ ist kein eigener Zieltyp. Film/Werk, Serie und
    Franchise teilen denselben Radar-Intent, bleiben intern aber typisiert. */
-export function createSearchActionDraft({ intent, target, watchmodeId = null } = {}) {
+export function createSearchActionDraft({ intent, target } = {}) {
   if (!inList(intent, RADAR_SEARCH_INTENTS)) {
     return Object.freeze({ ok: false, reason: "intent-invalid", action: null });
   }
   const targetCheck = validateRadarTarget(target);
   if (!targetCheck.ok) {
     return Object.freeze({ ok: false, reason: "target-invalid", errors: targetCheck.errors, action: null });
-  }
-
-  if (intent === "watch") {
-    const normalizedWatchmodeId = positiveInteger(watchmodeId);
-    if (target.targetType !== "series" || normalizedWatchmodeId == null) {
-      return Object.freeze({ ok: false, reason: "watch-series-id-required", action: null });
-    }
-    return Object.freeze({
-      ok: true,
-      action: Object.freeze({
-        intent: "watch",
-        writePath: "series-watch",
-        targetId: target.targetId,
-        targetType: "series",
-        watchmodeId: normalizedWatchmodeId,
-        costBearing: false,
-        setsObserved: true,
-        setsRadar: false,
-        createsProviderJob: false,
-      }),
-    });
   }
 
   if (target.targetStatus !== "active" || target.canonical !== true) {
@@ -98,7 +77,6 @@ export function createSearchActionDraft({ intent, target, watchmodeId = null } =
       requiresConfirmation: true,
       shareEnabled: false,
       costBearing: true,
-      setsObserved: false,
       setsRadar: false,
       createsProviderJob: false,
     }),

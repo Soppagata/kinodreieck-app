@@ -67,7 +67,7 @@ const backup = {
   format: "kinodreieck-backup", version: 1, erstellt: "2026-07-17T00:00:00Z",
   masterliste: { meta: { name: "Max", version: "3.0" }, filme: [
     { titel: "Größe · 🎬", jahr: 2001, typ: "filmreihe", bewertung: { wie: 3, was: 4, warum: 2 } }, // Legacy-Typ + ohne id
-    { id: "fest_1999", titel: "Fester Eintrag", jahr: 1999 },
+    { id: "fest_1999", titel: "Fester Eintrag", jahr: 1999, zuletzt_ticker: 4 },
   ] },
   artikel: [{ id: "a1", titel: "Blog 1", liste: [{ eingabe: "Legacy-Reihe", typ: "filmreihe" }] }],
   kino_pins: [{ t: "Film", j: 2020, z: "12.08. Kino", seit: 1 }],
@@ -96,6 +96,8 @@ check("Master: ensureIds vergibt fehlende id", m.filme[0].id && typeof m.filme[0
 check("Master: alter Filmreihe-Typ wird beim Restore zu Film normalisiert", m.filme[0].typ === "film");
 check("Master: bestehende id bleibt", m.filme[1].id === "fest_1999");
 check("Master: Unicode/Emoji unversehrt", m.filme[0].titel === "Größe · 🎬");
+check("Master: Restore bewahrt einen gültigen Zuletzt-Ticker werttreu", m.filme[1].zuletzt_ticker === 4);
+check("Master: Restore erfindet für Altbestand keinen Zuletzt-Ticker", !("zuletzt_ticker" in m.filme[0]));
 
 /* 3) Artikel: Wrapper {artikel,gespeichertAm} */
 const art = parse("kd:artikel");

@@ -9,8 +9,7 @@ import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import {
   statusVon, mediathekIdVon, mitMediathekEintrag, gleicheMediathekStatusAb,
-  istBeobachtet, neuerGesehenEintrag, setzeSerienBeobachtung, toggleGesehenInStatus,
-  neueStaffeln, bestaetigeStaffel,
+  neuerGesehenEintrag, toggleGesehenInStatus,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import {
@@ -271,7 +270,7 @@ export function StreamingTab({
       const basis = roh && typeof roh === "object" ? roh : {};
       if (statusVon(roh) === wert) {
         const { status: _status, gesehen_am: _gesehenAm, ...rest } = basis;
-        if (rest.beobachtet || rest.mediathek_id) next[t.watchmode_id] = rest;
+        if (Object.keys(rest).length) next[t.watchmode_id] = rest;
         else delete next[t.watchmode_id];
       } else next[t.watchmode_id] = wert === "gesehen"
         ? { ...basis, ...neuerGesehenEintrag(t) }
@@ -287,16 +286,6 @@ export function StreamingTab({
     }
     setExpandedId("e" + t.watchmode_id);
     setGesehenFrage(t.watchmode_id);
-  };
-
-  const toggleBeobachten = async (t) => {
-    return await schreibeEntdeckenStatus((prev) => {
-      const next = { ...prev };
-      const wert = setzeSerienBeobachtung(prev[t.watchmode_id], t, !istBeobachtet(prev[t.watchmode_id]));
-      if (wert) next[t.watchmode_id] = wert;
-      else delete next[t.watchmode_id];
-      return next;
-    });
   };
 
   const uebernehmeGesehen = async (t) => {
@@ -395,13 +384,11 @@ export function StreamingTab({
   }, [genreFilterSichtbarE, genreE]);
 
   const statusAnzahlenE = useMemo(() => {
-    if (!entdeckenDa) return { gesehen: 0, beobachtet: 0 };
-    return entdecken.titel.reduce((anzahlen, titel) => {
+    if (!entdeckenDa) return 0;
+    return entdecken.titel.reduce((anzahl, titel) => {
       const status = entdeckenStatus[titel.watchmode_id];
-      if (statusVon(status) === "gesehen") anzahlen.gesehen += 1;
-      if (istBeobachtet(status)) anzahlen.beobachtet += 1;
-      return anzahlen;
-    }, { gesehen: 0, beobachtet: 0 });
+      return anzahl + (statusVon(status) === "gesehen" ? 1 : 0);
+    }, 0);
   }, [entdecken, entdeckenDa, entdeckenStatus]);
 
   /* Starke Katalogkennungen gleichen Entdecken bidirektional mit der Mediathek
@@ -412,28 +399,12 @@ export function StreamingTab({
     void schreibeEntdeckenStatus((prev) => gleicheMediathekStatusAb(prev, entdecken?.titel, master));
   }, [master, entdecken, schreibeEntdeckenStatus]);
 
-  const staffelHinweise = useMemo(() => {
-    const titel = [...((bekannt && bekannt.titel) || []), ...((entdecken && entdecken.titel) || [])];
-    return neueStaffeln(titel, entdeckenStatus);
-  }, [bekannt, entdecken, entdeckenStatus]);
-
-  const bestaetigeHinweis = (hinweis) => {
-    const t = [...((bekannt && bekannt.titel) || []), ...((entdecken && entdecken.titel) || [])]
-      .find((x) => x.watchmode_id === hinweis.watchmode_id);
-    if (!t) return;
-    void schreibeEntdeckenStatus((prev) => ({
-      ...prev,
-      [t.watchmode_id]: bestaetigeStaffel(prev[t.watchmode_id], t),
-    }));
-  };
-
   const entdeckenListe = useMemo(() => {
     if (!entdeckenDa) return [];
     let l = entdecken.titel.filter((t) => (
       fokusOverride?.art === "entdecken" && String(t.watchmode_id) === fokusOverride.ref
     ) || (dienstOk(t) && plattformOkE(t)));
     if (statusFilterE === "gesehen") l = l.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen");
-    if (statusFilterE === "beobachtet") l = l.filter((t) => istBeobachtet(entdeckenStatus[t.watchmode_id]));
     if (buchstabeE) l = l.filter((t) => streamingAnfangsbuchstabe(t.titel) === buchstabeE);
     if (genreFilterSichtbarE && genreE) l = l.filter((t) => (t.genres || []).some((genre) => norm(genre) === genreE));
     if (dekadeE != null) l = l.filter((t) => passtInJahrzehntMitKulanz(t.jahr, dekadeE));
@@ -637,29 +608,6 @@ export function StreamingTab({
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.rauch }}>
             Ungeprüfte Katalogtitel — kein Dreieck und keine Bewertung. Sortiert wird nur nach den sichtbaren Metadaten.
           </div>
-          {staffelHinweise.length > 0 && (
-            <div className="kd-staffelhinweise" style={{ marginBottom: 14 }}>
-              <div style={{ ...h2, marginBottom: 8 }}>Serien-Updates</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {staffelHinweise.map((h) => (
-                  <div key={h.watchmode_id} className="kd-staffelhinweis" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "rgba(216,160,61,.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 12px" }}>
-                    <span aria-hidden="true" style={{ color: T.wolfram, fontSize: 18 }}>★</span>
-                    <span style={{ flex: 1, minWidth: 180 }}>
-                      <strong style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17 }}>{h.titel}</strong>
-                      <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>
-                        {h.staffel_neu ? `Staffel ${h.staffel_verfuegbar} verfügbar` : "Neue Folge erkannt"}
-                        {h.folge_aktuell ? ` · Folge ${h.folge_aktuell}` : ""}
-                      </span>
-                      {h.dienste.length > 0 && <span style={{ ...mono, display: "block", marginTop: 2 }}>{gruppiereDienstBadges(h.dienste).map((d) => d.label).join(", ")}</span>}
-                    </span>
-                    <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 10px" }} onClick={() => bestaetigeHinweis(h)}>
-                      Als neuen Stand bestätigen
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           <div className="kd-kompakt kd-streaming-werkzeuge" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter und Sortierung einklappen" : "Filter und Sortierung ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
@@ -683,11 +631,7 @@ export function StreamingTab({
                 <ChipReihe style={{ gap: 6, marginBottom: 0 }}>
                   <Chip active={statusFilterE === "gesehen"}
                     onClick={() => aendereFilter(setStatusFilterE, statusFilterE === "gesehen" ? null : "gesehen")}>
-                    Gesehen ({statusAnzahlenE.gesehen})
-                  </Chip>
-                  <Chip active={statusFilterE === "beobachtet"}
-                    onClick={() => aendereFilter(setStatusFilterE, statusFilterE === "beobachtet" ? null : "beobachtet")}>
-                    Beobachtet ({statusAnzahlenE.beobachtet})
+                    Gesehen ({statusAnzahlenE})
                   </Chip>
                 </ChipReihe>
               </div>
@@ -745,7 +689,6 @@ export function StreamingTab({
                       <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>
                         {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
                         {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
-                        {istBeobachtet(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" || mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? " · " : ""}⚑ beobachtet` : ""}
                       </span>
                     )}
                   </div>
@@ -766,17 +709,6 @@ export function StreamingTab({
                 {expandedId === "e" + t.watchmode_id && (
                   <div style={{ marginTop: 6, fontSize: 12, color: T.rauch }} onClick={(e) => e.stopPropagation()}>
                     {(t.genres || []).length > 0 && <span>{t.genres.join(", ")}</span>}
-                    {t.typ === "tv_series" && (
-                      <div className="kd-entdecken-beobachten">
-                        <button type="button" className={istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "aktiv" : ""}
-                          aria-pressed={istBeobachtet(entdeckenStatus[t.watchmode_id])}
-                          title={istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "Serie nicht mehr beobachten" : "Serie beobachten und im Pinboard verfolgen"}
-                          onClick={() => void toggleBeobachten(t)}>
-                          ⚑ {istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "Beobachtet" : "Beobachten"}
-                        </button>
-                        <span>Unabhängig davon, ob du die Serie schon gesehen hast.</span>
-                      </div>
-                    )}
                     {addFilm && formFuer !== t.watchmode_id && !mediathekIdVon(entdeckenStatus[t.watchmode_id]) && (
                       <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 11px", marginTop: 8 }}
                         onClick={() => setFormFuer(t.watchmode_id)}>

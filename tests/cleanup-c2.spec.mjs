@@ -99,10 +99,6 @@ async function installLocalBackend(page, requests) {
       requests.push("personal-read");
       return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
     }
-    if (url.pathname === "/rest/v1/rpc/kd_set_series_watch") {
-      requests.push("series-watch-stub");
-      return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
-    }
     if (url.pathname === "/rest/v1/kd_catalog") {
       const name = String(url.searchParams.get("name") || "").replace(/^eq\./, "");
       requests.push(`catalog:${name}`);

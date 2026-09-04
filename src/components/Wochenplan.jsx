@@ -8,7 +8,6 @@ import {
   dateinameIcs, erstelleIcs, kalenderEventAusWochenEintrag, ladeIcsHerunter,
   reminderIcsEvent, wocheAlsIcs,
 } from "../lib/kalenderExport.js";
-import { formatPresentationDate } from "../lib/presentationDate.js";
 
 function datumKurz(wert) {
   return new Date(`${wert}T12:00:00`).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit" });
@@ -218,7 +217,6 @@ function ReminderZeile({
   const zielVorhanden = !!eintrag.ziel;
   const istKinoPin = eintrag.art === "kino" && !!eintrag.pin;
   const istVorschlag = !!eintrag.vorschlag;
-  const istBeobachtetProjektion = eintrag.abgeleitet === "beobachtet";
   const istFolgeOderStaffel = eintrag.art === "folge" || eintrag.art === "staffel";
   const hatAnlageJahr = Number.isInteger(eintrag.jahr);
   const meta = [ART_LABEL[eintrag.art] || "Termin", eintrag.jahr, eintrag.plattform, eintrag.uhrzeit].filter(Boolean).join(" · ");
@@ -228,24 +226,23 @@ function ReminderZeile({
     kalenderDownload(erstelleIcs([kalenderEventAusWochenEintrag(eintrag, datum)]), `${eintrag.titel}-${datum}`);
   };
   return (
-    <details className={`kd-wochen-eintrag kd-wochen-eintrag--${eintrag.art}${istVorschlag ? " kd-wochen-eintrag--vorschlag" : ""}${istBeobachtetProjektion ? " kd-wochen-eintrag--beobachtet" : ""}`}>
-      <summary><span className="kd-wochen-eintragtitel">{eintrag.titel}</span><span className="kd-wochen-eintragmeta">{istVorschlag && <em>Empfehlung</em>}{istBeobachtetProjektion && <em>Beobachtet</em>}{meta}</span><button type="button" className="kd-wochen-eintrag-download" title="Diesen Termin im Kalender speichern" aria-label={`${eintrag.titel} am ${datumKurz(datum)} im Kalender speichern`} onClick={terminSpeichern}><KalenderIcon /></button><span className="kd-wochen-expandicon"><ChevronIcon /></span></summary>
+    <details className={`kd-wochen-eintrag kd-wochen-eintrag--${eintrag.art}${istVorschlag ? " kd-wochen-eintrag--vorschlag" : ""}`}>
+      <summary><span className="kd-wochen-eintragtitel">{eintrag.titel}</span><span className="kd-wochen-eintragmeta">{istVorschlag && <em>Empfehlung</em>}{meta}</span><button type="button" className="kd-wochen-eintrag-download" title="Diesen Termin im Kalender speichern" aria-label={`${eintrag.titel} am ${datumKurz(datum)} im Kalender speichern`} onClick={terminSpeichern}><KalenderIcon /></button><span className="kd-wochen-expandicon"><ChevronIcon /></span></summary>
       <div className="kd-wochen-details">
         {eintrag.folgenstand && <div className="kd-wochen-folgenstand">{eintrag.folgenstand}</div>}
-        {istBeobachtetProjektion && <div className="kd-wochen-verknuepfungsstatus">Aus deiner Beobachtet-Liste · Katalogstand geprüft {formatPresentationDate(eintrag.geprueft_am, { includeTime: true })}</div>}
-        {!istBeobachtetProjektion && eintrag.ziel && eintrag.ref && <div className="kd-wochen-verknuepfungsstatus">{eintrag.link_modus === "auto" ? "Automatisch verknüpft" : "Verknüpft"}: {eintrag.quelle?.titel || eintrag.titel} · {refBereich(eintrag.ref)}</div>}
+        {eintrag.ziel && eintrag.ref && <div className="kd-wochen-verknuepfungsstatus">{eintrag.link_modus === "auto" ? "Automatisch verknüpft" : "Verknüpft"}: {eintrag.quelle?.titel || eintrag.titel} · {refBereich(eintrag.ref)}</div>}
         {eintrag.verknuepfungFehlt && <div className="kd-wochen-verknuepfungsstatus" role="status">Verknüpfung derzeit nicht verfügbar.</div>}
         {eintrag.notiz && <div>{eintrag.notiz}</div>}
         <div className="kd-wochen-aktionen">
           {(istVorschlag || istKinoPin) && onVorschlagAnsehen && <button type="button" className="kd-wochen-vorschlagaktion" onClick={() => onVorschlagAnsehen(eintrag)}>{istVorschlag ? "Termine ansehen" : "Termin ansehen"}</button>}
           {!istKinoPin && !istVorschlag && zielVorhanden && <button type="button" onClick={() => onAnsehen(eintrag)}>Eintrag ansehen</button>}
-          {!istKinoPin && !istVorschlag && !istBeobachtetProjektion && !zielVorhanden && !eintrag.verknuepfungFehlt && istFolgeOderStaffel && (hatAnlageJahr
+          {!istKinoPin && !istVorschlag && !zielVorhanden && !eintrag.verknuepfungFehlt && istFolgeOderStaffel && (hatAnlageJahr
             ? <button type="button" disabled={!!anlegenLauf} onClick={() => onAnlegen(eintrag)}>{anlegenLauf === eintrag.id ? "Legt an …" : "Titel anlegen"}</button>
             : <button type="button" onClick={() => onBearbeiten(eintrag)}>Jahr ergänzen</button>)}
-          {!istKinoPin && !istVorschlag && !istBeobachtetProjektion && eintrag.ref && <button type="button" onClick={() => onVerknuepfungLoesen(eintrag)}>Verknüpfung lösen</button>}
-          {!istKinoPin && !istVorschlag && !istBeobachtetProjektion && <button type="button" onClick={() => onBearbeiten(eintrag)}>Bearbeiten</button>}
-          {!istKinoPin && !istVorschlag && !istBeobachtetProjektion && <button type="button" title="Alle Wiederholungen exportieren" onClick={() => kalenderDownload(erstelleIcs([reminderIcsEvent(eintrag)]), `${eintrag.titel}-termine`)}><KalenderIcon /> Alle</button>}
-          {!istVorschlag && !istBeobachtetProjektion && <button type="button" className="kd-wochen-trash" title="Löschen" aria-label={`${eintrag.titel} löschen`} onClick={() => onLoeschen(eintrag)}><PapierkorbIcon /></button>}
+          {!istKinoPin && !istVorschlag && eintrag.ref && <button type="button" onClick={() => onVerknuepfungLoesen(eintrag)}>Verknüpfung lösen</button>}
+          {!istKinoPin && !istVorschlag && <button type="button" onClick={() => onBearbeiten(eintrag)}>Bearbeiten</button>}
+          {!istKinoPin && !istVorschlag && <button type="button" title="Alle Wiederholungen exportieren" onClick={() => kalenderDownload(erstelleIcs([reminderIcsEvent(eintrag)]), `${eintrag.titel}-termine`)}><KalenderIcon /> Alle</button>}
+          {!istVorschlag && <button type="button" className="kd-wochen-trash" title="Löschen" aria-label={`${eintrag.titel} löschen`} onClick={() => onLoeschen(eintrag)}><PapierkorbIcon /></button>}
         </div>
       </div>
     </details>
@@ -254,7 +251,7 @@ function ReminderZeile({
 
 export function Wochenplan({
   plan, onPlanAendern, kinoPins = [], kinoVorschlaege = [], onKinoPinLoeschen, onKinoVorschlagAnsehen,
-  kinoKatalog = [], katalog = [], master = [], entdeckenStatus = {},
+  kinoKatalog = [], katalog = [], master = [],
   onSpringeZuFilm, onSpringeZuStreaming, onFilmAnlegen, onStreamingKatalogLaden,
 }) {
   const [jetzt, setJetzt] = useState(() => new Date());
@@ -271,8 +268,8 @@ export function Wochenplan({
   }, []);
 
   const tage = useMemo(() => wochenansicht({
-    wochenplan: plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, entdeckenStatus, jetzt,
-  }), [plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, entdeckenStatus, jetzt]);
+    wochenplan: plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, jetzt,
+  }), [plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, jetzt]);
 
   const schreibePlan = async (next, schliesseEditor = false) => {
     if (planSchreibtRef.current) return false;
@@ -303,7 +300,6 @@ export function Wochenplan({
     return schreibePlan({ version: 1, eintraege: next }, true);
   };
   const loesche = async (eintrag) => {
-    if (eintrag.abgeleitet === "beobachtet") return;
     if (eintrag.art === "kino" && eintrag.pin) { onKinoPinLoeschen?.(eintrag.pin); return; }
     if (!window.confirm(`„${eintrag.titel}“ aus deinem Wochenplan löschen?`)) return;
     await schreibePlan({

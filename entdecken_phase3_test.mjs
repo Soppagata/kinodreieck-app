@@ -60,11 +60,10 @@ const check = (name, fn) => {
 const seriesActions = createCatalogSearchActions({
   watchmodeId: 4711, title: "Synthetische Serie", type: "tv_series",
 });
-check("Seriensuche trennt Beobachten und Radar in zwei Intent-Verträge", () => {
-  assert.equal(seriesActions.watch.intent, "watch");
+check("Seriensuche trägt nach der Beobachtet-Ablösung nur den Radar-Intent", () => {
   assert.equal(seriesActions.radar.intent, "radar");
-  assert.equal(seriesActions.watch.setsRadar, false);
-  assert.equal(seriesActions.radar.setsObserved, false);
+  assert.equal("watch" in seriesActions, false);
+  assert.equal(seriesActions.radar.setsRadar, false);
 });
 check("Titeltext allein wird niemals zur Radaridentität", () => {
   const actions = createCatalogSearchActions({ title: "Nur ein Name", type: "movie" });
@@ -371,7 +370,7 @@ const entdeckenUiSource = fs.readFileSync(path.join(wurzel, "src/lib/entdeckenUi
 const cssSource = fs.readFileSync(path.join(wurzel, "src/index.css"), "utf8");
 check("Sichtbar heißt es Blog; technischer blog/meinungen-Deep-Link bleibt kompatibel", () => {
   assert.match(appNavigation, /id:\s*"blog",\s*label:\s*"Entdecken"/);
-  assert.match(appSource, /setBlogFokus\(id\);\s*setTab\("blog"\)/);
+  assert.match(appSource, /setBlogFokus\(id\);\s*navigiere\("blog"\)/);
   assert.match(entdeckenSource, /\["meinungen", "Blog"\]/);
   assert.match(entdeckenSource, /if \(fokusId\) setAnsicht\("meinungen"\)/);
 });
