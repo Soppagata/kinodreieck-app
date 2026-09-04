@@ -9,6 +9,44 @@ const RUN_TIMEOUT_MS = 5 * 60_000;
 const safeCode = (value) => String(value || "UNKNOWN").replace(/[^A-Z0-9_]/gi, "_").slice(0, 60).toUpperCase();
 const result = (id, code, extra = {}) => ({ id, code: safeCode(code), ...extra });
 
+const STAGING_PRIVATE_FLAGS = Object.freeze({
+  provider_requests_enabled: true,
+  scheduler_enabled: false,
+  purge_enabled: false,
+  delete_enabled: false,
+  export_enabled: false,
+});
+const STAGING_RADAR_FLAGS = Object.freeze({
+  radar_aktiv: true,
+  radar_shares_aktiv: false,
+  radar_provider_aktiv: true,
+  radar_scheduler_aktiv: true,
+  radar_proposal_import_aktiv: false,
+});
+
+/* Staging and Production currently share one Supabase project. Keeping both
+   profiles explicit prevents a hidden all-false default if that topology
+   changes later. */
+export const PRIVATE_OPS_FLAG_MATRICES = Object.freeze({
+  staging: Object.freeze({
+    privateSettings: STAGING_PRIVATE_FLAGS,
+    radarSettings: STAGING_RADAR_FLAGS,
+  }),
+  production: Object.freeze({
+    privateSettings: Object.freeze({ ...STAGING_PRIVATE_FLAGS }),
+    radarSettings: Object.freeze({ ...STAGING_RADAR_FLAGS }),
+  }),
+});
+
+function matchesExactMatrix(row, expected) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return false;
+  const expectedKeys = Object.keys(expected).sort();
+  const actualKeys = Object.keys(row).sort();
+  return actualKeys.length === expectedKeys.length
+    && actualKeys.every((key, index) => key === expectedKeys[index])
+    && expectedKeys.every((key) => typeof row[key] === "boolean" && row[key] === expected[key]);
+}
+
 async function jsonFetch(fetchImpl, url, init = {}) {
   const signal = AbortSignal.timeout(NETWORK_TIMEOUT_MS);
   const response = await fetchImpl(url, { ...init, signal, headers: { Accept: "application/json", ...(init.headers || {}) } });
@@ -27,6 +65,7 @@ export async function runPrivateOpsCheck({ env = process.env, fetchImpl = global
   const base = String(env.KD_MONITOR_SUPABASE_URL || "").replace(/\/+$/, "");
   const serviceKey = String(env.KD_MONITOR_SERVICE_ROLE_KEY || "");
   const publicKey = String(env.KD_MONITOR_PUBLISHABLE_KEY || "");
+  const expectedFlags = PRIVATE_OPS_FLAG_MATRICES[String(env.KD_MONITOR_ENVIRONMENT || "")];
 
   try {
     if (!env.KD_MONITOR_STAGING_URL || !env.KD_MONITOR_EXPECTED_BUILD) add(result("build", "NOT_CONFIGURED"), true);
@@ -68,29 +107,30 @@ export async function runPrivateOpsCheck({ env = process.env, fetchImpl = global
 
   const adminHeaders = serviceKey ? { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } : null;
   try {
-    if (!base || !adminHeaders) add(result("flags", "NOT_CONFIGURED"), true);
+    if (!expectedFlags) add(result("flags", "EXPECTED_MATRIX_NOT_CONFIGURED"), true);
+    else if (!base || !adminHeaders) add(result("flags", "NOT_CONFIGURED"), true);
     else {
       const response = await jsonFetch(fetchImpl, `${base}/rest/v1/kd_private_settings?select=provider_requests_enabled,scheduler_enabled,purge_enabled,delete_enabled,export_enabled&singleton=eq.true`, { headers: adminHeaders });
       const row = Array.isArray(response.data) && response.data.length === 1 ? response.data[0] : null;
-      const hasAllFlags = row && Object.prototype.hasOwnProperty.call(row, "provider_requests_enabled")
-        && Object.prototype.hasOwnProperty.call(row, "scheduler_enabled")
-        && Object.prototype.hasOwnProperty.call(row, "purge_enabled")
-        && Object.prototype.hasOwnProperty.call(row, "delete_enabled")
-        && Object.prototype.hasOwnProperty.call(row, "export_enabled");
-      const safelyOff = hasAllFlags && row.provider_requests_enabled === false && row.scheduler_enabled === false && row.purge_enabled === false && row.delete_enabled === false && row.export_enabled === false;
-      add(result("flags", response.ok && safelyOff ? "OK" : "UNEXPECTED_DANGEROUS_FLAG"), true);
+      const code = !response.ok || !row
+        ? "DATABASE_UNAVAILABLE"
+        : matchesExactMatrix(row, expectedFlags.privateSettings)
+          ? "OK" : "FLAG_MATRIX_MISMATCH";
+      add(result("flags", code), true);
     }
   } catch { add(result("flags", "DATABASE_UNAVAILABLE"), true); }
 
   try {
-    if (!base || !adminHeaders) add(result("radar_flags", "NOT_CONFIGURED"), true);
+    if (!expectedFlags) add(result("radar_flags", "EXPECTED_MATRIX_NOT_CONFIGURED"), true);
+    else if (!base || !adminHeaders) add(result("radar_flags", "NOT_CONFIGURED"), true);
     else {
       const response = await jsonFetch(fetchImpl, `${base}/rest/v1/kd_radar_settings?select=radar_aktiv,radar_shares_aktiv,radar_provider_aktiv,radar_scheduler_aktiv,radar_proposal_import_aktiv&singleton=eq.true`, { headers: adminHeaders });
       const row = Array.isArray(response.data) && response.data.length === 1 ? response.data[0] : null;
-      const safelyOff = row && row.radar_aktiv === false && row.radar_shares_aktiv === false
-        && row.radar_provider_aktiv === false && row.radar_scheduler_aktiv === false
-        && row.radar_proposal_import_aktiv === false;
-      add(result("radar_flags", !response.ok || !row ? "DATABASE_UNAVAILABLE" : safelyOff ? "OK" : "UNEXPECTED_DANGEROUS_FLAG"), true);
+      const code = !response.ok || !row
+        ? "DATABASE_UNAVAILABLE"
+        : matchesExactMatrix(row, expectedFlags.radarSettings)
+          ? "OK" : "FLAG_MATRIX_MISMATCH";
+      add(result("radar_flags", code), true);
     }
   } catch { add(result("radar_flags", "DATABASE_UNAVAILABLE"), true); }
 

@@ -2,7 +2,10 @@
 /* Modul-Tests für tools/private-ops-check.mjs – vollständig mit injizierten Fetch-Mocks. */
 
 import { readFileSync } from "node:fs";
-import { runPrivateOpsCheck } from "./private-ops-check.mjs";
+import {
+  PRIVATE_OPS_FLAG_MATRICES,
+  runPrivateOpsCheck,
+} from "./private-ops-check.mjs";
 
 let ok = 0;
 const fehler = [];
@@ -35,6 +38,7 @@ function createFetchMock(handler) {
 }
 
 const BASIS_ENV = {
+  KD_MONITOR_ENVIRONMENT: "staging",
   KD_MONITOR_STAGING_URL: "https://staging.kd.test",
   KD_MONITOR_EXPECTED_BUILD: "build-v1",
   KD_MONITOR_EXPECTED_FUNCTION_BUILD: "fn-v1",
@@ -59,10 +63,10 @@ const okFetch = createFetchMock((url) => {
     return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
   }
   if (url.includes("/rest/v1/kd_private_settings")) {
-    return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false, export_enabled: false }]);
+    return fakeAntwort(200, [{ ...PRIVATE_OPS_FLAG_MATRICES.staging.privateSettings }]);
   }
   if (url.includes("/rest/v1/kd_radar_settings")) {
-    return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
+    return fakeAntwort(200, [{ ...PRIVATE_OPS_FLAG_MATRICES.staging.radarSettings }]);
   }
   if (url.includes("/rest/v1/kd_ai_limits")) {
     return fakeAntwort(200, [
@@ -83,7 +87,7 @@ check("grüner Build/Function/Rolle/Fünffeld-Flags/Budget/Purge", healthy.build
 check("grüne Check-Läufe liefern kein kritisches Ergebnis", healthyReports.ok === true && healthyReports.critical.length === 0);
 check("Purge als Warnung darf weiterlaufen und nicht kritisch sein", healthy.purge === "OK" && healthyReports.critical.includes("purge") === false);
 
-const missing = await runPrivateOpsCheck({ env: {}, fetchImpl: createFetchMock(() => { throw new Error("should not run"); }) });
+const missing = await runPrivateOpsCheck({ env: { KD_MONITOR_ENVIRONMENT: "staging" }, fetchImpl: createFetchMock(() => { throw new Error("should not run"); }) });
 const missingById = Object.fromEntries(missing.reports.map((r) => [r.id, r.code]));
 check("fehlende Secrets je Check melden NOT_CONFIGURED", missingById.build === "NOT_CONFIGURED" && missingById.function === "NOT_CONFIGURED" && missingById.access === "NOT_CONFIGURED" && missingById.flags === "NOT_CONFIGURED" && missingById.radar_flags === "NOT_CONFIGURED" && missingById.budget === "NOT_CONFIGURED" && missingById.purge === "NOT_CONFIGURED");
 check("fehlende Secrets brechen den Ablauf nicht ab, aber machen ihn rot", missing.ok === false && missing.reports.map((r) => r.id).length === 7 && missing.critical.length === 7);
@@ -111,33 +115,29 @@ const inactiveAccess = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: cre
 }) });
 check("inaktive oder fehlende Rollen-v1-Freigabe macht Monitoring rot", inactiveAccess.reports.find((r) => r.id === "access")?.code === "ACCESS_DENIED" && inactiveAccess.critical.includes("access"));
 
-const PRIVATE_FLAGS = [
-  "provider_requests_enabled",
-  "scheduler_enabled",
-  "purge_enabled",
-  "delete_enabled",
-  "export_enabled",
-];
-for (const activeFlag of PRIVATE_FLAGS) {
-  const dangerousFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+for (const changedFlag of Object.keys(PRIVATE_OPS_FLAG_MATRICES.staging.privateSettings)) {
+  const mismatchedFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
     if (url.includes("/rest/v1/kd_private_settings")) {
-      const safeFlags = Object.fromEntries(PRIVATE_FLAGS.map((name) => [name, false]));
-      safeFlags[activeFlag] = true;
-      return fakeAntwort(200, [safeFlags]);
+      const flags = { ...PRIVATE_OPS_FLAG_MATRICES.staging.privateSettings };
+      flags[changedFlag] = !flags[changedFlag];
+      return fakeAntwort(200, [flags]);
     }
     return okFetch(url);
   }) });
-  const dangerousFlagsById = Object.fromEntries(dangerousFlags.reports.map((r) => [r.id, r.code]));
-  check(`gefährlicher Privat-Flag '${activeFlag}' wird erkannt`, dangerousFlagsById.flags === "UNEXPECTED_DANGEROUS_FLAG");
-  check(`gefährlicher Privat-Flag '${activeFlag}' ist kritisch`, dangerousFlags.critical.includes("flags"));
+  const mismatchedById = Object.fromEntries(mismatchedFlags.reports.map((r) => [r.id, r.code]));
+  check(`abweichender Privat-Flag '${changedFlag}' wird erkannt`, mismatchedById.flags === "FLAG_MATRIX_MISMATCH");
+  check(`abweichender Privat-Flag '${changedFlag}' ist kritisch`, mismatchedFlags.critical.includes("flags"));
 }
 
   const missingPrivateExportFlag = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
-    if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
+    if (url.includes("/rest/v1/kd_private_settings")) {
+      const { export_enabled: _missing, ...incomplete } = PRIVATE_OPS_FLAG_MATRICES.staging.privateSettings;
+      return fakeAntwort(200, [incomplete]);
+    }
     return okFetch(url);
   }) });
   const missingPrivateExportFlagById = Object.fromEntries(missingPrivateExportFlag.reports.map((r) => [r.id, r.code]));
-  check("fehlender export_enabled-Flag wird als UNEXPECTED_DANGEROUS_FLAG erkannt", missingPrivateExportFlagById.flags === "UNEXPECTED_DANGEROUS_FLAG");
+  check("fehlender export_enabled-Flag wird als FLAG_MATRIX_MISMATCH erkannt", missingPrivateExportFlagById.flags === "FLAG_MATRIX_MISMATCH");
   check("fehlender export_enabled-Flag ist kritisch", missingPrivateExportFlag.critical.includes("flags"));
   check("fehlender export_enabled-Flag macht Gesamtcheck rot", missingPrivateExportFlag.ok === false);
 
@@ -146,7 +146,7 @@ for (const activeFlag of PRIVATE_FLAGS) {
     return okFetch(url);
   }) });
   const missingPrivateSettingsRowById = Object.fromEntries(missingPrivateSettingsRow.reports.map((r) => [r.id, r.code]));
-  check("leere Singleton-Antwort der privaten Einstellungen wird als UNEXPECTED_DANGEROUS_FLAG erkannt", missingPrivateSettingsRowById.flags === "UNEXPECTED_DANGEROUS_FLAG");
+  check("leere Singleton-Antwort der privaten Einstellungen wird fail-closed erkannt", missingPrivateSettingsRowById.flags === "DATABASE_UNAVAILABLE");
   check("leere Singleton-Antwort bleibt kritisch", missingPrivateSettingsRow.critical.includes("flags") && missingPrivateSettingsRow.ok === false);
 
   const privateSettingsQueryError = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
@@ -154,27 +154,30 @@ for (const activeFlag of PRIVATE_FLAGS) {
     return okFetch(url);
   }) });
   const privateSettingsQueryErrorById = Object.fromEntries(privateSettingsQueryError.reports.map((r) => [r.id, r.code]));
-  check("schema-/queryfehlerhafte private Einstellungen werden als UNEXPECTED_DANGEROUS_FLAG erkannt", privateSettingsQueryErrorById.flags === "UNEXPECTED_DANGEROUS_FLAG");
+  check("schema-/queryfehlerhafte private Einstellungen werden fail-closed erkannt", privateSettingsQueryErrorById.flags === "DATABASE_UNAVAILABLE");
   check("schema-/queryfehlerhafte private Einstellungen bleiben kritisch", privateSettingsQueryError.critical.includes("flags") && privateSettingsQueryError.ok === false);
 
-const RADAR_FLAGS = [
-  "radar_aktiv",
-  "radar_shares_aktiv",
-  "radar_provider_aktiv",
-  "radar_scheduler_aktiv",
-  "radar_proposal_import_aktiv",
-];
-for (const activeFlag of RADAR_FLAGS) {
-  const dangerousRadarFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+for (const changedFlag of Object.keys(PRIVATE_OPS_FLAG_MATRICES.staging.radarSettings)) {
+  const mismatchedRadarFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
     if (url.includes("/rest/v1/kd_radar_settings")) {
-      return fakeAntwort(200, [Object.fromEntries(RADAR_FLAGS.map((flag) => [flag, flag === activeFlag]))]);
+      const flags = { ...PRIVATE_OPS_FLAG_MATRICES.staging.radarSettings };
+      flags[changedFlag] = !flags[changedFlag];
+      return fakeAntwort(200, [flags]);
     }
     return okFetch(url);
   }) });
-  const dangerousRadarFlagsById = Object.fromEntries(dangerousRadarFlags.reports.map((r) => [r.id, r.code]));
-  check(`${activeFlag} wird fail-closed erkannt`, dangerousRadarFlagsById.radar_flags === "UNEXPECTED_DANGEROUS_FLAG");
-  check(`${activeFlag} macht den Lauf kritisch`, dangerousRadarFlags.critical.includes("radar_flags"));
+  const mismatchedById = Object.fromEntries(mismatchedRadarFlags.reports.map((r) => [r.id, r.code]));
+  check(`${changedFlag} wird fail-closed erkannt`, mismatchedById.radar_flags === "FLAG_MATRIX_MISMATCH");
+  check(`${changedFlag} macht den Lauf kritisch`, mismatchedRadarFlags.critical.includes("radar_flags"));
 }
+
+const unknownEnvironment = await runPrivateOpsCheck({
+  env: { ...BASIS_ENV, KD_MONITOR_ENVIRONMENT: "preview" },
+  fetchImpl: okFetch,
+});
+const unknownEnvironmentById = Object.fromEntries(unknownEnvironment.reports.map((r) => [r.id, r.code]));
+check("unbekannte Umgebung besitzt keinen stillen Flag-Fallback", unknownEnvironmentById.flags === "EXPECTED_MATRIX_NOT_CONFIGURED" && unknownEnvironmentById.radar_flags === "EXPECTED_MATRIX_NOT_CONFIGURED");
+check("unbekannte Umgebung macht beide Flagchecks kritisch", unknownEnvironment.critical.includes("flags") && unknownEnvironment.critical.includes("radar_flags"));
 
 const unknownBudget = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
   if (url.includes("/rest/v1/kd_ai_limits")) {
@@ -212,8 +215,8 @@ const redactedRun = await runPrivateOpsCheck({ env: { ...BASIS_ENV, ...redactedP
   if (url.includes("/auth/v1/token")) return fakeAntwort(200, { access_token: "monitor-session-token" });
   if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { buildVersion: "fn-v1", health: true });
   if (url.includes("/rest/v1/kd_account_access")) return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
-  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false, export_enabled: false }]);
-  if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
+  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ ...PRIVATE_OPS_FLAG_MATRICES.staging.privateSettings }]);
+  if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ ...PRIVATE_OPS_FLAG_MATRICES.staging.radarSettings }]);
   if (url.includes("/rest/v1/kd_ai_limits")) return fakeAntwort(200, [
     { schluessel: "ai_aktiv", wert: true },
     { schluessel: "monatsbudget_usd_cent", wert: 111 },
@@ -244,8 +247,8 @@ const timeoutCheckFetch = createFetchMock((url) => {
   if (url.includes("/auth/v1/token")) return fakeAntwort(200, { access_token: "monitor-session-token" });
   if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { buildVersion: "fn-v1", health: true });
   if (url.includes("/rest/v1/kd_account_access")) return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
-  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false, export_enabled: false }]);
-  if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
+  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ ...PRIVATE_OPS_FLAG_MATRICES.staging.privateSettings }]);
+  if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ ...PRIVATE_OPS_FLAG_MATRICES.staging.radarSettings }]);
   if (url.includes("/rest/v1/kd_ai_limits")) return fakeAntwort(200, [
     { schluessel: "ai_aktiv", wert: true },
     { schluessel: "monatsbudget_usd_cent", wert: 123 },
@@ -263,6 +266,7 @@ check("Run-Timeout für den Check ist 5 Minuten", /RUN_TIMEOUT_MS\s*=\s*5\s*\*\s
 const monitorWorkflow = readFileSync(".github/workflows/private-ops-monitor.yml", "utf8");
 check("Workflow ist auf 5 Minuten begrenzt", /timeout-minutes:\s*5/.test(monitorWorkflow));
 check("Workflow verwendet ausschließlich den Check-Entrypoint", /node tools\/private-ops-check\.mjs/.test(monitorWorkflow));
+check("Workflow bindet die explizite Staging-Sollmatrix", /KD_MONITOR_ENVIRONMENT:\s*staging/.test(monitorWorkflow));
 
 console.log(`\n${ok}/${ok + fehler.length} Private-Ops-Monitor-Checks bestanden.`);
 if (fehler.length) {

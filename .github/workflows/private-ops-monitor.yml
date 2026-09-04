@@ -23,6 +23,7 @@ jobs:
           node-version: 22
       - name: Read-only operational checks
         env:
+          KD_MONITOR_ENVIRONMENT: staging
           KD_MONITOR_STAGING_URL: ${{ vars.STAGING_APP_URL }}
           KD_MONITOR_EXPECTED_BUILD: ${{ vars.STAGING_EXPECTED_BUILD }}
           KD_MONITOR_EXPECTED_FUNCTION_BUILD: ${{ vars.STAGING_EXPECTED_FUNCTION_BUILD }}

@@ -137,5 +137,8 @@ jobs:
             outside_window) echo "Entdecken: verspaeteter Trigger ausserhalb des UTC-02-Uhr-Fensters." ;;
             in_progress) echo "Entdecken: eine aktive Lease laeuft; kein zweiter Abruf." ;;
             held) echo "Entdecken: Claim nicht frei; kein Abruf." ;;
-            failed) echo "::warning::Entdecken: Quellen-/Anreicherungsversuch endete degraded; kein Retry in diesem Fenster." ;;
+            failed)
+              echo "::error::Entdecken: Quellen-/Anreicherungsversuch endete degraded; kein Retry in diesem Fenster."
+              exit 1
+              ;;
           esac

@@ -98,6 +98,25 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   assert.notEqual(runResponseParser("<!doctype html><title>Login</title>").status, 0);
 });
 
+check("Fachliches Entdecken-failed ist rot, erwartete No-ops bleiben gruen", () => {
+  const failedTerminal = triggerShell.match(/failed\)[\s\S]*?;;/)?.[0] || "";
+  assert.match(failedTerminal, /::error::Entdecken/u);
+  assert.match(failedTerminal, /exit 1/u);
+  assert.doesNotMatch(failedTerminal, /::warning::/u);
+  for (const status of ["not_due", "outside_window", "in_progress", "held"]) {
+    assert.match(triggerShell, new RegExp(`${status}\\)`));
+  }
+});
+
+check("Keep-alive nutzt nur den belegten Auth-Health-Vertrag", () => {
+  assert.match(keepalive, /\/auth\/v1\/health/u);
+  assert.match(keepalive, /keys !== "description,name,version"/u);
+  assert.match(keepalive, /http_status" != "200"/u);
+  assert.match(keepalive, /content_type" != application\/json/u);
+  assert.doesNotMatch(keepalive, /kd_store|kd_catalog|--request\s+(?:POST|PUT|PATCH|DELETE)/u);
+  assert.equal((keepalive.match(/\bcurl\b/g) || []).length, 1);
+});
+
 check("Atomarer DB-Zaun nutzt exakt 144 Stunden und einen Versuch", () => {
   assert.match(migration, /for update/iu);
   assert.match(migration, /v_anchor \+ interval '144 hours'/u);
