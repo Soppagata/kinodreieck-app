@@ -113,6 +113,26 @@ function runtimeDependencies() {
       p_mail_operation_id: mailOperationId,
       p_terminal_status: status,
     }),
+    async inspectBacklog({ asOf }: { asOf: string }) {
+      if (!admin) throw new Error("automatic-ai-check-unavailable");
+      const result = await admin
+        .from("kd_automatic_ai_retry_jobs")
+        .select("check_due_at", { count: "exact" })
+        .eq("initial_evidence_status", "pending")
+        .lte("check_due_at", asOf)
+        .order("check_due_at", { ascending: true })
+        .limit(1);
+      if (result.error || !Number.isSafeInteger(result.count)
+          || !Array.isArray(result.data)
+          || (result.count === 0 && result.data.length !== 0)
+          || (result.count > 0 && result.data.length !== 1)) {
+        throw new Error("automatic-ai-check-backlog-unavailable");
+      }
+      return {
+        remainingDueJobs: result.count,
+        oldestDueAt: result.count === 0 ? null : result.data[0]?.check_due_at,
+      };
+    },
     randomUUID: () => crypto.randomUUID(),
   };
 }

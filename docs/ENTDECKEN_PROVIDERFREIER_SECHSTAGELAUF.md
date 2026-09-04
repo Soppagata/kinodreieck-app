@@ -1,7 +1,9 @@
-# Entdecken: providerfreier Sechs-Tage-Pool
+# Entdecken: providerfreier Tages-Pool
 
-Stand: 27. August 2026. Dies ist der lokale Produkt- und Betriebsvertrag. Er
-aktiviert weder einen Remote-Zeitplan noch eine Migration oder ein Deployment.
+Ursprungsstand: 27. August 2026; lokale Kadenzfortschreibung: 4. September
+2026. Dies ist der lokale Produkt- und Betriebsvertrag. Die Fortschreibung
+authored nur den Kandidaten und aktiviert weder Remote-Zeitplan noch Migration
+oder Deployment. Radar bleibt ein getrennter Sechs-Tage-Vertrag.
 
 ## Reale Vorabspikes
 
@@ -112,12 +114,16 @@ Lanes verschoben; Kino-, Detail- und Buchungslinks bleiben identisch.
 ## Zeit- und Kostengrenze
 
 GitHub stößt täglich um `02:00 UTC` an: `03:00 CET` beziehungsweise `04:00
-CEST`. Die Datenbank claimt atomar erst, wenn seit dem letzten erfolgreichen
-oder verbrauchten Versuch mindestens 144 Stunden vergangen sind. Der Lauf hat
-genau einen Versuch und zwei Joyn-GETs. Joyn und Wikidata verursachen im
-implementierten Vertrag keine Anbieter- oder KI-Kosten; `providerRequests=0`
-und `searchRequests=0` sind harte Workflowbedingungen.
+CEST`. Der lokale Kandidat claimt atomar erst, wenn seit dem letzten
+erfolgreichen oder verbrauchten Versuch mindestens 24 Stunden vergangen sind.
+Der Lauf hat genau einen Versuch, dieselbe 180-Sekunden-Lease und drei
+providerfreie Quell-GETs für den Format-6-Pool aus zwei Joyn-Listen und ÖFI. Joyn,
+ÖFI-Quelle und Wikidata verursachen im implementierten Vertrag keine KI-
+Anbieterkosten; `providerRequests=0` und `searchRequests=0` sind harte
+Workflowbedingungen.
 
-Der Schedule wirkt erst, wenn die Workflowdatei im GitHub-Default-Branch liegt.
-Default-Branch-Aktivierung, Push, CI, Migration, Function-Deploy und praktische
-Staging-Abnahme sind eigene Liefergrenzen und nicht Teil dieser lokalen Etappe.
+Die additive 24h-Migrationsdatei ist autorisiert lokal authored, aber nicht
+angewandt. Der Schedule wirkt erst, wenn die Workflowdatei im
+GitHub-Default-Branch liegt und die getrennten Releasegrenzen erfüllt sind.
+Push, CI, Migration-Apply, Function-Deploy und praktische Staging-Abnahme sind
+eigene Liefergrenzen und nicht Teil dieser lokalen Etappe.

@@ -1,4 +1,4 @@
-/* Providerfreier Sechs-Tage-Trigger: rein statischer/lokaler Vertragstest.
+/* Providerfreier Tages-Trigger: rein statischer/lokaler Vertragstest.
    Kein Netzwerk, kein GitHub-Lauf, kein Supabase-Write und kein Anbieter. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -18,11 +18,15 @@ const migration = readFileSync(
 const mixedPoolMigration = readFileSync(
   "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql", "utf8",
 );
+const dailyCadenceMigration = readFileSync(
+  "supabase/migrations/20260904140000_entdecken_daily_refresh_interval.sql", "utf8",
+);
+const dailyCadenceCode = dailyCadenceMigration.replace(/^--.*$/gmu, "");
 const forbiddenDiversePoolMigration =
   "supabase/migrations/20260828233000_entdecken_current_diverse_pool.sql";
 const scheduleBlock = workflow.match(/^on:\n([\s\S]*?)^permissions:/m)?.[1] || "";
 const cronExpressions = [...scheduleBlock.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]);
-const stepStart = workflow.indexOf("      - name: Entdecken um 02 Uhr UTC");
+const stepStart = workflow.indexOf("      - name: Entdecken taeglich um 02 Uhr UTC");
 const triggerStep = stepStart < 0 ? "" : workflow.slice(stepStart);
 const triggerShell = (triggerStep.match(/\n        run: \|\n([\s\S]*)$/)?.[1] || "").replace(/^          /gm, "");
 const responseParser = triggerShell.match(/node -e '\n([\s\S]*?)\n\s*' "\$response_file"/)?.[1] || "";
@@ -57,7 +61,7 @@ check("Step sendet exakt einen retryfreien und nicht umgeleiteten POST", () => {
   assert.ok(triggerStep);
   assert.equal((triggerStep.match(/^\s*curl\b/gm) || []).length, 1);
   assert.match(triggerStep, /--request POST/u);
-  assert.match(triggerStep, /x-kd-entdecken-refresh: scheduled-v1/u);
+  assert.match(triggerStep, /x-kd-entdecken-refresh: scheduled-24h-v1/u);
   assert.doesNotMatch(triggerStep, /--retry|--location|\b(for|while|until)\b/u);
   assert.match(triggerStep, /--connect-timeout 10/u);
   assert.match(triggerStep, /--max-time 150/u);
@@ -71,13 +75,19 @@ check("Workflow-Shell und eingebetteter Parser sind syntaktisch gueltig", () => 
 });
 
 check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
+  const sourceIds = ["chart:joyn-at", "chart:oefi-weekend-at"];
   const common = {
     ok: true, status: "fresh", responseMode: "structured",
     providerRequests: 0, searchRequests: 0, sourceRequests: 0,
     wikidataRequests: 0, writes: 0,
   };
   const refreshed = runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 2, wikidataRequests: 17, writes: 1,
+    ...common, sourceRequests: 3, wikidataRequests: 17, writes: 1,
+    feed: { format: 6, sourceIds, items: Array.from({ length: 50 }, (_, id) => ({ id })) },
+    feedReadback: {
+      itemCount: 50, sourceCount: 2, sourceIds,
+      rightsStatus: "owner_private", providerRequests: 0,
+    },
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   }));
   const notDue = runResponseParser(JSON.stringify({
@@ -94,6 +104,24 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   assert.notEqual(runResponseParser(JSON.stringify({
     ...common, providerRequests: 1,
     refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
+  })).status, 0);
+  assert.notEqual(runResponseParser(JSON.stringify({
+    ...common, sourceRequests: 2, writes: 1,
+    feed: { format: 6, sourceIds, items: Array.from({ length: 50 }, (_, id) => ({ id })) },
+    feedReadback: {
+      itemCount: 50, sourceCount: 2, sourceIds,
+      rightsStatus: "owner_private", providerRequests: 0,
+    },
+    refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
+  })).status, 0);
+  assert.notEqual(runResponseParser(JSON.stringify({
+    ...common, sourceRequests: 3, writes: 1,
+    feed: { format: 6, sourceIds, items: Array.from({ length: 49 }, (_, id) => ({ id })) },
+    feedReadback: {
+      itemCount: 50, sourceCount: 2, sourceIds,
+      rightsStatus: "owner_private", providerRequests: 0,
+    },
+    refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser("<!doctype html><title>Login</title>").status, 0);
 });
@@ -117,18 +145,37 @@ check("Keep-alive nutzt nur den belegten Auth-Health-Vertrag", () => {
   assert.equal((keepalive.match(/\bcurl\b/g) || []).length, 1);
 });
 
-check("Atomarer DB-Zaun nutzt exakt 144 Stunden und einen Versuch", () => {
-  assert.match(migration, /for update/iu);
-  assert.match(migration, /v_anchor \+ interval '144 hours'/u);
-  assert.match(migration, /extract\(hour from v_utc\)::integer <> 2/u);
-  assert.match(migration, /'maxAttempts',1/u);
-  assert.match(migration, /last_success_at/u);
-  assert.match(migration, /last_public_attempt_at/u);
-  assert.doesNotMatch(migration.match(/create or replace function public\.kd_entdecken_weekly_refresh_claim[\s\S]*?\n\$\$;/u)?.[0] || "", /cooldown|failed_retry|abandoned_retry|attempt_count \+ 1/u);
-  const plus144 = (instant) => new Date(new Date(instant).getTime() + 144 * 60 * 60 * 1000).toISOString();
-  assert.equal(plus144("2026-08-28T02:00:00.000Z"), "2026-09-03T02:00:00.000Z");
-  assert.equal(plus144("2026-03-27T02:00:00.000Z"), "2026-04-02T02:00:00.000Z");
-  assert.equal(plus144("2026-10-23T02:00:00.000Z"), "2026-10-29T02:00:00.000Z");
+check("Additive Claim-Ersetzung nutzt exakt 24 Stunden und einen Versuch", () => {
+  const claim = dailyCadenceMigration.match(
+    /create or replace function public\.kd_entdecken_weekly_refresh_claim[\s\S]*?\n\$\$;/u,
+  )?.[0] || "";
+  const latestFormat6Claim = mixedPoolMigration.match(
+    /create or replace function public\.kd_entdecken_weekly_refresh_claim[\s\S]*?\n\$\$;/u,
+  )?.[0] || "";
+  assert.ok(claim);
+  assert.ok(latestFormat6Claim);
+  assert.equal(claim, latestFormat6Claim.replace("interval '144 hours'", "interval '24 hours'"));
+  assert.match(dailyCadenceMigration, /^begin;$/mu);
+  assert.match(dailyCadenceMigration, /^commit;$/mu);
+  assert.equal((dailyCadenceCode.match(/create or replace function/gu) || []).length, 1);
+  assert.doesNotMatch(dailyCadenceCode, /create table|alter table|drop table|cron\.|http_post|net\.http/iu);
+  assert.match(claim, /for update/iu);
+  assert.match(claim, /v_anchor \+ interval '24 hours'/u);
+  assert.doesNotMatch(claim, /v_anchor \+ interval '144 hours'/u);
+  assert.match(claim, /extract\(hour from v_utc\)::integer <> 2/u);
+  assert.match(claim, /p_source = 'owner' and not coalesce\(v_owner_override,false\)/u);
+  assert.match(claim, /lease_expires_at = v_now \+ interval '180 seconds'/u);
+  assert.match(claim, /'maxAttempts',1/u);
+  assert.match(claim, /last_success_at/u);
+  assert.match(claim, /last_public_attempt_at/u);
+  assert.match(claim, /not provider_enabled and not commercial_enabled/u);
+  assert.doesNotMatch(claim, /cooldown|failed_retry|abandoned_retry|attempt_count \+ 1/u);
+  assert.match(dailyCadenceMigration, /grant execute on function public\.kd_entdecken_weekly_refresh_claim\(text\)[\s\S]*to service_role/u);
+  assert.doesNotMatch(dailyCadenceMigration, /radar_scheduler_interval_hours|kd_radar_|scheduled-144h-v1/u);
+  const plus24 = (instant) => new Date(new Date(instant).getTime() + 24 * 60 * 60 * 1000).toISOString();
+  assert.equal(plus24("2026-08-28T02:00:00.000Z"), "2026-08-29T02:00:00.000Z");
+  assert.equal(plus24("2026-03-27T02:00:00.000Z"), "2026-03-28T02:00:00.000Z");
+  assert.equal(plus24("2026-10-23T02:00:00.000Z"), "2026-10-24T02:00:00.000Z");
 });
 
 check("Format 5, owner_private Quelle und Cache sind DB-seitig fail-closed", () => {
@@ -189,4 +236,4 @@ check("Doku trennt lokale Vorbereitung von Default-Branch-Aktivierung", () => {
   assert.match(hostingDoc, /[Pp]roviderfrei/u);
 });
 
-console.log(`\n${checks}/${checks} Entdecken-Sechs-Tage-Triggerchecks bestanden.`);
+console.log(`\n${checks}/${checks} Entdecken-Tages-Triggerchecks bestanden.`);

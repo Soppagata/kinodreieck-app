@@ -1,8 +1,10 @@
-/* Server-only orchestrator for one due automatic AI check.
+/* Server-only orchestrator for one due automatic AI check plus an authored,
+   currently unwired bounded-drain wrapper.
 
    The database owns due/retry/mail idempotency. This handler performs no
-   loop, timer or retry of its own: one claimed job can cause at most one
-   bodyless Radar call and, after the separate DB mail claim, one mail send. */
+   retry of its own: one claimed job can cause at most one bodyless Radar call
+   and, after the separate DB mail claim, one mail send. The drain wrapper
+   only awaits up to three complete handler invocations serially. */
 
 import {
   PRIVATE_MAIL_SCHEMA_VERSION,
@@ -20,9 +22,16 @@ export const AUTOMATIC_AI_CHECK_CODES = Object.freeze({
   IDLE: "idle",
   INITIAL_SUCCEEDED: "initial-succeeded",
   RETRY_FINISHED: "retry-finished",
+  DRAINED: "drained",
+  BACKLOG: "backlog",
   FORBIDDEN: "forbidden",
   UNAVAILABLE: "unavailable",
 });
+
+export const AUTOMATIC_AI_DRAIN_MAX_JOBS = 3;
+export const AUTOMATIC_AI_DRAIN_TIME_BUDGET_MS = 225_000;
+export const AUTOMATIC_AI_DRAIN_SETTLEMENT_RESERVE_MS = 15_000;
+export const AUTOMATIC_AI_RADAR_TIMEOUT_MS = 120_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -108,6 +117,65 @@ function safeResponse(code, status) {
   const ok = status === 200;
   return new Response(JSON.stringify({ ok, code }), {
     status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+function validSingleSuccess(value) {
+  return exactKeys(value, ["ok", "code"])
+    && value.ok === true
+    && [
+      AUTOMATIC_AI_CHECK_CODES.IDLE,
+      AUTOMATIC_AI_CHECK_CODES.INITIAL_SUCCEEDED,
+      AUTOMATIC_AI_CHECK_CODES.RETRY_FINISHED,
+    ].includes(value.code);
+}
+
+function backlogTelemetry(value, asOfMs) {
+  if (!exactKeys(value, ["remainingDueJobs", "oldestDueAt"])
+      || !Number.isSafeInteger(value.remainingDueJobs)
+      || value.remainingDueJobs < 0
+      || value.remainingDueJobs > 1_000_000) return null;
+  if (value.remainingDueJobs === 0) {
+    return value.oldestDueAt === null
+      ? Object.freeze({ remainingDueJobs: 0, oldestLagSeconds: null })
+      : null;
+  }
+  const oldestDueAt = canonicalInstant(value.oldestDueAt);
+  const oldestDueAtMs = oldestDueAt ? Date.parse(oldestDueAt) : Number.NaN;
+  if (!Number.isFinite(oldestDueAtMs) || oldestDueAtMs > asOfMs) return null;
+  return Object.freeze({
+    remainingDueJobs: value.remainingDueJobs,
+    oldestLagSeconds: Math.floor((asOfMs - oldestDueAtMs) / 1000),
+  });
+}
+
+function safeDrainResponse({
+  code,
+  processedJobs,
+  initialSucceededJobs,
+  retryFinishedJobs,
+  telemetry,
+  stopReason,
+  maxJobs,
+  timeBudgetMs,
+}) {
+  return new Response(JSON.stringify({
+    ok: true,
+    code,
+    processedJobs,
+    initialSucceededJobs,
+    retryFinishedJobs,
+    remainingDueJobs: telemetry.remainingDueJobs,
+    oldestLagSeconds: telemetry.oldestLagSeconds,
+    stopReason,
+    maxJobs,
+    timeBudgetMs,
+  }), {
+    status: 200,
     headers: {
       "Cache-Control": "no-store",
       "Content-Type": "application/json",
@@ -448,5 +516,115 @@ export function createAutomaticAiCheckHandler(dependencies = {}) {
       return safeResponse(AUTOMATIC_AI_CHECK_CODES.UNAVAILABLE, 500);
     }
     return safeResponse(AUTOMATIC_AI_CHECK_CODES.RETRY_FINISHED, 200);
+  };
+}
+
+/* The single-job handler remains the atomic provider/mail boundary. This
+   wrapper awaits each complete terminal response before it creates the next
+   bodyless request, caps the whole invocation at three jobs, and exposes only
+   aggregate read-only backlog telemetry. It is intentionally not wired to
+   Deno.serve or the workflow until the provider-effect boundary is approved. */
+export function createAutomaticAiDrainHandler(dependencies = {}, options = {}) {
+  const maxJobs = Number.isInteger(options.maxJobs)
+      && options.maxJobs > 0
+      && options.maxJobs <= AUTOMATIC_AI_DRAIN_MAX_JOBS
+    ? options.maxJobs : AUTOMATIC_AI_DRAIN_MAX_JOBS;
+  const timeBudgetMs = Number.isInteger(options.timeBudgetMs)
+      && options.timeBudgetMs > AUTOMATIC_AI_DRAIN_SETTLEMENT_RESERVE_MS
+      && options.timeBudgetMs <= AUTOMATIC_AI_DRAIN_TIME_BUDGET_MS
+    ? options.timeBudgetMs : AUTOMATIC_AI_DRAIN_TIME_BUDGET_MS;
+  const nowMs = typeof options.nowMs === "function" ? options.nowMs : Date.now;
+
+  return async function automaticAiDrain(request) {
+    const startedAt = nowMs();
+    if (!Number.isFinite(startedAt)
+        || typeof dependencies.inspectBacklog !== "function") {
+      return safeResponse(AUTOMATIC_AI_CHECK_CODES.UNAVAILABLE, 500);
+    }
+
+    let processedJobs = 0;
+    let initialSucceededJobs = 0;
+    let retryFinishedJobs = 0;
+    let stopReason = "job_limit";
+
+    for (let index = 0; index < maxJobs; index += 1) {
+      const beforeJob = nowMs();
+      if (!Number.isFinite(beforeJob)) {
+        return safeResponse(AUTOMATIC_AI_CHECK_CODES.UNAVAILABLE, 500);
+      }
+      const remainingMs = timeBudgetMs - (beforeJob - startedAt);
+      if (remainingMs <= AUTOMATIC_AI_DRAIN_SETTLEMENT_RESERVE_MS) {
+        stopReason = "time_budget";
+        break;
+      }
+
+      const singleRequest = index === 0
+        ? request
+        : new Request(request.url, { method: "POST", headers: request.headers });
+      const invokeRadar = typeof dependencies.invokeRadar === "function"
+        ? (claim, serviceKey) => dependencies.invokeRadar(claim, serviceKey, {
+          timeoutMs: Math.max(1, Math.min(
+            AUTOMATIC_AI_RADAR_TIMEOUT_MS,
+            remainingMs - AUTOMATIC_AI_DRAIN_SETTLEMENT_RESERVE_MS,
+          )),
+        })
+        : dependencies.invokeRadar;
+      const response = await createAutomaticAiCheckHandler({
+        ...dependencies,
+        invokeRadar,
+      })(singleRequest);
+      if (response.status !== 200) return response;
+
+      let body;
+      try {
+        body = await response.json();
+      } catch {
+        return safeResponse(AUTOMATIC_AI_CHECK_CODES.UNAVAILABLE, 500);
+      }
+      if (!validSingleSuccess(body)) {
+        return safeResponse(AUTOMATIC_AI_CHECK_CODES.UNAVAILABLE, 500);
+      }
+      if (body.code === AUTOMATIC_AI_CHECK_CODES.IDLE) {
+        stopReason = "idle";
+        break;
+      }
+      processedJobs += 1;
+      if (body.code === AUTOMATIC_AI_CHECK_CODES.INITIAL_SUCCEEDED) {
+        initialSucceededJobs += 1;
+      } else {
+        retryFinishedJobs += 1;
+      }
+    }
+
+    const inspectedAt = nowMs();
+    if (!Number.isFinite(inspectedAt)) {
+      return safeResponse(AUTOMATIC_AI_CHECK_CODES.UNAVAILABLE, 500);
+    }
+    let rawTelemetry;
+    try {
+      rawTelemetry = await dependencies.inspectBacklog({
+        asOf: new Date(inspectedAt).toISOString(),
+      });
+    } catch {
+      return safeResponse(AUTOMATIC_AI_CHECK_CODES.UNAVAILABLE, 500);
+    }
+    const telemetry = backlogTelemetry(rawTelemetry, inspectedAt);
+    if (!telemetry) return safeResponse(AUTOMATIC_AI_CHECK_CODES.UNAVAILABLE, 500);
+
+    const code = telemetry.remainingDueJobs > 0
+      ? AUTOMATIC_AI_CHECK_CODES.BACKLOG
+      : processedJobs > 0
+        ? AUTOMATIC_AI_CHECK_CODES.DRAINED
+        : AUTOMATIC_AI_CHECK_CODES.IDLE;
+    return safeDrainResponse({
+      code,
+      processedJobs,
+      initialSucceededJobs,
+      retryFinishedJobs,
+      telemetry,
+      stopReason,
+      maxJobs,
+      timeBudgetMs,
+    });
   };
 }

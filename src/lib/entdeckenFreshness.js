@@ -1,5 +1,5 @@
 export const ENTDECKEN_TARGET_REFRESH_SLA_HOURS = 24;
-export const ENTDECKEN_CURRENT_REFRESH_INTERVAL_HOURS = 144;
+export const ENTDECKEN_CURRENT_REFRESH_INTERVAL_HOURS = 24;
 export const RADAR_REFRESH_INTERVAL_HOURS = 144;
 
 const VALID_DAY = /^\d{4}-\d{2}-\d{2}$/u;
@@ -103,8 +103,8 @@ export function buildEntdeckenTitleGateTrace({
     gates,
     conclusion,
     marketAbsenceProven: false,
-    preferredAction: "shorten-existing-provider-free-refresh",
-    migrationState: "not-authorized-not-authored",
+    preferredAction: "apply-authored-provider-free-refresh-migration",
+    migrationState: "authorized-authored-not-applied",
   });
 }
 

@@ -1,4 +1,4 @@
-/* Privater Entdecken-Wochenfeed auf dem kompatiblen Tagesfeed-Endpoint.
+/* Privater Entdecken-Feed auf dem kompatiblen Tagesfeed-Endpoint.
    GET liest ausschliesslich und uebergibt weder Suchtext noch lokale Daten,
    verlangt aber eine verifizierte aktive Kontofreigabe. Nur das explizite
    scheduled-POST darf den begrenzten Produktclaim samt Fencing-Lease
@@ -37,7 +37,7 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:5173",
 ]);
 const REFRESH_HEADER = "x-kd-entdecken-refresh";
-const SCHEDULED_REFRESH_VALUE = "scheduled-v1";
+const SCHEDULED_REFRESH_VALUE = "scheduled-24h-v1";
 const OWNER_REFRESH_VALUE = "owner-v1";
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

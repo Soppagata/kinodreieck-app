@@ -1,4 +1,4 @@
-name: Entdecken und Radar im Sechs-Tage-Takt
+name: Entdecken täglich und Radar im Sechs-Tage-Takt
 
 on:
   schedule:
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Entdecken um 02 Uhr UTC faelligkeitsgeprueft anstossen
+      - name: Entdecken taeglich um 02 Uhr UTC faelligkeitsgeprueft anstossen
         timeout-minutes: 3
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
@@ -83,7 +83,7 @@ jobs:
               "${SUPABASE_URL%/}/functions/v1/entdecken-daily-task" \
               --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
               --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-              --header "x-kd-entdecken-refresh: scheduled-v1"
+              --header "x-kd-entdecken-refresh: scheduled-24h-v1"
           )"
 
           http_status="${response_meta%% *}"
@@ -105,7 +105,7 @@ jobs:
             ]);
             const countsValid = Number.isInteger(body?.providerRequests) && body.providerRequests === 0
               && Number.isInteger(body?.searchRequests) && body.searchRequests === 0
-              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0 && body.sourceRequests <= 2
+              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0 && body.sourceRequests <= 3
               && Number.isInteger(body?.wikidataRequests) && body.wikidataRequests >= 0 && body.wikidataRequests <= 40
               && Number.isInteger(body?.writes) && body.writes >= 0 && body.writes <= 1;
             if (!body || body.ok !== true || !statuses.has(body.status)
@@ -116,8 +116,20 @@ jobs:
                 || !Number.isInteger(body.refresh.attemptCount)
                 || body.refresh.attemptCount < 0 || body.refresh.attemptCount > 1
                 || body.refresh.maxAttempts !== 1) process.exit(3);
+            const format6ReadbackValid = body?.feed?.format === 6
+              && Array.isArray(body.feed.items) && body.feed.items.length === 50
+              && Array.isArray(body.feed.sourceIds)
+              && JSON.stringify([...body.feed.sourceIds].sort())
+                === JSON.stringify(["chart:joyn-at", "chart:oefi-weekend-at"])
+              && body?.feedReadback?.itemCount === 50
+              && body.feedReadback.sourceCount === 2
+              && Array.isArray(body.feedReadback.sourceIds)
+              && JSON.stringify([...body.feedReadback.sourceIds].sort())
+                === JSON.stringify(["chart:joyn-at", "chart:oefi-weekend-at"])
+              && body.feedReadback.rightsStatus === "owner_private"
+              && body.feedReadback.providerRequests === 0;
             if (body.refresh.status === "refreshed" && body.status === "fresh"
-                && body.sourceRequests === 2 && body.writes === 1) {
+                && body.sourceRequests === 3 && body.writes === 1 && format6ReadbackValid) {
               process.stdout.write("refreshed");
             } else if (body.refresh.status === "failed" && body.responseMode === "degraded"
                 && body.writes === 0) {
@@ -132,8 +144,8 @@ jobs:
           fi
 
           case "$outcome" in
-            refreshed) echo "Entdecken: neuer Joyn-Pool gespeichert." ;;
-            not_due) echo "Entdecken: naechster Sechs-Tage-Lauf noch nicht faellig." ;;
+            refreshed) echo "Entdecken: neuer Joyn-/OeFI-Pool gespeichert." ;;
+            not_due) echo "Entdecken: naechster taeglicher Lauf noch nicht faellig." ;;
             outside_window) echo "Entdecken: verspaeteter Trigger ausserhalb des UTC-02-Uhr-Fensters." ;;
             in_progress) echo "Entdecken: eine aktive Lease laeuft; kein zweiter Abruf." ;;
             held) echo "Entdecken: Claim nicht frei; kein Abruf." ;;

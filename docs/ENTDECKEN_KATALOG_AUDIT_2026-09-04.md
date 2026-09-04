@@ -3,7 +3,7 @@
 Dieses datierte Supportartefakt gehört zu C3 und deckt D-06, U-06, U-07 und
 U-14 ab. Es beschreibt ausschließlich die in Etappe A gelesenen Stände und
 lokale, providerfreie Projektionen. Es startete keinen Scheduler, keinen
-GitHub-Run, keinen Providerrequest und keine Migration.
+GitHub-Run, keinen Providerrequest und wandte keine Migration an.
 
 ## D-06 / U-06: Mandalorian & Grogu zuerst über Freshness prüfen
 
@@ -27,13 +27,18 @@ in „Für mich“ ist durch einen abgelaufenen Feed, die enge Joyn-/ÖFI-Abdeck
 und fehlende Profilmetadaten erklärbar. Prompt, Ranking und Quellen werden
 deshalb nicht auf Verdacht umgebaut.
 
-Der providerfreie Entdecken-Workflow tickt bereits täglich um 02:00 UTC, sein
-letzter Format-6-Claim sperrt aber noch 144 Stunden. Fachliches Ziel sind
-24 Stunden bei weiterhin genau einem Versuch, einer Lease und ohne Retry.
-Radar bleibt separat bei 144 Stunden. Die dazu notwendige lokale
-Forward-Migration wurde vom Wirkungswächter ohne ausdrückliche
-Migrationsautorisierung abgelehnt und daher weder erstellt noch angewandt.
-Auch Workflow und UI behaupten deshalb noch keinen aktiven 24h-Vertrag.
+Der providerfreie Entdecken-Workflow tickt bereits täglich um 02:00 UTC. Für
+den lokalen Kandidaten ist die vollständige Format-6-Claim-RPC nun additiv auf
+24 Stunden authored: weiterhin genau ein Versuch, dieselbe 180-Sekunden-Lease,
+derselbe kurzlebige Owner-Staging-Override und keine Retryschleife. Der
+Workflow- und Function-Header lautet passend `scheduled-24h-v1`; der Vertrag
+bleibt providerfrei bei 50 Items aus Joyn und ÖFI. Radar bleibt separat bei
+144 Stunden und behält `scheduled-144h-v1`.
+
+Diese lokale Migrationserstellung ist autorisiert. Die Datei ist
+**autorisiert lokal erstellt, aber nicht angewandt**. Weder Supabase noch ein
+Scheduler, eine Function oder ein Live-Feed wurden dadurch verändert; ein
+aktiver 24h-Livevertrag ist ausdrücklich nicht belegt.
 
 ## U-07: Radar-Neuigkeiten nennen nur exakt gebundene Ziele
 
@@ -87,8 +92,8 @@ unter „Streaming-Katalogstand“ an.
 
 ## Liefergrenzen dieses Pakets
 
-- lokal gebaut: D-06, U-07, U-14
-- wirkungsgesperrt: U-06 (Migrationserstellung braucht ausdrückliche Freigabe)
+- lokal gebaut: D-06, U-06, U-07, U-14
+- U-06-Migration: autorisiert lokal authored, nicht angewandt
 - Migration angewandt: nein
 - Function deployt: nein
 - Scheduler/Run gestartet: nein

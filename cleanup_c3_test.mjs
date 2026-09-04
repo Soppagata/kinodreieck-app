@@ -90,14 +90,16 @@ test("D-06 bewertet Tagespräzision für die 24h-Ziel-SLA fail-closed", () => {
   assert.equal(entdeckenFeedFreshness({ refreshedOn: "kaputt", validUntil: "2026-09-03" }, "2026-09-04").status, "unknown");
 });
 
-test("U-06 bleibt bis zur Autorisierung ehrlich zwischen Ist-Intervall und Ziel-SLA getrennt", () => {
-  assert.equal(ENTDECKEN_CURRENT_REFRESH_INTERVAL_HOURS, 144);
+test("U-06 bildet den autorisiert authored, aber nicht angewandten 24h-Kandidaten ehrlich ab", () => {
+  assert.equal(ENTDECKEN_CURRENT_REFRESH_INTERVAL_HOURS, 24);
   assert.equal(ENTDECKEN_TARGET_REFRESH_SLA_HOURS, 24);
   assert.equal(RADAR_REFRESH_INTERVAL_HOURS, 144);
-  assert.equal(MANDALORIAN_GROGU_TRACE.migrationState, "not-authorized-not-authored");
-  const format6 = read("supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql");
+  assert.equal(MANDALORIAN_GROGU_TRACE.migrationState, "authorized-authored-not-applied");
+  const cadence = read("supabase/migrations/20260904140000_entdecken_daily_refresh_interval.sql");
   const radar = read("supabase/migrations/20260830120000_radar_six_day_schedule.sql");
-  assert.match(format6, /v_anchor \+ interval '144 hours'/u);
+  assert.match(cadence, /v_anchor \+ interval '24 hours'/u);
+  assert.match(cadence, /not provider_enabled and not commercial_enabled/u);
+  assert.doesNotMatch(cadence, /kd_radar_|radar_scheduler_interval_hours/u);
   assert.match(radar, /radar_scheduler_interval_hours integer not null default 144/u);
 });
 
@@ -141,7 +143,7 @@ test("D-06/U-07/U-14 sind in Support- und UI-Artefakten sichtbar, Unbekanntes bl
   assert.match(radarUi, /nicht eindeutig zugeordnet/u);
   for (const phrase of ["Rohquellen", "AT-Verfügbarkeit", "Filter", "Deduplizierung",
     "Sortierung", "Begrenzung", "Auslieferung", "Nutzersicht", "ausdrücklich unbekannt",
-    "nicht autorisiert und nicht erstellt"]) assert.match(`${component}\n${auditDoc}`, new RegExp(phrase, "u"));
+    "autorisiert lokal erstellt, aber nicht angewandt"]) assert.match(`${component}\n${auditDoc}`, new RegExp(phrase, "u"));
 });
 
 test("Trace-Builder erfindet ohne Belege weder Identität noch Ausschluss", () => {

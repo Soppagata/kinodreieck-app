@@ -120,3 +120,17 @@ gezählt.
 Benachrichtigungen werden nicht pauschal stummgeschaltet. Nach diesen
 Korrekturen soll eine rote Mail einen unerwarteten, handlungsrelevanten Zustand
 bezeichnen; erwartete No-ops bleiben grün und werden im Log benannt.
+
+## Lokaler Authoring-Nachtrag nach dem read-only Audit
+
+- **U-06:** Der lokale Kandidat enthält eine additive, vollständige Ersetzung
+  des Format-6-Claims mit 24h-Kadenz sowie den Header
+  `scheduled-24h-v1`. Radar bleibt unverändert bei 144h und
+  `scheduled-144h-v1`. Die Migration ist authored, nicht angewandt; weder
+  Workflow noch Function wurden deployt oder gestartet.
+- **R-04:** Der lokale Core-Entwurf begrenzt einen seriellen Drain hart auf
+  drei Jobs und sieht nur anonyme Restanzahl-/Lag-Telemetrie vor. Die
+  Aktivierungsnaht in Function und Workflow bleibt wirkungsgesperrt, weil der
+  native Guard hierfür eine ausdrückliche Freigabe der möglichen
+  Providerwirkung verlangt. Es gab keinen Provider-, Mail-, Scheduler- oder
+  Shared-Datenaufruf.
