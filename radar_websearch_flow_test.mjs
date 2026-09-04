@@ -364,6 +364,7 @@ try {
       streamingDiscover,
       selectedServices: ["Teststream"],
       accountMode: accountHarness !== null,
+      radarAvailable: true,
       radarPilotEvents: controller.radarPilotEvents,
       radarAutomaticAvailable: controller.radarAutomaticAvailable,
       onObserveToggle: controller.aendereSerienBeobachtung,
@@ -656,7 +657,7 @@ try {
     assert.match(accountUi.container.textContent, /automatisch auf dem Laufenden/i);
     assert.match(accountUi.container.textContent, /Star Wars: Starfighter/);
     assert.doesNotMatch(accountUi.container.textContent, /Gefunden für:/);
-    assert.match(accountUi.container.textContent, /2027-05-20 · Film · Kinostart Österreich/);
+    assert.match(accountUi.container.textContent, /20\.05\.2027 · Film · Kinostart Österreich/);
     assert.equal(accountUi.container.querySelectorAll(".kd-pilot-quellen").length, 0);
     const news = [...accountUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
@@ -674,7 +675,7 @@ try {
     assert.equal(button(accountReload.container, "Jetzt prüfen"), undefined);
     assert.match(accountReload.container.textContent, /Star Wars: Starfighter/);
     assert.doesNotMatch(accountReload.container.textContent, /Gefunden für:/);
-    assert.match(accountReload.container.textContent, /2027-05-20 · Film · Kinostart Österreich/);
+    assert.match(accountReload.container.textContent, /20\.05\.2027 · Film · Kinostart Österreich/);
   });
   await accountReload.cleanup();
 } finally {
