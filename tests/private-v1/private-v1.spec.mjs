@@ -145,6 +145,7 @@ test("Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag", asy
   const news = page.getByRole("heading", { name: "Neuigkeiten" }).locator("xpath=following-sibling::ul[1]");
   await expect(news).toContainText("05.09.2026");
   await expect(news).toContainText("Ziel: Fight Club");
+  await expect(news).not.toContainText("nicht eindeutig zugeordnet");
 
   await viewNav.getByRole("button", { name: "Blog", exact: true }).click();
   const article = page.locator(".kd-blog-karte", { hasText: "Privatrelease Artikel" });

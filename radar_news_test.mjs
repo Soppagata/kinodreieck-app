@@ -126,6 +126,13 @@ check("Starke Suchprovenienz gewinnt vor gleichzeitig passender Werk- und Gruppe
 check("Ohne starke eindeutige Beziehung bleibt ein Alt-Ereignis unaufgelöst", () => {
   const target = { targetId: "imdb:tt1234567", targetType: "work", title: "Einzelfilm", status: "active" };
   assert.equal(radarSubscriptionForEvent({ targetId: "imdb:tt7654321" }, [target]), null);
+  assert.equal(radarSubscriptionForEvent({ targetId: "imdb:tt7654321", title: target.title }, [target]), null);
+  assert.equal(radarSubscriptionForEvent({ targetId: target.targetId }, [{ ...target, status: "paused" }]), null);
+  const first = { targetId: "title-group:v1:eins", targetType: "franchise", title: "Reihe Eins", status: "active",
+    titleGroup: { members: [{ targetId: "imdb:tt7654321" }] } };
+  const second = { targetId: "title-group:v1:zwei", targetType: "franchise", title: "Reihe Zwei", status: "active",
+    titleGroup: { members: [{ targetId: "imdb:tt7654321" }] } };
+  assert.equal(radarSubscriptionForEvent({ targetId: "imdb:tt7654321" }, [first, second]), null);
 });
 
 const targetText="Beispieldorf";

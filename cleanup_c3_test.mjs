@@ -91,6 +91,13 @@ test("U-07 bindet direkte und gruppierte Neuigkeiten nur über starke Zielbezieh
   assert.equal(radarSubscriptionForEvent(direct, [target]), target);
   assert.equal(radarSubscriptionForEvent({ ...direct, targetId: "imdb:tt7654321" }, [target]), null);
 
+  const firstGroup = { targetId: "title-group:v1:eins", targetType: "franchise", title: "Reihe Eins", status: "active",
+    titleGroup: { members: [{ targetId: direct.targetId }] } };
+  const secondGroup = { targetId: "title-group:v1:zwei", targetType: "franchise", title: "Reihe Zwei", status: "active",
+    titleGroup: { members: [{ targetId: direct.targetId }] } };
+  assert.equal(radarSubscriptionForEvent(direct, [firstGroup]), firstGroup);
+  assert.equal(radarSubscriptionForEvent(direct, [firstGroup, secondGroup]), null);
+
   const episode = (number) => ({
     eventVersionId: `episode-${number}`,
     title: `Beispielziel Staffel 2 Folge ${number}`,
@@ -121,7 +128,7 @@ test("D-06/U-07/U-14 bewahren generische Logik und eine knappe Bestandsanzeige",
   assert.doesNotMatch(component, /Snapshotdifferenz|Pipelinephasen|Warum fehlt|titleTrace/u);
   assert.match(radarUi, /\{target \? <span className="kd-radar-suchstatus">Ziel: \{localRadarTargetLabel/u);
   assert.doesNotMatch(radarUi, /nicht eindeutig zugeordnet/u);
-  assert.doesNotMatch(radarUi, /filter\(\(\{ target \}\) => target !== null\)/u);
+  assert.match(radarUi, /filter\(\(\{ target \}\) => target !== null\)/u);
 });
 
 test("Trace-Builder erfindet ohne Belege weder Identität noch Ausschluss", () => {

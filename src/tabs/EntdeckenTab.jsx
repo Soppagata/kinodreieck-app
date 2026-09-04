@@ -339,7 +339,7 @@ function RadarView({
   const news = useMemo(() => events.map((entry) => Object.freeze({
     entry,
     target: radarSubscriptionForEvent(entry, subscriptions),
-  })), [events, subscriptions]);
+  })).filter(({ target }) => target !== null), [events, subscriptions]);
   const searchStatuses = accountMode ? radarState?.pilot?.searchStatuses : undefined;
 
   const addTarget = async (event) => {

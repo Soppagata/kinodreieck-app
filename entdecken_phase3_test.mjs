@@ -816,12 +816,14 @@ try {
   };
   accountState = reconcileAccountRadarPilotFeed(accountState, feed([confirmedEvent])).state;
   await workUi.render(renderWorkProps());
-  check("Bestätigter Film-Treffer zeigt nur Titel, Inhaltsdatum und Typ", () => {
+  check("Direkt gebundener Film-Treffer zeigt Titel, Inhaltsdatum, Typ und das korrekte Ziel", () => {
     assert.match(workUi.container.textContent, /Passender Film/);
     assert.ok(workUi.container.textContent.includes(formatPresentationDate(confirmedEvent.date)));
     assert.match(workUi.container.textContent, /Film · Kinostart Österreich/);
     const news = [...workUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
+    assert.match(news.textContent, /Ziel:\s*Passender Film/);
+    assert.doesNotMatch(news.textContent, /nicht eindeutig zugeordnet/i);
     assert.equal(news.querySelectorAll("a").length, 0);
     assert.doesNotMatch(news.textContent, /film\.at|Quelle/);
   });
@@ -875,7 +877,11 @@ try {
   const targetFoundUi = await mount(EntdeckenTab, {
     ...baseProps,
     radarState: targetFoundState,
-    radarPilotEvents: [starfighterEvent],
+    radarPilotEvents: [{
+      ...starfighterEvent,
+      sourceTargetKey: `franchise:${starWarsTarget.targetId}`,
+      sourceTargetKind: "franchise",
+    }],
   });
   await act(async () => { button(targetFoundUi.container, "Radar").click(); await tick(); });
   check("Radar trennt abgeleiteten Fund und zeigt das exakt gebundene Suchziel", () => {
@@ -891,11 +897,43 @@ try {
   });
   await targetFoundUi.cleanup();
 
+  const ambiguousTargetId = "imdb:tt99990001";
+  const ambiguousState = {
+    ...createEmptyLocalRadar(),
+    subscriptions: [
+      { targetId: "title-group:v1:eins", targetType: "franchise", title: "Reihe Eins", status: "active",
+        titleGroup: { members: [{ targetId: ambiguousTargetId }] } },
+      { targetId: "title-group:v1:zwei", targetType: "franchise", title: "Reihe Zwei", status: "active",
+        titleGroup: { members: [{ targetId: ambiguousTargetId }] } },
+    ],
+  };
+  const hiddenEvents = [
+    { ...starfighterEvent, eventVersionId: "unbound-event", targetId: "release:v1:unbound", title: "Ungebundener Alt-Freitext" },
+    { ...starfighterEvent, eventVersionId: "ambiguous-event", targetId: ambiguousTargetId, title: "Mehrdeutiger Alt-Fund" },
+  ];
+  const hiddenStateBefore = JSON.stringify(ambiguousState);
+  const hiddenEventsBefore = JSON.stringify(hiddenEvents);
+  const hiddenUi = await mount(EntdeckenTab, {
+    ...baseProps, radarState: ambiguousState, radarPilotEvents: hiddenEvents,
+  });
+  await act(async () => { button(hiddenUi.container, "Radar").click(); await tick(); });
+  check("Ungebundene und mehrdeutige alte Funde bleiben fail-closed vollständig aus Neuigkeiten", () => {
+    const news = [...hiddenUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
+    assert.equal(news.querySelector(".kd-radar-neuigkeiten"), null);
+    assert.match(news.textContent, /Noch keine belegte Neuigkeit/);
+    assert.doesNotMatch(news.textContent, /Ungebundener Alt-Freitext|Mehrdeutiger Alt-Fund|nicht eindeutig zugeordnet/i);
+    assert.equal(JSON.stringify(ambiguousState), hiddenStateBefore);
+    assert.equal(JSON.stringify(hiddenEvents), hiddenEventsBefore);
+  });
+  await hiddenUi.cleanup();
+
   const episodeEvents = [6,2,5,3,4].map((number) => ({
     ...starfighterEvent, eventVersionId:`episode-${number}`, targetId:`release:v1:episode-${number}`,
     title:`Beispieldorf Staffel 29 Folge ${number}${number === 4 ? ": Nacht" : ""}`,
     category:"series",targetType:"series",seasonNumber:29,eventType:"staffelstart",
     date:`2099-09-0${number}`,platform:number === 3 ? "-" : "Beispiel+",region:"global",
+    sourceTargetKey:`franchise:${starWarsTarget.targetId}`,sourceTargetKind:"franchise",
   }));
   let detailRequests=0;
   const seasonUi=await mount(EntdeckenTab,{
