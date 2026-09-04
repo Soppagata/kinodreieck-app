@@ -8,6 +8,8 @@
    Entdecken-Titel (ungeprüft) NUR bei explizitem Entdecken-Signal.
    ============================================================ */
 import { norm, score } from "./match.js";
+import { titleVariants } from "./titleSearch.js";
+import { rankCatalogTitleMatches } from "./catalogTitleSearch.js";
 /* Import-Attribut ist unter Node ab 22 Pflicht (ERR_IMPORT_ATTRIBUTE_MISSING).
    Ohne es lässt sich dieses Modul nur über den Vite-Bundler laden — genau der
    Grund, warum der Finder bis Etappe 6 ohne einen einzigen Modultest lief.
@@ -268,18 +270,24 @@ export function parseAnfrage(text, master, zusatzGenres = []) {
       merke(m[0]);
     }
   }
-  /* Direkte Titel-Erkennung — schlägt alle Filter: "Wo spielt es Crank?"
-     liefert den Crank-Eintrag mit voller Herkunft (Kino/DVD/Streaming),
-     "Star Wars" liefert alle Star-Wars-Einträge. */
-  sig.titel = [];
-  for (const f of master || []) {
-    const t = norm(f.titel), o = norm(f.originaltitel || "");
-    const passt = (t.length >= 4 && nt.includes(t)) || (o.length >= 4 && nt.includes(o)) ||
-      (nt.length >= 4 && ((t && t.includes(nt)) || (o && o.includes(nt))));
-    if (passt) {
-      sig.titel.push({ id: f.id, label: f.titel });
-      merke(t); if (o) merke(o);
-    }
+  /* Direkte Titel-Erkennung folgt dem gemeinsamen konservativen Vertrag:
+     stabile ID, exakt normalisierter Titel/Originaltitel, starker Treffer und
+     erst bei Eindeutigkeit ein längenabhängiger Tippfehler. In natürlich
+     formulierten Sätzen bleibt ein vollständig enthaltener Titel möglich. */
+  let titelTreffer = rankCatalogTitleMatches({ text, identities: [text] }, master || []);
+  if (!titelTreffer.length && nt.length >= 4) {
+    titelTreffer = (master || []).flatMap((film, index) => {
+      const variante = titleVariants(film).find((titel) => (
+        titel.length >= 4 && (` ${nt} `).includes(` ${titel} `)
+      ));
+      return variante ? [{ item: film, index, embeddedVariant: variante }] : [];
+    });
+  }
+  sig.titel = titelTreffer.map(({ item }) => ({ id: item.id, label: item.titel }));
+  for (const treffer of titelTreffer) {
+    if (treffer.embeddedVariant) merke(treffer.embeddedVariant);
+    else if (treffer.match?.kind === "fuzzy") merke(nt);
+    else for (const variante of titleVariants(treffer.item)) if (nt.includes(variante)) merke(variante);
   }
   if (sig.titel.length > 12) sig.titel = []; // zu generisch ("man", "der") -> kein Titel-Signal
 
@@ -321,6 +329,7 @@ export function sucheFinder(sig, { master, kinoMatches, streamingBekannt }) {
   const morgen = tagKey(new Date(Date.now() + 86400000));
 
   const titelIds = new Set((sig.titel || []).map((t) => t.id));
+  const titelRang = new Map((sig.titel || []).map((t, index) => [t.id, index]));
   /* Ohne jedes Signal (Freitext, der nichts im Master trifft — z.B. "One Piece",
      das nicht in der Liste ist) KEINE Master-Vorschläge. Sonst käme die Top-Score-
      Liste unabhängig von der Frage. Der Treffer kommt dann aus Kino/Streaming. */
@@ -443,7 +452,16 @@ export function sucheFinder(sig, { master, kinoMatches, streamingBekannt }) {
   }
   // Semantische Query-Relevanz (Summe der Boni) zuerst, dann Dreieck-Score —
   // was gesucht wurde, steht oben; die Grundgüte entscheidet nur bei Gleichstand.
-  treffer.sort((a, b) => b.rel - a.rel || b.wert - a.wert);
+  treffer.sort((a, b) => {
+    const aTitel = titelRang.get(a.film.id);
+    const bTitel = titelRang.get(b.film.id);
+    if (aTitel != null || bTitel != null) {
+      if (aTitel == null) return 1;
+      if (bTitel == null) return -1;
+      if (aTitel !== bTitel) return aTitel - bTitel;
+    }
+    return b.rel - a.rel || b.wert - a.wert;
+  });
   return treffer.slice(0, 20);
 }
 
@@ -474,10 +492,19 @@ export function sucheKino(sig, kinoRest) {
   const nt = norm(sig.frage || "");
   const hatSignal = sig.genres.length || sig.dekaden.length || (sig.titel && sig.titel.length) || sig.quellen.includes("kino") || sig.jahrMin || sig.jahrMax;
   if (!hatSignal && nt.length < 4) return [];             // ohne Signal und ohne Titel-Freitext -> nichts
-  // Tolerante Titel-Suche (leerzeichen-egal + alle Wörter), wie im Streaming-Katalog.
-  const ntFlach = nt.replace(/ /g, "");
-  const toks = nt.split(" ").filter((w) => w.length >= 3);
-  const titelPasst = (tn) => !!tn && nt.length >= 4 && (tn.includes(nt) || tn.replace(/ /g, "").includes(ntFlach) || (toks.length > 0 && toks.every((w) => tn.includes(w))));
+  const kinoTitelKandidaten = (kinoRest || []).map((pf) => ({
+    id: pf.film_at_id ?? pf.id,
+    titel: pf.t,
+    originaltitel: pf.ot,
+    pf,
+  }));
+  const titelTreffer = rankCatalogTitleMatches(
+    { text: sig.frage, identities: [sig.frage] },
+    kinoTitelKandidaten,
+  );
+  const titelRang = new Map(titelTreffer.map((eintrag, index) => [
+    eintrag.item.pf, { ...eintrag.match, index },
+  ]));
   // Reine Titel-Suche (kein Genre/Dekade/Jahr/quellen:kino) -> nur Titel-Treffer zeigen.
   const nurTitel = !sig.genres.length && !sig.dekaden.length && !sig.jahrMin && !sig.jahrMax && !sig.quellen.includes("kino");
   const treffer = [];
@@ -507,14 +534,24 @@ export function sucheKino(sig, kinoRest) {
     if (sig.jahrMin && (!pf.j || pf.j < sig.jahrMin)) continue;
     if (sig.jahrMax) gruende.push("bis:" + sig.jahrMax);
     if (sig.jahrMin) gruende.push("ab:" + sig.jahrMin);
-    const titelHit = titelPasst(norm(pf.t)) || titelPasst(norm(pf.ot || ""));
+    const titelHit = titelRang.has(pf);
     if (titelHit) gruende.push("titel");
     if (nurTitel) { if (!titelHit) continue; }            // reine Titel-Suche -> Titel-Treffer verlangt
     else if (!gruende.length && !sig.quellen.includes("kino")) continue;
     treffer.push({ pf, gruende });
   }
   // Titel-Treffer nach oben, sonst nach Jahr (neu zuerst).
-  treffer.sort((a, b) => (b.gruende.includes("titel") - a.gruende.includes("titel")) || ((b.pf.j || 0) - (a.pf.j || 0)));
+  treffer.sort((a, b) => {
+    const aTitel = titelRang.get(a.pf);
+    const bTitel = titelRang.get(b.pf);
+    if (aTitel || bTitel) {
+      if (!aTitel) return 1;
+      if (!bTitel) return -1;
+      return aTitel.tier - bTitel.tier || aTitel.distance - bTitel.distance
+        || aTitel.index - bTitel.index;
+    }
+    return (b.pf.j || 0) - (a.pf.j || 0);
+  });
   return treffer.slice(0, 15);
 }
 
@@ -765,15 +802,15 @@ export function sucheEntdecken(sig, streamingEntdecken) {
   if (sig.dekaden.length) l = l.filter((t) => t.jahr && sig.dekaden.includes(Math.floor(t.jahr / 10) * 10));
   if (sig.jahrMax) l = l.filter((t) => t.jahr && t.jahr <= sig.jahrMax);
   if (sig.jahrMin) l = l.filter((t) => t.jahr && t.jahr >= sig.jahrMin);
-  // Ohne Genre/Dekade: Titel-Freitext als Filter (nicht bei explizitem "was Neues").
-  // Tolerant: direkte Teilzeichenkette, leerzeichen-egal ("super natural" -> "supernatural")
-  // ODER alle Query-Wörter (>=3) im Titel (Reihenfolge egal). Tippfehler/Fremdtitel
-  // fängt das NICHT — dafür bräuchte es Fuzzy-Suche bzw. Alternativtitel.
+  // Ohne Genre/Dekade: gemeinsamer konservativer Titelvertrag. Unsichere oder
+  // gleich gute Tippfehler bleiben bewusst leer statt eine Identität zu raten.
   if (!hatGenreDek && !sig.entdecken && nt.length >= 4) {
-    const ntFlach = nt.replace(/ /g, "");
-    const toks = nt.split(" ").filter((w) => w.length >= 3);
-    const passt = (tn) => !!tn && (tn.includes(nt) || tn.replace(/ /g, "").includes(ntFlach) || (toks.length > 0 && toks.every((w) => tn.includes(w))));
-    l = l.filter((t) => passt(norm(t.titel)) || passt(norm(t.originaltitel || "")));
+    const titelTreffer = rankCatalogTitleMatches({ text: sig.frage, identities: [sig.frage] }, l);
+    titelTreffer.sort((a, b) => a.match.tier - b.match.tier
+      || a.match.distance - b.match.distance
+      || (b.item.relevanz ?? 0) - (a.item.relevanz ?? 0)
+      || a.index - b.index);
+    return titelTreffer.slice(0, 12).map(({ item }) => item);
   }
   l = [...l].sort((a, b) => (b.relevanz ?? 0) - (a.relevanz ?? 0));
   return l.slice(0, 12);

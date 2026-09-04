@@ -30,7 +30,7 @@ const STALE_LOESCH_HINWEIS = "Der Datenstand hat sich geändert. Bitte Datenstan
      Unbewertete Einträge sind hier erstklassige Bürger (Filter + Badge).
    - Must-Watch: eigener persönlicher Datentopf, KEIN Master-Filter.
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
-export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
+export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht, onSelectionStateChange,
   onFilmBatchVorschau, onFilmBatchLoeschen,
   mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] }, onSpringeZuMustwatchRef,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
@@ -68,6 +68,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const letzterDatenKontextRef = useRef(datenKontextKey);
   const letzteTitellisteRef = useRef("");
   const kopierRequestRef = useRef(0);
+
+  useEffect(() => {
+    onSelectionStateChange?.({ active: auswahlmodus, count: auswahlIds.size });
+  }, [auswahlIds.size, auswahlmodus, onSelectionStateChange]);
   const aktuellerKopierStandRef = useRef({ modus: false, text: "" });
   const unsichereRenderKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
   const draftGrenzeRef = useRef({ master, datenKontextKey, epoch: 0, erwartet: false });
@@ -592,7 +596,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       {auswahlmodus && <div className="kd-auswahl-werkzeuge" aria-label="Mediathek-Auswahl">
         <button ref={auswahlModusButtonRef} type="button" className="kd-auswahl-modus" style={btnStyle(auswahlmodus)}
           aria-pressed={auswahlmodus} onClick={auswahlmodus ? beendeAuswahl : starteAuswahl}>
-          {auswahlmodus ? "Auswahl beenden" : "Auswählen"}
+          {auswahlmodus ? "Fertig" : "Auswählen"}
         </button>
         {auswahlmodus && (<>
           <strong className="kd-auswahl-zaehler" aria-live="polite">{auswahlZaehlerText}</strong>
@@ -642,7 +646,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={wechsleTyp}
         options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
 
-      <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <div className={`kd-kompakt kd-mediathek-suchleiste${auswahlmodus ? " kd-mediathek-suchleiste--auswahl" : ""}`}
+        style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input className="kd-lokalsuche" value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel oder Originaltitel suchen …"
           style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
         {suche && <button type="button" className="kd-lokalsuche-loeschen" aria-label="Mediatheksuche leeren" title="Mediatheksuche leeren"

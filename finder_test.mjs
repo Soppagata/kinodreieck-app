@@ -156,9 +156,8 @@ const STREAMING_BEKANNT = {
 const KTX = { master: MASTER, kinoMatches: KINO_MATCHES, streamingBekannt: STREAMING_BEKANNT };
 
 /* Kino-Programmfilme OHNE Masterlisten-Eintrag (kinoMatches.rest).
-   "Horror am Freitag" trägt das Abfragewort im Titel — nur so lässt sich der
-   Titel-Vorrang in der Sortierung neben einem Genre-Signal prüfen: sucheKino
-   verlangt für einen Titeltreffer, dass ALLE Query-Wörter (>=3) im Titel stehen. */
+   "Horror am Freitag" trägt das Abfragewort im Titel — so lässt sich der
+   konservative starke Titel-Vorrang neben einem Genre-Signal prüfen. */
 const KINO_REST = [
   { t: "Fremder Sommer", ot: "Foreign Summer", j: 2026, g: ["drama"], k: ["Votivkino"], z: [T_HEUTE] },
   { t: "Grelle Fratze", ot: "Garish Grin", j: 1985, g: ["horror", "thriller"], k: ["Filmcasino"], z: [T_MORGEN] },
@@ -275,10 +274,10 @@ checkA("Kappung: mehr als 20 Reihen-Treffer sind unspezifisch -> sig.reihen wird
   const zwanzig = P("sammelsaga", MASTER_MANY.slice(0, 20));
   return viele.reihen.length === 0 && zwanzig.reihen.length === 20;
 });
-checkA("Kappung: mehr als 12 Titel-Treffer sind zu generisch -> sig.titel wird geleert", () => {
+checkA("Kurzes generisches Titelfragment wird nicht als starker Treffer geraten", () => {
   const viele = P("film", MASTER_MANY);
   const zwoelf = P("film", MASTER_MANY.slice(0, 12));
-  return viele.titel.length === 0 && zwoelf.titel.length === 12;
+  return viele.titel.length === 0 && zwoelf.titel.length === 0;
 });
 
 /* --- A3 hatSignal-Gate ---------------------------------------------------- */
@@ -431,8 +430,9 @@ checkA("sucheKino sortiert Titeltreffer nach oben — vor dem neueren Nicht-Tite
 });
 checkA("sucheKino sortiert ohne Titeltreffer nach Jahr (neu zuerst)", () =>
   gleich(F.sucheKino(P("was im Kino"), KINO_REST).map((r) => r.pf.j), [2026, 2024, 1985, 1973]));
-checkA("sucheKino: ein Titeltreffer braucht ALLE Query-Wörter (>=3) im Titel", () =>
-  gleich(F.sucheKino(P("Grelle Fratze im Kino"), KINO_REST).filter((r) => r.gruende.includes("titel")), []));
+checkA("sucheKino: ein vollständiger Titel im Suchsatz bleibt ein starker Titeltreffer", () =>
+  gleich(F.sucheKino(P("Grelle Fratze im Kino"), KINO_REST)
+    .filter((r) => r.gruende.includes("titel")).map((r) => r.pf.t), ["Grelle Fratze"]));
 checkA("sucheKino liefert höchstens 15 Treffer", () => F.sucheKino(P("Drama"), KINO_REST_VIEL).length === 15);
 checkA("sucheKino: jahrMin/jahrMax filtern das Restprogramm hart", () =>
   gleich(F.sucheKino(P("oldschool im Kino"), KINO_REST).map((r) => r.pf.t), ["Grelle Fratze", "Horror am Freitag"]));

@@ -518,7 +518,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel span { grid-row:1 / span 2; align-self:center; color:#e3a63b; font:700 9px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
   .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:700 calc(16px * var(--kd-schriftfaktor,1)) 'Barlow Condensed',sans-serif; }
   .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#bdb7c5; font:10px 'Space Mono',monospace; }
-  .kd-globalsuche-aktionen { display:flex; flex-direction:column; gap:4px; min-width:0; }.kd-globalsuche .kd-globalsuche-aktionen button { min-height:0; max-width:100%; height:calc(50% - 2px); padding:3px 7px; border-color:#6f6878; border-radius:7px; color:#e3a63b; font-size:calc(10px * var(--kd-schriftfaktor,1)); }
+  .kd-globalsuche-aktionen { display:flex; flex-direction:column; gap:4px; min-width:0; }.kd-globalsuche .kd-globalsuche-aktionen button { min-width:44px; min-height:44px; max-width:100%; height:auto; padding:4px 7px; border-color:#6f6878; border-radius:7px; color:#e3a63b; font-size:calc(10px * var(--kd-schriftfaktor,1)); }
   .kd-globalsuche .kd-globalsuche-aktionen button[aria-pressed="true"] { color:#bdb7c5; border-color:#3c3742; }.kd-globalsuche .kd-globalsuche-aktionen button:disabled { opacity:.65; }
   .kd-globalsuche-treffer p { margin:5px 2px 10px; color:#bdb7c5; font-size:13px; }
   .kd-globalsuche .kd-globalsuche-alle { width:100%; margin-top:9px; border-color:#e3a63b; color:#e3a63b; }
@@ -609,9 +609,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-film-batch-dialog .kd-film-batch-fehler { color:var(--gefahr,#d96a5a); font-weight:700; }
 .kd-film-batch-aktionen { flex:0 0 auto; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .kd-film-batch-aktionen button { min-width:0; min-height:44px; white-space:normal; }
-.kd-auswahl-marke { display:grid; place-items:center; flex:0 0 44px; box-sizing:border-box; width:44px; height:44px; border:2px solid var(--kd-tinteWeich,#6f6878); border-radius:6px; background:var(--kd-saalHoch,#211e26); color:var(--kd-wolfram,#e3a63b); font:900 24px/1 'Space Mono',monospace; }
+.kd-auswahl-marke { display:grid; place-items:center; flex:0 0 28px; box-sizing:border-box; width:28px; height:28px; border:2px solid var(--kd-tinteWeich,#6f6878); border-radius:5px; background:var(--kd-saalHoch,#211e26); color:var(--kd-wolfram,#e3a63b); font:900 16px/1 'Space Mono',monospace; }
 .kd-auswahl-karte--aktiv .kd-auswahl-marke { border-color:var(--kd-wolfram,#e3a63b); background:var(--kd-tinte,#1c1a1e); }
+.kd-auswahl-karte { min-height:44px; }
 .kd-auswahl-karte:focus-visible { outline:3px solid var(--kd-wolfram,#e3a63b); outline-offset:3px; }
+.kd-selection-control-hitbox { display:inline-flex; align-items:center; gap:7px; box-sizing:border-box; min-height:44px; padding:7px 2px; cursor:pointer; white-space:nowrap; }
+.kd-selection-control-input { flex:0 0 18px; width:18px; height:18px; min-height:18px; margin:0; accent-color:var(--kd-wolfram,#e3a63b); }
+.kd-selection-control-text { display:grid; min-width:0; }
+.kd-selection-control-label { font:600 12px/1.2 'Space Mono',monospace; }
+.kd-selection-control-description { color:var(--kd-rauch,#948fa0); font:10px/1.35 'Space Mono',monospace; white-space:normal; }
 .kd-film-editor-shell { margin-left: 74px; margin-right: 48px; }
 .kd-editpanel, .kd-beschreibung-editor { width: 100%; min-width: 0; box-sizing: border-box; }
 .kd-entdecken-kopf { display:grid; grid-template-columns:auto minmax(0,1fr); gap:9px; align-items:center; min-width:0; }
@@ -686,6 +692,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      Select kollidiert nicht mit inline width:auto und braucht keins. */
   .kd-kompakt { gap: 6px !important; align-items: stretch !important; }
   .kd-kompakt input, .kd-kompakt select { width: 100% !important; max-width: none !important; min-width: 0 !important; }
+  .kd-mediathek-suchleiste--auswahl { position:sticky; top:calc(8px + env(safe-area-inset-top)); z-index:80; display:grid !important;
+    grid-template-columns:minmax(0,1fr) 44px; box-sizing:border-box; margin-inline:-5px; padding:7px;
+    border:1px solid color-mix(in srgb,var(--kd-wolfram,#e3a63b) 62%,transparent); border-radius:9px;
+    background:color-mix(in srgb,var(--kd-saalHoch,#211e26) 96%,transparent); box-shadow:0 5px 18px rgba(0,0,0,.36); }
+  .kd-mediathek-suchleiste--auswahl .kd-lokalsuche { display:block !important; grid-column:1; min-height:44px; }
+  .kd-mediathek-suchleiste--auswahl .kd-lokalsuche-loeschen { display:inline-flex !important; grid-column:2; align-items:center; justify-content:center;
+    box-sizing:border-box; width:44px; min-width:44px; min-height:44px; padding:0 !important; }
+  .kd-mediathek-suchleiste--auswahl select { grid-column:1 / -1; min-height:44px; }
   .kd-kino-programmfilter { grid-template-columns:repeat(2,minmax(0,1fr)); padding:9px; }
   .kd-kino-programmfilter-reset { grid-column:1/-1; width:100%; }
   .kd-mediathek-neuaktionen { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:stretch; }
@@ -726,7 +740,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      schmalen Spalte zwischen Dreieck und Score herausragen. */
   .kd-karte { width:100%; min-width:0; max-width:100%; box-sizing:border-box; padding:12px !important; }
   .kd-filmkopf { gap:10px !important; min-width:0; }
-  .kd-auswahl-marke { flex-basis:44px; }
+  .kd-auswahl-marke { flex-basis:28px; }
+  .kd-film-loeschen { width:44px !important; min-width:44px !important; min-height:44px; }
   .kd-filmhaupt { min-width:0; }
   .kd-film-editor-shell { width:100%; min-width:0; margin:0; }
   .kd-editpanel { padding:11px 10px !important; }
@@ -1181,6 +1196,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-dash-tag { flex: 0 0 auto; font-family: 'Space Mono', monospace; font-size: 11px; color: var(--kd-rauch); }
 .kd-dash-log .kd-dash-ztitel { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 12px;
   letter-spacing: 0; text-transform: none; }
+.kd-dash-legacyhinweis { margin:10px 2px 6px; color:var(--kd-rauch); font:10px/1.45 'Space Mono',monospace;
+  letter-spacing:.025em; }
 
 /* Gemeinsames Pinboard: beobachtete Serien sind echte Pins; neue Staffel-/
    Folgenstände bekommen die stärkste visuelle Priorität. */

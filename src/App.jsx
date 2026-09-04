@@ -67,6 +67,10 @@ import {
 import { useEggController } from "./controllers/useEggController.js";
 import { deepSpaceOwnerKey, useDeepSpaceHorror } from "./controllers/useDeepSpaceHorror.js";
 import { ensureIds, slugId } from "./lib/match.js";
+import {
+  mergePersonalMasterEntry,
+  stampPersonalMasterEntry,
+} from "./lib/personalEntryChronology.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
 import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, blogZuArtikel, normalisiereArtikelTypen } from "./lib/artikel.js";
@@ -885,10 +889,13 @@ export default function App() {
     try {
       const datei = parseBesitzImport(text);
       let auswertung = null, bestaetigterMaster = null;
+      const erstelltAm = new Date().toISOString();
       const gespeichert = await mutiereMaster((aktuell) => {
-        auswertung = wendeBesitzImportAn(datei, aktuell, new Date().toISOString());
+        auswertung = wendeBesitzImportAn(datei, aktuell, erstelltAm);
         if (!auswertung.neue.length) return { master: aktuell, unveraendert: true };
-        bestaetigterMaster = ensureIds([...aktuell, ...auswertung.neue]);
+        const neueMitZeit = auswertung.neue.map((film) => stampPersonalMasterEntry(film, erstelltAm));
+        auswertung = { ...auswertung, neue: neueMitZeit };
+        bestaetigterMaster = ensureIds([...aktuell, ...neueMitZeit]);
         return { master: bestaetigterMaster, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
       });
       if (!gespeichert || !auswertung) throw new Error("bestätigtes Speichern fehlgeschlagen.");
@@ -1085,9 +1092,12 @@ export default function App() {
   const uebernehmePaket = useCallback(async ({ neueFilme, neueArtikel }) => {
     let neuerMaster = masterRef.current || [];
     if (neueFilme.length) {
+      const erstelltAm = new Date().toISOString();
       const gespeichert = await mutiereMaster((aktuell) => {
         const ids = new Set(aktuell.map((film) => film.id));
-        const wirklichNeu = neueFilme.filter((film) => film?.id && !ids.has(film.id) && ids.add(film.id));
+        const wirklichNeu = neueFilme
+          .filter((film) => film?.id && !ids.has(film.id) && ids.add(film.id))
+          .map((film) => stampPersonalMasterEntry(film, erstelltAm));
         if (!wirklichNeu.length) { neuerMaster = aktuell; return { master: aktuell, unveraendert: true }; }
         neuerMaster = ensureIds([...aktuell, ...wirklichNeu]);
         return { master: neuerMaster, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
@@ -1141,7 +1151,9 @@ export default function App() {
   const updateFilm = useCallback((id, changes) => mutiereMaster((aktuell) => {
     if (!aktuell.some((film) => film.id === id)) return { abgebrochen: true };
     return {
-      master: ensureIds(aktuell.map((film) => film.id === id ? { ...film, ...changes } : film)),
+      master: ensureIds(aktuell.map((film) => (
+        film.id === id ? mergePersonalMasterEntry(film, changes) : film
+      ))),
       meta: masterMetaRef.current, herkunft: naechsteHerkunft(),
     };
   }), [mutiereMaster, naechsteHerkunft]);
@@ -1186,13 +1198,14 @@ export default function App() {
      nur eindeutige Exakt-Treffer, nichts wird geraten. */
   const addFilm = useCallback(async (film) => {
     const id = film.id || slugId(film.titel, film.jahr);
+    const erstelltAm = new Date().toISOString();
     let next = null, doppelt = false;
     const ok = await mutiereMaster((aktuell) => {
       if (aktuell.some((eintrag) => eintrag.id === id)) {
         doppelt = true;
         return { abgebrochen: true };
       }
-      next = [...aktuell, ensureIds([{ ...film, id }])[0]];
+      next = [...aktuell, ensureIds([stampPersonalMasterEntry({ ...film, id }, erstelltAm)])[0]];
       return { master: next, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
     });
     if (!ok) {
@@ -1211,6 +1224,7 @@ export default function App() {
 
   const addFilme = useCallback(async (filme) => {
     let next = null, neue = [];
+    const erstelltAm = new Date().toISOString();
     const ok = await mutiereMaster((aktuell) => {
       const ids = new Set(aktuell.map((film) => film.id));
       neue = [];
@@ -1218,7 +1232,7 @@ export default function App() {
         const id = film.id || slugId(film.titel, film.jahr);
         if (!id || ids.has(id)) continue;
         ids.add(id);
-        neue.push(ensureIds([{ ...film, id }])[0]);
+        neue.push(ensureIds([stampPersonalMasterEntry({ ...film, id }, erstelltAm)])[0]);
       }
       if (!neue.length) return { master: aktuell, unveraendert: true };
       next = [...aktuell, ...neue];
@@ -1297,7 +1311,7 @@ export default function App() {
     aktuellesProfil, aktuelleProfilVersion,
     starteVorbewertung,
     setzeFilmPrognoseStatus,
-    addFilmMitPrognose,
+    addFilmMitPrognose: addFilmMitPrognoseRoh,
     filmwissenLesenAktiv,
     filmwissenRechercheAktiv,
     filmwissenProFilm,
@@ -1316,6 +1330,9 @@ export default function App() {
     schreibeArtikel,
     setErr,
   });
+  const addFilmMitPrognose = useCallback((film) => (
+    addFilmMitPrognoseRoh(stampPersonalMasterEntry(film, new Date().toISOString()))
+  ), [addFilmMitPrognoseRoh]);
 
   /* ---- Master-Export (hält Max' Datei synchron) ---- */
   const exportMaster = useCallback(() => {
@@ -1359,6 +1376,24 @@ export default function App() {
   const [finderSuchauftrag, setFinderSuchauftrag] = useState(null);
   const [globaleSuchantwort, setGlobaleSuchantwort] = useState(null);
   const globaleSucheLaufRef = useRef(0);
+  const mediathekAuswahlRef = useRef({ active: false, count: 0 });
+  const meldeMediathekAuswahl = useCallback((state) => {
+    mediathekAuswahlRef.current = {
+      active: state?.active === true,
+      count: Number.isInteger(state?.count) && state.count >= 0 ? state.count : 0,
+    };
+  }, []);
+  const bestaetigeGlobalenAuswahlSprung = useCallback((ziel) => {
+    const auswahl = mediathekAuswahlRef.current;
+    if (tabRef.current !== "mediathek" || !auswahl.active) return true;
+    const anzahl = auswahl.count;
+    const text = anzahl === 1 ? "1 Eintrag ist ausgewählt" : `${anzahl} Einträge sind ausgewählt`;
+    const bestaetigt = window.confirm(
+      `${text}. Auswahl beenden und ${ziel}?\n\nMit „Abbrechen“ bleibt die Auswahl vollständig erhalten.`,
+    );
+    if (bestaetigt) mediathekAuswahlRef.current = { active: false, count: 0 };
+    return bestaetigt;
+  }, []);
   const starteGlobaleSuche = useCallback(async ({ text, scope }) => {
     const lauf = ++globaleSucheLaufRef.current;
     const bevorzugterBereich = scope || tabRef.current || "alles";
@@ -1388,13 +1423,15 @@ export default function App() {
   }, [finderMaster, kinoMatches, streamingBekannt, streamingEntdecken, artikelListe, radarRuntimeAvailable]);
   const oeffneAusfuehrlicheSuche = useCallback(() => {
     if (!globaleSuchantwort?.frage) return;
+    if (!bestaetigeGlobalenAuswahlSprung("die ausführlichen Ergebnisse öffnen")) return;
     const { frage: text, bevorzugterBereich: scope } = globaleSuchantwort;
     setFinderEingabe(text);
     setFinderSuchauftrag({ id: Date.now() + ":" + Math.random(), text, scope });
     setGlobaleSuchantwort(null);
     navigiere("finder");
-  }, [globaleSuchantwort, navigiere]);
+  }, [bestaetigeGlobalenAuswahlSprung, globaleSuchantwort, navigiere]);
   const oeffneGlobalenTreffer = useCallback((treffer) => {
+    if (!bestaetigeGlobalenAuswahlSprung(`zu „${treffer.titel}“ springen`)) return;
     setGlobaleSuchantwort(null);
     if (treffer.typ === "film" && treffer.bereich === "kino") {
       setZeigeAlles(true);
@@ -1413,7 +1450,7 @@ export default function App() {
     } else if (treffer.typ === "streaming") {
       void springeZuStreaming({ art: treffer.zielArt || "entdecken", ref: treffer.ref, titel: treffer.titel });
     }
-  }, [navigiere, springeZuArtikel, springeZuFilm, springeZuStreaming]);
+  }, [bestaetigeGlobalenAuswahlSprung, navigiere, springeZuArtikel, springeZuFilm, springeZuStreaming]);
   const toggleGlobalesMenu = useCallback(() => {
     setGlobaleSuchantwort(null);
     toggleMehr();
@@ -1886,6 +1923,7 @@ export default function App() {
             onFilmwissenRecherchieren={recherchiereFilmwissen}
             artikel={artikelListe} onArtikelKlick={springeZuArtikel}
             fokusFilmId={mediathekFokus} onFokusVerbraucht={() => setMediathekFokus(null)}
+            onSelectionStateChange={meldeMediathekAuswahl}
             mustwatch={mustwatch} addMustwatch={addMustwatch}
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
             mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef} datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}

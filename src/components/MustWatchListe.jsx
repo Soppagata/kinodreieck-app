@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm } from "../lib/match.js";
 import { Chip } from "./ui.jsx";
+import { SelectionControl } from "./SelectionControl.jsx";
 import {
   MUSTWATCH_FILTER, mustwatchTyp, mustwatchVerfuegbarkeit, projiziereMustwatch,
 } from "../lib/mustwatch.js";
@@ -119,9 +120,8 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
       <div className="kd-mustwatch-form-hauptfelder" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input placeholder="Titel *" value={titel} onChange={(e) => setTitel(e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 180 }} />
         <MetaFelder jahr={jahr} typ={typ} onJahr={setJahr} onTyp={setTyp} />
-        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer", whiteSpace: "nowrap" }}>
-          <input type="checkbox" checked={imBesitz} onChange={() => setImBesitz(!imBesitz)} /> im Besitz
-        </label>
+        <SelectionControl checked={imBesitz} onCheckedChange={setImBesitz}
+          label="Im Besitz" className="kd-mustwatch-besitzwahl" />
       </div>
       <textarea placeholder="Beschreibung (worum geht's / warum drauf?)" rows={2} value={beschreibung} onChange={(e) => setBeschreibung(e.target.value)} style={{ ...inputStyle, boxSizing: "border-box" }} />
       <textarea placeholder="Notiz (frei)" rows={1} value={notiz} onChange={(e) => setNotiz(e.target.value)} style={{ ...inputStyle, boxSizing: "border-box" }} />
@@ -215,9 +215,11 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
                     {status.label}
                   </span>
                 )}
-                <label onClick={(ev) => ev.stopPropagation()} style={{ display: "flex", gap: 5, alignItems: "center", fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich, cursor: "pointer", whiteSpace: "nowrap" }}>
-                  <input type="checkbox" checked={!!e.im_besitz} onChange={() => onUpdate(e.id, (aktuell) => ({ im_besitz: !aktuell.im_besitz }))} /> im Besitz
-                </label>
+                <div onClick={(ev) => ev.stopPropagation()}>
+                  <SelectionControl checked={!!e.im_besitz}
+                    onCheckedChange={(checked) => onUpdate(e.id, () => ({ im_besitz: checked }))}
+                    label="Im Besitz" className="kd-mustwatch-besitzwahl kd-mustwatch-besitzwahl--karte" />
+                </div>
               </div>
               {meta && (
                 <div style={{ marginTop: 3, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>{meta}</div>

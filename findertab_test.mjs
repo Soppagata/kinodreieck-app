@@ -328,6 +328,16 @@ check("G0", "globale Ergebniszeile rendert Zielöffnung und Suchaktionen als get
   && /kd-globalsuche-aktionen/.test(globalLeisteQuelle)
   && /onSuchaktion\?\.\(item, "watch"\)/.test(globalLeisteQuelle)
   && /onSuchaktion\?\.\(item, "radar"\)/.test(globalLeisteQuelle));
+const artikelTitelAntwort = erstelleFinderAntwort({
+  text: "Obsession", master: [], kinoMatches: KINO_MATCHES,
+  streamingBekannt: STREAMING_BEKANNT, streamingEntdecken: STREAMING_ENTDECKEN,
+  artikel: [
+    { id: "inhalt", titel: "Nur im Text", text: "Ein Absatz über Obsession" },
+    { id: "titel", titel: "Obsession", text: "Anderer Inhalt" },
+  ],
+});
+check("G0", "exakter Artikeltitel steht vor einem bloßen Inhaltstreffer", () =>
+  JSON.stringify(artikelTitelAntwort.artikel.map((artikel) => artikel.id)) === JSON.stringify(["titel", "inhalt"]));
 
 /* Zwei Sätze, die der deterministische Parser NICHT deuten kann — nur dann
    bietet die Oberfläche „Mit KI deuten" überhaupt an (E1). */

@@ -351,10 +351,12 @@ export function GlobalSearchBar({
                 </button>
                 {item.searchActions?.watch || item.searchActions?.radar ? <div className="kd-globalsuche-aktionen" aria-label={`Aktionen für ${item.titel}`}>
                   {item.searchActions.watch ? <button type="button"
+                    aria-label={`${beobachtet.has(String(item.searchActions.watch.watchmodeId)) ? "Beobachtet" : "Beobachten"}: ${item.titel}`}
                     aria-pressed={beobachtet.has(String(item.searchActions.watch.watchmodeId))}
                     onClick={(event) => { event.currentTarget.focus(); viewportEndRef.current();
                       onSuchaktion?.(item, "watch"); }}>{beobachtet.has(String(item.searchActions.watch.watchmodeId)) ? "Beobachtet" : "Beobachten"}</button> : null}
                   {item.searchActions.radar ? <button type="button"
+                    aria-label={`${imRadar.has(item.searchActions.radar.targetId) ? "Im Radar" : "Ins Radar"}: ${item.titel}`}
                     aria-pressed={imRadar.has(item.searchActions.radar.targetId)}
                     disabled={imRadar.has(item.searchActions.radar.targetId)}
                     onClick={(event) => { event.currentTarget.focus(); viewportEndRef.current();

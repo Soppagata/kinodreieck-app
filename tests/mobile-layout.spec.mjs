@@ -3247,7 +3247,7 @@ test("KD-OBS-002/003 hält Mediathek-Aktionen und Must-Watch-Felder bei 320 px k
   await page.getByPlaceholder("Jahr *").fill("2026");
   await page.getByRole("button", { name: "Auswählen", exact: true }).click();
   await expect(entwurfTitel).toHaveValue("Mobiler Entwurf bleibt");
-  await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
+  await page.getByRole("button", { name: "Fertig", exact: true }).click();
   await expect(entwurfTitel).toBeVisible();
   await expect(entwurfTitel).toHaveValue("Mobiler Entwurf bleibt");
   await page.getByRole("button", { name: "Abbrechen", exact: true }).click();
@@ -3295,7 +3295,11 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
     localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [], gespeichertAm: 1_786_650_000_000 }));
   });
   await page.goto("/");
-  await waehleMobileTab(page, "Mediathek");
+  if (await page.getByRole("button", { name: "Menü öffnen" }).count()) {
+    await waehleMobileTab(page, "Mediathek");
+  } else {
+    await expect(page.getByRole("heading", { name: "Mediathek", exact: true })).toBeVisible();
+  }
 
   const masterVorEntwuerfen = await page.evaluate(() => localStorage.getItem("kd:master"));
   await page.getByRole("button", { name: "+ Eintrag hinzufügen", exact: true }).click();
@@ -3310,7 +3314,7 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await page.getByRole("button", { name: /^Serien/ }).click();
   await expect(neuTitel).toHaveValue("Ungespeicherter Neu-Entwurf");
   await page.getByRole("button", { name: /^Filme/ }).click();
-  await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
+  await page.getByRole("button", { name: "Fertig", exact: true }).click();
   await expect(neuTitel).toBeVisible();
   await expect(neuTitel).toHaveValue("Ungespeicherter Neu-Entwurf");
   await expect(neuJahr).toHaveValue("2025");
@@ -3329,7 +3333,7 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await page.getByRole("button", { name: /^Serien/ }).click();
   await expect(editBegruendung).toHaveValue("Alpha-Edit-Entwurf bleibt erhalten");
   await page.getByRole("button", { name: /^Filme/ }).click();
-  await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
+  await page.getByRole("button", { name: "Fertig", exact: true }).click();
   await expect(editBegruendung).toBeVisible();
   await expect(editBegruendung).toHaveValue("Alpha-Edit-Entwurf bleibt erhalten");
   await alphaKarte.getByRole("button", { name: "Abbrechen", exact: true }).click();
@@ -3337,7 +3341,7 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await alphaKarte.click();
 
   await page.getByRole("button", { name: "Auswählen", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Auswahl beenden", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fertig", exact: true })).toBeVisible();
   const kopieren = page.getByRole("button", { name: "Titelliste kopieren", exact: true });
   await expect(kopieren).toBeDisabled();
   await expect(page.locator(".kd-film-loeschen")).toHaveCount(0);
@@ -3350,8 +3354,31 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await expect(page.getByText("2 ausgewählt", { exact: true })).toBeVisible();
   await expect(alpha).toHaveAttribute("aria-checked", "true");
   const markerBox = await alpha.locator(".kd-auswahl-marke").boundingBox();
-  expect(markerBox?.width).toBeGreaterThanOrEqual(44);
-  expect(markerBox?.height).toBeGreaterThanOrEqual(44);
+  expect(markerBox?.width).toBeGreaterThanOrEqual(24);
+  expect(markerBox?.width).toBeLessThanOrEqual(32);
+  expect(markerBox?.height).toBeGreaterThanOrEqual(24);
+  expect(markerBox?.height).toBeLessThanOrEqual(32);
+  const auswahlKartenBox = await alpha.boundingBox();
+  expect(auswahlKartenBox?.width).toBeGreaterThanOrEqual(44);
+  expect(auswahlKartenBox?.height).toBeGreaterThanOrEqual(44);
+
+  const lokaleAuswahlsuche = page.getByPlaceholder("Titel oder Originaltitel suchen …");
+  await expect(lokaleAuswahlsuche).toBeVisible();
+  const suchleistenPosition = await lokaleAuswahlsuche.evaluate((input) => (
+    getComputedStyle(input.closest(".kd-mediathek-suchleiste")).position
+  ));
+  expect(suchleistenPosition).toBe("sticky");
+  expect((await lokaleAuswahlsuche.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await lokaleAuswahlsuche.fill("Alpha");
+  await expect(alpha).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("checkbox", { name: "Zulu auswählen" })).toHaveCount(0);
+  await expect(page.getByText("2 ausgewählt · 1 sichtbar", { exact: true })).toBeVisible();
+  const lokaleSucheLeeren = page.getByRole("button", { name: "Mediatheksuche leeren", exact: true });
+  expect((await lokaleSucheLeeren.boundingBox())?.width).toBeGreaterThanOrEqual(44);
+  expect((await lokaleSucheLeeren.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await lokaleSucheLeeren.click();
+  await expect(zulu).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText("2 ausgewählt", { exact: true })).toBeVisible();
 
   await page.locator("select").filter({ has: page.locator('option[value="titel"]') }).selectOption("titel");
   await page.evaluate(() => {
@@ -3431,7 +3458,7 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
 
   await page.getByRole("button", { name: "Auswählen", exact: true }).click();
   await page.getByRole("checkbox", { name: "Alpha auswählen" }).click();
-  await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
+  await page.getByRole("button", { name: "Fertig", exact: true }).click();
   await alphaKarte.click();
   await expect(alphaKarte).toContainText("Alpha-Details");
   await keineDokumentUeberbreite(page);

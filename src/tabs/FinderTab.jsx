@@ -13,6 +13,8 @@ import { FilmForm } from "../components/EintragForm.jsx";
 import { appHilfeAntwort } from "../lib/appHilfe.js";
 import { createCatalogSearchActions } from "../lib/entdeckenUi.js";
 import { rankRecommendations } from "../lib/recommendationRanking.js";
+import { rankCatalogTitleMatches } from "../lib/catalogTitleSearch.js";
+import { projectCompactGlobalResults } from "../lib/globalSearchProjection.js";
 
 /* Sperre gegen zwei gleichzeitige, bezahlte KI-Deutungen. Bewusst im
    Modul-Scope: der Finder-Tab wird beim Wechseln auf einen anderen Tab
@@ -155,12 +157,20 @@ export function erstelleFinderAntwort({
   const frage = String(text || "").trim();
   const sig = vorhandeneSignale || parseAnfrage(frage, master, kinoGenresAusMatches(kinoMatches));
   const nq = frage.toLocaleLowerCase("de-AT");
-  const artikelTreffer = nq
-    ? (artikel || []).filter((eintrag) => [
-      eintrag.titel, eintrag.text,
-      ...(eintrag.liste || []).flatMap((zeile) => [zeile.eingabe, zeile.notiz]),
-    ].some((wert) => String(wert || "").toLocaleLowerCase("de-AT").includes(nq))).slice(0, 10)
+  const artikelTitelTreffer = nq
+    ? rankCatalogTitleMatches({ text: frage, identities: [frage] }, artikel || [])
     : [];
+  const artikelTitelIds = new Set(artikelTitelTreffer.map(({ item }) => item.id));
+  const artikelInhaltTreffer = nq ? (artikel || []).filter((eintrag) => (
+    !artikelTitelIds.has(eintrag.id) && [
+      eintrag.text,
+      ...(eintrag.liste || []).flatMap((zeile) => [zeile.eingabe, zeile.notiz]),
+    ].some((wert) => String(wert || "").toLocaleLowerCase("de-AT").includes(nq))
+  )) : [];
+  const artikelTreffer = [
+    ...artikelTitelTreffer.map(({ item }) => item),
+    ...artikelInhaltTreffer,
+  ].slice(0, 10);
   const treffer = sucheFinder(sig, { master: master || [], kinoMatches, streamingBekannt });
   return {
     sig,
@@ -210,8 +220,9 @@ export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", lim
       : film.id;
     const watchmodeId = treffer.herkunft?.streaming?.watchmode_id ?? film.watchmode_id ?? null;
     gruppen[bereich].push({
-      key: `film:${bereich}:${ref}`, typ: "film", ref,
+      key: `film:${bereich}:${ref}`, id: film.id, typ: "film", ref,
       zielArt: bereich === "streaming" ? "programm" : "film", titel: film.titel,
+      originaltitel: film.originaltitel,
       meta: [film.jahr, film.typ && film.typ !== "film" ? film.typ : null].filter(Boolean).join(" · "),
       searchActions: createCatalogSearchActions({
         watchmodeId,
@@ -223,8 +234,10 @@ export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", lim
   }
   for (const treffer of antwort?.kino || []) {
     gruppen.kino.push({
-      key: "kino:" + (treffer.pf.film_at_id || treffer.pf.t), typ: "kino",
+      key: "kino:" + (treffer.pf.film_at_id || treffer.pf.t),
+      id: treffer.pf.film_at_id || treffer.pf.id, typ: "kino",
       zielArt: "programm", ref: treffer.pf.film_at_id || treffer.pf.t, titel: treffer.pf.t,
+      originaltitel: treffer.pf.ot,
       meta: [treffer.pf.j, ...(treffer.pf.k || []).slice(0, 2)].filter(Boolean).join(" · "),
       searchActions: createCatalogSearchActions({
         catalogId: treffer.pf.film_at_id,
@@ -236,8 +249,10 @@ export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", lim
   }
   for (const titel of antwort?.entdecken || []) {
     gruppen.streaming.push({
-      key: "streaming:" + (titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`), typ: "streaming",
+      key: "streaming:" + (titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`),
+      watchmode_id: titel.watchmode_id, typ: "streaming",
       zielArt: "entdecken", ref: titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`, titel: titel.titel,
+      originaltitel: titel.originaltitel,
       meta: [titel.jahr, ...(titel.dienste || []).slice(0, 2)].filter(Boolean).join(" · "),
       searchActions: createCatalogSearchActions({
         watchmodeId: titel.watchmode_id,
@@ -247,20 +262,23 @@ export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", lim
     });
   }
   for (const artikel of antwort?.artikel || []) gruppen.blog.push({
-    key: "blog:" + artikel.id, typ: "blog", ref: artikel.id, titel: artikel.titel, meta: "Blogbeitrag",
+    key: "blog:" + artikel.id, id: artikel.id, typ: "blog", ref: artikel.id,
+    titel: artikel.titel, originaltitel: artikel.originaltitel, meta: "Blogbeitrag",
   });
 
   const standard = ["mediathek", "kino", "streaming", "blog", "daten"];
-  const reihenfolge = standard.includes(bevorzugterBereich)
-    ? [bevorzugterBereich, ...standard.filter((bereich) => bereich !== bevorzugterBereich)]
-    : standard;
-  const alle = [
-    ...(hilfeTreffer ? [hilfeTreffer] : []),
-    ...reihenfolge.flatMap((bereich) => gruppen[bereich].map((item) => ({
+  if (hilfeTreffer) {
+    const hilfeBereich = standard.includes(hilfeTreffer.bereich) ? hilfeTreffer.bereich : "daten";
+    gruppen[hilfeBereich].push(hilfeTreffer);
+  }
+  const alle = standard.flatMap((bereich) => gruppen[bereich].map((item) => ({
       ...item, bereich, bereichLabel: BEREICH_LABEL[bereich],
-    }))),
-  ];
-  return { items: alle.slice(0, limit), gesamt: alle.length };
+    })));
+  return projectCompactGlobalResults(alle, {
+    query: antwort?.sig?.frage || "",
+    preferredArea: bevorzugterBereich,
+    limit,
+  });
 }
 
 /* ================= FINDER =================

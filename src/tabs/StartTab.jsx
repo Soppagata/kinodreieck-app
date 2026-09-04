@@ -8,6 +8,7 @@ import { findeKinoPinImKatalog, folgenstandText } from "../lib/wochenplan.js";
 import { mustwatchVerfuegbarkeit, sortiereMustwatch } from "../lib/mustwatch.js";
 import { localRecommendationCandidates, webDiscoveryFeedCards } from "../lib/entdeckenUi.js";
 import { resolveEntdeckenPins } from "../lib/entdeckenPins.js";
+import { projectRecentPersonalEntries } from "../lib/personalEntryChronology.js";
 
 /* ================= START =================
    Das Dashboard ist die einzige Startansicht. Alle Module entstehen
@@ -33,11 +34,9 @@ const pinSortWert = (p) => {
    · Deine Woche:      persönliche Reminder + Kinopins + passende Kinovorschläge,
                        rollierende sieben Tage
    · Must-Watch:       mustwatch (oberste 5 = Listenreihenfolge)
-   · Zuletzt hinzugefügt: NUR belegbare Zeitstempel — Must-Watch erstellt_am +
-     Merkliste hinzugefuegt_am. Master-Einträge bewusst NICHT dabei: die Liste
-     trägt kein Datum, und ihre Array-Ordnung ist nach einem Voll-Import
-     (importMaster/Restore ersetzt die Liste in Datei-Reihenfolge) nicht
-     nachweislich chronologisch. Kein neues Datenfeld, kein neuer Topf. */
+   · Zuletzt hinzugefügt: Master + Must-Watch + Merkliste. Neue Master-Einträge
+     tragen `erstellt_am`; Alt-Master ohne Zeitpunkt bleiben in einer getrennt
+     beschrifteten stabilen Einfügereihenfolge, ohne historische Zeit zu erfinden. */
 
 /* Nächster Termin aus den Zeit-Strings eines Programm-Films — gleiche
    Parse-Logik wie KinoTab.terminWert (Jahres-Rollover, 2-Tage-Kulanz). */
@@ -129,6 +128,13 @@ function StartDashboard({
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
   const zuEintrag = (id, fallbackTab) => { if (id && zeigeEintrag) zeigeEintrag(id); else if (onNavigiere) onNavigiere(fallbackTab); };
+  const oeffneChronikEintrag = (eintrag) => {
+    if (eintrag.target === "streaming" && onSpringeZuStreaming) {
+      onSpringeZuStreaming({ art: "entdecken", ref: eintrag.ref, titel: eintrag.label });
+      return;
+    }
+    zuEintrag(eintrag.ref, eintrag.target);
+  };
 
   /* Die drei stärksten passenden Filme sitzen nicht mehr in einem eigenen
      Dashboard-Modul, sondern als Vorschläge direkt an ihrem Kalendertag. */
@@ -226,16 +232,9 @@ function StartDashboard({
     .sort((a, b) => Number(!!b.radar) - Number(!!a.radar) || String(a.titel).localeCompare(String(b.titel), "de")),
   [entdeckenStatus, serienKatalog, serienRadarMap]);
 
-  /* Zuletzt hinzugefügt: nur belegbare Zeitstempel; ref = Sprung-Ziel (Must-Watch-ID). */
-  const zuletzt = useMemo(() => {
-    const mw = (mustwatch || []).filter((e) => e.erstellt_am).map((e) => ({
-      key: "mw" + e.id, label: e.titel, quelle: "MUST-WATCH", ziel: "mediathek", ref: e.id, zeit: Date.parse(e.erstellt_am) || 0,
-    }));
-    const mk = (merkliste || []).filter((m) => m.hinzugefuegt_am).map((m) => ({
-      key: "merk" + m.watchmode_id, label: m.titel + (m.jahr ? " (" + m.jahr + ")" : ""), quelle: "MERKLISTE", ziel: "streaming", ref: null, zeit: Date.parse(m.hinzugefuegt_am) || 0,
-    }));
-    return [...mw, ...mk].sort((a, b) => b.zeit - a.zeit).slice(0, 5);
-  }, [mustwatch, merkliste]);
+  const zuletzt = useMemo(() => projectRecentPersonalEntries({
+    master, mustwatch, merkliste, limit: 5,
+  }), [master, mustwatch, merkliste]);
 
   const datum = new Date().toLocaleDateString("de-AT", { weekday: "long", day: "numeric", month: "long" });
   const fmtTag = (ms) => { const d = new Date(ms); const z = (n) => String(n).padStart(2, "0"); return z(d.getDate()) + "." + z(d.getMonth() + 1) + "."; };
@@ -356,19 +355,35 @@ function StartDashboard({
           ) : <p className="kd-dash-leer">Noch kein Titel auf deiner Must-Watch-Liste.</p>}
         </Modul>
 
-        {/* ---- 4 · Zuletzt hinzugefügt (Must-Watch-Zeilen -> Eintrag, Merkliste -> Bereich) ---- */}
+        {/* ---- 4 · Zuletzt hinzugefügt: belegte Zeiten + ehrlicher Legacy-Fallback ---- */}
         <Modul name="Zuletzt hinzugefügt" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
-          {zuletzt.length > 0 ? (
+          {zuletzt.dated.length > 0 ? (
             <div className="kd-dash-karte">
-              {zuletzt.map((z) => (
-                <div key={z.key} className="kd-dash-zeile kd-dash-log" onClick={() => zuEintrag(z.ref, z.ziel)}>
+              {zuletzt.dated.map((z) => (
+                <div key={z.key} className="kd-dash-zeile kd-dash-log" onClick={() => oeffneChronikEintrag(z)}>
                   <span className="kd-dash-ztitel">{z.label}</span>
-                  <span className="kd-dash-tag">{fmtTag(z.zeit)}</span>
-                  <span className="kd-dash-badge">{z.quelle}</span>
+                  <span className="kd-dash-tag">{fmtTag(z.time)}</span>
+                  <span className="kd-dash-badge">{z.source}</span>
                 </div>
               ))}
             </div>
-          ) : <p className="kd-dash-leer">Neue Must-Watch- und Merkliste-Einträge erscheinen hier.</p>}
+          ) : null}
+          {zuletzt.legacyMaster.length > 0 ? (<>
+            <p className="kd-dash-legacyhinweis">
+              Altbestand · stabile Einfügereihenfolge, ohne historischen Zeitstempel
+            </p>
+            <div className="kd-dash-karte">
+              {zuletzt.legacyMaster.map((z) => (
+                <div key={z.key} className="kd-dash-zeile kd-dash-log" onClick={() => oeffneChronikEintrag(z)}>
+                  <span className="kd-dash-ztitel">{z.label}</span>
+                  <span className="kd-dash-badge">MASTER · LEGACY</span>
+                </div>
+              ))}
+            </div>
+          </>) : null}
+          {zuletzt.dated.length === 0 && zuletzt.legacyMaster.length === 0
+            ? <p className="kd-dash-leer">Neue Master-, Must-Watch- und Merkliste-Einträge erscheinen hier.</p>
+            : null}
         </Modul>
       </div>
       <footer className="kd-start-service">

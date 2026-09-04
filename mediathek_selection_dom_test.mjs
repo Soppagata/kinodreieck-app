@@ -233,7 +233,7 @@ const editShell = document.querySelector(".kd-film-editor-shell");
 const mutationenVorEditEntwurf = mutationen;
 await sende(knopf("Auswählen"), "click");
 check("Karten-Edit-Draft bleibt im Auswahlmodus gemountet und verborgen", editEntwurf.isConnected && editShell.isConnected && editShell.hidden);
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 check("Karten-Edit-Draft wird nach Auswahlende unverändert sichtbar", () => {
   const aktuell = document.querySelector('textarea[placeholder^="Begründung"]');
   return aktuell === editEntwurf && !editShell.hidden && aktuell.value === "Alpha-Entwurf bleibt erhalten";
@@ -252,7 +252,7 @@ const neuFormShell = document.querySelector('[data-tour="eintrag-neu"]');
 const mutationenVorNeuEntwurf = mutationen;
 await sende(knopf("Auswählen"), "click");
 check("Neu-Draft bleibt im Auswahlmodus gemountet und verborgen", neuerTitelEntwurf.isConnected && neuFormShell.isConnected && neuFormShell.hidden);
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 check("Neu-Draft wird nach Auswahlende unverändert sichtbar", () => {
   const titel = document.querySelector('input[placeholder="Titel *"]');
   const jahr = document.querySelector('input[placeholder="Jahr *"]');
@@ -411,7 +411,7 @@ await setzeWert(projektionsSuche, "");
 await sende(knopf("▸ Filter"), "click");
 await sende(knopf("Action"), "click");
 await sende(knopfEnthaelt("Serien"), "click");
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 await sende(knopfEnthaelt("Filme"), "click");
 await sende(knopf("Action"), "click");
 check("Karten-Edit-Draft behält DOM-Identität und Wert über alle Auswahlprojektionen", projektionsEdit.isConnected && projektionsEdit.value === "EDIT BLEIBT DURCH PROJEKTIONEN");
@@ -431,7 +431,7 @@ const mutationenVorMedienDraft = mutationen;
 await sende(knopf("Auswählen"), "click");
 await sende(knopfEnthaelt("Filme"), "click");
 await setzeWert([...document.querySelectorAll("select")].find((el) => [...el.options].some((o) => o.value === "jahr_alt")), "jahr_alt");
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 await sende(knopfEnthaelt("Musik"), "click");
 check("Medien-Neudraft behält DOM-Identität und Wert über Typ/Sortierung", medienNeuEntwurf.isConnected && medienNeuEntwurf.value === "MEDIEN-DRAFT BLEIBT");
 check("Medien-Neudraft über Auswahlprojektionen erzeugt keine Mutation", mutationen === mutationenVorMedienDraft);
@@ -440,7 +440,7 @@ await sende(knopfEnthaelt("Filme"), "click");
 
 const mutationenVorAuswahlmodus = mutationen;
 await sende(knopf("Auswählen"), "click");
-check("Modus ist ausdrücklich aktiviert", !!knopf("Auswahl beenden"));
+check("Modus ist ausdrücklich aktiviert und verständlich abschließbar", !!knopf("Fertig"));
 check("leere Auswahl meldet null", document.querySelector(".kd-auswahl-zaehler")?.textContent === "0 ausgewählt");
 check("Folgeaktionen sind bei leerer Auswahl deaktiviert", knopf("Auswahl leeren")?.disabled && knopf("Titelliste kopieren")?.disabled);
 check("ungültige f.id bleibt sichtbar, aber nicht auswählbar", () => {
@@ -516,7 +516,7 @@ clipboardAuftrag = null;
 await sende(knopf("Titelliste kopieren"), "click");
 const kopierenVorBeenden = clipboardAuftrag;
 const rafVorBeenden = rafAufrufe;
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 await act(async () => {
   kopierenVorBeenden.reject(new Error("clipboard-denied-nach-ende"));
   await Promise.resolve();
@@ -530,7 +530,7 @@ await sende(document.querySelector('[role="checkbox"][aria-label="Zulu auswähle
 clipboardAuftrag = null;
 await sende(knopf("Titelliste kopieren"), "click");
 const kopierenResolveVorBeenden = clipboardAuftrag;
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 await act(async () => {
   kopierenResolveVorBeenden.resolve();
   await Promise.resolve();
@@ -618,7 +618,7 @@ await act(async () => {
   await Promise.resolve();
 });
 updateVerzoegern = false;
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 check("laufender Editor-Save wird weder abgebrochen noch dupliziert", mutationen === mutationenVorEditorSave + 1 && !document.querySelector(".kd-editpanel") && document.body.textContent.includes("Alpha-Details"));
 
 await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
@@ -638,7 +638,7 @@ await act(async () => {
   await Promise.resolve();
 });
 updateVerzoegern = false;
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 check("fehlgeschlagener Editor-Save bleibt genau einmal und mit Draft am Ursprung", mutationen === mutationenBeimEditorFehler
   && fehlerEditEntwurf.isConnected && fehlerEditEntwurf.value === "FEHLER-DRAFT BLEIBT AM URSPRUNG"
   && document.body.textContent.includes("Editor-Save absichtlich fehlgeschlagen"));
@@ -660,7 +660,7 @@ await act(async () => {
   await Promise.resolve();
 });
 addVerzoegern = false;
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 check("laufender Neu-Save wird weder abgebrochen noch dupliziert", mutationen === mutationenVorNeuSave + 1 && !!knopf("+ Eintrag hinzufügen"));
 
 await sende(knopf("+ Eintrag hinzufügen"), "click");
@@ -679,7 +679,7 @@ await act(async () => {
   await Promise.resolve();
 });
 addVerzoegern = false;
-await sende(knopf("Auswahl beenden"), "click");
+await sende(knopf("Fertig"), "click");
 check("fehlgeschlagener Neu-Save bleibt genau einmal und mit Draft am Ursprung", mutationen === mutationenBeimNeuFehler
   && fehlerNeuEntwurf.isConnected && fehlerNeuEntwurf.value === "NEU-FEHLER-DRAFT BLEIBT"
   && document.body.textContent.includes("Neu-Save absichtlich fehlgeschlagen"));
