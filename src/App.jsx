@@ -148,6 +148,7 @@ export default function App() {
   const scrollProBereichRef = useRef(new Map());
   const scrollWiederherstellungRef = useRef(0);
   const scrollTabwechselGestartetRef = useRef(false);
+  const scrollEntsperrungRef = useRef(null);
   const aktuelleScrolltiefe = useCallback(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return 0;
     /* Das Popup sperrt iOS-Scroll über einen fixierten Body. In diesem Zustand
@@ -161,23 +162,43 @@ export default function App() {
   const stelleScrolltiefeHer = useCallback((id, ueberschreiben = null) => {
     const ziel = ueberschreiben ?? scrollProBereichRef.current.get(id) ?? 0;
     const auftrag = ++scrollWiederherstellungRef.current;
-    /* Passive Effect-Cleanups können die Menüsperre erst nach mehreren Frames
-       lösen. Erst danach darf die Zielposition gewinnen; eine feste Zahl von
-       Frames wäre auf iOS und in Chromium nicht zuverlässig. */
-    let versuche = 0;
-    const nachEntsperrung = () => {
+    scrollEntsperrungRef.current?.disconnect();
+    scrollEntsperrungRef.current = null;
+    const anwenden = () => {
       if (scrollWiederherstellungRef.current !== auftrag) return;
-      if (document.body.style.position === "fixed" && versuche < 12) {
-        versuche += 1;
-        requestAnimationFrame(nachEntsperrung);
-        return;
-      }
       requestAnimationFrame(() => {
         if (scrollWiederherstellungRef.current !== auftrag) return;
         try { window.scrollTo({ top: ziel, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, ziel); }
       });
     };
-    requestAnimationFrame(nachEntsperrung);
+    /* Das Menü-Cleanup kann auf langsamen iPhones beliebig später als der
+       Tab-Render laufen. Beobachte deshalb die echte Body-Entsperrung, statt
+       nach einer geratenen Framezahl möglicherweise zu früh zu scrollen. */
+    requestAnimationFrame(() => {
+      if (scrollWiederherstellungRef.current !== auftrag) return;
+      if (document.body.style.position !== "fixed") { anwenden(); return; }
+      const observer = new MutationObserver(() => {
+        if (scrollWiederherstellungRef.current !== auftrag) { observer.disconnect(); return; }
+        if (document.body.style.position === "fixed") return;
+        observer.disconnect();
+        if (scrollEntsperrungRef.current === observer) scrollEntsperrungRef.current = null;
+        anwenden();
+      });
+      scrollEntsperrungRef.current = observer;
+      observer.observe(document.body, { attributes: true, attributeFilter: ["style"] });
+      /* Schließt die Lücke, falls das Cleanup genau zwischen Prüfung und
+         Observer-Registrierung lief. */
+      if (document.body.style.position !== "fixed") {
+        observer.disconnect();
+        scrollEntsperrungRef.current = null;
+        anwenden();
+      }
+    });
+  }, []);
+  useEffect(() => () => {
+    scrollEntsperrungRef.current?.disconnect();
+    scrollEntsperrungRef.current = null;
+    scrollWiederherstellungRef.current += 1;
   }, []);
   const navigiere = useCallback((id) => {
     if (!remoteKontoAktiv && id !== "mediathek") return;

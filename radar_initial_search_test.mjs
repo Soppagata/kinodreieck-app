@@ -112,7 +112,11 @@ try {
     await act(async()=>{ui.release();assert.equal((await first).status,"confirmed");});
     const saved=JSON.parse(localStorage.getItem(K.radar));assert.equal(saved.subscriptions[0].targetText,query);
     assert.equal(saved.pilot.events[0].title,event.title);await ui.radar();
-    assert.match(ui.container.textContent,/Ein anderer Werktitel/);assert.doesNotMatch(ui.container.textContent,/alle sechs Tage|alle 6 Tage/);
+    /* TEXT-Funde bleiben im eigenen Feed gespeichert. Der reale Feed liefert
+       derzeit aber keine starke Zuordnung vom Fund zurück zum Textziel; die
+       Neuigkeitenansicht darf diese Herkunft deshalb nicht erraten. */
+    assert.doesNotMatch(ui.container.textContent,/Ein anderer Werktitel/);
+    assert.doesNotMatch(ui.container.textContent,/alle sechs Tage|alle 6 Tage/);
     await act(async()=>{assert.equal((await controller.fuegeRadarTextHinzu(query)).status,"active");});
     assert.equal(ui.context.calls.filter(x=>x==="search").length,1);
     await ui.remount();assert.equal(ui.context.calls.filter(x=>x==="search").length,1);await ui.radar();

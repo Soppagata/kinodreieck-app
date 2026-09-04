@@ -97,7 +97,14 @@ test("Haupt-Entdecken bleibt leicht; Streaming Alles und beide Jahrzehntregler b
 });
 
 test("Mobile Haupttabs merken Scrollpositionen und Same-tab-Schließen springt nicht", async ({ privateApp }) => {
-  const { page } = privateApp;
+  const { page, traffic } = privateApp;
+  /* Erst den echten Konto-Boot abwarten: Andernfalls verschwindet zwischen
+     Startmessung und Rückkehr noch der Erstladehinweis und WebKit klemmt die
+     gespeicherte Tiefe korrekt an eine inzwischen kleinere Dokumenthöhe. */
+  await expect.poll(() => ["catalog:programm", "catalog:streaming_bekannt"]
+    .every((contract) => traffic.contracts.includes(contract))).toBe(true);
+  await expect(page.locator(".kd-vertrauen")).not.toContainText("noch nicht geladen");
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect.poll(() => page.evaluate(() => (
     document.documentElement.scrollHeight - window.innerHeight
   ))).toBeGreaterThan(100);
