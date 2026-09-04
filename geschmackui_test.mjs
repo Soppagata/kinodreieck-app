@@ -1625,7 +1625,7 @@ await klickT("Aktuelle Infos");
 
 check("L", "die Ansicht nennt Fassung, Änderungsdatum und die Zahl der Angaben  [gemessen: "
   + JSON.stringify((text().match(/Fassung [^m]*/) || [])[0]) + "]",
-  () => /Fassung p1 · zuletzt geändert \d{4}-\d{2}-\d{2} · 1 bestätigte Angabe/.test(text()));
+  () => /Fassung p1 · zuletzt geändert \d{2}\.\d{2}\.\d{4} · 1 bestätigte Angabe/.test(text()));
 check("L", "jeder Zug trägt seine HERKUNFT  [gemessen: "
   + JSON.stringify(text().includes("von dir angekreuzt")) + "]",
   () => text().includes("von dir angekreuzt"));

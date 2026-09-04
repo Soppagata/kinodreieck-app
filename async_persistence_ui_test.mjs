@@ -651,7 +651,7 @@ const streamingFixture = await mounte(StreamingTab, {
     return new Promise((resolve) => { statusResolver = resolve; });
   },
 });
-await act(async () => { knopf(streamingFixture.container, "Entdecken").click(); await tick(); });
+await act(async () => { knopf(streamingFixture.container, "Alles").click(); await tick(); });
 await act(async () => {
   streamingFixture.container.querySelector('button[title="Als gesehen markieren"]').click();
   await tick();
