@@ -26,8 +26,12 @@ export function radarEpisodeIdentity(entry) {
       || (entry.seasonNumber != null && entry.seasonNumber !== seasonNumber)
       || (episodeTitle && (MARKER.test(episodeTitle) || /^\d|^(?:und|and|bis|to)\b/iu.test(episodeTitle)))
       || (episodeNumber === null && (entry.eventType !== "staffelstart" || episodeTitle))) return null;
+  const provenance = typeof entry.sourceTargetKey === "string" && entry.sourceTargetKey.trim()
+    ? entry.sourceTargetKey.trim() : null;
   return { seriesTitle, seasonNumber, episodeNumber, episodeTitle,
-    key: JSON.stringify([seriesTitle.normalize("NFC").toLowerCase().replace(/\s+/gu, " "), seasonNumber]) };
+    key: JSON.stringify([
+      seriesTitle.normalize("NFC").toLowerCase().replace(/\s+/gu, " "), seasonNumber, provenance,
+    ]) };
 }
 
 function byDate(a, b) { return `${a.date}|${a.title}`.localeCompare(`${b.date}|${b.title}`, "de-AT"); }
@@ -63,6 +67,9 @@ export function projectRadarNews(events, today) {
       title: `${entries[0].seriesTitle} · Staffel ${entries[0].seasonNumber}`,
       date: dated.date, dateLabel: premiere ? "Staffelstart" : "Nächste Folge",
       category: "season", platform: unanimous(upcoming, "platform"), region: unanimous(upcoming, "region"),
+      targetId: unanimous(upcoming, "targetId"),
+      sourceTargetKey: unanimous(upcoming, "sourceTargetKey"),
+      sourceTargetKind: unanimous(upcoming, "sourceTargetKind"),
       episodes,
     });
   }

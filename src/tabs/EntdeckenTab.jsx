@@ -6,6 +6,7 @@ import {
   createEntdeckenRecommendations,
   localCalendarDay,
   localRadarTargetLabel,
+  radarSubscriptionForEvent,
   radarSyncProblem,
 } from "../lib/entdeckenUi.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
@@ -347,6 +348,10 @@ function RadarView({
   const syncProblem = radarSyncProblem(radarState?.outbox, syncStatus);
   const radarDay = radarViennaDay();
   const events = useMemo(() => projectRadarNews(radarPilotEvents, radarDay), [radarPilotEvents, radarDay]);
+  const news = useMemo(() => events.map((entry) => Object.freeze({
+    entry,
+    target: radarSubscriptionForEvent(entry, subscriptions),
+  })), [events, subscriptions]);
   const searchStatuses = accountMode ? radarState?.pilot?.searchStatuses : undefined;
 
   const addTarget = async (event) => {
@@ -408,9 +413,12 @@ function RadarView({
       </article>
       <article className="kd-entdecken-panel">
         <h3>Neuigkeiten</h3>
-        {events.length ? <ul className="kd-radar-neuigkeiten">{events.map((entry) => <li key={entry.eventVersionId}>
+        {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
           <span>{entry.date} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
+          <span className="kd-radar-suchstatus">Ziel: {target
+            ? localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })
+            : "nicht eindeutig zugeordnet"}</span>
           {entry.kind === "season" ? <details className="kd-radar-folgen">
             <summary>{entry.episodes.length} {entry.episodes.length === 1 ? "Folge" : "Folgen"} anzeigen</summary>
             <ol>{entry.episodes.map((episode) => <li key={episode.eventVersionId}>

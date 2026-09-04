@@ -176,10 +176,16 @@ const button = (label) => [...rootElement.querySelectorAll("button")]
 for (const label of [
   "Darstellung & Verhalten", "KI-Funktionen", "Geschmacksprofil",
   "Konto & Geräte-Sync", "Datenrechte & Konto", "Sicherheitskopie dieses Geräts",
-  "Streaming-Quellen", "KI-Vokabular", "Über & Rechtliches",
+  "Streaming-Quellen", "Streaming-Katalogstand", "KI-Vokabular", "Über & Rechtliches",
 ]) {
   check(`Release-Kernfläche bleibt sichtbar: ${label}`, hatSummary(label));
 }
+check("Datierter Katalogaudit nennt Umfang, Snapshotdifferenz und Mandalorian-Trace",
+  text().includes("AT-Streaming · Discover und Known")
+    && text().includes("Snapshotvergleich voll")
+    && text().includes("Pipeline limitiert")
+    && text().includes("keinen Marktabgang")
+    && hatSummary("Warum fehlt „Mandalorian & Grogu“?"));
 check("Deterministisches Geschmacksprofil bleibt ohne KI erreichbar",
   !!button("Profil anlegen") && !text().includes("Eigene Blogartikel für dein Profil auswerten"));
 check("Manueller Datenrechteweg bleibt erreichbar",

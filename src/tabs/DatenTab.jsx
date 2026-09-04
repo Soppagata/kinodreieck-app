@@ -8,6 +8,7 @@ import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { StapelImport } from "../components/StapelImport.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
 import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
+import { KatalogAuditStatus } from "../components/KatalogAuditStatus.jsx";
 import { DatenschutzUebersicht, KontoDatenrechte, SupportDaten } from "../components/PrivatePilotOps.jsx";
 import { alleStimmungen, bekannteWerte, sigAusSchema } from "../lib/finder.js";
 import { hatOfflineDefinition, vokabularEintragAusDeutung } from "../lib/vokabular.js";
@@ -374,6 +375,10 @@ export function DatenTab({
       {/* 5 — Streaming-Quellen */}
       {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
         katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
+
+      <Klappe titel="Streaming-Katalogstand">
+        <KatalogAuditStatus />
+      </Klappe>
 
       {/* 6 — Such-Vokabular */}
       {saveVokabular && (

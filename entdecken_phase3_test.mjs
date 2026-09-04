@@ -878,7 +878,7 @@ try {
     radarPilotEvents: [starfighterEvent],
   });
   await act(async () => { button(targetFoundUi.container, "Radar").click(); await tick(); });
-  check("Radar trennt abgeleiteten Fund und Suchziel ohne Zusatzmetadaten im Fund", () => {
+  check("Radar trennt abgeleiteten Fund und zeigt das exakt gebundene Suchziel", () => {
     const targets = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => entry.querySelector("h3")?.textContent === "Meine Ziele");
     const news = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
@@ -886,7 +886,7 @@ try {
     assert.match(targets.textContent, /Star Wars/);
     assert.doesNotMatch(targets.textContent, /Star Wars: Starfighter/);
     assert.match(news.textContent, /Star Wars: Starfighter/);
-    assert.doesNotMatch(news.textContent, /Gefunden für:/);
+    assert.match(news.textContent, /Ziel:\s*Star Wars/);
     assert.equal(news.querySelectorAll("a,button").length, 0);
   });
   await targetFoundUi.cleanup();

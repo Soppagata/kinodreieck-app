@@ -97,6 +97,23 @@ check("Plattform- oder Regionswiderspruch wird nicht auf die Staffel verallgemei
     assert.equal(group.episodes.length,2);
   }
 });
+check("Staffelgruppen bleiben an genau eine vorhandene Zielprovenienz gebunden", () => {
+  const targetId = "imdb:tt1234567";
+  const sourceTargetKey = `work:${targetId}`;
+  const grouped = projectRadarNews([
+    episode(2, { targetId, sourceTargetKey, sourceTargetKind: "work" }),
+    episode(3, { targetId, sourceTargetKey, sourceTargetKind: "work" }),
+  ], today);
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].targetId, targetId);
+  assert.equal(grouped[0].sourceTargetKey, sourceTargetKey);
+  assert.equal(grouped[0].sourceTargetKind, "work");
+  const split = projectRadarNews([
+    episode(2, { targetId, sourceTargetKey, sourceTargetKind: "work" }),
+    episode(3, { targetId, sourceTargetKey: "franchise:title-group:v1:test", sourceTargetKind: "franchise" }),
+  ], today);
+  assert.equal(split.length, 2);
+});
 
 const targetText="Beispieldorf";
 const targetId=createLocalTextRadarTargetId(targetText);
