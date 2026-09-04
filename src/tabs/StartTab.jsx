@@ -2,7 +2,6 @@ import { useEffect, useMemo } from "react";
 import { T } from "../lib/tokens.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { formatiereTermin } from "../lib/programm.js";
-import { useInstallationsStatus } from "../lib/installation.js";
 import { Wochenplan } from "../components/Wochenplan.jsx";
 import { beobachteteSerien, neueStaffeln } from "../lib/staffeln.js";
 import { findeKinoPinImKatalog, folgenstandText } from "../lib/wochenplan.js";
@@ -127,7 +126,6 @@ function StartDashboard({
   master = [], onSpringeZuStreaming, onSpringeZuKino, onFilmAnlegen, toggleKinoPin,
   onStreamingKatalogLaden,
 }) {
-  const installation = useInstallationsStatus();
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
   const zuEintrag = (id, fallbackTab) => { if (id && zeigeEintrag) zeigeEintrag(id); else if (onNavigiere) onNavigiere(fallbackTab); };
@@ -375,7 +373,6 @@ function StartDashboard({
       </div>
       <footer className="kd-start-service">
         <button onClick={(event) => { event.currentTarget.focus(); onHilfe(); }}>? Anleitung &amp; Hilfe</button>
-        {!installation.datei && !installation.standalone && <a href={import.meta.env.BASE_URL + "download/"}>App installieren &amp; Einzeldatei</a>}
       </footer>
     </section>
   );

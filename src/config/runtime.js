@@ -79,5 +79,22 @@ export function validateRuntimeConfig(config = STANDARD) {
   return Object.freeze({ ok: fehler.length === 0, fehler: Object.freeze(fehler) });
 }
 
+/* Eine einzige, fail-closed Capability fuer alle sichtbaren Radar-Einstiege.
+   Das Featureflag allein ist keine Laufbereitschaft: Der Browser braucht auch
+   die oeffentliche Supabase-Verbindung und einen fertigen Kontokontext. */
+export function radarClientRuntimeAvailable(config = STANDARD, {
+  singleFile = false,
+  remoteAccountReady = false,
+  accountCacheAuthority = false,
+  clientEnabled = config?.radarPilotClientEnabled,
+} = {}) {
+  return singleFile !== true
+    && remoteAccountReady === true
+    && accountCacheAuthority === true
+    && clientEnabled === true
+    && /^https:\/\/[a-z0-9-]+\.supabase\.co$/iu.test(url(config?.supabaseUrl))
+    && text(config?.supabasePublishableKey).length > 0;
+}
+
 const viteEnv = (typeof import.meta.env !== "undefined" && import.meta.env) || {};
 export const runtimeConfig = createRuntimeConfig(viteEnv);

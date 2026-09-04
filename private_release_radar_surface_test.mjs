@@ -170,6 +170,7 @@ const radarUi = await mount(EntdeckenTab, {
   blogProps: emptyBlogProps,
   radarState,
   accountMode: true,
+  radarAvailable: true,
   master: [],
   seriesCatalog: [],
   entdeckenStatus: {},

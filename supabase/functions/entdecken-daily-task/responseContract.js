@@ -3,6 +3,8 @@
    aber, dass ein bezahlter Fehllauf nur als unspezifisches CLAIM_FAILED endet. */
 
 import { normalizeEntdeckenProviderFailure } from "./providerFailureContract.js";
+import { ENTDECKEN_MIXED_SOURCE_REQUESTS } from "./publicMixAdapter.js";
+import { ENTDECKEN_PUBLIC_SOURCE_REQUESTS } from "./publicChartAdapter.js";
 
 const FAILURE_REASONS = new Set([
   "setup-invalid", "storage_error", "source_registry_unavailable",
@@ -14,13 +16,16 @@ function safeCount(value, max = 100) {
 }
 
 function qualitySummary(result, telemetry) {
-  if (telemetry?.providerRequests !== 1 && telemetry?.sourceRequests !== 2 && !result?.quality) return null;
+  if (telemetry?.providerRequests !== 1
+      && ![ENTDECKEN_PUBLIC_SOURCE_REQUESTS, ENTDECKEN_MIXED_SOURCE_REQUESTS]
+        .includes(telemetry?.sourceRequests)
+      && !result?.quality) return null;
   return Object.freeze({
     searchResultCount: safeCount(telemetry?.resultCount, 20),
     citationUrlCount: safeCount(telemetry?.citationUrlCount, 20),
     rawItemCount: safeCount(telemetry?.rawItemCount, 100),
     normalizedItemCount: safeCount(telemetry?.normalizedItemCount, 50),
-    sourceItemCount: safeCount(telemetry?.sourceItemCount, 100),
+    sourceItemCount: safeCount(telemetry?.sourceItemCount, 150),
     candidateItemCount: safeCount(result?.quality?.candidateItemCount, 50),
     eligibleUniqueCount: safeCount(result?.quality?.eligibleUniqueCount, 50),
     rejectedItemCount: safeCount(result?.quality?.rejectedItemCount, 50),

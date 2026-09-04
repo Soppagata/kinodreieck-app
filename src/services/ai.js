@@ -24,11 +24,11 @@ import { createAiTransport } from "../lib/aiDriver.js";
 import { BoundaryError, ERROR_CODES, errorFromStatus, normalizeBoundaryError } from "./errors.js";
 
 /* `health` und `echo-struct` sind die Gesundheits- und Kettenproben aus
-   Etappe 5 — ohne persönliche Daten. Die beiden Fachaufgaben sind registriert,
-   aber noch nicht gebaut; der Endpunkt meldet dafür NOT_IMPLEMENTED statt eines
-   Serverfehlers. */
+   Etappe 5 — ohne persönliche Daten. Nur tatsächlich nutzbare Fachaufgaben
+   stehen in der aktiven Clientauswahl; serverseitige 501-Guards bleiben davon
+   als Abwärtsgrenze unberührt. */
 export const AI_TASKS = Object.freeze([
-  "health", "echo-struct", "intelligent-search", "masterlist-enrichment",
+  "health", "echo-struct", "intelligent-search",
   /* Etappe 7, Phase 3: liest aus den drei freien Antworten Geschmacks-Signale.
      Die Belegpflicht wird SERVERSEITIG erzwungen — der Endpunkt schlägt nach,
      ob jede gemeldete Textstelle wirklich in der Antwort steht. Hier wäre sie

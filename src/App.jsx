@@ -49,6 +49,7 @@ import { useErrorQueue } from "./controllers/useErrorQueue.js";
 import { useMasterStateController } from "./controllers/useMasterStateController.js";
 import { useBackupExportController } from "./controllers/useBackupExportController.js";
 import { useEntdeckenRadarController } from "./controllers/useEntdeckenRadarController.js";
+import { radarClientRuntimeAvailable, runtimeConfig } from "./config/runtime.js";
 import { starteEinzelExportDownload } from "./controllers/backupExportController.js";
 import { naechsteLokaleMasterHerkunft } from "./controllers/masterOriginController.js";
 import { useConfirmedStorageState } from "./controllers/useConfirmedStorageState.js";
@@ -1279,6 +1280,14 @@ export default function App() {
     personRadarAvailable, fuegePersonRadarHinzu, aenderePersonRadar, } = useEntdeckenRadarController({
     session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
     entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr, });
+  /* Sichtbarkeit und Bedienbarkeit besitzen exakt dieselbe Laufzeitgrenze.
+     Ein deaktivierter Radarclient darf weder Tab noch Suchaktion anbieten. */
+  const radarRuntimeAvailable = radarClientRuntimeAvailable(runtimeConfig, {
+    singleFile: EINZELDATEI_BUILD,
+    remoteAccountReady: remoteKontoAktiv,
+    accountCacheAuthority: radarAuthority === "account-cache",
+    clientEnabled: radarPilotClientEnabled,
+  });
   const {
     accountId,
     vorbewertungAktiv,
@@ -1365,11 +1374,18 @@ export default function App() {
       streamingEntdecken: geladeneAnsichten?.entdecken || streamingEntdecken,
       artikel: artikelListe,
     });
+    const kompakt = kompakteFinderTreffer(antwort, bevorzugterBereich);
     setGlobaleSuchantwort({
       frage: text, bevorzugterBereich,
-      ...kompakteFinderTreffer(antwort, bevorzugterBereich),
+      ...kompakt,
+      items: radarRuntimeAvailable ? kompakt.items : kompakt.items.map((item) => ({
+        ...item,
+        ...(item.searchActions ? {
+          searchActions: { ...item.searchActions, radar: null },
+        } : {}),
+      })),
     });
-  }, [finderMaster, kinoMatches, streamingBekannt, streamingEntdecken, artikelListe]);
+  }, [finderMaster, kinoMatches, streamingBekannt, streamingEntdecken, artikelListe, radarRuntimeAvailable]);
   const oeffneAusfuehrlicheSuche = useCallback(() => {
     if (!globaleSuchantwort?.frage) return;
     const { frage: text, bevorzugterBereich: scope } = globaleSuchantwort;
@@ -1886,6 +1902,7 @@ export default function App() {
             master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryState.feed} webDiscoveryStatus={webDiscoveryState}
             dailyVariety={einstellungen.entdeckenTaeglich === true}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
+            radarAvailable={radarRuntimeAvailable}
             radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}
             syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
             onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
@@ -2001,11 +2018,12 @@ export default function App() {
         antwort={globaleSuchantwort}
         onAntwortSchliessen={() => setGlobaleSuchantwort(null)}
         onTreffer={oeffneGlobalenTreffer}
-        onSuchaktion={fuehreGlobaleSuchaktionAus} beobachteteIds={beobachteteWatchmodeIds} radarTargetIds={radarTargetIds}
+        onSuchaktion={fuehreGlobaleSuchaktionAus}
+        beobachteteIds={beobachteteWatchmodeIds} radarTargetIds={radarRuntimeAvailable ? radarTargetIds : []}
         onAlleErgebnisse={oeffneAusfuehrlicheSuche}
         menuOffen={mehrOffen} onMenu={toggleGlobalesMenu} />}
       </div>{/* .kd-app */}
-      {remoteKontoAktiv && radarPreviewTarget && (<RadarSubscriptionPreview target={radarPreviewTarget} radarState={sichtbarerRadarState}
+      {radarRuntimeAvailable && radarPreviewTarget && (<RadarSubscriptionPreview target={radarPreviewTarget} radarState={sichtbarerRadarState}
           accountMode={radarAuthority === "account-cache"} accountActive={remoteKontoAktiv} onConfirm={bestaetigeRadarVorschau} onClose={schliesseRadarPreview} />
       )}
       {EGGS_ENABLED && toasts.length > 0 && (

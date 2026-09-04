@@ -51,6 +51,7 @@ function focusableElements(root) {
 
 function ManageDialog({
   radarState, seriesCatalog, entdeckenStatus, master, useLibrary, accountMode,
+  radarAvailable,
   onUseLibrary, onObserveToggle, onRadarChange, onPersonRadarChange,
   syncStatus, onRadarPilotSync, onBlog, onClose, returnFocusRef,
 }) {
@@ -107,7 +108,7 @@ function ManageDialog({
                 <button type="button" onClick={() => onObserveToggle?.(entry, false)}>Beobachtung beenden</button></li>
             ))}</ul> : <p className="kd-entdecken-leer">Noch keine Serie beobachtet.</p>}
           </section>
-          <section>
+          {radarAvailable ? <section>
             <h3>Mein Radar</h3>
             <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Diese Ziele bleiben auf diesem Gerät."}</p>
             {subscriptions.length ? <ul className="kd-entdecken-verwalten-liste">{subscriptions.map((entry) => <li key={entry.targetId}>
@@ -125,7 +126,7 @@ function ManageDialog({
               </div> : <small>Änderung derzeit nicht verfügbar.</small>}
             </li>)}</ul> : null}
             {syncProblem ? <RadarSyncProblem problem={syncProblem} onRetry={onRadarPilotSync} /> : null}
-          </section>
+          </section> : null}
           <section>
             <h3>Empfehlungen</h3>
             <label className="kd-entdecken-check"><input type="checkbox" checked={useLibrary} onChange={(event) => onUseLibrary(event.target.checked)} />
@@ -427,6 +428,7 @@ export function EntdeckenTab({
   blogProps, fokusId, radarState, datenKontextKey = "local", seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   webDiscoveryFeed = null, webDiscoveryStatus = null, dailyVariety = false, calendarDay = null,
+  radarAvailable = false,
   radarPilotEvents = [], syncStatus = "idle", radarAutomaticAvailable = false,
   onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   onRadarRejectedDismiss,
@@ -446,13 +448,18 @@ export function EntdeckenTab({
     return () => { aktiv = false; };
   }, []);
   useEffect(() => { if (fokusId) setAnsicht("meinungen"); }, [fokusId]);
+  useEffect(() => {
+    if (!radarAvailable && ansicht === "radar") setAnsicht("empfehlungen");
+  }, [ansicht, radarAvailable]);
   const closeManage = useCallback(() => setManageOffen(false), []);
   const openBlog = useCallback(() => { setManageOffen(false); setAnsicht("meinungen"); }, []);
+  const sichtbareAnsichten = radarAvailable
+    ? ANSICHTEN : ANSICHTEN.filter(([id]) => id !== "radar");
 
   return <section className="kd-entdecken" data-testid="entdecken-tab">
     <div className="kd-entdecken-toolbar">
       <nav className="kd-entdecken-tabs" aria-label="Entdecken-Ansichten" role="tablist">
-        {ANSICHTEN.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={ansicht === id}
+        {sichtbareAnsichten.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={ansicht === id}
           className={ansicht === id ? "aktiv" : ""} onClick={() => setAnsicht(id)}>{label}</button>)}
         <button ref={manageButtonRef} type="button" className="kd-entdecken-verwalten" aria-label="Entdecken verwalten"
           title="Entdecken verwalten" onClick={() => setManageOffen(true)}>
@@ -467,7 +474,7 @@ export function EntdeckenTab({
       entdeckenStatus={entdeckenStatus} webDiscoveryFeed={webDiscoveryFeed} webDiscoveryStatus={webDiscoveryStatus}
       dailyVariety={dailyVariety} selectionDay={selectionDay} recommendationPins={recommendationPins}
       onRecommendationPinToggle={onRecommendationPinToggle} /> : null}
-    {ansicht === "radar" ? <RadarView key={datenKontextKey} radarState={radarState} master={master} streamingKnown={streamingKnown}
+    {radarAvailable && ansicht === "radar" ? <RadarView key={datenKontextKey} radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
       radarAutomaticAvailable={radarAutomaticAvailable} onRadarPilotReceipt={onRadarPilotReceipt}
@@ -476,7 +483,7 @@ export function EntdeckenTab({
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
-      master={master} useLibrary={useLibrary} accountMode={accountMode} onUseLibrary={setUseLibrary}
+      master={master} useLibrary={useLibrary} accountMode={accountMode} radarAvailable={radarAvailable} onUseLibrary={setUseLibrary}
       onObserveToggle={onObserveToggle} onRadarChange={onRadarChange} onPersonRadarChange={onPersonRadarChange}
       syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
       onBlog={openBlog} onClose={closeManage} returnFocusRef={manageButtonRef} /> : null}

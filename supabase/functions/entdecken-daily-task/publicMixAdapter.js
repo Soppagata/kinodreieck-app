@@ -1,32 +1,32 @@
 /* Providerfreier, marktuebergreifender Entdecken-Wochenpool.
    ---------------------------------------------------------
-   - bindet offizielle Wochencharts fuer Kino und Netflix in Oesterreich
-   - begrenzt Netflix hart auf 40 Prozent statt eine Plattformdominanz zu bauen
-   - zwei retryfreie, unangemeldete GETs pro neuem Pool (Netflix + OeFI)
-   - liest beim grossen Netflix-Archiv nur bis zum aktuellen AT-Block und
-     beendet den Stream danach aktiv, statt den Gesamtdatensatz zu puffern
+   - bindet die in Format 6 festgelegten Joyn- und OeFI-Charts fuer Oesterreich
+   - drei retryfreie, unangemeldete GETs pro neuem Pool (Joyn Film/Serie + OeFI)
+   - baut exakt 15 Kino-, 18 Streamingfilm- und 17 Serien-Eintraege
    - scheitert eine Quelle oder driftet ihre Struktur, wird kein Teilpool
      gespeichert; der Runner behaelt den letzten guten Gesamtpool
    - Popularitaet, Verfuegbarkeit und spaetere persoenliche Passung bleiben
      als getrennte Fakten modelliert */
 
+import { ENTDECKEN_PUBLIC_SOURCE_ID, extractJoynChartItems, JOYN_PUBLIC_CHARTS } from "./publicChartAdapter.js";
+
 export const ENTDECKEN_MIXED_FEED_FORMAT = 6;
 export const ENTDECKEN_MIXED_FEED_ID = "public:weekly-market-mix-at";
 export const ENTDECKEN_MIXED_SOURCE_ID = "chart:market-mix-at";
 export const ENTDECKEN_OEFI_SOURCE_ID = "chart:oefi-weekend-at";
-export const ENTDECKEN_NETFLIX_SOURCE_ID = "chart:netflix-weekly-at";
-export const ENTDECKEN_MIXED_POOL_SIZE = 25;
-export const ENTDECKEN_MIXED_SOURCE_REQUESTS = 2;
+export const ENTDECKEN_JOYN_SOURCE_ID = ENTDECKEN_PUBLIC_SOURCE_ID;
+export const ENTDECKEN_MIXED_POOL_SIZE = 50;
+export const ENTDECKEN_MIXED_SOURCE_REQUESTS = 3;
 export const ENTDECKEN_MIXED_MARKET_COUNTS = Object.freeze({
   cinema: 15,
-  streamingFilm: 5,
-  streamingSeries: 5,
+  streamingFilm: 18,
+  streamingSeries: 17,
 });
 export const ENTDECKEN_MIXED_SOURCE_COUNTS = Object.freeze({
   [ENTDECKEN_OEFI_SOURCE_ID]: 15,
-  [ENTDECKEN_NETFLIX_SOURCE_ID]: 10,
+  [ENTDECKEN_JOYN_SOURCE_ID]: 35,
 });
-export const ENTDECKEN_MIXED_MAX_SOURCE_SHARE = 0.4;
+export const ENTDECKEN_MIXED_MAX_SOURCE_SHARE = 0.7;
 
 export const OEFI_WEEKEND_CHART = Object.freeze({
   listUrl: "https://filminstitut.at/charts",
@@ -35,23 +35,8 @@ export const OEFI_WEEKEND_CHART = Object.freeze({
   sourceLabel: "Österreichisches Filminstitut",
 });
 
-export const NETFLIX_AT_WEEKLY_CHART = Object.freeze({
-  dataUrl: "https://www.netflix.com/tudum/top10/data/all-weeks-countries.tsv",
-  countryName: "Austria",
-  countryIso2: "AT",
-  sourceId: ENTDECKEN_NETFLIX_SOURCE_ID,
-  sourceLabel: "Netflix Top 10 Österreich",
-  filmReferenceUrl: "https://www.netflix.com/tudum/top10/austria/films",
-  seriesReferenceUrl: "https://www.netflix.com/tudum/top10/austria/tv",
-});
-
 const MAX_HTML_BYTES = 512_000;
-const MAX_NETFLIX_PREFIX_BYTES = 4_000_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
-const NETFLIX_TSV_HEADER = Object.freeze([
-  "country_name", "country_iso2", "week", "category", "weekly_rank",
-  "show_title", "season_title", "cumulative_weeks_in_top_10",
-]);
 const BLOCK_PAGE_FORM = /(?:captcha|verify\s+(?:that\s+)?you\s+are\s+human|access\s+denied|unusual\s+traffic)/iu;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
@@ -63,11 +48,6 @@ function validDay(value) {
 function validInstant(value) {
   return typeof value === "string" && value === text(value)
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
-}
-function daysBetween(left, right) {
-  if (!validDay(left) || !validDay(right)) return null;
-  const days = (Date.parse(`${right}T00:00:00.000Z`) - Date.parse(`${left}T00:00:00.000Z`)) / 86_400_000;
-  return Number.isInteger(days) ? days : null;
 }
 function normalizedTitle(value) {
   return text(value).normalize("NFKC").toLocaleLowerCase("de-AT")
@@ -201,133 +181,6 @@ export function extractOefiWeekendChartItems(html) {
     ? Object.freeze(rows) : Object.freeze([]);
 }
 
-function netflixCollector(retrievedOn) {
-  let headerSeen = false;
-  let latestWeek = null;
-  let complete = false;
-  const rows = [];
-  const push = (rawLine) => {
-    if (complete) return true;
-    const line = String(rawLine || "").replace(/\r$/u, "");
-    if (!headerSeen) {
-      headerSeen = true;
-      if (JSON.stringify(line.split("\t")) !== JSON.stringify(NETFLIX_TSV_HEADER)) {
-        throw new Error("public_mix_source_structure_invalid");
-      }
-      return false;
-    }
-    if (!line) return false;
-    const fields = line.split("\t");
-    if (fields.length !== NETFLIX_TSV_HEADER.length) {
-      throw new Error("public_mix_source_structure_invalid");
-    }
-    const [countryName, countryIso2, week, category, rankValue, showTitle, seasonTitle, cumulativeValue] = fields;
-    const austriaNamed = countryName === NETFLIX_AT_WEEKLY_CHART.countryName;
-    const austriaCoded = countryIso2 === NETFLIX_AT_WEEKLY_CHART.countryIso2;
-    if (austriaNamed !== austriaCoded) throw new Error("public_mix_source_structure_invalid");
-    if (!austriaNamed) {
-      if (latestWeek !== null) complete = true;
-      return complete;
-    }
-    if (latestWeek === null) {
-      const ageDays = daysBetween(week, retrievedOn);
-      if (!validDay(week) || new Date(`${week}T00:00:00.000Z`).getUTCDay() !== 0
-          || ageDays === null || ageDays < 0 || ageDays > 9) {
-        throw new Error("public_mix_source_stale");
-      }
-      latestWeek = week;
-    }
-    if (week !== latestWeek) {
-      complete = true;
-      return true;
-    }
-    const rank = Number(rankValue);
-    const cumulativeWeeks = Number(cumulativeValue);
-    const title = text(showTitle);
-    if (!["Films", "TV"].includes(category) || !Number.isInteger(rank) || rank < 1 || rank > 10
-        || !title || title !== showTitle || title.length > 200 || seasonTitle.length > 200
-        || !Number.isInteger(cumulativeWeeks) || cumulativeWeeks < 1) {
-      throw new Error("public_mix_source_structure_invalid");
-    }
-    const mediaType = category === "Films" ? "film" : "series";
-    rows.push(Object.freeze({
-      sourceItemId: `${mediaType === "film" ? "f" : "s"}_netflix-${hash64(`${mediaType}|${normalizedTitle(title)}`)}`,
-      title,
-      mediaType,
-      sourcePosition: rank,
-      measuredOn: latestWeek,
-      url: mediaType === "film"
-        ? NETFLIX_AT_WEEKLY_CHART.filmReferenceUrl
-        : NETFLIX_AT_WEEKLY_CHART.seriesReferenceUrl,
-    }));
-    return false;
-  };
-  const finish = () => {
-    if (!headerSeen || latestWeek === null) throw new Error("public_mix_source_structure_invalid");
-    for (const mediaType of ["film", "series"]) {
-      const ranks = rows.filter((row) => row.mediaType === mediaType)
-        .map((row) => row.sourcePosition).sort((left, right) => left - right);
-      if (JSON.stringify(ranks) !== JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])) {
-        throw new Error("public_mix_source_structure_invalid");
-      }
-    }
-    return Object.freeze(rows);
-  };
-  return Object.freeze({ push, finish });
-}
-
-export function extractNetflixAustriaWeeklyItems(tsv, { retrievedOn } = {}) {
-  if (typeof tsv !== "string" || !tsv || tsv.length > MAX_NETFLIX_PREFIX_BYTES || !validDay(retrievedOn)) {
-    return Object.freeze([]);
-  }
-  try {
-    const collector = netflixCollector(retrievedOn);
-    for (const line of tsv.split("\n")) {
-      if (collector.push(line)) break;
-    }
-    return collector.finish();
-  } catch {
-    return Object.freeze([]);
-  }
-}
-
-async function boundedNetflixRows(response, maxBytes, abort, retrievedOn) {
-  if (!response.body?.getReader) throw new Error("public_mix_source_body_invalid");
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  const collector = netflixCollector(retrievedOn);
-  let pending = "";
-  let length = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!(value instanceof Uint8Array)) throw new Error("public_mix_source_body_invalid");
-      length += value.byteLength;
-      if (length > maxBytes) {
-        abort?.();
-        try { await reader.cancel("public_mix_source_prefix_too_large"); } catch { /* beendet */ }
-        throw new Error("public_mix_source_prefix_too_large");
-      }
-      pending += decoder.decode(value, { stream: true });
-      const lines = pending.split("\n");
-      pending = lines.pop() || "";
-      let complete = false;
-      for (const line of lines) {
-        if (collector.push(line)) { complete = true; break; }
-      }
-      if (complete) {
-        try { await reader.cancel("austria-current-week-complete"); } catch { /* Stream ist bereits beendet. */ }
-        abort?.();
-        return collector.finish();
-      }
-    }
-    pending += decoder.decode();
-    if (pending) collector.push(pending);
-    return collector.finish();
-  } finally { try { reader.releaseLock(); } catch { /* beendet */ } }
-}
-
 async function boundedHtml(response, maxBytes, abort) {
   const contentLength = Number(response.headers?.get?.("content-length"));
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
@@ -361,24 +214,24 @@ async function boundedHtml(response, maxBytes, abort) {
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 
-function netflixItem(item, fetchedAt) {
+function joynItem(item, fetchedAt, retrievedOn) {
   return Object.freeze({
     title: item.title,
     sourceItemId: item.sourceItemId,
-    sourceId: ENTDECKEN_NETFLIX_SOURCE_ID,
-    sourceLabel: NETFLIX_AT_WEEKLY_CHART.sourceLabel,
+    sourceId: ENTDECKEN_JOYN_SOURCE_ID,
+    sourceLabel: "Joyn Österreich",
     mediaType: item.mediaType,
-    genres: Object.freeze([]),
+    genres: Object.freeze([...item.genres]),
     availability: Object.freeze({
       region: "AT",
       market: "streaming",
-      service: "Netflix",
-      licenseTypes: Object.freeze(["SVOD"]),
+      service: "Joyn",
+      licenseTypes: Object.freeze([...item.licenseTypes]),
     }),
     popularity: Object.freeze({
-      metric: "weekly-country-rank",
+      metric: "source-chart-rank",
       rank: item.sourcePosition,
-      measuredOn: item.measuredOn,
+      measuredOn: retrievedOn,
       value: null,
     }),
     sourceUrl: item.url,
@@ -434,7 +287,6 @@ export function createMixedPublicChartAdapter({
   now = () => new Date().toISOString(),
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxHtmlBytes = MAX_HTML_BYTES,
-  maxNetflixPrefixBytes = MAX_NETFLIX_PREFIX_BYTES,
 } = {}) {
   let telemetry = Object.freeze({
     sourceRequests: 0, sourceItemCount: 0, eligibleUniqueCount: 0,
@@ -449,30 +301,37 @@ export function createMixedPublicChartAdapter({
       }
       const fetchedAt = now();
       if (!validInstant(fetchedAt)) throw new Error("public_mix_clock_invalid");
-      let netflixRows;
-      {
+      const joynRows = [];
+      let sourceRequests = 0;
+      for (const chart of JOYN_PUBLIC_CHARTS) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
         try {
-          const response = await fetchImpl(NETFLIX_AT_WEEKLY_CHART.dataUrl, {
-            method: "GET", headers: { Accept: "text/tab-separated-values" }, redirect: "error", signal: controller.signal,
-          });
+          sourceRequests += 1;
           telemetry = Object.freeze({
-            sourceRequests: 1, sourceItemCount: 0, eligibleUniqueCount: 0,
+            sourceRequests,
+            sourceItemCount: joynRows.reduce((sum, rows) => sum + rows.length, 0),
+            eligibleUniqueCount: 0,
             marketCounts: ENTDECKEN_MIXED_MARKET_COUNTS,
           });
+          const response = await fetchImpl(chart.listUrl, {
+            method: "GET", headers: { Accept: "text/html" }, redirect: "error", signal: controller.signal,
+          });
           const contentType = text(response?.headers?.get?.("content-type")).toLowerCase();
-          if (!response?.ok || !contentType.startsWith("text/tab-separated-values")) {
+          if (!response?.ok || !contentType.startsWith("text/html")) {
             const error = new Error([401, 403, 429].includes(response?.status)
               ? "public_mix_source_blocked" : "public_mix_source_transport_invalid");
             error.sourceStatus = Number(response?.status) || null;
             throw error;
           }
-          netflixRows = await boundedNetflixRows(
-            response, maxNetflixPrefixBytes, () => controller.abort(), retrievedOn,
-          );
+          const html = await boundedHtml(response, maxHtmlBytes, () => controller.abort());
+          const rows = extractJoynChartItems(html, chart);
+          if (rows.length !== 50) throw new Error("public_mix_source_structure_invalid");
+          joynRows.push(rows);
           telemetry = Object.freeze({
-            sourceRequests: 1, sourceItemCount: netflixRows.length, eligibleUniqueCount: 0,
+            sourceRequests,
+            sourceItemCount: joynRows.reduce((sum, entries) => sum + entries.length, 0),
+            eligibleUniqueCount: 0,
             marketCounts: ENTDECKEN_MIXED_MARKET_COUNTS,
           });
         } finally { clearTimeout(timer); }
@@ -482,14 +341,15 @@ export function createMixedPublicChartAdapter({
       const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
       let response;
       try {
-        response = await fetchImpl(OEFI_WEEKEND_CHART.listUrl, {
-          method: "GET", headers: { Accept: "text/html" }, redirect: "error", signal: controller.signal,
-        });
+        sourceRequests += 1;
         telemetry = Object.freeze({
-          sourceRequests: 2,
-          sourceItemCount: netflixRows.length,
+          sourceRequests,
+          sourceItemCount: joynRows.reduce((sum, rows) => sum + rows.length, 0),
           eligibleUniqueCount: 0,
           marketCounts: ENTDECKEN_MIXED_MARKET_COUNTS,
+        });
+        response = await fetchImpl(OEFI_WEEKEND_CHART.listUrl, {
+          method: "GET", headers: { Accept: "text/html" }, redirect: "error", signal: controller.signal,
         });
         const contentType = text(response?.headers?.get?.("content-type")).toLowerCase();
         if (!response?.ok || !contentType.startsWith("text/html")) {
@@ -507,35 +367,35 @@ export function createMixedPublicChartAdapter({
         const seen = new Set();
         const cinema = takeUnique(cinemaRows.map((item) => oefiItem(item, fetchedAt)),
           ENTDECKEN_MIXED_MARKET_COUNTS.cinema, seen);
-        const netflixFilms = takeUnique(netflixRows.filter((item) => item.mediaType === "film")
-          .map((item) => netflixItem(item, fetchedAt)),
+        const joynFilms = takeUnique(joynRows.flat().filter((item) => item.mediaType === "film")
+          .map((item) => joynItem(item, fetchedAt, retrievedOn)),
         ENTDECKEN_MIXED_MARKET_COUNTS.streamingFilm, seen);
-        const netflixSeries = takeUnique(netflixRows.filter((item) => item.mediaType === "series")
-          .map((item) => netflixItem(item, fetchedAt)),
+        const joynSeries = takeUnique(joynRows.flat().filter((item) => item.mediaType === "series")
+          .map((item) => joynItem(item, fetchedAt, retrievedOn)),
         ENTDECKEN_MIXED_MARKET_COUNTS.streamingSeries, seen);
         if (cinema.length !== ENTDECKEN_MIXED_MARKET_COUNTS.cinema
-            || netflixFilms.length !== ENTDECKEN_MIXED_MARKET_COUNTS.streamingFilm
-            || netflixSeries.length !== ENTDECKEN_MIXED_MARKET_COUNTS.streamingSeries) {
+            || joynFilms.length !== ENTDECKEN_MIXED_MARKET_COUNTS.streamingFilm
+            || joynSeries.length !== ENTDECKEN_MIXED_MARKET_COUNTS.streamingSeries) {
           throw new Error("public_mix_pool_insufficient");
         }
-        const items = interleave([cinema, netflixFilms, netflixSeries]);
+        const items = interleave([cinema, joynFilms, joynSeries]);
         const sourceCounts = Object.fromEntries(Object.keys(ENTDECKEN_MIXED_SOURCE_COUNTS)
           .map((sourceId) => [sourceId, items.filter((item) => item.sourceId === sourceId).length]));
         if (items.length !== ENTDECKEN_MIXED_POOL_SIZE
             || JSON.stringify(sourceCounts) !== JSON.stringify(ENTDECKEN_MIXED_SOURCE_COUNTS)
-            || sourceCounts[ENTDECKEN_NETFLIX_SOURCE_ID] / items.length > ENTDECKEN_MIXED_MAX_SOURCE_SHARE) {
+            || sourceCounts[ENTDECKEN_JOYN_SOURCE_ID] / items.length > ENTDECKEN_MIXED_MAX_SOURCE_SHARE) {
           throw new Error("public_mix_source_diversity_invalid");
         }
         telemetry = Object.freeze({
           sourceRequests: ENTDECKEN_MIXED_SOURCE_REQUESTS,
-          sourceItemCount: netflixRows.length + cinemaRows.length,
+          sourceItemCount: joynRows.reduce((sum, rows) => sum + rows.length, 0) + cinemaRows.length,
           eligibleUniqueCount: items.length,
           marketCounts: ENTDECKEN_MIXED_MARKET_COUNTS,
         });
         return Object.freeze({
           sourceMode: "public-mix",
           sourceId: ENTDECKEN_MIXED_SOURCE_ID,
-          sourceIds: Object.freeze([ENTDECKEN_NETFLIX_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID]),
+          sourceIds: Object.freeze([ENTDECKEN_JOYN_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID]),
           queryContext,
           checkedAt: fetchedAt,
           retrievedOn,

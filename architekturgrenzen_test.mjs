@@ -341,7 +341,7 @@ let limitMapped = false;
 try {
   await createAiService({
     auth, config, transport: async () => ({ ok: false, status: 429 }),
-  }).runTask("masterlist-enrichment", { id: "alien" });
+  }).runTask("intelligent-search", { query: "Alien" });
 } catch (error) { limitMapped = error.code === ERROR_CODES.LIMIT; }
 check("KI-Limit wird einheitlich als limit gemeldet", limitMapped);
 

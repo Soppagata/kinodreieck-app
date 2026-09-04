@@ -1,12 +1,8 @@
 import { useState } from "react";
-import { T, btnStyle } from "../lib/tokens.js";
+import { btnStyle } from "../lib/tokens.js";
 import { installiereApp, useInstallationsStatus } from "../lib/installation.js";
 
-function downloadUrl(datei = "") {
-  return import.meta.env.BASE_URL + "download/" + datei;
-}
-
-export function InstallationCard({ kompakt = false, zeigeEinzeldatei = true }) {
+export function InstallationCard({ kompakt = false }) {
   const status = useInstallationsStatus();
   const [meldung, setMeldung] = useState("");
 
@@ -37,18 +33,12 @@ export function InstallationCard({ kompakt = false, zeigeEinzeldatei = true }) {
           if (!ergebnis.angenommen) setMeldung("Installation wurde nicht abgeschlossen. Du kannst sie jederzeit erneut starten.");
         }}>Als App installieren</button>
       ) : (
-        <p className="kd-install-status">Die genaue Anleitung für deinen Browser findest du auf der Download-Seite.</p>
-      )}
-
-      {!status.datei && !status.standalone && !status.installierbar && (
-        <a className="kd-linkbutton" href={downloadUrl()}>Installationsanleitung öffnen</a>
-      )}
-      {meldung && <p role="status" className="kd-inline-meldung">{meldung}</p>}
-      {zeigeEinzeldatei && !status.datei && !status.standalone && (
-        <p className="kd-einzeldatei">
-          Lieber ohne Installation? <a href={downloadUrl("Kinodreieck.html")} download>Einzeldatei herunterladen</a>
+        <p className="kd-install-status">
+          Öffne das Menü deines Browsers und wähle dort „App installieren“ oder „Zum Home-Bildschirm“.
         </p>
       )}
+
+      {meldung && <p role="status" className="kd-inline-meldung">{meldung}</p>}
     </section>
   );
 }
