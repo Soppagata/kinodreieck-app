@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { baueBackup } from "../lib/backup.js";
+import {
+  baueBackup,
+  pruefeLokaleBackupVollstaendigkeit,
+} from "../lib/backup.js";
 import { runtimeConfig } from "../config/runtime.js";
 import {
   ACCOUNT_EXPORT_RELEASE_CONTRACT,
@@ -47,6 +50,7 @@ function ladeBackupDateiHerunter({
   backup,
   dateiname,
   markiereExport,
+  vollstaendigkeit = null,
   createBlob = (text) => new Blob([text], { type: "application/json" }),
   createObjectURL = (blob) => URL.createObjectURL(blob),
   revokeObjectURL = (url) => URL.revokeObjectURL(url),
@@ -60,7 +64,7 @@ function ladeBackupDateiHerunter({
     anchor.href = url;
     anchor.download = dateiname;
     starteGesamtBackupDownload(anchor, markiereExport, backup._exportStaende);
-    return Object.freeze({ ok: true, clicked: true, dateiname, backup });
+    return Object.freeze({ ok: true, clicked: true, dateiname, backup, vollstaendigkeit });
   } finally {
     if (url) revokeObjectURL(url);
   }
@@ -83,10 +87,12 @@ export async function ladeGebundeneSicherheitskopieHerunter({
   if (Object.prototype.hasOwnProperty.call(backup || {}, "konto_serverdaten")) {
     throw exportFehler("LOCAL_EXPORT_CONTAINS_ACCOUNT_DATA", "Die lokale Sicherheitskopie enthielt unerwartete Serverdaten.");
   }
+  const vollstaendigkeit = pruefeLokaleBackupVollstaendigkeit(backup);
   return ladeBackupDateiHerunter({
     backup,
     dateiname: `kinodreieck_sicherheitskopie_geraet_${dateiDatum(now)}.json`,
     markiereExport,
+    vollstaendigkeit,
     ...downloadUmgebung,
   });
 }

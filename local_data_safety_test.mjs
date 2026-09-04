@@ -5,6 +5,8 @@ import {
   createLocalDataSafetyController,
 } from "./src/controllers/localDataSafetyController.js";
 import { ACCOUNT_CACHE_METADATA_KEYS } from "./src/lib/accountStorageKeys.js";
+import { baueBackup, pruefeLokaleBackupVollstaendigkeit } from "./src/lib/backup.js";
+import { createEmptyLocalRadar } from "./src/lib/localEventRadar.js";
 import { LOCAL_RETENTION_KEYS } from "./src/lib/localRetention.js";
 import { PERSONAL_DATA_KEYS, VERALTETE_PRIVACY_KEYS } from "./src/lib/personalDataRegistry.js";
 import { K } from "./src/lib/storage.js";
@@ -53,7 +55,13 @@ function harness({ deleteNoopKey = null } = {}) {
     async downloadSafetyCopy({ storageContext }) {
       assert.equal(storageContext.generation, generation);
       downloads++;
-      return { ok: true, clicked: true };
+      const backup = await baueBackup({ pull: false, storageContext });
+      return {
+        ok: true,
+        clicked: true,
+        backup,
+        vollstaendigkeit: pruefeLokaleBackupVollstaendigkeit(backup),
+      };
     },
     reload: () => { reloads++; },
     now: () => 1234,
@@ -66,6 +74,32 @@ function harness({ deleteNoopKey = null } = {}) {
     setSession(next) { session = next; },
     switchContext() { generation++; },
   };
+}
+
+function fuelleGueltigenLoeschstand(h, prefix) {
+  for (const key of LOCAL_CONTENT_DELETE_KEYS) h.values.set(key, `${prefix}:${key}`);
+  const registryRohwerte = new Map([
+    [K.master, JSON.stringify({ filme: [], gespeichertAm: 1 })],
+    [K.artikel, JSON.stringify({ artikel: [], gespeichertAm: 1 })],
+    [K.kinoPins, "[]"],
+    [K.wochenplan, JSON.stringify({ version: 1, eintraege: [] })],
+    [K.radar, JSON.stringify(createEmptyLocalRadar({ authority: "guest" }))],
+    [K.merkliste, "[]"],
+    [K.vokabular, "[]"],
+    [K.einstellungen, "{}"],
+    [K.entdeckenStatus, "{}"],
+    [K.autorName, `Test ${prefix}`],
+    [K.streamingDienste, "{}"],
+    [K.mustwatch, JSON.stringify({ eintraege: [], gespeichertAm: 1 })],
+    [K.achievements, "{}"],
+    [K.zeitgrenze, "14:00"],
+    [K.filterMediathek, "0"],
+    [K.filterKino, "0"],
+    [K.filterStreaming, "0"],
+    [K.geschmacksprofil, "{}"],
+  ]);
+  for (const [key, value] of registryRohwerte) h.values.set(key, value);
+  return new Map(h.values);
 }
 
 const erwarteteSchluessel = new Set([
@@ -97,7 +131,7 @@ check("Auth, Katalog/PWA und größerer Browserreset liegen außerhalb des Lösc
 
 {
   const h = harness();
-  for (const key of LOCAL_CONTENT_DELETE_KEYS) h.values.set(key, `wert:${key}`);
+  fuelleGueltigenLoeschstand(h, "wert");
   h.values.set("kd:auth:session", "auth-bleibt");
   h.values.set(K.programm, "katalog-bleibt");
   h.values.set(K.einstieg, "einstieg-bleibt");
@@ -115,7 +149,7 @@ check("Auth, Katalog/PWA und größerer Browserreset liegen außerhalb des Lösc
 
 {
   const h = harness();
-  for (const key of LOCAL_CONTENT_DELETE_KEYS) h.values.set(key, `vorher:${key}`);
+  const vorher = fuelleGueltigenLoeschstand(h, "vorher");
   const receipt = await h.controller.download();
   h.switchContext();
   await assert.rejects(
@@ -123,25 +157,25 @@ check("Auth, Katalog/PWA und größerer Browserreset liegen außerhalb des Lösc
     (error) => error?.code === LOCAL_DATA_SAFETY_ERROR.CONTEXT_CHANGED,
   );
   check("A/B- oder Treiberwechsel nach dem Download bricht vor jeder Löschung fail-closed ab",
-    LOCAL_CONTENT_DELETE_KEYS.every((key) => h.values.get(key) === `vorher:${key}`) && h.reloads === 0);
+    LOCAL_CONTENT_DELETE_KEYS.every((key) => h.values.get(key) === vorher.get(key)) && h.reloads === 0);
 }
 
 {
   const blockiert = LOCAL_CONTENT_DELETE_KEYS[Math.floor(LOCAL_CONTENT_DELETE_KEYS.length / 2)];
   const h = harness({ deleteNoopKey: blockiert });
-  for (const key of LOCAL_CONTENT_DELETE_KEYS) h.values.set(key, `vorher:${key}`);
+  const vorher = fuelleGueltigenLoeschstand(h, "vorher");
   const receipt = await h.controller.download();
   await assert.rejects(
     () => h.controller.deleteLocalContents(receipt),
     (error) => error?.code === LOCAL_DATA_SAFETY_ERROR.DELETE_INCOMPLETE && error?.rollback?.ok === true,
   );
   check("Ein stiller Teilfehler wird rückgelesen, nie als Erfolg gemeldet und vollständig zurückgerollt",
-    LOCAL_CONTENT_DELETE_KEYS.every((key) => h.values.get(key) === `vorher:${key}`) && h.reloads === 0);
+    LOCAL_CONTENT_DELETE_KEYS.every((key) => h.values.get(key) === vorher.get(key)) && h.reloads === 0);
 }
 
 {
   const h = harness();
-  for (const key of LOCAL_CONTENT_DELETE_KEYS) h.values.set(key, `vorher:${key}`);
+  const vorher = fuelleGueltigenLoeschstand(h, "vorher");
   const receipt = await h.controller.download();
   h.setSession({ mode: "account", state: "ready", account: { id: "konto-b" } });
   await assert.rejects(
@@ -149,7 +183,7 @@ check("Auth, Katalog/PWA und größerer Browserreset liegen außerhalb des Lösc
     (error) => error?.code === LOCAL_DATA_SAFETY_ERROR.GUEST_CONTEXT_REQUIRED,
   );
   check("Ein Sitzungswechsel zum Konto sperrt die lokale Löschung ohne Remote- oder Local-Write",
-    LOCAL_CONTENT_DELETE_KEYS.every((key) => h.values.get(key) === `vorher:${key}`) && h.reloads === 0);
+    LOCAL_CONTENT_DELETE_KEYS.every((key) => h.values.get(key) === vorher.get(key)) && h.reloads === 0);
 }
 
 console.log(`\nLOCAL-DATA-SAFETY-TEST BESTANDEN (${checks}/${checks})`);

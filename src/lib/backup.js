@@ -11,6 +11,96 @@ import { captureStorageContext } from "./storage.js";
 import { PERSONAL_DATA_ENTRIES } from "./personalDataRegistry.js";
 import { privateOpsExportStatus } from "./privatePilotOps.js";
 
+export const LOCAL_BACKUP_COMPLETENESS_SCHEMA = 1;
+
+const REGISTRY_CONTRACT = Object.freeze(PERSONAL_DATA_ENTRIES.map((entry) => Object.freeze({
+  key: entry.key,
+  backupField: entry.backupField,
+})));
+
+function gleichesJson(a, b) {
+  try { return JSON.stringify(a) === JSON.stringify(b); }
+  catch { return false; }
+}
+
+/* Die Löschfreigabe braucht mehr als einen gelungenen Anchor-Klick. Dieser
+   rein lokale Beleg prüft, dass jedes Registry-Feld in der tatsächlich
+   serialisierbaren Datei steckt und weiterhin vom Restorevertrag verstanden
+   wird. Warnungen sind absichtlich terminal für die Löschfreigabe. */
+export function pruefeLokaleBackupVollstaendigkeit(backup) {
+  const fehler = [];
+  let roundtrip = null;
+  try {
+    const serialisiert = JSON.stringify(backup);
+    if (!serialisiert) throw new Error("leer");
+    roundtrip = JSON.parse(serialisiert);
+  } catch { fehler.push("serialisierung"); }
+
+  if (roundtrip?.format !== "kinodreieck-backup" || roundtrip?.version !== 1) {
+    fehler.push("format");
+  }
+  if (Array.isArray(roundtrip?._warnungen) && roundtrip._warnungen.length) {
+    fehler.push("warnungen");
+  }
+
+  const beleg = roundtrip?._vollstaendigkeit;
+  const belegRegister = Array.isArray(beleg?.register) ? beleg.register : [];
+  if (beleg?.schemaVersion !== LOCAL_BACKUP_COMPLETENESS_SCHEMA
+      || beleg?.status !== "VOLLSTAENDIG"
+      || belegRegister.length !== REGISTRY_CONTRACT.length
+      || !REGISTRY_CONTRACT.every((entry, index) => (
+        belegRegister[index]?.key === entry.key
+        && belegRegister[index]?.backupField === entry.backupField
+      ))) {
+    fehler.push("registry-beleg");
+  }
+
+  for (const entry of PERSONAL_DATA_ENTRIES) {
+    if (!Object.prototype.hasOwnProperty.call(roundtrip || {}, entry.backupField)) {
+      fehler.push(`feld:${entry.backupField}`);
+      continue;
+    }
+    try { entry.restorePlan(roundtrip[entry.backupField], 1); }
+    catch { fehler.push(`restore:${entry.backupField}`); }
+  }
+
+  return Object.freeze({
+    ok: fehler.length === 0,
+    schemaVersion: LOCAL_BACKUP_COMPLETENESS_SCHEMA,
+    registryEntries: REGISTRY_CONTRACT.length,
+    fehler: Object.freeze([...new Set(fehler)]),
+  });
+}
+
+/* Zweiter Beleg direkt an der Löschgrenze: Seit dem Dateibau darf sich kein
+   persönlicher Topf geändert haben. Die Werte verlassen diese Funktion nie;
+   verglichen wird nur ihre Registry-Projektion. */
+export async function pruefeLokalesBackupGegenSpeicher(backup, storageContext) {
+  const struktur = pruefeLokaleBackupVollstaendigkeit(backup);
+  if (!struktur.ok || storageContext?.isCurrent?.() !== true) {
+    return Object.freeze({ ok: false, grund: struktur.ok ? "kontext" : "backup" });
+  }
+  for (const entry of PERSONAL_DATA_ENTRIES) {
+    let roh = null;
+    const warnungen = [];
+    try {
+      const gelesen = await storageContext.get(entry.key);
+      roh = gelesen?.value ?? null;
+    } catch { return Object.freeze({ ok: false, grund: "lesen" }); }
+    if (storageContext.isCurrent?.() !== true) {
+      return Object.freeze({ ok: false, grund: "kontext" });
+    }
+    let projiziert;
+    try {
+      projiziert = entry.backupAusRoh(roh, (bereich, grund) => warnungen.push({ bereich, grund }));
+    } catch { return Object.freeze({ ok: false, grund: "projektion" }); }
+    if (warnungen.length || !gleichesJson(projiziert, backup[entry.backupField])) {
+      return Object.freeze({ ok: false, grund: "stand-geaendert" });
+    }
+  }
+  return Object.freeze({ ok: true, grund: "registry-roundtrip-bestaetigt" });
+}
+
 export async function baueBackup({
   pull = true, speicher = null, storageContext = null, remoteOwnData = null,
 } = {}) {
@@ -56,6 +146,7 @@ export async function baueBackup({
     hinweis: "Portable JSON-Sicherheitskopie dieses Geräts zur eigenen Aufbewahrung; dieser Release bietet dafür keinen Restore- oder Reimportweg.",
   };
   const exportStaende = {};
+  const geleseneStaende = new Map();
   for (const entry of PERSONAL_DATA_ENTRIES) {
     let roh = null;
     try {
@@ -66,6 +157,7 @@ export async function baueBackup({
       warnungen.push({ bereich: entry.key, grund: "Lesefehler — als leer gesichert." });
     }
     pruefeKontext();
+    geleseneStaende.set(entry.key, roh);
     backup[entry.backupField] = entry.backupAusRoh(
       roh,
       (bereich, grund) => warnungen.push({ bereich, grund }),
@@ -86,6 +178,21 @@ export async function baueBackup({
       } catch { /* Legacy-/Leerstand besitzt bewusst keine Sicherungsgrenze. */ }
     }
   }
+  /* Jeder Topf wird nach der Projektion bytegenau rückgelesen. Eine Änderung
+     während des sequenziellen Exports macht die Datei weiterhin nützlich,
+     aber nicht ausreichend für eine anschließende Löschung. */
+  for (const entry of PERSONAL_DATA_ENTRIES) {
+    try {
+      const erneut = await kontext.get(entry.key);
+      if ((erneut?.value ?? null) !== geleseneStaende.get(entry.key)) {
+        warnungen.push({ bereich: entry.key, grund: "Während der Sicherung geändert — Löschfreigabe gesperrt." });
+      }
+    } catch (error) {
+      if (kontextGewechselt(error)) throw error;
+      warnungen.push({ bereich: entry.key, grund: "Kontrolllesen fehlgeschlagen — Löschfreigabe gesperrt." });
+    }
+    pruefeKontext();
+  }
   /* Optionales Diagnosefeld bewusst zuletzt: ältere Wiederherstellungen
      ignorieren es, Menschen sehen Probleme aber direkt im Export. */
   if (warnungen.length) backup._warnungen = warnungen;
@@ -94,6 +201,11 @@ export async function baueBackup({
     backup.konto_serverdaten = remoteOwnData;
   }
   backup._privateOps = privateOpsExportStatus({ remoteIncluded: !!backup.konto_serverdaten });
+  backup._vollstaendigkeit = Object.freeze({
+    schemaVersion: LOCAL_BACKUP_COMPLETENESS_SCHEMA,
+    status: warnungen.length ? "UNVOLLSTAENDIG" : "VOLLSTAENDIG",
+    register: REGISTRY_CONTRACT,
+  });
   pruefeKontext();
   return backup;
 }

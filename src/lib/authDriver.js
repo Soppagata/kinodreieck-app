@@ -30,6 +30,16 @@ const SESSION_SCHEMA = 1;
 const REFRESH_PUFFER_MS = 5 * 60 * 1000;   // so früh vor Ablauf proaktiv erneuern
 const TIMEOUT_MS = 10000;
 
+const nichtLeer = (wert) => typeof wert === "string" && wert.trim().length > 0;
+const istMail = (wert) => nichtLeer(wert) && /^[^\s@]+@[^\s@]+$/.test(wert.trim());
+
+function istVollstaendigeGespeicherteSitzung(s) {
+  return !!s && s.v === SESSION_SCHEMA
+    && nichtLeer(s.access_token) && nichtLeer(s.refresh_token)
+    && nichtLeer(s.kontoId) && istMail(s.mail)
+    && Number.isFinite(s.gueltigBis) && s.gueltigBis > 0;
+}
+
 /* Zustände, die der Treiber nach außen meldet. */
 export const AUTH_ZUSTAND = Object.freeze({
   GAST: "gast",             // keine Sitzung vorhanden
@@ -60,11 +70,16 @@ function leseSitzung() {
     const roh = localStorage.getItem(AUTH_SESSION_KEY);
     if (!roh) return null;
     const s = JSON.parse(roh);
-    if (!s || s.v !== SESSION_SCHEMA || !s.access_token || !s.refresh_token) return null;
-    return s;
+    if (!istVollstaendigeGespeicherteSitzung(s)) return null;
+    return {
+      ...s,
+      mail: s.mail.trim(),
+      benutzername: nichtLeer(s.benutzername) ? s.benutzername : mailZuBenutzername(s.mail),
+    };
   } catch { return null; }
 }
 function schreibeSitzung(s) {
+  if (!istVollstaendigeGespeicherteSitzung(s)) return false;
   try {
     const raw = JSON.stringify(s);
     localStorage.setItem(AUTH_SESSION_KEY, raw);
@@ -82,20 +97,39 @@ export function hatGespeicherteSitzung() { return !!leseSitzung(); }
 
 /* `jetztMs` kommt immer von der Uhr des Treibers — nie direkt von Date.now().
    Sonst liefen Ablaufrechnung und Ablaufprüfung auf zwei verschiedenen Uhren. */
-function sitzungAus(daten, vorher = null, jetztMs = Date.now()) {
-  const gueltigBis = Number.isFinite(daten?.expires_at)
-    ? daten.expires_at * 1000
-    : jetztMs + (Number(daten?.expires_in) || 3600) * 1000;
-  const mail = daten?.user?.email || vorher?.mail || "";
+function sitzungAus(daten, {
+  jetztMs = Date.now(), erwarteteKontoId = null, erwarteteMail = null,
+} = {}) {
+  if (!daten || typeof daten !== "object" || Array.isArray(daten)
+      || !nichtLeer(daten.access_token) || !nichtLeer(daten.refresh_token)
+      || !nichtLeer(daten.user?.id) || !istMail(daten.user?.email)) return null;
+  const hatExpiresAt = Object.prototype.hasOwnProperty.call(daten, "expires_at");
+  const gueltigBis = hatExpiresAt
+    ? (Number.isFinite(daten.expires_at) ? daten.expires_at * 1000 : NaN)
+    : (Number.isFinite(daten.expires_in) && daten.expires_in > 0
+      ? jetztMs + daten.expires_in * 1000
+      : NaN);
+  if (!Number.isFinite(gueltigBis) || gueltigBis <= jetztMs) return null;
+  const kontoId = daten.user.id.trim();
+  const mail = daten.user.email.trim();
+  if (erwarteteKontoId != null && kontoId !== String(erwarteteKontoId).trim()) return null;
+  if (erwarteteMail != null && mail.toLowerCase() !== String(erwarteteMail).trim().toLowerCase()) return null;
   return {
     v: SESSION_SCHEMA,
     access_token: daten.access_token,
-    refresh_token: daten.refresh_token || vorher?.refresh_token || "",
+    refresh_token: daten.refresh_token,
     gueltigBis,
-    kontoId: daten?.user?.id || vorher?.kontoId || "",
+    kontoId,
     mail,
-    benutzername: mailZuBenutzername(mail) || vorher?.benutzername || "",
+    benutzername: mailZuBenutzername(mail),
   };
+}
+
+function unvollstaendigeSitzungsantwort(operation) {
+  return new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+    source: "auth", operation, reason: "incomplete-session-contract",
+    message: "Die Anmeldung konnte nicht sicher bestätigt werden. Bitte versuche es erneut.",
+  });
 }
 
 /* ---------- Treiber ---------- */
@@ -195,8 +229,9 @@ export function createAuthDriver({
     } catch (e) {
       throw normalizeBoundaryError(e, { source: "auth", operation: "auth.sign-in" });
     }
-    if (!antwort.ok || !antwort.data?.access_token) throw fehlerAus(antwort.status, antwort.data, "auth.sign-in");
-    const s = sitzungAus(antwort.data, null, jetzt());
+    if (!antwort.ok) throw fehlerAus(antwort.status, antwort.data, "auth.sign-in");
+    const s = sitzungAus(antwort.data, { jetztMs: jetzt(), erwarteteMail: mail });
+    if (!s) throw unvollstaendigeSitzungsantwort("auth.sign-in");
     if (!schreibeSitzung(s)) {
       throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
         source: "auth", operation: "auth.sign-in", reason: "storage-blocked",
@@ -218,11 +253,11 @@ export function createAuthDriver({
     let antwort;
     try { antwort = await ruf("/token?grant_type=password", { body: { email: vorher.mail, password: String(passwort) } }); }
     catch (error) { throw normalizeBoundaryError(error, { source: "auth", operation: "auth.reauthenticate" }); }
-    if (!antwort.ok || !antwort.data?.access_token) throw fehlerAus(antwort.status, antwort.data, "auth.reauthenticate");
-    const neu = sitzungAus(antwort.data, vorher, jetzt());
-    if (String(neu.kontoId || "") !== String(vorher.kontoId)) {
-      throw new BoundaryError(ERROR_CODES.FORBIDDEN, { source: "auth", operation: "auth.reauthenticate", reason: "account-mismatch" });
-    }
+    if (!antwort.ok) throw fehlerAus(antwort.status, antwort.data, "auth.reauthenticate");
+    const neu = sitzungAus(antwort.data, {
+      jetztMs: jetzt(), erwarteteKontoId: vorher.kontoId, erwarteteMail: vorher.mail,
+    });
+    if (!neu) throw unvollstaendigeSitzungsantwort("auth.reauthenticate");
     if (!schreibeSitzung(neu)) {
       throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "auth", operation: "auth.reauthenticate", reason: "storage-blocked" });
     }
@@ -250,8 +285,14 @@ export function createAuthDriver({
       zustand = AUTH_ZUSTAND.DEGRADIERT;
       return frisch;
     }
-    if (antwort.ok && antwort.data?.access_token) {
-      const neu = sitzungAus(antwort.data, frisch, jetzt());
+    if (antwort.ok) {
+      const neu = sitzungAus(antwort.data, {
+        jetztMs: jetzt(), erwarteteKontoId: frisch.kontoId, erwarteteMail: frisch.mail,
+      });
+      if (!neu) {
+        zustand = AUTH_ZUSTAND.DEGRADIERT;
+        return frisch;
+      }
       if (!schreibeSitzung(neu)) {
         zustand = AUTH_ZUSTAND.DEGRADIERT;
         return frisch;

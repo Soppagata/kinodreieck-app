@@ -24,7 +24,7 @@ export function LocalDataSafety({ markiereExport = NICHT_MARKIEREN, controller =
     try {
       const bestaetigung = await datenController.download();
       setReceipt(bestaetigung);
-      setMeldung("Die Sicherheitskopie dieses Geräts wurde als Download ausgelöst. Die getrennte Löschbestätigung ist jetzt freigeschaltet.");
+      setMeldung("Alle persönlichen App-Bereiche wurden vollständig geprüft und als Datei ausgelöst. Die getrennte Löschbestätigung ist jetzt freigeschaltet.");
     } catch (error) {
       setFehler(error?.message || "Die lokale Sicherheitskopie konnte nicht heruntergeladen werden.");
     } finally { setAktion(""); }
@@ -55,7 +55,8 @@ export function LocalDataSafety({ markiereExport = NICHT_MARKIEREN, controller =
       </h2>
       <p style={{ margin: "0 0 12px", color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
         Die Datei enthält den gebundenen persönlichen App-Stand in diesem Browser. Sie ist kein Server- oder Kontoexport.
-        Dieser Release bietet dafür keinen Restore- oder Reimportweg.
+        Dieser Release bietet dafür keinen Restore- oder Reimportweg. Die Löschung wird nur freigeschaltet,
+        wenn alle registrierten persönlichen Bereiche vollständig und unverändert in der Datei nachweisbar sind.
       </p>
       <button type="button" style={btnStyle(true)} disabled={laeuft} onClick={download}>
         {aktion === "download" ? "Sicherheitskopie wird erstellt …" : "Lokale Sicherheitskopie herunterladen"}

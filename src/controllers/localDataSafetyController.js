@@ -1,4 +1,5 @@
 import { ACCOUNT_CACHE_METADATA_KEYS } from "../lib/accountStorageKeys.js";
+import { pruefeLokalesBackupGegenSpeicher } from "../lib/backup.js";
 import { LOCAL_RETENTION_KEYS } from "../lib/localRetention.js";
 import {
   PERSONAL_DATA_KEYS,
@@ -17,6 +18,7 @@ export const LOCAL_DATA_SAFETY_ERROR = Object.freeze({
   GUEST_CONTEXT_REQUIRED: "guest-context-required",
   SAFETY_COPY_REQUIRED: "safety-copy-required",
   SAFETY_COPY_FAILED: "safety-copy-failed",
+  SAFETY_COPY_STALE: "safety-copy-stale",
   CONTEXT_CHANGED: "storage-context-changed",
   DELETE_INCOMPLETE: "local-delete-incomplete",
 });
@@ -106,17 +108,33 @@ export function createLocalDataSafetyController({
   now = Date.now,
 } = {}) {
   let aktiveBestaetigung = null;
+  let aktivesBackup = null;
+  const verwerfeBestaetigung = () => {
+    aktiveBestaetigung = null;
+    aktivesBackup = null;
+  };
+  const pruefeGastOderVerwirf = (context) => {
+    try { pruefeGastgrenze(context, getSession); }
+    catch (error) { verwerfeBestaetigung(); throw error; }
+  };
 
   return Object.freeze({
     async download() {
+      verwerfeBestaetigung();
       const context = captureContext();
-      pruefeGastgrenze(context, getSession);
+      pruefeGastOderVerwirf(context);
       const download = await downloadSafetyCopy({ storageContext: context, markiereExport });
-      pruefeGastgrenze(context, getSession);
-      if (download?.clicked !== true) {
+      pruefeGastOderVerwirf(context);
+      const gegenSpeicher = download?.vollstaendigkeit?.ok === true
+        ? await pruefeLokalesBackupGegenSpeicher(download.backup, context)
+        : { ok: false };
+      pruefeGastOderVerwirf(context);
+      if (download?.clicked !== true || gegenSpeicher.ok !== true) {
         throw fehler(
           LOCAL_DATA_SAFETY_ERROR.SAFETY_COPY_FAILED,
-          "Die lokale Sicherheitskopie wurde nicht als Download bestätigt.",
+          download?.clicked === true
+            ? "Die Datei wurde ausgelöst, ist aber nicht nachweislich vollständig. Die Löschung bleibt gesperrt."
+            : "Die lokale Sicherheitskopie wurde nicht als Download bestätigt. Die Löschung bleibt gesperrt.",
         );
       }
       const timestamp = Number(typeof now === "function" ? now() : now);
@@ -126,6 +144,7 @@ export function createLocalDataSafetyController({
         owner: context.owner,
         completedAt: Number.isFinite(timestamp) ? timestamp : Date.now(),
       });
+      aktivesBackup = download.backup;
       return aktiveBestaetigung;
     },
 
@@ -137,12 +156,21 @@ export function createLocalDataSafetyController({
         );
       }
       const context = captureContext();
-      pruefeGastgrenze(context, getSession);
+      pruefeGastOderVerwirf(context);
       if (context.generation !== receipt.generation || context.owner !== receipt.owner) {
-        aktiveBestaetigung = null;
+        verwerfeBestaetigung();
         throw fehler(
           LOCAL_DATA_SAFETY_ERROR.CONTEXT_CHANGED,
           "Der lokale Datenkontext hat sich seit dem Download geändert. Bitte erstelle eine neue Sicherheitskopie.",
+        );
+      }
+      const weiterhinVollstaendig = await pruefeLokalesBackupGegenSpeicher(aktivesBackup, context);
+      pruefeGastOderVerwirf(context);
+      if (weiterhinVollstaendig.ok !== true) {
+        verwerfeBestaetigung();
+        throw fehler(
+          LOCAL_DATA_SAFETY_ERROR.SAFETY_COPY_STALE,
+          "Persönliche Inhalte haben sich seit der Sicherheitskopie geändert oder konnten nicht vollständig geprüft werden. Bitte erstelle eine neue Sicherheitskopie.",
         );
       }
 
@@ -174,7 +202,7 @@ export function createLocalDataSafetyController({
         const rollback = loeschungBegonnen
           ? await rolleLokalZurueck(context, snapshot)
           : Object.freeze({ ok: true, grund: "nicht-noetig", fehlerKeys: [] });
-        aktiveBestaetigung = null;
+        verwerfeBestaetigung();
         throw fehler(
           cause?.code === LOCAL_DATA_SAFETY_ERROR.GUEST_CONTEXT_REQUIRED
             ? LOCAL_DATA_SAFETY_ERROR.CONTEXT_CHANGED
@@ -186,7 +214,7 @@ export function createLocalDataSafetyController({
         );
       }
 
-      aktiveBestaetigung = null;
+      verwerfeBestaetigung();
       const entfernt = [...snapshot.values()].filter((value) => value != null).length;
       let reloadAusgeloest = false;
       try {

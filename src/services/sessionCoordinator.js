@@ -48,6 +48,34 @@ export const STORAGE_SESSION_STATES = Object.freeze({
   ACCESS_BLOCKED: "account-access-blocked",
 });
 
+const PRIVACY_RECOVERY_TEXTE = Object.freeze({
+  PERSONAL_DATA_PRIVACY_LOCKED: "Persönliche Daten bleiben geschützt. Melde dich mit demselben Konto erneut an oder lade die App neu.",
+  ACCOUNT_LOAD_FAILED: "Der Kontostand konnte nicht sicher geladen werden. Bitte versuche es erneut.",
+  ACCOUNT_CONTEXT_CHANGED: "Der Kontokontext hat sich geändert. Persönliche Daten bleiben geschützt. Bitte versuche es erneut.",
+  AUTH_CREDENTIAL_PERSISTENCE_FAILED: "Die Anmeldung konnte auf diesem Gerät nicht sicher abgeschlossen werden. Persönliche Daten bleiben geschützt.",
+});
+
+/* UI-Grenze für Privacy-/Recovery-Fehler. Interne Ursachen, Storage-Schlüssel,
+   Providertexte und Causes werden nicht weitergereicht; der maschinenlesbare
+   Code bleibt für kontrollierte Zustandsentscheidungen erhalten. */
+export function sicherePrivacyRecoveryFehler(error, { privacyLocked = false } = {}) {
+  const originalCode = typeof error?.code === "string" && error.code.trim()
+    ? error.code.trim()
+    : "";
+  if (!privacyLocked && !Object.prototype.hasOwnProperty.call(PRIVACY_RECOVERY_TEXTE, originalCode)) {
+    return error;
+  }
+  const code = originalCode || "PERSONAL_DATA_PRIVACY_LOCKED";
+  const begrenzt = new Error(
+    PRIVACY_RECOVERY_TEXTE[code]
+      || PRIVACY_RECOVERY_TEXTE.PERSONAL_DATA_PRIVACY_LOCKED,
+  );
+  begrenzt.name = "PrivacyRecoveryError";
+  begrenzt.code = code;
+  begrenzt.retryable = error?.retryable !== false;
+  return begrenzt;
+}
+
 export function createSessionCoordinator({
   auth = authService,
   storage = {
@@ -100,6 +128,15 @@ export function createSessionCoordinator({
     grenzQueue = lauf.catch(() => {});
     return lauf;
   };
+  const begrenzePrivacyFehler = (error) => sicherePrivacyRecoveryFehler(error, {
+    privacyLocked: (() => {
+      try { return storage.masked?.() === true; } catch { return true; }
+    })(),
+  });
+  const serialisiereSicher = (auftrag) => serialisiere(async () => {
+    try { return await auftrag(); }
+    catch (error) { throw begrenzePrivacyFehler(error); }
+  });
 
   function accountId(session = sichtbareSession) {
     return session?.mode === "account" ? String(session.account?.id || "") : "";
@@ -406,21 +443,21 @@ export function createSessionCoordinator({
         if (!wiederholbarerLadefehler && (fehlerOwner || fehlerTransition)) {
           storage.mask?.(); emit();
         }
-        throw error;
+        throw begrenzePrivacyFehler(error);
       }
       });
     },
 
     async signIn(benutzername, passwort) {
-      return serialisiere(async () => {
-      const session = await auth.signIn(benutzername, passwort);
-      await align(session, { pullWhenReady: true });
-      return publish(session);
+      return serialisiereSicher(async () => {
+        const session = await auth.signIn(benutzername, passwort);
+        await align(session, { pullWhenReady: true });
+        return publish(session);
       });
     },
 
     async signOut() {
-      return serialisiere(async () => {
+      return serialisiereSicher(async () => {
       const id = accountId();
       const cacheId = String(storage.cacheOwner?.() || "");
 
@@ -448,7 +485,7 @@ export function createSessionCoordinator({
     },
 
     async finalizeDeletedAccount() {
-      return serialisiere(async () => {
+      return serialisiereSicher(async () => {
         /* Nur nach bestätigter serverseitiger Auth-Löschung: kein Flush mehr,
            weil das Konto nicht länger Ziel einer Remote-Schreiboperation ist. */
         return beendeLokaleKontositzung(String(storage.cacheOwner?.() || accountId() || ""));
@@ -456,7 +493,7 @@ export function createSessionCoordinator({
     },
 
     async refresh() {
-      return serialisiere(async () => {
+      return serialisiereSicher(async () => {
       const session = await auth.refresh();
       await align(session);
       return publish(session);
