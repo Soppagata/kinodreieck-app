@@ -121,8 +121,9 @@ function buttonContains(container, text) {
     .find((element) => element.textContent.includes(text));
 }
 function card(container, title) {
-  return [...container.querySelectorAll('[role="button"]')]
+  const artikel = [...container.querySelectorAll("article.kd-blog-karte")]
     .find((element) => element.textContent.includes(title));
+  return artikel?.querySelector("button.kd-blog-expand");
 }
 async function click(element) {
   assert.ok(element, "erwartetes Bedienelement fehlt");

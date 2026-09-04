@@ -174,7 +174,7 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch, services 
             Auf diesem Gerät liegt der Bestand einer anderen Anmeldung. Ihn in dein Konto zu übernehmen,
             würde fremde Einträge zu deinen machen. Im Zweifel: <em>Daten aus dem Konto laden</em>.
           </p>
-          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", color: T.rauch, fontSize: 13 }}>
+          <label className="kd-touch-checkbox" style={{ display: "flex", gap: 8, alignItems: "flex-start", color: T.rauch, fontSize: 13 }}>
             <input type="checkbox" checked={warnungBestaetigt} onChange={(e) => setWarnungBestaetigt(e.target.checked)} />
             <span>Ich weiß, was ich tue — die Daten auf diesem Gerät gehören mir.</span>
           </label>

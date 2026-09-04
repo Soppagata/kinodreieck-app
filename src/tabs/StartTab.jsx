@@ -9,6 +9,7 @@ import { mustwatchVerfuegbarkeit, sortiereMustwatch } from "../lib/mustwatch.js"
 import { localRecommendationCandidates, webDiscoveryFeedCards } from "../lib/entdeckenUi.js";
 import { resolveEntdeckenPins } from "../lib/entdeckenPins.js";
 import { projectRecentPersonalEntries } from "../lib/personalEntryChronology.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 /* ================= START =================
    Das Dashboard ist die einzige Startansicht. Alle Module entstehen
@@ -89,11 +90,7 @@ function VertrauensZeile({ progStand, streamingBekannt, programmInfo = null, str
     : (s.pending && s.pending.length) ? { farbe: T.wolfram, text: "ausstehend " + s.pending.length }
     : (s.stale && s.stale.length) ? { farbe: T.wolfram, text: "nicht aktuell" }
     : { farbe: T.ok, text: "synchron" };
-  const fmt = (ms) => {
-    const d = new Date(ms);
-    const z = (n) => String(n).padStart(2, "0");
-    return z(d.getDate()) + "." + z(d.getMonth() + 1) + ". " + z(d.getHours()) + ":" + z(d.getMinutes());
-  };
+  const fmt = (ms) => formatPresentationDate(ms, { includeTime: true, fallback: "—" });
   const katalog = streamingBekannt && streamingBekannt.stand ? (streamingBekannt.titel || []).length : null;
   const fehltText = (info) => (info?.anmeldungNoetig ? "Anmeldung nötig" : info?.fehler ? "nicht geladen" : "noch nicht geladen");
   const zusatz = programmInfo?.abgelaufen ? " · abgelaufen"
@@ -236,8 +233,8 @@ function StartDashboard({
     master, mustwatch, merkliste, limit: 5,
   }), [master, mustwatch, merkliste]);
 
-  const datum = new Date().toLocaleDateString("de-AT", { weekday: "long", day: "numeric", month: "long" });
-  const fmtTag = (ms) => { const d = new Date(ms); const z = (n) => String(n).padStart(2, "0"); return z(d.getDate()) + "." + z(d.getMonth() + 1) + "."; };
+  const datum = formatPresentationDate(new Date(), { format: "long" });
+  const fmtTag = (ms) => formatPresentationDate(ms);
 
   /* Theme-Tokens als CSS-Variablen an die Dashboard-Wurzel (setzeTheme kennt keine
      :root-Vars) — pro Render aus T, damit dunkel/hell/showa/neon-noir korrekt durchschlagen. */
@@ -285,7 +282,7 @@ function StartDashboard({
                 const kommendeStaffel = !hinweis && serie.naechste_staffel_am && new Date(serie.naechste_staffel_am).getTime() >= Date.now();
                 const status = hinweis?.staffel_neu ? `Neue Staffel ${hinweis.staffel_verfuegbar}`
                   : hinweis?.folgen_neu ? `Neue Folge${hinweis.folge_aktuell ? ` ${hinweis.folge_aktuell}` : ""}`
-                    : kommendeStaffel ? `Staffel ab ${new Date(serie.naechste_staffel_am).toLocaleDateString("de-AT")}`
+                    : kommendeStaffel ? `Staffel ab ${formatPresentationDate(serie.naechste_staffel_am)}`
                       : "Beobachtet";
                 return (
                   <div key={`serie-${serie.watchmode_id}`} className={`kd-dash-zeile kd-pinboard-serie${hinweis ? " ist-neu" : ""}`}>

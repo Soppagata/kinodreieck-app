@@ -455,6 +455,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   font:600 calc(19px * var(--kd-schriftfaktor,1))/1.05 'Barlow Condensed',sans-serif; letter-spacing:.08em; text-transform:uppercase; }
 .kd-mobile-menu-liste button:hover,.kd-mobile-menu-liste button:focus-visible { background:rgba(227,166,59,.12); color:#ece8df; }
 .kd-mobile-menu-liste button.aktiv { background:#ece8df; color:#1c1a1e; }
+.kd-mobile-menu-liste .kd-mobile-menu-hilfe { margin-top:6px; border-top:1px solid rgba(148,143,160,.32); border-radius:0 0 8px 8px; color:#e3a63b; }
+.kd-mobile-menu-hilfe span { display:inline-grid; place-items:center; width:22px; height:22px; margin-right:7px; border:1px solid currentColor; border-radius:50%; font:700 13px/1 'Space Mono',monospace; }
 .kd-mobile-menu-liste button.kd-sicherung-offen::after { content:""; float:right; width:8px; height:8px; margin-top:5px;
   border-radius:50%; background:#d96a5a; box-shadow:0 0 0 3px rgba(217,106,90,.14); }
 .kd-mobile-menu-nachoben { position:absolute; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%);
@@ -546,9 +548,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-blog-form-actions { display:flex; gap:8px; align-items:stretch; }
 .kd-blog-form-actions>button { min-height:44px; white-space:nowrap; }
 .kd-blog-zurueck { min-width:112px; }
+.kd-blog-kartenkopf { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:12px; }
+.kd-blog-expand { min-width:142px; min-height:44px; box-sizing:border-box; border:1px solid var(--kd-rauch,#948fa0); border-radius:5px; background:transparent; color:var(--kd-leinwandTief,#dfdacd); padding:8px 11px; cursor:pointer; font:600 11px/1.25 'Space Mono',monospace; }
+.kd-blog-expand:hover,.kd-blog-expand:focus-visible { border-color:var(--kd-wolfram,#e3a63b); color:var(--kd-wolfram,#e3a63b); }
 @media (max-width:760px) {
   .kd-blog-form-actions { display:grid; grid-template-columns:minmax(0,2fr) minmax(112px,1fr); }
   .kd-blog-form-actions>button { width:100%; min-width:0; }
+  .kd-blog-kartenkopf { grid-template-columns:1fr; gap:9px; }
+  .kd-blog-expand { width:100%; min-width:0; }
 }
 .kd-profil-dialog-layer { position:fixed; inset:0; z-index:14000; display:grid; place-items:center; padding:max(16px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left)); }
 .kd-profil-dialog-scrim { position:absolute; inset:0; width:100%; height:100%; border:0; border-radius:0; background:rgba(0,0,0,.56); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
@@ -1480,9 +1487,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-wochen-editor input:focus,.kd-wochen-editor select:focus,.kd-wochen-editor textarea:focus { outline:1px solid var(--kd-wolfram); border-color:var(--kd-wolfram); }
 .kd-wochen-tage { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; margin:0; padding:7px 8px 8px; border:1px solid var(--wp-border); border-radius:5px; }
 .kd-wochen-tage legend { padding:0 3px; color:var(--kd-rauch); font:8px 'Space Mono',monospace; }
-.kd-wochen-tage label { position:relative; min-width:0; cursor:pointer; }
+.kd-wochen-tage label { position:relative; display:flex; align-items:center; min-width:44px; min-height:44px; cursor:pointer; }
 .kd-wochen-tage input { position:absolute; width:1px; height:1px; margin:0; opacity:0; pointer-events:none; }
-.kd-wochen-tage span { display:flex; align-items:center; justify-content:center; min-height:30px; border:1px solid var(--wp-border); border-radius:999px; background:var(--kd-saal); color:var(--kd-rauch); font:700 9px 'Space Mono',monospace; transition:border-color .15s ease,background .15s ease,color .15s ease; }
+.kd-wochen-tage span { display:flex; align-items:center; justify-content:center; width:100%; min-height:30px; border:1px solid var(--wp-border); border-radius:999px; background:var(--kd-saal); color:var(--kd-rauch); font:700 9px 'Space Mono',monospace; transition:border-color .15s ease,background .15s ease,color .15s ease; }
 .kd-wochen-tage input:checked+span { border-color:var(--kd-wolfram); background:var(--kd-wolfram); color:var(--kd-saal); }
 .kd-wochen-tage input:focus-visible+span { outline:2px solid var(--kd-leinwandTief); outline-offset:2px; }
 .kd-wochen-verknuepfung { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:0; padding:8px; border:1px solid var(--wp-border); border-radius:5px; }
@@ -1530,3 +1537,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-wochen-aktionen button { flex-basis:calc(50% - 4px); }
   .kd-wochen-aktionen .kd-wochen-trash { flex-basis:32px; }
 }
+
+/* Gemeinsamer Touchvertrag für native Checkboxen: das sichtbare Kästchen
+   bleibt kompakt, das umschließende semantische Label ist vollständig
+   bedienbar und erreicht auf Touchgeräten mindestens 44 × 44 px. */
+label.kd-touch-checkbox { min-width:44px; min-height:44px; box-sizing:border-box; touch-action:manipulation; cursor:pointer; }
+label.kd-touch-checkbox:has(input:disabled) { cursor:not-allowed; }

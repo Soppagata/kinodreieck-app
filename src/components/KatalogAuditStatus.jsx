@@ -71,7 +71,10 @@ export function KatalogAuditStatus({
         </li>)}
       </ul>
       <p style={{ color: T.rauch, fontSize: 11, lineHeight: 1.6, marginBottom: 0 }}>
-        Entdecken läuft derzeit wie Radar im {titleTrace.currentRefreshIntervalHours}-Stunden-Intervall. Fachliches Ziel für den providerfreien Entdecken-Pool: {titleTrace.targetRefreshSlaHours} Stunden; die dafür nötige Migration ist nicht autorisiert und nicht erstellt. Radar bleibt getrennt bei {titleTrace.radarIntervalHours} Stunden. Letzter Versuch und letzter erfolgreicher Lauf waren im Audit nicht belegt; eine Live-Aktualisierung wurde nicht gestartet.
+        Lokaler Kandidat für den providerfreien Entdecken-Pool: {titleTrace.targetRefreshSlaHours}-Stunden-Intervall.
+        Die passende Migration wurde im Repository erstellt, aber weder auf die gemeinsame Datenbank angewandt noch deployt.
+        Welches Intervall live für Entdecken oder Radar aktiv ist, ist nicht belegt. Letzter Versuch und letzter
+        erfolgreicher Lauf waren im Audit nicht belegt; eine Live-Aktualisierung wurde nicht gestartet.
       </p>
     </details>
   </div>;

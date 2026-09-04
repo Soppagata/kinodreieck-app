@@ -203,7 +203,7 @@ export function FilmForm({
 
       {/* Unbewertet-Schalter: Besitz jetzt erfassen, Dreieck später vergeben. */}
       {bewertbar && (
-        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer" }}>
+        <label className="kd-touch-checkbox" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer" }}>
           <input type="checkbox" checked={ohneBewertung} onChange={() => setOhneBewertung(!ohneBewertung)} />
           Ohne Bewertung speichern (Eintrag bleibt „unbewertet“ — Dreieck kommt später)
         </label>

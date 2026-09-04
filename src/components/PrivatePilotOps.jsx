@@ -15,6 +15,7 @@ import {
   setLocalDiagnosticsEnabled,
 } from "../lib/localDiagnostics.js";
 import { T, btnStyle } from "../lib/tokens.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 import { runtimeConfig } from "../config/runtime.js";
 import {
   FeedbackOhneNamensangabe,
@@ -72,7 +73,7 @@ export function DatenschutzUebersicht({
         <ul style={{ margin: "10px 0 0", paddingLeft: 20, display: "grid", gap: 8, color: T.rauch, fontSize: 12, lineHeight: 1.5 }}>
           {PRIVATE_PROVIDER_REGISTRY.map((entry) => (
             <li key={entry.id}>
-              <strong>{entry.name}</strong>: {entry.purpose}; übertragene Klasse: {entry.data}. Region: {entry.region}. Status: {entry.legalStatus}. <a href={entry.officialSource} target="_blank" rel="noreferrer">Offizielle Quelle (Abruf {entry.retrievedAt})</a>
+              <strong>{entry.name}</strong>: {entry.purpose}; übertragene Klasse: {entry.data}. Region: {entry.region}. Status: {entry.legalStatus}. <a href={entry.officialSource} target="_blank" rel="noreferrer">Offizielle Quelle (Abruf {formatPresentationDate(entry.retrievedAt, { fallback: entry.retrievedAt })})</a>
             </li>
           ))}
         </ul>
@@ -142,7 +143,7 @@ function BestaetigteSupportDaten({ ownerBestaetigt }) {
         <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
           Die Erfassung ist standardmäßig aus und bleibt lokal in diesem Browser. Ein späterer DB-Transport ist nur als gesperrter Vertrag vorbereitet: ohne bestätigte Servercapability, separates Flag und Adapter ist er inaktiv.
         </p>
-        <label style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13 }}>
+        <label className="kd-touch-checkbox" style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13 }}>
           <input type="checkbox" data-local-diagnostics-toggle="true" checked={diagnoseAktiv} onChange={toggleDiagnose} />
           Sichere technische Fehler lokal erfassen
         </label>
@@ -156,7 +157,7 @@ function BestaetigteSupportDaten({ ownerBestaetigt }) {
             <ul style={{ margin: "8px 0 0", paddingLeft: 20, display: "grid", gap: 6, color: T.rauch, fontSize: 11, lineHeight: 1.5 }}>
               {diagnosen.map((entry) => (
                 <li key={`${entry.reference}:${entry.timestamp}`}>
-                  <code>{entry.code}</code> · {entry.source}/{entry.operation} · {entry.timestamp} · {entry.count}× · {entry.reference}
+                  <code>{entry.code}</code> · {entry.source}/{entry.operation} · {formatPresentationDate(entry.timestamp, { includeTime: true, fallback: entry.timestamp })} · {entry.count}× · {entry.reference}
                 </li>
               ))}
             </ul>

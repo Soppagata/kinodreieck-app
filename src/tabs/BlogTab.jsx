@@ -7,6 +7,7 @@ import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
 import { IconClose, IconDelete } from "../components/ui.jsx";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 /* ================= BLOG =================
    Flow (Spec): "Erstellen" speichert sofort mit status "wartet" -> Abgleich
@@ -56,7 +57,7 @@ export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
       </div>
       <textarea placeholder="Text * (beliebig lang — Absätze per Leerzeile)" rows={10} value={text} onChange={(e) => setText(e.target.value)}
         style={{ ...inputStyle, boxSizing: "border-box", lineHeight: 1.6 }} />
-      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer" }}>
+      <label className="kd-touch-checkbox" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer" }}>
         <input type="checkbox" checked={geordnet} onChange={() => setGeordnet(!geordnet)} />
         Liste ist eine Reihenfolge (nummeriert — z.B. Watch-Order) statt einer Sammlung
       </label>
@@ -192,7 +193,7 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
         {artikel.titel}
       </h1>
       <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, marginBottom: 18 }}>
-        {artikel.autor}{artikel.erstellt_am ? " · " + artikel.erstellt_am.slice(0, 10) : ""}
+        {artikel.autor}{artikel.erstellt_am ? " · " + formatPresentationDate(artikel.erstellt_am) : ""}
       </div>
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 16, lineHeight: 1.75 }}>
         {artikel.text.split(/\n\s*\n/).map((abs, i) => <p key={i} style={{ margin: "0 0 14px" }}>{abs}</p>)}
@@ -315,9 +316,9 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
       onBearbeiten={(id) => setAnsicht({ typ: "maske", id })}
       onSpringeZuFilm={onSpringeZuFilm} onAddFilm={onAddFilm} onSetzeRef={onSetzeRef} />;
   }
-  /* Liste — der Hub: Karten klappen auf (Auszug + Referenz-Chips), erst der
-     zweite Klick öffnet Lesen/Abgleich. Hält den Bereich bei vielen Artikeln
-     überschaubar. */
+  /* Liste — der Hub: Ein eigener Button klappt Vorschau und Aktionen auf.
+     Die Karte selbst bleibt ein semantischer Artikel, damit Lesen, Bearbeiten,
+     Löschen und Eingabefelder keine verschachtelten Bedienelemente sind. */
   return (
     <section>
       <div data-tour="blog" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
@@ -340,24 +341,30 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
           const publiziertLaufend = publikation.status === SHARED_PUBLICATION_STATUS.PUBLISHING;
           const unpubliziertLaufend = publikation.status === SHARED_PUBLICATION_STATUS.UNPUBLISHING;
           const publikationsFehler = publikation.status === SHARED_PUBLICATION_STATUS.ERROR;
+          const domId = `kd-blog-artikel-${String(a.id).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+          const titelId = `${domId}-titel`;
+          const detailsId = `${domId}-details`;
           return (
-            <div key={a.id} onClick={() => setOffenId(offen ? null : a.id)}
-              // KD-027: Tastatur-Zugang für die klickbare Karte (Enter/Space wie onClick), nur der Karten-Root
-              role="button" tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.target !== e.currentTarget) return; // innere Buttons nicht doppelt auslösen
-                if (e.key === "Enter" || e.key === " ") { if (e.key === " ") e.preventDefault(); setOffenId(offen ? null : a.id); }
-              }}
-              style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px", cursor: "pointer", opacity: wartend ? 0.6 : 1 }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 19, textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                {a.titel}{wartend && <span style={{ color: T.wolfram, fontSize: 13, marginLeft: 10 }}>· WARTET</span>}
-              </div>
-              <div style={{ ...mono, marginTop: 3 }}>
-                {a.autor}{a.erstellt_am ? " · " + a.erstellt_am.slice(0, 10) : ""} · {a.liste.length} Referenzen{rot > 0 ? " · " + rot + " offen" : ""}{a.geordnet ? " · Reihenfolge" : ""}
-                {publiziert ? " · öffentlich" : publiziertLaufend ? " · wird veröffentlicht …" : unpubliziertLaufend ? " · wird öffentlich entfernt …" : publikationsFehler ? " · Veröffentlichung fehlerhaft" : ""}
+            <article key={a.id} className="kd-blog-karte"
+              style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px", opacity: wartend ? 0.6 : 1 }}>
+              <div className="kd-blog-kartenkopf">
+                <div style={{ minWidth: 0 }}>
+                  <h3 id={titelId} style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 19, textTransform: "uppercase", letterSpacing: "0.03em", margin: 0 }}>
+                    {a.titel}{wartend && <span style={{ color: T.wolfram, fontSize: 13, marginLeft: 10 }}>· WARTET</span>}
+                  </h3>
+                  <div style={{ ...mono, marginTop: 3 }}>
+                    {a.autor}{a.erstellt_am ? " · " + formatPresentationDate(a.erstellt_am) : ""} · {a.liste.length} Referenzen{rot > 0 ? " · " + rot + " offen" : ""}{a.geordnet ? " · Reihenfolge" : ""}
+                    {publiziert ? " · öffentlich" : publiziertLaufend ? " · wird veröffentlicht …" : unpubliziertLaufend ? " · wird öffentlich entfernt …" : publikationsFehler ? " · Veröffentlichung fehlerhaft" : ""}
+                  </div>
+                </div>
+                <button type="button" className="kd-blog-expand"
+                  aria-expanded={offen} aria-controls={detailsId}
+                  onClick={() => setOffenId(offen ? null : a.id)}>
+                  {offen ? "Vorschau schließen" : "Vorschau öffnen"}
+                </button>
               </div>
               {offen && (
-                <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10 }}>
+                <div id={detailsId} role="region" aria-labelledby={titelId} style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 14, lineHeight: 1.6, color: T.leinwandTief }}>{auszug}</div>
                   {a.liste.length > 0 && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
@@ -421,7 +428,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                   )}
                 </div>
               )}
-            </div>
+            </article>
           );
         })}
       </div>

@@ -12,6 +12,7 @@ import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import { formatiereTermin } from "../lib/programm.js";
 import { filtereAktiveKinoPins } from "../lib/libraryProjection.js";
 import { rankKinoProgramRecommendations } from "../lib/kinoRecommendations.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 import "../styles/kino-filter.css";
 
 /* ================= KINO (Dashboard) =================
@@ -239,7 +240,7 @@ export function KinoTab({
       <div className="kd-kino-status-anker kd-visually-hidden" aria-hidden="true">
         {progStand ? (
           <span>
-            Stand {new Date(progStand).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            Stand {formatPresentationDate(progStand, { includeTime: true })}
             {programmInfo?.variante === "demo" ? " · Demo-Schnappschuss" : ""}
             {programmInfo?.abgelaufen ? " · abgelaufen" : ""}
             {programmInfo?.ausCache ? " · aus dem Browser-Speicher, nicht neu geladen" : ""}
@@ -455,7 +456,7 @@ export function KinoTab({
                 {programm.events.map((ev, i) => (
                   <div key={i} style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px", borderLeft: "3px solid " + T.wolfram }}>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 18, textTransform: "uppercase", letterSpacing: "0.03em" }}>{ev.t}</div>
-                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.rauch, marginTop: 3 }}>{ev.k} · {ev.d}</div>
+                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.rauch, marginTop: 3 }}>{ev.k} · {formatPresentationDate(ev.d, { fallback: ev.d })}</div>
                     {ev.info && <div style={{ fontSize: 13, marginTop: 5, color: T.leinwandTief }}>{ev.info}</div>}
                   </div>
                 ))}
@@ -476,7 +477,7 @@ export function KinoTab({
                         {m ? "★ " : ""}{n.t}{n.j ? " (" + n.j + ")" : ""}
                       </span>
                       {n.k && <KinoLinks kinos={[n.k]} />}
-                      <span style={{ color: T.rauch }}>{n.d || ""}</span>
+                      <span style={{ color: T.rauch }}>{formatPresentationDate(n.d, { fallback: n.d || "" })}</span>
                       {m && <span style={{ color: T.wolfram }}>in deiner Liste</span>}
                     </div>
                   );
@@ -666,7 +667,7 @@ function VerknuepfenSuche({ pf, master, updateFilm }) {
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="In deiner Mediathek suchen (auch Originaltitel) …"
         style={{ ...inputStyle, maxWidth: 340, fontSize: 13 }} />
       {norm(pf.t) && (
-        <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, cursor: "pointer" }}>
+        <label className="kd-touch-checkbox" style={{ display: "inline-flex", gap: 6, alignItems: "center", fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, cursor: "pointer" }}>
           <input type="checkbox" checked={titelUebernehmen} onChange={() => setTitelUebernehmen(!titelUebernehmen)} />
           Programm-Titel „{pf.t}" als Anzeige-Titel übernehmen (bisheriger wandert in die Metadaten)
         </label>

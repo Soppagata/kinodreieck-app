@@ -19,6 +19,7 @@ import {
   passtInJahrzehntMitKulanz,
 } from "../lib/streamingSort.js";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -544,7 +545,7 @@ export function StreamingTab({
       {datenDa && katalogInfo?.abgelaufen && (
         <div style={{ background: "rgba(217,106,90,0.12)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
           <strong style={{ color: T.gefahr }}>Abgelaufener Schnappschuss</strong> — diese Verfügbarkeiten galten bis
-          {" "}{new Date(katalogInfo.gueltigBis).toLocaleDateString("de-AT")} und stimmen heute nicht mehr zwingend.
+          {" "}{formatPresentationDate(katalogInfo.gueltigBis)} und stimmen heute nicht mehr zwingend.
           {katalogInfo.variante === "demo" ? " Mit einer Anmeldung siehst du den laufenden Katalog." : ""}
         </div>
       )}

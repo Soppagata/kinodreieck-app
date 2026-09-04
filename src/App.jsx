@@ -149,6 +149,10 @@ export default function App() {
   const [hilfeOffen, setHilfeOffen] = useState(false);
   const toggleMehr = useCallback(() => setMehrOffen((offen) => !offen), []);
   const schliesseHilfe = useCallback(() => setHilfeOffen(false), []);
+  const oeffneHilfe = useCallback(() => {
+    setMehrOffen(false);
+    setHilfeOffen(true);
+  }, []);
   const scrollProBereichRef = useRef(new Map([["start", 0]]));
   const aktuelleScrolltiefe = useCallback(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return 0;
@@ -1807,6 +1811,7 @@ export default function App() {
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap" }}>
           {sichtbareNavigation.map(({ id, label }) => (
             <button key={id} className={tab === id ? "kd-nav-aktiv" : undefined}
+              aria-current={tab === id ? "page" : undefined}
               aria-label={id === "daten" && sicherungOffen ? label : undefined}
               aria-description={id === "daten" && sicherungOffen ? "Sicherung offen" : undefined}
               onClick={() => id === "daten" && sicherungOffen ? oeffneSicherung() : navigiere(id)}
@@ -1852,7 +1857,7 @@ export default function App() {
         ) : null}
 
         {remoteKontoAktiv && tab === "start" && bootDone && (
-          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={() => setHilfeOffen(true)}
+          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={oeffneHilfe}
             entdeckenPins={entdeckenPins} webDiscoveryFeed={webDiscoveryState.feed} onEntdeckenPinsBereinigen={bereinigeEntdeckenPins} onSpringeZuEntdecken={() => navigiere("blog")}
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
             entdeckenStatus={entdeckenStatus} onEntdeckenStatusAendern={bestaetigeSerienHinweis}
@@ -2056,7 +2061,7 @@ export default function App() {
         )}
       </main>
       {remoteKontoAktiv && <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} sicherungOffen={sicherungOffen} onMehr={toggleMehr}
-        onNavigate={navigiereAusGlobalemMenu} onNachOben={nachObenAusMenu} />}
+        onNavigate={navigiereAusGlobalemMenu} onNachOben={nachObenAusMenu} onHilfe={oeffneHilfe} />}
       {remoteKontoAktiv && <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche}
         antwort={globaleSuchantwort}
         onAntwortSchliessen={() => setGlobaleSuchantwort(null)}

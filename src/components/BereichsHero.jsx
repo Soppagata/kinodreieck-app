@@ -15,7 +15,7 @@ const BEREICHE = Object.freeze({
     text: "Dein Programm und Entdeckungen aus den verbundenen Katalogen.",
   },
   blog: {
-    kicker: "Empfehlungen · Ereignisse · Meinungen",
+    kicker: "Empfehlungen · Ereignisse · Blog",
     titel: "Entdecken",
     text: "Persönliche Empfehlungen, dein lokaler Radar und alle bisherigen Artikel an einem Ort.",
   },

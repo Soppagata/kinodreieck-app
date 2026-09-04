@@ -1,5 +1,6 @@
 import { T, btnStyle } from "../lib/tokens.js";
 import { FILMWISSEN_STATUS } from "../lib/filmwissen.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 const SICHERHEIT = {
   sehr_niedrig: "sehr unsicher",
@@ -55,7 +56,7 @@ export function FilmwissenBereich({
             {daten.warum.kurztext}
           </p>
           <p style={{ margin: "0 0 8px", color: T.rauch, fontSize: 11 }}>
-            Gemeinsame Einordnung · Stand {new Date(daten.version.stand).toLocaleDateString("de-AT")}
+            Gemeinsame Einordnung · Stand {formatPresentationDate(daten.version.stand)}
             {" · "}Version {daten.version.nr}
           </p>
           <details>

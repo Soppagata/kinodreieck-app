@@ -6,6 +6,7 @@ import {
   bauePaketUebernahme, ingestionPrompt,
 } from "../lib/paket.js";
 import { TYP_GRUPPEN } from "../lib/typen.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 /* ================= TEILEN & TAUSCHEN (Phase A) =================
    Export des eigenen Bestands als kinodreieck-paket (Bereichs-Auswahl),
@@ -131,7 +132,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
       {!nurKi && <div style={{ borderTop: "1px solid " + T.saal, paddingTop: 12, marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           {BEREICHE.map((b) => (
-            <label key={b} style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer", opacity: anzahlIm(b) ? 1 : 0.45 }}>
+            <label key={b} className="kd-touch-checkbox" style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer", opacity: anzahlIm(b) ? 1 : 0.45 }}>
               <input type="checkbox" checked={exportWahl.includes(b)} onChange={() => toggle(exportWahl, setExportWahl, b)} />
               {BEREICH_LABELS[b]} <span style={monoKlein}>({anzahlIm(b)})</span>
             </label>
@@ -204,13 +205,13 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
           <div style={{ ...h2Style, fontSize: 16, margin: "0 0 6px" }}>{nurKi ? "Masterlisten-Vorschau" : "Paket-Vorschau"} — noch wird nichts übernommen</div>
           <p style={{ ...monoKlein, margin: "0 0 10px" }}>
             Autor: <span style={{ color: T.wolfram }}>{analyse.autor}</span>
-            {analyse.erstellt ? " · erstellt " + String(analyse.erstellt).slice(0, 10) : ""}
+            {analyse.erstellt ? " · erstellt " + formatPresentationDate(analyse.erstellt) : ""}
             {" · Quelle: " + (analyse.quelle === "ki-ingestion" ? "KI-Ingestion" : analyse.quelle === "kinodreieck-export" ? "Kinodreieck-Export" : analyse.quelle)}
           </p>
           {analyse.bereiche.map((b) => (
             <details key={b.name} style={{ marginBottom: 8 }}>
               <summary style={{ cursor: "pointer", fontSize: 14, color: T.leinwand }}>
-                <label style={{ display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
+                <label className="kd-touch-checkbox" style={{ display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={importWahl.includes(b.name)} onChange={() => toggle(importWahl, setImportWahl, b.name)} disabled={b.neu === 0} />
                   <strong>{BEREICH_LABELS[b.name]}</strong>
                 </label>

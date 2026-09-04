@@ -46,6 +46,7 @@ import {
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
 import { radarViennaDay } from "./src/lib/radarNews.js";
+import { formatPresentationDate } from "./src/lib/presentationDate.js";
 import "./radar_websearch_mvp_test.mjs";
 
 let checks = 0;
@@ -497,8 +498,8 @@ try {
   const unavailableRadarUi = await mount(EntdeckenTab, {
     ...baseProps, radarAvailable: false, radarState: createEmptyLocalRadar(),
   });
-  check("Fehlende Radar-Laufzeitfähigkeit entfernt Tab und Verwaltungs-Einstieg", () => {
-    assert.deepEqual([...unavailableRadarUi.container.querySelectorAll('[role="tab"]')]
+  check("Fehlende Radar-Laufzeitfähigkeit entfernt Navigationseintrag und Verwaltungs-Einstieg", () => {
+    assert.deepEqual([...unavailableRadarUi.container.querySelectorAll(".kd-entdecken-tabs > button:not(.kd-entdecken-verwalten)")]
       .map((entry) => entry.textContent), ["Empfehlungen", "Blog"]);
   });
   await act(async () => {
@@ -514,8 +515,8 @@ try {
 
   const ui = await mount(EntdeckenTab, { ...baseProps, radarState: createEmptyLocalRadar() });
   check("Entdecken zeigt Blog und ein direkt anschließendes Icon-only-Control", () => {
-    const tabs = [...ui.container.querySelectorAll('[role="tab"]')];
-    assert.deepEqual(tabs.map((entry) => entry.textContent), ["Empfehlungen", "Radar", "Blog"]);
+    const ansichten = [...ui.container.querySelectorAll(".kd-entdecken-tabs > button:not(.kd-entdecken-verwalten)")];
+    assert.deepEqual(ansichten.map((entry) => entry.textContent), ["Empfehlungen", "Radar", "Blog"]);
     const manage = ui.container.querySelector('button[aria-label="Entdecken verwalten"]');
     assert.ok(manage?.querySelector("svg"));
     assert.equal(manage.previousElementSibling?.textContent, "Blog");
@@ -734,8 +735,8 @@ try {
     ...baseProps, fokusId: "blog:fehlend", radarState: createEmptyLocalRadar(),
   });
   check("Ein bestehender Blog-Deep-Link öffnet weiterhin den Blog", () => {
-    assert.equal(deepLinkUi.container.querySelector('[role="tab"][aria-selected="true"]').textContent, "Blog");
-    assert.equal(deepLinkUi.container.querySelector('[role="tabpanel"]').getAttribute("aria-label"), "Blog");
+    assert.equal(deepLinkUi.container.querySelector('.kd-entdecken-tabs > button[aria-current="page"]').textContent, "Blog");
+    assert.ok(deepLinkUi.container.querySelector('[data-entdecken-ansicht="blog"]'));
   });
   await deepLinkUi.cleanup();
 
@@ -818,7 +819,7 @@ try {
   await workUi.render(renderWorkProps());
   check("Bestätigter Film-Treffer zeigt nur Titel, Inhaltsdatum und Typ", () => {
     assert.match(workUi.container.textContent, /Passender Film/);
-    assert.ok(workUi.container.textContent.includes(confirmedEvent.date));
+    assert.ok(workUi.container.textContent.includes(formatPresentationDate(confirmedEvent.date)));
     assert.match(workUi.container.textContent, /Film · Kinostart Österreich/);
     const news = [...workUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
@@ -835,7 +836,7 @@ try {
   await act(async () => { button(workReloadUi.container, "Radar").click(); await tick(); });
   check("Film-Titel und validiertes Feed-Ereignis bleiben nach Reload sichtbar", () => {
     assert.match(workReloadUi.container.textContent, /Passender Film/);
-    assert.ok(workReloadUi.container.textContent.includes(confirmedEvent.date));
+    assert.ok(workReloadUi.container.textContent.includes(formatPresentationDate(confirmedEvent.date)));
     assert.doesNotMatch(workReloadUi.container.textContent, /watchmode:|fixture:|work:/i);
   });
   await workReloadUi.cleanup();
@@ -910,7 +911,7 @@ try {
     const list=seasonUi.container.querySelector(".kd-radar-neuigkeiten");
     assert.equal(list.children.length,1);
     assert.match(list.firstElementChild.querySelector("strong").textContent,/Beispieldorf · Staffel 29/);
-    assert.match(list.firstElementChild.querySelector("span").textContent,/2099-09-02 · Staffel · Nächste Folge/);
+    assert.match(list.firstElementChild.querySelector("span").textContent,/02\.09\.2099 · Staffel · Nächste Folge/);
     assert.doesNotMatch(list.firstElementChild.querySelector("span").textContent,/Beispiel\+|Staffelstart/);
     assert.equal(list.querySelector("summary").textContent,"5 Folgen anzeigen");
     assert.equal(list.querySelectorAll("details ol li").length,5);
@@ -921,7 +922,7 @@ try {
   check("Aufklappen bleibt requestfrei und zeigt Datum/optionale Plattform je Folge",() => {
     const details=seasonUi.container.querySelector("details");
     assert.equal(details.open,true); assert.equal(detailRequests,0);
-    assert.match(details.querySelector("li").textContent,/Folge 2.*2099-09-02.*Beispiel\+/);
+    assert.match(details.querySelector("li").textContent,/Folge 2.*02\.09\.2099.*Beispiel\+/);
     assert.doesNotMatch(details.querySelectorAll("li")[1].textContent,/Beispiel\+|unknown/);
   });
   await seasonUi.cleanup();
@@ -962,8 +963,8 @@ try {
     check("Identische Eventreferenz nach Wiener Mitternacht projiziert neu und hält letzte Folge gebündelt",()=>{
       const news=dayUi.container.querySelector(".kd-radar-neuigkeiten");
       assert.equal(news.children.length,2);
-      assert.doesNotMatch(news.textContent,/Film heute|2099-09-05/);
-      assert.match(news.textContent,/2099-09-06 · Staffel · Nächste Folge/);
+      assert.doesNotMatch(news.textContent,/Film heute|05\.09\.2099/);
+      assert.match(news.textContent,/06\.09\.2099 · Staffel · Nächste Folge/);
       assert.equal(news.querySelector("summary").textContent,"1 Folge anzeigen");
       assert.equal(news.querySelectorAll("details li").length,1);
       assert.match(news.textContent,/Ferner Film/);

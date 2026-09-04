@@ -4,6 +4,7 @@ import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
 import { K } from "../services/storage.js";
 import { serienBeobachten } from "../lib/staffeln.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================
    Aus dem Streaming-Tab in die Einstellungen verschoben — ein Ort für alle
@@ -160,11 +161,11 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
             {katalogInfo?.variante === "demo" && <p style={{ color: T.wolfram, fontSize: 13, margin: "0 0 12px", lineHeight: 1.55 }}><strong>Öffentliche Beispieldaten.</strong> Angemeldete Konten erhalten den laufenden Watchmode-Katalog.</p>}
             <dl className="kd-statusliste">
               <div><dt>Betriebsart</dt><dd>{katalogInfo?.art === "snapshot" ? "Eingebettete Offline-Beispiele" : katalogInfo?.variante === "demo" ? "Demo" : katalogInfo?.variante === "live" ? "Konto · live" : "nicht gemeldet"}</dd></div>
-              <div><dt>Stand</dt><dd>{stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</dd></div>
+              <div><dt>Stand</dt><dd>{formatPresentationDate(stand, { includeTime: true })}</dd></div>
               <div><dt>Titel</dt><dd>{bekannt.titel.length} bekannt · {entdeckenDa ? entdecken.titel.length : 0} entdecken</dd></div>
               <div><dt>Credits</dt><dd>{bekannt.quota_nach_lauf ?? "?"}{bekannt.quota_limit ? ` / ${bekannt.quota_limit}` : ""} im letzten Lauf</dd></div>
               <div><dt>Nächster Reset</dt><dd>{resetDatum
-                ? `${resetDatum.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })} · in ${resetInTagen} ${resetInTagen === 1 ? "Tag" : "Tagen"}`
+                ? `${formatPresentationDate(resetDatum)} · in ${resetInTagen} ${resetInTagen === 1 ? "Tag" : "Tagen"}`
                 : "nicht gemeldet"}</dd></div>
               <div><dt>Quellen</dt><dd className="kd-status-quellen">{(bekannt.dienste || []).map(kurzQuelle).join(" · ") || "keine gemeldet"}</dd></div>
               {alterTage > 35 && <div><dt>Zustand</dt><dd style={{ color: T.gefahr }}>Seit {Math.floor(alterTage)} Tagen nicht aktualisiert</dd></div>}

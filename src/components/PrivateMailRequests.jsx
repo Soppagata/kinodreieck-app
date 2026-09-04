@@ -136,7 +136,7 @@ export function Kontoloeschanfrage({
       <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
         Diese authentifizierte Anfrage wird manuell geprüft und bearbeitet. Sie löscht dein Konto oder deine Daten nicht sofort.
       </p>
-      <label style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 10, color: T.rauch, fontSize: 12 }}>
+      <label className="kd-touch-checkbox" style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 10, color: T.rauch, fontSize: 12 }}>
         <input type="checkbox" checked={confirmed} disabled={running} onChange={(event) => setConfirmed(event.target.checked === true)} />
         Ich möchte eine manuelle Kontolöschung anfragen.
       </label>

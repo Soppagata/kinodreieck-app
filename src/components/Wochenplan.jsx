@@ -196,7 +196,7 @@ function ReminderEditor({
       )}
       {katalogSucheLaeuft && <div className="kd-wochen-verknuepfungsstatus" role="status">Streaming-Titel werden abgeglichen …</div>}
       <fieldset className="kd-wochen-tage"><legend>Wochentage</legend>{WOCHENTAGE.map((tag) => (
-        <label key={tag.nr}><input type="checkbox" checked={entwurf.wochentage.includes(tag.nr)} onChange={() => tagToggle(tag.nr)} /><span>{tag.kurz}</span></label>
+        <label key={tag.nr} className="kd-touch-checkbox"><input type="checkbox" checked={entwurf.wochentage.includes(tag.nr)} onChange={() => tagToggle(tag.nr)} /><span>{tag.kurz}</span></label>
       ))}</fieldset>
       <div className="kd-wochen-formgrid">
         <label>Wiederholen bis<select value={entwurf.ende.typ} onChange={(e) => setze("ende", { typ: e.target.value })}>

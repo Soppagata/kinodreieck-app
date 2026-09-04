@@ -1,5 +1,7 @@
 /* Read-only display projection. Explicit title markers only; no query matching,
    provider calls, inferred identity or changes to stored findings. */
+import { formatPresentationDate } from "./presentationDate.js";
+
 const SERIES_CATEGORIES = new Set(["series", "season"]);
 const MARKER = /\b(?:staffel|season|folge|episode)\s*\d|\bS\d+\s*E\d+/iu;
 const VIENNA_DAY = new Intl.DateTimeFormat("en", {
@@ -80,9 +82,7 @@ export function radarSearchStatusLabel(searchStatuses, targetId) {
   const entry = searchStatuses?.find((status) => status.targetId === targetId);
   if (!entry) return "Suchstatus nicht verfügbar";
   if (entry.status === "never") return "Noch keine Suche";
-  const timestamp = new Intl.DateTimeFormat("de-AT", {
-    dateStyle: "short", timeStyle: "short", timeZone: "Europe/Vienna",
-  }).format(new Date(entry.checkedAt));
+  const timestamp = formatPresentationDate(entry.checkedAt, { includeTime: true, fallback: "unbekannt" });
   // This can be cached: never promise that a past lease is still running.
   if (entry.status === "searching") return `Suche gestartet ${timestamp}`;
   const label = { confirmed: "Treffer gefunden", no_change: "keine neuen Treffer",

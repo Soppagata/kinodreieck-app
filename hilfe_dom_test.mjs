@@ -290,7 +290,14 @@ async function runHilfeDomTest() {
     await act(async () => { tastatur("Tab", { shift: true }); });
     stepIf("focusRingRueckwaerts", check("HilfeSheet Shift+Tab fährt vom ersten Fokusziel auf das letzte", document.activeElement === last));
   } else {
-    check("HilfeSheet Tab/Shift+Tab bleibt bei Einzelziel im Dialog", panelFocusables.includes(document.activeElement));
+    const einzelzielBleibtImDialog = check(
+      "HilfeSheet Tab/Shift+Tab bleibt bei Einzelziel im Dialog",
+      panelFocusables.includes(document.activeElement),
+    );
+    if (einzelzielBleibtImDialog) {
+      step("focusRingVorwaerts");
+      step("focusRingRueckwaerts");
+    }
   }
   if (outerTarget) {
     await act(async () => { outerTarget.focus(); });
@@ -321,9 +328,12 @@ async function runHilfeDomTest() {
   if (reopenOffen && lockWiederDa) step("lockReopen");
 
   const reopenFocusables = fokusziele(reopenPanel);
-  const rerenderReferenz = reopenFocusables[1] || null;
+  // Nach der Bereinigung des veralteten Einzeldatei-Downloads kann die Hilfe
+  // regulär nur noch den Schließen-Button als interaktives Panelziel haben.
+  // Der Rerender-Vertrag gilt ebenso für dieses eine verbleibende Fokusziel.
+  const rerenderReferenz = reopenFocusables[1] || reopenFocusables[0] || null;
   const hatReRenderFokusziel = check(
-    "Rerender nutzt bewusst ein späteres Fokusziel",
+    "Rerender nutzt ein vorhandenes Fokusziel",
     !!rerenderReferenz,
   );
   if (hatReRenderFokusziel) {
@@ -333,7 +343,7 @@ async function runHilfeDomTest() {
     await act(async () => { bindState.current?.onRerender?.(); });
     const rerenderFocus = document.activeElement;
     const lockNachRerender = bodyStyleSnapshot();
-    stepIf("rerenderFokus", check("Rerender hält Fokus exakt auf späterem Ziel", rerenderFocus === fokusVorRerender
+    stepIf("rerenderFokus", check("Rerender hält Fokus exakt auf dem gewählten Ziel", rerenderFocus === fokusVorRerender
       && rerenderFocus === rerenderReferenz));
     stepIf("rerenderCloseAufheben", check("Rerender hält Lock-Zustand exakt", lockNachRerender.overflow === lockVorRerender.overflow
       && lockNachRerender.position === lockVorRerender.position

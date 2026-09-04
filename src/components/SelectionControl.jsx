@@ -29,7 +29,7 @@ export function SelectionControl({
   return (
     <label
       htmlFor={inputId}
-      className={`kd-selection-control kd-selection-control-hitbox ${className}`.trim()}
+      className={`kd-selection-control kd-selection-control-hitbox kd-touch-checkbox ${className}`.trim()}
       data-selection-control="checkbox"
     >
       <input

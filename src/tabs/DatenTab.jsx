@@ -20,6 +20,7 @@ import { KI_FUNKTIONEN, istEinzelfunktionAn } from "../lib/kiSchalter.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { errorText } from "../services/errors.js";
 import { aiService } from "../services/ai.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 /* UI-onlyer Privatrelease-Schalter: Altwerkzeuge und ihre Handler bleiben
    unveraendert erhalten, werden aber nicht in die Release-DOM projiziert. */
@@ -195,7 +196,7 @@ export function DatenTab({
                   {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Entdecken"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
-              <label className="kd-einstellcheck">
+              <label className="kd-einstellcheck kd-touch-checkbox">
                 <input type="checkbox" checked={einstellungen.entdeckenTaeglich === true}
                   onChange={(event) => setzeEinstellung("entdeckenTaeglich", event.target.checked)} />
                 <span><strong>Täglich neue Entdecken-Auswahl</strong><small>Wählt pro Tag stabil aus den 20 besten Passungen.</small></span>
@@ -421,7 +422,7 @@ export function DatenTab({
                 <dl className="kd-statusliste">
                   <div><dt>Betriebsart</dt><dd>{demoStand ? "Demo" : programmInfo?.art === "manuell" ? "Manueller Notfallimport" : "Aktuelles Konto-Programm"}</dd></div>
                   <div><dt>Stand</dt><dd style={{ color: programmInfo?.abgelaufen ? T.gefahr : undefined }}>{stand && !Number.isNaN(stand.getTime())
-                    ? stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                    ? formatPresentationDate(stand, { includeTime: true })
                     : "unbekannt"}</dd></div>
                   <div><dt>Quelle</dt><dd>{s.quelle || details[0] || "unbekannt"}</dd></div>
                   <div><dt>Zeitraum</dt><dd>{s.zeitraum || details.find((x) => x.startsWith("Zeitraum "))?.replace(/^Zeitraum /, "") || "nicht gemeldet"}</dd></div>

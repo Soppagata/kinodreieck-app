@@ -94,7 +94,7 @@ const BEREICHE = [
     kurztext: "Verfügbare Titel auf deinen gewählten Diensten ansehen und neue Titel entdecken.",
     details: [
       "Mein Programm zeigt passende bekannte Titel für deine gewählten Streamingdienste. Ein Schnellfilter grenzt die sichtbare Liste auf einen Dienst ein.",
-      "Unter Entdecken findest du weitere Katalogtitel, kannst sie als gesehen markieren oder für später merken.",
+      "Unter Alles findest du weitere Katalogtitel, kannst sie als gesehen markieren oder für später merken.",
       "Welche Streamingdienste berücksichtigt werden, stellst du in Settings unter Streaming-Quellen ein.",
     ],
     suchwoerter: ["streaming", "streamingdienst", "mein programm", "streaming entdecken", "gesehen", "merkliste"],
@@ -115,10 +115,10 @@ const BEREICHE = [
   {
     id: "blog",
     titel: "Entdecken",
-    kurztext: "Empfehlungen, Radar-Einträge und eigene Meinungen getrennt verwalten.",
+    kurztext: "Empfehlungen, Radar-Einträge und den eigenen Blog getrennt verwalten.",
     details: [
-      "Entdecken trennt Empfehlungen, Radar und Meinungen in eigene Ansichten.",
-      "In Meinungen schreibst und verwaltest du eigene Artikel. Verweise können mit Einträgen aus Mediathek oder Must-Watch verbunden sein.",
+      "Entdecken trennt Empfehlungen, Radar und Blog in eigene Ansichten.",
+      "Im Blog schreibst und verwaltest du eigene Artikel. Verweise können mit Einträgen aus Mediathek oder Must-Watch verbunden sein.",
       "Wird eine solche Verbindung gelöst, bleibt der Artikel bestehen und der offene Verweis kann später erneut zugeordnet werden.",
     ],
     suchwoerter: ["entdecken", "empfehlungen", "radar", "meinungen", "artikel", "blog", "rotlink"],
@@ -260,7 +260,7 @@ const AKTIONEN = [
   {
     id: "gesehen-markieren",
     titel: "Gesehen markieren",
-    text: "Öffne Streaming → Entdecken und markiere den Titel dort als gesehen.",
+    text: "Öffne Streaming → Alles und markiere den Titel dort als gesehen.",
     suchwoerter: ["gesehen", "erledigt", "gesehen markieren", "als gesehen", "erledigt markieren"],
     direkteSuchwoerter: ["gesehen markieren", "erledigt markieren"],
     bereichId: "streaming",
@@ -271,7 +271,7 @@ const AKTIONEN = [
 const FALLBACK = {
   id: "allgemeine-hilfe",
   titel: "Kinodreieck kurz erklärt",
-  text: "Kinodreieck bündelt Kinoprogramm, deine Mediathek und Streaming in einer App. Entdecken zeigt Empfehlungen und Radar-Neuigkeiten; die Suche findet Filme und beantwortet Fragen zur App. Einstellungen, Konto, Quellen und optionale KI-Funktionen verwaltest du in Settings. Die ausführliche Anleitung findest du dort unter Über & Rechtliches → Über Kinodreieck & Anleitung.",
+  text: "Kinodreieck bündelt Kinoprogramm, deine Mediathek und Streaming in einer App. Entdecken zeigt Empfehlungen und Radar-Neuigkeiten; die Suche findet Filme und beantwortet Fragen zur App. Einstellungen, Konto, Quellen und optionale KI-Funktionen verwaltest du in Settings. Die Anleitung ist mobil direkt im Menü als Anleitung & Hilfe erreichbar und bleibt zusätzlich in Settings verfügbar.",
   bereichId: "daten",
   ziel: "daten",
 };

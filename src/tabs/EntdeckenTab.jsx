@@ -15,6 +15,7 @@ import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "../lib/radarNews.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -130,7 +131,7 @@ function ManageDialog({
           </section> : null}
           <section>
             <h3>Empfehlungen</h3>
-            <label className="kd-entdecken-check"><input type="checkbox" checked={useLibrary} onChange={(event) => onUseLibrary(event.target.checked)} />
+            <label className="kd-entdecken-check kd-touch-checkbox"><input type="checkbox" checked={useLibrary} onChange={(event) => onUseLibrary(event.target.checked)} />
               <span><strong>Explizit bewertete Mediathek einbeziehen</strong><small>Nur lesend; ohne neue Profilsignale.</small></span></label>
           </section>
           <section>
@@ -227,7 +228,7 @@ function RecommendationsView({
   const sourceStand = (entry) => {
     const day = entry.popularity?.measuredOn || source(entry)?.retrievedOn;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) return null;
-    return new Date(`${day}T12:00:00`).toLocaleDateString("de-AT");
+    return formatPresentationDate(day);
   };
   const titleHeading = (entry) => <h3>{source(entry) ? <a className="kd-entdecken-titellink"
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
@@ -241,7 +242,7 @@ function RecommendationsView({
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
   const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn
-    ? `Stand ${new Date(`${webDiscoveryFeed.refreshedOn}T12:00:00`).toLocaleDateString("de-AT")}`
+    ? `Stand ${formatPresentationDate(webDiscoveryFeed.refreshedOn)}`
     : weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   const pinButton = (entry) => {
     const pinned = isEntdeckenPinned(recommendationPins, entry);
@@ -415,7 +416,7 @@ function RadarView({
         <h3>Neuigkeiten</h3>
         {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
-          <span>{entry.date} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
+          <span>{formatPresentationDate(entry.date, { fallback: entry.date })} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
           <span className="kd-radar-suchstatus">Ziel: {target
             ? localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })
             : "nicht eindeutig zugeordnet"}</span>
@@ -423,7 +424,7 @@ function RadarView({
             <summary>{entry.episodes.length} {entry.episodes.length === 1 ? "Folge" : "Folgen"} anzeigen</summary>
             <ol>{entry.episodes.map((episode) => <li key={episode.eventVersionId}>
               <strong>Folge {episode.episodeNumber}{episode.episodeTitle ? ` · ${episode.episodeTitle}` : ""}</strong>
-              <span>{episode.date}{episode.region === "AT" ? " · Österreich" : episode.region === "global" ? " · weltweit" : ""}{sichtbarePlattform(episode.platform) ? ` · ${sichtbarePlattform(episode.platform)}` : ""}</span>
+              <span>{formatPresentationDate(episode.date, { fallback: episode.date })}{episode.region === "AT" ? " · Österreich" : episode.region === "global" ? " · weltweit" : ""}{sichtbarePlattform(episode.platform) ? ` · ${sichtbarePlattform(episode.platform)}` : ""}</span>
             </li>)}</ol>
           </details> : null}
         </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine belegte Neuigkeit. Dein Radar zeigt hier gefundene Starttermine.</p>}
@@ -466,8 +467,8 @@ export function EntdeckenTab({
 
   return <section className="kd-entdecken" data-testid="entdecken-tab">
     <div className="kd-entdecken-toolbar">
-      <nav className="kd-entdecken-tabs" aria-label="Entdecken-Ansichten" role="tablist">
-        {sichtbareAnsichten.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={ansicht === id}
+      <nav className="kd-entdecken-tabs" aria-label="Entdecken-Ansichten">
+        {sichtbareAnsichten.map(([id, label]) => <button key={id} type="button" aria-current={ansicht === id ? "page" : undefined}
           className={ansicht === id ? "aktiv" : ""} onClick={() => setAnsicht(id)}>{label}</button>)}
         <button ref={manageButtonRef} type="button" className="kd-entdecken-verwalten" aria-label="Entdecken verwalten"
           title="Entdecken verwalten" onClick={() => setManageOffen(true)}>
@@ -489,7 +490,7 @@ export function EntdeckenTab({
       onRadarTextAdd={onRadarTextAdd}
       onRadarRejectedDismiss={onRadarRejectedDismiss}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd} /> : null}
-    {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
+    {ansicht === "meinungen" ? <div data-entdecken-ansicht="blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
       master={master} useLibrary={useLibrary} accountMode={accountMode} radarAvailable={radarAvailable} onUseLibrary={setUseLibrary}
       onObserveToggle={onObserveToggle} onRadarChange={onRadarChange} onPersonRadarChange={onPersonRadarChange}

@@ -605,7 +605,7 @@ export function BlogProfilAnalyse({
         <p className="kd-blogprofilanalyse-consent-felder">
         Titel: {ausgewaehlt?.payload?.artikel?.titel}; Artikeltext: {ausgewaehlt?.payload?.artikel?.text}; Genres: {JSON.stringify(ausgewaehlt?.payload?.listen?.genres)}; Tags: {JSON.stringify(ausgewaehlt?.payload?.listen?.tags)}
       </p>
-      <label>
+      <label className="kd-touch-checkbox" style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <input type="checkbox" checked={bestaetigt} disabled={analyseGesperrt}
           onChange={(event) => setBestaetigt(event.target.checked)} />
         Ich möchte diesen ausgewählten eigenen Artikel jetzt einmal analysieren lassen.

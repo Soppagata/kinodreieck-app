@@ -13,6 +13,7 @@ import { kiAn } from "../lib/kiSchalter.js";
 import { ladeKontostandNachDemo } from "../services/demoAccountWechsel.js";
 import { fordereEinstiegNachAbmeldung } from "../controllers/onboardingController.js";
 import { hatBestaetigteOwnerRolle } from "../lib/accountAccess.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 
 /* Konto & Geräte-Sync. Der Kern der Etappe aus Nutzersicht:
    anmelden, Bestand übernehmen, auf mehreren Geräten weiterarbeiten.
@@ -38,7 +39,7 @@ function Statuszeile({ status }) {
       ))}
       {status.lastPull && (
         <span style={{ color: T.rauch, opacity: 0.65, fontSize: 12 }}>
-          zuletzt abgeglichen: {new Date(status.lastPull).toLocaleString("de-AT", { dateStyle: "short", timeStyle: "short" })}
+          zuletzt abgeglichen: {formatPresentationDate(status.lastPull, { includeTime: true })}
         </span>
       )}
     </p>

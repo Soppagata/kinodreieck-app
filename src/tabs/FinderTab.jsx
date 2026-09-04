@@ -185,7 +185,7 @@ export function erstelleFinderAntwort({
 }
 
 const BEREICH_LABEL = Object.freeze({
-  mediathek: "Mediathek", kino: "Kino", streaming: "Streaming", blog: "Entdecken · Meinung", daten: "App-Hilfe",
+  mediathek: "Mediathek", kino: "Kino", streaming: "Streaming", blog: "Entdecken · Blog", daten: "App-Hilfe",
 });
 
 export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", limit = 5) {

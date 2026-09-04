@@ -12,16 +12,16 @@ export const NAVIGATION = Object.freeze([
   { id: "daten", label: "Settings", mehr: true, icon: "⚙" },
 ]);
 
-export function MobileNavigation({ aktiv, mehrOffen, sicherungOffen = false, onMehr, onNavigate, onNachOben }) {
+export function MobileNavigation({ aktiv, mehrOffen, sicherungOffen = false, onMehr, onNavigate, onNachOben, onHilfe }) {
   return (
     <>
       {mehrOffen && <MenuPopup aktiv={aktiv} sicherungOffen={sicherungOffen}
-        onClose={onMehr} onNavigate={onNavigate} onNachOben={onNachOben} />}
+        onClose={onMehr} onNavigate={onNavigate} onNachOben={onNachOben} onHilfe={onHilfe} />}
     </>
   );
 }
 
-function MenuPopup({ aktiv, sicherungOffen, onClose, onNavigate, onNachOben }) {
+function MenuPopup({ aktiv, sicherungOffen, onClose, onNavigate, onNachOben, onHilfe }) {
   const dialogRef = useRef(null);
   useEffect(() => {
     const vorher = document.activeElement;
@@ -69,6 +69,9 @@ function MenuPopup({ aktiv, sicherungOffen, onClose, onNavigate, onNachOben }) {
                 {eintrag.label}
               </button>
             ))}
+            <button type="button" className="kd-mobile-menu-hilfe" onClick={onHilfe}>
+              <span aria-hidden="true">?</span> Anleitung &amp; Hilfe
+            </button>
           </nav>
         </section>
         <button className="kd-mobile-menu-nachoben" type="button" onClick={onNachOben}

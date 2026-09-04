@@ -3,6 +3,7 @@ import { T, btnStyle } from "../lib/tokens.js";
 import { RICHTUNGEN } from "../lib/profil.js";
 import { ausSchlagwort } from "../lib/geschmack.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 import { IconClose, IconDelete } from "./ui.jsx";
 
 const RICHTUNG_WORT = { zieht_an: "mag", stoesst_ab: "meidet", ambivalent: "zwiespältig zu" };
@@ -149,7 +150,7 @@ export function ProfilAnsicht({
         <span>KI-Eindruck aus deinen Angaben</span>
         <p>{profilEindruck(signale, filme, achsText)}</p>
       </div>
-      <p style={klein}>Fassung {profil.version || "p0"}{profil.geaendert ? " · zuletzt geändert " + String(profil.geaendert).slice(0, 10) : ""}{" · "}{signale.length} bestätigte {signale.length === 1 ? "Angabe" : "Angaben"}</p>
+      <p style={klein}>Fassung {profil.version || "p0"}{profil.geaendert ? " · zuletzt geändert " + formatPresentationDate(profil.geaendert) : ""}{" · "}{signale.length} bestätigte {signale.length === 1 ? "Angabe" : "Angaben"}</p>
       {signale.length === 0 && <p style={p}>Im Profil steht noch nichts Bestätigtes.</p>}
       {offen.length > 0 && <p style={{ ...klein, color: T.wolfram }}>{offen.length} {offen.length === 1 ? "Vorschlag wartet" : "Vorschläge warten"} auf deine Bestätigung.</p>}
       <div className="kd-profil-hauptaktionen">
