@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { IconDelete, IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
@@ -41,6 +41,7 @@ const normalisiereTagDedupe = (wert) => {
    Katalog und manuelle Wartung bleiben bewusst getrennte Bereiche. */
 export function DatenTab({
   master, masterMeta, masterHerkunft, nachtragCount,
+  anleitungAuftrag = 0,
   exportMaster, importMaster, importProgramm, importNonstop,
   programm, clearProgrammCache,
   startWahl = null, demoAktiv = false, onStartWahl,
@@ -106,6 +107,22 @@ export function DatenTab({
   const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
   const [eggOffen, setEggOffen] = useState(false);
   const [ueberOffen, setUeberOffen] = useState(false);
+  const anleitungKnopfRef = useRef(null);
+  useEffect(() => {
+    if (!anleitungAuftrag) return undefined;
+    setUeberOffen(true);
+    let zweiterFrame = 0;
+    const ersterFrame = requestAnimationFrame(() => {
+      zweiterFrame = requestAnimationFrame(() => {
+        const knopf = anleitungKnopfRef.current;
+        const klappe = knopf?.closest("details");
+        if (klappe) klappe.open = true;
+        knopf?.focus?.({ preventScroll: true });
+        knopf?.scrollIntoView?.({ block: "center", behavior: "auto" });
+      });
+    });
+    return () => { cancelAnimationFrame(ersterFrame); cancelAnimationFrame(zweiterFrame); };
+  }, [anleitungAuftrag]);
 
   /* Dieselbe Wertelisten-Logik wie die intelligente Suche. `bekannteWerte`
      bewahrt die echte Anzeigeschreibweise und entdoppelt robust; eine zweite
@@ -377,7 +394,7 @@ export function DatenTab({
       {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
         katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
 
-      <Klappe titel="Streaming-Katalogstand">
+      <Klappe titel="Streaming-Katalogbestand">
         <KatalogAuditStatus />
       </Klappe>
 
@@ -493,7 +510,8 @@ export function DatenTab({
           </p>
           {RELEASE_NEBENWEGE_SICHTBAR && eggOffen && waehleModus && <div style={{ marginTop: 12 }}><button onClick={eggToggle} style={btnStyle(eggAktiv)}>{eggLabel}</button></div>}
           <div style={{ marginTop: 14 }}>
-            <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => setUeberOffen((v) => !v)}>{ueberOffen ? "Anleitung zuklappen" : "Über Kinodreieck & Anleitung"}</button>
+            <button ref={anleitungKnopfRef} style={{ ...btnStyle(false), fontSize: 13 }}
+              aria-expanded={ueberOffen} onClick={() => setUeberOffen((v) => !v)}>Über Kinodreieck &amp; Anleitung</button>
             {ueberOffen && <UeberKinodreieck />}
           </div>
           <details style={{ marginTop: 18 }}>

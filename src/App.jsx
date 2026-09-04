@@ -96,7 +96,6 @@ import { DatenTab } from "./tabs/DatenTab.jsx";
 import { EGGS_ENABLED } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { MobileNavigation, NAVIGATION } from "./components/AppNavigation.jsx";
-import { HilfeSheet } from "./components/HilfeSheet.jsx";
 import { ModusFx } from "./components/ModusOverlay.jsx";
 import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 import { CageAlphabet } from "./components/CageAlphabet.jsx";
@@ -146,14 +145,10 @@ export default function App() {
   const tabRef = useRef(tab);
   tabRef.current = tab;
   const [mehrOffen, setMehrOffen] = useState(false);
-  const [hilfeOffen, setHilfeOffen] = useState(false);
+  const [anleitungAuftrag, setAnleitungAuftrag] = useState(0);
   const toggleMehr = useCallback(() => setMehrOffen((offen) => !offen), []);
-  const schliesseHilfe = useCallback(() => setHilfeOffen(false), []);
-  const oeffneHilfe = useCallback(() => {
-    setMehrOffen(false);
-    setHilfeOffen(true);
-  }, []);
-  const scrollProBereichRef = useRef(new Map([["start", 0]]));
+  const scrollProBereichRef = useRef(new Map());
+  const scrollWiederherstellungRef = useRef(0);
   const aktuelleScrolltiefe = useCallback(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return 0;
     /* Das Popup sperrt iOS-Scroll über einen fixierten Body. In diesem Zustand
@@ -166,19 +161,40 @@ export default function App() {
   }, []);
   const stelleScrolltiefeHer = useCallback((id, ueberschreiben = null) => {
     const ziel = ueberschreiben ?? scrollProBereichRef.current.get(id) ?? 0;
-    /* Zwei Frames: erst darf die Scrollsperre des ausgebauten Popup-Menüs ihren
-       alten Stand freigeben, danach gewinnt die bereichseigene Position. */
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      try { window.scrollTo({ top: ziel, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, ziel); }
-    }));
+    const auftrag = ++scrollWiederherstellungRef.current;
+    /* Passive Effect-Cleanups können die Menüsperre erst nach mehreren Frames
+       lösen. Erst danach darf die Zielposition gewinnen; eine feste Zahl von
+       Frames wäre auf iOS und in Chromium nicht zuverlässig. */
+    let versuche = 0;
+    const nachEntsperrung = () => {
+      if (scrollWiederherstellungRef.current !== auftrag) return;
+      if (document.body.style.position === "fixed" && versuche < 12) {
+        versuche += 1;
+        requestAnimationFrame(nachEntsperrung);
+        return;
+      }
+      requestAnimationFrame(() => {
+        if (scrollWiederherstellungRef.current !== auftrag) return;
+        try { window.scrollTo({ top: ziel, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, ziel); }
+      });
+    };
+    requestAnimationFrame(nachEntsperrung);
   }, []);
   const navigiere = useCallback((id) => {
     if (!remoteKontoAktiv && id !== "mediathek") return;
+    if (id === tabRef.current) {
+      setMehrOffen(false);
+      return;
+    }
     scrollProBereichRef.current.set(tabRef.current, aktuelleScrolltiefe());
     setTab(id);
     setMehrOffen(false);
     stelleScrolltiefeHer(id);
   }, [aktuelleScrolltiefe, remoteKontoAktiv, stelleScrolltiefeHer]);
+  const oeffneHilfe = useCallback(() => {
+    navigiere("daten");
+    setAnleitungAuftrag((auftrag) => auftrag + 1);
+  }, [navigiere]);
   useEffect(() => {
     if (!remoteKontoAktiv && tab !== "mediathek") setTab("mediathek");
   }, [remoteKontoAktiv, tab]);
@@ -1134,14 +1150,14 @@ export default function App() {
   const [kinoFokus, setKinoFokus] = useState(null);
   const [streamingFokus, setStreamingFokus] = useState(null);
   const ladeStreamingDateienRef = useRef(null), streamingSprungLaufRef = useRef(0);
-  const springeZuFilm = useCallback((ref) => { setMediathekFokus(ref); setExpandedId("b" + ref); setTab("mediathek"); }, []);
+  const springeZuFilm = useCallback((ref) => { setMediathekFokus(ref); setExpandedId("b" + ref); navigiere("mediathek"); }, [navigiere]);
   const springeZuStreaming = useCallback(async (fokus) => {
-    const lauf = ++streamingSprungLaufRef.current; setTab("streaming");
+    const lauf = ++streamingSprungLaufRef.current; navigiere("streaming");
     /* Erst den Vollkatalog übernehmen; sonst verschiebt sein Render die bereits fokussierte Snapshot-Karte. */
     try { await ladeStreamingDateienRef.current?.(true); } catch { /* Tab bleibt nutzbar */ }
     if (streamingSprungLaufRef.current !== lauf) return;
     setStreamingFokus({ ...fokus, auftrag: lauf });
-  }, []);
+  }, [navigiere]);
   const springeZuMustwatchRef = useCallback((verknuepfung, eintrag) => {
     const plan = planeMustwatchSprung(verknuepfung, eintrag, master);
     if (plan?.bereich === "mediathek") return springeZuFilm(plan.fokus);
@@ -1150,7 +1166,7 @@ export default function App() {
       navigiere("kino");
     } else if (plan?.bereich === "streaming") void springeZuStreaming(plan.fokus);
   }, [master, navigiere, springeZuFilm, springeZuStreaming]);
-  const springeZuArtikel = useCallback((id) => { setBlogFokus(id); setTab("blog"); }, []);
+  const springeZuArtikel = useCallback((id) => { setBlogFokus(id); navigiere("blog"); }, [navigiere]);
 
   const updateFilm = useCallback((id, changes) => mutiereMaster((aktuell) => {
     if (!aktuell.some((film) => film.id === id)) return { abgebrochen: true };
@@ -1789,7 +1805,6 @@ export default function App() {
             }
           }} />
       )}
-      {hilfeOffen && <HilfeSheet onClose={schliesseHilfe} />}
       {klaerung && klaerung.length > 0 && (
         <QuelleKlaerung eintraege={klaerung}
           onSpaeter={() => setKlaerung(null)}
@@ -2025,6 +2040,7 @@ export default function App() {
         {remoteKontoAktiv && tab === "daten" && (
           <DatenTab
             master={master} masterMeta={masterMeta} masterHerkunft={masterHerkunft}
+            anleitungAuftrag={anleitungAuftrag}
             nachtragCount={nachtragSichtbar.length}
             exportMaster={exportMaster} importMaster={importMaster}
             importProgramm={ownerTechnikBestaetigt ? importProgramm : undefined} importNonstop={ownerTechnikBestaetigt ? importNonstop : undefined}
@@ -2061,7 +2077,7 @@ export default function App() {
         )}
       </main>
       {remoteKontoAktiv && <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} sicherungOffen={sicherungOffen} onMehr={toggleMehr}
-        onNavigate={navigiereAusGlobalemMenu} onNachOben={nachObenAusMenu} onHilfe={oeffneHilfe} />}
+        onNavigate={navigiereAusGlobalemMenu} onNachOben={nachObenAusMenu} />}
       {remoteKontoAktiv && <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche}
         antwort={globaleSuchantwort}
         onAntwortSchliessen={() => setGlobaleSuchantwort(null)}
@@ -2088,7 +2104,7 @@ export default function App() {
         <CageAlphabet filme={cageFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
           onZeigeEintrag={eggZeigeEintrag} onClose={() => setCageOffen(false)} />
       )}
-      <ZurueckObenKnopf verdeckt={mehrOffen || hilfeOffen} />
+      <ZurueckObenKnopf verdeckt={mehrOffen} />
     </div>
   );
 }

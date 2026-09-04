@@ -132,17 +132,18 @@ test("D2 mobil: Hilfe, ehrliche Entdecken-Navigation, Blog-ARIA und Checkbox-Hit
   expect(weekdayGridFits, "Wochenplan-Checkboxen bleiben bei 393px im Editor").toBe(true);
   await week.getByRole("button", { name: "Abbrechen", exact: true }).click();
 
-  let menu = await openMobileMenu(page);
-  const helpEntry = menu.getByRole("button", { name: "Anleitung & Hilfe", exact: true });
-  const helpBox = await expectTouchBox(helpEntry, "mobiler Hilfe-Einstieg");
+  const helpEntry = page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
+  await helpEntry.scrollIntoViewIfNeeded();
+  const helpBox = await expectTouchBox(helpEntry, "Start-Hilfe-Einstieg");
   await helpEntry.click();
-  const help = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
-  await expect(help).toBeVisible();
-  await expect(help.locator('a[href*="/download/"]')).toHaveCount(0);
-  await expect(help).not.toContainText(/Einzeldatei (?:herunterladen|downloaden)/i);
-  await help.getByRole("button", { name: "Schließen", exact: true }).click();
+  const settingsHelp = page.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
+  await expect(settingsHelp).toBeFocused();
+  await expect(settingsHelp).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
+  const menu = await openMobileMenu(page);
+  await expect(menu.getByRole("button", { name: "Anleitung & Hilfe", exact: true })).toHaveCount(0);
+  await menu.getByRole("button", { name: "Entdecken", exact: true }).click();
 
-  await navigateMobile(page, "Entdecken");
   const views = page.getByRole("navigation", { name: "Entdecken-Ansichten" });
   await expect(views.locator('[role="tab"]')).toHaveCount(0);
   await expect(views.locator('[role="tablist"]')).toHaveCount(0);
@@ -190,14 +191,12 @@ test("D2 mobil: Hilfe, ehrliche Entdecken-Navigation, Blog-ARIA und Checkbox-Hit
   await navigateMobile(page, "Settings");
   const settingsCheckbox = page.getByRole("checkbox", { name: /Täglich neue Entdecken-Auswahl/ });
   const settingsBox = await expectTouchBox(settingsCheckbox.locator("xpath=ancestor::label[1]"), "Settings-Checkbox");
-  await page.getByText("Streaming-Katalogstand", { exact: true }).click();
+  await page.getByText("Streaming-Katalogbestand", { exact: true }).click();
   const audit = page.getByTestId("streaming-catalog-audit");
   await expect(audit).toBeVisible();
-  await audit.getByText(/Warum fehlt „Mandalorian & Grogu“/).click();
-  await expect(audit).toContainText("Lokaler Kandidat für den providerfreien Entdecken-Pool: 24-Stunden-Intervall");
-  await expect(audit).toContainText("weder auf die gemeinsame Datenbank angewandt noch deployt");
-  await expect(audit).toContainText("Welches Intervall live für Entdecken oder Radar aktiv ist, ist nicht belegt");
-  await expect(audit).not.toContainText(/läuft derzeit|nicht autorisiert und nicht erstellt/);
+  await expect(audit).toContainText("Streaming-Titel im gespeicherten Bestand");
+  await expect(audit).not.toContainText(/Snapshotdifferenz|Pipelinephasen|Warum fehlt/);
+  await expect(audit.locator("details")).toHaveCount(0);
 
   console.log(`[D2_TOUCH] ${JSON.stringify({ browser: testInfo.project.name, viewport: "393x852", weekdayBox, helpBox, recommendationBox, blogBox, settingsBox })}`);
 });

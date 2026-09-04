@@ -11,7 +11,6 @@ import {
 import {
   ENTDECKEN_CURRENT_REFRESH_INTERVAL_HOURS,
   ENTDECKEN_TARGET_REFRESH_SLA_HOURS,
-  MANDALORIAN_GROGU_TRACE,
   RADAR_REFRESH_INTERVAL_HOURS,
   buildEntdeckenTitleGateTrace,
   entdeckenFeedFreshness,
@@ -65,22 +64,6 @@ test("U-14 verwirft rechnerisch ungeschlossene oder unvollständige Vergleiche",
   }), /identity-balance-invalid/u);
 });
 
-test("D-06 verfolgt Mandalorian & Grogu durch Freshness, Quelle und Profil", () => {
-  const trace = MANDALORIAN_GROGU_TRACE;
-  assert.equal(trace.title, "Mandalorian & Grogu");
-  assert.equal(trace.conclusion, "explainable-source-exclusion");
-  assert.equal(trace.marketAbsenceProven, false);
-  assert.equal(trace.gates.find((gate) => gate.id === "catalog-identity").status, "passed");
-  assert.equal(trace.gates.find((gate) => gate.id === "at-availability").status, "passed");
-  assert.equal(trace.gates.find((gate) => gate.id === "feed-freshness").status, "expired");
-  assert.equal(trace.gates.find((gate) => gate.id === "feed-intake").status, "absent");
-  assert.equal(trace.gates.find((gate) => gate.id === "source-coverage").status, "excluded");
-  assert.equal(trace.gates.find((gate) => gate.id === "profile").status, "absent");
-  assert.equal(trace.gates.find((gate) => gate.id === "personal").status, "passed");
-  assert.equal(trace.gates.find((gate) => gate.id === "last-attempt").status, "unknown");
-  assert.equal(trace.gates.find((gate) => gate.id === "last-success").status, "unknown");
-});
-
 test("D-06 bewertet Tagespräzision für die 24h-Ziel-SLA fail-closed", () => {
   assert.deepEqual(entdeckenFeedFreshness({ refreshedOn: "2026-09-04", validUntil: "2026-09-10" }, "2026-09-04"), {
     status: "within_sla", ageDays: 0, label: "Heute aktualisiert",
@@ -94,7 +77,6 @@ test("U-06 bildet den autorisiert authored, aber nicht angewandten 24h-Kandidate
   assert.equal(ENTDECKEN_CURRENT_REFRESH_INTERVAL_HOURS, 24);
   assert.equal(ENTDECKEN_TARGET_REFRESH_SLA_HOURS, 24);
   assert.equal(RADAR_REFRESH_INTERVAL_HOURS, 144);
-  assert.equal(MANDALORIAN_GROGU_TRACE.migrationState, "authorized-authored-not-applied");
   const cadence = read("supabase/migrations/20260904140000_entdecken_daily_refresh_interval.sql");
   const radar = read("supabase/migrations/20260830120000_radar_six_day_schedule.sql");
   assert.match(cadence, /v_anchor \+ interval '24 hours'/u);
@@ -130,20 +112,16 @@ test("U-07 bindet direkte und gruppierte Neuigkeiten nur über starke Zielbezieh
   assert.equal(radarSubscriptionForEvent(season, [target]), target);
 });
 
-test("D-06/U-07/U-14 sind in Support- und UI-Artefakten sichtbar, Unbekanntes bleibt benannt", () => {
+test("D-06/U-07/U-14 bewahren generische Logik und eine knappe Bestandsanzeige", () => {
   const component = read("src/components/KatalogAuditStatus.jsx");
   const tab = read("src/tabs/DatenTab.jsx");
   const radarUi = read("src/tabs/EntdeckenTab.jsx");
-  const auditDoc = read("docs/ENTDECKEN_KATALOG_AUDIT_2026-09-04.md");
-  assert.match(tab, /titel="Streaming-Katalogstand"/u);
-  assert.match(component, /Snapshotvergleich <strong>voll<\/strong>.*Pipeline.*<strong>limitiert<\/strong>/su);
-  assert.match(component, /keinen Marktabgang/u);
-  assert.match(component, /Warum fehlt „Mandalorian &amp; Grogu“\?/u);
-  assert.match(radarUi, /Ziel: \{target/u);
-  assert.match(radarUi, /nicht eindeutig zugeordnet/u);
-  for (const phrase of ["Rohquellen", "AT-Verfügbarkeit", "Filter", "Deduplizierung",
-    "Sortierung", "Begrenzung", "Auslieferung", "Nutzersicht", "ausdrücklich unbekannt",
-    "autorisiert lokal erstellt, aber nicht angewandt"]) assert.match(`${component}\n${auditDoc}`, new RegExp(phrase, "u"));
+  assert.match(tab, /titel="Streaming-Katalogbestand"/u);
+  assert.match(component, /Streaming-Titel im gespeicherten Bestand/u);
+  assert.doesNotMatch(component, /Snapshotdifferenz|Pipelinephasen|Warum fehlt|titleTrace/u);
+  assert.match(radarUi, /\{target \? <span className="kd-radar-suchstatus">Ziel: \{localRadarTargetLabel/u);
+  assert.doesNotMatch(radarUi, /nicht eindeutig zugeordnet/u);
+  assert.doesNotMatch(radarUi, /filter\(\(\{ target \}\) => target !== null\)/u);
 });
 
 test("Trace-Builder erfindet ohne Belege weder Identität noch Ausschluss", () => {

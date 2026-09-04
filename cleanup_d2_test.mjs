@@ -83,20 +83,20 @@ check("R-12: Desktop- und Mobilnavigation kennzeichnen die aktive Seite", () => 
   assert.match(navigation, /aria-current=\{aktiv === eintrag\.id \? "page" : undefined\}/);
 });
 
-check("U-13: mobile Hilfe ist direkt erreichbar und verspricht keinen nicht ausgelieferten Download", () => {
-  assert.match(navigation, />\?<[\s\S]*?Anleitung &amp; Hilfe/);
-  assert.match(app, /onHilfe=\{oeffneHilfe\}/);
-  assert.match(hilfe, /mobil direkt im Menü als Anleitung & Hilfe erreichbar/);
+check("U-13: Start-Hilfe führt in die eingebaute Settings-Anleitung", () => {
+  assert.doesNotMatch(navigation, /kd-mobile-menu-hilfe|onHilfe/);
+  assert.match(app, /navigiere\("daten"\);\s*setAnleitungAuftrag/u);
+  assert.match(source("./src/tabs/StartTab.jsx"), /\? Anleitung &amp; Hilfe/);
+  assert.match(source("./src/tabs/DatenTab.jsx"), /anleitungAuftrag[\s\S]*Über Kinodreieck &amp; Anleitung/);
+  assert.match(hilfe, /Hilfe-Knopf auf Start/u);
   for (const path of jsxFiles("./src")) assert.doesNotMatch(source(path), /href=["'{`]\/download\//, path);
   assert.doesNotMatch(source("./src/components/InstallationCard.jsx"), /herunterladen|Download/i);
 });
 
-check("U-06-Naht: Katalogaudit trennt lokalen 24h-Kandidaten von nicht angewandter Migration und Livezustand", () => {
+check("U-06-Naht: Katalogbestand bleibt knapp und ohne titelspezifischen Sonderfall", () => {
   const status = source("./src/components/KatalogAuditStatus.jsx");
-  assert.match(status, /Lokaler Kandidat für den providerfreien Entdecken-Pool/);
-  assert.match(status, /Migration wurde im Repository erstellt, aber weder auf die gemeinsame Datenbank angewandt noch deployt/);
-  assert.match(status, /Welches Intervall live für Entdecken oder Radar aktiv ist, ist nicht belegt/);
-  assert.doesNotMatch(status, /läuft derzeit|nicht autorisiert und nicht erstellt/);
+  assert.match(status, /Streaming-Titel im gespeicherten Bestand/);
+  assert.doesNotMatch(status, /Snapshotdifferenz|Pipelinephasen|Warum fehlt|titleTrace/);
 });
 
 check("D-09: jedes native Checkbox-Inventar hängt am gemeinsamen 44px-Labelvertrag", () => {

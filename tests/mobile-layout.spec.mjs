@@ -134,16 +134,14 @@ async function pruefeE14TypografieProfil({ browser, schrift, viewport }) {
     await menueEintragStart.click();
     await expect(menue).toBeHidden();
 
-    const hilfeAusloeser = page.getByRole("button", { name: "Anleitung & Hilfe" });
+    const hilfeAusloeser = page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
     await hilfeAusloeser.click();
-    const hilfeDialog = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
-    await expect(hilfeDialog).toBeVisible();
-    const hilfeText = hilfeDialog.locator("p").first();
+    const settingsHilfe = page.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
+    await expect(settingsHilfe).toBeFocused();
+    await expect(settingsHilfe).toHaveAttribute("aria-expanded", "true");
+    const hilfeText = page.getByText(/Deine Filme, dein Kino, dein Urteil/);
     await expect(hilfeText).toBeVisible();
     fontGroessen.hilfeText = await leseFontSize(hilfeText);
-
-    await page.keyboard.press("Escape");
-    await expect(hilfeDialog).toBeHidden();
 
     const wrapKlasse = await page.locator(".kd-wrap").getAttribute("class");
     const erwarteteSchrift = schrift === "BROKEN" ? "kd-schrift-normal" : `kd-schrift-${schrift}`;
@@ -454,227 +452,31 @@ for (const viewport of VIEWPORTS) {
       const dashboardBox = await dashboard.boundingBox();
       expect(dashboardBox.x).toBeGreaterThanOrEqual(18);
       expect(dashboardBox.x + dashboardBox.width).toBeLessThanOrEqual(viewport.width - 18);
-      const hilfeAusloeser = page.getByRole("button", { name: "Anleitung & Hilfe" });
-      const hilfeZielnamen = ["Start", "Kino", "Mediathek", "Streaming", "Suche", "Entdecken", "Settings"];
+      const hilfeAusloeser = page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
       await hilfeAusloeser.click();
-      await expect(page.getByRole("dialog", { name: "Anleitung & Hilfe" })).toBeVisible();
-      const hilfeDialog = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
-      const hilfePanel = hilfeDialog.locator(".kd-help-panel");
-      const hilfeLayer = page.locator(".kd-help-layer");
-      await expect(hilfeDialog.locator("article").first()).toBeVisible();
-      await expect(hilfeDialog).toHaveAttribute("aria-modal", "true");
-      await expect(hilfeDialog).toContainText("Anleitung & Hilfe");
-      const hilfeÜberschriften = await hilfePanel.locator("h3").allInnerTexts();
-      expect(hilfeÜberschriften.length).toBe(hilfeZielnamen.length);
-      for (let i = 0; i < hilfeZielnamen.length; i += 1) {
-        await expect(hilfePanel.locator("h3").nth(i)).toHaveText(hilfeZielnamen[i]);
-      }
-      await expect(hilfePanel.locator(".kd-help-lead")).toHaveText("Diese Hilfe öffnet sich nur, wenn du sie bewusst aufrufst.");
-      await expect(hilfePanel.locator(".kd-help-lead")).toBeVisible();
-      await expect(hilfeDialog).not.toContainText(/sichtbare auswahl.*schnittmenge.*global/);
-      const panelCss = await hilfePanel.evaluate((el) => {
-        const rect = el.getBoundingClientRect();
-        const articleRects = [...el.querySelectorAll("article")].map((a) => a.getBoundingClientRect());
-        const cols = new Set(articleRects.map((rect) => Math.round(rect.left)));
-        const rows = new Set(articleRects.map((rect) => Math.round(rect.top)));
-        return {
-          width: rect.width,
-          columns: cols.size,
-          rows: rows.size,
-          overflowY: el.scrollHeight > el.clientHeight,
-          overflowX: el.scrollWidth > el.clientWidth,
-          overflowXVisible: el.scrollWidth <= el.clientWidth,
-        };
-      });
-      const hilfeLayerPads = await hilfeLayer.evaluate((el) => {
-        const st = getComputedStyle(el);
-        return {
-          top: Number.parseFloat(st.paddingTop),
-          right: Number.parseFloat(st.paddingRight),
-          bottom: Number.parseFloat(st.paddingBottom),
-          left: Number.parseFloat(st.paddingLeft),
-        };
-      });
-      expect(panelCss.width).toBeLessThanOrEqual(viewport.width + 0.5);
-      expect(panelCss.columns).toBe(1);
-      expect(panelCss.rows).toBe(7);
-      expect(panelCss.overflowXVisible).toBe(true);
-      expect(panelCss.overflowY).toBe(true);
-      expect(hilfeLayerPads.top).toBeGreaterThanOrEqual(20);
-      expect(hilfeLayerPads.left).toBeGreaterThanOrEqual(20);
-      expect(hilfeLayerPads.right).toBeGreaterThanOrEqual(20);
-      expect(hilfeLayerPads.bottom).toBeGreaterThanOrEqual(20);
-      await page.waitForTimeout(20);
-      const panelBox = await hilfePanel.boundingBox();
-      const layerBox = await hilfeLayer.boundingBox();
-      expect(panelBox.x).toBeGreaterThanOrEqual(layerBox.x + hilfeLayerPads.left - 0.5);
-      expect(panelBox.y).toBeGreaterThanOrEqual(layerBox.y + hilfeLayerPads.top - 0.5);
-      expect(viewport.height - (panelBox.y + panelBox.height)).toBeGreaterThanOrEqual(hilfeLayerPads.bottom - 0.5);
-      const hilfeScrim = hilfeDialog.locator('.kd-sheet-scrim');
-      const hilfeFocusables = hilfePanel.locator('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-      await expect(hilfeScrim).not.toBeFocused();
-      await expect(hilfeFocusables.first()).toBeFocused();
-      const focusCount = await hilfeFocusables.count();
-      if (focusCount > 1) {
-        const laterFocusTarget = hilfeFocusables.nth(1);
-        const lockVorMenu = await page.evaluate(() => ({
-          overflow: document.body.style.overflow,
-          position: document.body.style.position,
-          top: document.body.style.top,
-          left: document.body.style.left,
-          right: document.body.style.right,
-          width: document.body.style.width,
-          className: document.body.className,
-          locked: document.body.classList.contains("kd-scroll-gesperrt"),
-        }));
-        const späterMerkmal = await laterFocusTarget.evaluate((el) => ({
-          tagName: el.tagName,
-          text: (el.textContent || "").replace(/\s+/g, " ").trim(),
-          name: el.getAttribute("name") || "",
-          type: el.getAttribute("type") || "",
-          role: el.getAttribute("role") || "",
-        }));
-
-        await laterFocusTarget.focus();
-        const menueButtonGefunden = await page.evaluate(() => {
-          const menueButton = document.querySelector('.kd-globalsuche-menu[aria-label="Menü öffnen"]');
-          if (!menueButton) return false;
-          menueButton.dispatchEvent(new MouseEvent("click", {
-            bubbles: true,
-            cancelable: true,
-          }));
-          return true;
-        });
-        expect(menueButtonGefunden).toBe(true);
-
-        const menuDialog = page.getByRole("dialog", { name: "Menü" });
-        await expect(menuDialog).toBeVisible();
-        const menuScrim = page.locator(".kd-mobile-menu-layer > .kd-sheet-scrim");
-        await expect(menuScrim).toBeVisible();
-        const menuClosePoint = await page.evaluate(() => {
-          const panel = document.querySelector(".kd-mobile-menu");
-          const scrim = document.querySelector(".kd-mobile-menu-layer > .kd-sheet-scrim");
-          if (!panel || !scrim) return null;
-          const panelRect = panel.getBoundingClientRect();
-          const scrimRect = scrim.getBoundingClientRect();
-          const margin = 6;
-          const kandidaten = [
-            { x: panelRect.right + margin, y: panelRect.top + margin },
-            { x: panelRect.right + margin, y: panelRect.bottom - margin },
-            { x: panelRect.left - margin, y: panelRect.top + margin },
-            { x: panelRect.left - margin, y: panelRect.bottom - margin },
-            { x: panelRect.left + margin, y: panelRect.bottom + margin },
-            { x: scrimRect.left + 4, y: scrimRect.top + 4 },
-          ];
-          const istImScrim = (point) => point.x >= scrimRect.left && point.x <= scrimRect.right && point.y >= scrimRect.top && point.y <= scrimRect.bottom;
-          const istAußerhalbPanel = (point) => point.x <= panelRect.left || point.x >= panelRect.right || point.y <= panelRect.top || point.y >= panelRect.bottom;
-          return kandidaten.find((point) => istImScrim(point) && istAußerhalbPanel(point)) || null;
-        });
-        expect(menuClosePoint).toBeTruthy();
-        await page.mouse.click(menuClosePoint.x, menuClosePoint.y);
-        await expect(menuDialog).toBeHidden();
-
-        await expect(hilfeDialog).toBeVisible();
-        const laterFocusTargetNachher = hilfePanel.locator('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])').nth(1);
-        await expect(laterFocusTargetNachher).toBeFocused();
-        const nachherMerkmal = await laterFocusTargetNachher.evaluate((el) => ({
-          tagName: el.tagName,
-          text: (el.textContent || "").replace(/\s+/g, " ").trim(),
-          name: el.getAttribute("name") || "",
-          type: el.getAttribute("type") || "",
-          role: el.getAttribute("role") || "",
-        }));
-        expect(nachherMerkmal.tagName).toBe(späterMerkmal.tagName);
-        expect(nachherMerkmal.text).toBe(späterMerkmal.text);
-        expect(nachherMerkmal.name).toBe(späterMerkmal.name);
-        expect(nachherMerkmal.type).toBe(späterMerkmal.type);
-        expect(nachherMerkmal.role).toBe(späterMerkmal.role);
-
-        const lockNachMenu = await page.evaluate(() => ({
-          overflow: document.body.style.overflow,
-          position: document.body.style.position,
-          top: document.body.style.top,
-          left: document.body.style.left,
-          right: document.body.style.right,
-          width: document.body.style.width,
-          className: document.body.className,
-          locked: document.body.classList.contains("kd-scroll-gesperrt"),
-        }));
-        expect(lockNachMenu).toEqual(lockVorMenu);
-      }
-      if (focusCount > 1) {
-        await hilfeFocusables.last().focus();
-        await page.keyboard.press("Tab");
-        await expect(hilfeFocusables.first()).toBeFocused();
-        await page.keyboard.press("Shift+Tab");
-        await expect(hilfeFocusables.last()).toBeFocused();
-      } else {
-        await page.keyboard.press("Tab");
-        await expect(hilfeFocusables.first()).toBeFocused();
-        await page.keyboard.press("Shift+Tab");
-        await expect(hilfeFocusables.first()).toBeFocused();
-      }
+      await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
+      const anleitung = page.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
+      await expect(anleitung).toBeFocused();
+      await expect(anleitung).toHaveAttribute("aria-expanded", "true");
+      await expect(page.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Anleitung & Hilfe" })).toHaveCount(0);
+      await expect(page.locator(".kd-help-layer")).toHaveCount(0);
+      await page.getByRole("button", { name: "Menü öffnen" }).click();
+      const hilfeMenu = page.getByRole("dialog", { name: "Menü" });
+      await expect(hilfeMenu.getByRole("button", { name: "Anleitung & Hilfe", exact: true })).toHaveCount(0);
+      await hilfeMenu.getByRole("button", { name: "Start", exact: true }).click();
       await keineDokumentUeberbreite(page);
-      await page.keyboard.press("Escape");
-      await expect(hilfeDialog).toBeHidden();
-      await expect(hilfeAusloeser).toBeFocused();
       await expect.poll(() => page.evaluate(() => ({
         overflow: document.body.style.overflow,
         position: document.body.style.position,
         locked: document.body.classList.contains("kd-scroll-gesperrt"),
       }))).toEqual({ overflow: "", position: "", locked: false });
-
-      await hilfeAusloeser.click();
-      await expect(hilfeDialog).toBeVisible();
-      await expect.poll(() => page.evaluate(() => ({
-        locked: document.body.classList.contains("kd-scroll-gesperrt"),
-        position: document.body.style.position,
-        overflow: document.body.style.overflow,
-      }))).toEqual({ locked: true, position: "fixed", overflow: "hidden" });
-      const scrim = hilfeDialog.locator(".kd-sheet-scrim");
-      const hilfeScrimClosePoint = await page.evaluate(() => {
-        const panel = document.querySelector(".kd-help-panel");
-        const layerScrim = document.querySelector(".kd-sheet-scrim");
-        if (!panel || !layerScrim) return null;
-        const panelRect = panel.getBoundingClientRect();
-        const scrimRect = layerScrim.getBoundingClientRect();
-        const candidates = [
-          { x: scrimRect.left + 4, y: scrimRect.top + 4 },
-          { x: scrimRect.right - 4, y: scrimRect.top + 4 },
-          { x: scrimRect.left + 4, y: scrimRect.bottom - 4 },
-          { x: scrimRect.right - 4, y: scrimRect.bottom - 4 },
-          { x: panelRect.left - 4, y: panelRect.top + 4 },
-          { x: panelRect.right + 4, y: panelRect.top + 4 },
-          { x: panelRect.left - 4, y: panelRect.bottom - 4 },
-          { x: panelRect.right + 4, y: panelRect.bottom - 4 },
-        ];
-        const liegtImScrim = (punkt) => punkt.x >= scrimRect.left && punkt.x <= scrimRect.right
-          && punkt.y >= scrimRect.top && punkt.y <= scrimRect.bottom;
-        const außerhalbPanel = (punkt) => punkt.x <= panelRect.left || punkt.x >= panelRect.right
-          || punkt.y <= panelRect.top || punkt.y >= panelRect.bottom;
-        return candidates.find((punkt) => liegtImScrim(punkt) && außerhalbPanel(punkt)) || null;
-      });
-      expect(hilfeScrimClosePoint).toBeTruthy();
-      await page.mouse.click(hilfeScrimClosePoint.x, hilfeScrimClosePoint.y);
-      await expect(hilfeDialog).toBeHidden();
-      await expect(hilfeAusloeser).toBeFocused();
-      await expect.poll(() => page.evaluate(() => ({
-        overflow: document.body.style.overflow,
-        position: document.body.style.position,
-        locked: document.body.classList.contains("kd-scroll-gesperrt"),
-      }))).toEqual({ overflow: "", position: "", locked: false });
-
-      await page.evaluate(() => window.scrollTo(0, 900));
-      await page.waitForTimeout(180);
-      await expect(page.locator('[role="dialog"]')).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Menü öffnen" })).toBeEnabled();
-      await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe("");
       await keineDokumentUeberbreite(page);
     });
   }
 }
 
-test("E14 Typografie stabil, inkl. BROKEN-Fallback, Help-Portal und Settings-Persistenz", async ({ browser }) => {
+test("E14 Typografie stabil, inkl. BROKEN-Fallback, Settings-Hilfe und Settings-Persistenz", async ({ browser }) => {
   const profils = [
     { schrift: "klein", viewport: { width: 393, height: 852 } },
     { schrift: "normal", viewport: { width: 393, height: 852 } },
@@ -701,9 +503,10 @@ test("E14 Typografie stabil, inkl. BROKEN-Fallback, Help-Portal und Settings-Per
     await blockiereFremdnetz(overflowPage);
     await seedAppMitDarstellung(overflowPage, { schrift: "gross" });
     await overflowPage.goto("/");
-    const hilfeAusloeser = overflowPage.getByRole("button", { name: "Anleitung & Hilfe" });
+    const hilfeAusloeser = overflowPage.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
     await hilfeAusloeser.click();
-    await expect(overflowPage.getByRole("dialog", { name: "Anleitung & Hilfe" })).toBeVisible();
+    await expect(overflowPage.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true })).toBeFocused();
+    await expect(overflowPage.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
     await keineDokumentUeberbreite(overflowPage);
   } finally {
     await overflowContext.close();
@@ -745,93 +548,6 @@ test("E14 Typografie stabil, inkl. BROKEN-Fallback, Help-Portal und Settings-Per
     })).toBe("gross");
   } finally {
     await context.close();
-  }
-});
-
-test("Chromium-Mobil respektiert Safe-Area-Insets im Hilfe-Layer", async ({ browserName, page }) => {
-  test.skip(browserName !== "chromium", "Safe-Area-Bestätigung ist als Chromium-Fokusprobe definiert.");
-
-  const SAFE_AREA = { top: 37, right: 11, bottom: 29, left: 7 };
-  const SAFE_PADS = {
-    top: Math.max(20, SAFE_AREA.top),
-    right: Math.max(20, SAFE_AREA.right),
-    bottom: Math.max(20, SAFE_AREA.bottom),
-    left: Math.max(20, SAFE_AREA.left),
-  };
-
-  const cdp = await page.context().newCDPSession(page);
-  try {
-    try {
-      await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: SAFE_AREA });
-    } catch (error) {
-      console.log("STOP_PRODUKTFINDING: Emulation.setSafeAreaInsetsOverride nicht verfügbar oder fehlgeschlagen");
-      throw error;
-    }
-    await page.setViewportSize({ width: 393, height: 852 });
-    await blockiereFremdnetz(page);
-    await seedAppMitDarstellung(page);
-    await page.goto("/");
-
-    await expect(page.getByRole("button", { name: "Menü öffnen" })).toBeVisible();
-    await page.getByRole("button", { name: "Menü öffnen" }).click();
-    await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Start", exact: true }).click();
-
-    const hilfeAusloeser = page.getByRole("button", { name: "Anleitung & Hilfe" });
-    await hilfeAusloeser.click();
-    const hilfeDialog = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
-    const hilfePanel = hilfeDialog.locator(".kd-help-panel");
-    const hilfeLayer = page.locator(".kd-help-layer");
-    await expect(hilfeDialog).toBeVisible();
-
-    const hilfeLayerPads = await hilfeLayer.evaluate((el) => {
-      const st = getComputedStyle(el);
-      return {
-        top: Number.parseFloat(st.paddingTop),
-        right: Number.parseFloat(st.paddingRight),
-        bottom: Number.parseFloat(st.paddingBottom),
-        left: Number.parseFloat(st.paddingLeft),
-      };
-    });
-
-    expect(hilfeLayerPads.top).toBeGreaterThanOrEqual(SAFE_PADS.top - 0.5);
-    expect(hilfeLayerPads.right).toBeGreaterThanOrEqual(SAFE_PADS.right - 0.5);
-    expect(hilfeLayerPads.bottom).toBeGreaterThanOrEqual(SAFE_PADS.bottom - 0.5);
-    expect(hilfeLayerPads.left).toBeGreaterThanOrEqual(SAFE_PADS.left - 0.5);
-
-    const panelBox = await hilfePanel.boundingBox();
-    const layerBox = await hilfeLayer.boundingBox();
-    expect(panelBox.x).toBeGreaterThanOrEqual(layerBox.x + SAFE_PADS.left - 0.5);
-    expect(panelBox.y).toBeGreaterThanOrEqual(layerBox.y + SAFE_PADS.top - 0.5);
-    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(layerBox.x + layerBox.width - SAFE_PADS.right + 0.5);
-    expect(852 - (panelBox.y + panelBox.height)).toBeGreaterThanOrEqual(SAFE_PADS.bottom - 0.5);
-
-    const panelCss = await hilfePanel.evaluate((el) => {
-      const articleRects = [...el.querySelectorAll("article")].map((a) => a.getBoundingClientRect());
-      const cols = new Set(articleRects.map((rect) => Math.round(rect.left)));
-      const rows = new Set(articleRects.map((rect) => Math.round(rect.top)));
-      return {
-        rows: rows.size,
-        cols: cols.size,
-      };
-    });
-    expect(panelCss.rows).toBe(7);
-    expect(panelCss.cols).toBe(1);
-
-    await page.keyboard.press("Escape");
-  } finally {
-    try {
-      await cdp.send("Emulation.setSafeAreaInsetsOverride", {
-        insets: {
-          top: 0,
-          right: 0,
-          bottom: 0,
-          left: 0,
-        },
-      });
-    } catch {
-      /* best effort */
-    }
-    await cdp.detach();
   }
 });
 
@@ -3025,10 +2741,8 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await expect(ueber).toHaveAttribute("open", "");
   const ueberKinodreieckButton = ueber.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
   await expect(ueberKinodreieckButton).toBeVisible();
+  await expect(ueberKinodreieckButton).toHaveAttribute("aria-expanded", "false");
   await ueberKinodreieckButton.click();
-  const anleitungButton = ueber.getByRole("button", { name: /Anleitung & Hilfe öffnen/i, exact: true });
-  await expect(anleitungButton).toBeVisible();
-  await anleitungButton.click();
   const mobileDoku = page.locator(".kd-doku-hilfe");
   await expect(mobileDoku).toBeVisible();
   await expect(mobileDoku.locator('[role="dialog"]')).toHaveCount(0);
@@ -3039,7 +2753,7 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await mobileDokuSummary.focus();
   await page.keyboard.press("Enter");
   await expect(mobileDokuDetails.first()).toHaveAttribute("open");
-  const ueberZu = mobileDoku.locator("xpath=..").getByRole("button", { name: "Anleitung zuklappen", exact: true });
+  const ueberZu = mobileDoku.locator("xpath=..").getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
   await expect(ueberZu).toBeVisible();
   await expect(ueberZu).toHaveCount(1);
   await ueberZu.click();

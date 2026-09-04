@@ -231,13 +231,19 @@ export function radarSubscriptionForEvent(event, subscriptions = []) {
   const rows = list(subscriptions).filter((entry) => entry?.status === "active");
   const directSource = text(event?.sourceTargetKey);
   const sourceTargetId = directSource.match(/^(?:work|franchise):(.+)$/)?.[1] || null;
-  const matches = rows.filter((entry) => (
-    entry.targetId === event?.targetId
-    || (sourceTargetId && entry.targetId === sourceTargetId)
-    || (entry.targetType === "franchise" && list(entry.titleGroup?.members)
-      .some((member) => member?.targetId === event?.targetId))
-  ));
-  return matches.length === 1 ? matches[0] : null;
+  const unique = (matches) => matches.length === 1 ? matches[0] : null;
+  /* sourceTargetKey bezeichnet das Ziel, dessen Suche den Fund erzeugt hat.
+     Diese Herkunft muss vor der Identität des gefundenen Werks gewinnen:
+     dasselbe Werk kann zusätzlich ein eigenes Ziel und Mitglied einer Reihe
+     sein, ohne die belegte Suchherkunft dadurch mehrdeutig zu machen. */
+  if (sourceTargetId) {
+    const source = unique(rows.filter((entry) => entry.targetId === sourceTargetId));
+    if (source) return source;
+  }
+  const direct = unique(rows.filter((entry) => entry.targetId === event?.targetId));
+  if (direct) return direct;
+  return unique(rows.filter((entry) => entry.targetType === "franchise" && list(entry.titleGroup?.members)
+    .some((member) => member?.targetId === event?.targetId)));
 }
 
 /* Eine normale, kurzlebige Outbox ist kein Nutzerfehler und braucht keinen

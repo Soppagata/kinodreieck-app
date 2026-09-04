@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "./src/lib/radarNews.js";
+import { radarSubscriptionForEvent } from "./src/lib/entdeckenUi.js";
 import { validateRadarPilotFeed, RADAR_PILOT_FEED_FORMAT } from "./src/lib/radarPilotContracts.js";
 import { createEmptyLocalRadar, createLocalTextRadarTargetId, reconcileAccountRadarPilotFeed,
   decodeLocalRadar, changeLocalTextRadarSubscription, validateLocalRadarState,
@@ -113,6 +114,18 @@ check("Staffelgruppen bleiben an genau eine vorhandene Zielprovenienz gebunden",
     episode(3, { targetId, sourceTargetKey: "franchise:title-group:v1:test", sourceTargetKind: "franchise" }),
   ], today);
   assert.equal(split.length, 2);
+});
+check("Starke Suchprovenienz gewinnt vor gleichzeitig passender Werk- und Gruppenbeziehung", () => {
+  const work = { targetId: "imdb:tt1234567", targetType: "work", title: "Einzelfilm", status: "active" };
+  const group = { targetId: "title-group:v1:reihe", targetType: "franchise", title: "Reihe", status: "active",
+    titleGroup: { members: [{ targetId: work.targetId }] } };
+  const event = { targetId: work.targetId, sourceTargetKey: `franchise:${group.targetId}` };
+  assert.equal(radarSubscriptionForEvent(event, [work, group]), group);
+  assert.equal(radarSubscriptionForEvent({ ...event, sourceTargetKey: `work:${work.targetId}` }, [work, group]), work);
+});
+check("Ohne starke eindeutige Beziehung bleibt ein Alt-Ereignis unaufgelöst", () => {
+  const target = { targetId: "imdb:tt1234567", targetType: "work", title: "Einzelfilm", status: "active" };
+  assert.equal(radarSubscriptionForEvent({ targetId: "imdb:tt7654321" }, [target]), null);
 });
 
 const targetText="Beispieldorf";

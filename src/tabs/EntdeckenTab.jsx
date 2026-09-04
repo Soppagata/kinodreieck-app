@@ -417,9 +417,7 @@ function RadarView({
         {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
           <span>{formatPresentationDate(entry.date, { fallback: entry.date })} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
-          <span className="kd-radar-suchstatus">Ziel: {target
-            ? localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })
-            : "nicht eindeutig zugeordnet"}</span>
+          {target ? <span className="kd-radar-suchstatus">Ziel: {localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })}</span> : null}
           {entry.kind === "season" ? <details className="kd-radar-folgen">
             <summary>{entry.episodes.length} {entry.episodes.length === 1 ? "Folge" : "Folgen"} anzeigen</summary>
             <ol>{entry.episodes.map((episode) => <li key={episode.eventVersionId}>

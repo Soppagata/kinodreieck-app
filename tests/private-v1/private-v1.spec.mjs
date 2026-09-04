@@ -95,6 +95,27 @@ test("Haupt-Entdecken bleibt leicht; Streaming Alles und beide Jahrzehntregler b
   await expect(page.locator(".kd-entdecken-karte").first()).toContainText("Zulu Fund");
 });
 
+test("Mobile Haupttabs merken Scrollpositionen und Same-tab-Schließen springt nicht", async ({ privateApp }) => {
+  const { page } = privateApp;
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const startY = await page.evaluate(() => window.scrollY);
+  expect(startY).toBeGreaterThan(100);
+
+  await navigateMobile(page, "Settings");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(5);
+  await page.evaluate(() => window.scrollTo(0, Math.min(700, document.documentElement.scrollHeight)));
+  const settingsY = await page.evaluate(() => window.scrollY);
+  expect(settingsY).toBeGreaterThan(100);
+
+  await navigateMobile(page, "Start");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startY - 12);
+  await navigateMobile(page, "Start");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startY - 12);
+
+  await navigateMobile(page, "Settings");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(settingsY - 12);
+});
+
 test("Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag", async ({ privateApp }, testInfo) => {
   const { page } = privateApp;
   await navigateMobile(page, "Entdecken");
@@ -131,24 +152,24 @@ test("Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag", asy
   await expect(article.getByRole("region", { name: "Privatrelease Artikel" })).toHaveAttribute("id", controlledId);
   await expect(article.locator("button button")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Menü öffnen" }).click();
-  const menu = page.getByRole("dialog", { name: "Menü" });
-  const helpEntry = menu.getByRole("button", { name: "Anleitung & Hilfe", exact: true });
-  const helpBox = await expectTouchTarget(helpEntry, "mobiler Hilfe-Einstieg");
+  await navigateMobile(page, "Start");
+  const helpEntry = page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
+  await helpEntry.scrollIntoViewIfNeeded();
+  const helpBox = await expectTouchTarget(helpEntry, "Start-Hilfe-Einstieg");
   await helpEntry.click();
-  const help = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
-  await expect(help.locator('a[href*="/download/"]')).toHaveCount(0);
-  await expect(help).not.toContainText(/Einzeldatei (?:herunterladen|downloaden)/iu);
-  await help.getByRole("button", { name: "Schließen", exact: true }).click();
+  const settingsHelp = page.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
+  await expect(settingsHelp).toBeFocused();
+  await expect(settingsHelp).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Menü öffnen" }).click();
+  await expect(page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Anleitung & Hilfe", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Menü schließen" }).click();
 
-  await navigateMobile(page, "Settings");
-  await page.getByText("Streaming-Katalogstand", { exact: true }).click();
+  await page.getByText("Streaming-Katalogbestand", { exact: true }).click();
   const audit = page.getByTestId("streaming-catalog-audit");
-  await audit.getByText(/Warum fehlt „Mandalorian & Grogu“/u).click();
-  await expect(audit).toContainText("Lokaler Kandidat für den providerfreien Entdecken-Pool: 24-Stunden-Intervall");
-  await expect(audit).toContainText("weder auf die gemeinsame Datenbank angewandt noch deployt");
-  await expect(audit).toContainText("Welches Intervall live für Entdecken oder Radar aktiv ist, ist nicht belegt");
-  await expect(audit).not.toContainText(/läuft derzeit|nicht autorisiert und nicht erstellt/iu);
+  await expect(audit).toContainText("Streaming-Titel im gespeicherten Bestand");
+  await expect(audit).not.toContainText(/Snapshotdifferenz|Pipelinephasen|Warum fehlt/u);
+  await expect(audit.locator("details")).toHaveCount(0);
 
   console.log(`[PRIVATE_V1_TOUCH] ${JSON.stringify({ browser: testInfo.project.name, viewport: "393x852", touchBox, helpBox })}`);
 });

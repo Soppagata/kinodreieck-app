@@ -107,28 +107,3 @@ export function buildEntdeckenTitleGateTrace({
     migrationState: "authorized-authored-not-applied",
   });
 }
-
-export const MANDALORIAN_GROGU_TRACE = buildEntdeckenTitleGateTrace({
-  title: "Mandalorian & Grogu",
-  checkedOn: "2026-09-04",
-  fullCatalog: {
-    present: true,
-    stableIdConfirmed: true,
-    atAvailable: true,
-    service: "Disney+",
-  },
-  previousSnapshot: { titlePresent: false },
-  feed: {
-    format: 6,
-    refreshedOn: "2026-08-28",
-    validUntil: "2026-09-03",
-    titlePresent: false,
-    coverage: {
-      sourceIds: Object.freeze(["chart:joyn-at", "chart:oefi-weekend-at"]),
-      capturesCatalogService: false,
-    },
-  },
-  profile: { metadataPresent: false },
-  personal: { seen: false, inLibrary: false },
-  operation: { lastAttemptAt: null, lastSuccessAt: null },
-});
