@@ -1574,7 +1574,11 @@ export default function App() {
     return a;
   }, [snapshotFreigabe, master, reportError, resolveError]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
-  useEffect(() => { if (tab === "streaming" || tab === "blog") void ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // Vollkatalog nur für beide Entdecken-Wege
+  /* Der Hauptbereich Entdecken und „Mein Programm" leben zuerst aus dem
+     kleinen, gebündelten Marktfeed beziehungsweise dem leichten Bekannt-
+     Katalog. Der 3,26-MB-Vollkatalog wird erst durch Streaming → Alles, einen
+     konkreten Streaming-Sprung, eine globale Suche oder das manuelle
+     Katalog-Nachladen angefordert. */
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
@@ -1674,7 +1678,7 @@ export default function App() {
          Sitzung tot. Der Programm-Lauf zählt allein für die Freigabe. */
       const [programmErgebnis] = await Promise.allSettled([
         ladeProgrammDatei(false),
-        ladeStreamingDateien(tabRef.current === "streaming" || tabRef.current === "blog"),
+        ladeStreamingDateien(false),
       ]);
       const programmOk = programmErgebnis.status === "fulfilled" && programmErgebnis.value;
       /* Ein weiterer Wechsel ist dazwischengekommen — dessen Effekt führt. */
@@ -1978,6 +1982,7 @@ export default function App() {
             onFilmwissenLaden={ladeFilmwissen}
             onFilmwissenRecherchieren={recherchiereFilmwissen}
             mustwatchIds={mustwatchMasterIds}
+            onAllesKatalogLaden={() => ladeStreamingDateien(true)}
             auswahl={auswahl} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
             entdeckenStatus={entdeckenStatus} schreibeEntdeckenStatus={schreibeEntdeckenStatus}

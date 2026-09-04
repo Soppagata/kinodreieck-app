@@ -137,8 +137,8 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.equal(streamingAnfangsbuchstabe("  Zulu"), "Z");
   assert.equal(streamingAnfangsbuchstabe("2001"), null);
   assert.deepEqual(streamingJahrzehnte([{ jahr: 1987 }, { jahr: 2012 }]), [1980, 1990, 2000, 2010]);
-  assert.equal(streamingJahrzehntLabel(1920), "20er");
-  assert.equal(streamingJahrzehntLabel(2000), "00er");
+  assert.equal(streamingJahrzehntLabel(1920), "1920er");
+  assert.equal(streamingJahrzehntLabel(2000), "2000er");
   assert.deepEqual(streamingJahrzehntBereich(1950), { von: 1948, bis: 1962, label: "1948–1962" });
   assert.equal(streamingGenreFilterSichtbar([
     { genres: ["Crime"] }, { genres: ["Drama"] }, { genres: [] },
@@ -168,7 +168,8 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.match(streaming, /Beobachtet \(\{statusAnzahlenE\.beobachtet\}\)/);
   assert.match(streaming, /type="range"[\s\S]*Anfangsbuchstaben filtern/);
   assert.match(streaming, /Jahrzehntbereich/);
-  assert.match(streaming, /bereich\?\.label \|\| "Alle"/);
+  assert.match(streaming, /streamingJahrzehntLabel\(wert\).*bereich\.label/);
+  assert.match(streaming, /bereich \? `\$\{streamingJahrzehntLabel\(wert\)\} · \$\{bereich\.label\}` : "Alle"/);
   assert.match(streaming, /aria-valuetext=\{bereich \? `\$\{Number\(wert\)\}er: \$\{bereich\.von\} bis \$\{bereich\.bis\}` : "Alle Jahrzehnte"\}/);
   assert.match(streaming, /Filter &amp; Sortierung/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*optionen=\{dekadenP\}/);

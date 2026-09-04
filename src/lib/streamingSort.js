@@ -30,7 +30,7 @@ export function streamingJahrzehnte(titel = []) {
 export function streamingJahrzehntLabel(jahrzehnt) {
   const nummer = Number(jahrzehnt);
   if (!Number.isFinite(nummer)) return "";
-  return `${String(Math.abs(nummer) % 100).padStart(2, "0")}er`;
+  return `${nummer}er`;
 }
 
 export function streamingJahrzehntBereich(jahrzehnt) {

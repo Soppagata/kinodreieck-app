@@ -131,7 +131,7 @@ function JahrzehntFilter({ wert, optionen, onChange, name }) {
     <div className="kd-streamfilter-abc kd-streamfilter-dekade" data-aktiv={wert != null ? "1" : "0"}>
       <div className="kd-streamfilter-abc-kopf">
         <span>Jahrzehntbereich</span>
-        <strong aria-live="polite">{bereich?.label || "Alle"}</strong>
+        <strong aria-live="polite">{bereich ? `${streamingJahrzehntLabel(wert)} · ${bereich.label}` : "Alle"}</strong>
         <button type="button" onClick={() => onChange(null)} disabled={wert == null}>Alle</button>
       </div>
       <input type="range" min="0" max={optionen.length} step="1" value={index}
@@ -162,6 +162,7 @@ export function StreamingTab({
   onFilmwissenLaden, onFilmwissenRecherchieren,
   mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false,
   fokusTreffer = null, onFokusVerbraucht,
+  onAllesKatalogLaden,
   entdeckenStatus = {}, schreibeEntdeckenStatus = async () => false,
 }) {
   const bereichRef = useRef(null);
@@ -460,6 +461,20 @@ export function StreamingTab({
     setFokusOverride(null);
     setter(wert);
   };
+  const aendereDekadeP = (wert) => {
+    aendereFilter(setDekadeP, wert);
+    setSortP("jahr");
+    setSortRichtungP("auf");
+  };
+  const aendereDekadeE = (wert) => {
+    aendereFilter(setDekadeE, wert);
+    setSortE("jahr");
+    setSortRichtungE("auf");
+  };
+  const aendereAnsicht = (naechsteAnsicht) => {
+    setAnsicht(naechsteAnsicht);
+    if (naechsteAnsicht === "entdecken") void onAllesKatalogLaden?.();
+  };
   const aktiveFilterP = Number(!!plattformP) + Number(nurBewertet) + Number(nurWunsch)
     + Number(!!buchstabeP) + Number(dekadeP != null);
   const aktiveFilterE = Number(!!plattformE) + Number(!!statusFilterE) + Number(!!typE)
@@ -479,10 +494,10 @@ export function StreamingTab({
   return (
     <section ref={bereichRef}>
       {/* dataTour="streaming-views" bleibt am SegmentedControl-Container — Tour-Anker. */}
-      <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={setAnsicht}
+      <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={aendereAnsicht}
         options={[
           { id: "programm", label: "Mein Programm", badge: datenDa ? programm.length : undefined },
-          { id: "entdecken", label: "Entdecken", badge: entdeckenDa ? entdeckenListe.length : undefined },
+          { id: "entdecken", label: "Alles", badge: entdeckenDa ? entdeckenListe.length : undefined },
         ]} />
 
       {!datenDa && (
@@ -568,7 +583,7 @@ export function StreamingTab({
             <AlphabetFilter name="Mein Programm" wert={buchstabeP}
               onChange={(wert) => aendereFilter(setBuchstabeP, wert)} />
             <JahrzehntFilter name="Mein Programm" wert={dekadeP} optionen={dekadenP}
-              onChange={(wert) => aendereFilter(setDekadeP, wert)} />
+              onChange={aendereDekadeP} />
           </div>
           {programm.length === 0 && <p style={{ color: T.rauch, fontSize: 14 }}>Kein Titel deiner Liste auf den gewählten Diensten.</p>}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -700,7 +715,7 @@ export function StreamingTab({
             <AlphabetFilter name="Entdecken" wert={buchstabeE}
               onChange={(wert) => aendereFilter(setBuchstabeE, wert)} />
             <JahrzehntFilter name="Entdecken" wert={dekadeE} optionen={dekadenE}
-              onChange={(wert) => aendereFilter(setDekadeE, wert)} />
+              onChange={aendereDekadeE} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sichtbareEntdeckenTitel.map((t) => (
