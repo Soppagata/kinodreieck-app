@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { test } from "node:test";
 
 import {
@@ -7,10 +10,32 @@ import {
   validateFinalGatePlan,
 } from "./private-release-final.mjs";
 import {
+  resolveDistAssetReference,
   scanAddedCommittedDiff,
   scanVisibleSingleFilePromises,
   validateBuiltArtifacts,
 } from "./private-release-integrity.mjs";
+
+function createArtifactFixture(references) {
+  const root = mkdtempSync(join(tmpdir(), "kd-private-release-artifacts-"));
+  mkdirSync(join(root, "dist", "assets"), { recursive: true });
+  mkdirSync(join(root, "dist-single"), { recursive: true });
+  writeFileSync(join(root, "dist", "assets", "app.js"), "console.log('fixture');\n");
+  writeFileSync(join(root, "dist", "assets", "app.css"), ":root { color: black; }\n");
+  writeFileSync(join(root, "dist", "sw.js"), "// synthetic service worker\n");
+  writeFileSync(join(root, "dist", "index.html"), [
+    "<!doctype html><div id=\"root\"></div>",
+    ...references.map((reference) => reference.endsWith(".css")
+      ? `<link rel=\"stylesheet\" href=\"${reference}\">`
+      : `<script src=\"${reference}\"></script>`),
+  ].join("\n"));
+  writeFileSync(join(root, "dist-single", "Kinodreieck.html"), [
+    "<!doctype html><div data-kd-einzeldatei-seed></div>",
+    "<script>window.__KD_DEMO_SEED__ = {};</script>",
+    "Der letzte Vorführer · Sommer der Kometen · Der stille Zeuge",
+  ].join("\n"));
+  return root;
+}
 
 test("Gateplan enthaelt alle sechs providerfreien Teilgates exakt einmal und ohne Retry", () => {
   assert.deepEqual(validateFinalGatePlan(), { ok: true, errors: [] });
@@ -94,4 +119,45 @@ test("Artefakt- und Sichtbarkeitspruefer sind fail-closed", () => {
   assert.ok(missing.errors.includes("dist-index-missing"));
   assert.ok(missing.errors.includes("single-file-missing"));
   assert.deepEqual(scanVisibleSingleFilePromises("/definitely/not/a/private-release-candidate"), []);
+});
+
+test("Dist-Asset-Resolver akzeptiert nur die zwei lokalen Vite-Formen", () => {
+  const dist = resolve("/tmp", "private-release-candidate", "dist");
+  assert.equal(resolveDistAssetReference(dist, "/assets/app.js"), join(dist, "assets", "app.js"));
+  assert.equal(resolveDistAssetReference(dist, "./assets/app.js?v=1#bundle"), join(dist, "assets", "app.js"));
+});
+
+test("Dist-Asset-Resolver weist externe und Traversal-Pfade ab", () => {
+  const dist = resolve("/tmp", "private-release-candidate", "dist");
+  for (const reference of [
+    "https://cdn.example/assets/app.js",
+    "//cdn.example/assets/app.js",
+    "assets/app.js",
+    "/assets/../app.js",
+    "./assets/%2e%2e/app.js",
+    "./assets/app%2fescape.js",
+    "./assets/app%5cescape.js",
+  ]) assert.equal(resolveDistAssetReference(dist, reference), null, reference);
+});
+
+test("Artefaktpruefer akzeptiert root- und dot-relative lokale Vite-Assets", (context) => {
+  for (const prefix of ["/assets/", "./assets/"]) {
+    const root = createArtifactFixture([`${prefix}app.js`, `${prefix}app.css`]);
+    context.after(() => rmSync(root, { recursive: true, force: true }));
+    assert.deepEqual(validateBuiltArtifacts(root), { ok: true, errors: [] });
+  }
+});
+
+test("Artefaktpruefer laesst externe oder Traversal-Referenzen nicht als lokale Assets gelten", (context) => {
+  const externalRoot = createArtifactFixture([
+    "https://cdn.example/assets/app.js",
+    "https://cdn.example/assets/app.css",
+  ]);
+  context.after(() => rmSync(externalRoot, { recursive: true, force: true }));
+  assert.ok(validateBuiltArtifacts(externalRoot).errors.includes("dist-asset-reference-missing"));
+
+  const traversalRoot = createArtifactFixture(["./assets/../app.js", "./assets/app.css"]);
+  writeFileSync(join(traversalRoot, "dist", "app.js"), "console.log('must not escape assets');\n");
+  context.after(() => rmSync(traversalRoot, { recursive: true, force: true }));
+  assert.ok(validateBuiltArtifacts(traversalRoot).errors.includes("dist-asset-reference-unsafe"));
 });

@@ -2,7 +2,7 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -88,6 +88,36 @@ function filesBelow(root) {
   return result;
 }
 
+const LOCAL_DIST_ASSET_PREFIX = /^(?:\/|\.\/)assets\//u;
+
+export function resolveDistAssetReference(dist, reference) {
+  if (typeof reference !== "string" || !LOCAL_DIST_ASSET_PREFIX.test(reference)) return null;
+
+  const pathOnly = reference.split(/[?#]/u, 1)[0];
+  if (!pathOnly || pathOnly.includes("\\") || pathOnly.includes("\0")) return null;
+
+  const rawPath = pathOnly.startsWith("./") ? pathOnly.slice(2) : pathOnly.slice(1);
+  const rawSegments = rawPath.split("/");
+  if (rawSegments.length < 2 || rawSegments.some((segment) => !segment)) return null;
+
+  const segments = [];
+  for (const rawSegment of rawSegments) {
+    let segment;
+    try { segment = decodeURIComponent(rawSegment); } catch { return null; }
+    if (!segment || segment === "." || segment === ".."
+      || segment.includes("/") || segment.includes("\\") || segment.includes("\0")) return null;
+    segments.push(segment);
+  }
+  if (segments[0] !== "assets") return null;
+
+  const assetsRoot = resolve(dist, "assets");
+  const target = resolve(dist, ...segments);
+  const pathBelowAssets = relative(assetsRoot, target);
+  if (!pathBelowAssets || pathBelowAssets === ".."
+    || pathBelowAssets.startsWith(`..${sep}`) || isAbsolute(pathBelowAssets)) return null;
+  return target;
+}
+
 export function validateBuiltArtifacts(root = REPOSITORY_ROOT) {
   const errors = [];
   const dist = resolve(root, "dist");
@@ -99,11 +129,18 @@ export function validateBuiltArtifacts(root = REPOSITORY_ROOT) {
   else {
     const index = readFileSync(indexPath, "utf8");
     if (!/<div\s+id=["']root["']/iu.test(index)) errors.push("dist-root-marker-missing");
-    const references = [...index.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/giu)]
-      .map((match) => match[1]);
+    const candidates = [...index.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/giu)]
+      .map((match) => match[1])
+      .filter((reference) => LOCAL_DIST_ASSET_PREFIX.test(reference));
+    const references = [];
+    for (const reference of candidates) {
+      const target = resolveDistAssetReference(dist, reference);
+      if (!target) errors.push("dist-asset-reference-unsafe");
+      else references.push({ reference, target });
+    }
     if (!references.length) errors.push("dist-asset-reference-missing");
-    for (const reference of references) {
-      if (!existsSync(resolve(dist, `.${reference}`))) errors.push(`dist-asset-target-missing:${reference}`);
+    for (const { reference, target } of references) {
+      if (!existsSync(target)) errors.push(`dist-asset-target-missing:${reference}`);
     }
   }
   if (!js.length) errors.push("dist-javascript-missing");
