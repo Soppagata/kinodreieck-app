@@ -217,7 +217,7 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
                 )}
                 <div onClick={(ev) => ev.stopPropagation()}>
                   <SelectionControl checked={!!e.im_besitz}
-                    onCheckedChange={(checked) => onUpdate(e.id, () => ({ im_besitz: checked }))}
+                    onCheckedChange={() => onUpdate(e.id, (aktuell) => ({ im_besitz: !aktuell.im_besitz }))}
                     label="Im Besitz" className="kd-mustwatch-besitzwahl kd-mustwatch-besitzwahl--karte" />
                 </div>
               </div>
