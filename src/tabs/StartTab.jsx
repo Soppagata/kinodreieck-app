@@ -31,8 +31,8 @@ const pinSortWert = (p) => {
    Datenquellen (alles vorhandener App-State, keine neuen Fetches, kein LLM):
    · Vertrauens-Zeile: useSyncStatus (Muster SyncStatusChip) + progStand + streamingBekannt
    · Pinboard & Radar: Entdecken-Titel + kinoPins + ausdrücklich beobachtete Serien
-   · Deine Woche:      persönliche Reminder + Kinopins + passende Kinovorschläge,
-                       rollierende sieben Tage
+   · Deine Woche:      persönliche Reminder + Kinopins + passende Kinovorschläge
+                       + belegte Beobachtet-Ereignisse, rollierende sieben Tage
    · Must-Watch:       mustwatch (oberste 5 = Listenreihenfolge)
    · Zuletzt hinzugefügt: Master + Must-Watch + Merkliste. Neue Master-Einträge
      tragen `erstellt_am`; Alt-Master ohne Zeitpunkt bleiben in einer getrennt
@@ -324,7 +324,7 @@ function StartDashboard({
           plan={wochenplan} onPlanAendern={onWochenplanAendern}
           kinoPins={aktiveKinoPins} kinoVorschlaege={kinoVorschlaege} kinoKatalog={kinoKatalog}
           onKinoPinLoeschen={(pin) => toggleKinoPin?.(pin.t, pin.j, pin.z)}
-          katalog={serienKatalog} master={master}
+          katalog={serienKatalog} master={master} entdeckenStatus={entdeckenStatus}
           onStreamingKatalogLaden={onStreamingKatalogLaden}
           onSpringeZuFilm={zeigeEintrag} onSpringeZuStreaming={onSpringeZuStreaming}
           onKinoVorschlagAnsehen={(eintrag) => {

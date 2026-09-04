@@ -1,5 +1,7 @@
 /* Persönlicher Wochenplan: reine, zeitzonenfeste Kalenderlogik. */
 
+import { beobachteteSerienEreignisse, wienerKalendertag } from "./seriesWatchEvents.js";
+
 export const WOCHENTAGE = Object.freeze([
   { nr: 1, kurz: "Mo", name: "Montag" },
   { nr: 2, kurz: "Di", name: "Dienstag" },
@@ -206,7 +208,7 @@ export function tageDerWoche(wochenstart = new Date()) {
    sondern ein stets aktueller Sieben-Tage-Ausblick: heute zuerst, danach die
    sechs tatsächlich folgenden Kalendertage (auch über Monats-/Jahresgrenzen). */
 export function naechsteSiebenTage(ab = new Date()) {
-  const start = new Date(ab);
+  const start = typeof ab === "string" ? (lokalesDatum(ab) || new Date(NaN)) : new Date(ab);
   start.setHours(12, 0, 0, 0);
   return Array.from({ length: 7 }, (_, index) => {
     const datum = datumPlusTage(start, index);
@@ -534,12 +536,13 @@ export function findeKinoPinImKatalog(pin, kinoKatalog = [], jetzt = new Date())
 
 export function wochenansicht({
   wochenplan, kinoPins = [], kinoVorschlaege = [], kinoKatalog = [], katalog = [], master = [],
-  startdatum = null, wochenstart = null, jetzt = new Date(),
+  entdeckenStatus = {}, startdatum = null, wochenstart = null, jetzt = new Date(),
 } = {}) {
   const plan = normalisiereWochenplan(wochenplan, jetzt);
   /* `wochenstart` bleibt als lesbarer Alt-Parameter erhalten, damit ältere
      Einzeldateien/Tests nicht brechen. Die App selbst übergibt nur noch jetzt. */
-  const tage = naechsteSiebenTage(startdatum || wochenstart || jetzt).map((tag) => ({ ...tag, eintraege: [] }));
+  const ausblickStart = startdatum || wochenstart || wienerKalendertag(jetzt) || jetzt;
+  const tage = naechsteSiebenTage(ausblickStart).map((tag) => ({ ...tag, eintraege: [] }));
   for (const e of plan.eintraege) {
     const verknuepfung = reminderVerknuepfung(e, { kinoKatalog, katalog, master }, jetzt);
     for (const tag of tage) if (reminderFaellig(e, tag.iso)) tag.eintraege.push({
@@ -549,6 +552,13 @@ export function wochenansicht({
       ...(verknuepfung.verknuepfungFehlt ? { verknuepfungFehlt: true } : {}),
       folgenstand: folgenstandText(verknuepfung.quelle),
     });
+  }
+  /* Serienereignisse bleiben eine flüchtige Projektion des bereits geladenen
+     Katalogs. Sie laufen weder durch die Reminder-Normalisierung noch in den
+     Schreibpfad für `kd:wochenplan`. */
+  for (const ereignis of beobachteteSerienEreignisse(katalog, entdeckenStatus, jetzt)) {
+    const tag = tage.find((eintrag) => eintrag.iso === ereignis.datum);
+    if (tag && !tag.eintraege.some((eintrag) => eintrag.id === ereignis.id)) tag.eintraege.push(ereignis);
   }
   const gepinnteKinoSlots = new Set();
   for (const pin of Array.isArray(kinoPins) ? kinoPins : []) {
