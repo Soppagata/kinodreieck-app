@@ -111,19 +111,13 @@ check("Unbekannte, degradierte und Gastrollen fallen geschlossen aus",
     && !hatBestaetigteOwnerRolle({ ...ownerSession, capabilities: { remoteStorage: false } })
     && !hatBestaetigteOwnerRolle({ mode: "guest", state: "ready" }));
 
-let cacheRufe = 0;
-let technikRefreshRufe = 0;
 let recoveryRufe = 0;
 const basisProps = {
-  master: [], masterMeta: null, masterHerkunft: null, nachtragCount: 0,
-  exportMaster: () => {}, importMaster: () => {},
-  importProgramm: () => {}, importNonstop: () => {},
+  master: [],
   programm: { stand: "2026-08-18T10:00:00Z", filme: [], status: {} },
-  clearProgrammCache: () => { cacheRufe += 1; },
-  startWahl: "clean", demoAktiv: false, onStartWahl: () => {},
+  demoAktiv: false,
   katalogVerbunden: true, onKatalogVerbinden: () => {},
   onKatalogRefresh: () => { recoveryRufe += 1; },
-  onTechnikKatalogRefresh: () => { technikRefreshRufe += 1; },
   programmInfo: { art: "remote", variante: "live", stand: "2026-08-18T10:00:00Z" },
   einstellungen: { theme: "dunkel" }, setzeEinstellung: () => {}, waehleModus: () => {},
   backupGesamt: async () => true,
@@ -132,9 +126,7 @@ const basisProps = {
   streamingEntdecken: { stand: "2026-08-18T10:00:00Z", titel: [] },
   streamingInfo: { art: "remote", variante: "live" },
   auswahl: [], toggleQuelle: () => {}, datenGesperrt: false,
-  offeneFlags: 1, migriereMustwatch: () => {}, importiereBesitz: () => {},
-  artikelListe: [], addFilm: () => {}, addFilme: () => {},
-  kontoId: "", kontoEmail: "", onKontoGeloescht: () => {},
+  artikelListe: [], kontoId: "", kontoEmail: "",
 };
 
 async function render(overrides = {}) {
@@ -234,18 +226,17 @@ check("Auch ein bestätigter Owner behält bei echtem Fehler den begrenzten Reco
   summary("Verbindung wiederherstellen") && button("Katalog neu laden") && keineTechnik());
 await act(async () => { button("Katalog neu laden").click(); });
 check("Owner-Recovery nutzt denselben begrenzten Handler ohne Technikmutation",
-  recoveryRufe === 2 && cacheRufe === 0 && technikRefreshRufe === 0);
+  recoveryRufe === 2);
 
 const appQuelle = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
+const datenQuelle = fs.readFileSync(path.join(WURZEL, "src/tabs/DatenTab.jsx"), "utf8");
 const mainQuelle = fs.readFileSync(path.join(WURZEL, "src/main.jsx"), "utf8");
 const kontoQuelle = fs.readFileSync(path.join(WURZEL, "src/components/KontoBereich.jsx"), "utf8");
-check("App und Fehlergrenze leiten Ownerzugriff zentral aus derselben Rollenfunktion ab",
-  appQuelle.includes("hatBestaetigteOwnerRolle(session)")
-    && mainQuelle.includes("hatBestaetigteOwnerRolle(sessionCoordinator.getSnapshot())"));
-check("App reicht technische Mutationshandler an Nicht-Owner gar nicht weiter",
-  appQuelle.includes("importProgramm={ownerTechnikBestaetigt ? importProgramm : undefined}")
-    && appQuelle.includes("clearProgrammCache={ownerTechnikBestaetigt ? clearProgrammCache : undefined}")
-    && appQuelle.includes("onTechnikKatalogRefresh={ownerTechnikBestaetigt ? refreshKatalog : undefined}"));
+check("Die Fehlergrenze leitet Ownerzugriff weiterhin aus der zentralen Rollenfunktion ab",
+  mainQuelle.includes("hatBestaetigteOwnerRolle(sessionCoordinator.getSnapshot())"));
+check("App und DatenTab enthalten keine unerreichbaren technischen Mutationshandler mehr",
+  !/importProgramm|importNonstop|clearProgrammCache|onTechnikKatalogRefresh/.test(appQuelle)
+    && !/importProgramm|importNonstop|clearProgrammCache|onTechnikKatalogRefresh/.test(datenQuelle));
 check("Auch die KI-Verbindungsdiagnose im Kontoweg verlangt bestätigten Owner",
   kontoQuelle.includes('ownerTechnikBestaetigt && personalAiFreigegeben && kiAn("diagnose")'));
 check("Der DOM-Lauf hat weder Netz noch automatischen Diagnosetransport ausgelöst", netzVersuche.length === 0);

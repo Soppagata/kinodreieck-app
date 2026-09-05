@@ -62,17 +62,12 @@ check("Kino-Programmfilter bleiben sichtbar, beschriftet und mobil kompakt", () 
   assert.match(filterCss, /\.kd-kino-tab \.kd-kino-zusatzfilter input \{[^}]*min-height: 44px;[^}]*min-width: 44px/);
 });
 
-check("Mobiler Kino-Fehler verweist nicht auf einen dort unsichtbaren Notfallimport", () => {
+check("Kino-Fehler verweist auf den sichtbaren Recoveryweg statt auf entfernte Notfallimporte", () => {
   const kino = lies("./src/tabs/KinoTab.jsx");
-  assert.match(kino, /manuelle Notfallimport ist dort in der Desktopansicht verfügbar/);
-});
-
-check("Katalogoberflächen unterscheiden hinterlegte Zugangsdaten von bestätigter Verbindung", () => {
   const daten = lies("./src/tabs/DatenTab.jsx");
-  const kino = lies("./src/tabs/KinoTab.jsx");
-  const streaming = lies("./src/tabs/StreamingTab.jsx");
-  assert.match(daten, /Zugangsdaten hinterlegt/);
-  assert.doesNotMatch(daten + kino + streaming, /Datenbank noch nicht verbunden/);
+  assert.match(kino, /Settings → Verbindung wiederherstellen/);
+  assert.doesNotMatch(kino, /Notfallimport|Desktopansicht verfügbar/);
+  assert.match(daten, /titel="Verbindung wiederherstellen"/);
 });
 
 check("Dashboard folgt der festen Startseiten-Reihenfolge", () => {
@@ -212,13 +207,13 @@ check("Blog-Datenwerkzeuge sind aus der Release-Oberfläche entfernt", () => {
   assert.doesNotMatch(lies("./src/tabs/BlogTab.jsx"), /kd-blog-daten|MasterImport|Artikel exportieren|Artikel importieren/);
 });
 
-check("Blog-Bearbeitung bleibt knapp und Altmodi sind an die geschlossene Release-Projektion gebunden", () => {
+check("Blog-Bearbeitung bleibt knapp und entfernte Altmodi kehren nicht als tote Release-Projektion zurück", () => {
   const blog = lies("./src/tabs/BlogTab.jsx");
   const daten = lies("./src/tabs/DatenTab.jsx");
   assert.match(blog, /vorlage \? "Speichern" : "Erstellen"/);
   assert.doesNotMatch(blog, /Speichern & neu abgleichen/i);
-  assert.match(daten, /const RELEASE_NEBENWEGE_SICHTBAR = false/);
-  assert.match(daten, /RELEASE_NEBENWEGE_SICHTBAR && eggOffen && waehleModus/);
+  assert.doesNotMatch(daten, /RELEASE_NEBENWEGE_SICHTBAR|eggOffen|eggToggle/);
+  assert.match(daten, /blogProfilAnalyseSichtbar=\{false\}/);
 });
 
 check("Icon-only Lösch- und Schließen-Aktionen sind zugänglich beschriftet", () => {

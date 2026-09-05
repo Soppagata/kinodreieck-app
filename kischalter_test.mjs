@@ -511,11 +511,9 @@ check("H", "auch __proto__, constructor und toString fallen auf „ausblenden“
 
 /* =========================================================================
    U — DIE OBERFLÄCHEN-NAHT (DatenTab)
-   Der KI-Block in DatenTab.jsx wird NICHT gerendert: der Tab zieht neun
-   Geschwister-Komponenten nach (MasterImport, TeilenBlock, KontoBereich,
-   RestoreImport …), und der Block selbst ist reine Darstellung über drei
-   Props. Ein Rendertest kostete den halben Komponentengraphen für drei
-   Aussagen — und zwei davon prüfen die Module oben schon.
+   Der KI-Block in DatenTab.jsx wird hier NICHT gerendert: seine Darstellung
+   hängt am größeren Settings-Komponentengraphen und zwei der drei Aussagen
+   prüfen die Module oben bereits direkt.
    Was ein Rendertest NICHT ersetzen könnte und hier stattdessen steht: die
    drei Stellen, an denen die Oberfläche die Modulregeln DUPLIZIERT und
    deshalb still auseinanderlaufen kann. Läuft eine, zeigt die App einen

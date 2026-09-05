@@ -1966,9 +1966,9 @@ check("N", "Blog-Pfad bleibt auf KI-, Konto-, Profil-Geltigkeit und Writer-Exist
     && blogAktivAusdruck.includes("profilGueltig()")
     && blogAktivAusdruck.includes("typeof onVokabularSpeichern === \"function\""));
 
-check("N", "DatenTab bindet den Blogdialog an die geschlossene Release-Projektion",
-  () => datentabText.includes("const RELEASE_NEBENWEGE_SICHTBAR = false")
-    && datentabText.includes("blogProfilAnalyseSichtbar={RELEASE_NEBENWEGE_SICHTBAR}")
+check("N", "DatenTab projiziert den nicht freigegebenen Blogdialog ohne toten Kompatibilitätsschalter nicht",
+  () => !datentabText.includes("RELEASE_NEBENWEGE_SICHTBAR")
+    && datentabText.includes("blogProfilAnalyseSichtbar={false}")
     && bereichText.includes("{blogProfilAnalyseSichtbar && <BlogProfilAnalyse"));
 
 dom.window.localStorage.setItem(TOPF.geschmacksprofil, JSON.stringify(P.erteileEinwilligung(LEER(), "2026-08-17T00:00:00.000Z")));

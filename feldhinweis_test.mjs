@@ -7,6 +7,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 
 const WURZEL = process.cwd();
+const cssQuelle = fs.readFileSync(path.join(WURZEL, "src/index.css"), "utf8");
 const cache = path.join(WURZEL, "node_modules/.cache/feldhinweis-test");
 fs.mkdirSync(cache, { recursive: true });
 const ausgabe = path.join(cache, "FeldHinweis.mjs");
@@ -51,8 +52,11 @@ const sende = async (ziel, art, optionen = {}) => {
   });
 };
 
-check("Touchziel ist mindestens 32 × 32 CSS-Pixel", () =>
+check("Desktop-Symbol bleibt mindestens 32 × 32 CSS-Pixel", () =>
   parseInt(knopf().style.width, 10) >= 32 && parseInt(knopf().style.height, 10) >= 32);
+check("Grobzeiger erweitert den Feldhinweis auf mindestens 44 Pixel", () =>
+  knopf().classList.contains("kd-feldhinweis-knopf")
+    && /@media \(pointer:coarse\)[\s\S]*\.kd-feldhinweis-knopf\s*\{[\s\S]*min-width:44px;/.test(cssQuelle));
 check("geschlossener Auslöser meldet aria-expanded=false", knopf().getAttribute("aria-expanded") === "false");
 
 await sende(knopf(), "mouseover");

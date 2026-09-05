@@ -43,7 +43,7 @@ export function FeldHinweis({ feld, text }) {
   return (
     <span ref={wrapRef} style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}
       onMouseEnter={oeffnen} onMouseLeave={schliesseVorschau}>
-      <button type="button" aria-label={"Was bedeutet dieses Feld? " + feld}
+      <button type="button" className="kd-feldhinweis-knopf" aria-label={"Was bedeutet dieses Feld? " + feld}
         aria-expanded={offen} aria-describedby={offen ? tooltipId : undefined}
         onFocus={oeffnen} onBlur={schliessen} onClick={(e) => {
           e.stopPropagation();

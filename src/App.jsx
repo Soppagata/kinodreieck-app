@@ -8,8 +8,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
      kein Smart-Chat, kein KI-Programmabruf. Deterministisch.
    - Masterliste v3.1 (251 Einträge, stabile IDs) als Datenmodul
      gebündelt statt Embed-Slot. Schlüssel überall: film.id.
-   - Programm: public/programm.json (Autoload) + Nonstop-HTML-
-     Import + Snapshot-Import.
+   - Programm: versionierte Katalog-Snapshots über den Service-Layer.
    - Diagnose-Tab entfernt (testete den Artifact-Proxy).
    Datenquellen bewusst schlank: film.at + Nonstop (Kino),
    Watchmode (Streaming). Kein TMDB (ausgebaut Juli 2026).
@@ -18,14 +17,12 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { T, btnStyle, setzeTheme } from "./lib/tokens.js";
 import { initSetup, setupUeberspringen } from "./lib/tutorial.js";
 import { ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
-import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { KatalogZugang } from "./components/KatalogZugang.jsx";
 import {
   store, K, PROGRAMM_TTL_MS, storageService, storageOwnerKennung,
 } from "./services/storage.js";
 import { catalogService } from "./services/catalog.js";
 import { sessionCoordinator } from "./services/sessionCoordinator.js";
-import { hatBestaetigteOwnerRolle } from "./lib/accountAccess.js";
 import { sharedArticlesService } from "./services/sharedArticles.js";
 import { errorText, ERROR_CODES } from "./services/errors.js";
 import {
@@ -35,7 +32,6 @@ import {
 } from "./controllers/onboardingController.js";
 import {
   zeitpunkt,
-  IMPORT_INFO,
   streamingPayloadMitMetadaten,
   ladeEntdeckenBeilage,
   streamingBekanntSnapshot,
@@ -50,13 +46,11 @@ import { useMasterStateController } from "./controllers/useMasterStateController
 import { useBackupExportController } from "./controllers/useBackupExportController.js";
 import { useEntdeckenRadarController } from "./controllers/useEntdeckenRadarController.js";
 import { radarClientRuntimeAvailable, runtimeConfig } from "./config/runtime.js";
-import { starteEinzelExportDownload } from "./controllers/backupExportController.js";
 import { naechsteLokaleMasterHerkunft } from "./controllers/masterOriginController.js";
 import { useConfirmedStorageState } from "./controllers/useConfirmedStorageState.js";
 import { ERROR_SCOPE } from "./controllers/appErrorScopes.js";
 import { erstellePersonalDataTransactionController } from "./controllers/personalDataTransactionController.js";
 import {
-  gueltigerArtikel,
   baueRefUniversum,
   baueKinoMatches,
   reicheFinderMasterAn,
@@ -71,9 +65,9 @@ import {
   markNewPersonalMasterEntries,
   mergePersonalMasterEntry,
 } from "./lib/personalEntryChronology.js";
-import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
+import { grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
-import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, blogZuArtikel, normalisiereArtikelTypen } from "./lib/artikel.js";
+import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, normalisiereArtikelTypen } from "./lib/artikel.js";
 import {
   SHARED_PUBLICATION_ACTION,
   beginPublication,
@@ -84,7 +78,6 @@ import {
   publicationRetryAction,
   publicationState,
 } from "./lib/sharedPublication.js";
-import { parseMustwatch, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "./lib/dienste.js";
 import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
@@ -129,7 +122,6 @@ export default function App() {
      getrennt. Alte, unvollständige oder degradierte Sessions sind hier
      ausdrücklich nicht optimistisch freigeschaltet. */
   const remoteKontoAktiv = session.mode === "account" && session.state === "ready" && session.capabilities?.remoteStorage === true;
-  const ownerTechnikBestaetigt = hatBestaetigteOwnerRolle(session);
   const [frischerStartWarnung] = useState(() => {
     verbraucheFrischenStart();
     return liesFrischenStartWarnung();
@@ -780,53 +772,6 @@ export default function App() {
     }
   }, [bootDone, programm, snapshotFreigabe, ladeProgrammDatei]);
 
-  /* ---- Programm-Snapshot-Import ---- */
-  const importProgramm = useCallback(async (text) => {
-    try {
-      const parsed = JSON.parse(text);
-      const data = normalisiereProgramm(parsed); // Alt- und film.at-Format
-      const jetzt = Date.now();
-      setProgramm(data);
-      setProgrammArt("manuell");
-      setProgStand(jetzt);
-      setProgrammInfo(IMPORT_INFO(jetzt));      // eigenes Etikett statt des geerbten
-      try {
-        await store.set(K.programm, JSON.stringify({ fetchedAt: jetzt, art: "manuell", data }));
-      } catch { /* Cache-Fehler nicht fatal */ }
-      resolveError(ERROR_SCOPE.IMPORT_PROGRAMM);
-      setTab("kino");
-    } catch (e) {
-      reportError(ERROR_SCOPE.IMPORT_PROGRAMM, "Programm-Import fehlgeschlagen: " + e.message);
-    }
-  }, [reportError, resolveError]);
-
-  /* ---- Nonstop-HTML-Import: deterministisch geparst, kein KI-Call ---- */
-  const importNonstop = useCallback(async (html) => {
-    try {
-      const p = parseNonstopHtml(html);
-      if (!p.filme.length) throw new Error("Geparst, aber keine Wiener Vorstellungen enthalten.");
-      const data = normalisiereProgramm({
-        stand: new Date().toISOString().slice(0, 10),
-        quelle_hinweis: "Nonstop-Agenda-Import: " + p.statistik.titel + " Filme / " + p.statistik.wien + " Wiener Vorstellungen (alle Abo-Kinos, ~1 Woche)",
-        filme: p.filme,
-        events: (programm && programm.events) || [],
-        demnaechst: (programm && programm.demnaechst) || [], // Demnächst bleibt erhalten
-      });
-      const jetzt = Date.now();
-      setProgramm(data);
-      setProgrammArt("manuell");
-      setProgStand(jetzt);
-      setProgrammInfo(IMPORT_INFO(jetzt));      // eigenes Etikett statt des geerbten
-      try {
-        await store.set(K.programm, JSON.stringify({ fetchedAt: jetzt, art: "manuell", data }));
-      } catch { /* Cache-Fehler nicht fatal */ }
-      resolveError(ERROR_SCOPE.IMPORT_NONSTOP);
-      setTab("kino");
-    } catch (e) {
-      reportError(ERROR_SCOPE.IMPORT_NONSTOP, "Nonstop-Import fehlgeschlagen: " + e.message);
-    }
-  }, [programm, reportError, resolveError]);
-
   /* ---- Film aktualisieren / hinzufügen ----
      Schlüssel ist film.id (stabil, aus der Masterliste). Erste Bearbeitung
      einer gebündelten Liste überführt sie in den Storage (mit Basis-Vermerk). */
@@ -839,12 +784,12 @@ export default function App() {
     mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch,
     mustwatchRef, transaktionMustwatchVorbereitet,
     addMustwatch: persistiereNeuesMustwatch, updateMustwatch,
-    mustwatchMasterIds, offeneFlags, migriereMustwatch, migrationsBericht,
+    mustwatchMasterIds,
   } = useMustwatchController({ master, masterRef, setErr });
 
   const {
     artikelListe, artikelListeRef, artikelGeladen, artikelGespeichertAm,
-    setArtikelListe, schreibeArtikel, transaktionArtikel,
+    schreibeArtikel, transaktionArtikel,
   } = useArticleController({ setErr });
 
   const personalDataTransaktionen = useMemo(() => erstellePersonalDataTransactionController({
@@ -856,34 +801,6 @@ export default function App() {
     transaktionMustwatchVorbereitet, transaktionArtikel, transaktionMaster,
   ]);
   const deleteMustwatch = personalDataTransaktionen.loescheMustwatch;
-
-  /* Vollständiger Masterimport über alle drei Referenztöpfe. Die gekoppelte
-     Transaktion rollt Teilfehler zurück; State und Navigation wechseln erst
-     nach bestätigtem Artikel-, MW- und Masterstand. */
-  const importMaster = useCallback(async (text) => {
-    try {
-      if (!mustwatchGeladen || !artikelGeladen) {
-        throw new Error("Must-Watch und Artikel sind noch nicht sicher geladen — nichts überschrieben.");
-      }
-      const parsed = JSON.parse(text);
-      const filme = Array.isArray(parsed) ? parsed : parsed.filme;
-      if (!Array.isArray(filme) || filme.length === 0) throw new Error("Kein 'filme'-Array gefunden.");
-      const mitIds = ensureIds(filme);
-      const meta = Array.isArray(parsed) ? null : parsed.meta || null;
-      const herkunft = { typ: "manuell", zeit: Date.now() };
-      if (!await personalDataTransaktionen.ersetzeMaster(mitIds, { meta, herkunft })) {
-        throw new Error("gekoppelte Speicherung fehlgeschlagen; der vorherige Stand wurde soweit möglich wiederhergestellt.");
-      }
-      resolveError(ERROR_SCOPE.IMPORT_MASTER);
-      setTab("kino");
-      return true;
-    } catch (e) {
-      reportError(ERROR_SCOPE.IMPORT_MASTER, "Master-Import fehlgeschlagen: " + e.message);
-      return false;
-    }
-  }, [
-    artikelGeladen, mustwatchGeladen, personalDataTransaktionen, reportError, resolveError,
-  ]);
 
   /* Blog-Referenz-Universum = Master ∪ Must-Watch. */
   const mitMustwatch = baueRefUniversum;
@@ -931,34 +848,6 @@ export default function App() {
       return n > 0 ? geheilt : alist;
     });
   }), [master, mitMustwatch, persistiereNeuesMustwatch, schreibeArtikel]);
-
-  /* ---- Besitz-Nachtrag-Import (deterministisch, idempotent; queue-zeitig) ---- */
-  const [besitzImportBericht, setBesitzImportBericht] = useState(null);
-  const importiereBesitz = useCallback(async (text) => {
-    try {
-      const datei = parseBesitzImport(text);
-      let auswertung = null, bestaetigterMaster = null;
-      const gespeichert = await mutiereMaster((aktuell) => {
-        auswertung = wendeBesitzImportAn(datei, aktuell, new Date().toISOString());
-        if (!auswertung.neue.length) return { master: aktuell, unveraendert: true };
-        bestaetigterMaster = ensureIds(markNewPersonalMasterEntries(aktuell, auswertung.neue));
-        auswertung = { ...auswertung, neue: bestaetigterMaster.slice(-auswertung.neue.length) };
-        return { master: bestaetigterMaster, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
-      });
-      if (!gespeichert || !auswertung) throw new Error("bestätigtes Speichern fehlgeschlagen.");
-      if (bestaetigterMaster && !await schreibeArtikel((prev) => {
-        const [geheilt, n] = heileRotlinks(prev, mitMustwatch(bestaetigterMaster, mustwatchRef.current));
-        return n > 0 ? geheilt : prev;
-      })) throw new Error("Mediathek wurde gespeichert, aber Blog-Rotlinks konnten nicht geheilt werden.");
-      const { bericht } = auswertung;
-      setBesitzImportBericht({
-        uebernommen: bericht.filter((b) => b.status === "übernommen").length,
-        uebersprungen: bericht.filter((b) => b.status !== "übernommen").length,
-        zeilen: bericht,
-      });
-      resolveError(ERROR_SCOPE.IMPORT_BESITZ);
-    } catch (e) { reportError(ERROR_SCOPE.IMPORT_BESITZ, "Besitz-Import fehlgeschlagen: " + e.message); }
-  }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, reportError, resolveError, schreibeArtikel]);
 
   const setzeArtikelRef = useCallback((id, index, ref, rotlinkOk) => (
     schreibeArtikel((prev) => (
@@ -1051,18 +940,6 @@ export default function App() {
     }
   }, [artikelListe, fuehrePublikationsAktion, remoteKontoAktiv]);
 
-  /* Einen geteilten Blog in die eigene Mediathek ziehen: lokale Kopie mit Herkunft,
-     Referenzen gegen die eigene Master neu aufgelöst (fehlende = Rotlink). */
-  const zieheSharedBlog = useCallback(async (sharedBlog) => {
-    let art = null;
-    const ok = await schreibeArtikel((prev) => {
-      const universum = mitMustwatch(masterRef.current || [], mustwatchRef.current || []);
-      art = blogZuArtikel(sharedBlog, prev, universum);
-      return [...prev, art];
-    });
-    return ok ? art.id : null;
-  }, [mitMustwatch, mustwatchRef, schreibeArtikel]);
-
   /* ---- Export-Wächter: ungesicherte Browser-Änderungen sichtbar machen ----
      Browser-Speicher ist kein Backup. Sobald der Storage-Stand jünger ist
      als der letzte Export, markiert Settings den zuständigen Backup-Bereich. */
@@ -1093,72 +970,11 @@ export default function App() {
     }));
   }, [navigiere]);
 
-  /* Hilfe ist nun ausschließlich nutzerinitiiert. Die frühere automatische
-     Tour bei Tabwechseln und Scrollereignissen ist aus dem Laufzeitpfad entfernt. */
-  const [klaerung, setKlaerung] = useState(null); // Quellen-Klärung nach KI-Import
-
-  /* ---- Artikel-Export/-Import (Sicherung, analog Master) ---- */
-  const exportArtikel = useCallback(() => {
-    const blob = new Blob([JSON.stringify({ exportiert_am: new Date().toISOString(), artikel: artikelListe }, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "artikel.json";
-    try { starteEinzelExportDownload(a, markiereExport, "artikel", artikelGespeichertAm); }
-    finally { URL.revokeObjectURL(url); }
-  }, [artikelGespeichertAm, artikelListe, markiereExport]);
-  const importArtikel = useCallback(async (text) => {
-    try {
-      const p = JSON.parse(text);
-      const liste = Array.isArray(p) ? p : p.artikel;
-      if (!Array.isArray(liste)) throw new Error("Kein 'artikel'-Array gefunden.");
-      // KD-006: Schema-Müll ablehnen statt zu persistieren (sonst Blog-Crash an a.liste.map/a.text).
-      if (!liste.every(gueltigerArtikel)) throw new Error("Datei enthält ungültige Artikel (id/titel/text/liste) — nicht importiert.");
-      if (!await schreibeArtikel(() => {
-        const universum = mitMustwatch(masterRef.current || [], mustwatchRef.current || []);
-        return liste.map((artikel) => ohneAbgleichFelder(gleicheArtikelAb(artikel, universum)));
-      })) throw new Error("bestätigtes Speichern fehlgeschlagen.");
-      resolveError(ERROR_SCOPE.IMPORT_ARTIKEL);
-      return true;
-    } catch (e) { reportError(ERROR_SCOPE.IMPORT_ARTIKEL, "Artikel-Import fehlgeschlagen: " + e.message); }
-    return false;
-  }, [mitMustwatch, mustwatchRef, reportError, resolveError, schreibeArtikel]);
-
-  /* ---- Teilen & Tauschen (Phase A): Autorname + Bulk-Übernahme ---- */
+  /* Der Autorname bleibt lokal und wird in aktiven Bewertungsformularen verwendet. */
   const [autorName, setAutorName] = useState("");
   useEffect(() => {
     store.get(K.autorName).then((r) => { if (r && r.value) setAutorName(r.value); }).catch(() => {});
   }, []);
-  const saveAutorName = useCallback((v) => {
-    setAutorName(v);
-    store.set(K.autorName, v).catch(() => {});
-  }, []);
-
-  /* Paket-Übernahme als EIN Commit: Master einmal persistieren, Artikel
-     anhängen, danach Rotlink-Heilung über ALLE Artikel (neue Filme können
-     auch alte Rotlinks schließen). */
-  const uebernehmePaket = useCallback(async ({ neueFilme, neueArtikel }) => {
-    let neuerMaster = masterRef.current || [];
-    if (neueFilme.length) {
-      const gespeichert = await mutiereMaster((aktuell) => {
-        const ids = new Set(aktuell.map((film) => film.id));
-        const wirklichNeu = neueFilme
-          .filter((film) => film?.id && !ids.has(film.id) && ids.add(film.id));
-        if (!wirklichNeu.length) { neuerMaster = aktuell; return { master: aktuell, unveraendert: true }; }
-        neuerMaster = ensureIds(markNewPersonalMasterEntries(aktuell, wirklichNeu));
-        return { master: neuerMaster, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
-      });
-      if (!gespeichert) return false;
-      if (neueFilme.some((f) => f.quelle_unklar)) {
-        setKlaerung(neuerMaster.filter((f) => f.quelle_unklar).map((f) => ({ id: f.id, titel: f.titel, jahr: f.jahr })));
-      }
-    }
-    return schreibeArtikel((prev) => {
-      let next = neueArtikel.length ? [...prev, ...neueArtikel] : prev;
-      const [geheilt, n] = heileRotlinks(next, mitMustwatch(neuerMaster, mustwatchRef.current));
-      if (n > 0) next = geheilt;
-      return next;
-    });
-  }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, schreibeArtikel]);
 
   /* Kandidaten für Picker und lokale Startprojektion: Master, aktuelles
      Kinoprogramm (stabile ID oder rein lokaler Projektionsschlüssel) sowie
@@ -1237,15 +1053,6 @@ export default function App() {
   ]);
   const planeFilmBatchLoeschung = useCallback((ids) => { if (!mustwatchGeladen || !artikelGeladen) { setErr("Mehrfachlöschen ist erst möglich, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert."); return null; } try { return personalDataTransaktionen.planeFilmLoeschungen(ids); } catch { setErr("Die Löschfolgen konnten nicht sicher geprüft werden. Es wurde nichts verändert."); return null; } }, [artikelGeladen, mustwatchGeladen, personalDataTransaktionen]);
   const fuehreFilmBatchLoeschungAus = useCallback(async (ids, plan) => { if (!mustwatchGeladen || !artikelGeladen) { setErr("Mehrfachlöschen ist erst möglich, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert."); return false; } try { return await personalDataTransaktionen.loescheFilme(ids, { plan, meta: masterMetaRef.current, herkunft: naechsteHerkunft() }); } catch { return false; } }, [artikelGeladen, mustwatchGeladen, naechsteHerkunft, personalDataTransaktionen]);
-  const uebernehmeQuellenKlaerung = useCallback(async (map) => {
-    const ok = await mutiereMaster((aktuell) => ({
-      master: aktuell.map((film) => map[film.id] !== undefined
-        ? { ...film, quelle: map[film.id], quelle_unklar: undefined }
-        : film),
-      meta: masterMetaRef.current, herkunft: naechsteHerkunft(),
-    }));
-    if (ok) setKlaerung(null);
-  }, [mutiereMaster, naechsteHerkunft]);
   /* Gibt die neue ID zurück (Blog-Rotlink-Anlage setzt damit sofort die ref).
      Nach jedem neuen Eintrag: automatische Rotlink-Heilung über alle Artikel —
      nur eindeutige Exakt-Treffer, nichts wird geraten. */
@@ -1274,31 +1081,6 @@ export default function App() {
     });
     return id;
   }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, schreibeArtikel, setErr]);
-
-  const addFilme = useCallback(async (filme) => {
-    let next = null, neue = [];
-    const ok = await mutiereMaster((aktuell) => {
-      const ids = new Set(aktuell.map((film) => film.id));
-      neue = [];
-      for (const film of filme || []) {
-        const id = film.id || slugId(film.titel, film.jahr);
-        if (!id || ids.has(id)) continue;
-        ids.add(id);
-        neue.push(ensureIds([{ ...film, id }])[0]);
-      }
-      if (!neue.length) return { master: aktuell, unveraendert: true };
-      next = ensureIds(markNewPersonalMasterEntries(aktuell, neue));
-      neue = next.slice(-neue.length);
-      return { master: next, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
-    });
-    if (!ok) return null;
-    if (!neue.length) return [];
-    await schreibeArtikel((prev) => {
-      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatchRef.current));
-      return n > 0 ? geheilt : prev;
-    });
-    return neue.map((f) => f.id);
-  }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, schreibeArtikel]);
 
   const serienKatalog = useMemo(() => [
     ...((streamingBekannt && streamingBekannt.titel) || []),
@@ -1351,18 +1133,6 @@ export default function App() {
     setErr,
   });
   const addFilmMitPrognose = addFilmMitPrognoseRoh;
-
-  /* ---- Master-Export (hält Max' Datei synchron) ---- */
-  const exportMaster = useCallback(() => {
-    const meta = { ...(masterMeta || {}), export_am: new Date().toISOString().slice(0, 10), anzahl_eintraege: master.length };
-    const blob = new Blob([JSON.stringify({ meta, filme: master }, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "max_filmguide_masterliste_export.json";
-    try { starteEinzelExportDownload(a, markiereExport, "master", masterHerkunft?.zeit); }
-    finally { URL.revokeObjectURL(url); }
-  }, [master, masterHerkunft?.zeit, masterMeta, markiereExport]);
 
   const kinoMatches = useMemo(
     () => baueKinoMatches(programm, master),
@@ -1747,16 +1517,6 @@ export default function App() {
     || (deepSpaceAktiv && einstellungen.modus === "neon-noir");
   const effektiverModus = deepSpaceSichtbar ? "deep-space-horror" : einstellungen.modus;
 
-  const clearProgrammCache = useCallback(async () => {
-    try { await store.delete(K.programm); } catch { /* war leer */ }
-    /* Der Programm-Topf war nur die halbe Miete: ohne den Cache-Storage-Eintrag
-       gewann beim nächsten fehlgeschlagenen Direkt-Read wieder derselbe alte
-       Stand — „neu laden" hätte nichts verworfen. */
-    try { await catalogService.discardCache("programm"); } catch { /* Cache ist Komfort */ }
-    setProgramm(null); setProgrammArt(null); setProgStand(null); setProgrammInfo(null);
-    autoFetched.current = false;
-  }, []);
-
   const refreshKatalog = useCallback(async () => {
     /* Laufende Antworten gehören ab hier zum alten manuellen Ladeversuch. */
     betriebsartGen.current++;
@@ -1802,11 +1562,6 @@ export default function App() {
               setStartTick((t) => t + 1);
             }
           }} />
-      )}
-      {klaerung && klaerung.length > 0 && (
-        <QuelleKlaerung eintraege={klaerung}
-          onSpaeter={() => setKlaerung(null)}
-          onFertig={uebernehmeQuellenKlaerung} />
       )}
       <header style={{ padding: "26px 22px 12px", maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1976,7 +1731,6 @@ export default function App() {
               onErstellen: erstelleArtikel, onAktualisieren: aktualisiereArtikel,
               onSetzeRef: setzeArtikelRef, onFreigeben: freigebeArtikel, onLoeschen: loescheArtikel,
               onRetryPublication: wiederholePublikation, onAddFilm: addFilm, onSpringeZuFilm: springeZuFilm,
-              exportArtikel, importArtikel, onZiehe: zieheSharedBlog,
             }}
           />
         )}
@@ -2037,40 +1791,28 @@ export default function App() {
 
         {remoteKontoAktiv && tab === "daten" && (
           <DatenTab
-            master={master} masterMeta={masterMeta} masterHerkunft={masterHerkunft}
+            master={master}
             anleitungAuftrag={anleitungAuftrag}
-            nachtragCount={nachtragSichtbar.length}
-            exportMaster={exportMaster} importMaster={importMaster}
-            importProgramm={ownerTechnikBestaetigt ? importProgramm : undefined} importNonstop={ownerTechnikBestaetigt ? importNonstop : undefined}
             programm={programm}
-            setErr={setErr} clearProgrammCache={ownerTechnikBestaetigt ? clearProgrammCache : undefined}
+            setErr={setErr}
             kiStand={kiStand} onKiGlobal={setzeKiGlobal} onKiFunktion={setzeKiFunktion}
             kiProfilFaehig={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true}
-            startWahl="clean"
             demoAktiv={false}
-            onStartWahl={undefined}
             katalogVerbunden={snapshotFreigabe}
             programmInfo={programmInfo}
             onKatalogVerbinden={() => setKatalogZugangOffen(true)}
             onKatalogRefresh={refreshKatalog}
-            onTechnikKatalogRefresh={ownerTechnikBestaetigt ? refreshKatalog : undefined}
-            artikelAnzahl={artikelListe.length} exportArtikel={exportArtikel} importArtikel={importArtikel}
             ungesichertMaster={ungesichertMaster} ungesichertArtikel={ungesichertArtikel}
-            artikelListe={artikelListe} autorName={autorName} saveAutorName={saveAutorName}
-            uebernehmePaket={uebernehmePaket}
-            addFilm={addFilm} addFilme={addFilme}
+            artikelListe={artikelListe}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             streamingInfo={streamingInfo}
-            auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
-            setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
+            auswahl={auswahl} toggleQuelle={toggleQuelle}
             datenGesperrt={!snapshotFreigabe}
             sicherheitskopieGeraet={sicherheitskopieGeraet} kontoExportVollstaendig={kontoExportVollstaendig}
             vokabular={vokabular} saveVokabular={saveVokabular}
-            offeneFlags={offeneFlags} migriereMustwatch={ownerTechnikBestaetigt ? migriereMustwatch : undefined} migrationsBericht={migrationsBericht}
-            importiereBesitz={ownerTechnikBestaetigt ? importiereBesitz : undefined} besitzImportBericht={besitzImportBericht}
-            onKontoDatenGeaendert={() => { try { location.reload(); } catch { setStartTick((t) => t + 1); } }} kontoAktiv={session.mode === "account" && session.state === "ready"} kontoModus={session.mode === "account"} kontoId={session.account?.id || ""} kontoEmail={session.account?.email || ""} ownerTechnikBestaetigt={ownerTechnikBestaetigt} onKontoGeloescht={async () => { await sessionCoordinator.finalizeDeletedAccount(); try { location.reload(); } catch { setStartTick((t) => t + 1); } }}
+            onKontoDatenGeaendert={() => { try { location.reload(); } catch { setStartTick((t) => t + 1); } }} kontoAktiv={session.mode === "account" && session.state === "ready"} kontoModus={session.mode === "account"} kontoId={session.account?.id || ""} kontoEmail={session.account?.email || ""}
           />
         )}
       </main>

@@ -82,7 +82,7 @@ check("Cage-Start führt Animation und Hooks nicht in einem State-Updater aus",
   !/setPhase\(\s*\(/.test(cage) && /gestartet\.current/.test(cage));
 check("Artikel- und Entdecken-Aktionen besitzen je einen serialisierten Schreibweg",
   /const schreibeArtikel = useCallback/.test(articleController)
-  && /setArtikelListe, schreibeArtikel, transaktionArtikel/.test(app)
+  && /artikelListe, artikelListeRef, artikelGeladen, artikelGespeichertAm,[\s\S]*schreibeArtikel, transaktionArtikel/.test(app)
   && /schreibe:\s*schreibeEntdeckenStatus/.test(app)
   && /erstelleBestaetigtenStateWriter/.test(confirmedStateController)
   && /schreibeEntdeckenStatus=\{schreibeEntdeckenStatus\}/.test(app)

@@ -28,10 +28,10 @@ const datenQuelle = fs.readFileSync(path.join(WURZEL, "src/tabs/DatenTab.jsx"), 
 const geschmackQuelle = fs.readFileSync(path.join(WURZEL, "src/components/GeschmackBereich.jsx"), "utf8");
 const hilfeQuelle = fs.readFileSync(path.join(WURZEL, "src/lib/hilfeInhalte.js"), "utf8");
 const kinoQuelle = fs.readFileSync(path.join(WURZEL, "src/tabs/KinoTab.jsx"), "utf8");
-check("Release-Nebenwege sind an einer expliziten, geschlossenen DOM-Projektion gebunden",
-  datenQuelle.includes("const RELEASE_NEBENWEGE_SICHTBAR = false")
-    && datenQuelle.includes("blogProfilAnalyseSichtbar={RELEASE_NEBENWEGE_SICHTBAR}"));
-check("Bloganalyse-Code und Handler bleiben erhalten, nur sein Release-Einstieg ist bedingt",
+check("Entfernte Release-Nebenwege bleiben ohne toten Kompatibilitätsschalter aus dem Laufzeitmodul",
+  !datenQuelle.includes("RELEASE_NEBENWEGE_SICHTBAR")
+    && datenQuelle.includes("blogProfilAnalyseSichtbar={false}"));
+check("Bloganalyse-Komponente bleibt isoliert verfügbar, ihr Release-Einstieg ist deaktiviert",
   geschmackQuelle.includes('import { BlogProfilAnalyse } from "./BlogProfilAnalyse.jsx"')
     && geschmackQuelle.includes("blogProfilAnalyseSichtbar = true")
     && geschmackQuelle.includes("{blogProfilAnalyseSichtbar && <BlogProfilAnalyse"));
@@ -108,31 +108,23 @@ const { DatenTab } = await import(pathToFileURL(ziel).href);
 const rootElement = document.getElementById("root");
 const root = createRoot(rootElement);
 
-const altHandlerRufe = [];
 const modusWahlen = [];
 const kiWahlen = [];
 const streamingWahlen = [];
 let sicherungen = 0;
 let recoveryRufe = 0;
+let verbindungsRufe = 0;
 const persoByte = '{"unveraendert":true,"titel":"Mein Film"}';
 localStorage.setItem("kd:e5-persoenlich", persoByte);
 
 await act(async () => {
   root.render(h(DatenTab, {
     master: [{ id: "film-1", titel: "Mein Film", genre: ["Drama"], tags: ["ruhig"] }],
-    masterMeta: { version: 7 }, masterHerkunft: { basis: "konto" }, nachtragCount: 1,
-    exportMaster: () => altHandlerRufe.push("master-export"),
-    importMaster: () => altHandlerRufe.push("master-import"),
-    importProgramm: () => altHandlerRufe.push("programm-import"),
-    importNonstop: () => altHandlerRufe.push("nonstop-import"),
     programm: { stand: "2026-09-03T12:00:00Z", filme: [], status: {} },
-    clearProgrammCache: () => altHandlerRufe.push("cache"),
-    startWahl: "clean", demoAktiv: false,
-    onStartWahl: () => altHandlerRufe.push("startwahl"),
+    demoAktiv: false,
     katalogVerbunden: false,
-    onKatalogVerbinden: () => altHandlerRufe.push("katalog-verbinden"),
+    onKatalogVerbinden: () => { verbindungsRufe += 1; },
     onKatalogRefresh: () => { recoveryRufe += 1; },
-    onTechnikKatalogRefresh: () => altHandlerRufe.push("technik-refresh"),
     programmInfo: { art: "remote", variante: "live", fehler: true, stand: "2026-09-03T12:00:00Z" },
     ungesichertMaster: true,
     einstellungen: { theme: "dunkel", basisTheme: "dunkel", startTab: "start" },
@@ -155,14 +147,8 @@ await act(async () => {
     streamingInfo: { art: "remote", variante: "live" },
     auswahl: ["Netflix"],
     toggleQuelle: (name) => streamingWahlen.push(name),
-    offeneFlags: 2,
-    migriereMustwatch: () => altHandlerRufe.push("migration"),
-    importiereBesitz: () => altHandlerRufe.push("besitz-import"),
     artikelListe: [{ id: "blog-1", titel: "Privat", text: "Inhalt" }],
-    autorName: "Max", addFilm: () => altHandlerRufe.push("stapel-eins"),
-    addFilme: () => altHandlerRufe.push("stapel-viele"),
     kontoModus: true, kontoAktiv: true, kontoId: "konto-1", kontoEmail: "max@example.invalid",
-    ownerTechnikBestaetigt: true,
     einzeldatei: false,
   }));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -207,7 +193,11 @@ check("Manueller Datenrechteweg bleibt erreichbar",
 check("Legal-Datenübersicht bleibt im Rechtliches-Block erreichbar",
   hatSummary("Datenschutz & Datenübersicht"));
 check("Bestätigter Owner behält bei echtem Katalogfehler den begrenzten Recoveryweg",
-  hatSummary("Verbindung wiederherstellen") && !!button("Katalog neu laden"));
+  hatSummary("Verbindung wiederherstellen")
+    && !!button("Datenbankzugang prüfen")
+    && !!button("Katalog neu laden"));
+await act(async () => { button("Datenbankzugang prüfen").click(); });
+check("Zugangsprüfung erreicht den sichtbaren Verbindungs-Handler", verbindungsRufe === 1);
 await act(async () => { button("Katalog neu laden").click(); });
 check("Owner-Recovery erreicht weiterhin ausschließlich seinen bestehenden Handler", recoveryRufe === 1);
 
@@ -247,7 +237,6 @@ const netflix = [...rootElement.querySelectorAll("button")]
 await act(async () => { netflix.click(); });
 check("Streamingquellen bleiben funktional verdrahtet",
   streamingWahlen.length === 1 && streamingWahlen[0] === "Netflix");
-check("Verborgene Alt-Handler wurden nicht ausgelöst", altHandlerRufe.length === 0);
 check("Persönlicher Teststand blieb bytegleich", localStorage.getItem("kd:e5-persoenlich") === persoByte);
 check("Der DOM-Lauf blieb vollständig ohne Netz", netzVersuche.length === 0);
 

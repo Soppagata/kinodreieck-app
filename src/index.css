@@ -1525,3 +1525,14 @@ label.kd-touch-checkbox { min-width:44px; min-height:44px; box-sizing:border-box
 label.kd-touch-checkbox:has(input:disabled) { cursor:not-allowed; }
 
 input[type="checkbox"] { width:18px; height:18px; min-width:18px; min-height:18px; flex:0 0 18px; margin:1px 0 0; accent-color:var(--kd-wolfram,#e3a63b); }
+
+/* Kompakte Symbolknöpfe behalten am Desktop ihre visuelle Größe. Auf
+   Touchgeräten erweitert die echte Schaltfläche selbst den Trefferbereich. */
+@media (pointer:coarse) {
+  .kd-wochen-kalenderknopf,
+  .kd-wochen-tagaktionen button,
+  .kd-feldhinweis-knopf {
+    box-sizing:border-box;
+    min-width:44px;
+  }
+}

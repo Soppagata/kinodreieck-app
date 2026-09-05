@@ -162,7 +162,7 @@ await test("abweichender Health-Buildmarker stoppt getrennt vom Authpfad", async
 
 const MANAGEMENT = Object.freeze([
   Object.freeze({ slug: "ai-task", status: "ACTIVE", verify_jwt: true, version: 59 }),
-  Object.freeze({ slug: "radar-websearch-task", status: "ACTIVE", verify_jwt: true, version: 31 }),
+  Object.freeze({ slug: "radar-websearch-task", status: "ACTIVE", verify_jwt: false, version: 31 }),
   Object.freeze({ slug: "entdecken-daily-task", status: "ACTIVE", verify_jwt: false, version: 29 }),
 ]);
 const SOURCES = Object.freeze([
@@ -189,7 +189,7 @@ const SOURCES = Object.freeze([
   }),
 ]);
 
-await test("ACTIVE/JWT plus Marker und Byteabschluss bestaetigen alle drei Functions", async () => {
+await test("ACTIVE und der je Function versionierte Authmodus plus Marker und Byteabschluss bestaetigen alle drei Functions", async () => {
   const proof = bestaetigeFunctionDeploymentReadback({
     expectedBuildVersion: BUILD,
     healthBuildVersion: BUILD,

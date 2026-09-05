@@ -286,7 +286,7 @@ export function KinoTab({
             <><strong style={{ color: T.wolfram }}>Für das laufende Kinoprogramm ist eine Anmeldung nötig.</strong> Melde dich unter Settings → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss — der steht für diesen Zugang gerade nicht bereit.</>
           ) : programmInfo?.fehler ? (
             <>
-              <strong style={{ color: T.wolfram }}>Kinoprogramm konnte nicht geladen werden.</strong> {programmInfo.fehler} Den Verbindungsstatus findest du unter Settings; der manuelle Notfallimport ist dort in der Desktopansicht verfügbar.
+              <strong style={{ color: T.wolfram }}>Kinoprogramm konnte nicht geladen werden.</strong> {programmInfo.fehler} Unter Settings → Verbindung wiederherstellen kannst du den Datenbankzugang prüfen oder den Katalog neu laden.
               {!angemeldet && " Als Gast siehst du ohnehin nur den Demo-Schnappschuss; angemeldet käme das laufende Programm."}
             </>
           ) : (

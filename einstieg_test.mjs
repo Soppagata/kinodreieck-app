@@ -136,11 +136,9 @@ check("Bereiche merken ihre eigene Scrolltiefe und starten beim ersten Besuch ob
   /scrollProBereichRef/.test(app) && /aktuelleScrolltiefe/.test(app)
   && /scrollProBereichRef\.current\.get\(id\) \?\? 0/.test(app)
   && /onNachOben=\{nachObenAusMenu\}/.test(app));
-check("Riskante Datei- und Wartungswerkzeuge bleiben mobil verborgen, Backup-Download nicht", () =>
-  /className="kd-nur-desktop">\s*<Klappe titel="Masterliste"/.test(daten)
-  && /<Klappe id="gesamt-backup" titel="Konto, Daten & Sicherung"/.test(daten)
-  && !/RestoreImport/.test(daten)
-  && /className="kd-nur-desktop" data-tour="erweitert"/.test(daten));
+check("Riskante Datei- und Wartungsaltwege sind entfernt, der Backup-Download bleibt", () =>
+  /<Klappe id="gesamt-backup" titel="Konto, Daten & Sicherung"/.test(daten)
+  && !/RestoreImport|titel="Masterliste"|titel="Stapelimport"|Programm-Cache leeren|Programm manuell importieren/.test(daten));
 check("Der alte Seitengriff und die Bedienhand-Spiegelung bleiben entfernt", () =>
   !/Bedienhand|linkshaender/.test(daten) && !/kd-links/.test(css)
   && !/kd-navband/.test(css) && /kd-globalsuche-menu/.test(css) && !/NavBand/.test(app));
