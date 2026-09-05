@@ -50,13 +50,16 @@ Isolationstest nach jeder RLS-berührenden Migration: `npm run test:rls`
 (Konfiguration nur über Umgebungsvariablen, siehe Kopf von
 `tools/rls_test_personal.mjs`).
 
-`current_schema.sql` ist zusätzlich der bereinigte, daten- und geheimnisfreie
-Ist-Stand des Produktionsschemas vom 2. August 2026. Er enthält auch das zuvor
+`current_schema.sql` ist zusätzlich ein bereinigter, daten- und geheimnisfreier
+Basissnapshot des Produktionsschemas vom 2. August 2026. Er enthält auch das zuvor
 nicht versionierte Basisschema von `kd_store`, samt Constraints, Funktionen,
 Triggern, RLS-Policies und Grants. Historische Migrationen bleiben unverändert
-die Änderungshistorie; der Snapshot ist die vollständige Prüf- und
-Wiederherstellungsreferenz für neue Umgebungen. Seine Struktur hält
-`schema_snapshot_test.mjs`.
+die Änderungshistorie. Der Snapshot wurde lokal bis Rollen-v1
+(`20260809121000`) fortgeschrieben, enthält die späteren Radar-, Private-,
+Mail-, Retry- und Entdecken-Objekte aber nicht. Er ist deshalb weder ein
+aktueller Ist-Stand noch allein wiederherstellbar; für eine neue Umgebung
+müssen die späteren Migrationen in belegter Reihenfolge folgen. Seine
+historische Basisstruktur hält `schema_snapshot_test.mjs`.
 
 **Hinweis zur Aktualität:** Die App wird seit Etappe 2 über Cloudflare Pages
 auf `kinodreieck.at` ausgeliefert, nicht mehr über GitHub Pages. Ältere

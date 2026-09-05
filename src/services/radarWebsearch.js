@@ -14,6 +14,7 @@ export const RADAR_WEBSEARCH_CLIENT_STATUSES = Object.freeze([
   "invalid_response", "forbidden", "unavailable", "storage_error", "busy",
 ]);
 export const RADAR_WEBSEARCH_CLIENT_RESPONSE_MAX_BYTES = 64 * 1024;
+export const RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS = 140_000;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -152,7 +153,11 @@ export function createRadarWebsearchService({
   getAccessToken = authDriver.getAccessToken,
   fetchImpl = globalThis.fetch,
   singleFile = RADAR_WEBSEARCH_SINGLE_FILE_DISABLED,
+  timeoutMs = RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS,
 } = {}) {
+  const requestTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? Math.min(timeoutMs, RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS)
+    : RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS;
   async function checkTarget(targetId, expectedPerson = null, targetText = null, options = {}) {
     const normalizedTargetId = text(targetId);
     const hasTargetText = targetText !== null && targetText !== undefined;
@@ -182,7 +187,10 @@ export function createRadarWebsearchService({
       return Object.freeze({ status: "forbidden", writes: 0 });
     }
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     let response;
+    let payload;
     try {
       response = await fetchImpl(`${basis}/functions/v1/${RADAR_WEBSEARCH_ENDPOINT}`, {
         method: "POST",
@@ -192,16 +200,21 @@ export function createRadarWebsearchService({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ targetId: normalizedTargetId, ...(hasTargetText ? { targetText } : {}), ...(initial ? { initial: true } : {}) }),
+        signal: controller.signal,
       });
+      if (auth.getSnapshot() !== session || text(getAccount()?.id) !== accountId) {
+        return Object.freeze({ status: "forbidden", writes: 0 });
+      }
+      try { payload = await response.json(); }
+      catch {
+        return Object.freeze({
+          status: controller.signal.aborted ? "unavailable" : "invalid_response",
+          writes: 0,
+        });
+      }
     } catch {
       return Object.freeze({ status: "unavailable", writes: 0 });
-    }
-    if (auth.getSnapshot() !== session || text(getAccount()?.id) !== accountId) {
-      return Object.freeze({ status: "forbidden", writes: 0 });
-    }
-    let payload;
-    try { payload = await response.json(); }
-    catch { return Object.freeze({ status: "invalid_response", writes: 0 }); }
+    } finally { clearTimeout(timer); }
     if (auth.getSnapshot() !== session || text(getAccount()?.id) !== accountId) {
       return Object.freeze({ status: "forbidden", writes: 0 });
     }

@@ -39,6 +39,12 @@ verify_jwt = false
 # User-ID und aktiven Accountzugang zusaetzlich selbst.
 verify_jwt = true
 
+[functions.account-self-service]
+# Export und der doppelt abgeschaltete technische Self-Delete-Pfad verlangen
+# bereits an der Plattformgrenze ein gueltiges Sitzungstoken. Der Handler
+# prueft Claims, User-ID, aktiven Account und alle weiteren Gates erneut.
+verify_jwt = true
+
 [functions.automatic-ai-check]
 # New API Keys sind keine JWTs. Der periodische Checker akzeptiert deshalb nur
 # seinen bodylosen Serverrequest mit exaktem Header und passendem sb_secret_-Key.

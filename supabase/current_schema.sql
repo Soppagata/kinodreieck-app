@@ -1,5 +1,5 @@
 
--- Kinodreieck: bereinigter Current-Schema-Snapshot
+-- Kinodreieck: bereinigter historischer Current-Schema-Snapshot (Basis)
 -- Erzeugt am 31.07.2026 aus dem verknüpften Produktionsprojekt mit
 -- `supabase db dump --linked --schema public` und PostgreSQL 17; anschließend
 -- auf den lokal vorbereiteten Rollen-v1-Stand 20260809121000 gebracht.
@@ -8,8 +8,10 @@
 --
 -- Enthält ausschließlich Schema: Tabellen, Constraints, Funktionen, Trigger,
 -- RLS-Policies und Grants. Keine Tabellenzeilen, Konten oder Secrets.
--- Historische Migrationen bleiben unverändert die Änderungshistorie; diese
--- Datei ist der prüf- und wiederherstellbare Ist-Stand für neue Umgebungen.
+-- Historische Migrationen bleiben unverändert die Änderungshistorie. Diese
+-- Datei bildet nur die Basis bis 20260809121000 ab und ist seit den späteren
+-- Radar-/Private-/Entdecken-Migrationen KEIN aktueller Ist-Stand und KEINE
+-- alleinige Wiederherstellungsreferenz für neue Umgebungen.
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;

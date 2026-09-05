@@ -74,6 +74,8 @@ const radarTextFindingRows = (value) => rows(value, [
   "checked_at", "created_at", "updated_at",
 ]);
 
+export const ACCOUNT_SELF_SERVICE_TIMEOUT_MS = 20_000;
+
 export function validateOwnData(value) {
   if (!fixedObject(value) || value.ok !== true || value.schemaVersion !== 1 || !fixedObject(value.data)) {
     throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "account-self-service", operation: "own-data.validate" });
@@ -123,7 +125,15 @@ export function validateOwnData(value) {
   return Object.freeze(value.data);
 }
 
-export function createAccountSelfService({ config = runtimeConfig, tokenLoader = authDriver.getAccessToken, fetchImpl = globalThis.fetch } = {}) {
+export function createAccountSelfService({
+  config = runtimeConfig,
+  tokenLoader = authDriver.getAccessToken,
+  fetchImpl = globalThis.fetch,
+  timeoutMs = ACCOUNT_SELF_SERVICE_TIMEOUT_MS,
+} = {}) {
+  const requestTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? Math.min(timeoutMs, ACCOUNT_SELF_SERVICE_TIMEOUT_MS)
+    : ACCOUNT_SELF_SERVICE_TIMEOUT_MS;
   const basis = String(config.supabaseUrl || "").replace(/\/+$/, "");
   const endpoint = String(config.accountSelfServiceEndpointName || "");
   const invoke = async (method, body = null) => {
@@ -133,8 +143,9 @@ export function createAccountSelfService({ config = runtimeConfig, tokenLoader =
     const token = await tokenLoader();
     if (!token) throw new BoundaryError(ERROR_CODES.UNAUTHENTICATED, { source: "account-self-service", operation: method });
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 20000);
+    const timer = setTimeout(() => ctrl.abort(), requestTimeoutMs);
     let response;
+    let payload = null;
     try {
       response = await fetchImpl(`${basis}/functions/v1/${endpoint}`, {
         method,
@@ -142,11 +153,12 @@ export function createAccountSelfService({ config = runtimeConfig, tokenLoader =
         body: body ? JSON.stringify(body) : undefined,
         signal: ctrl.signal,
       });
+      try { payload = await response.json(); } catch (cause) {
+        if (ctrl.signal.aborted) throw cause;
+      }
     } catch (cause) {
       throw new BoundaryError(ERROR_CODES.OFFLINE, { source: "account-self-service", operation: method, cause });
     } finally { clearTimeout(timer); }
-    let payload = null;
-    try { payload = await response.json(); } catch { /* invalid below */ }
     if (!response.ok) throw errorFromStatus(response.status, { source: "account-self-service", operation: method });
     return payload;
   };

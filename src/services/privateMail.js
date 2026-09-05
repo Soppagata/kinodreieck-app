@@ -56,6 +56,9 @@ export function createPrivateMailService({
   createOperationId = () => globalThis.crypto?.randomUUID?.() || "",
   timeoutMs = PRIVATE_MAIL_TIMEOUT_MS,
 } = {}) {
+  const requestTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? Math.min(timeoutMs, PRIVATE_MAIL_TIMEOUT_MS)
+    : PRIVATE_MAIL_TIMEOUT_MS;
   async function submit(type, feedbackText = null) {
     if (!privateMailRuntimeEnabled(config) || typeof fetchImpl !== "function") {
       return result(PRIVATE_MAIL_CLIENT_STATUS.UNAVAILABLE);
@@ -83,8 +86,9 @@ export function createPrivateMailService({
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     let response;
+    let payload;
     try {
       response = await fetchImpl(
         `${text(config.supabaseUrl).replace(/\/+$/, "")}/functions/v1/${text(config.privateMailEndpointName)}`,
@@ -101,6 +105,10 @@ export function createPrivateMailService({
           body: JSON.stringify(checked.request),
         },
       );
+      if (auth.getSnapshot() !== session || text(getAccount?.()?.id) !== accountId) {
+        return result(PRIVATE_MAIL_CLIENT_STATUS.UNKNOWN, operationId);
+      }
+      payload = await response.json();
     } catch {
       return result(PRIVATE_MAIL_CLIENT_STATUS.UNKNOWN, operationId);
     } finally {
@@ -110,9 +118,6 @@ export function createPrivateMailService({
     if (auth.getSnapshot() !== session || text(getAccount?.()?.id) !== accountId) {
       return result(PRIVATE_MAIL_CLIENT_STATUS.UNKNOWN, operationId);
     }
-    let payload;
-    try { payload = await response.json(); }
-    catch { return result(PRIVATE_MAIL_CLIENT_STATUS.UNKNOWN, operationId); }
     const normalized = normalizePrivateMailResponse(payload, {
       expectedType: type,
       expectedOperationId: operationId,

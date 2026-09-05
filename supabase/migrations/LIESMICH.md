@@ -85,6 +85,8 @@ die Statusautorität für den Remote-Lauf.
 | `20260817120000_blog_profile_extract_config.sql` | | | | Source-only; `REMOTE_PAYLOAD_PENDING`, Ledger-Zielzeile erst nach atomarem E17B-Lauf |
 | `20260903193000_automatic_ai_retry_jobs.sql` | `bscjgwcntapobyxsiyce` | 2026-09-03 | Codex über verknüpfte Management-API | erfolgreich atomar angewandt und rückgelesen; leeres service-only/RLS-Ledger, keine Browserrechte, fünf RPCs ausschließlich für `service_role`, +6h- und Einmalzustände vorhanden; Budgetwerte unverändert |
 | `20260903213000_radar_automatic_retry_binding.sql` | `bscjgwcntapobyxsiyce` | 2026-09-03 | Codex über verknüpfte Management-API | erfolgreich atomar nach dem Retry-Ledger angewandt und rückgelesen; drei exakte Radar-Retry-RPCs ausschließlich für `service_role`, keine Browserrechte und weiter null Ledgerzeilen |
+| `20260904140000_entdecken_daily_refresh_interval.sql` | | | | Source-only; nicht angewandt. Ersetzt den Format-6-Claim zunächst mit sekundengenauer 24h-Fälligkeit. |
+| `20260905180000_entdecken_vienna_day_claim.sql` | | | | Source-only; nicht angewandt. Forward-Fix gegen 48h-Aussetzer bei Schedulerjitter; einmal je Wiener Kalendertag. Nur gemeinsam und in Reihenfolge nach `20260904140000` anwenden. |
 
 ## Entscheidung zum Beta-Tageslimit (08.08.2026)
 
@@ -184,9 +186,9 @@ Zwei neue Handgriffe im SQL-Editor:
 ## Was NICHT hier liegt
 
 - `../katalog_schema.sql` — das historische Basisschema von `kd_catalog`.
-- `../current_schema.sql` — der datenfreie Ist-Stand aller Anwendungstabellen,
-  Funktionen, Trigger, Policies und Grants, einschließlich des alten
-  `kd_store`-Basisschemas.
+- `../current_schema.sql` — historischer datenfreier Basissnapshot bis
+  Rollen-v1 (`20260809121000`), einschließlich des alten `kd_store`-Schemas;
+  kein aktueller Gesamtstand und keine alleinige Wiederherstellungsreferenz.
 
 `kd_store` (Legacy-Schlüssel-Sync) ist auf Datenmodell und Policies eingefroren.
 Rollen-v1 korrigiert ausschließlich die zu breiten Tabellenrechte auf den

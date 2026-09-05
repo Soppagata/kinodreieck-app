@@ -11,6 +11,7 @@ export const ENTDECKEN_DAILY_PARTIAL_NOTICE =
   "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel.";
 export const ENTDECKEN_DAILY_DEGRADED_NOTICE =
   "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar.";
+export const ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS = 20_000;
 const READ_REFRESH_STATUSES = new Set(["read_only", "disabled", "unavailable"]);
 
 function text(value) { return String(value == null ? "" : value).trim(); }
@@ -134,7 +135,11 @@ export function createEntdeckenDailyFeedService({
   fetchImpl = globalThis.fetch,
   currentDay = () => viennaDay(new Date()),
   fallbackFeed = null,
+  timeoutMs = ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS,
 } = {}) {
+  const requestTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? Math.min(timeoutMs, ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS)
+    : ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS;
   async function load() {
     if (fallbackFeed !== null) {
       const today = currentDay();
@@ -168,7 +173,10 @@ export function createEntdeckenDailyFeedService({
     );
     if (!token || !accountUnchanged()) return frozen("disabled");
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     let response;
+    let payload;
     try {
       response = await fetchImpl(`${basis}/functions/v1/${ENTDECKEN_DAILY_ENDPOINT}`, {
         method: "GET",
@@ -177,12 +185,15 @@ export function createEntdeckenDailyFeedService({
           apikey: publishableKey,
           Accept: "application/json",
         },
+        signal: controller.signal,
       });
+      if (!accountUnchanged()) return frozen("disabled");
+      try { payload = await response.json(); }
+      catch {
+        return frozen(controller.signal.aborted ? "unavailable" : "invalid_response");
+      }
     } catch { return frozen("unavailable"); }
-    if (!accountUnchanged()) return frozen("disabled");
-    let payload;
-    try { payload = await response.json(); }
-    catch { return frozen("invalid_response"); }
+    finally { clearTimeout(timer); }
     if (!accountUnchanged()) return frozen("disabled");
     const checked = exactResult(payload, currentDay());
     if (!response.ok || !checked) return frozen(response.ok ? "invalid_response" : "unavailable");
