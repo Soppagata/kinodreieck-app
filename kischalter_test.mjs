@@ -526,12 +526,12 @@ abschnitt("U", async () => {
 console.log("\n--- U: Oberflächen-Naht (DatenTab, statisch) ---");
 const NAHT_WURZEL = process.env.NAHT_WURZEL || WURZEL;
 const dt = fs.readFileSync(path.join(NAHT_WURZEL, "src/tabs/DatenTab.jsx"), "utf8");
-/* Genau der eine Klappen-Block. „Konto & Geräte-Sync" kommt weiter oben schon
+/* Genau der eine Sammelklappen-Block. „Konto, Daten & Sicherung" kommt weiter oben schon
    in einem Kommentar vor, deshalb wird ab der Klappe gesucht, nicht ab dem
    ersten Vorkommen. */
-const blockStart = dt.indexOf('<Klappe titel="KI-Funktionen">');
-const block = blockStart < 0 ? "" : dt.slice(blockStart, dt.indexOf("Konto & Geräte-Sync", blockStart));
-check("U", "der KI-Block ist als eigene Klappe „KI-Funktionen“ auffindbar",
+const blockStart = dt.indexOf('<Klappe titel="Personalisierung & KI">');
+const block = blockStart < 0 ? "" : dt.slice(blockStart, dt.indexOf("Konto, Daten & Sicherung", blockStart));
+check("U", "der KI-Block ist Inhalt der Sammelklappe „Personalisierung & KI“",
   () => blockStart > 0 && block.length > 400);
 
 check("U", "der KI-Block bekommt Stand und Setter als PROPS — nicht über `einstellungen`",

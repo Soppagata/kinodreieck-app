@@ -323,7 +323,7 @@ check("Tab heißt Settings", !!datenTab);
 if (datenTab) { datenTab.click(); await warte(600); }
 check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()));
 const sicherheitskopieSummary = [...doc.querySelectorAll("summary")]
-  .find((summary) => /^Sicherheitskopie dieses Geräts/.test((summary.textContent || "").trim()));
+  .find((summary) => /^Konto, Daten & Sicherung/.test((summary.textContent || "").trim()));
 const sicherheitskopieDetails = sicherheitskopieSummary?.parentElement;
 check("Settings-Marker führt direkt zur offenen Sicherheitskopie dieses Geräts",
   dom.window.__kdLetztesScrollziel === "gesamt-backup"
@@ -346,7 +346,7 @@ const datenmodus = [...doc.querySelectorAll("summary")]
 const datenschutzSummary = [...doc.querySelectorAll("summary")]
   .find((summary) => /^Datenschutz & Datenübersicht$/.test((summary.textContent || "").trim()));
 const rechtlichesSummary = [...doc.querySelectorAll("summary")]
-  .find((summary) => /^Über & Rechtliches$/.test((summary.textContent || "").trim()));
+  .find((summary) => /^Über Kinodreieck, Anleitung & Rechtliches$/.test((summary.textContent || "").trim()));
 check("Gast-Settings behalten die Streaming-Auswahl, aber keine Betriebs-/Supportflächen",
   !katalogStatus && !datenmodus
   && ![...doc.querySelectorAll("summary")].some((summary) => /^(Technik & Support|Kinoprogramm-Status|Erweitert —)/.test((summary.textContent || "").trim()))
@@ -370,11 +370,11 @@ if (sicherheitskopieKnopf) {
     && !/Sicherung offen/.test(sicherheitskopieSummary.textContent || "")
     && datenTab?.getAttribute("aria-description") !== "Sicherung offen");
 }
-check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
+check("Rechtliches vorhanden", /Über Kinodreieck, Anleitung & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
 
 /* ---- „Über"-Einstieg (Etappe 4): Erklärstücke + Anleitung leben jetzt hier ---- */
 const ueberKnopf = knopf(/^Über Kinodreieck & Anleitung$/i);
-check("Über-Einstieg unter Über & Rechtliches vorhanden", !!ueberKnopf);
+check("Über-Einstieg unter dem Rechtliches-Block vorhanden", !!ueberKnopf);
 if (ueberKnopf) {
   ueberKnopf.click(); await warte(400);
   check("Über: Hero + Dreieck-Erklärstück erscheinen", /LOKALE FILM-PLATTFORM/.test(text()) && /Deine Filme, dein Kino, dein Urteil/.test(text())

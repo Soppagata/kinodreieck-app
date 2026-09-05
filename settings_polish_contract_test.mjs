@@ -21,7 +21,7 @@ check("Streaming-Katalogbestand ist lokal und auf Staging sichtbar, aber nicht i
     && /\{showKatalogbestand && <Klappe titel="Streaming-Katalogbestand">/.test(datenTab));
 
 const darstellung = datenTab.indexOf('titel="Darstellung & Verhalten"');
-const streaming = datenTab.indexOf('titel="Streaming-Quellen"');
+const streaming = datenTab.indexOf("<StreamingEinstellungen");
 const katalog = datenTab.indexOf('titel="Streaming-Katalogbestand"');
 const personalisierung = datenTab.indexOf('titel="Personalisierung & KI"');
 const kontoDatenSicherung = datenTab.indexOf('titel="Konto, Daten & Sicherung"');
@@ -34,7 +34,10 @@ check("Release-Settings-Abschnitte stehen in der geforderten Reihenfolge",
     && kontoDatenSicherung > personalisierung
     && rechtliches > kontoDatenSicherung);
 check("Personalisierung und Konto sind jeweils genau eine Hauptklappe",
-  !datenTab.includes('<Klappe titel="KI-Funktionen">')
+  !datenTab.includes('<Klappe titel="Streaming-Quellen">')
+    && /<StreamingEinstellungen[\s\S]*?teil="quellen"/.test(datenTab)
+    && !/data-tour="daten-vokabular" style=\{kasten\}/.test(datenTab)
+    && !datenTab.includes('<Klappe titel="KI-Funktionen">')
     && !datenTab.includes('<Klappe titel="Geschmacksprofil">')
     && !datenTab.includes('<Klappe titel="KI-Vokabular"')
     && !datenTab.includes('<Klappe titel="Konto & Geräte-Sync">')

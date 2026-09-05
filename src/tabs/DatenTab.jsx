@@ -254,12 +254,8 @@ export function DatenTab({
       </Klappe>}
 
       {/* 2 — Streaming-Anbieter */}
-      {toggleQuelle && <Klappe titel="Streaming-Quellen">
-        <div style={kasten}>
-          <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
-            katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />
-        </div>
-      </Klappe>}
+      {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
+        katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
       {showKatalogbestand && <Klappe titel="Streaming-Katalogbestand">
         <div style={kasten}>
           <KatalogAuditStatus />
@@ -345,8 +341,7 @@ export function DatenTab({
       </div>
 
       {saveVokabular && (
-        <div style={kasten} data-tour="daten-vokabular">
-          <h2 style={h2}>KI-Vokabular</h2>
+        <div data-tour="daten-vokabular">
           <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono}
             master={master || []} bekannteGenres={bekannteGenres}
             ai={ai}

@@ -164,10 +164,10 @@ await render({
 check("Gesunder Gast sieht weder Datenmodus, Demo-Löschung noch Betriebs-/Supportflächen",
   keineTechnik() && !summary("Verbindung wiederherstellen"));
 check("Gast sieht keine Kontolöschung", !summary("Konto löschen"));
-const rechtliches = summary("Über & Rechtliches");
+const rechtliches = summary("Über Kinodreieck, Anleitung & Rechtliches");
 const datenschutz = summary("Datenschutz & Datenübersicht");
 const hauptklappen = [...rootElement.querySelectorAll("section > details.kd-klappe")];
-check("Datenschutz bleibt niedrig und verschachtelt unter Über & Rechtliches erreichbar",
+check("Datenschutz bleibt niedrig und verschachtelt unter dem Rechtliches-Block erreichbar",
   !!rechtliches && !!datenschutz
     && datenschutz.closest("details.kd-klappe") === rechtliches.parentElement
     && hauptklappen.at(-1) === rechtliches.parentElement);
@@ -181,8 +181,8 @@ await render({
   ownerTechnikBestaetigt: hatBestaetigteOwnerRolle(memberMitOwnerIdentitaet),
 });
 check("Member mit Owner-Namen sieht keine Technik oder Supportdaten", keineTechnik());
-check("Datenrechte bleiben als eigener Kontoweg ohne alten Self-Delete erreichbar",
-  !!summary("Datenrechte & Konto")
+check("Datenrechte bleiben im Konto-, Daten- und Sicherungsweg ohne alten Self-Delete erreichbar",
+  !!summary("Konto, Daten & Sicherung")
     && /manuellen Rechteweg/.test(text())
     && !summary("Konto löschen"));
 

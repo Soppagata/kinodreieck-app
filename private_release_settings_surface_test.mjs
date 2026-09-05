@@ -182,14 +182,17 @@ for (const label of [
 ]) {
   check(`Release-Kernfläche bleibt sichtbar: ${label}`, hatSummary(label));
 }
+check("Streaming-Quellen wird durch die direkte Einbindung genau einmal als Summary gerendert",
+  summaries().filter((label) => label.startsWith("Streaming-Quellen")).length === 1);
 const einstellLabels = summaries();
+const streamingSummaryIndex = einstellLabels.findIndex((label) => label.startsWith("Streaming-Quellen"));
 check("Streaming-Bereiche kommen direkt nach Darstellung in der Sichtreihenfolge",
   einstellLabels.indexOf("Darstellung & Verhalten") >= 0
-    && einstellLabels.indexOf("Streaming-Quellen") >= 0
+    && streamingSummaryIndex >= 0
     && einstellLabels.indexOf("Streaming-Katalogbestand") >= 0
     && einstellLabels.indexOf("Personalisierung & KI") >= 0
-    && einstellLabels.indexOf("Darstellung & Verhalten") < einstellLabels.indexOf("Streaming-Quellen")
-    && einstellLabels.indexOf("Streaming-Quellen") < einstellLabels.indexOf("Streaming-Katalogbestand")
+    && einstellLabels.indexOf("Darstellung & Verhalten") < streamingSummaryIndex
+    && streamingSummaryIndex < einstellLabels.indexOf("Streaming-Katalogbestand")
     && einstellLabels.indexOf("Streaming-Katalogbestand") < einstellLabels.indexOf("Personalisierung & KI"));
 check("Datierter Katalogbestand zeigt lokal und auf Staging beide gespeicherten Snapshotstände knapp",
   text().includes("Gespeicherte Katalogstände vom 22.07.2026 und 04.09.2026")

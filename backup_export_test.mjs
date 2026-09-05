@@ -259,7 +259,8 @@ ok(kontoDownload.clicked === true && kontoDownloadKlicks === 1
 
 const datenTabQuelle = readFileSync(new URL("./src/tabs/DatenTab.jsx", import.meta.url), "utf8");
 ok(!datenTabQuelle.includes("RestoreImport")
-  && datenTabQuelle.includes('titel="Sicherheitskopie dieses Geräts"')
+  && datenTabQuelle.includes('id="gesamt-backup" titel="Konto, Daten & Sicherung"')
+  && datenTabQuelle.includes("Sicherheitskopie dieses Geräts")
   && datenTabQuelle.includes("Serverweite Konto-Eigendaten")
   && datenTabQuelle.includes("sind nicht enthalten"),
 "Privatrelease-UI zeigt nur den präzisen Geräte-Download und keinen Restore-Einstieg");

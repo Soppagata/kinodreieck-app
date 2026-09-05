@@ -426,9 +426,9 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByRole("heading", { name: "Streaming gesperrt", exact: true })).toHaveCount(1);
       await expect(page.locator("summary", { hasText: /^Erweitert/ })).toBeHidden();
       await expect(page.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
-      await expect(page.locator("summary", { hasText: /^Konto & Geräte-Sync$/ })).toBeVisible();
-      await expect(page.locator("summary", { hasText: /^KI-Vokabular$/ })).toBeVisible();
-      const rechtliches = page.locator("summary", { hasText: /^Über & Rechtliches$/ });
+      await expect(page.locator("summary", { hasText: /^Konto, Daten & Sicherung$/ })).toBeVisible();
+      await expect(page.locator("summary", { hasText: /^Personalisierung & KI$/ })).toBeVisible();
+      const rechtliches = page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ });
       await expect(rechtliches).toBeVisible();
       await rechtliches.click();
       const datenschutz = page.locator("summary", { hasText: /^Datenschutz & Datenübersicht$/ });
@@ -1311,7 +1311,7 @@ test("Der vierte Film zeigt genau vier Sekunden nur den unsichtbaren Achievement
 
   await waehleMobileTab(page, "Settings");
   await page.getByRole("button", { name: /Saal \(Dunkel\)/i }).click();
-  await page.locator("summary", { hasText: /^Über & Rechtliches$/ }).click();
+  await page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ }).click();
   await page.locator('span[title="…"]', { hasText: /^Max$/ }).evaluate((el) => el.click());
   await page.getByRole("button", { name: /Schon kuhl/i }).click();
   await expect(page.locator('.kd-wrap.kd-deep-space-horror[data-kd-effect="deep-space-horror"]')).toHaveCount(1);
@@ -2684,7 +2684,7 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
 
   await page.getByRole("button", { name: "Menü öffnen" }).click();
   await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Settings", exact: true }).click();
-  await page.locator("summary", { hasText: /^Geschmacksprofil$/ }).click();
+  await page.locator("summary", { hasText: /^Personalisierung & KI$/ }).click();
   await page.getByRole("button", { name: "Ändern", exact: true }).click();
   await page.getByRole("button", { name: "Aktuelle Infos", exact: true }).click();
   const signal = page.locator(".kd-profil-signal").first();
@@ -2729,7 +2729,7 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await settings.click();
   await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
 
-  const ueberSummary = page.locator("summary:visible", { hasText: /^Über & Rechtliches$/ });
+  const ueberSummary = page.locator("summary:visible", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ });
   const ueber = ueberSummary.locator("..");
   await expect(ueberSummary).toBeVisible();
   await ueberSummary.focus();

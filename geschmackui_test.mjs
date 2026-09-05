@@ -1778,8 +1778,9 @@ const tabProps = (kiStand, extra = {}) => ({
   ...extra,
 });
 const klappen = () => alles("details").map((d) => ({ el: d, titel: d.querySelector("summary")?.textContent.trim() }));
-const geschmackKlappe = () => klappen().find((k) => k.titel === "Geschmacksprofil")?.el || null;
-const kiKlappe = () => klappen().find((k) => k.titel === "KI-Funktionen")?.el || null;
+const personalisierungKlappe = () => klappen().find((k) => k.titel === "Personalisierung & KI")?.el || null;
+const geschmackBereich = () => [...(personalisierungKlappe()?.querySelectorAll("h2") || [])]
+  .find((heading) => heading.textContent.trim() === "Geschmacksprofil")?.parentElement || null;
 
 /* Alle Stände des Schalters: nie entschieden (null), ausdrücklich aus
    (false), an (true). Der Block muss in allen da sein — und DatenTab muss in
@@ -1806,12 +1807,10 @@ for (const stand of [null, false, true]) {
   check("M", "DatenTab rendert bei kiStand.global=" + JSON.stringify(stand)
     + " ohne Fehler  [gemessen: " + (bruch ? "ABSTURZ: " + bruch : "kein Fehler") + "]",
     () => bruch === null);
-  const g = geschmackKlappe();
-  check("M", "bei kiStand.global=" + JSON.stringify(stand) + " gibt es die Klappe „Geschmacksprofil\""
+  const g = personalisierungKlappe();
+  check("M", "bei kiStand.global=" + JSON.stringify(stand) + " gibt es die Sammelklappe „Personalisierung & KI\""
     + "  [gemessen: " + JSON.stringify(klappen().map((k) => k.titel)) + "]", () => !!g);
-  check("M", "…und sie steckt NICHT in der Klappe „KI-Funktionen\"",
-    () => !!g && !!kiKlappe() && !kiKlappe().contains(g));
-  check("M", "…und sie zeigt den Bereich  [gemessen: "
+  check("M", "…und sie zeigt den KI-unabhängigen Geschmacksbereich  [gemessen: "
     + JSON.stringify(g?.textContent.replace(/\s+/g, " ").trim().slice(16, 60)) + "]",
     () => !!g && g.textContent.includes("Du hast noch kein Geschmacksprofil."));
 }
@@ -1827,7 +1826,7 @@ const montiereTabNeu = async (props) => {
   feld = () => document.getElementById("tabwurzel");
   await act(async () => { tabWurzel.render(h(DatenTab, props)); });
   await ruhe();
-  const bereich = geschmackKlappe();
+  const bereich = geschmackBereich();
   feld = () => bereich;
 };
 await montiereTabNeu(tabProps(
@@ -1850,7 +1849,7 @@ dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
 feld = () => document.getElementById("tabwurzel");
 await act(async () => { tabWurzel.render(h(DatenTab, tabProps({ global: false, funktionen: {} }))); });
 await ruhe();
-const g = geschmackKlappe();
+const g = geschmackBereich();
 feld = () => g;
 check("M", "bei KI=aus steht im Bereich der KI=aus-Hinweis noch nicht (kein Profil)",
   () => !text().includes("Dein Profil ist angelegt"));
@@ -1909,10 +1908,10 @@ check("M", "Container führt den Aufruf, DatenTab das zusammengesetzte Gate  [ge
   () => importiert("bereich", "services/ai\\.js")
     && /kiAktiv=\{kiProfilFaehig/.test(QUELLEN.datentab.text)
     && !importiert("bereich", "kiSchalter"));
-check("M", "in DatenTab hängt die Klappe nicht an einer Bedingung mit `kiStand`"
-  + "  [gemessen: " + JSON.stringify((QUELLEN.datentab.text.match(/.{0,60}Klappe titel="Geschmacksprofil"/s) || [])[0]?.slice(-60)) + "]",
+check("M", "in DatenTab hängt die Personalisierungs-Sammelklappe nicht an einer Bedingung mit `kiStand`"
+  + "  [gemessen: " + JSON.stringify((QUELLEN.datentab.text.match(/.{0,60}Klappe titel="Personalisierung & KI"/s) || [])[0]?.slice(-60)) + "]",
   () => {
-    const i = QUELLEN.datentab.text.indexOf("<Klappe titel=\"Geschmacksprofil\">");
+    const i = QUELLEN.datentab.text.indexOf("<Klappe titel=\"Personalisierung & KI\">");
     if (i < 0) return false;
     /* Die 200 Zeichen davor: dort stünde ein `{kiStand… && (` einer
        bedingten Einbettung. */

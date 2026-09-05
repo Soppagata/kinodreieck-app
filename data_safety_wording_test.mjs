@@ -58,7 +58,8 @@ check("Fehlergrenze benennt Text, Status, Knopf und Dateinamen als lokale Gerät
   && !sichtbar.fehlergrenze.includes("kinodreieck_notfall_backup_"));
 
 check("Geräte-Download bleibt sichtbar vom Kontoexport getrennt und verspricht keinen Restore",
-  sichtbar.datenTab.includes('titel="Sicherheitskopie dieses Geräts"')
+  sichtbar.datenTab.includes('id="gesamt-backup" titel="Konto, Daten & Sicherung"')
+  && sichtbar.datenTab.includes("Sicherheitskopie dieses Geräts")
   && sichtbar.datenTab.includes("Serverweite Konto-Eigendaten")
   && sichtbar.datenTab.includes("keinen Restore- oder Reimportweg")
   && sichtbar.lokaleSicherheit.includes("Sie ist kein Server- oder Kontoexport")
