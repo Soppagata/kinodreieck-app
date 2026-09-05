@@ -94,7 +94,7 @@ Mediathek, globaler Katalog und externer Pool bleiben getrennte Wahrheiten:
 Mindestens ein kompatibles Profilgenre oder eine echte positiv bewertete
 Genrepassung ist Pflicht. Eine Listenposition ist nur Reihenfolge und niemals
 Passungsersatz. Fehlende oder inkompatible Genres erscheinen daher
-ausschließlich unter **Diese Woche beliebt**. Der lokale Rang wählt höchstens
+ausschließlich unter **Beliebte Titel**. Der lokale Rang wählt höchstens
 sechs persönliche Titel; die separate Beliebtheitsliste zeigt bis zu sechs
 weitere, ungesehene und duplikatfreie Titel in Quellenreihenfolge.
 

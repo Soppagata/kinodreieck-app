@@ -222,7 +222,9 @@ function RecommendationsView({
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format);
   const feedNotice = webDiscoveryStatus?.status === "stale"
-    ? "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar."
+    ? webDiscoveryStatus?.responseMode === "degraded"
+      ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums und bleibt nur zur Orientierung sichtbar."
+      : "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar."
     : webDiscoveryStatus?.responseMode === "partial"
       ? "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel."
       : webDiscoveryStatus?.responseMode === "degraded"

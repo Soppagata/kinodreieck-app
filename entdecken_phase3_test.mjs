@@ -673,6 +673,19 @@ try {
       "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar.");
     assert.doesNotMatch(versionedUi.container.textContent, /Aktuelle österreichische Liste|Diese Woche beliebt|Aktuelle Kino-/u);
   });
+  await versionedUi.render({
+    ...versionedProps,
+    webDiscoveryStatus: {
+      status: "stale", responseMode: "degraded",
+      displayText: "Dieser freie Servertext darf nicht angezeigt werden.",
+    },
+  });
+  check("Stale plus degraded bewahrt Ausfall- und Gültigkeitsinformation als lokalen Festtext", () => {
+    const status = versionedUi.container.querySelector('[role="status"]');
+    assert.equal(status?.textContent,
+      "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums und bleibt nur zur Orientierung sichtbar.");
+    assert.doesNotMatch(versionedUi.container.textContent, /Dieser freie Servertext/u);
+  });
   const ersterPinKnopf = versionedSection.querySelector('button[aria-label$="am Pinboard anpinnen"]');
   await act(async () => { ersterPinKnopf.click(); await tick(); });
   const gesetztePins = toggleEntdeckenPin([], angepinnterEintrag, 1234);
