@@ -153,7 +153,7 @@ try {
     from public.kd_entdecken_daily_feed where singleton;
   `), "t");
 
-  console.log("release_data_audit_migration_pg17: migration, claim and ACL checks passed");
+  console.log("entdecken_vienna_day_claim_pg17_test: migration, claim and ACL checks passed");
 } finally {
   if (running) {
     run("pg_ctl", ["--pgdata", data, "--mode", "immediate", "--wait", "stop"]);

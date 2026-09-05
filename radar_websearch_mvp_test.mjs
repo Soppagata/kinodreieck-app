@@ -13,7 +13,10 @@ import {
   createRadarWebsearchMockAdapter,
 } from "./supabase/functions/radar-websearch-task/mockAdapter.js";
 import { createProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
-import { createRadarWebsearchService } from "./src/services/radarWebsearch.js";
+import {
+  createRadarWebsearchService,
+  RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS,
+} from "./src/services/radarWebsearch.js";
 import { createLocalTextRadarTargetId } from "./src/lib/localEventRadar.js";
 
 let checks = 0;
@@ -495,6 +498,37 @@ await check("Browserdienst sendet nur targetId und macht keinen Retry", async ()
   assert.equal(calls.length, 1);
   assert.deepEqual(JSON.parse(calls[0].options.body), { targetId: target.targetId });
   assert.equal(calls[0].options.body.includes("max-account"), false);
+});
+
+await check("Browserdienst-Zeitgrenze umfasst auch einen hängenden Response-Body", async () => {
+  const session = { mode: "account", state: "ready", account: { id: "max-account" } };
+  let responseSignal;
+  const service = createRadarWebsearchService({
+    config: {
+      radarPilotClientEnabled: true,
+      supabaseUrl: "https://project.example.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => session.account,
+    getAccessToken: async () => "session-token",
+    timeoutMs: 5,
+    fetchImpl: async (_url, options) => {
+      responseSignal = options.signal;
+      return {
+        ok: true,
+        status: 200,
+        json: () => new Promise((_resolve, reject) => {
+          const aborted = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+          if (options.signal.aborted) aborted();
+          else options.signal.addEventListener("abort", aborted, { once: true });
+        }),
+      };
+    },
+  });
+  assert.deepEqual(await service.checkNow(target.targetId), { status: "unavailable", writes: 0 });
+  assert.equal(responseSignal?.aborted, true);
+  assert.equal(RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS, 140_000);
 });
 
 await check("Browserdienst verwirft einen Feed außerhalb des bestehenden exakten Vertrags", async () => {

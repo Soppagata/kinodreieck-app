@@ -3,7 +3,7 @@
    Anbieteraufruf. */
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import {
   DeploymentEffectContractError,
   pruefeStagingWorkflowDeploymentEffects,
@@ -203,6 +203,41 @@ await test("ACTIVE und der je Function versionierte Authmodus plus Marker und By
     { slug: "entdecken-daily-task", version: 29 },
   ]);
   assert.ok(proof.functions.every(({ sourceSha256 }) => /^[a-f0-9]{64}$/.test(sourceSha256)));
+});
+
+await test("Management-Readback weist einen abweichenden versionierten Authmodus zurück", async () => {
+  assert.throws(
+    () => bestaetigeFunctionDeploymentReadback({
+      expectedBuildVersion: BUILD,
+      healthBuildVersion: BUILD,
+      managementFunctions: MANAGEMENT.map((entry) => entry.slug === "radar-websearch-task"
+        ? { ...entry, verify_jwt: true }
+        : entry),
+      sourceReadbacks: SOURCES,
+    }),
+    (error) => error instanceof LiveFunctionReadbackFehler
+      && error.code === "FUNCTION_MANAGEMENT_UNCONFIRMED",
+  );
+});
+
+await test("jede deploybare Function besitzt genau einen expliziten JWT-Konfigvertrag", async () => {
+  const config = readFileSync("supabase/config.toml", "utf8");
+  const deployable = readdirSync("supabase/functions", { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(`supabase/functions/${entry.name}/index.ts`))
+    .map((entry) => entry.name)
+    .sort();
+  assert.deepEqual(deployable, [
+    "account-self-service", "ai-task", "automatic-ai-check",
+    "entdecken-daily-task", "private-mail-request", "radar-websearch-task",
+  ]);
+  for (const name of deployable) {
+    const marker = `[functions.${name}]`;
+    assert.equal((config.match(new RegExp(`^\\[functions\\.${name}\\]$`, "gmu")) || []).length, 1, name);
+    const remainder = config.slice(config.indexOf(marker) + marker.length);
+    const nextSection = remainder.search(/^\[/mu);
+    const section = nextSection < 0 ? remainder : remainder.slice(0, nextSection);
+    assert.match(section, /^verify_jwt = (?:true|false)$/mu, name);
+  }
 });
 
 await test("Management-Versionsspruenge allein sind weder Drift- noch Quellbeleg", async () => {

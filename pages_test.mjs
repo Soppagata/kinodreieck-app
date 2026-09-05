@@ -83,6 +83,7 @@ check("_headers: aktiver Client darf nur zur eigenen Supabase-Instanz verbinden"
   && !/api\.github\.com/.test(headers));
 
 const workflow = readFileSync(join(".github", "workflows", "deploy.yml"), "utf8");
+const privateOpsWorkflow = readFileSync(join(".github", "workflows", "private-ops-monitor.yml"), "utf8");
 const remoteSmoke = readFileSync(join("tools", "smoke-deployment.mjs"), "utf8");
 const remoteRetryStart = remoteSmoke.indexOf("for (let versuch = 1; versuch <= metaVersuche; versuch++)");
 const remoteRetryEnd = remoteSmoke.indexOf("if (metaFehler) throw", remoteRetryStart);
@@ -124,6 +125,14 @@ check("Production-Deploy enthält harte false-Werte für alle fünf Flags und ke
     && !/STAGING_RADAR_PILOT_CLIENT_ENABLED/.test(deployProductionBlock)
     && !/STAGING_ENTDECKEN_DAILY_FEED_ENABLED/.test(deployProductionBlock)
     && !/STAGING_PRIVATE_SELF_SERVICE_ENABLED/.test(deployProductionBlock));
+check("Manuelle Deploys bleiben an den Branch ihrer Zielumgebung gebunden",
+  /github\.event_name == 'workflow_dispatch'\s*&&\s*github\.ref_name == 'staging'\s*&&\s*inputs\.target == 'staging'/.test(deployStagingBlock)
+  && /github\.ref_name == 'main'[\s\S]*?github\.event_name == 'workflow_dispatch'\s*&&\s*inputs\.target == 'production'/.test(deployProductionBlock));
+check("Workflow-Actions verwenden ausschließlich die geprüften Majors v7, v7 und v6",
+  !/actions\/(?:checkout|setup-node)@v4|actions\/cache@v4/.test(`${workflow}\n${privateOpsWorkflow}`)
+  && /actions\/checkout@v7/.test(workflow)
+  && /actions\/setup-node@v7/.test(workflow)
+  && /actions\/cache@v6/.test(workflow));
 check("PR-Tests bleiben erhalten und prüfen weiterhin den Merge-Commit",
   !workflow.includes("github.event.pull_request.head.repo.full_name")
   && !workflow.includes("github.head_ref != 'staging'"));
@@ -170,6 +179,17 @@ check("Remote-Smoke weist den gemessenen Vier-Stunden-Cache von sw.js zurück",
 check("Remote-Smoke erkennt eine feste Domain mit falschem Commit",
   buildMetaFehler({ format: 1, buildVersion: "alt" }, "neu") !== null
   && buildMetaFehler({ format: 1, buildVersion: "neu" }, "neu") === null
+  && buildMetaFehler({ format: 1, buildVersion: "neu", appEnvironment: "staging" }, "neu", "staging") === null
+  && /Umgebung production/.test(buildMetaFehler(
+    { format: 1, buildVersion: "neu", appEnvironment: "production" },
+    "neu",
+    "staging",
+  ) || "")
+  && /unvollständige Build-Metadaten/.test(
+    buildMetaFehler({ format: 1, buildVersion: "neu" }, "neu", "staging") || "",
+  )
+  && remoteSmoke.includes("buildMetaFehler(meta, erwarteteVersion, erwarteteUmgebung)")
+  && remoteSmoke.includes("DEPLOY_TARGET muss staging oder production sein")
   && serviceWorkerBuildFehler('const BUILD_VERSION = "alt";\nconst CACHE = `kd-shell-v3-${BUILD_VERSION}`;', "neu") !== null
   && serviceWorkerBuildFehler('const BUILD_VERSION = "neu";\nconst CACHE = `kd-shell-v3-${BUILD_VERSION}`;', "neu") === null);
 check("Remote-Smoke liest den ausgelieferten Minimal-Login statt nur eine leere Shell",

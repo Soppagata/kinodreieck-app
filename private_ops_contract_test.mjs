@@ -19,7 +19,11 @@ import {
 } from "./src/lib/localRetention.js";
 import { buildSupportBundle } from "./src/lib/supportBundle.js";
 import { ERROR_CODES, BoundaryError } from "./src/services/errors.js";
-import { createAccountSelfService, validateOwnData } from "./src/services/accountSelfService.js";
+import {
+  ACCOUNT_SELF_SERVICE_TIMEOUT_MS,
+  createAccountSelfService,
+  validateOwnData,
+} from "./src/services/accountSelfService.js";
 import {
   ACCOUNT_SELF_SERVICE_ERROR,
   exportReceiptMatchesAccount,
@@ -1356,6 +1360,39 @@ expect(
     && requestLog[1].init.method === "POST"
     && JSON.stringify(deleteRequestBody) === JSON.stringify({ action: "delete", operationId: deleteOperationId, confirmation: "DELETE test@example.invalid" })
     && !Object.hasOwn(deleteRequestBody, "accountId"),
+);
+
+let accountResponseSignal;
+const hangingAccountResponse = createAccountSelfService({
+  config: {
+    supabaseUrl: "https://private-ops-test.supabase.co",
+    supabasePublishableKey: "sb_publishable_test",
+    accountSelfServiceEndpointName: "account-self-service",
+    privateSelfServiceEnabled: true,
+    accountDeleteEnabled: false,
+  },
+  tokenLoader: async () => "synthetic-user-token",
+  timeoutMs: 5,
+  fetchImpl: async (_url, init) => {
+    accountResponseSignal = init.signal;
+    return {
+      ok: true,
+      status: 200,
+      json: () => new Promise((_resolve, reject) => {
+        const aborted = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        if (init.signal.aborted) aborted();
+        else init.signal.addEventListener("abort", aborted, { once: true });
+      }),
+    };
+  },
+});
+await assert.rejects(
+  () => hangingAccountResponse.getOwnData(),
+  (error) => error instanceof BoundaryError && error.code === ERROR_CODES.OFFLINE,
+);
+expect(
+  "Self-Service-Zeitgrenze umfasst auch einen hängenden Response-Body",
+  ACCOUNT_SELF_SERVICE_TIMEOUT_MS === 20_000 && accountResponseSignal?.aborted === true,
 );
 
 const deletionAccount = { accountId: "11111111-2222-4333-8444-555555555555", accountEmail: "test@example.invalid" };

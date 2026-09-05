@@ -12,6 +12,8 @@ const accessEnforcement = fs.readFileSync(
 const aiKostenzaun = fs.readFileSync(
   "supabase/migrations/20260808120000_ai_anbieter_request_kostenzaun.sql", "utf8",
 );
+const supabaseReadme = fs.readFileSync("supabase/README.md", "utf8");
+const migrationReadme = fs.readFileSync("supabase/migrations/LIESMICH.md", "utf8");
 let ok = 0;
 function check(name, wert) {
   if (!wert) throw new Error("Fehlgeschlagen: " + name);
@@ -33,6 +35,12 @@ function dollarBody(text, marker) {
 check("Snapshot erklärt Herkunft und Datenfreiheit",
   /Current-Schema-Snapshot/.test(sql)
   && /Keine Tabellenzeilen, Konten oder Secrets/.test(sql));
+check("Historischer Snapshot behauptet keinen aktuellen Restore-Gesamtstand",
+  /Basis bis 20260809121000/u.test(sql)
+  && /KEIN aktueller Ist-Stand/u.test(sql)
+  && /KEINE\s+--\s+alleinige Wiederherstellungsreferenz/u.test(sql)
+  && /späteren Radar-, Private-,\s+Mail-, Retry- und Entdecken-Objekte aber nicht/u.test(supabaseReadme)
+  && /kein aktueller Gesamtstand und keine alleinige Wiederherstellungsreferenz/u.test(migrationReadme));
 check("Snapshot enthält keine Tabelleninhalte",
   !/^(?:COPY|INSERT INTO|\\connect)\b/m.test(sql));
 check("Snapshot enthält keine erkennbaren Zugangsdaten",

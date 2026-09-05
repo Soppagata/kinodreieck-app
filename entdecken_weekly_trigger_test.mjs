@@ -12,6 +12,7 @@ function check(name, test) { test(); checks += 1; console.log(`✓ ${name}`); }
 const workflow = readFileSync(".github/workflows/entdecken-six-day.yml", "utf8");
 const keepalive = readFileSync(".github/workflows/keepalive.yml", "utf8");
 const hostingDoc = readFileSync("docs/ETAPPE_2_HOSTING.md", "utf8");
+const migrationReadme = readFileSync("supabase/migrations/LIESMICH.md", "utf8");
 const migration = readFileSync(
   "supabase/migrations/20260827140000_entdecken_public_six_day_pool.sql", "utf8",
 );
@@ -156,6 +157,9 @@ check("Additive Claim-Ersetzung nutzt den Wiener Kalendertag und einen Versuch",
   assert.doesNotMatch(viennaDayClaimCode, /create table|alter table|drop table|cron\.|http_post|net\.http/iu);
   assert.match(claim, /for update/iu);
   assert.match(claim, /Europe\/Vienna/u);
+  assert.match(claim, /v_last_attempt_day := coalesce\([\s\S]*at time zone 'Europe\/Vienna'/u);
+  assert.match(claim, /v_due := v_last_attempt_day is null or v_last_attempt_day < v_today/u);
+  assert.match(claim, /extract\(hour from v_utc\)::integer <> 2/u);
   assert.match(claim, /::date|date_trunc\('day'/u);
   assert.doesNotMatch(claim, /interval '24 hours'|interval '144 hours'|v_anchor \+/u);
   assert.match(claim, /p_source = 'owner' and not coalesce\(v_owner_override,false\)/u);
@@ -165,8 +169,20 @@ check("Additive Claim-Ersetzung nutzt den Wiener Kalendertag und einen Versuch",
   assert.match(claim, /last_public_attempt_at/u);
   assert.match(claim, /not provider_enabled and not commercial_enabled/u);
   assert.doesNotMatch(claim, /cooldown|failed_retry|abandoned_retry|attempt_count \+ 1/u);
+  assert.match(viennaDayClaimMigration, /revoke all on function[\s\S]*from public, anon, authenticated/u);
   assert.match(viennaDayClaimMigration, /grant execute on function public\.kd_entdecken_weekly_refresh_claim\(text\)[\s\S]*to service_role/u);
   assert.doesNotMatch(viennaDayClaimMigration, /radar_scheduler_interval_hours|kd_radar_|scheduled-144h-v1/u);
+  assert.equal((migrationReadme.match(/20260905180000_entdecken_vienna_day_claim\.sql/gu) || []).length, 1);
+  assert.match(migrationReadme, /Self-contained Ersatz des Format-6-Claims/u);
+  assert.match(migrationReadme, /Einzige offene Release-Migration dieses Audits/u);
+
+  const previousRun = new Date("2026-09-04T02:00:10.000Z");
+  const nextCron = new Date("2026-09-05T02:00:01.000Z");
+  const viennaDay = (instant) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(instant);
+  assert.equal(nextCron >= new Date(previousRun.getTime() + 86_400_000), false);
+  assert.notEqual(viennaDay(previousRun), viennaDay(nextCron));
 });
 
 check("Format 5, owner_private Quelle und Cache sind DB-seitig fail-closed", () => {
@@ -203,8 +219,11 @@ check("Historische Format-6-Migration bleibt als additiver 50er-Marktmix belegt"
   assert.doesNotMatch(mixedPoolMigration, /cron\.schedule|radar-websearch-task|ANTHROPIC_API_KEY/u);
 });
 
-check("Verbotene 25er-Forward-Migration bleibt aus dem Kandidaten entfernt", () => {
+check("Verbotene und nie installierte Forward-Migrationen bleiben aus dem Kandidaten entfernt", () => {
   assert.equal(existsSync(forbiddenDiversePoolMigration), false);
+  assert.equal(existsSync("supabase/migrations/20260902130000_private_account_size_report.sql"), false);
+  assert.equal(existsSync("supabase/migrations/20260904140000_entdecken_daily_refresh_interval.sql"), false);
+  assert.doesNotMatch(migrationReadme, /20260902130000|20260904140000/u);
 });
 
 check("Fehlerpfad behaelt Payload und verbrauchten Versuch ohne Retry", () => {

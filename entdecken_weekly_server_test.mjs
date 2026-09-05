@@ -30,7 +30,10 @@ import {
 } from "./supabase/functions/_shared/providerReceipt.js";
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import { createEntdeckenRecommendations } from "./src/lib/entdeckenUi.js";
-import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
+import {
+  createEntdeckenDailyFeedService,
+  ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS,
+} from "./src/services/entdeckenDailyFeed.js";
 import { ENTDECKEN_MARKET_POOL_50 } from "./src/data/entdeckenMarketPool50.js";
 
 let checks = 0;
@@ -946,6 +949,48 @@ await check("Aktives identisches Konto liest denselben Feed mit Bearer und apike
   assert.equal(calls[0].options.headers.Authorization, "Bearer account-token");
   assert.equal(calls[0].options.headers.apikey, "public-key");
   assert.doesNotMatch(JSON.stringify(calls[0]), /profile|seen|gesehen|dienst|radar/i);
+});
+
+await check("Browserdienst-Zeitgrenze umfasst auch einen hängenden Response-Body", async () => {
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
+  let responseSignal;
+  const service = createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://project.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => "account-token",
+    fallbackFeed: null,
+    timeoutMs: 5,
+    fetchImpl: async (_url, options) => {
+      responseSignal = options.signal;
+      return {
+        ok: true,
+        status: 200,
+        json: () => new Promise((_resolve, reject) => {
+          const aborted = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+          if (options.signal.aborted) aborted();
+          else options.signal.addEventListener("abort", aborted, { once: true });
+        }),
+      };
+    },
+  });
+  assert.deepEqual(await service.load(), {
+    status: "unavailable",
+    feed: null,
+    responseMode: "structured",
+    displayText: null,
+    warnings: [],
+  });
+  assert.equal(responseSignal?.aborted, true);
+  assert.equal(ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS, 20_000);
 });
 
 await check("Kontowechsel waehrend Token oder Request bleibt fail-closed", async () => {

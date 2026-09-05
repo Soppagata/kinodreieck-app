@@ -151,6 +151,24 @@ const timeout = serviceWith((_url, options) => new Promise((_resolve, reject) =>
 assert.equal((await timeout.submitFeedback("Text")).status, PRIVATE_MAIL_CLIENT_STATUS.UNKNOWN);
 check("Timeout löst keinen Retry aus und bleibt ehrlich unknown", () => {});
 
+let responseBodySignal;
+const responseBodyTimeout = serviceWith(async (_url, options) => {
+  responseBodySignal = options.signal;
+  return {
+    ok: true,
+    status: 200,
+    json: () => new Promise((_resolve, reject) => {
+      const aborted = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      if (options.signal.aborted) aborted();
+      else options.signal.addEventListener("abort", aborted, { once: true });
+    }),
+  };
+}, { timeoutMs: 2 });
+assert.equal((await responseBodyTimeout.submitFeedback("Text")).status, PRIVATE_MAIL_CLIENT_STATUS.UNKNOWN);
+check("Timeout bleibt bis zum vollständigen Response-Body aktiv", () => {
+  assert.equal(responseBodySignal?.aborted, true);
+});
+
 const dom = new JSDOM("<!doctype html><div id='root'></div>", { url: "https://local.invalid/" });
 for (const key of ["window", "document", "navigator", "HTMLElement", "Event", "MouseEvent"]) {
   Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true });
