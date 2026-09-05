@@ -211,12 +211,22 @@ const klickeAlle = async (text) => {
 check("Karten öffnen außerhalb des Modus weiterhin Details", karte("a")?.getAttribute("role") === "button");
 const appQuelltext = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
 const mediathekQuelltext = fs.readFileSync(path.join(WURZEL, "src/tabs/MediathekTab.jsx"), "utf8");
-const batchNaht = appQuelltext.slice(
-  appQuelltext.indexOf("const planeFilmBatchLoeschung"),
-  appQuelltext.indexOf("const uebernehmeQuellenKlaerung"),
+const quelltextZwischen = (quelle, startAnker, endAnker) => {
+  const start = quelle.indexOf(startAnker);
+  if (start < 0) return null;
+  const ende = quelle.indexOf(endAnker, start + startAnker.length);
+  return ende < 0 ? null : quelle.slice(start, ende);
+};
+const batchNaht = quelltextZwischen(
+  appQuelltext,
+  "const planeFilmBatchLoeschung",
+  "const addFilm = useCallback",
 );
+check("App-Batchnaht schlägt bei fehlendem Endanker geschlossen fehl",
+  quelltextZwischen("start ohne Ende", "start", "ende") === null);
 check("App-Batchnaht nutzt exakt Preview und gebundene Ausführungs-API mit Lade-Gates",
-  batchNaht.includes("personalDataTransaktionen.planeFilmLoeschungen(ids)")
+  batchNaht !== null
+  && batchNaht.includes("personalDataTransaktionen.planeFilmLoeschungen(ids)")
   && batchNaht.includes("personalDataTransaktionen.loescheFilme(ids, { plan")
   && (batchNaht.match(/!mustwatchGeladen \|\| !artikelGeladen/g) || []).length === 2
   && !batchNaht.includes("window.confirm") && !batchNaht.includes("loescheFilm("));
