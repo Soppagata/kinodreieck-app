@@ -64,6 +64,7 @@ filtern; der Marker allein ist keine technische Ausschlussautomatik.
 
 | Datei | Inhalt | Status |
 |---|---|---|
+| `NAECHSTER_MASTERCHAT_PRIVATRELEASE_ETAPPENPLAN.md` | eingefrorener, lückenlos zu bestätigender Etappenplan für den privaten Production-Stand; ausdrücklich erst nach Abschluss des aktuell laufenden Radar-/Entdecken-Haupttasks | nur Planung; der aktuelle Hauptchat ist nicht zur Umsetzung beauftragt |
 | `ENTDECKEN_RADAR_EMPFEHLUNGEN_PLAN.md` | verbindlicher Produktvertrag für Entdecken, getrennte globale Suchaktionen, Statusgrenzen, Personen im Radar, kuratierte Radar-Freigaben, deterministische Empfehlungen und getrennte Österreich-Charts | ausformuliert; echte Chart-Ingestion ist bis zu Quellenrechten blockiert |
 | `RADAR_BEOBACHTUNGEN_PLAN.md` | technischer Daten-, Evidenz-, Kosten-, Datenschutz- und Rolloutplan für den global deduplizierten aktiven Webradar | ausformuliert; sichtbare UI und Begriffswahl werden vom Entdecken-Plan überstimmt |
 | `AUFTRAG_ENTDECKEN_RADAR.md` | Standalone-Bauauftrag mit Phase-0-, Remote-, Rechte-, Provider-, Kosten- und Staging-STOPs | Phasen 1–3 lokal umgesetzt; Phasen 4–6 bleiben an ihren Remote-STOPs blockiert |

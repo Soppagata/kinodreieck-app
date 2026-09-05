@@ -1030,7 +1030,12 @@ test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussi
   await expect(verwalten).toBeFocused();
 
   await page.getByRole("tab", { name: "Radar" }).click();
-  await page.getByLabel("Film oder Serie").selectOption({ index: 1 });
+  const radarSearch = page.getByLabel("Film oder Serie");
+  await expect(radarSearch).toHaveAttribute("type", "search");
+  await radarSearch.fill("Passender Film");
+  const radarResult = page.getByRole("button", { name: /Passender Film.*Mediathek/ });
+  await expect(radarResult).toBeVisible();
+  await radarResult.click();
   await page.getByRole("button", { name: "Werk ins Radar", exact: true }).click();
   const preview = page.getByRole("dialog", { name: "Ins Radar" });
   await expect(preview).toContainText("Vorschau · noch nicht gespeichert");
@@ -1703,6 +1708,39 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     const rect = element.getBoundingClientRect();
     return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
   });
+
+  /* iOS kann die VisualViewport-Geometrie erst nach dem Focus-Frame liefern,
+     ohne dass WebKit dazu verlässlich sofort ein resize-Event zustellt. Ein
+     Scrollen darf nicht der erste Auslöser sein, der die Suchleiste wieder
+     über die Tastatur holt. */
+  await eingabe.focus();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.evaluate(() => {
+    Object.assign(window.visualViewport, {
+      height: 500, offsetTop: 60, pageTop: 60,
+    });
+  });
+  await page.waitForTimeout(160);
+  expect(await suche.evaluate((element) => element.classList.contains("tastatur-offen"))).toBe(true);
+  expect(await anker()).toBe(-8);
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
+  }));
+
+  /* Resize und Fokuswechsel zum Suchbutton dürfen im selben Frame landen,
+     ohne die gerade startende Keyboard-Phase zu verlieren. */
+  await eingabe.fill("Fokus und Text bleiben erhalten");
+  await page.evaluate(() => {
+    window.__kdSetVisualViewport({ height: 500, offsetTop: 60 });
+    document.querySelector(".kd-globalsuche-los")?.focus();
+  });
+  await expect(suchen).toBeFocused();
+  await expect(eingabe).toHaveValue("Fokus und Text bleiben erhalten");
+  await expect(suche).toHaveClass(/tastatur-offen/);
+  await expect.poll(anker).toBe(-8);
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
+  }));
 
   await eingabe.focus();
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));

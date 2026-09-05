@@ -23,6 +23,7 @@ const SAFE_AREA_VARIABLEN = Object.freeze({
   bottom: "--kd-suche-safe-area-bottom",
   left: "--kd-suche-safe-area-left",
 });
+const VIEWPORT_STABILISIERUNGS_FRAMES = 45;
 
 const liesSafeAreaInsets = (element) => {
   const style = getComputedStyle(element);
@@ -96,6 +97,8 @@ export function GlobalSearchBar({
     const eingabe = eingabeRef.current;
     if (!viewport || !form || !eingabe) return undefined;
     let frame = 0;
+    let stabilisierungFrame = 0;
+    let stabilisierungGeneration = 0;
     let basis = {
       height: Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height),
       width: viewport.width,
@@ -108,11 +111,12 @@ export function GlobalSearchBar({
         const layoutHeight = Math.max(window.innerHeight, document.documentElement.clientHeight);
         const editierbarerFokus = document.activeElement === eingabe
           && !eingabe.disabled && !eingabe.readOnly;
+        const suchfokus = editierbarerFokus || form.contains(document.activeElement);
         const neutraleSkalierung = istNeutraleViewportSkalierung(viewport.scale);
         let breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
         const volleGeometrie = Math.abs(layoutHeight - viewport.height) <= MIN_TASTATUR_HOEHENVERLUST;
 
-        if (neutraleSkalierung && (!editierbarerFokus || breiteGeaendert || volleGeometrie)) {
+        if (neutraleSkalierung && (!suchfokus || breiteGeaendert || volleGeometrie)) {
           basis = {
             height: Math.max(layoutHeight, viewport.height),
             width: viewport.width,
@@ -125,7 +129,7 @@ export function GlobalSearchBar({
              die OS-Tastatur nicht atomar. Solange der Visual Viewport noch
              verkleinert ist, bleibt deshalb eine einmal erkannte Phase aktiv.
              Erst die echte Viewport-Erholung (oder Rotation/Zoom) räumt sie. */
-          editierbarerFokus: editierbarerFokus || tastaturPhaseAktiv,
+          editierbarerFokus: suchfokus || tastaturPhaseAktiv,
           scale: viewport.scale,
           height: viewport.height,
           width: viewport.width,
@@ -168,22 +172,39 @@ export function GlobalSearchBar({
         form.style.setProperty("--kd-suche-ergebnis-maxhoehe", `${geometrie.ergebnisMaxHoehe}px`);
       });
     };
+    const stabilisiereFokuswechsel = () => {
+      const generation = ++stabilisierungGeneration;
+      cancelAnimationFrame(stabilisierungFrame);
+      let verbleibend = VIEWPORT_STABILISIERUNGS_FRAMES;
+      const sample = () => {
+        if (generation !== stabilisierungGeneration) return;
+        aktualisiere();
+        verbleibend -= 1;
+        if (verbleibend > 0) stabilisierungFrame = requestAnimationFrame(sample);
+      };
+      stabilisierungFrame = requestAnimationFrame(sample);
+    };
     viewportUpdateRef.current = aktualisiere;
     viewport.addEventListener("resize", aktualisiere);
     viewport.addEventListener("scroll", aktualisiere);
     window.addEventListener("resize", aktualisiere);
     window.addEventListener("scroll", aktualisiere, { passive: true });
-    eingabe.addEventListener("focus", aktualisiere);
-    eingabe.addEventListener("blur", aktualisiere);
+    /* WebKit liefert die Keyboard-Geometrie teils erst nach dem Focus-Frame,
+       ohne sofort ein VisualViewport-Resize auszulösen. Eine kurze, begrenzte
+       Samplingphase schließt dieses Loch; dauerhaftes Polling gibt es nicht. */
+    eingabe.addEventListener("focus", stabilisiereFokuswechsel);
+    eingabe.addEventListener("blur", stabilisiereFokuswechsel);
     aktualisiere();
     return () => {
       cancelAnimationFrame(frame);
+      stabilisierungGeneration += 1;
+      cancelAnimationFrame(stabilisierungFrame);
       viewport.removeEventListener("resize", aktualisiere);
       viewport.removeEventListener("scroll", aktualisiere);
       window.removeEventListener("resize", aktualisiere);
       window.removeEventListener("scroll", aktualisiere);
-      eingabe.removeEventListener("focus", aktualisiere);
-      eingabe.removeEventListener("blur", aktualisiere);
+      eingabe.removeEventListener("focus", stabilisiereFokuswechsel);
+      eingabe.removeEventListener("blur", stabilisiereFokuswechsel);
       tastaturPhaseAktiv = false;
       raeume();
       if (viewportUpdateRef.current === aktualisiere) viewportUpdateRef.current = () => {};

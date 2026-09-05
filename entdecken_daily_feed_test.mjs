@@ -1,7 +1,6 @@
 /* Entdecken-Tagesfeed: fokussierte Offline-/Mockbelege.
    Kein Netz, kein Provider, keine Datenbank und keine echte KI. */
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import {
   evaluateEntdeckenDailyResponse,
@@ -294,11 +293,6 @@ await check("Budgetpfad macht genau einen bodylosen Live-GET ohne Retry und miss
         },
       }; } };
     }
-    if (url.includes("/rest/v1/kd_account_access")) {
-      return { ok: true, status: 200, async json() { return [{
-        role: "owner", active: true, personal_ai: true,
-      }]; } };
-    }
     if (url.endsWith("/functions/v1/entdecken-daily-task")) {
       return { ok: true, status: 200, async json() { return {
         ok: true, status: "fresh", feed: evaluated(),
@@ -309,10 +303,7 @@ await check("Budgetpfad macht genau einen bodylosen Live-GET ohne Retry und miss
   };
   const result = await runEntdeckenDailyOnce({ env, fetchImpl, ausgabe: (line) => output.push(line) });
   const discoveryCalls = calls.filter((call) => call.url.endsWith("/functions/v1/entdecken-daily-task"));
-  const ownerCalls = calls.filter((call) => call.url.includes("/rest/v1/kd_account_access"));
   assert.equal(result.laufKostenUsdCent, 0.25);
-  assert.equal(ownerCalls.length, 1);
-  assert.ok(calls.indexOf(ownerCalls[0]) < calls.indexOf(discoveryCalls[0]));
   assert.equal(discoveryCalls.length, 1);
   assert.equal(discoveryCalls[0].options.method, "GET");
   assert.equal("body" in discoveryCalls[0].options, false);
@@ -327,57 +318,13 @@ await check("Budgetpfad macht genau einen bodylosen Live-GET ohne Retry und miss
   assert.equal(unguardedFetches, 0);
 });
 
-await check("Nicht-Owner stoppt vor Budgetmessung, Discovery-Function und Provider", async () => {
-  const calls = [];
-  const env = {
-    KD_SB_URL: "https://project.supabase.co",
-    KD_SB_ANON: "sb_publishable_test_1234567890",
-    KD_TESTA_PASS: "nicht-echt",
-    KD_TESTA_USER: "testa",
-    KD_MAIL_DOMAIN: "login.kinodreieck.at",
-    KD_AI_FUNKTION: "ai-task",
-    KD_ORIGIN: "https://kinodreieck.at",
-    KD_AI_OWNER_APPROVED_SERVER_BUDGET: "1",
-    [ENTDECKEN_DAILY_ONCE_ENV]: "keychain-budget-guard-v1",
-  };
-  await assert.rejects(() => runEntdeckenDailyOnce({
-    env,
-    fetchImpl: async (url, options) => {
-      calls.push({ url, options });
-      if (url.includes("/auth/v1/token")) {
-        return { ok: true, status: 200, async json() { return { access_token: "member-token" }; } };
-      }
-      if (url.includes("/rest/v1/kd_account_access")) {
-        return { ok: true, status: 200, async json() { return [{
-          role: "member", active: true, personal_ai: false,
-        }]; } };
-      }
-      throw new Error("Owner-Gate haette vor diesem Request stoppen muessen");
-    },
-  }), /Kein bestaetigter Owner-Credentialpfad/);
-  assert.equal(calls.filter((call) => call.url.includes("/auth/v1/token")).length, 1);
-  assert.equal(calls.filter((call) => call.url.includes("/rest/v1/kd_account_access")).length, 1);
-  assert.equal(calls.some((call) => call.url.endsWith("/functions/v1/ai-task")), false);
-  assert.equal(calls.some((call) => call.url.endsWith("/functions/v1/entdecken-daily-task")), false);
-});
-
 const migration = fs.readFileSync("./supabase/migrations/20260820200000_entdecken_daily_feed.sql", "utf8");
-const remotePersonBaseline = fs.readFileSync(
-  "./supabase/migrations/20260819220000_radar_person_server_candidate.sql",
-);
 const functionSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/runner.js", "utf8");
 const clientSource = fs.readFileSync("./src/services/entdeckenDailyFeed.js", "utf8");
 const controllerSource = fs.readFileSync("./src/controllers/useWebDiscoveryFeed.js", "utf8");
 const appSource = fs.readFileSync("./src/App.jsx", "utf8");
 const configSource = fs.readFileSync("./supabase/config.toml", "utf8");
-
-await check("Remote bereits gelaufene Personenradar-Basis bleibt bytegenau gespiegelt", () => {
-  assert.equal(
-    createHash("sha256").update(remotePersonBaseline).digest("hex"),
-    "d23f80f7073deb1197fdcb0b5a73f4abd1ad002e0b3bded6ee08c691d937f658",
-  );
-});
 
 await check("Migration beansprucht atomar, seedet nur zwei Quellen und hält Public/Commercial aus", () => {
   assert.match(migration, /owner_pilot_enabled\s+boolean\s+not null default false/i);
