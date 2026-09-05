@@ -564,10 +564,10 @@ try {
     assert.ok([...beforeFurther.querySelectorAll(".kd-entdecken-hub-karte")]
       .every((card) => !card.querySelector("ul") && /Profil:/.test(card.textContent)));
   });
-  check("Diese Woche beliebt zeigt ausschließlich belegte Webtipps mit Quellenlink", () => {
+  check("Beliebte Titel zeigt ausschließlich belegte Webtipps mit Quellenlink", () => {
     const section = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
     const cards = [...(section?.querySelectorAll(".kd-entdecken-neutral") || [])];
-    assert.match(section?.textContent || "", /Diese Woche beliebt/);
+    assert.match(section?.textContent || "", /Beliebte Titel/);
     assert.equal(cards.length, 1);
     assert.ok(cards.every((card) => {
       const link = card.querySelector('a[href^="https://"]');
@@ -652,12 +652,26 @@ try {
   await act(async () => { await tick(); await tick(); });
   const versionedSection = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
   const expandVersioned = button(versionedSection, "Weitere 44 Titel anzeigen");
-  check("50er-UI startet unnummeriert mit sechs Karten, ehrlichem Stand und 44er-Ausklapper", () => {
+  check("Format 7 benennt den datierten Fünf-Quellen-Snapshot ohne Aktualitätsversprechen", () => {
     assert.equal(versionedSection.querySelectorAll(".kd-entdecken-neutral").length, 6);
     assert.equal(versionedSection.querySelector("ol"), null);
     assert.equal(expandVersioned?.getAttribute("aria-expanded"), "false");
-    assert.match(versionedSection.textContent, /Prime-Video|Disney\+|Apple-TV\+/);
-    assert.match(versionedSection.textContent, /Stand/);
+    assert.match(versionedSection.textContent, /Österreichische Quellenliste/u);
+    assert.match(versionedSection.textContent, /Beliebte Titel/u);
+    assert.match(versionedSection.textContent, /Datierter Österreich-Snapshot aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney\+ und Apple TV\+/u);
+    assert.match(versionedSection.textContent, /Popularität ist kein persönlicher Passungsgrund/u);
+    assert.match(versionedSection.textContent, /Stand 29\.08\.2026/u);
+    assert.doesNotMatch(versionedSection.textContent, /Aktuelle österreichische Liste|Diese Woche beliebt|Aktuelle Kino-/u);
+  });
+  await versionedUi.render({
+    ...versionedProps,
+    webDiscoveryStatus: { status: "stale", responseMode: "structured" },
+  });
+  check("Ein abgelaufener Format-7-Stand zeigt einen festen verständlichen Statushinweis", () => {
+    const status = versionedUi.container.querySelector('[role="status"]');
+    assert.equal(status?.textContent,
+      "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar.");
+    assert.doesNotMatch(versionedUi.container.textContent, /Aktuelle österreichische Liste|Diese Woche beliebt|Aktuelle Kino-/u);
   });
   const ersterPinKnopf = versionedSection.querySelector('button[aria-label$="am Pinboard anpinnen"]');
   await act(async () => { ersterPinKnopf.click(); await tick(); });
@@ -705,7 +719,7 @@ try {
   await act(async () => { await tick(); await tick(); });
   const mixedPopularSection = mixedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
   const expandPopular = button(mixedPopularSection, "Weitere 44 Titel anzeigen");
-  check("Aktueller Marktmix startet kompakt und verlinkt jede sichtbare Titelüberschrift neutral", () => {
+  check("Format 6 benennt ausschließlich OeFI und Joyn und verlinkt jede sichtbare Titelüberschrift neutral", () => {
     const cards = [...mixedPopularSection.querySelectorAll(".kd-entdecken-neutral")];
     const links = cards.map((card) => card.querySelector("h3 > a.kd-entdecken-titellink"));
     assert.equal(cards.length, 6);
@@ -714,6 +728,9 @@ try {
       && link.getAttribute("rel") === "noopener noreferrer"
       && /Referenz bei/.test(link.getAttribute("aria-label") || "")));
     assert.equal(expandPopular?.getAttribute("aria-expanded"), "false");
+    assert.match(mixedPopularSection.textContent, /Österreichische Kinocharts des Österreichischen Filminstituts sowie Joyn-Filme und -Serien/u);
+    assert.match(mixedPopularSection.textContent, /Popularität ist kein persönlicher Passungsgrund/u);
+    assert.doesNotMatch(mixedPopularSection.textContent, /Netflix|Prime Video|Disney\+|Apple TV\+/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /Quelle ansehen|Bei Joyn ansehen/);
   });
   await act(async () => { expandPopular.click(); await tick(); });

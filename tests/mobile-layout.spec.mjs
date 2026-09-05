@@ -665,7 +665,7 @@ test("Entdecken zeigt den eingebetteten providerfreien Pool ohne Fremdnetz kompa
   await expect(persoenlich).not.toContainText("Kataloggröße");
   await expect(persoenlich).not.toContainText("Aktuelle Treffermenge");
   const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
-  await expect(weitere.getByRole("heading", { name: "Diese Woche beliebt" })).toBeVisible();
+  await expect(weitere.getByRole("heading", { name: "Beliebte Titel" })).toBeVisible();
   await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
   const mehrTitel = weitere.getByRole("button", { name: "Weitere 44 Titel anzeigen" });
   await expect(mehrTitel).toBeVisible();

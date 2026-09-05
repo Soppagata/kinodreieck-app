@@ -64,7 +64,7 @@ test("Haupt-Entdecken bleibt leicht; Streaming Alles und beide Jahrzehntregler b
 
   await navigateMobile(page, "Entdecken");
   await expect(page.getByTestId("entdecken-tab")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Diese Woche beliebt" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Beliebte Titel" })).toBeVisible();
   await expect(page.locator(".kd-entdecken-neutral").first()).toBeVisible();
   expect(fullCatalogRequests(traffic)).toHaveLength(0);
 

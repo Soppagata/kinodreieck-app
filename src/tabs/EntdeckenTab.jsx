@@ -221,11 +221,13 @@ function RecommendationsView({
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format);
-  const feedNotice = webDiscoveryStatus?.responseMode === "partial"
-    ? "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel."
-    : webDiscoveryStatus?.responseMode === "degraded"
-      ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar."
-      : null;
+  const feedNotice = webDiscoveryStatus?.status === "stale"
+    ? "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar."
+    : webDiscoveryStatus?.responseMode === "partial"
+      ? "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel."
+      : webDiscoveryStatus?.responseMode === "degraded"
+        ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar."
+        : null;
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
   const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn
@@ -263,10 +265,12 @@ function RecommendationsView({
     ))}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
-        <div><span>Aktuelle österreichische Liste</span><h2 id="kd-entdecken-weitere">Diese Woche beliebt</h2></div>
-        <p>{[6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
-          ? "Aktuelle Kino-, Netflix-, Prime-Video-, Disney+- und Apple-TV+-Titel für Österreich. Popularität ist kein persönlicher Passungsgrund."
-          : "Aktuelle belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
+        <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
+        <p>{webDiscoveryFeed?.format === 6
+          ? "Österreichische Kinocharts des Österreichischen Filminstituts sowie Joyn-Filme und -Serien. Popularität ist kein persönlicher Passungsgrund."
+          : webDiscoveryFeed?.format === VERSIONED_DISCOVERY_FEED_FORMAT
+            ? "Datierter Österreich-Snapshot aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney+ und Apple TV+. Popularität ist kein persönlicher Passungsgrund."
+            : "Belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
           {weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
       {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-beliebtliste">{visiblePopular.map((entry) => (

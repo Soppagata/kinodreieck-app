@@ -138,7 +138,7 @@ test("C2: Entdecken bleibt leicht; beide Streaming-Regler erzwingen Jahr aufstei
   const coldStarted = await page.evaluate(() => performance.now());
   await navigateMobile(page, "Entdecken");
   await expect(page.getByTestId("entdecken-tab")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Diese Woche beliebt" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Beliebte Titel" })).toBeVisible();
   await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(6);
   const coldReady = await page.evaluate(() => performance.now());
   const lightRequests = [...requests];
