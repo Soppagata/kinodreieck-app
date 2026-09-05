@@ -55,12 +55,11 @@ function hangingBodyFetch(capture) {
 }
 
 await check("täglicher Entdecken-Forward-Fix folgt dem Wiener Kalendertag", () => {
-  const previousPath = "supabase/migrations/20260904140000_entdecken_daily_refresh_interval.sql";
   const fixPath = "supabase/migrations/20260905180000_entdecken_vienna_day_claim.sql";
-  const previous = fs.readFileSync(previousPath, "utf8");
   const fix = fs.readFileSync(fixPath, "utf8");
-  assert.ok(previousPath < fixPath);
-  assert.match(previous, /v_anchor \+ interval '24 hours'/u);
+  assert.equal(fs.existsSync("supabase/migrations/20260902130000_private_account_size_report.sql"), false);
+  assert.equal(fs.existsSync("supabase/migrations/20260904140000_entdecken_daily_refresh_interval.sql"), false);
+  assert.equal(fs.existsSync(fixPath), true);
   assert.match(fix, /v_last_attempt_day := coalesce\([\s\S]*at time zone 'Europe\/Vienna'/u);
   assert.match(fix, /v_due := v_last_attempt_day is null or v_last_attempt_day < v_today/u);
   assert.doesNotMatch(fix, /v_anchor \+ interval '24 hours'/u);
@@ -71,6 +70,12 @@ await check("täglicher Entdecken-Forward-Fix folgt dem Wiener Kalendertag", () 
   assert.match(fix, /not provider_enabled and not commercial_enabled/u);
   assert.match(fix, /revoke all on function[\s\S]*from public, anon, authenticated/u);
   assert.match(fix, /grant execute on function[\s\S]*to service_role/u);
+
+  const migrationReadme = fs.readFileSync("supabase/migrations/LIESMICH.md", "utf8");
+  assert.doesNotMatch(migrationReadme, /20260902130000|20260904140000/u);
+  assert.equal((migrationReadme.match(/20260905180000_entdecken_vienna_day_claim\.sql/gu) || []).length, 1);
+  assert.match(migrationReadme, /Self-contained Ersatz des Format-6-Claims/u);
+  assert.match(migrationReadme, /Einzige offene Release-Migration dieses Audits/u);
 
   const previousRun = new Date("2026-09-04T02:00:10.000Z");
   const nextCron = new Date("2026-09-05T02:00:01.000Z");
