@@ -399,10 +399,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-verwalten-liste small { margin-top:2px; color:var(--rauch,#948fa0); font:9px 'Space Mono',monospace; }.kd-entdecken-verwalten-liste li>div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
 .kd-entdecken-verwalten-liste button { min-height:38px; padding:6px 8px; font-size:11px; }
 .kd-entdecken-check,.kd-entdecken-share { display:flex; align-items:flex-start; gap:10px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.4; }
-.kd-entdecken-check input,.kd-entdecken-share input { width:20px; height:20px; flex:0 0 auto; margin:1px 0 0; }.kd-entdecken-check strong,.kd-entdecken-check small,.kd-entdecken-share strong,.kd-entdecken-share small { display:block; }
+.kd-entdecken-check input,.kd-entdecken-share input,
+.kd-einstellcheck input,
+.kd-selection-control-input { width:18px; height:18px; flex:0 0 18px; min-width:18px; min-height:18px; margin:1px 0 0; accent-color:var(--kd-wolfram,#e3a63b); }
+.kd-entdecken-check strong,.kd-entdecken-check small,.kd-entdecken-share strong,.kd-entdecken-share small { display:block; }
 .kd-entdecken-check small,.kd-entdecken-share small { margin-top:3px; color:var(--rauch,#948fa0); font-size:11px; }.kd-entdecken-share.gesperrt { opacity:.62; }
 .kd-einstellcheck { display:flex; align-items:flex-start; gap:10px; padding-top:2px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.4; cursor:pointer; }
-.kd-einstellcheck input { width:20px; height:20px; flex:0 0 auto; margin:1px 0 0; }.kd-einstellcheck strong,.kd-einstellcheck small { display:block; }
+.kd-einstellcheck strong,.kd-einstellcheck small { display:block; }
 .kd-einstellcheck small { margin-top:2px; color:var(--rauch,#948fa0); font-size:11px; }
 .kd-entdecken-preview-ziel { display:flex; flex-direction:column; gap:3px; padding:14px; border-left:3px solid var(--wolfram,#e3a63b); border-radius:6px; background:var(--saal,#17151a); }
 .kd-entdecken-preview-ziel strong { font:700 24px 'Barlow Condensed',sans-serif; text-transform:uppercase; }.kd-entdecken-preview-ziel span { color:var(--rauch,#948fa0); font-size:12px; }
@@ -614,7 +617,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-auswahl-karte { min-height:44px; }
 .kd-auswahl-karte:focus-visible { outline:3px solid var(--kd-wolfram,#e3a63b); outline-offset:3px; }
 .kd-selection-control-hitbox { display:inline-flex; align-items:center; gap:7px; box-sizing:border-box; min-height:44px; padding:7px 2px; cursor:pointer; white-space:nowrap; }
-.kd-selection-control-input { flex:0 0 18px; width:18px; height:18px; min-height:18px; margin:0; accent-color:var(--kd-wolfram,#e3a63b); }
+.kd-selection-control-input { margin:0; }
 .kd-selection-control-text { display:grid; min-width:0; }
 .kd-selection-control-label { font:600 12px/1.2 'Space Mono',monospace; }
 .kd-selection-control-description { color:var(--kd-rauch,#948fa0); font:10px/1.35 'Space Mono',monospace; white-space:normal; }
@@ -1523,3 +1526,5 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    bedienbar und erreicht auf Touchgeräten mindestens 44 × 44 px. */
 label.kd-touch-checkbox { min-width:44px; min-height:44px; box-sizing:border-box; touch-action:manipulation; cursor:pointer; }
 label.kd-touch-checkbox:has(input:disabled) { cursor:not-allowed; }
+
+input[type="checkbox"] { width:18px; height:18px; min-width:18px; min-height:18px; flex:0 0 18px; margin:1px 0 0; accent-color:var(--kd-wolfram,#e3a63b); }

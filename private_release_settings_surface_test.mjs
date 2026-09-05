@@ -41,6 +41,8 @@ check("Hilfetexte verweisen nicht auf entfernte Settings-Einstiege",
     && hilfeQuelle.includes("Ein Rohdatenimport ist in diesem Privatrelease nicht freigeschaltet"));
 check("Kino verweist nicht auf den entfernten technischen Statusbereich",
   !kinoQuelle.includes("Settings → Kinoprogramm-Status"));
+check("Katalogaudit ist außerhalb von Production sichtbar und in Production aus der DOM ausgeschlossen",
+  datenQuelle.includes('const showKatalogbestand = runtimeConfig.appEnvironment !== "production";'));
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "kd-private-release-settings-"));
 process.on("exit", () => {
@@ -174,13 +176,22 @@ const button = (label) => [...rootElement.querySelectorAll("button")]
   .find((node) => (node.textContent || "").trim() === label);
 
 for (const label of [
-  "Darstellung & Verhalten", "KI-Funktionen", "Geschmacksprofil",
-  "Konto & Geräte-Sync", "Datenrechte & Konto", "Sicherheitskopie dieses Geräts",
-  "Streaming-Quellen", "Streaming-Katalogbestand", "KI-Vokabular", "Über & Rechtliches",
+  "Darstellung & Verhalten", "Streaming-Quellen", "Streaming-Katalogbestand",
+  "Personalisierung & KI", "Konto, Daten & Sicherung",
+  "Über Kinodreieck, Anleitung & Rechtliches",
 ]) {
   check(`Release-Kernfläche bleibt sichtbar: ${label}`, hatSummary(label));
 }
-check("Datierter Katalogbestand zeigt beide gespeicherten Snapshotstände knapp",
+const einstellLabels = summaries();
+check("Streaming-Bereiche kommen direkt nach Darstellung in der Sichtreihenfolge",
+  einstellLabels.indexOf("Darstellung & Verhalten") >= 0
+    && einstellLabels.indexOf("Streaming-Quellen") >= 0
+    && einstellLabels.indexOf("Streaming-Katalogbestand") >= 0
+    && einstellLabels.indexOf("Personalisierung & KI") >= 0
+    && einstellLabels.indexOf("Darstellung & Verhalten") < einstellLabels.indexOf("Streaming-Quellen")
+    && einstellLabels.indexOf("Streaming-Quellen") < einstellLabels.indexOf("Streaming-Katalogbestand")
+    && einstellLabels.indexOf("Streaming-Katalogbestand") < einstellLabels.indexOf("Personalisierung & KI"));
+check("Datierter Katalogbestand zeigt lokal und auf Staging beide gespeicherten Snapshotstände knapp",
   text().includes("Gespeicherte Katalogstände vom 22.07.2026 und 04.09.2026")
     && text().includes("Streaming-Titel im gespeicherten Bestand")
     && !text().includes("Snapshotdifferenz")

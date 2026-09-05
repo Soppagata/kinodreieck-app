@@ -21,6 +21,7 @@ import { ERROR_CODES } from "../services/errors.js";
 import { errorText } from "../services/errors.js";
 import { aiService } from "../services/ai.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
+import { runtimeConfig } from "../config/runtime.js";
 
 /* UI-onlyer Privatrelease-Schalter: Altwerkzeuge und ihre Handler bleiben
    unveraendert erhalten, werden aber nicht in die Release-DOM projiziert. */
@@ -105,6 +106,7 @@ export function DatenTab({
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 8px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
   const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
+  const showKatalogbestand = runtimeConfig.appEnvironment !== "production";
   const [eggOffen, setEggOffen] = useState(false);
   const [ueberOffen, setUeberOffen] = useState(false);
   const anleitungKnopfRef = useRef(null);
@@ -251,13 +253,28 @@ export function DatenTab({
         </div>
       </Klappe>}
 
-      {/* 2b — Konto & Geräte-Sync (Etappe 3) */}
+      {/* 2 — Streaming-Anbieter */}
+      {toggleQuelle && <Klappe titel="Streaming-Quellen">
+        <div style={kasten}>
+          <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
+            katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />
+        </div>
+      </Klappe>}
+      {showKatalogbestand && <Klappe titel="Streaming-Katalogbestand">
+        <div style={kasten}>
+          <KatalogAuditStatus />
+        </div>
+      </Klappe>}
+
+      {/* 3 — Personalisierung & KI (Etappe 7). */}
       {/* KI-Funktionen (Etappe 7). Steht VOR dem Konto-Block, weil die
-          Grundentscheidung ohne Konto getroffen wird und den Rest praegt.
+          Grundentscheidung ohne Konto getroffen wird und den Rest prägt.
           Der Schalter ist geraetelokal (kd:ki) -- deshalb der Hinweis, dass
           er nicht mitreist. */}
-      <Klappe titel="KI-Funktionen">
+      <Klappe titel="Personalisierung & KI">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={kasten}>
+          <h2 style={h2}>KI-Funktionen</h2>
           <p style={{ ...mono, margin: "0 0 10px", lineHeight: 1.6 }}>
             Ohne KI funktioniert alles — Suche, Sammlung, Bewertungen — vollständig
             und kostenlos auf diesem Gerät. Mit KI kommen Deutungs- und
@@ -297,7 +314,6 @@ export function DatenTab({
             außerdem ein Konto.
           </p>
         </div>
-      </Klappe>
 
       {/* Geschmacksprofil (Etappe 7, Phase 2c). Steht NACH dem KI-Block,
           weil der Schalter die Rahmenentscheidung ist — aber ausdrücklich
@@ -306,8 +322,8 @@ export function DatenTab({
           dem KI-Schalter versteckt, hätte den Abnahme-Anker der Etappe
           („ein KI-loser Start ist vollwertig") in der Oberfläche
           zurückgenommen. */}
-      <Klappe titel="Geschmacksprofil">
-        <div style={kasten}>
+      <div style={kasten}>
+          <h2 style={h2}>Geschmacksprofil</h2>
           <GeschmackBereich
             bekannteTitel={Array.isArray(master) ? master : []}
             bekannteGenres={bekannteGenres}
@@ -326,32 +342,55 @@ export function DatenTab({
             kiGeraeteweiseAus={kiStand.global !== true}
             onFehler={(e) => setErr?.(e)}
           />
+      </div>
+
+      {saveVokabular && (
+        <div style={kasten} data-tour="daten-vokabular">
+          <h2 style={h2}>KI-Vokabular</h2>
+          <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono}
+            master={master || []} bekannteGenres={bekannteGenres}
+            ai={ai}
+            kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.suche !== false}
+            kiSperrgrund={kiStand.global !== true
+              ? "Aktiviere zuerst KI-Funktionen. Bereits gespeicherte Wörter funktionieren trotzdem offline."
+              : kiStand.funktionen?.suche === false
+                ? "Aktiviere die KI-Suche. Bereits gespeicherte Wörter funktionieren trotzdem offline."
+                : !kiProfilFaehig
+                  ? "Zum Deuten neuer Wörter brauchst du ein angemeldetes KI-fähiges Konto. Gespeicherte Wörter bleiben offline verfügbar."
+                  : null} />
+        </div>
+      )}
         </div>
       </Klappe>
 
-      <Klappe titel="Konto & Geräte-Sync">
+      {/* 4 — Konto, Daten & Sicherung */}
+      <Klappe id="gesamt-backup" titel="Konto, Daten & Sicherung" offen={sicherungOffen}
+        markiert={sicherungOffen} status={sicherungOffen ? "Sicherung offen" : null}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={kasten}>
-          <h2 style={h2}>Zwischen Handy und Rechner</h2>
+          <h2 style={h2}>Konto & Geräte-Sync</h2>
           <KontoBereich demoAktiv={demoAktiv}
             onDatenGeaendert={onKontoDatenGeaendert} onBackupWunsch={sicherheitskopieGeraet} />
         </div>
-      </Klappe>
 
-      {kontoModus && <Klappe titel="Datenrechte & Konto">
-        <div style={kasten}>
+      {kontoModus && <div style={kasten}>
+          <h2 style={h2}>Datenrechte & Konto</h2>
           <KontoDatenrechte accountActive={kontoAktiv} exportAccountData={kontoExportVollstaendig} />
-        </div>
-      </Klappe>}
+      </div>}
 
-      {RELEASE_NEBENWEGE_SICHTBAR && <Klappe titel="Stapelimport" tour="ki-ingestion">
-        <div style={kasten}>
-          <h2 style={h2}>Eigene Mediathek stapelweise erfassen</h2>
-          <StapelImport master={master || []}
-            addFilm={addFilm} addFilme={addFilme} autorName={autorName}
-            kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.stapelimport !== false}
-            setErr={setErr} />
+      <div style={kasten}>
+          <h2 style={h2}>Sicherheitskopie dieses Geräts</h2>
+          {sicherungOffen && (
+            <p role="status" data-tour="daten-waechter" style={{ color: T.wolfram, fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
+              Es gibt ungesicherte Änderungen im Browser. Die Sicherheitskopie hält Mediathek, Blog, Listen und Settings dieses Geräts gemeinsam in einer Datei fest.
+            </p>
+          )}
+          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den gebundenen persönlichen App-Stand dieses Browsers als portable JSON-Datei herunter. Serverweite Konto-Eigendaten und der gemeinsame Kino- und Streamingkatalog sind nicht enthalten. Dieser Release bietet dafür keinen Restore- oder Reimportweg.</p>
+          {sicherheitskopieGeraet && <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={sicherheitskopieGeraet}><IconExport size={16} />Sicherheitskopie dieses Geräts herunterladen</button>}
+          <FeldHinweis feld="backup" text="Enthält den gebundenen persönlichen App-Stand dieses Geräts, aber keine serverweiten Konto-Eigendaten." />
+      </div>
         </div>
-      </Klappe>}
+      </Klappe>
 
       {/* 3 — Masterliste */}
       {RELEASE_NEBENWEGE_SICHTBAR && <div className="kd-nur-desktop">
@@ -375,45 +414,17 @@ export function DatenTab({
       </Klappe>
       </div>}
 
-      {/* 4 — gebundene Sicherheitskopie dieses Geräts */}
-      <Klappe id="gesamt-backup" titel="Sicherheitskopie dieses Geräts" offen={sicherungOffen}
-        markiert={sicherungOffen} status={sicherungOffen ? "Sicherung offen" : null}>
+      {/* 4 — (release) Stapelimport bleibt verborgen, technische Eingangswege
+          laufen weiterhin unter der freigegebenen Owner-Zwischenbahn. */}
+      {RELEASE_NEBENWEGE_SICHTBAR && <Klappe titel="Stapelimport" tour="ki-ingestion">
         <div style={kasten}>
-          {sicherungOffen && (
-            <p role="status" data-tour="daten-waechter" style={{ color: T.wolfram, fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
-              Es gibt ungesicherte Änderungen im Browser. Die Sicherheitskopie hält Mediathek, Blog, Listen und Settings dieses Geräts gemeinsam in einer Datei fest.
-            </p>
-          )}
-          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den gebundenen persönlichen App-Stand dieses Browsers als portable JSON-Datei herunter. Serverweite Konto-Eigendaten und der gemeinsame Kino- und Streamingkatalog sind nicht enthalten. Dieser Release bietet dafür keinen Restore- oder Reimportweg.</p>
-          {sicherheitskopieGeraet && <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={sicherheitskopieGeraet}><IconExport size={16} />Sicherheitskopie dieses Geräts herunterladen</button>}
-          <FeldHinweis feld="backup" text="Enthält den gebundenen persönlichen App-Stand dieses Geräts, aber keine serverweiten Konto-Eigendaten." />
+          <h2 style={h2}>Eigene Mediathek stapelweise erfassen</h2>
+          <StapelImport master={master || []}
+            addFilm={addFilm} addFilme={addFilme} autorName={autorName}
+            kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.stapelimport !== false}
+            setErr={setErr} />
         </div>
-      </Klappe>
-
-      {/* 5 — Streaming-Quellen */}
-      {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
-        katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
-
-      <Klappe titel="Streaming-Katalogbestand">
-        <KatalogAuditStatus />
-      </Klappe>
-
-      {/* 6 — Such-Vokabular */}
-      {saveVokabular && (
-        <Klappe titel="KI-Vokabular" tour="daten-vokabular">
-          <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono}
-            master={master || []} bekannteGenres={bekannteGenres}
-            ai={ai}
-            kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.suche !== false}
-            kiSperrgrund={kiStand.global !== true
-              ? "Aktiviere zuerst KI-Funktionen. Bereits gespeicherte Wörter funktionieren trotzdem offline."
-              : kiStand.funktionen?.suche === false
-                ? "Aktiviere die KI-Suche. Bereits gespeicherte Wörter funktionieren trotzdem offline."
-                : !kiProfilFaehig
-                  ? "Zum Deuten neuer Wörter brauchst du ein angemeldetes KI-fähiges Konto. Gespeicherte Wörter bleiben offline verfügbar."
-                  : null} />
-        </Klappe>
-      )}
+      </Klappe>}
 
       {/* Historische Technikzweige bleiben zusätzlich zur Ownerbindung aus der
           Release-DOM geschlossen; sie werden nicht bloß per CSS versteckt. */}
@@ -500,7 +511,7 @@ export function DatenTab({
       </>}
 
       {/* 9 — Rechtliches + absichtlich unklarer versteckter Modusknopf. */}
-      <Klappe titel="Über & Rechtliches">
+      <Klappe titel="Über Kinodreieck, Anleitung & Rechtliches">
         <div style={kasten}>
           <p style={{ fontSize: 12, color: T.rauch, lineHeight: 1.7, margin: 0 }}>
             Kinodreieck — privates, nicht-kommerzielles Projekt. Persönliche Daten liegen lokal und bei aktiviertem Kontospeicher zusätzlich im eigenen Konto; die App verwendet keine allgemeine Telemetrie. Programmdaten: film.at &amp; nonstopkino.at · Streaming-Kataloge: Watchmode. Alle Angaben ohne Gewähr — verbindlich sind die Kino- bzw. Anbieterseiten. Bewertungen und Texte sind persönliche Meinungen ihrer Autoren.

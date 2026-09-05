@@ -289,18 +289,19 @@ const darstellungIndex = einstellTexte.findIndex((s) => /^Darstellung & Verhalte
 const modusIndex = einstellTexte.findIndex((s) => /^Datenmodus & Verbindung/.test(s));
 const masterIndex = einstellTexte.findIndex((s) => /^Masterliste/.test(s));
 const stapelIndex = einstellTexte.findIndex((s) => /^Stapelimport/.test(s));
-const profilIndex = einstellTexte.findIndex((s) => /^Geschmacksprofil/.test(s));
-const kontoIndex = einstellTexte.findIndex((s) => /^Konto & Geräte-Sync/.test(s));
-const backupIndex = einstellTexte.findIndex((s) => /^Sicherheitskopie dieses Geräts/.test(s));
+const personalisierungIndex = einstellTexte.findIndex((s) => /^Personalisierung & KI/.test(s));
+const kontoDatenSicherungIndex = einstellTexte.findIndex((s) => /^Konto, Daten & Sicherung/.test(s));
 const streamingIndex = einstellTexte.findIndex((s) => /^Streaming-Quellen/.test(s));
-const vokIndex = einstellTexte.findIndex((s) => /^KI-Vokabular/.test(s));
+const katalogIndex = einstellTexte.findIndex((s) => /^Streaming-Katalogbestand/.test(s));
 const statusIndex = einstellTexte.findIndex((s) => /^Katalog-Status/.test(s));
 const erweitertIndex = einstellTexte.findIndex((s) => /^Erweitert — manuelle Aktualisierung & Wartung/.test(s));
-const rechtIndex = einstellTexte.findIndex((s) => /^Über & Rechtliches/.test(s));
+const rechtIndex = einstellTexte.findIndex((s) => /^Über Kinodreieck, Anleitung & Rechtliches/.test(s));
 check("Privatrelease: feste Reihenfolge der sichtbaren Kernflächen",
-  darstellungIndex >= 0 && darstellungIndex < profilIndex && profilIndex < kontoIndex
-    && kontoIndex < backupIndex && backupIndex < streamingIndex
-    && streamingIndex < vokIndex && vokIndex < rechtIndex);
+  darstellungIndex >= 0 && darstellungIndex < streamingIndex && streamingIndex < katalogIndex
+    && katalogIndex < personalisierungIndex && personalisierungIndex < kontoDatenSicherungIndex
+    && kontoDatenSicherungIndex < rechtIndex);
+check("Privatrelease: Katalogaudit ist im lokalen Test sichtbar",
+  katalogIndex >= 0);
 check("Gast: Rohimport, Stapelimport, Datenmodus und Owner-Technik fehlen vollständig",
   masterIndex === -1 && stapelIndex === -1 && modusIndex === -1
     && statusIndex === -1 && erweitertIndex === -1
