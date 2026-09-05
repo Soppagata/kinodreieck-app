@@ -25,7 +25,10 @@ const PROJECT_REF_FORM = /^[a-z0-9]{10,40}$/;
 const FUNCTION_SOURCE_PATH_FORM = /^[A-Za-z0-9._/-]{1,240}$/;
 const FUNCTION_READBACK_TARGETS = Object.freeze([
   Object.freeze({ slug: "ai-task", verifyJwt: true }),
-  Object.freeze({ slug: "radar-websearch-task", verifyJwt: true }),
+  /* New API Keys sind keine JWTs. Der Scheduler und Browserzugriff werden
+     deshalb im Handler authentifiziert; der Management-Readback muss den
+     versionierten Plattformvertrag aus supabase/config.toml bestaetigen. */
+  Object.freeze({ slug: "radar-websearch-task", verifyJwt: false }),
   Object.freeze({ slug: "entdecken-daily-task", verifyJwt: false }),
 ]);
 

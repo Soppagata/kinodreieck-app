@@ -26,10 +26,10 @@ jobs:
       group: kd-test-suiten-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -52,14 +52,14 @@ jobs:
       group: kd-test-mobile-${{ matrix.browser }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
       - name: Playwright-Browser cachen
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-${{ matrix.browser }}
@@ -88,7 +88,8 @@ jobs:
   deploy-staging:
     if: >-
       (github.event_name == 'push' && github.ref_name == 'staging') ||
-      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref_name == 'staging' && inputs.target == 'staging')
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -116,8 +117,8 @@ jobs:
       VITE_BUILD_VERSION: ${{ github.sha }}
       EXPECTED_BUILD_VERSION: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -178,8 +179,8 @@ jobs:
       VITE_BUILD_VERSION: ${{ github.sha }}
       EXPECTED_BUILD_VERSION: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm

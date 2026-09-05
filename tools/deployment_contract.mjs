@@ -22,12 +22,18 @@ export function serviceWorkerRevalidiert(cacheControl, sharedCacheControls = [])
   return browserKurz && !sharedPositiv;
 }
 
-export function buildMetaFehler(meta, erwarteteVersion = "") {
+export function buildMetaFehler(meta, erwarteteVersion = "", erwarteteUmgebung = "") {
   if (!meta || meta.format !== 1 || typeof meta.buildVersion !== "string" || !meta.buildVersion) {
     return "unerwartete oder unvollständige Build-Metadaten";
   }
   if (erwarteteVersion && meta.buildVersion !== erwarteteVersion) {
     return `Build ${meta.buildVersion}, erwartet war ${erwarteteVersion}`;
+  }
+  if (erwarteteUmgebung && !["staging", "production"].includes(meta.appEnvironment)) {
+    return "unerwartete oder unvollständige Build-Metadaten";
+  }
+  if (erwarteteUmgebung && meta.appEnvironment !== erwarteteUmgebung) {
+    return `Umgebung ${meta.appEnvironment}, erwartet war ${erwarteteUmgebung}`;
   }
   return null;
 }

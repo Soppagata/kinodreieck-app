@@ -9,6 +9,10 @@ import {
 const basis = String(process.env.APP_URL || process.argv[2] || "").replace(/\/+$/, "");
 if (!basis.startsWith("https://")) throw new Error("APP_URL muss eine HTTPS-URL sein.");
 const erwarteteVersion = String(process.env.EXPECTED_BUILD_VERSION || "").trim();
+const erwarteteUmgebung = String(process.env.DEPLOY_TARGET || "").trim();
+if (erwarteteUmgebung && !["staging", "production"].includes(erwarteteUmgebung)) {
+  throw new Error("DEPLOY_TARGET muss staging oder production sein.");
+}
 const domainRetry = process.env.SMOKE_RETRY_BUILD_META === "1";
 
 async function hole(pfad, erwarteterTyp) {
@@ -45,6 +49,9 @@ for (let versuch = 1; versuch <= metaVersuche; versuch++) {
     const metaAntwort = await hole(`/build-meta.json?${parameter}`, "application/json");
     const meta = await metaAntwort.json().catch(() => null);
     metaFehler = buildMetaFehler(meta, erwarteteVersion);
+    if (!metaFehler && erwarteteUmgebung) {
+      metaFehler = buildMetaFehler(meta, erwarteteVersion, erwarteteUmgebung);
+    }
     if (!metaFehler) {
       const swAntwort = await hole(`/sw.js?${parameter}`, "javascript");
       const swCache = (swAntwort.headers.get("cache-control") || "").toLowerCase();
