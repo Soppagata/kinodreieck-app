@@ -188,7 +188,7 @@ function validateEnvironmentCheckpoint(checkpoint, environment, candidateCommit)
     ? [] : ["RELEASE_COMMIT_DRIFT"];
 }
 
-function validateNaturalRuns(checkpoint, resumeAt) {
+function validateNaturalRuns(checkpoint, resumeAt, capturedAt) {
   if (!exactKeys(checkpoint, ["observedAt", "workflows", "runs"])) {
     return ["NATURAL_RUN_READBACK_INVALID"];
   }
@@ -197,11 +197,13 @@ function validateNaturalRuns(checkpoint, resumeAt) {
   });
   if (!uniqueExactNames(checkpoint.runs, RELEASE_TRANSITION_WORKFLOWS, "path")
       || checkpoint.runs.some((run) => !exactKeys(run, [
-        "path", "runId", "event", "status", "conclusion", "startedAt", "completedAt",
+        "path", "runId", "runAttempt", "event", "status", "conclusion",
+        "startedAt", "completedAt",
       ]))) {
     push(errors, "NATURAL_RUN_READBACK_INVALID", false);
     return errors;
   }
+  const observedAt = canonicalInstant(checkpoint.observedAt);
   let timesValid = true;
   for (const run of checkpoint.runs) {
     const startedAt = canonicalInstant(run.startedAt);
@@ -209,10 +211,15 @@ function validateNaturalRuns(checkpoint, resumeAt) {
     timesValid = timesValid
       && (typeof run.runId === "string" || Number.isSafeInteger(run.runId))
       && String(run.runId).length > 0 && String(run.runId).length <= 40
+      && Number.isSafeInteger(run.runAttempt) && run.runAttempt === 1
       && run.event === "schedule" && run.status === "completed"
       && run.conclusion === "success"
       && startedAt !== null && completedAt !== null
-      && startedAt > resumeAt && completedAt >= startedAt;
+      && observedAt !== null && capturedAt !== null
+      && startedAt > resumeAt
+      && startedAt <= completedAt
+      && completedAt <= observedAt
+      && observedAt <= capturedAt;
   }
   push(errors, "NATURAL_RUN_READBACK_INVALID", timesValid);
   return errors;
@@ -378,6 +385,7 @@ export function evaluateReleaseTransition({
     for (const code of validateNaturalRuns(
       observed.checkpoints.naturalRuns,
       resumeAt ?? Number.POSITIVE_INFINITY,
+      capturedAt,
     )) push(errors, code, false);
   }
 

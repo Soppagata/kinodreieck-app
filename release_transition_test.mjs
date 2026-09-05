@@ -119,6 +119,7 @@ function allCheckpoints() {
       runs: RELEASE_TRANSITION_WORKFLOWS.map((path, index) => ({
         path,
         runId: String(9000 + index),
+        runAttempt: 1,
         event: "schedule",
         status: "completed",
         conclusion: "success",
@@ -263,9 +264,42 @@ test("post-resume verlangt aktive Workflows und je einen spaeteren natuerlichen 
   manual.observed.checkpoints.naturalRuns.runs[0].event = "workflow_dispatch";
   expectStop(manual, "NATURAL_RUN_READBACK_INVALID");
 
+  for (const invalidAttempt of [0, 1.5, "1", 2]) {
+    const rerun = fixture("post-resume");
+    rerun.observed.checkpoints.naturalRuns.runs[0].runAttempt = invalidAttempt;
+    expectStop(rerun, "NATURAL_RUN_READBACK_INVALID");
+  }
+  const missingAttempt = fixture("post-resume");
+  delete missingAttempt.observed.checkpoints.naturalRuns.runs[0].runAttempt;
+  expectStop(missingAttempt, "NATURAL_RUN_READBACK_INVALID");
+
   const oldRun = fixture("post-resume");
   oldRun.observed.checkpoints.naturalRuns.runs[1].startedAt = "2026-09-05T12:06:59.000Z";
   expectStop(oldRun, "NATURAL_RUN_READBACK_INVALID");
+
+  const backwards = fixture("post-resume");
+  backwards.observed.checkpoints.naturalRuns.runs[0].completedAt = "2026-09-05T12:07:09.000Z";
+  expectStop(backwards, "NATURAL_RUN_READBACK_INVALID");
+
+  const observedTooEarly = fixture("post-resume");
+  observedTooEarly.observed.checkpoints.naturalRuns.runs[0].completedAt = "2026-09-05T12:09:00.001Z";
+  expectStop(observedTooEarly, "NATURAL_RUN_READBACK_INVALID");
+
+  const completedBeyondCapture = fixture("post-resume");
+  completedBeyondCapture.observed.checkpoints.naturalRuns.runs[0].completedAt = "2026-09-05T12:09:30.001Z";
+  expectStop(completedBeyondCapture, "NATURAL_RUN_READBACK_INVALID");
+
+  const capturedTooEarly = fixture("post-resume");
+  capturedTooEarly.observed.capturedAt = "2026-09-05T12:08:59.999Z";
+  capturedTooEarly.nowMs = Date.parse("2026-09-05T12:09:30.000Z");
+  expectStop(capturedTooEarly, "TRANSITION_ORDER_INVALID");
+  expectStop(capturedTooEarly, "NATURAL_RUN_READBACK_INVALID");
+
+  const inclusiveBounds = fixture("post-resume");
+  inclusiveBounds.observed.checkpoints.naturalRuns.runs[0].startedAt = "2026-09-05T12:09:00.000Z";
+  inclusiveBounds.observed.checkpoints.naturalRuns.runs[0].completedAt = "2026-09-05T12:09:00.000Z";
+  inclusiveBounds.observed.capturedAt = "2026-09-05T12:09:00.000Z";
+  assert.equal(evaluateReleaseTransition(inclusiveBounds).ok, true);
 });
 
 test("unbekannte Phase und abweichender Sollvertrag failen geschlossen", () => {

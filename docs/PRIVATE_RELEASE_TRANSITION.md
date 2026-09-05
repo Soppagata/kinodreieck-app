@@ -90,9 +90,11 @@ ist der echte Web-/Sechs-Functions-/Migrationsreadback fuer dieses Manifest.
 10. Nur nach gruenem `pre-resume` beide Workflows wieder aktivieren und den
     Zustand `active` ruecklesen.
 11. Je Workflow den ersten nach der Aktivierung natuerlich durch `schedule`
-    gestarteten Lauf abwarten. Beide muessen `completed/success` erreichen;
-    erst dann darf `post-resume` gruen werden. Kein manueller Ersatzlauf und
-    kein Retry zaehlt als dieser Nachweis.
+    gestarteten Lauf abwarten. Beide muessen im ersten Versuch
+    (`runAttempt: 1`) `completed/success` erreichen; erst dann darf
+    `post-resume` gruen werden. Ein GitHub-Rerun behaelt zwar das Ereignis
+    `schedule`, ist aber mit `runAttempt > 1` ausdruecklich kein natuerlicher
+    Erstlauf. Kein manueller Ersatzlauf und kein Retry zaehlt als Nachweis.
 
 Aufruf in jeder Phase:
 
@@ -128,8 +130,9 @@ naturalRuns
 `post-resume` enthaelt alle neun Checkpoints. Die beiden Workflowlisten sind
 immer exakt und duplikatfrei. `preResume` und `resume` tragen zusaetzlich die
 beobachteten Workflow-SHA-256. `naturalRuns` enthaelt je Workflow genau einen
-Run mit `runId`, `event`, `status`, `conclusion`, `startedAt` und
-`completedAt`.
+Run mit `runId`, `runAttempt`, `event`, `status`, `conclusion`, `startedAt`
+und `completedAt`. Fuer jeden Run gilt streng
+`resume.observedAt < startedAt <= completedAt <= naturalRuns.observedAt <= capturedAt`.
 
 ## Harte STOPs
 
