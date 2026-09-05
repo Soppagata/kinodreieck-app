@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
-import { store, K } from "../services/storage.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { norm } from "../lib/match.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
@@ -242,27 +241,10 @@ export function StreamingTab({
     return () => { cancelAnimationFrame(frame); window.clearTimeout(bestaetigung); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fokusTreffer, ansicht, expandedId, suche, fokusOverride, bekannt, entdecken]);
-  /* Filterleiste auf/zu — Default ZUGEKLAPPT (gilt für Programm & Entdecken).
-     Seit Etappe 3 dauerhafte Sicht-Präferenz im Datentopf statt sessionStorage. */
+  /* Filter-Panel startet bewusst immer zu. Persönliche Filterwerte bleiben
+     stehen; der Sichtzustand lebt ausschließlich pro Tab-Instanz. */
   const [streamFilterOffen, setStreamFilterOffen] = useState(false);
-  const streamFilterOffenRef = useRef(streamFilterOffen);
-  streamFilterOffenRef.current = streamFilterOffen;
-  useEffect(() => {
-    let aktiv = true;
-    store.get(K.filterStreaming).then((r) => {
-      if (aktiv && r?.value === "1") {
-        streamFilterOffenRef.current = true;
-        setStreamFilterOffen(true);
-      }
-    }).catch(() => {});
-    return () => { aktiv = false; };
-  }, []);
-  const toggleStreamFilter = () => {
-    const nv = !streamFilterOffenRef.current;
-    streamFilterOffenRef.current = nv;
-    setStreamFilterOffen(nv);
-    store.set(K.filterStreaming, nv ? "1" : "0").catch(() => {});
-  };
+  const toggleStreamFilter = () => setStreamFilterOffen((offen) => !offen);
   const setzeStatus = async (t, wert) => {
     const gespeichert = await schreibeEntdeckenStatus((prev) => {
       const next = { ...prev };

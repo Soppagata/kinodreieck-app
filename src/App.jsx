@@ -275,7 +275,7 @@ export default function App() {
   const [bootDone, setBootDone] = useState(false);
   const webDiscoveryState = useWebDiscoveryFeed(remoteKontoAktiv && bootDone && tab === "blog");
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
-  const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
+  const [zeigeAlles, setZeigeAlles] = useState(true);   // Kino startet ohne aktive Zeitbeschränkung
   /* Der Storage-Boot gehört ausschließlich zum ersten Render. Gast/Konto-
      Wechsel werden weiter unten gezielt behandelt; ein erneutes Einlesen hier
      würde dabei einen gerade verworfenen, alten Anzeigestand zurückholen. */
