@@ -179,12 +179,20 @@ test("C2: Entdecken bleibt leicht; beide Streaming-Regler erzwingen Jahr aufstei
   await programSort.selectOption("titel");
   await programDirection.selectOption("ab");
   const programDecade = page.getByRole("slider", { name: "Mein Programm: Jahrzehnt filtern" });
+  await expect(programDecade).toHaveValue("0");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").first())
+    .toHaveText("Alle");
+  await expect(programDecade).toHaveAttribute("aria-valuetext", "Alle Jahrzehnte");
+  await expect(page.locator(".kd-streamfilter-regler .kd-streamfilter-abc-kopf button")).toHaveCount(0);
+  expect(await page.locator(".kd-streamfilter-regler .kd-streamfilter-abc-kopf").evaluateAll((koepfe) => (
+    koepfe.every((kopf) => getComputedStyle(kopf).gridTemplateColumns.trim().split(/\s+/).length === 2)
+  ))).toBe(true);
   await programDecade.fill("2");
   await expect(programSort).toHaveValue("jahr");
   await expect(programDirection).toHaveValue("auf");
   await expect(programDecade).toHaveAttribute("aria-valuetext", "1990er: 1988 bis 2002");
   await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").first())
-    .toHaveText("1990er · 1988–2002");
+    .toHaveText("1990er");
   await expect(programmCards).toHaveCount(2);
   await expect(programmCards.first()).toContainText("Zulu Alt");
 
@@ -197,12 +205,20 @@ test("C2: Entdecken bleibt leicht; beide Streaming-Regler erzwingen Jahr aufstei
   await discoverSort.selectOption("titel");
   await discoverDirection.selectOption("ab");
   const discoverDecade = page.getByRole("slider", { name: "Entdecken: Jahrzehnt filtern" });
+  await expect(discoverDecade).toHaveValue("0");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last())
+    .toHaveText("Alle");
+  await expect(discoverDecade).toHaveAttribute("aria-valuetext", "Alle Jahrzehnte");
+  await expect(page.locator(".kd-streamfilter-regler .kd-streamfilter-abc-kopf button")).toHaveCount(0);
+  expect(await page.locator(".kd-streamfilter-regler .kd-streamfilter-abc-kopf").evaluateAll((koepfe) => (
+    koepfe.every((kopf) => getComputedStyle(kopf).gridTemplateColumns.trim().split(/\s+/).length === 2)
+  ))).toBe(true);
   await discoverDecade.fill("2");
   await expect(discoverSort).toHaveValue("jahr");
   await expect(discoverDirection).toHaveValue("auf");
   await expect(discoverDecade).toHaveAttribute("aria-valuetext", "1990er: 1988 bis 2002");
   await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last())
-    .toHaveText("1990er · 1988–2002");
+    .toHaveText("1990er");
   await expect(discoverCards).toHaveCount(2);
   await expect(discoverCards.first()).toContainText("Zulu Fund");
 });

@@ -103,7 +103,6 @@ function AlphabetFilter({ wert, onChange, name }) {
       <div className="kd-streamfilter-abc-kopf">
         <span>Anfangsbuchstabe</span>
         <strong aria-live="polite">{wert || "Alle"}</strong>
-        <button type="button" onClick={() => onChange(null)} disabled={!wert}>Alle</button>
       </div>
       <input type="range" min="0" max={STREAMING_ALPHABET.length} step="1" value={index}
         onChange={(event) => {
@@ -127,7 +126,7 @@ function JahrzehntFilter({ wert, optionen, onChange, name }) {
   const index = wert == null ? 0 : Math.max(0, optionen.indexOf(wert) + 1);
   const bereich = streamingJahrzehntBereich(wert);
   return (
-    <div className="kd-streamfilter-abc kd-streamfilter-dekade" data-aktiv={wert != null ? "1" : "0"}>
+    <div className="kd-streamfilter-abc kd-streamfilter-dekade" data-aktiv={bereich ? "1" : "0"}>
       <div className="kd-streamfilter-abc-kopf">
         <span>Jahrzehntbereich</span>
         <strong aria-live="polite">{bereich ? streamingJahrzehntLabel(wert) : "Alle"}</strong>
@@ -342,7 +341,7 @@ export function StreamingTab({
     if (nurWunsch) l = l.filter((f) => mustwatchIds && mustwatchIds.has(f.id));
     if (nurBewertet) l = l.filter((f) => f.bewertung != null);
     if (buchstabeP) l = l.filter((f) => streamingAnfangsbuchstabe(f.titel) === buchstabeP);
-    if (dekadeP != null) l = l.filter((f) => passtInJahrzehntMitKulanz(f.jahr, dekadeP));
+    if (streamingJahrzehntBereich(dekadeP)) l = l.filter((f) => passtInJahrzehntMitKulanz(f.jahr, dekadeP));
     if (suche.trim()) { const nq = norm(suche); l = l.filter((f) => norm(f.titel || "").includes(nq)); }
     return sortiereStreamingTitel(l, sortP, sortRichtungP);
   }, [bekannt, datenDa, dienstOk, plattformOkP, nurWunsch, nurBewertet, buchstabeP, dekadeP, mustwatchIds, suche, sortP, sortRichtungP, fokusOverride]);
@@ -389,7 +388,7 @@ export function StreamingTab({
     if (statusFilterE === "gesehen") l = l.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen");
     if (buchstabeE) l = l.filter((t) => streamingAnfangsbuchstabe(t.titel) === buchstabeE);
     if (genreFilterSichtbarE && genreE) l = l.filter((t) => (t.genres || []).some((genre) => norm(genre) === genreE));
-    if (dekadeE != null) l = l.filter((t) => passtInJahrzehntMitKulanz(t.jahr, dekadeE));
+    if (streamingJahrzehntBereich(dekadeE)) l = l.filter((t) => passtInJahrzehntMitKulanz(t.jahr, dekadeE));
     if (typE) l = l.filter((t) => (t.typ || "") === typE);
     return sortiereStreamingTitel(l, sortE, sortRichtungE);
   }, [entdecken, entdeckenDa, dienstOk, plattformOkE, statusFilterE, buchstabeE, genreE, genreFilterSichtbarE, dekadeE, typE, sortE, sortRichtungE, entdeckenStatus, fokusOverride]);
@@ -415,12 +414,12 @@ export function StreamingTab({
     setter(wert);
   };
   const aendereDekadeP = (wert) => {
-    aendereFilter(setDekadeP, wert);
+    aendereFilter(setDekadeP, streamingJahrzehntBereich(wert) ? wert : null);
     setSortP("jahr");
     setSortRichtungP("auf");
   };
   const aendereDekadeE = (wert) => {
-    aendereFilter(setDekadeE, wert);
+    aendereFilter(setDekadeE, streamingJahrzehntBereich(wert) ? wert : null);
     setSortE("jahr");
     setSortRichtungE("auf");
   };
@@ -429,9 +428,9 @@ export function StreamingTab({
     if (naechsteAnsicht === "entdecken") void onAllesKatalogLaden?.();
   };
   const aktiveFilterP = Number(!!plattformP) + Number(nurBewertet) + Number(nurWunsch)
-    + Number(!!buchstabeP) + Number(dekadeP != null);
+    + Number(!!buchstabeP) + Number(!!streamingJahrzehntBereich(dekadeP));
   const aktiveFilterE = Number(!!plattformE) + Number(!!statusFilterE) + Number(!!typE)
-    + Number(genreFilterSichtbarE && !!genreE) + Number(dekadeE != null) + Number(!!buchstabeE);
+    + Number(genreFilterSichtbarE && !!genreE) + Number(!!streamingJahrzehntBereich(dekadeE)) + Number(!!buchstabeE);
 
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };

@@ -137,7 +137,9 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.deepEqual(streamingJahrzehnte([{ jahr: 1987 }, { jahr: 2012 }]), [1980, 1990, 2000, 2010]);
   assert.equal(streamingJahrzehntLabel(1920), "1920er");
   assert.equal(streamingJahrzehntLabel(2000), "2000er");
+  assert.equal(streamingJahrzehntLabel(0), "Alle");
   assert.deepEqual(streamingJahrzehntBereich(1950), { von: 1948, bis: 1962, label: "1948–1962" });
+  assert.equal(streamingJahrzehntBereich(0), null);
   assert.equal(streamingGenreFilterSichtbar([
     { genres: ["Crime"] }, { genres: ["Drama"] }, { genres: [] },
   ]), false);
@@ -152,6 +154,7 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.equal(passtInJahrzehntMitKulanz(null, 1950), false);
   assert.equal(passtInJahrzehntMitKulanz("kein Jahr", 1950), false);
   assert.equal(passtInJahrzehntMitKulanz(Number.NaN, 1950), false);
+  assert.equal(passtInJahrzehntMitKulanz(2024, 0), true);
 
   const streaming = lies("./src/tabs/StreamingTab.jsx");
   assert.doesNotMatch(streaming, /Sortierung: Passung|User-Score|Könnte dir gefallen|passungStufe|lesbaresPassungsSignal/);
@@ -169,12 +172,15 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.match(streaming, /<strong aria-live="polite">\{bereich \? streamingJahrzehntLabel\(wert\) : "Alle"\}<\/strong>/);
   assert.doesNotMatch(streaming, /streamingJahrzehntLabel\(wert\).*bereich\.label/);
   assert.match(streaming, /aria-valuetext=\{bereich \? `\$\{Number\(wert\)\}er: \$\{bereich\.von\} bis \$\{bereich\.bis\}` : "Alle Jahrzehnte"\}/);
+  const alphabetFilter = streaming.match(/function AlphabetFilter[\s\S]*?\n}\n\nfunction JahrzehntFilter/)?.[0] || "";
+  assert.doesNotMatch(alphabetFilter, /<button/);
   assert.match(streaming, /Filter &amp; Sortierung/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*optionen=\{dekadenP\}/);
   assert.match(streaming, /kd-kompakt kd-streaming-werkzeuge[\s\S]*kd-streamfilter-knopf/);
   assert.match(streaming, /genreFilterSichtbarE && <div className="kd-streamfilter-gruppe kd-streamfilter-genre"/);
   const css = lies("./src/index.css");
-  assert.match(css, /\.kd-streamfilter-abc-kopf \{[^}]*grid-template-columns:minmax\(0,1fr\) 104px 48px/);
+  assert.match(css, /\.kd-streamfilter-abc-kopf \{[^}]*grid-template-columns:minmax\(0,1fr\) 104px/);
+  assert.doesNotMatch(css, /\.kd-streamfilter-abc-kopf button/);
   assert.match(css, /\.kd-streamfilter-sortierung select \{[^}]*min-height:44px/);
   assert.match(streaming, /className="kd-streamfilter-knopf"/);
 });

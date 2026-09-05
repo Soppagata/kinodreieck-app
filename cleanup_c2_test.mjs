@@ -23,6 +23,8 @@ const jahrzehntFilter = streaming.match(/function JahrzehntFilter[\s\S]*?\n}\n\n
 check("U-01: Jahrzehnte sind ohne Jahrhundert-Ambiguität beschriftet", () => {
   assert.equal(streamingJahrzehntLabel(1920), "1920er");
   assert.equal(streamingJahrzehntLabel(2020), "2020er");
+  assert.equal(streamingJahrzehntLabel(0), "Alle");
+  assert.equal(streamingJahrzehntBereich(0), null);
   assert.deepEqual(streamingJahrzehntBereich(2020), {
     von: 2018, bis: 2032, label: "2018–2032",
   });
@@ -42,9 +44,9 @@ check("U-01: Jahr aufsteigend stellt fehlende Jahre ans Ende", () => {
   );
 });
 
-check("U-01: beide Jahrzehntregler erzwingen Jahr aufsteigend", () => {
-  assert.match(streaming, /const aendereDekadeP = \(wert\) => \{[\s\S]*?setSortP\("jahr"\);[\s\S]*?setSortRichtungP\("auf"\);[\s\S]*?\};/);
-  assert.match(streaming, /const aendereDekadeE = \(wert\) => \{[\s\S]*?setSortE\("jahr"\);[\s\S]*?setSortRichtungE\("auf"\);[\s\S]*?\};/);
+check("U-01: beide Jahrzehntregler normalisieren Null und erzwingen Jahr aufsteigend", () => {
+  assert.match(streaming, /const aendereDekadeP = \(wert\) => \{[\s\S]*?aendereFilter\(setDekadeP, streamingJahrzehntBereich\(wert\) \? wert : null\);[\s\S]*?setSortP\("jahr"\);[\s\S]*?setSortRichtungP\("auf"\);[\s\S]*?\};/);
+  assert.match(streaming, /const aendereDekadeE = \(wert\) => \{[\s\S]*?aendereFilter\(setDekadeE, streamingJahrzehntBereich\(wert\) \? wert : null\);[\s\S]*?setSortE\("jahr"\);[\s\S]*?setSortRichtungE\("auf"\);[\s\S]*?\};/);
   assert.match(streaming, /wert=\{dekadeP\}[\s\S]*?onChange=\{aendereDekadeP\}/);
   assert.match(streaming, /wert=\{dekadeE\}[\s\S]*?onChange=\{aendereDekadeE\}/);
 });
@@ -55,11 +57,15 @@ check("Follow-up 5: die leere Kino-Datumsauswahl heißt Datum", () => {
   assert.match(kino, /programmFilterStatus \|\| "Alle Programmtage und Kinos"/);
 });
 
-check("Follow-up 6: Jahrzehntwert bleibt kompakt und ohne Alle-Button", () => {
+check("Follow-up 6: beide Slider zeigen Null als Alle ohne separaten Button", () => {
   assert.match(jahrzehntFilter, /<strong aria-live="polite">\{bereich \? streamingJahrzehntLabel\(wert\) : "Alle"\}<\/strong>/);
   assert.doesNotMatch(jahrzehntFilter, /<button[^>]*>Alle<\/button>/);
+  assert.match(jahrzehntFilter, /data-aktiv=\{bereich \? "1" : "0"\}/);
   assert.match(jahrzehntFilter, /aria-valuetext=\{bereich \? `\$\{Number\(wert\)\}er: \$\{bereich\.von\} bis \$\{bereich\.bis\}` : "Alle Jahrzehnte"\}/);
-  assert.match(streaming, /function AlphabetFilter[\s\S]*?<button type="button" onClick=\{\(\) => onChange\(null\)\} disabled=\{!wert\}>Alle<\/button>/);
+  const alphabetFilter = streaming.match(/function AlphabetFilter[\s\S]*?\n}\n\nfunction JahrzehntFilter/)?.[0] || "";
+  assert.match(alphabetFilter, /<strong aria-live="polite">\{wert \|\| "Alle"\}<\/strong>/);
+  assert.match(alphabetFilter, /naechsterIndex === 0 \? null : STREAMING_ALPHABET/);
+  assert.doesNotMatch(alphabetFilter, /<button/);
 });
 
 check("U-05/D-05: nur der Streaming-Key entdecken heißt sichtbar Alles", () => {

@@ -2358,12 +2358,17 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
   await plattformP.selectOption("");
   const dekadeP = page.getByRole("slider", { name: "Mein Programm: Jahrzehnt filtern" });
   await expect(dekadeP).toBeVisible();
+  await expect(dekadeP).toHaveValue("0");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").first()).toHaveText("Alle");
+  await expect(dekadeP).toHaveAttribute("aria-valuetext", "Alle Jahrzehnte");
   await dekadeP.fill("2");
   await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").first()).toHaveText("1990er");
   await expect(dekadeP).toHaveAttribute("aria-valuetext", "1990er: 1988 bis 2002");
   await expect(programmKarten).toHaveCount(1);
   await expect(page.locator('[data-streaming-suchtreffer="programm:bravo-unrated"]')).toBeVisible();
   await dekadeP.fill("0");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").first()).toHaveText("Alle");
+  await expect(dekadeP).toHaveAttribute("aria-valuetext", "Alle Jahrzehnte");
   await page.getByRole("button", { name: "Bewertet", exact: true }).click();
   await expect(programmKarten).toHaveCount(2);
   const abcP = page.getByRole("slider", { name: "Mein Programm: Anfangsbuchstaben filtern" });
@@ -2410,7 +2415,9 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
   await page.getByRole("button", { name: /Gesehen \(1\)/ }).click();
   const dekadeE = page.getByRole("slider", { name: "Entdecken: Jahrzehnt filtern" });
   await expect(dekadeE).toBeVisible();
-  await expect(page.locator(".kd-streamfilter-dekade-skala").last()).toContainText("90er");
+  await expect(dekadeE).toHaveValue("0");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last()).toHaveText("Alle");
+  await expect(dekadeE).toHaveAttribute("aria-valuetext", "Alle Jahrzehnte");
   const reglerKopfGeometrie = await page.locator(".kd-streamfilter-regler").evaluate((regler) => (
     [...regler.querySelectorAll(".kd-streamfilter-abc-kopf")].map((kopf) => ({
       anzeige: kopf.querySelector("strong").getBoundingClientRect().width,
@@ -2418,7 +2425,7 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
     }))
   ));
   expect(reglerKopfGeometrie).toHaveLength(2);
-  expect(reglerKopfGeometrie[0].hatAlleKnopf).toBe(true);
+  expect(reglerKopfGeometrie[0].hatAlleKnopf).toBe(false);
   expect(reglerKopfGeometrie[1].hatAlleKnopf).toBe(false);
   await dekadeE.fill("1");
   await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last()).toHaveText("1990er");
@@ -2426,6 +2433,8 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
   await expect(entdeckenKarten).toHaveCount(1);
   await expect(entdeckenKarten).toContainText("Apollo Road");
   await dekadeE.fill("0");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last()).toHaveText("Alle");
+  await expect(dekadeE).toHaveAttribute("aria-valuetext", "Alle Jahrzehnte");
   const abcE = page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" });
   await abcE.fill("3");
   await expect(entdeckenKarten).toHaveCount(1);

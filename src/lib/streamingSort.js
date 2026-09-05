@@ -30,12 +30,13 @@ export function streamingJahrzehnte(titel = []) {
 export function streamingJahrzehntLabel(jahrzehnt) {
   const nummer = Number(jahrzehnt);
   if (!Number.isFinite(nummer)) return "";
+  if (nummer === 0) return "Alle";
   return `${nummer}er`;
 }
 
 export function streamingJahrzehntBereich(jahrzehnt) {
   const startjahr = Number(jahrzehnt);
-  if (!Number.isInteger(startjahr)) return null;
+  if (!Number.isInteger(startjahr) || startjahr === 0) return null;
   const von = startjahr - 2;
   const bis = startjahr + 12;
   return { von, bis, label: `${von}–${bis}` };
@@ -51,8 +52,8 @@ export function streamingGenreFilterSichtbar(titel = []) {
 }
 
 export function passtInJahrzehntMitKulanz(jahr, jahrzehnt) {
-  if (jahrzehnt == null) return true;
   const bereich = streamingJahrzehntBereich(jahrzehnt);
+  if (!bereich) return true;
   const nummer = Number(jahr);
   return Number.isInteger(nummer) && !!bereich && nummer >= bereich.von && nummer <= bereich.bis;
 }
