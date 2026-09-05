@@ -3,14 +3,11 @@ import { T } from "../lib/tokens.js";
 import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
 import { formatPresentationDate } from "../lib/presentationDate.js";
+import { TYP_KURZ, baueStreamingQuellenGruppen } from "../lib/streamingQuellen.js";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================
    Aus dem Streaming-Tab in die Einstellungen verschoben — ein Ort für alle
    Konfiguration. Bekommt bekannt/entdecken + die Quellen-Auswahl als Props. */
-
-const GRUPPEN_LABEL = { sub: "Abos (Subscription)", free: "Gratis (Free)", purchase: "Kauf & Leihe", tve: "TV-Anbieter", sonst: "Weitere" };
-/* Kurzform des Gruppen-Typs für die Suchtreffer-Zeilen (390px-tauglich). */
-const TYP_KURZ = { sub: "Abo", free: "Gratis", purchase: "Kauf/Leihe", tve: "TV", sonst: "Weitere", auswahl: "Deine Auswahl" };
 
 /* Settings bleiben der einzige Ort mit den unveränderten Katalognamen, damit
    Auswahl und gespeicherter Wert hier vollständig nachvollziehbar bleiben. */
@@ -36,28 +33,9 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
   const resetInTagen = resetDatum ? Math.ceil((resetDatum.getTime() - Date.now()) / 86400000) : null;
 
   const gruppen = useMemo(() => {
-    /* Demo-Snapshots (eingebettete Beispieldaten) dürfen die echte AT-Quellenliste
-       NICHT verdrängen — sonst schrumpft die Abo-Auswahl auf die 4 Testquellen. */
-    const abgedeckt = new Set((datenDa && bekannt.dienste) || []);
-    const vq = ((datenDa && katalogInfo?.variante !== "demo" && bekannt.verfuegbare_quellen) || []).filter((q) => abgedeckt.has(q.name));
-    let basis;
-    if (vq.length) {
-      const g = {};
-      for (const q of vq) {
-        const typ = ["sub", "free", "purchase", "tve"].includes(q.typ) ? q.typ : "sonst";
-        (g[typ] = g[typ] || []).push(q.name);
-      }
-      basis = Object.entries(g).map(([typ, quellen]) => ({
-        name: GRUPPEN_LABEL[typ] || typ, typ, quellen: quellen.sort((a, b) => a.localeCompare(b)),
-        warnung: typ === "purchase" ? quellenDefault.gruppen.find((x) => x.typ === "purchase")?.warnung : undefined,
-      }));
-    } else basis = quellenDefault.gruppen;
-    /* Union-Garantie: Jede aktiv gewählte Quelle muss sichtbar und abwählbar sein,
-       auch wenn Katalog/Startliste sie (noch) nicht kennen. */
-    const bekannteNamen = new Set(basis.flatMap((g) => g.quellen));
-    const fehlend = auswahl.filter((q) => !bekannteNamen.has(q));
-    return fehlend.length ? [...basis, { name: "Deine Auswahl (nicht in der Liste)", typ: "auswahl", quellen: fehlend }] : basis;
-  }, [bekannt, datenDa, katalogInfo?.variante, auswahl]);
+    const basis = baueStreamingQuellenGruppen({ bekannt, katalogInfo, auswahl, standardGruppen: quellenDefault.gruppen });
+    return basis;
+  }, [bekannt, katalogInfo?.variante, auswahl]);
 
   /* Mobil-taugliche Quellen-Auswahl (Etappe 1): statt ~40 Checkbox-Zeilen
      ein Suchfeld + kompakte Angehakt-Liste. Nicht angehakte Quellen erscheinen
@@ -97,7 +75,8 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
           Wähle die Dienste, die du tatsächlich nutzt. Die Auswahl filtert den gemeinsamen
-          Katalog sofort. Angeboten werden nur Quellen, die der aktuelle Datenstand wirklich abdeckt.
+          Katalog sofort. Die Filterung bezieht sich nur auf den bereits geladenen
+          gemeinsamen Katalog; es wird kein neuer Anbieterimport gestartet.
         </p>
         {/* Suchfeld: einzige Tür zu den nicht angehakten Quellen (~40 Namen). */}
         <input value={quellenSuche} onChange={(e) => setQuellenSuche(e.target.value)}
