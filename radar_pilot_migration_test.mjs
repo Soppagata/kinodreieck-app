@@ -24,6 +24,10 @@ const triggerFixSql = read(triggerFixPath);
 const currentSchema = read(schemaPath);
 const runbook = read(runbookPath);
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
+const currentSchemaBodyStart = currentSchema.indexOf("SET statement_timeout");
+assert.ok(currentSchemaBodyStart >= 0, "current_schema: ausfuehrbarer SQL-Rumpf fehlt");
+const currentSchemaHeader = currentSchema.slice(0, currentSchemaBodyStart);
+const currentSchemaExecutable = currentSchema.slice(currentSchemaBodyStart);
 const stripComments = (value) => value
   .replace(/\/\*[\s\S]*?\*\//g, " ")
   .replace(/--[^\r\n]*/g, " ");
@@ -327,9 +331,13 @@ check("Mutationen an Definer, Searchpath, ACL oder einer dritten Guard-Funktion 
   )));
 });
 
-check("Basismigration und current_schema bleiben bitidentisch; Pilotmigration ist additiv und atomar", () => {
+check("Basismigration und ausfuehrbarer Basis-Snapshot bleiben bitidentisch; Pilotmigration ist additiv und atomar", () => {
   assert.equal(sha256(baseSql), "d2bfe936e7ecf3b20c2c0fb5a761a87dbee42149b8b733e0e63fec5af82b94c4");
-  assert.equal(sha256(currentSchema), "d7124bdd16b06ba7924d71e6f5d9324ca5d9b10e860e9c9a3995bc7b99f66225");
+  assert.equal(sha256(currentSchemaExecutable), "7c0d5d0ccbc4833b4058fef9ba46d91f3b566ddb50b269d1d97a38e769624ed5");
+  assert.match(currentSchemaHeader, /historischer Current-Schema-Snapshot \(Basis\)/);
+  assert.match(currentSchemaHeader, /Basis bis 20260809121000/);
+  assert.match(currentSchemaHeader, /KEIN aktueller Ist-Stand/);
+  assert.match(currentSchemaHeader, /KEINE\s*\n-- alleinige Wiederherstellungsreferenz/);
   assert.match(executable, /^begin\s*;/);
   assert.match(executable, /commit\s*;$/);
   assert.doesNotMatch(executable, /\b(?:drop|truncate)\s+(?:table\s+)?public\.kd_radar_/);
