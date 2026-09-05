@@ -641,9 +641,9 @@ check("App besitzt keinen Demo-seitigen Must-Watch-Seed; normales Laden und Schr
   && /await kontext\.set\(K\.mustwatch, payload\)[\s\S]*return true/.test(mustwatchController)
   && /if \(!await persistMustwatch\(next, auftragKontext\)\) return false;[\s\S]*uebernehmeState\(next\)/.test(mustwatchController));
 check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",
-  /master: ensureIds\(aktuell\.map/.test(app)
-  && (app.match(/markNewPersonalMasterEntries/g) || []).length >= 5
-  && /markNewPersonalMasterEntries\(aktuell, \[prepared\]\)/.test(intelligenceController));
+  /next = ensureIds\(markNewPersonalMasterEntries\(aktuell, \[neu\]\)\)/.test(app)
+  && /film\.id === id \? mergePersonalMasterEntry\(film, changes\) : film/.test(app)
+  && /next = ensureIds\(markNewPersonalMasterEntries\(aktuell, \[prepared\]\)\)/.test(intelligenceController));
 check("Mehrtopf-Löschungen warten fail-closed auf den sicheren Must-Watch-Ladestand",
   /mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch/.test(app)
   && (app.match(/if \(!mustwatchGeladen \|\| !artikelGeladen\)/g) || []).length >= 2
