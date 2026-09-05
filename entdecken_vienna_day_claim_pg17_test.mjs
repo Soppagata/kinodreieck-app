@@ -5,18 +5,35 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
+const binaries = ["initdb", "pg_ctl", "postgres", "psql"];
+const configuredPgBin = process.env.KD_TEST_PG_BIN?.trim();
+const requirePg17 = process.argv.includes("--require-pg17")
+  || process.env.KD_REQUIRE_PG17 === "1";
 const pgConfig = spawnSync("pg_config", ["--bindir"], { encoding: "utf8" });
-const candidates = [
-  process.env.KD_TEST_PG_BIN,
+const candidates = (configuredPgBin ? [configuredPgBin] : [
   "/Applications/Postgres.app/Contents/Versions/17/bin",
   pgConfig.status === 0 ? pgConfig.stdout.trim() : null,
   "/usr/lib/postgresql/17/bin",
-].filter(Boolean);
-const binaries = ["initdb", "pg_ctl", "postgres", "psql"];
+]).filter(Boolean);
+const isPostgres17 = (directory) => {
+  if (!binaries.every((binary) => existsSync(join(directory, binary)))) return false;
+  const version = spawnSync(join(directory, "postgres"), ["--version"], {
+    encoding: "utf8",
+  });
+  return version.status === 0
+    && /^postgres \(PostgreSQL\) 17(?:\.|\s|$)/.test(version.stdout.trim());
+};
 const pg = [...new Set(candidates)].find((directory) => (
-  binaries.every((binary) => existsSync(join(directory, binary)))
+  isPostgres17(directory)
 ));
-assert.ok(pg, `PostgreSQL 17 server binaries are required (${binaries.join(", ")})`);
+
+if (!pg) {
+  const detail = `PostgreSQL 17 server binaries unavailable (${binaries.join(", ")}); set KD_TEST_PG_BIN to the PostgreSQL 17 bin directory`;
+  if (requirePg17) assert.fail(detail);
+  console.log(`SKIP entdecken_vienna_day_claim_pg17_test: ${detail}`);
+}
+
+if (pg) {
 
 const root = mkdtempSync("/private/tmp/kd-release-data-pg17-");
 const data = join(root, "data");
@@ -159,4 +176,5 @@ try {
     run("pg_ctl", ["--pgdata", data, "--mode", "immediate", "--wait", "stop"]);
   }
   rmSync(root, { recursive: true, force: true });
+}
 }
