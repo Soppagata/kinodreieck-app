@@ -72,9 +72,12 @@ for (const [name, quelle, muster] of [
   check(`${name}-Persistenz läuft nicht mehr in einem React-State-Updater`,
     !muster.test(quelle));
 }
-check("Filter-Persistenz läuft außerhalb der React-State-Updater",
-  !/setFilterMenueOffen\(\s*\(/.test(kinoTab + mediathekTab)
-  && !/setStreamFilterOffen\(\s*\(/.test(streamingTab));
+check("Kino- und Mediathek-Filter-Persistenz läuft außerhalb der React-State-Updater",
+  !/setFilterMenueOffen\(\s*\(/.test(kinoTab + mediathekTab));
+check("Streaming-Filter-Panel schaltet nur lokalen funktionalen State",
+  /const toggleStreamFilter\s*=\s*\(\)\s*=>\s*setStreamFilterOffen\(\(offen\)\s*=>\s*!offen\)/.test(streamingTab)
+  && !/store\.(?:get|set)\(K\.filterStreaming\)/.test(streamingTab)
+  && !/streamFilterOffenRef/.test(streamingTab));
 check("Cage-Start führt Animation und Hooks nicht in einem State-Updater aus",
   !/setPhase\(\s*\(/.test(cage) && /gestartet\.current/.test(cage));
 check("Artikel- und Entdecken-Aktionen besitzen je einen serialisierten Schreibweg",
