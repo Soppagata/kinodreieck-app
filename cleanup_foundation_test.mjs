@@ -124,7 +124,7 @@ const expectedRelease = {
     { name: "ai-task", metadata: { version: 80, sha256: "a".repeat(64), verifyJwt: true } },
     { name: "entdecken-daily-task", metadata: { version: 59, sha256: "b".repeat(64) } },
   ],
-  requiredMigrations: ["20260902130000_private_account_size_report"],
+  requiredMigrations: ["20260905180000_entdecken_vienna_day_claim"],
 };
 
 const observedRelease = {
@@ -133,7 +133,7 @@ const observedRelease = {
     { name: "ai-task", metadata: { version: 80, sha256: "a".repeat(64), verifyJwt: true, status: "ACTIVE" } },
     { name: "entdecken-daily-task", metadata: { version: 59, sha256: "b".repeat(64) } },
   ],
-  migrations: ["20260902130000_private_account_size_report", "20260903213000"],
+  migrations: ["20260905180000_entdecken_vienna_day_claim", "20260903213000"],
 };
 
 test("Releaseparität akzeptiert nur vollständige passende Readbacks", () => {
@@ -148,7 +148,7 @@ test("Releaseparität scheitert geschlossen bei fehlender Migration oder Metadat
     observed: { ...observedRelease, migrations: [] },
   });
   assert.equal(missingMigration.ok, false);
-  assert.ok(missingMigration.errors.includes("migration:20260902130000_private_account_size_report"));
+  assert.ok(missingMigration.errors.includes("migration:20260905180000_entdecken_vienna_day_claim"));
   const missingMetadata = evaluateReleaseCompatibility({
     expected: expectedRelease,
     observed: { ...observedRelease, functions: [{ name: "ai-task", metadata: {} }] },

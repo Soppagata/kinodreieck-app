@@ -73,13 +73,19 @@ test("D-06 bewertet Tagespräzision für die 24h-Ziel-SLA fail-closed", () => {
   assert.equal(entdeckenFeedFreshness({ refreshedOn: "kaputt", validUntil: "2026-09-03" }, "2026-09-04").status, "unknown");
 });
 
-test("U-06 bildet den autorisiert authored, aber nicht angewandten 24h-Kandidaten ehrlich ab", () => {
+test("U-06 bindet die Tages-SLA an den Wiener Kalendertag statt an rollierende 24 Stunden", () => {
   assert.equal(ENTDECKEN_CURRENT_REFRESH_INTERVAL_HOURS, 24);
   assert.equal(ENTDECKEN_TARGET_REFRESH_SLA_HOURS, 24);
   assert.equal(RADAR_REFRESH_INTERVAL_HOURS, 144);
-  const cadence = read("supabase/migrations/20260904140000_entdecken_daily_refresh_interval.sql");
+  const cadence = read("supabase/migrations/20260905180000_entdecken_vienna_day_claim.sql");
   const radar = read("supabase/migrations/20260830120000_radar_six_day_schedule.sql");
-  assert.match(cadence, /v_anchor \+ interval '24 hours'/u);
+  const claim = cadence.match(
+    /create or replace function public\.kd_entdecken_weekly_refresh_claim[\s\S]*?\n\$\$;/u,
+  )?.[0] || "";
+  assert.ok(claim);
+  assert.match(claim, /Europe\/Vienna/u);
+  assert.match(claim, /last_public_attempt_at/u);
+  assert.doesNotMatch(claim, /interval '24 hours'|v_anchor \+/u);
   assert.match(cadence, /not provider_enabled and not commercial_enabled/u);
   assert.doesNotMatch(cadence, /kd_radar_|radar_scheduler_interval_hours/u);
   assert.match(radar, /radar_scheduler_interval_hours integer not null default 144/u);
