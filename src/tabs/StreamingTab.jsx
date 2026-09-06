@@ -314,7 +314,10 @@ export function StreamingTab({
 
   const datenDa = !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
-  const stand = datenDa ? new Date(bekannt.stand) : null;
+  const entdeckenVollstaendig = entdecken?.katalogMengen?.umfang === "voll";
+  /* Die fachliche Katalogfrische stammt vom letzten echten Providerlauf. Ein
+     Skip darf durch einen neuen Publikations-`stand` nicht frisch aussehen. */
+  const stand = datenDa ? new Date(bekannt.katalog_stand || bekannt.stand) : null;
   const alterTage = stand ? (Date.now() - stand.getTime()) / 86400000 : null;
 
   /* Anzeige-Filter: leere Auswahl = alles zeigen */
@@ -501,7 +504,7 @@ export function StreamingTab({
       <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={aendereAnsicht}
         options={[
           { id: "programm", label: "Mein Programm", badge: datenDa ? programm.length : undefined },
-          { id: "entdecken", label: "Alles", badge: entdeckenDa ? (ansicht === "entdecken" ? katalogListe.length : entdeckenAnzahlFuerAuswahl) : undefined },
+          { id: "entdecken", label: "Alles", badge: entdeckenVollstaendig ? (ansicht === "entdecken" ? katalogListe.length : entdeckenAnzahlFuerAuswahl) : undefined },
           { id: "neu", label: "Neu", badge: streamingNeu?.status === "ready" ? (ansicht === "neu" ? katalogListe.length : neuAnzahlFuerAuswahl) : undefined },
         ]} />
 
@@ -642,9 +645,7 @@ export function StreamingTab({
         <>
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.rauch }}>
             {ansicht === "neu"
-              ? streamingNeu?.initial
-                ? "Erster vollständiger Katalogstand — er bildet den Ausgangspunkt und wird hier einmal vollständig gezeigt."
-                : "Neu seit dem unmittelbar zuvor auf diesem Gerät vollständig geladenen Katalogstand."
+              ? "Neue Titel aus deinen ausgewählten Diensten bleiben ab ihrem Kataloglauf 14 Tage sichtbar."
               : "Ungeprüfte Katalogtitel — kein Dreieck und keine Bewertung. Sortiert wird nur nach den sichtbaren Metadaten."}
           </div>
           {!katalogAnsichtBereit ? (
@@ -710,7 +711,7 @@ export function StreamingTab({
               onChange={aendereDekadeE} />
           </div>
           {ansicht === "neu" && katalogListe.length === 0 && (
-            <p style={{ color: T.rauch, fontSize: 14 }}>Seit dem vorherigen vollständigen Katalogstand sind keine Titel hinzugekommen.</p>
+            <p style={{ color: T.rauch, fontSize: 14 }}>In den letzten 14 Tagen sind keine neuen Titel für diese Auswahl hinzugekommen.</p>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sichtbareKatalogTitel.map((t) => (

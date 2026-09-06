@@ -1,4 +1,4 @@
-/* Fokussierter Nutzerweg fuer Streaming-Pins und den lokalen Vollkatalog-Diff.
+/* Fokussierter Nutzerweg fuer Streaming-Pins und den lokalen 14-Tage-Diff.
    Rein lokal: keine Datenbank, kein Provider, keine KI. */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -9,8 +9,11 @@ import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import {
   aktualisiereStreamingNeuSnapshot,
+  bereinigeStreamingNeuSnapshot,
   parseStreamingNeuSnapshot,
+  STREAMING_NEU_DAUER_MS,
   streamingNeuIds,
+  streamingNeuLegacyStorageKey,
   streamingNeuStorageKey,
 } from "./src/lib/streamingNeu.js";
 import { toggleEntdeckenPin } from "./src/lib/entdeckenPins.js";
@@ -23,41 +26,103 @@ const ownerB = "account:00000000-0000-4000-8000-0000000000bb";
 const titel = (id, name, dienst = "Netflix") => ({
   watchmode_id: id, titel: name, jahr: 2024, typ: "movie", genres: ["Drama"], dienste: [dienst],
 });
+const iso = (ms) => new Date(ms).toISOString();
+const TAG = 24 * 60 * 60 * 1000;
+const T0 = Date.parse("2026-08-01T08:00:00.000Z");
 
 const erster = aktualisiereStreamingNeuSnapshot(null, {
-  owner: ownerA, runId: "2026-09-06T08:00:00Z",
-  titel: [titel(1, "Bekannt"), titel(2, "Entdeckung")],
+  owner: ownerA, runId: iso(T0), now: T0,
+  titel: [titel(1, "Bekannt"), titel(2, "Entdeckung"), titel(2, "Dublette")],
 });
-check("Erster vollständiger Stand befüllt Neu initial mit dem ganzen Katalog", () => {
+check("Erster vollständiger Stand ist eine deduplizierte leere Baseline", () => {
   assert.equal(erster.geaendert, true);
-  assert.equal(erster.snapshot.neueIds, null);
-  assert.deepEqual(streamingNeuIds(erster.snapshot), [1, 2]);
+  assert.equal(erster.initialisiert, true);
+  assert.deepEqual(erster.snapshot.ids, [1, 2]);
+  assert.deepEqual(streamingNeuIds(erster.snapshot, T0), []);
 });
 
 const reload = parseStreamingNeuSnapshot(JSON.stringify(erster.snapshot), ownerA);
-check("Reload liest denselben ownergebundenen Ausgangsstand", () => {
+check("Reload bleibt ownergebunden und v2-validiert", () => {
   assert.deepEqual(reload, erster.snapshot);
   assert.equal(parseStreamingNeuSnapshot(JSON.stringify(erster.snapshot), ownerB), null);
   assert.notEqual(streamingNeuStorageKey(ownerA), streamingNeuStorageKey(ownerB));
+  assert.notEqual(streamingNeuStorageKey(ownerA), streamingNeuLegacyStorageKey(ownerA));
 });
 
 const nurGefilterterRender = aktualisiereStreamingNeuSnapshot(reload, {
-  owner: ownerA, runId: "2026-09-06T08:00:00Z", titel: [titel(2, "Entdeckung")],
+  owner: ownerA, runId: iso(T0), now: T0 + TAG, titel: [titel(2, "Entdeckung")],
 });
-check("Derselbe Run bleibt trotz anderer Filter-/Render-Menge unverändert", () => {
+check("Derselbe katalog_stand schreibt eine Filter-/Render-Teilmenge nicht als Lauf", () => {
   assert.equal(nurGefilterterRender.geaendert, false);
   assert.deepEqual(nurGefilterterRender.snapshot.ids, [1, 2]);
-  assert.deepEqual(streamingNeuIds(nurGefilterterRender.snapshot), [1, 2]);
+  assert.deepEqual(streamingNeuIds(nurGefilterterRender.snapshot, T0 + TAG), []);
 });
 
-const folgerun = aktualisiereStreamingNeuSnapshot(reload, {
-  owner: ownerA, runId: "2026-09-07T08:00:00Z",
-  titel: [titel(2, "Entdeckung"), titel(3, "Wirklich neu", "MUBI")],
+const zweiter = aktualisiereStreamingNeuSnapshot(reload, {
+  owner: ownerA, runId: iso(T0 + 2 * TAG), now: T0 + 2 * TAG,
+  titel: [titel(2, "Entdeckung"), titel(3, "Neu A"), titel(3, "Neu A doppelt")],
 });
-check("Ein neuer Vollstand zeigt ausschließlich den Diff zum unmittelbaren Vorgänger", () => {
-  assert.deepEqual(folgerun.snapshot.ids, [2, 3]);
-  assert.deepEqual(folgerun.snapshot.neueIds, [3]);
-  assert.deepEqual(streamingNeuIds(parseStreamingNeuSnapshot(JSON.stringify(folgerun.snapshot), ownerA)), [3]);
+const dritter = aktualisiereStreamingNeuSnapshot(zweiter.snapshot, {
+  owner: ownerA, runId: iso(T0 + 5 * TAG), now: T0 + 5 * TAG,
+  titel: [titel(2, "Entdeckung"), titel(3, "Neu A"), titel(4, "Neu B")],
+});
+check("Neue IDs sammeln sich über mehrere echte Läufe", () => {
+  assert.deepEqual(streamingNeuIds(zweiter.snapshot, T0 + 2 * TAG), [3]);
+  assert.deepEqual(streamingNeuIds(dritter.snapshot, T0 + 5 * TAG), [3, 4]);
+  assert.deepEqual(dritter.snapshot.neu.map((entry) => entry.firstSeenAt), [T0 + 2 * TAG, T0 + 5 * TAG]);
+});
+
+const ohneDrei = aktualisiereStreamingNeuSnapshot(dritter.snapshot, {
+  owner: ownerA, runId: iso(T0 + 6 * TAG), now: T0 + 6 * TAG,
+  titel: [titel(2, "Entdeckung"), titel(4, "Neu B")],
+});
+const dreiWiederDa = aktualisiereStreamingNeuSnapshot(ohneDrei.snapshot, {
+  owner: ownerA, runId: iso(T0 + 7 * TAG), now: T0 + 7 * TAG,
+  titel: [titel(2, "Entdeckung"), titel(3, "Neu A zurück"), titel(4, "Neu B")],
+});
+check("Verschwundene IDs werden entfernt und beim Wiederauftauchen erneut neu", () => {
+  assert.deepEqual(streamingNeuIds(ohneDrei.snapshot, T0 + 6 * TAG), [4]);
+  assert.deepEqual(streamingNeuIds(dreiWiederDa.snapshot, T0 + 7 * TAG), [4, 3]);
+  assert.equal(dreiWiederDa.snapshot.neu.find((entry) => entry.id === 3).firstSeenAt, T0 + 7 * TAG);
+});
+
+check("Ein Titel bleibt 14 volle Tage sichtbar und verschwindet exakt an der Grenze", () => {
+  const fastVierzehn = T0 + 2 * TAG + STREAMING_NEU_DAUER_MS - 1;
+  assert.deepEqual(streamingNeuIds(zweiter.snapshot, fastVierzehn), [3]);
+  const ablauf = bereinigeStreamingNeuSnapshot(zweiter.snapshot, fastVierzehn + 1);
+  assert.equal(ablauf.geaendert, true);
+  assert.deepEqual(streamingNeuIds(ablauf.snapshot, fastVierzehn + 1), []);
+});
+
+const legacy = {
+  format: 1, owner: ownerA, runId: iso(T0), ids: [1, 2], neueIds: null,
+};
+const migration = aktualisiereStreamingNeuSnapshot(JSON.stringify(legacy), {
+  owner: ownerA, runId: iso(T0), now: T0, titel: [titel(1, "Alt"), titel(2, "Alt")],
+});
+check("v1 migriert als leere Baseline statt den Altbestand als neu zu zeigen", () => {
+  assert.equal(migration.snapshot.format, 2);
+  assert.equal(migration.geaendert, true);
+  assert.deepEqual(streamingNeuIds(migration.snapshot, T0), []);
+});
+
+check("Korrupte Historien und rückwärts laufende Katalogstände bleiben fail-closed", () => {
+  assert.equal(parseStreamingNeuSnapshot(JSON.stringify({
+    ...dritter.snapshot, neu: [{ id: 4, firstSeenAt: T0 + 9 * TAG }],
+  }), ownerA), null);
+  const stale = aktualisiereStreamingNeuSnapshot(dritter.snapshot, {
+    owner: ownerA, runId: iso(T0 + 4 * TAG), now: T0 + 6 * TAG, titel: [titel(99, "Stale")],
+  });
+  assert.deepEqual(stale.snapshot.ids, dritter.snapshot.ids);
+  assert.deepEqual(streamingNeuIds(stale.snapshot, T0 + 6 * TAG), [3, 4]);
+});
+
+const appSource = fs.readFileSync(new URL("./src/App.jsx", import.meta.url), "utf8");
+check("App verwendet katalog_stand und lädt den Vollkatalog beim Öffnen von Streaming", () => {
+  assert.equal((appSource.match(/runId:\s*[^\n]*\?\.katalog_stand/g) || []).length, 2);
+  assert.match(appSource, /tab === "streaming"[\s\S]{0,180}ladeStreamingDateien\(true\)/u);
+  const streamingSource = fs.readFileSync(new URL("./src/tabs/StreamingTab.jsx", import.meta.url), "utf8");
+  assert.match(streamingSource, /new Date\(bekannt\.katalog_stand \|\| bekannt\.stand\)/u);
 });
 
 const wurzel = path.dirname(fileURLToPath(import.meta.url));
@@ -75,6 +140,8 @@ await esbuild.build({
     contents: [
       'export { StreamingTab } from "./src/tabs/StreamingTab.jsx";',
       'export { StartTab } from "./src/tabs/StartTab.jsx";',
+      'export { useStreamingNeuController } from "./src/controllers/useStreamingNeuController.js";',
+      'export { setStorageDriver } from "./src/lib/storage.js";',
     ].join("\n"),
     loader: "js", resolveDir: wurzel,
   },
@@ -93,7 +160,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const React = await import("react");
 const { act, createElement: h } = React;
 const { createRoot } = await import("react-dom/client");
-const { StreamingTab, StartTab } = await import(ausgabe);
+const { StreamingTab, StartTab, useStreamingNeuController, setStorageDriver } = await import(ausgabe);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 async function mount(Component, props) {
@@ -105,52 +172,103 @@ async function mount(Component, props) {
   return { container, render, async cleanup() { await act(async () => root.unmount()); container.remove(); } };
 }
 
+const gespeicherteWerte = new Map();
+const testDriver = {
+  name: "test", owner: ownerA,
+  async get(key) { return gespeicherteWerte.has(key) ? { key, value: gespeicherteWerte.get(key) } : null; },
+  async set(key, value) { gespeicherteWerte.set(key, value); return { key, value }; },
+  async delete(key) { gespeicherteWerte.delete(key); return { key, deleted: true }; },
+  async list(prefix = "") { return { keys: [...gespeicherteWerte.keys()].filter((key) => key.startsWith(prefix)) }; },
+};
+setStorageDriver(testDriver);
+let controller = null;
+function ControllerProbe() {
+  controller = useStreamingNeuController();
+  return h("output", null, `${controller.streamingNeu.status}:${controller.streamingNeu.neueIds.join(",")}`);
+}
+const controllerUi = await mount(ControllerProbe, {});
+const realNow = Date.now();
+await act(async () => {
+  await controller.uebernehmeVollkatalog({
+    runId: iso(realNow - STREAMING_NEU_DAUER_MS - 1_000), titel: [titel(10, "Baseline")],
+  });
+  await tick();
+});
+await act(async () => {
+  await controller.uebernehmeVollkatalog({
+    runId: iso(realNow - STREAMING_NEU_DAUER_MS + 250),
+    titel: [titel(10, "Baseline"), titel(11, "Controller neu")],
+  });
+  await tick();
+});
+check("Controller persistiert v2 asynchron und übernimmt nur den echten Folgelauf-Diff", () => {
+  assert.equal(controllerUi.container.textContent, "ready:11");
+  assert.equal(JSON.parse(gespeicherteWerte.get(streamingNeuStorageKey(ownerA))).format, 2);
+});
+await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); await tick(); });
+check("Offen bleibende UI entfernt und persistiert einen Titel an seiner Ablaufgrenze", () => {
+  assert.equal(controllerUi.container.textContent, "ready:");
+  assert.deepEqual(JSON.parse(gespeicherteWerte.get(streamingNeuStorageKey(ownerA))).neu, []);
+});
+await controllerUi.cleanup();
+setStorageDriver(null);
+
 const bekannt = {
-  stand: "2026-09-06T08:00:00Z", dienste: ["Netflix"], katalogMengen: { umfang: "voll" },
+  stand: iso(realNow), katalog_stand: iso(realNow), dienste: ["Netflix"],
+  katalogMengen: { umfang: "voll" },
   titel: [{ ...titel(1, "Bekannt"), id: "bekannt-master", bewertung: null, quelle: "streaming", typ: "film" }],
 };
-const entdecken = {
-  stand: "2026-09-06T08:00:00Z", dienste: ["Netflix", "MUBI"], katalogMengen: { umfang: "voll" },
-  titel: [titel(2, "Entdeckung"), titel(3, "Nur MUBI", "MUBI")],
+const entdeckenVoll = {
+  stand: iso(realNow), katalog_stand: iso(realNow), dienste: ["Netflix", "MUBI"],
+  katalogMengen: { umfang: "voll" },
+  titel: [titel(2, "Entdeckung"), titel(3, "Nur MUBI", "MUBI"), titel(4, "Noch Netflix")],
+};
+const entdeckenBegrenzt = {
+  ...entdeckenVoll, katalogMengen: { umfang: "begrenzt" }, titel: [titel(2, "Entdeckung")],
 };
 let letzterToggle = null;
 let vollLadungen = 0;
 const basisProps = {
-  bekannt, entdecken, auswahl: ["Netflix"], merkliste: [], toggleMerk() {},
+  bekannt, entdecken: entdeckenBegrenzt, auswahl: ["Netflix"], merkliste: [], toggleMerk() {},
   master: bekannt.titel, mustwatchIds: new Set(), entdeckenStatus: {},
   schreibeEntdeckenStatus: async () => true,
   onAllesKatalogLaden() { vollLadungen++; },
   recommendationPins: [], onRecommendationPinToggle(entry) { letzterToggle = entry; },
-  streamingNeu: { status: "ready", runId: "2026-09-06T08:00:00Z", neueIds: [1, 2, 3], initial: true },
+  streamingNeu: { status: "ready", runId: iso(realNow), neueIds: [1, 2, 3, 4], naechsterAblauf: null },
 };
 const ui = await mount(StreamingTab, basisProps);
 const pin = (name, action = "anpinnen") => ui.container.querySelector(`button[aria-label="${name} ${action === "lösen" ? "vom Pinboard lösen" : "am Pinboard anpinnen"}"]`);
+const tabButton = (name) => [...ui.container.querySelectorAll("button")]
+  .find((button) => button.textContent.trim().startsWith(name));
+
+check("Begrenzter Startbestand zeigt bei Alles keine irreführende Teilzahl", () => {
+  assert.equal(tabButton("Alles").textContent.trim(), "Alles");
+});
+await ui.render({ ...basisProps, entdecken: entdeckenVoll });
+check("Nach Vollabdeckung zeigt Alles die echte Zahl für ausgewählte Dienste", () => {
+  assert.equal(tabButton("Alles").textContent.trim(), "Alles (2)");
+});
 
 await act(async () => { pin("Bekannt").click(); await tick(); });
 const gesetztePins = toggleEntdeckenPin([], letzterToggle, 1234);
-await ui.render({ ...basisProps, recommendationPins: gesetztePins });
-check("Jeder Titel in Mein Programm lässt sich über den bestehenden Pin-Mechanismus pinnen und entpinnen", () => {
+await ui.render({ ...basisProps, entdecken: entdeckenVoll, recommendationPins: gesetztePins });
+check("Jeder Titel in Mein Programm lässt sich über denselben Pin-Mechanismus pinnen", () => {
   assert.equal(letzterToggle.watchmode_id, 1);
   assert.equal(pin("Bekannt", "lösen")?.getAttribute("aria-pressed"), "true");
 });
-await act(async () => { pin("Bekannt", "lösen").click(); await tick(); });
-check("Der gedrückte Streaming-Pin ruft zum Entpinnen dieselbe stabile Titelidentität auf", () => {
-  assert.equal(letzterToggle.watchmode_id, 1);
-});
 
-const allesKnopf = [...ui.container.querySelectorAll("button")].find((button) => button.textContent.trim().startsWith("Alles"));
-await act(async () => { allesKnopf.click(); await tick(); await tick(); });
-check("Auch jede Karte in Alles besitzt denselben Pin-Button", () => {
+await act(async () => { tabButton("Alles").click(); await tick(); await tick(); });
+check("Auch jede Karte in Alles besitzt den Pin-Button", () => {
   assert.ok(pin("Entdeckung"));
   assert.equal(vollLadungen, 1);
 });
 
-const neuKnopf = [...ui.container.querySelectorAll("button")].find((button) => button.textContent.trim().startsWith("Neu"));
-await act(async () => { neuKnopf.click(); await tick(); await tick(); });
-check("Neu nutzt den vollständigen Initialbestand, die Dienstewahl und dieselben Pin-Karten", () => {
-  assert.match(ui.container.textContent, /Erster vollständiger Katalogstand/u);
+await act(async () => { tabButton("Neu").click(); await tick(); await tick(); });
+check("Neu nutzt 14-Tage-Menge, Dienstewahl und dieselben Pin-Karten", () => {
+  assert.match(ui.container.textContent, /14 Tage/u);
   assert.match(ui.container.textContent, /Bekannt/u);
   assert.match(ui.container.textContent, /Entdeckung/u);
+  assert.match(ui.container.textContent, /Noch Netflix/u);
   assert.doesNotMatch(ui.container.textContent, /Nur MUBI/u);
   assert.ok((pin("Bekannt") || pin("Bekannt", "lösen")) && pin("Entdeckung"));
   assert.equal(vollLadungen, 2);
@@ -158,14 +276,14 @@ check("Neu nutzt den vollständigen Initialbestand, die Dienstewahl und dieselbe
 
 let dashboardSprung = null;
 const dashboard = await mount(StartTab, {
-  entdeckenPins: gesetztePins, streamingBekannt: bekannt, streamingEntdecken: entdecken,
+  entdeckenPins: gesetztePins, streamingBekannt: bekannt, streamingEntdecken: entdeckenVoll,
   webDiscoveryFeed: null, progStand: Date.now(), kinoMatches: { matched: [], rest: [] },
   wochenplan: { version: 1, eintraege: [] }, onWochenplanAendern() {},
   onSpringeZuStreaming(target) { dashboardSprung = target; }, onEntdeckenPinsBereinigen() {},
 });
 const dashboardPin = dashboard.container.querySelector(".kd-pinboard-titel");
 await act(async () => { dashboardPin.click(); await tick(); });
-check("Ein Streaming-Pin erscheint zuverlässig im bestehenden Dashboard-Pinboard", () => {
+check("Ein Streaming-Pin erscheint zuverlässig im Dashboard-Pinboard", () => {
   assert.match(dashboardPin.textContent, /Bekannt/u);
   assert.equal(dashboardSprung?.ref, 1);
   assert.equal(dashboardSprung?.art, "programm");

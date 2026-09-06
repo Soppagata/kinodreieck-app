@@ -1327,7 +1327,7 @@ export default function App() {
           setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
           if (dateiRoh.entdeckenUmfang === "voll") {
             await uebernehmeVollkatalog({
-              runId: dateiEntdecken?.stand,
+              runId: dateiEntdecken?.katalog_stand,
               titel: [...(dateiRoh.bekannt?.titel || []), ...(dateiEntdecken?.titel || [])],
             });
           }
@@ -1351,7 +1351,7 @@ export default function App() {
         entdeckenGeladen.current = true;
         uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);
         await uebernehmeVollkatalog({
-          runId: vollerEntdeckenStand?.stand,
+          runId: vollerEntdeckenStand?.katalog_stand,
           titel: [...(roh.bekannt?.titel || []), ...(vollerEntdeckenStand?.titel || [])],
         });
         if (veraltet() || !snapshotFreigabeRef.current) return;
@@ -1376,11 +1376,14 @@ export default function App() {
     return a;
   }, [snapshotFreigabe, master, reportError, resolveError, uebernehmeVollkatalog]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
-  /* Der Hauptbereich Entdecken und „Mein Programm" leben zuerst aus dem
-     kleinen, gebündelten Marktfeed beziehungsweise dem leichten Bekannt-
-     Katalog. Der 3,26-MB-Vollkatalog wird erst durch Streaming → Alles, einen
-     konkreten Streaming-Sprung, eine globale Suche oder das manuelle
-     Katalog-Nachladen angefordert. */
+  /* Dashboard und „Mein Programm" leben zuerst aus dem leichten Bekannt-
+     Katalog. Sobald Streaming selbst offen ist, wird der Vollkatalog geladen:
+     bis dahin bleibt die Alles-Zahl verborgen, danach ist sie echt. */
+  useEffect(() => {
+    if (remoteKontoAktiv && bootDone && snapshotFreigabe && tab === "streaming") {
+      void ladeStreamingDateien(true);
+    }
+  }, [remoteKontoAktiv, bootDone, snapshotFreigabe, tab, ladeStreamingDateien]);
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */

@@ -1,10 +1,12 @@
-/* Lokaler Verlauf fuer den zuletzt vollstaendig geladenen Streaming-Katalog.
-   Die Run-Identitaet kommt ausschliesslich aus `kd_catalog.stand` (Fallback
-   updated_at) der vollstaendigen streaming_entdecken-Zeile. Filter, Sortierung
-   und Renderzyklen koennen deshalb keinen neuen Lauf vortaeuschen. */
+/* Lokaler Verlauf fuer vollstaendige Streaming-Kataloglaeufe.
+   Ein Lauf wird ausschliesslich durch `katalog_stand` identifiziert. Der bei
+   einer blossen Neuveroeffentlichung gesetzte Payload-/DB-`stand` darf diese
+   Historie weder leeren noch neu starten. */
 
-export const STREAMING_NEU_FORMAT = 1;
-export const STREAMING_NEU_KEY_PREFIX = "kd:streaming-neu:v1:";
+export const STREAMING_NEU_FORMAT = 2;
+export const STREAMING_NEU_KEY_PREFIX = "kd:streaming-neu:v2:";
+export const STREAMING_NEU_LEGACY_KEY_PREFIX = "kd:streaming-neu:v1:";
+export const STREAMING_NEU_DAUER_MS = 14 * 24 * 60 * 60 * 1000;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 
@@ -14,9 +16,27 @@ function watchmodeId(entry) {
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 
-export function streamingNeuStorageKey(owner) {
+function zeitpunkt(value) {
+  const parsed = typeof value === "number" ? value : Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function rawValue(raw) {
+  if (typeof raw !== "string") return raw;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function key(prefix, owner) {
   const clean = text(owner);
-  return clean ? STREAMING_NEU_KEY_PREFIX + encodeURIComponent(clean) : null;
+  return clean ? prefix + encodeURIComponent(clean) : null;
+}
+
+export function streamingNeuStorageKey(owner) {
+  return key(STREAMING_NEU_KEY_PREFIX, owner);
+}
+
+export function streamingNeuLegacyStorageKey(owner) {
+  return key(STREAMING_NEU_LEGACY_KEY_PREFIX, owner);
 }
 
 export function streamingKatalogIds(titel) {
@@ -28,59 +48,175 @@ export function streamingKatalogIds(titel) {
   return Object.freeze([...ids].sort((a, b) => a - b));
 }
 
-export function parseStreamingNeuSnapshot(raw, owner) {
-  let value = raw;
-  if (typeof raw === "string") {
-    try { value = JSON.parse(raw); } catch { return null; }
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value)
-      || value.format !== STREAMING_NEU_FORMAT
-      || text(value.owner) !== text(owner)
-      || !text(value.runId)
-      || !Array.isArray(value.ids)
-      || !(value.neueIds === null || Array.isArray(value.neueIds))) return null;
-  const ids = streamingKatalogIds(value.ids.map((id) => ({ watchmode_id: id })));
-  if (ids.length !== value.ids.length) return null;
-  const idSet = new Set(ids);
-  const neueIds = value.neueIds === null
-    ? null
-    : streamingKatalogIds(value.neueIds.map((id) => ({ watchmode_id: id })))
-      .filter((id) => idSet.has(id));
-  if (value.neueIds !== null && neueIds.length !== value.neueIds.length) return null;
+function parseIds(value) {
+  if (!Array.isArray(value)) return null;
+  const ids = streamingKatalogIds(value.map((id) => ({ watchmode_id: id })));
+  return ids.length === value.length ? ids : null;
+}
+
+function parseV1(value, owner) {
+  if (value?.format !== 1 || text(value.owner) !== text(owner)
+      || zeitpunkt(value.runId) == null) return null;
+  const ids = parseIds(value.ids);
+  if (!ids || !(value.neueIds === null || Array.isArray(value.neueIds))) return null;
+  /* Der alte Erststand zeigte absichtlich den ganzen Bestand. Diese Bedeutung
+     darf nicht in v2 uebernommen werden: v1 wird nur als bekannte Baseline
+     migriert, niemals als Liste vermeintlich neuer Titel. */
   return Object.freeze({
     format: STREAMING_NEU_FORMAT,
     owner: text(owner),
     runId: text(value.runId),
     ids,
-    neueIds: neueIds === null ? null : Object.freeze(neueIds),
+    neu: Object.freeze([]),
   });
 }
 
-/* Erstbestand: alle Titel sind neu. Folgestand: nur IDs, die im unmittelbar
-   zuvor geladenen Vollstand fehlten. Derselbe Run bleibt byte-stabil; selbst
-   eine versehentlich uebergebene Filtermenge darf ihn nicht umschreiben. */
+export function parseStreamingNeuSnapshot(raw, owner) {
+  const value = rawValue(raw);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (value.format === 1) return parseV1(value, owner);
+  const runAt = zeitpunkt(value.runId);
+  if (value.format !== STREAMING_NEU_FORMAT
+      || text(value.owner) !== text(owner)
+      || !text(value.runId)
+      || runAt == null) return null;
+  const ids = parseIds(value.ids);
+  if (!ids || !Array.isArray(value.neu)) return null;
+  const idSet = new Set(ids);
+  const seen = new Set();
+  const neu = [];
+  for (const entry of value.neu) {
+    const id = Number(entry?.id);
+    const firstSeenAt = zeitpunkt(entry?.firstSeenAt);
+    if (!Number.isInteger(id) || id <= 0 || firstSeenAt == null || firstSeenAt > runAt
+        || !idSet.has(id) || seen.has(id)) return null;
+    seen.add(id);
+    neu.push(Object.freeze({ id, firstSeenAt }));
+  }
+  neu.sort((a, b) => a.firstSeenAt - b.firstSeenAt || a.id - b.id);
+  return Object.freeze({
+    format: STREAMING_NEU_FORMAT,
+    owner: text(owner),
+    runId: text(value.runId),
+    ids,
+    neu: Object.freeze(neu),
+  });
+}
+
+function aktiveNeueEintraege(snapshot, now, ids = snapshot?.ids || []) {
+  const currentIds = new Set(ids);
+  return Object.freeze((snapshot?.neu || []).filter((entry) => (
+    currentIds.has(entry.id)
+    && now < entry.firstSeenAt + STREAMING_NEU_DAUER_MS
+  )));
+}
+
+function gleicherSnapshot(snapshot, ids, neu) {
+  return snapshot.ids.length === ids.length
+    && snapshot.ids.every((id, index) => id === ids[index])
+    && snapshot.neu.length === neu.length
+    && snapshot.neu.every((entry, index) => (
+      entry.id === neu[index].id && entry.firstSeenAt === neu[index].firstSeenAt
+    ));
+}
+
+function snapshotMit(snapshot, ids, neu) {
+  return Object.freeze({
+    format: STREAMING_NEU_FORMAT,
+    owner: snapshot.owner,
+    runId: snapshot.runId,
+    ids,
+    neu,
+  });
+}
+
+export function bereinigeStreamingNeuSnapshot(snapshot, now = Date.now()) {
+  const aktuell = parseStreamingNeuSnapshot(snapshot, snapshot?.owner);
+  const zeit = zeitpunkt(now);
+  if (!aktuell || zeit == null) return null;
+  const neu = aktiveNeueEintraege(aktuell, zeit);
+  const next = gleicherSnapshot(aktuell, aktuell.ids, neu)
+    ? aktuell
+    : snapshotMit(aktuell, aktuell.ids, neu);
+  return Object.freeze({ snapshot: next, geaendert: next !== aktuell });
+}
+
+/* Der erste Vollstand ist nur die Baseline. Jeder spaetere echte Kataloglauf
+   fuegt die Differenz zum unmittelbar vorherigen Bestand hinzu. Schon aktive
+   Eintraege behalten ihren ersten Erkennungszeitpunkt ueber weitere Laeufe. */
 export function aktualisiereStreamingNeuSnapshot(vorher, {
-  owner, runId, titel,
+  owner, runId, titel, now = Date.now(),
 } = {}) {
   const cleanOwner = text(owner);
   const cleanRunId = text(runId);
-  if (!cleanOwner || !cleanRunId || !Array.isArray(titel)) return null;
-  const alt = parseStreamingNeuSnapshot(vorher, cleanOwner);
-  if (alt?.runId === cleanRunId) return Object.freeze({ snapshot: alt, geaendert: false });
+  const runAt = zeitpunkt(cleanRunId);
+  const zeit = zeitpunkt(now);
+  if (!cleanOwner || runAt == null || zeit == null || !Array.isArray(titel)) return null;
+
+  const raw = rawValue(vorher);
+  const warLegacy = raw?.format === 1;
+  const alt = parseStreamingNeuSnapshot(raw, cleanOwner);
   const ids = streamingKatalogIds(titel);
-  const alteIds = new Set(alt?.ids || []);
-  const neueIds = alt ? ids.filter((id) => !alteIds.has(id)) : null;
+
+  if (!alt) {
+    const snapshot = Object.freeze({
+      format: STREAMING_NEU_FORMAT,
+      owner: cleanOwner,
+      runId: cleanRunId,
+      ids,
+      neu: Object.freeze([]),
+    });
+    return Object.freeze({ snapshot, geaendert: true, initialisiert: true });
+  }
+
+  const altRunAt = zeitpunkt(alt.runId);
+  /* Derselbe oder ein aelterer Cache-Stand darf die Baseline nicht mit einer
+     moeglicherweise gefilterten bzw. rueckwaerts gelaufenen Menge ersetzen.
+     Ablauf wird trotzdem anhand der Uhr bereinigt. */
+  if (cleanRunId === alt.runId || (altRunAt != null && runAt <= altRunAt)) {
+    const neu = aktiveNeueEintraege(alt, zeit);
+    const snapshot = gleicherSnapshot(alt, alt.ids, neu)
+      ? alt
+      : snapshotMit(alt, alt.ids, neu);
+    return Object.freeze({
+      snapshot,
+      geaendert: warLegacy || snapshot !== alt,
+      initialisiert: false,
+    });
+  }
+
+  const alteIds = new Set(alt.ids);
+  const neu = [...aktiveNeueEintraege(alt, zeit, ids)];
+  const schonNeu = new Set(neu.map((entry) => entry.id));
+  for (const id of ids) {
+    if (alteIds.has(id) || schonNeu.has(id)) continue;
+    if (zeit >= runAt + STREAMING_NEU_DAUER_MS) continue;
+    neu.push(Object.freeze({ id, firstSeenAt: runAt }));
+  }
+  neu.sort((a, b) => a.firstSeenAt - b.firstSeenAt || a.id - b.id);
   const snapshot = Object.freeze({
     format: STREAMING_NEU_FORMAT,
     owner: cleanOwner,
     runId: cleanRunId,
     ids,
-    neueIds: neueIds === null ? null : Object.freeze(neueIds),
+    neu: Object.freeze(neu),
   });
-  return Object.freeze({ snapshot, geaendert: true });
+  return Object.freeze({ snapshot, geaendert: true, initialisiert: false });
 }
 
-export function streamingNeuIds(snapshot) {
-  if (!snapshot) return Object.freeze([]);
-  return snapshot.neueIds === null ? snapshot.ids : snapshot.neueIds;
+export function streamingNeuIds(snapshot, now = Date.now()) {
+  const zeit = zeitpunkt(now);
+  if (!snapshot || zeit == null) return Object.freeze([]);
+  return Object.freeze(aktiveNeueEintraege(snapshot, zeit).map((entry) => entry.id));
+}
+
+export function naechsterStreamingNeuAblauf(snapshot, now = Date.now()) {
+  const zeit = zeitpunkt(now);
+  if (!snapshot || zeit == null) return null;
+  let next = null;
+  for (const entry of aktiveNeueEintraege(snapshot, zeit)) {
+    const ablauf = entry.firstSeenAt + STREAMING_NEU_DAUER_MS;
+    if (next == null || ablauf < next) next = ablauf;
+  }
+  return next;
 }
