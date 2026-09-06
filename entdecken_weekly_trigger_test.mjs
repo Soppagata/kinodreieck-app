@@ -172,9 +172,17 @@ check("Additive Claim-Ersetzung nutzt den Wiener Kalendertag und einen Versuch",
   assert.match(viennaDayClaimMigration, /revoke all on function[\s\S]*from public, anon, authenticated/u);
   assert.match(viennaDayClaimMigration, /grant execute on function public\.kd_entdecken_weekly_refresh_claim\(text\)[\s\S]*to service_role/u);
   assert.doesNotMatch(viennaDayClaimMigration, /radar_scheduler_interval_hours|kd_radar_|scheduled-144h-v1/u);
-  assert.equal((migrationReadme.match(/20260905180000_entdecken_vienna_day_claim\.sql/gu) || []).length, 1);
-  assert.match(migrationReadme, /Self-contained Ersatz des Format-6-Claims/u);
-  assert.match(migrationReadme, /Einzige offene Release-Migration dieses Audits/u);
+  const viennaDayClaimLogLines = migrationReadme.split("\n").filter((line) => (
+    line.includes("20260905180000_entdecken_vienna_day_claim.sql")
+  ));
+  assert.equal(viennaDayClaimLogLines.length, 1);
+  const [viennaDayClaimLog] = viennaDayClaimLogLines;
+  assert.match(viennaDayClaimLog, /`bscjgwcntapobyxsiyce` \| 2026-09-06 \| Codex über verknüpfte Management-API/u);
+  assert.match(viennaDayClaimLog, /erfolgreich exakt einmal atomar angewandt und rückgelesen/u);
+  assert.match(viennaDayClaimLog, /Ledgerzeile eindeutig/u);
+  assert.match(viennaDayClaimLog, /Wiener Kalendertag ohne rollierende 24h-\/48h-Logik/u);
+  assert.match(viennaDayClaimLog, /ausschließlich für `service_role`/u);
+  assert.doesNotMatch(viennaDayClaimLog, /Source-only|nicht angewandt|offen/iu);
 
   const previousRun = new Date("2026-09-04T02:00:10.000Z");
   const nextCron = new Date("2026-09-05T02:00:01.000Z");

@@ -85,7 +85,7 @@ die Statusautorität für den Remote-Lauf.
 | `20260817120000_blog_profile_extract_config.sql` | | | | Source-only; `REMOTE_PAYLOAD_PENDING`, Ledger-Zielzeile erst nach atomarem E17B-Lauf |
 | `20260903193000_automatic_ai_retry_jobs.sql` | `bscjgwcntapobyxsiyce` | 2026-09-03 | Codex über verknüpfte Management-API | erfolgreich atomar angewandt und rückgelesen; leeres service-only/RLS-Ledger, keine Browserrechte, fünf RPCs ausschließlich für `service_role`, +6h- und Einmalzustände vorhanden; Budgetwerte unverändert |
 | `20260903213000_radar_automatic_retry_binding.sql` | `bscjgwcntapobyxsiyce` | 2026-09-03 | Codex über verknüpfte Management-API | erfolgreich atomar nach dem Retry-Ledger angewandt und rückgelesen; drei exakte Radar-Retry-RPCs ausschließlich für `service_role`, keine Browserrechte und weiter null Ledgerzeilen |
-| `20260905180000_entdecken_vienna_day_claim.sql` | | | | Source-only; nicht angewandt. Self-contained Ersatz des Format-6-Claims gegen 48h-Aussetzer bei Schedulerjitter; einmal je Wiener Kalendertag. Einzige offene Release-Migration dieses Audits. |
+| `20260905180000_entdecken_vienna_day_claim.sql` | `bscjgwcntapobyxsiyce` | 2026-09-06 | Codex über verknüpfte Management-API | erfolgreich exakt einmal atomar angewandt und rückgelesen; Ledgerzeile eindeutig, Claim folgt dem Wiener Kalendertag ohne rollierende 24h-/48h-Logik, Ausführung ausschließlich für `service_role` |
 
 ## Entscheidung zum Beta-Tageslimit (08.08.2026)
 
