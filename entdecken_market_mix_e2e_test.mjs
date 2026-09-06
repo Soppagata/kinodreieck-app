@@ -245,7 +245,7 @@ function legacyJoynFormat6() {
   };
 }
 
-check("Ein neuerer Format-6-Stand verdraengt Format 7 nicht", () => {
+check("Ein neuerer Netflix-OeFI-Format-6-Stand gewinnt gegen den aelteren Format-7-Fallback", () => {
   const newerFormat6 = structuredClone(mixedFeed);
   newerFormat6.refreshedOn = "2026-08-30";
   newerFormat6.validUntil = "2026-09-05";
@@ -254,6 +254,20 @@ check("Ein neuerer Format-6-Stand verdraengt Format 7 nicht", () => {
   const selected = selectEntdeckenFeed(
     { status: "fresh", feed: newerFormat6 },
     { status: "fresh", feed: ENTDECKEN_MARKET_POOL_50 },
+  );
+  assert.equal(selected.feed.format, 6);
+  assert.deepEqual(selected.feed, newerFormat6);
+});
+
+check("Ein neuerer Format-7-Stand gewinnt gegen einen aelteren Netflix-OeFI-Format-6-Stand", () => {
+  const olderFormat6 = structuredClone(mixedFeed);
+  olderFormat6.refreshedOn = "2026-08-28";
+  olderFormat6.validUntil = "2026-09-03";
+  olderFormat6.isoWeek = "2026-W35";
+  assert.equal(validateWebDiscoveryFeed(olderFormat6).ok, true);
+  const selected = selectEntdeckenFeed(
+    { status: "fresh", feed: ENTDECKEN_MARKET_POOL_50 },
+    { status: "fresh", feed: olderFormat6 },
   );
   assert.equal(selected.feed.format, 7);
   assert.deepEqual(selected.feed, ENTDECKEN_MARKET_POOL_50);

@@ -105,6 +105,20 @@ check("R-03: Function bleibt Joyn-frei und Format 7 bindet den sichtbaren 50er V
   assert.match(migration, /v_streaming_film is distinct from 18/u);
   assert.match(migration, /v_streaming_series is distinct from 17/u);
   assert.match(migration, /'chart:joyn-at','chart:oefi-weekend-at'/u);
+
+  const forwardPath = "supabase/migrations/20260906180000_entdecken_current_diverse_pool.sql";
+  const forward = source(forwardPath);
+  assert.equal(forwardPath > "supabase/migrations/20260906170000_radar_text_finding_source_target.sql", true);
+  assert.match(forward, /source_id not in \('chart:netflix-weekly-at','chart:oefi-weekend-at'\)/u);
+  assert.match(forward, /jsonb_array_length\(p_payload->'items'\) is distinct from 25/u);
+  assert.match(forward, /v_cinema is distinct from 15/u);
+  assert.match(forward, /v_streaming_film is distinct from 5/u);
+  assert.match(forward, /v_streaming_series is distinct from 5/u);
+  assert.match(forward, /v_netflix is distinct from 10/u);
+  assert.match(forward, /v_oefi is distinct from 15/u);
+  assert.match(forward, /'itemCount',25,'sourceCount',2/u);
+  assert.match(forward, /Format 6 bleibt 25 Items aus Netflix AT und OeFI/u);
+  assert.doesNotMatch(forward, /\bdelete\s+from\b|\bdrop\s+(?:table|function|schema)\b/iu);
   const responseContract = source("supabase/functions/entdecken-daily-task/responseContract.js");
   assert.match(responseContract, /ENTDECKEN_PUBLIC_SOURCE_REQUESTS, ENTDECKEN_MIXED_SOURCE_REQUESTS/u);
 });

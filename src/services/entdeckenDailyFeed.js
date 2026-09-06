@@ -161,18 +161,19 @@ export function selectEntdeckenFeed(serverState, localState) {
   if (feedHasJoynSource(serverState?.feed)) return localState;
   if (!localState?.feed) return serverState;
   if (!serverState?.feed) return localState;
-  if (serverState.feed.format !== localState.feed.format) {
-    return serverState.feed.format > localState.feed.format ? serverState : localState;
+  if (serverState.feed.refreshedOn !== localState.feed.refreshedOn) {
+    return serverState.feed.refreshedOn > localState.feed.refreshedOn
+      ? serverState : localState;
   }
-  return serverState.feed.refreshedOn > localState.feed.refreshedOn
-    ? serverState : localState;
+  return serverState.feed.format > localState.feed.format ? serverState : localState;
 }
 
 /* Nur ein aktiv freigeschaltetes, waehrend Token- und Requestphase identisches
    Konto versucht den privaten GET. Der versionierte Pool bleibt oeffentlicher
-   Fail-safe. Ein niedrigeres oder Joyn-haltiges Serverformat darf ihn auch bei
-   neuerem Datum nicht ersetzen. Body, Profil, Seen-Stand, Dienste und
-   Katalogdaten bleiben vollstaendig lokal. */
+   Fail-safe. Ein Joyn-haltiger Serverfeed darf ihn auch bei neuerem Datum
+   nicht ersetzen; zwischen Joyn-freien Feeds gewinnt primaer refreshedOn und
+   das Format entscheidet nur bei Gleichstand. Body, Profil, Seen-Stand,
+   Dienste und Katalogdaten bleiben vollstaendig lokal. */
 export function createEntdeckenDailyFeedService({
   config = runtimeConfig,
   auth = authService,
