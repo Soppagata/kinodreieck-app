@@ -61,7 +61,12 @@ import {
 import {
   ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
   ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256,
+  ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256,
   requireEntdeckenJoynFreeCandidateProvenance,
+  requireEntdeckenJoynFreeDeployedReleaseProvenance,
+  requireEntdeckenJoynFreeSingleLiveReleaseProvenance,
 } from "./tools/radar_websearch_remote_start.mjs";
 import {
   PROVIDER_DIAGNOSTIC_ENV,
@@ -951,27 +956,31 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && candidate.files.length === 4
       && candidate.files.some((entry) => entry.path
         === "supabase/migrations/20260906180000_entdecken_current_diverse_pool.sql"));
-  let stopp = null;
-  try {
-    await starteModus({
-      modus: "ai-live",
-      ambientEnv: {},
-      lokaleKonfig: PUBLIC,
-      keychainLeser(account) {
-        gelesen.push(account);
-        return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
-      },
-      spawnImpl,
-      ownerApprovedServerBudget: true,
-      entdeckenDailyOnce: true,
-    });
-  } catch (error) { stopp = error; }
+  const deployed = requireEntdeckenJoynFreeDeployedReleaseProvenance();
+  const live = requireEntdeckenJoynFreeSingleLiveReleaseProvenance();
+  pruefe("Joyn-freier Deploy- und Einmallaufvertrag sind separat promotiert",
+    deployed.commit === ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT
+      && deployed.releaseSha256 === ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256
+      && live.releaseSha256 === ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256);
+  const code = await starteModus({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+    },
+    spawnImpl,
+    ownerApprovedServerBudget: true,
+    entdeckenDailyOnce: true,
+  });
   pruefe("Entdecken-Einmallauf bleibt fest auf seinen einzelnen Client verdrahtet",
     MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
       && !MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Nicht deployter Joyn-freier Kandidat stoppt vor Keychain und Budgetwächter",
-    stopp?.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT"
-      && starts.length === 0 && gelesen.length === 0);
+  pruefe("Promotierter Joyn-freier Einmallauf erreicht Keychain und genau ein Budgetkind",
+    code === 0 && starts.length === 1
+      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner);
 }
 
 {

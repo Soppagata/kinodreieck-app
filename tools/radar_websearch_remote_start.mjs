@@ -313,6 +313,68 @@ export const ENTDECKEN_JOYN_FREE_CANDIDATE_FILES = Object.freeze([
     sha256: ENTDECKEN_JOYN_FREE_CANDIDATE_MIGRATION.sha256,
   }),
 ]);
+
+/* Nach Remote-Readback promotierter Joyn-freier Format-6-Vertrag. Er bindet
+   exakt die 16 ruecklesbaren deployten Function-/Shared-Dateien und genau die
+   neue Forward-Migration an den unveraenderlichen Staging-Kandidaten. Der
+   ungenutzte lokale Deploy-Input anthropicAdapter.js ist kein Bestandteil der
+   Remote-Closure. Der historische ENTDECKEN_MIXED_* Zaun bleibt unten
+   unveraendert als Rollbackprovenienz erhalten. */
+export const ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT =
+  "01383bc5ff0a2212f8f753adb30d25111e426b06";
+export const ENTDECKEN_JOYN_FREE_DEPLOYED_SOURCE_BUNDLE_SHA256 =
+  "8acc38de40e2f591a5ecc7a6ed942b856ebf18dd51c6c5c804904b6f26855255";
+export const ENTDECKEN_JOYN_FREE_DEPLOYED_FILES = Object.freeze([
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicFactsAdapter.js`, sha256: "aec3d0013441f66f28c7e49690c10f1ad30e8917477f0c374e135485881d0835" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "56cd2c3795d815a5c136b22eb751b42b352914456740861977d90ed865f48217" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/factsRequest.js`, sha256: "1cc8b10f23def52f4e2bf35a0b1e268d09898b02c6451ee3a668eb5751f55943" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "d3ec0204eab9a7cd6cc8756c88de6372aa32c5623ac15368b787350f5a2dd6eb" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerFailureContract.js`, sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerProbe.js`, sha256: "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/publicChartAdapter.js`, sha256: "7e8403c919ae4096c403958e45ed1967068154f975a0d5ac8db599c80ad8952a" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/publicMixAdapter.js`, sha256: "4548f777dcc48a8fe97e92e382b53a9a8d4eea3c19917c9ae8646949a64087f6" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "e50df9891f7296ef3154f0a8cde8f2c0af772bb140179c8acbf7248272876892" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "07fad3827305b8d4206350727adef4f1c4e6373ecf4a591b2fcac6f23523dcbf" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "9080c9439c0da027b3bd785e395a5075c29f20d2b86a7342c6c8610e33a6777a" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/wikidataResolver.js`, sha256: "bd20f09da8f4755ba6e15d5d796918a8d8c2b9188ed649381c0246b93564f037" }),
+  Object.freeze({ path: "supabase/functions/_shared/entdeckenFacts.js", sha256: "3995e55c51f228b27dc4b26f25a919703ed59c048649a4aeb671f1af22d919d1" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
+]);
+export const ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION = Object.freeze({
+  version: "20260906180000",
+  name: "entdecken_current_diverse_pool",
+  path: "supabase/migrations/20260906180000_entdecken_current_diverse_pool.sql",
+  sha256: "20f42261cc729b3bfcdaaa239030cecda770e158ffb6243c908d13c4b9b63a35",
+});
+export const ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256 =
+  "163422bbbb4634e0df966cd41443e1fb6311221b375d5c897bdedc335e070adf";
+
+/* Exakter lokaler Laufweg fuer den einen spaeter autorisierten Joyn-freien
+   Entdecken-Refresh. Die Functionbytes werden ueber den Deployvertrag oben
+   gebunden; diese Closure bindet zusaetzlich nur den npm-/Budget-/Keychain-
+   und Readbackpfad. */
+export const ENTDECKEN_JOYN_FREE_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 =
+  "eaeaed6842bfa8317bd16a7b9e71f708c288f10b07bc0c1193ead147c0643a1f";
+export const ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES = Object.freeze([
+  Object.freeze({ path: "AGENTS.md", sha256: "c78326afd5d1d44654580a95462fb141ac5f49257f765d67fe782ee275a2c19f" }),
+  Object.freeze({ path: "package.json", sha256: "d0bffaccd345584c4cdd5367fec874893a428996188bff69356209849f19f935" }),
+  Object.freeze({ path: "src/lib/filmwissen.js", sha256: "c55e2114f4aec92a84ddb3fd416806987deed82aa00f7f171793cf3ec4ace8b2" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerFailureContract.js`, sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerProbe.js`, sha256: "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "e50df9891f7296ef3154f0a8cde8f2c0af772bb140179c8acbf7248272876892" }),
+  Object.freeze({ path: "tools/ai_budget_guard.mjs", sha256: "d9de85711a0f9767c2ed310a27915d9b9e9bf3308310e004180c902a27beb920" }),
+  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "2d66b19075a9a09daec9f4edf55e8bcbed89d57f6f7fe096ee18fc15ef492fbc" }),
+  Object.freeze({ path: "tools/entdecken_live_proof.mjs", sha256: "d66ba46783ebae776d8c07570542221d7e6b4fd95a3ef134be08c2e3a3db5321" }),
+  Object.freeze({ path: "tools/filmwissen_live_target.mjs", sha256: "e4fcad77cbee2fef1930a78d1e78d155b23b704ab7c3ec20e5d84f1f3a46015c" }),
+  Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "38456529cf682bb4bcb830c7490ee9499750cacdf41da208f94b9a963cd22a45" }),
+  Object.freeze({ path: "tools/provider_raw_capture.mjs", sha256: "359b761b920385c348be47da91c3690cf43e4170447075f7f466a5eb010a1fa0" }),
+]);
+export const ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256 =
+  "24b3ce5cd4af3f16c870aac71ccef8a820536a1b570ebf2f7c2c1d73d07b027d";
 export const ENTDECKEN_MIXED_POOL_SOURCE_BUNDLE_SHA256 = "02ad0de5581f45b044aed1e808882e618634ef30d64125c06b5e5480eebcc8b3";
 export const ENTDECKEN_MIXED_POOL_FILES = Object.freeze([
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/anthropicAdapter.js", sha256: "d58ee4413cddcd590a44fb4534cd94f2c2fcffa21fed64007fd143135751b6f8" }),
@@ -745,6 +807,113 @@ export function requireEntdeckenJoynFreeCandidateProvenance(options = {}) {
     sourceSha256: ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
     files,
     migration: ENTDECKEN_JOYN_FREE_CANDIDATE_MIGRATION,
+  });
+}
+
+export function requireEntdeckenJoynFreeDeployedReleaseProvenance(options = {}) {
+  requireAncestor(ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT, "HEAD", options);
+  const immutableEntries = [
+    ...ENTDECKEN_JOYN_FREE_DEPLOYED_FILES,
+    ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION,
+  ];
+  requireCommitFileRows(
+    ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT,
+    immutableEntries,
+    "ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT",
+    options,
+  );
+  const files = requireExactFileRows(
+    ENTDECKEN_JOYN_FREE_DEPLOYED_FILES,
+    ENTDECKEN_JOYN_FREE_DEPLOYED_SOURCE_BUNDLE_SHA256,
+    "ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT",
+    options,
+  );
+  const migrationSha256 = createHash("sha256")
+    .update(readRegularFile(ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION.path, options)).digest("hex");
+  if (migrationSha256 !== ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION.sha256) {
+    stop(
+      "ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT",
+      "Joyn-freie Entdecken-Migration weicht vom deployten Bytevertrag ab.",
+    );
+  }
+  const migration = Object.freeze({
+    ...ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION,
+    sha256: migrationSha256,
+  });
+  const rows = [
+    {
+      kind: "function",
+      name: "entdecken-daily-task-joyn-free",
+      sha256: ENTDECKEN_JOYN_FREE_DEPLOYED_SOURCE_BUNDLE_SHA256,
+    },
+    {
+      kind: "migration",
+      name: `${migration.version}_${migration.name}`,
+      sha256: migrationSha256,
+    },
+  ];
+  const releaseSha256 = createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  if (releaseSha256 !== ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256) {
+    stop(
+      "ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT",
+      "Joyn-freier Entdecken-Deployvertrag driftet.",
+    );
+  }
+  return Object.freeze({
+    commit: ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT,
+    releaseSha256,
+    files,
+    migration,
+  });
+}
+
+export function requireEntdeckenJoynFreeSingleLiveReleaseProvenance(options = {}) {
+  if (options.requireCleanVerifier === true) {
+    const executableClosure = [
+      "tools/radar_websearch_remote_start.mjs",
+      ...ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES.map(({ path }) => path),
+    ];
+    requireClosureTracked(executableClosure, options);
+    requireClosureClean(executableClosure, options);
+  }
+  const functionRelease = requireEntdeckenJoynFreeDeployedReleaseProvenance(options);
+  const files = requireExactFileRows(
+    ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES,
+    ENTDECKEN_JOYN_FREE_SINGLE_LIVE_SOURCE_BUNDLE_SHA256,
+    "ENTDECKEN_JOYN_FREE_SINGLE_LIVE_PROVENANCE_DRIFT",
+    options,
+  );
+  const commandSha256 = createHash("sha256")
+    .update(ENTDECKEN_SINGLE_LIVE_COMMAND).digest("hex");
+  const rows = [
+    {
+      kind: "entdecken-function-release",
+      name: "entdecken-joyn-free-25",
+      sha256: functionRelease.releaseSha256,
+    },
+    {
+      kind: "live-tooling",
+      name: "entdecken-daily-once-joyn-free-25",
+      sha256: ENTDECKEN_JOYN_FREE_SINGLE_LIVE_SOURCE_BUNDLE_SHA256,
+    },
+    {
+      kind: "command",
+      name: ENTDECKEN_SINGLE_LIVE_COMMAND,
+      sha256: commandSha256,
+    },
+  ];
+  const releaseSha256 = createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  if (releaseSha256 !== ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256) {
+    stop(
+      "ENTDECKEN_JOYN_FREE_SINGLE_LIVE_PROVENANCE_DRIFT",
+      "Joyn-freier Entdecken-Einmallaufvertrag driftet.",
+    );
+  }
+  return Object.freeze({
+    command: ENTDECKEN_SINGLE_LIVE_COMMAND,
+    releaseSha256,
+    files,
+    functionReleaseSha256: functionRelease.releaseSha256,
   });
 }
 

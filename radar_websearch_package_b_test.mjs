@@ -34,6 +34,13 @@ import {
   ENTDECKEN_JOYN_FREE_CANDIDATE_FILES,
   ENTDECKEN_JOYN_FREE_CANDIDATE_MIGRATION,
   ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_FILES,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_SOURCE_BUNDLE_SHA256,
+  ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES,
+  ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256,
   ENTDECKEN_MIXED_POOL_DEPLOYED_COMMIT,
   ENTDECKEN_MIXED_POOL_FILES,
   ENTDECKEN_MIXED_POOL_MIGRATION,
@@ -67,6 +74,8 @@ import {
   requireEntdeckenEditorialSourceReleaseProvenance,
   requireEntdeckenHttpDiagnosticReleaseProvenance,
   requireEntdeckenJoynFreeCandidateProvenance,
+  requireEntdeckenJoynFreeDeployedReleaseProvenance,
+  requireEntdeckenJoynFreeSingleLiveReleaseProvenance,
   requireEntdeckenMixedPoolReleaseProvenance,
   requireEntdeckenMixedPoolSingleLiveReleaseProvenance,
   requireEntdeckenProviderProbeReleaseProvenance,
@@ -923,6 +932,61 @@ await check("Joyn-freier Kandidat stoppt bei einer einzelnen Closure-Byteänderu
     },
   }), (error) => error instanceof RadarRemoteStartStop
     && error.code === "ENTDECKEN_JOYN_FREE_CANDIDATE_DRIFT");
+});
+
+await check("Joyn-freier Deployvertrag bindet die volle Function-Closure an 01383bc", () => {
+  const release = requireEntdeckenJoynFreeDeployedReleaseProvenance();
+  assert.equal(release.commit, ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT);
+  assert.equal(release.commit, "01383bc5ff0a2212f8f753adb30d25111e426b06");
+  assert.equal(release.releaseSha256, ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256);
+  assert.equal(ENTDECKEN_JOYN_FREE_DEPLOYED_SOURCE_BUNDLE_SHA256.length, 64);
+  assert.deepEqual(release.files, ENTDECKEN_JOYN_FREE_DEPLOYED_FILES);
+  assert.deepEqual(release.migration, ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION);
+  assert.equal(release.migration.sha256,
+    "20f42261cc729b3bfcdaaa239030cecda770e158ffb6243c908d13c4b9b63a35");
+  assert.equal(ENTDECKEN_JOYN_FREE_DEPLOYED_FILES.length, 16);
+  const deployedFunctionPaths = ENTDECKEN_JOYN_FREE_DEPLOYED_FILES
+    .filter(({ path }) => path.startsWith("supabase/functions/entdecken-daily-task/"))
+    .map(({ path }) => path.split("/").at(-1)).sort();
+  assert.deepEqual(deployedFunctionPaths,
+    fs.readdirSync(resolve(REPO_ROOT, "supabase/functions/entdecken-daily-task"))
+      .filter((name) => name !== "anthropicAdapter.js").sort());
+  assert.equal(ENTDECKEN_JOYN_FREE_DEPLOYED_FILES
+    .some(({ path }) => path.endsWith("/anthropicAdapter.js")), false);
+  assert.deepEqual(ENTDECKEN_JOYN_FREE_DEPLOYED_FILES
+    .filter(({ path }) => path.startsWith("supabase/functions/_shared/"))
+    .map(({ path }) => path.split("/").at(-1)).sort(), [
+    "entdeckenFacts.js",
+    "providerDiagnostic.js",
+    "providerReceipt.js",
+    "providerText.js",
+  ]);
+});
+
+await check("Joyn-freier Deploy- und Einmallaufzaun stoppen bei Byte-Drift", () => {
+  const changedFunctionPath = "supabase/functions/_shared/entdeckenFacts.js";
+  assert.throws(() => requireEntdeckenJoynFreeDeployedReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      const pathname = relative(REPO_ROOT, String(absolutePath)).split("\\").join("/");
+      return pathname === changedFunctionPath ? Buffer.concat([bytes, Buffer.from("\n")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT");
+
+  const live = requireEntdeckenJoynFreeSingleLiveReleaseProvenance();
+  assert.equal(live.command, ENTDECKEN_SINGLE_LIVE_COMMAND);
+  assert.equal(live.releaseSha256, ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256);
+  assert.deepEqual(live.files, ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES);
+  const changedLivePath = "tools/entdecken_daily_live.mjs";
+  assert.throws(() => requireEntdeckenJoynFreeSingleLiveReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      const pathname = relative(REPO_ROOT, String(absolutePath)).split("\\").join("/");
+      return pathname === changedLivePath ? Buffer.concat([bytes, Buffer.from("\n")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "ENTDECKEN_JOYN_FREE_SINGLE_LIVE_PROVENANCE_DRIFT");
 });
 
 await check("Historischer Radar-Tagesrelease bleibt belegbar, sein ersetzter Workflow ist lokal entfernt", () => {
