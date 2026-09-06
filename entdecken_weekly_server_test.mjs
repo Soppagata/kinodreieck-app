@@ -885,7 +885,7 @@ await check("Alter Tagesfeed bleibt als stale lesbar, erzeugt aber keinen zweite
   assert.equal(result.feed.format, 3);
 });
 
-await check("Browserdienst ohne Kontositzung bleibt vor Token und privatem GET fail-closed", async () => {
+await check("Browserdienst liefert anonym nur den oeffentlichen Fallback und bleibt vor Token und privatem GET", async () => {
   const calls = [];
   let tokenCalls = 0;
   const service = createEntdeckenDailyFeedService({
@@ -897,11 +897,13 @@ await check("Browserdienst ohne Kontositzung bleibt vor Token und privatem GET f
     auth: { getSnapshot: () => ({ mode: "guest", state: "ready", account: null }) },
     getAccount: () => null,
     getAccessToken: async () => { tokenCalls += 1; return "forbidden-token"; },
-    currentDay: () => "2026-08-20",
+    fallbackFeed: ENTDECKEN_MARKET_POOL_50,
+    currentDay: () => "2026-08-29",
     fetchImpl: async (...args) => { calls.push(args); throw new Error("network-forbidden"); },
   });
   const result = await service.load();
-  assert.equal(result.status, "disabled");
+  assert.equal(result.status, "fresh");
+  assert.deepEqual(result.feed, ENTDECKEN_MARKET_POOL_50);
   assert.equal(tokenCalls, 0);
   assert.equal(calls.length, 0);
 });
@@ -1041,7 +1043,7 @@ await check("Kontowechsel waehrend Token oder Request bleibt fail-closed", async
   assert.equal(requestPhaseFetches, 1);
 });
 
-await check("Aktives Konto behaelt den eingebetteten Default-Fallback ohne Token oder GET", async () => {
+await check("Aktives Konto versucht GET und behaelt bei Transportfehler den eingebetteten Fallback", async () => {
   const session = {
     mode: "account", state: "ready",
     account: { id: "00000000-0000-4000-8000-000000000001" },
@@ -1050,6 +1052,11 @@ await check("Aktives Konto behaelt den eingebetteten Default-Fallback ohne Token
   let tokenCalls = 0;
   let fetchCalls = 0;
   const result = await createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://project.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
     fallbackFeed: ENTDECKEN_MARKET_POOL_50,
     auth: { getSnapshot: () => session },
     getAccount: () => ({ id: session.account.id }),
@@ -1060,8 +1067,34 @@ await check("Aktives Konto behaelt den eingebetteten Default-Fallback ohne Token
   assert.equal(result.status, "fresh");
   assert.deepEqual(result.feed, ENTDECKEN_MARKET_POOL_50);
   assert.equal(result.feed.items.length, 50);
-  assert.equal(tokenCalls, 0);
-  assert.equal(fetchCalls, 0);
+  assert.equal(tokenCalls, 1);
+  assert.equal(fetchCalls, 1);
+});
+
+await check("Ungueltige Serverantwort ersetzt den strikt validierten Fallback nicht", async () => {
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
+  const result = await createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://project.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    fallbackFeed: ENTDECKEN_MARKET_POOL_50,
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => "account-token",
+    currentDay: () => "2026-08-29",
+    fetchImpl: async () => ({ ok: true, async json() { return {
+      ok: true, status: "fresh", feed: { ...ENTDECKEN_MARKET_POOL_50, items: [] },
+      refresh: { requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1 },
+    }; } }),
+  }).load();
+  assert.equal(result.status, "fresh");
+  assert.deepEqual(result.feed, ENTDECKEN_MARKET_POOL_50);
 });
 
 const migration = fs.readFileSync("./supabase/migrations/20260822190000_entdecken_weekly_feed.sql", "utf8");

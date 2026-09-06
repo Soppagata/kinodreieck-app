@@ -63,7 +63,7 @@ function refreshState(value, feedFormat = null) {
   /* Direkt nach der Forward-Migration darf der letzte gute Format-3/4-Feed
      noch unter dem neuen Ein-Versuch-Serververtrag sichtbar sein. Format 5
      selbst ist dagegen ausschliesslich mit maxAttempts=1 gueltig. */
-  const expectedAttempts = [5, 6].includes(feedFormat) ? 1 : null;
+  const expectedAttempts = [5, 6, 7].includes(feedFormat) ? 1 : null;
   if (!plain(value)
       || Object.keys(value).sort().join(",")
         !== ["attemptCount", "maxAttempts", "mode", "requested", "status"].sort().join(",")
@@ -112,7 +112,7 @@ function exactResult(value, today) {
     const currentWeek = isoWeekForDay(today);
     if (!currentWeek || (value.status === "fresh") !== (checked.value.isoWeek === currentWeek)) return null;
     if (value.status === "fresh" && checked.value.validUntil < today) return null;
-  } else if ([5, 6].includes(checked.value.format)) {
+  } else if ([5, 6, 7].includes(checked.value.format)) {
     if ((value.status === "fresh") !== (
       checked.value.refreshedOn <= today && checked.value.validUntil >= today
     )) return null;
@@ -123,10 +123,28 @@ function exactResult(value, today) {
   return frozen(value.status, checked.value, response, refresh);
 }
 
-/* Der versionierte Staging-Fallback startet keinen GET. Ohne Fallback startet
-   nur ein aktiv freigeschaltetes, waehrend Token- und Requestphase identisches
-   Konto einen GET. Body, Profil, Seen-Stand, Dienste und Katalogdaten bleiben
-   vollstaendig lokal. */
+function fallbackState(fallbackFeed, today) {
+  if (fallbackFeed === null) return null;
+  const checked = validateWebDiscoveryFeed(fallbackFeed);
+  if (!checked.ok || !today) return frozen("invalid_response");
+  const status = checked.value.refreshedOn <= today && checked.value.validUntil >= today
+    ? "fresh" : "stale";
+  return frozen(status, checked.value, presentation({}), Object.freeze({
+    requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1,
+  }));
+}
+function newerFeed(serverState, localState) {
+  if (!localState?.feed) return serverState;
+  if (!serverState?.feed) return localState;
+  return serverState.feed.refreshedOn > localState.feed.refreshedOn
+    ? serverState : localState;
+}
+
+/* Nur ein aktiv freigeschaltetes, waehrend Token- und Requestphase identisches
+   Konto versucht den privaten GET. Der versionierte Pool bleibt oeffentlicher
+   Fail-safe und gewinnt, solange der Server keinen strikt gueltigen, inhaltlich
+   neueren Stand liefert. Body, Profil, Seen-Stand, Dienste und Katalogdaten
+   bleiben vollstaendig lokal. */
 export function createEntdeckenDailyFeedService({
   config = runtimeConfig,
   auth = authService,
@@ -141,37 +159,31 @@ export function createEntdeckenDailyFeedService({
     ? Math.min(timeoutMs, ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS)
     : ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS;
   async function load() {
-    if (fallbackFeed !== null) {
-      const today = currentDay();
-      const checked = validateWebDiscoveryFeed(fallbackFeed);
-      if (!checked.ok || !today) return frozen("invalid_response");
-      const status = checked.value.refreshedOn <= today && checked.value.validUntil >= today
-        ? "fresh" : "stale";
-      return frozen(status, checked.value, presentation({}), Object.freeze({
-        requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1,
-      }));
-    }
+    const today = currentDay();
+    const localState = fallbackState(fallbackFeed, today);
+    const failSafe = (status) => localState?.feed || localState?.status === "invalid_response"
+      ? localState : frozen(status);
     if (config.entdeckenDailyFeedEnabled !== true || typeof fetchImpl !== "function") {
-      return frozen("disabled");
+      return failSafe("disabled");
     }
     const session = auth?.getSnapshot?.();
     const accountId = text(session?.account?.id);
     if (session?.mode !== "account" || session?.state !== "ready"
         || session?.capabilities?.remoteStorage !== true || !accountId
         || text(getAccount?.()?.id) !== accountId) {
-      return frozen("disabled");
+      return failSafe("disabled");
     }
     const basis = text(config.supabaseUrl).replace(/\/+$/, "");
     const publishableKey = text(config.supabasePublishableKey);
-    if (!basis || !publishableKey) return frozen("unavailable");
+    if (!basis || !publishableKey) return failSafe("unavailable");
 
     let token;
     try { token = await getAccessToken({ erwarteteKontoId: accountId }); }
-    catch { return frozen("unavailable"); }
+    catch { return failSafe("unavailable"); }
     const accountUnchanged = () => (
       auth.getSnapshot() === session && text(getAccount()?.id) === accountId
     );
-    if (!token || !accountUnchanged()) return frozen("disabled");
+    if (!token || !accountUnchanged()) return failSafe("disabled");
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
@@ -187,17 +199,17 @@ export function createEntdeckenDailyFeedService({
         },
         signal: controller.signal,
       });
-      if (!accountUnchanged()) return frozen("disabled");
+      if (!accountUnchanged()) return failSafe("disabled");
       try { payload = await response.json(); }
       catch {
-        return frozen(controller.signal.aborted ? "unavailable" : "invalid_response");
+        return failSafe(controller.signal.aborted ? "unavailable" : "invalid_response");
       }
-    } catch { return frozen("unavailable"); }
+    } catch { return failSafe("unavailable"); }
     finally { clearTimeout(timer); }
-    if (!accountUnchanged()) return frozen("disabled");
-    const checked = exactResult(payload, currentDay());
-    if (!response.ok || !checked) return frozen(response.ok ? "invalid_response" : "unavailable");
-    return checked;
+    if (!accountUnchanged()) return failSafe("disabled");
+    const checked = exactResult(payload, today);
+    if (!response.ok || !checked) return failSafe(response.ok ? "invalid_response" : "unavailable");
+    return newerFeed(checked, localState);
   }
   return Object.freeze({ load });
 }

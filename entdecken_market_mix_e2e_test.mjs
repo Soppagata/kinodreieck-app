@@ -26,6 +26,7 @@ import {
 } from "./src/lib/entdeckenUi.js";
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
+import { ENTDECKEN_MARKET_POOL_50 } from "./src/data/entdeckenMarketPool50.js";
 
 let checks = 0;
 function check(name, test) { test(); checks += 1; console.log(`✓ ${name}`); }
@@ -175,6 +176,76 @@ await checkAsync("Drei retryfreie GETs ergeben exakt den 50er-Vertrag aus Joyn u
   assert.equal(response.sourceRequests, 3);
   assert.equal(response.quality.sourceItemCount, 115);
   mixedFeed = evaluated.feed;
+});
+
+function mixedFeedAt(day, isoWeek) {
+  const clone = structuredClone(mixedFeed);
+  clone.refreshedOn = day;
+  const end = new Date(`${day}T00:00:00.000Z`);
+  end.setUTCDate(end.getUTCDate() + 6);
+  clone.validUntil = end.toISOString().slice(0, 10);
+  clone.isoWeek = isoWeek;
+  clone.items = clone.items.map((item) => item.sourceId === ENTDECKEN_JOYN_SOURCE_ID
+    ? { ...item, popularity: { ...item.popularity, measuredOn: day } } : item);
+  return clone;
+}
+
+await checkAsync("Neuerer Format-6-Serverfeed gewinnt deterministisch gegen den strikten Format-7-Fallback", async () => {
+  const serverFeed = mixedFeedAt("2026-08-30", "2026-W35");
+  assert.equal(validateWebDiscoveryFeed(serverFeed).ok, true);
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
+  const loaded = await createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://fixture.supabase.co",
+      supabasePublishableKey: "fixture-public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => "fixture-token",
+    fallbackFeed: ENTDECKEN_MARKET_POOL_50,
+    currentDay: () => "2026-08-30",
+    fetchImpl: async () => new Response(JSON.stringify({
+      ok: true, status: "fresh", feed: serverFeed,
+      writes: 0, providerRequests: 0, searchRequests: 0, sourceRequests: 0, wikidataRequests: 0,
+      responseMode: "structured", displayText: null, warnings: [],
+      refresh: { requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1 },
+    }), { status: 200, headers: { "content-type": "application/json" } }),
+  }).load();
+  assert.equal(loaded.feed.format, 6);
+  assert.equal(loaded.feed.refreshedOn, "2026-08-30");
+});
+
+await checkAsync("Aelterer Format-6-Serverfeed verschlechtert den neueren Format-7-Fallback nicht", async () => {
+  const session = {
+    mode: "account", state: "ready",
+    account: { id: "00000000-0000-4000-8000-000000000001" },
+    capabilities: { remoteStorage: true, personalAi: false },
+  };
+  const loaded = await createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://fixture.supabase.co",
+      supabasePublishableKey: "fixture-public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => ({ id: session.account.id }),
+    getAccessToken: async () => "fixture-token",
+    fallbackFeed: ENTDECKEN_MARKET_POOL_50,
+    currentDay: () => "2026-08-30",
+    fetchImpl: async () => new Response(JSON.stringify({
+      ok: true, status: "fresh", feed: mixedFeed,
+      writes: 0, providerRequests: 0, searchRequests: 0, sourceRequests: 0, wikidataRequests: 0,
+      responseMode: "structured", displayText: null, warnings: [],
+      refresh: { requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1 },
+    }), { status: 200, headers: { "content-type": "application/json" } }),
+  }).load();
+  assert.equal(loaded.feed.format, 7);
+  assert.equal(loaded.feed.refreshedOn, "2026-08-29");
 });
 
 await checkAsync("HTML-Größengrenze stoppt schon die erste Joyn-Liste vor weiteren Reads", async () => {
