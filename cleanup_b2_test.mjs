@@ -6,13 +6,17 @@ import {
   radarClientRuntimeAvailable,
 } from "./src/config/runtime.js";
 import {
-  ENTDECKEN_JOYN_SOURCE_ID,
   ENTDECKEN_MIXED_MARKET_COUNTS,
   ENTDECKEN_MIXED_POOL_SIZE,
   ENTDECKEN_MIXED_SOURCE_COUNTS,
   ENTDECKEN_MIXED_SOURCE_REQUESTS,
+  ENTDECKEN_NETFLIX_SOURCE_ID,
   ENTDECKEN_OEFI_SOURCE_ID,
 } from "./supabase/functions/entdecken-daily-task/publicMixAdapter.js";
+import {
+  ENTDECKEN_MARKET_POOL_50,
+  VERSIONED_DISCOVERY_SOURCE_COUNTS,
+} from "./src/data/entdeckenMarketPool50.js";
 import {
   evaluateReleaseManifestParity,
   localMigrationIds,
@@ -68,23 +72,33 @@ check("R-02: dieselbe fail-closed Runtime-Capability steuert alle Radar-Einstieg
   assert.match(tab, /\{radarAvailable \? <section>/u);
 });
 
-check("R-03: Function, Response und committed Format 6 teilen exakt den 50er Vertrag", () => {
-  assert.equal(ENTDECKEN_MIXED_POOL_SIZE, 50);
-  assert.equal(ENTDECKEN_MIXED_SOURCE_REQUESTS, 3);
+check("R-03: Function bleibt Joyn-frei und Format 7 bindet den sichtbaren 50er Vertrag", () => {
+  assert.equal(ENTDECKEN_MIXED_POOL_SIZE, 25);
+  assert.equal(ENTDECKEN_MIXED_SOURCE_REQUESTS, 2);
   assert.deepEqual(ENTDECKEN_MIXED_MARKET_COUNTS, {
     cinema: 15,
-    streamingFilm: 18,
-    streamingSeries: 17,
+    streamingFilm: 5,
+    streamingSeries: 5,
   });
   assert.deepEqual(ENTDECKEN_MIXED_SOURCE_COUNTS, {
     [ENTDECKEN_OEFI_SOURCE_ID]: 15,
-    [ENTDECKEN_JOYN_SOURCE_ID]: 35,
+    [ENTDECKEN_NETFLIX_SOURCE_ID]: 10,
   });
   assert.equal(MIXED_DISCOVERY_POOL_SIZE, ENTDECKEN_MIXED_POOL_SIZE);
   assert.deepEqual(MIXED_DISCOVERY_MARKET_COUNTS, ENTDECKEN_MIXED_MARKET_COUNTS);
   assert.deepEqual([...MIXED_DISCOVERY_SOURCE_IDS].sort(), [
-    ENTDECKEN_JOYN_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID,
+    ENTDECKEN_NETFLIX_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID,
   ].sort());
+  assert.equal(ENTDECKEN_MARKET_POOL_50.items.length, 50);
+  assert.deepEqual(ENTDECKEN_MARKET_POOL_50.items.reduce((counts, item) => {
+    counts[item.sourceId] = (counts[item.sourceId] || 0) + 1;
+    return counts;
+  }, {}), VERSIONED_DISCOVERY_SOURCE_COUNTS);
+  assert.doesNotMatch(JSON.stringify(ENTDECKEN_MARKET_POOL_50), /joyn/iu);
+
+  /* Die bereits angewandte Format-6-Migration bleibt als historische
+     Remote-Realitaet erhalten; Client und Function akzeptieren sie nicht mehr
+     als den sichtbaren Sollpool. */
   const migration = source("supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql");
   assert.match(migration, /jsonb_array_length\(p_payload->'items'\) is distinct from 50/u);
   assert.match(migration, /v_cinema is distinct from 15/u);

@@ -206,7 +206,7 @@ const mixedDiscoveryFeed = {
   feedId: "public:weekly-market-mix-at",
   region: "AT",
   sourceId: "chart:market-mix-at",
-  sourceIds: ["chart:joyn-at", "chart:oefi-weekend-at"],
+  sourceIds: ["chart:netflix-weekly-at", "chart:oefi-weekend-at"],
   isoWeek: "2026-W35",
   refreshedOn: "2026-08-27",
   validUntil: "2026-09-02",
@@ -223,28 +223,28 @@ const mixedDiscoveryFeed = {
       sourceUrl: "https://filminstitut.at/charts",
       fetchedAt: "2026-08-27T07:30:00.000Z",
     })),
-    ...Array.from({ length: 18 }, (_, index) => ({
+    ...Array.from({ length: 5 }, (_, index) => ({
       title: `Synthetischer Streamingfilm ${String(index + 1).padStart(2, "0")}`,
-      sourceItemId: `f_joyn-film-${String(index + 1).padStart(2, "0")}`,
-      sourceId: "chart:joyn-at",
-      sourceLabel: "Joyn Österreich",
+      sourceItemId: `f_netflix-film-${String(index + 1).padStart(2, "0")}`,
+      sourceId: "chart:netflix-weekly-at",
+      sourceLabel: "Netflix Top 10 Österreich",
       mediaType: "film",
       genres: ["Drama"],
-      availability: { region: "AT", market: "streaming", service: "Joyn", licenseTypes: ["SVOD"] },
-      popularity: { metric: "source-chart-rank", rank: index + 1, measuredOn: "2026-08-27", value: null },
-      sourceUrl: `https://www.joyn.at/filme/testfilm-${index + 1}`,
+      availability: { region: "AT", market: "streaming", service: "Netflix", licenseTypes: ["SVOD"] },
+      popularity: { metric: "weekly-country-rank", rank: index + 1, measuredOn: "2026-08-23", value: null },
+      sourceUrl: "https://www.netflix.com/tudum/top10/austria/films",
       fetchedAt: "2026-08-27T07:30:00.000Z",
     })),
-    ...Array.from({ length: 17 }, (_, index) => ({
+    ...Array.from({ length: 5 }, (_, index) => ({
       title: `Synthetische Streamingserie ${String(index + 1).padStart(2, "0")}`,
-      sourceItemId: `s_joyn-serie-${String(index + 1).padStart(2, "0")}`,
-      sourceId: "chart:joyn-at",
-      sourceLabel: "Joyn Österreich",
+      sourceItemId: `s_netflix-serie-${String(index + 1).padStart(2, "0")}`,
+      sourceId: "chart:netflix-weekly-at",
+      sourceLabel: "Netflix Top 10 Österreich",
       mediaType: "series",
       genres: ["Drama"],
-      availability: { region: "AT", market: "streaming", service: "Joyn", licenseTypes: ["SVOD"] },
-      popularity: { metric: "source-chart-rank", rank: index + 1, measuredOn: "2026-08-27", value: null },
-      sourceUrl: `https://www.joyn.at/serien/testserie-${index + 1}`,
+      availability: { region: "AT", market: "streaming", service: "Netflix", licenseTypes: ["SVOD"] },
+      popularity: { metric: "weekly-country-rank", rank: index + 1, measuredOn: "2026-08-23", value: null },
+      sourceUrl: "https://www.netflix.com/tudum/top10/austria/tv",
       fetchedAt: "2026-08-27T07:30:00.000Z",
     })),
   ],
@@ -727,13 +727,13 @@ try {
 
   const mixedUi = await mount(EntdeckenTab, {
     ...baseProps, radarState: createEmptyLocalRadar(),
-    streamingDiscover: { region: "AT", titel: [] }, selectedServices: ["Joyn"],
+    streamingDiscover: { region: "AT", titel: [] }, selectedServices: ["Netflix"],
     webDiscoveryFeed: mixedDiscoveryFeed, calendarDay: "2026-08-27",
   });
   await act(async () => { await tick(); await tick(); });
   const mixedPopularSection = mixedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
-  const expandPopular = button(mixedPopularSection, "Weitere 44 Titel anzeigen");
-  check("Format 6 benennt ausschließlich OeFI und Joyn und verlinkt jede sichtbare Titelüberschrift neutral", () => {
+  const expandPopular = button(mixedPopularSection, "Weitere 19 Titel anzeigen");
+  check("Format 6 benennt ausschließlich OeFI und Netflix und verlinkt jede sichtbare Titelüberschrift neutral", () => {
     const cards = [...mixedPopularSection.querySelectorAll(".kd-entdecken-neutral")];
     const links = cards.map((card) => card.querySelector("h3 > a.kd-entdecken-titellink"));
     assert.equal(cards.length, 6);
@@ -742,20 +742,20 @@ try {
       && link.getAttribute("rel") === "noopener noreferrer"
       && /Referenz bei/.test(link.getAttribute("aria-label") || "")));
     assert.equal(expandPopular?.getAttribute("aria-expanded"), "false");
-    assert.match(mixedPopularSection.textContent, /Österreichische Kinocharts des Österreichischen Filminstituts sowie Joyn-Filme und -Serien/u);
+    assert.match(mixedPopularSection.textContent, /Österreichische Kinocharts des Österreichischen Filminstituts sowie Netflix-Filme und -Serien/u);
     assert.match(mixedPopularSection.textContent, /Popularität ist kein persönlicher Passungsgrund/u);
-    assert.doesNotMatch(mixedPopularSection.textContent, /Netflix|Prime Video|Disney\+|Apple TV\+/u);
+    assert.doesNotMatch(mixedPopularSection.textContent, /Joyn|Prime Video|Disney\+|Apple TV\+/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /Quelle ansehen|Bei Joyn ansehen/);
   });
   await act(async () => { expandPopular.click(); await tick(); });
-  check("Restlicher 50er-Pool klappt vollständig auf und belegt den 15/35-Quellenvertrag", () => {
+  check("Restlicher 25er-Pool klappt vollständig auf und belegt den 15/10-Quellenvertrag", () => {
     const cards = [...mixedPopularSection.querySelectorAll(".kd-entdecken-neutral")];
     const links = cards.map((card) => card.querySelector("h3 > a.kd-entdecken-titellink"));
     const hosts = links.map((link) => new URL(link.href).hostname);
-    assert.equal(cards.length, 50);
-    assert.equal(links.filter(Boolean).length, 50);
+    assert.equal(cards.length, 25);
+    assert.equal(links.filter(Boolean).length, 25);
     assert.equal(hosts.filter((host) => host === "filminstitut.at").length, 15);
-    assert.equal(hosts.filter((host) => host === "www.joyn.at").length, 35);
+    assert.equal(hosts.filter((host) => host === "www.netflix.com").length, 10);
     assert.equal(expandPopular.getAttribute("aria-expanded"), "true");
     assert.equal(expandPopular.textContent.trim(), "Weniger Titel anzeigen");
   });

@@ -147,18 +147,32 @@ function fallbackState(fallbackFeed, today) {
     requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1,
   }));
 }
-function newerFeed(serverState, localState) {
+function feedHasJoynSource(feed) {
+  const sourceValues = [
+    feed?.sourceId,
+    ...(Array.isArray(feed?.sourceIds) ? feed.sourceIds : []),
+    ...(Array.isArray(feed?.items) ? feed.items.flatMap((item) => [
+      item?.sourceId, item?.sourceLabel, item?.sourceUrl, item?.availability?.service,
+    ]) : []),
+  ];
+  return sourceValues.some((value) => /(?:^|[^a-z])joyn(?:[^a-z]|$)/iu.test(text(value)));
+}
+export function selectEntdeckenFeed(serverState, localState) {
+  if (feedHasJoynSource(serverState?.feed)) return localState;
   if (!localState?.feed) return serverState;
   if (!serverState?.feed) return localState;
+  if (serverState.feed.format !== localState.feed.format) {
+    return serverState.feed.format > localState.feed.format ? serverState : localState;
+  }
   return serverState.feed.refreshedOn > localState.feed.refreshedOn
     ? serverState : localState;
 }
 
 /* Nur ein aktiv freigeschaltetes, waehrend Token- und Requestphase identisches
    Konto versucht den privaten GET. Der versionierte Pool bleibt oeffentlicher
-   Fail-safe und gewinnt, solange der Server keinen strikt gueltigen, inhaltlich
-   neueren Stand liefert. Body, Profil, Seen-Stand, Dienste und Katalogdaten
-   bleiben vollstaendig lokal. */
+   Fail-safe. Ein niedrigeres oder Joyn-haltiges Serverformat darf ihn auch bei
+   neuerem Datum nicht ersetzen. Body, Profil, Seen-Stand, Dienste und
+   Katalogdaten bleiben vollstaendig lokal. */
 export function createEntdeckenDailyFeedService({
   config = runtimeConfig,
   auth = authService,
@@ -223,7 +237,7 @@ export function createEntdeckenDailyFeedService({
     if (!accountUnchanged()) return failSafe("disabled");
     const checked = exactResult(payload, today);
     if (!response.ok || !checked) return failSafe(response.ok ? "invalid_response" : "unavailable");
-    return newerFeed(checked, localState);
+    return selectEntdeckenFeed(checked, localState) || failSafe("invalid_response");
   }
   return Object.freeze({ load });
 }

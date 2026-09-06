@@ -268,7 +268,7 @@ function RecommendationsView({
       <div className="kd-entdecken-sektionskopf">
         <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
         <p>{webDiscoveryFeed?.format === 6
-          ? "Österreichische Kinocharts des Österreichischen Filminstituts sowie Joyn-Filme und -Serien. Popularität ist kein persönlicher Passungsgrund."
+          ? "Österreichische Kinocharts des Österreichischen Filminstituts sowie Netflix-Filme und -Serien. Popularität ist kein persönlicher Passungsgrund."
           : webDiscoveryFeed?.format === VERSIONED_DISCOVERY_FEED_FORMAT
             ? "Datierter Österreich-Snapshot aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney+ und Apple TV+. Popularität ist kein persönlicher Passungsgrund."
             : "Belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
