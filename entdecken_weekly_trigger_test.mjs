@@ -76,17 +76,31 @@ check("Workflow-Shell und eingebetteter Parser sind syntaktisch gueltig", () => 
 });
 
 check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
-  const sourceIds = ["chart:joyn-at", "chart:oefi-weekend-at"];
+  const netflixSourceId = "chart:netflix-weekly-at";
+  const oefiSourceId = "chart:oefi-weekend-at";
+  const sourceIds = [netflixSourceId, oefiSourceId];
+  const poolItems = [
+    ...Array.from({ length: 15 }, (_, id) => ({
+      id: `oefi-${id}`, sourceId: oefiSourceId, mediaType: "film",
+    })),
+    ...Array.from({ length: 5 }, (_, id) => ({
+      id: `netflix-film-${id}`, sourceId: netflixSourceId, mediaType: "film",
+    })),
+    ...Array.from({ length: 5 }, (_, id) => ({
+      id: `netflix-series-${id}`, sourceId: netflixSourceId, mediaType: "series",
+    })),
+  ];
   const common = {
     ok: true, status: "fresh", responseMode: "structured",
     providerRequests: 0, searchRequests: 0, sourceRequests: 0,
     wikidataRequests: 0, writes: 0,
   };
+  assert.doesNotMatch(triggerStep, /Joyn|chart:joyn-at/iu);
   const refreshed = runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 3, wikidataRequests: 17, writes: 1,
-    feed: { format: 6, sourceIds, items: Array.from({ length: 50 }, (_, id) => ({ id })) },
+    ...common, sourceRequests: 2, wikidataRequests: 17, writes: 1,
+    feed: { format: 6, sourceIds, items: poolItems },
     feedReadback: {
-      itemCount: 50, sourceCount: 2, sourceIds,
+      itemCount: 25, sourceCount: 2, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
     },
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
@@ -107,19 +121,52 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
     refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 2, writes: 1,
-    feed: { format: 6, sourceIds, items: Array.from({ length: 50 }, (_, id) => ({ id })) },
+    ...common, wikidataRequests: 25,
+    refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
+  })).status, 0);
+  assert.notEqual(runResponseParser(JSON.stringify({
+    ...common, sourceRequests: 3, writes: 1,
+    feed: { format: 6, sourceIds, items: poolItems },
     feedReadback: {
-      itemCount: 50, sourceCount: 2, sourceIds,
+      itemCount: 25, sourceCount: 2, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
     },
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 3, writes: 1,
-    feed: { format: 6, sourceIds, items: Array.from({ length: 49 }, (_, id) => ({ id })) },
+    ...common, sourceRequests: 2, writes: 1,
+    feed: { format: 6, sourceIds, items: poolItems.slice(0, 24) },
     feedReadback: {
-      itemCount: 50, sourceCount: 2, sourceIds,
+      itemCount: 25, sourceCount: 2, sourceIds,
+      rightsStatus: "owner_private", providerRequests: 0,
+    },
+    refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
+  })).status, 0);
+  assert.notEqual(runResponseParser(JSON.stringify({
+    ...common, sourceRequests: 2, writes: 1,
+    feed: {
+      format: 6, sourceIds,
+      items: poolItems.map((item, index) => (
+        index === 15 ? { ...item, mediaType: "series" } : item
+      )),
+    },
+    feedReadback: {
+      itemCount: 25, sourceCount: 2, sourceIds,
+      rightsStatus: "owner_private", providerRequests: 0,
+    },
+    refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
+  })).status, 0);
+  const joynSourceId = "chart:joyn-at";
+  assert.notEqual(runResponseParser(JSON.stringify({
+    ...common, sourceRequests: 2, writes: 1,
+    feed: {
+      format: 6, sourceIds: [joynSourceId, oefiSourceId],
+      items: poolItems.map((item) => (
+        item.sourceId === netflixSourceId ? { ...item, sourceId: joynSourceId } : item
+      )),
+    },
+    feedReadback: {
+      itemCount: 25, sourceCount: 2, sourceIds: [joynSourceId, oefiSourceId],
       rightsStatus: "owner_private", providerRequests: 0,
     },
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
