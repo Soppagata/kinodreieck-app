@@ -288,20 +288,26 @@ export const ENTDECKEN_PROVIDER_PROBE_FILES = Object.freeze([
 export const ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256 = "0599f19a1c82fdcd1b3fda13b6c9c9975d39afbdec367cb44ccbc1bfdd672467";
 
 /* Additiver Format-6-Vertrag. Alle historischen Entdecken-Hashes und Guards
-   bleiben oben unverändert als Rückfall-/Rollbackprovenienz erhalten. */
-export const ENTDECKEN_MIXED_POOL_SOURCE_BUNDLE_SHA256 = "928efd8a9e1d6d13d4cabc7435fc38d5945f0677be850d11e5bdd6eb568733dc";
+   bleiben oben unverändert als Rückfall-/Rollbackprovenienz erhalten. Der
+   Remote-Function-/Ledger-Readback des Releaseaudits bindet diese Closure an
+   den unveränderlichen Integrationscommit. */
+export const ENTDECKEN_MIXED_POOL_DEPLOYED_COMMIT = "d7735be828f9be885cdf086d05e46143ff0a3cd1";
+export const ENTDECKEN_MIXED_POOL_SOURCE_BUNDLE_SHA256 = "02ad0de5581f45b044aed1e808882e618634ef30d64125c06b5e5480eebcc8b3";
 export const ENTDECKEN_MIXED_POOL_FILES = Object.freeze([
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/anthropicAdapter.js", sha256: "d58ee4413cddcd590a44fb4534cd94f2c2fcffa21fed64007fd143135751b6f8" }),
-  Object.freeze({ path: "supabase/functions/entdecken-daily-task/contract.js", sha256: "780ffbcac9566e3569127f64084cd5231957f5f4bcbe443474a7c2513556a39f" }),
-  Object.freeze({ path: "supabase/functions/entdecken-daily-task/index.ts", sha256: "b53d4b31e8f652784299fe394e66a6be5b13cfea88dc40c3130ed3beeed9ad9d" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/anthropicFactsAdapter.js", sha256: "aec3d0013441f66f28c7e49690c10f1ad30e8917477f0c374e135485881d0835" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/contract.js", sha256: "c8f664cd0bfa11fc7fdfa3b78e931e2246cf5226a742285fea363cc6f883f9b2" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/factsRequest.js", sha256: "1cc8b10f23def52f4e2bf35a0b1e268d09898b02c6451ee3a668eb5751f55943" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/index.ts", sha256: "d3ec0204eab9a7cd6cc8756c88de6372aa32c5623ac15368b787350f5a2dd6eb" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/providerFailureContract.js", sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/providerProbe.js", sha256: "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/publicChartAdapter.js", sha256: "7e8403c919ae4096c403958e45ed1967068154f975a0d5ac8db599c80ad8952a" }),
-  Object.freeze({ path: "supabase/functions/entdecken-daily-task/publicMixAdapter.js", sha256: "cbeea2256879888b68b85aae0f0721383206c3ad0e36902f87bbe4baf2b512e2" }),
-  Object.freeze({ path: "supabase/functions/entdecken-daily-task/readbackContract.js", sha256: "daba1e59dfefd74c4c87c19ca657fcb823efd9173ebb37547356e7c353bc7e1f" }),
-  Object.freeze({ path: "supabase/functions/entdecken-daily-task/responseContract.js", sha256: "fc3122ba40d1d32e46356627158cb0ba37f2e84ac7f38aa871edd61c42b1cbba" }),
-  Object.freeze({ path: "supabase/functions/entdecken-daily-task/runner.js", sha256: "3b0c5ca5f2d61d79f55863e3df49c292be36c35706d4a505f97431fa380cf77e" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/publicMixAdapter.js", sha256: "3868bebed3ef20bb7f81d1f9f9e098a553bb0a89b127652c2a0be39813e4e70c" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/readbackContract.js", sha256: "e50df9891f7296ef3154f0a8cde8f2c0af772bb140179c8acbf7248272876892" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/responseContract.js", sha256: "07fad3827305b8d4206350727adef4f1c4e6373ecf4a591b2fcac6f23523dcbf" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/runner.js", sha256: "9080c9439c0da027b3bd785e395a5075c29f20d2b86a7342c6c8610e33a6777a" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/wikidataResolver.js", sha256: "bd20f09da8f4755ba6e15d5d796918a8d8c2b9188ed649381c0246b93564f037" }),
+  Object.freeze({ path: "supabase/functions/_shared/entdeckenFacts.js", sha256: "3995e55c51f228b27dc4b26f25a919703ed59c048649a4aeb671f1af22d919d1" }),
   Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
   Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
   Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
@@ -312,26 +318,26 @@ export const ENTDECKEN_MIXED_POOL_MIGRATION = Object.freeze({
   path: "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql",
   sha256: "fa5491d5bb6457aadbb1b5a3da97b818c9e1654ffcb94e5e8986af520b228297",
 });
-export const ENTDECKEN_MIXED_POOL_RELEASE_SHA256 = "aa4f0fc0ab29914df7b7913e3ae9c0028eb120ab501eeed280203e315c679cbb";
+export const ENTDECKEN_MIXED_POOL_RELEASE_SHA256 = "468f71521a3833ae12e029316031f57c0e6d1f11fe9f260bca4d47afafd8d1c0";
 
-export const ENTDECKEN_MIXED_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "ae45744e2067e4e472a8dc21e771061e393ed721666d9eb6f4b0a3b69a7e7237";
+export const ENTDECKEN_MIXED_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "1a89dad79daf4e4da74dc64e90a122295aacd67e11442560a6e40238f063178e";
 export const ENTDECKEN_MIXED_SINGLE_LIVE_FILES = Object.freeze([
   Object.freeze({ path: "AGENTS.md", sha256: "c78326afd5d1d44654580a95462fb141ac5f49257f765d67fe782ee275a2c19f" }),
-  Object.freeze({ path: "package.json", sha256: "cb7624c98f1299471ddb1755466cd45bd8455ef66483ce1192bca400da922dac" }),
+  Object.freeze({ path: "package.json", sha256: "d0bffaccd345584c4cdd5367fec874893a428996188bff69356209849f19f935" }),
   Object.freeze({ path: "src/lib/filmwissen.js", sha256: "c55e2114f4aec92a84ddb3fd416806987deed82aa00f7f171793cf3ec4ace8b2" }),
   Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
   Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/providerFailureContract.js", sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/providerProbe.js", sha256: "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4" }),
-  Object.freeze({ path: "supabase/functions/entdecken-daily-task/readbackContract.js", sha256: "daba1e59dfefd74c4c87c19ca657fcb823efd9173ebb37547356e7c353bc7e1f" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/readbackContract.js", sha256: "e50df9891f7296ef3154f0a8cde8f2c0af772bb140179c8acbf7248272876892" }),
   Object.freeze({ path: "tools/ai_budget_guard.mjs", sha256: "d9de85711a0f9767c2ed310a27915d9b9e9bf3308310e004180c902a27beb920" }),
   Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "e773f27b06b727ced3b9f09b719f67510b28ad4de0b3625ce4fa0b21a558d9f3" }),
   Object.freeze({ path: "tools/entdecken_live_proof.mjs", sha256: "d66ba46783ebae776d8c07570542221d7e6b4fd95a3ef134be08c2e3a3db5321" }),
   Object.freeze({ path: "tools/filmwissen_live_target.mjs", sha256: "e4fcad77cbee2fef1930a78d1e78d155b23b704ab7c3ec20e5d84f1f3a46015c" }),
-  Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "6e6a39d789cab0cae2c95dd5eb0f6595cea7c048207576c618f20628fd57dd86" }),
+  Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "be1fad93316201bc079351cb580542554b08077a3d03c17e220cf29f67781ec0" }),
   Object.freeze({ path: "tools/provider_raw_capture.mjs", sha256: "359b761b920385c348be47da91c3690cf43e4170447075f7f466a5eb010a1fa0" }),
 ]);
-export const ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256 = "21b4ebfdebb87f67445508dfaf1728829d2575f403f9bb2856d5bd9073a2174a";
+export const ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256 = "84f1b6c4a4e5b2b05d21be06697590149551fe5a922c974e74bf7496e6c465a4";
 
 /* Bytegenauer Releasebeleg fuer den ersten automatischen Radar-Tageslauf.
    Der historische E18-/Text-Target-Zaun bleibt unveraendert; dieser Vertrag
@@ -877,6 +883,12 @@ export function requireEntdeckenMixedPoolReleaseProvenance(options = {}) {
   const files = requireExactFileRows(
     ENTDECKEN_MIXED_POOL_FILES,
     ENTDECKEN_MIXED_POOL_SOURCE_BUNDLE_SHA256,
+    "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT",
+    options,
+  );
+  requireCommitFileRows(
+    ENTDECKEN_MIXED_POOL_DEPLOYED_COMMIT,
+    ENTDECKEN_MIXED_POOL_FILES,
     "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT",
     options,
   );

@@ -939,28 +939,31 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     queueMicrotask(() => kind.emit("exit", 0, null));
     return kind;
   };
-  let fehler = null;
-  try {
-    await starteModus({
-      modus: "ai-live",
-      ambientEnv: {},
-      lokaleKonfig: PUBLIC,
-      keychainLeser(account) {
-        gelesen.push(account);
-        return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
-      },
-      spawnImpl,
-      ownerApprovedServerBudget: true,
-      entdeckenDailyOnce: true,
-    });
-  } catch (error) { fehler = error; }
+  const code = await starteModus({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+    },
+    spawnImpl,
+    ownerApprovedServerBudget: true,
+    entdeckenDailyOnce: true,
+  });
   pruefe("Entdecken-Einmallauf bleibt fest auf seinen einzelnen Client verdrahtet",
-    MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
+    code === 0
+      && starts.length === 1
+      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
+      && starts[0].argv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
       && !MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Nicht freigegebener Format-6-Einmallauf stoppt vor Keychain und Kindprozess",
-    fehler?.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT"
-      && starts.length === 0
-      && gelesen.length === 0);
+  pruefe("Bytegebundener Format-6-Einmallauf erreicht genau den Budgetwächter",
+    starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
+      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && !(RADAR_WEBSEARCH_ONCE_ENV in starts[0].optionen.env));
 }
 
 {

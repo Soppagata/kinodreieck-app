@@ -30,6 +30,7 @@ import {
   ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256,
   ENTDECKEN_HTTP_DIAGNOSTIC_FILES,
   ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256,
+  ENTDECKEN_MIXED_POOL_DEPLOYED_COMMIT,
   ENTDECKEN_MIXED_POOL_FILES,
   ENTDECKEN_MIXED_POOL_MIGRATION,
   ENTDECKEN_MIXED_POOL_RELEASE_SHA256,
@@ -869,21 +870,42 @@ await check("Nicht deployter Entdecken-Mix hält Einmallauf und Providerprobe vo
     && error.code === "RELEASE_CLOSURE_UNTRACKED");
 });
 
-await check("Nicht freigegebener Format-6-Functionpfad bleibt hinter seinem alten Migrationszaun geschlossen", () => {
-  for (const prove of [
-    requireEntdeckenMixedPoolReleaseProvenance,
-    requireEntdeckenMixedPoolSingleLiveReleaseProvenance,
-  ]) {
-    assert.throws(() => prove(), (error) => error instanceof RadarRemoteStartStop
-      && error.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT");
-  }
+await check("Deployter Format-6-Functionpfad ist bytegenau an den Einmallauf gebunden", () => {
+  const functionProof = requireEntdeckenMixedPoolReleaseProvenance();
+  const singleLiveProof = requireEntdeckenMixedPoolSingleLiveReleaseProvenance();
+  assert.equal(functionProof.releaseSha256, ENTDECKEN_MIXED_POOL_RELEASE_SHA256);
+  assert.deepEqual(functionProof.files, ENTDECKEN_MIXED_POOL_FILES);
+  assert.equal(ENTDECKEN_MIXED_POOL_DEPLOYED_COMMIT,
+    "d7735be828f9be885cdf086d05e46143ff0a3cd1");
+  assert.equal(singleLiveProof.releaseSha256, ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256);
+  assert.deepEqual(singleLiveProof.files, ENTDECKEN_MIXED_SINGLE_LIVE_FILES);
+  assert.equal(singleLiveProof.functionReleaseSha256, functionProof.releaseSha256);
   assert.equal(ENTDECKEN_MIXED_POOL_RELEASE_SHA256.length, 64);
   assert.equal(ENTDECKEN_MIXED_POOL_FILES.length > 0, true);
+  for (const pathname of [
+    "supabase/functions/_shared/entdeckenFacts.js",
+    "supabase/functions/entdecken-daily-task/anthropicFactsAdapter.js",
+    "supabase/functions/entdecken-daily-task/factsRequest.js",
+  ]) {
+    assert.equal(ENTDECKEN_MIXED_POOL_FILES.some((entry) => entry.path === pathname), true);
+  }
   assert.equal(ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256.length, 64);
   assert.equal(ENTDECKEN_MIXED_SINGLE_LIVE_FILES.length > 0, true);
   assert.equal(ENTDECKEN_MIXED_POOL_MIGRATION.path,
     "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql");
   assert.doesNotMatch(ENTDECKEN_MIXED_POOL_MIGRATION.path, /20260828233000/);
+});
+
+await check("Format-6-Einmallauf stoppt bei einer einzelnen Closure-Byteänderung", () => {
+  const changedPath = "supabase/functions/entdecken-daily-task/contract.js";
+  assert.throws(() => requireEntdeckenMixedPoolSingleLiveReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      const pathname = relative(REPO_ROOT, String(absolutePath)).split("\\").join("/");
+      return pathname === changedPath ? Buffer.concat([bytes, Buffer.from("\n")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT");
 });
 
 await check("Historischer Radar-Tagesrelease bleibt belegbar, sein ersetzter Workflow ist lokal entfernt", () => {
