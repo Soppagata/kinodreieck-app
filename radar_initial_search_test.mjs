@@ -40,6 +40,7 @@ const day=`${viennaDayParts.year}-${viennaDayParts.month}-${viennaDayParts.day}`
 const targetId=createLocalTextRadarTargetId(query);
 const event={eventId:"b1000000-0000-4000-8000-000000000001",eventVersionId:"b1000000-0000-4000-8000-000000000002",
   targetId:"release:v1:1122334455667788",title:"Ein anderer Werktitel",targetType:"work",category:"film",
+  sourceTargetKey:`text:${targetId}`,
   eventType:"kinostart_at",date:day,region:"AT",platform:"-",lifecycleStatus:"scheduled",verificationStatus:"confirmed",
   evidence:[{sourceId:"web:press.example",sourceDomain:"press.example",url:"https://press.example/start",retrievedAt:instant}]};
 const emptyFeed=()=>({format:"kd-radar-pilot-feed-v2",revision:0,checksum:null,reconciledAt:instant,
@@ -112,13 +113,12 @@ try {
     await act(async()=>{ui.release();assert.equal((await first).status,"confirmed");});
     const saved=JSON.parse(localStorage.getItem(K.radar));assert.equal(saved.subscriptions[0].targetText,query);
     assert.equal(saved.pilot.events[0].title,event.title);await ui.radar();
-    /* Der kontogebundene Feed liefert ausschließlich Funde aktiver eigener
-       Textziele. Ohne starke Rückzuordnung bleibt das Ziel unbenannt, der
-       belegte Werktitel darf aber nicht vollständig verschwinden. */
+    /* Der Fundtitel bleibt vom gespeicherten Suchziel getrennt; die sichtbare
+       Herkunft stammt ausschließlich aus der serverseitigen Zielreferenz. */
     assert.match(ui.container.textContent,/Ein anderer Werktitel/);
     const news=[...ui.container.querySelectorAll(".kd-entdecken-panel")]
       .find(entry=>entry.querySelector("h3")?.textContent==="Neuigkeiten");
-    assert.doesNotMatch(news.textContent,/Ziel:/);
+    assert.match(news.textContent,/Gefunden für:\s*Synthetische Sternenreihe/);
     assert.doesNotMatch(ui.container.textContent,/alle sechs Tage|alle 6 Tage/);
     await act(async()=>{assert.equal((await controller.fuegeRadarTextHinzu(query)).status,"active");});
     assert.equal(ui.context.calls.filter(x=>x==="search").length,1);

@@ -135,6 +135,7 @@ try {
     stored=persist(); assert.equal(stored.status,"confirmed");
     const value=feed(); assert.equal(validateRadarPilotFeed(value).ok,true,JSON.stringify(validateRadarPilotFeed(value).errors));
     assert.equal(value.events.length,1); assert.equal(value.events[0].title,payload.workTitle);
+    assert.equal(value.events[0].sourceTargetKey,`text:${targetId}`);
     assert.equal(value.events[0].platform,"Beispiel+"); assert.equal(value.events[0].category,"special");
     assert.equal(value.subscriptions.length,1); assert.equal(value.subscriptions[0].title,targetText);
   });

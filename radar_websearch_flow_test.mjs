@@ -653,7 +653,7 @@ try {
     assert.equal(button(accountUi.container, "Jetzt prüfen"), undefined);
     assert.match(accountUi.container.textContent, /automatisch auf dem Laufenden/i);
     assert.match(accountUi.container.textContent, /Star Wars: Starfighter/);
-    assert.doesNotMatch(accountUi.container.textContent, /Gefunden für:/);
+    assert.match(accountUi.container.textContent, /Gefunden für:\s*Star Wars/);
     assert.match(accountUi.container.textContent, /20\.05\.2027 · Film · Kinostart Österreich/);
     assert.equal(accountUi.container.querySelectorAll(".kd-pilot-quellen").length, 0);
     const news = [...accountUi.container.querySelectorAll(".kd-entdecken-panel")]
@@ -671,7 +671,7 @@ try {
     assert.equal(accountFeedSyncs, 2);
     assert.equal(button(accountReload.container, "Jetzt prüfen"), undefined);
     assert.match(accountReload.container.textContent, /Star Wars: Starfighter/);
-    assert.doesNotMatch(accountReload.container.textContent, /Gefunden für:/);
+    assert.match(accountReload.container.textContent, /Gefunden für:\s*Star Wars/);
     assert.match(accountReload.container.textContent, /20\.05\.2027 · Film · Kinostart Österreich/);
   });
   await accountReload.cleanup();

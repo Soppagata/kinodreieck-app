@@ -853,7 +853,7 @@ try {
     assert.match(workUi.container.textContent, /Film · Kinostart Österreich/);
     const news = [...workUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
-    assert.match(news.textContent, /Ziel:\s*Passender Film/);
+    assert.match(news.textContent, /Gefunden für:\s*Passender Film/);
     assert.doesNotMatch(news.textContent, /nicht eindeutig zugeordnet/i);
     assert.equal(news.querySelectorAll("a").length, 0);
     assert.doesNotMatch(news.textContent, /film\.at|Quelle/);
@@ -887,6 +887,7 @@ try {
     eventId: "00000000-0000-4000-8000-000000000031",
     eventVersionId: "00000000-0000-4000-8000-000000000032",
     targetId: "release:v1:1234567890abcdef",
+    sourceTargetKey: `text:${textSubscriptions[0].targetId}`,
     title: "Kommender Freitext-Fund",
     targetType: "work",
     category: "film",
@@ -913,13 +914,22 @@ try {
     region: "global",
     evidence: [{ sourceId: "film-at", sourceDomain: "film.at", url: `https://film.at/text-folge-${episodeNumber}`, retrievedAt: now }],
   }));
+  const legacyTextFinding = {
+    ...textFinding,
+    eventId: "00000000-0000-4000-8000-000000000061",
+    eventVersionId: "00000000-0000-4000-8000-000000000062",
+    targetId: "release:v1:abcdef1234567890",
+    title: "Bestehender Fund ohne Zielreferenz",
+    date: "2099-10-03",
+  };
+  delete legacyTextFinding.sourceTargetKey;
   const textFeed = {
     format: "kd-radar-pilot-feed-v2",
     revision: 1,
     checksum,
     reconciledAt: now,
     subscriptions: textSubscriptions,
-    events: [textFinding, ...textEpisodes],
+    events: [textFinding, ...textEpisodes, legacyTextFinding],
     receipts: [],
     operationAcks: [],
     radarReview: true,
@@ -937,15 +947,24 @@ try {
     radarPilotEvents: textStateResult.state.pilot.events,
   });
   await act(async () => { button(textFindingUi.container, "Radar").click(); await tick(); });
-  check("Kontogebundene Freitext-Funde bleiben ohne erfundene Zielzuordnung sichtbar", () => {
+  check("Textfunde zeigen nur die persistierte Zielreferenz und markieren Altbestand ohne Zuordnung ehrlich", () => {
     const news = [...textFindingUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
     assert.match(news.textContent, /Kommender Freitext-Fund/);
     assert.match(news.textContent, /Belegserie · Staffel 2/);
     assert.match(news.textContent, /2 Folgen anzeigen/);
+    assert.match(news.textContent, /Bestehender Fund ohne Zielreferenz/);
     assert.ok(news.textContent.includes(formatPresentationDate(textNow)));
-    assert.doesNotMatch(news.textContent, /Ziel:/);
-    assert.equal(news.querySelectorAll(":scope > ul > li").length, 2);
+    assert.match(news.textContent, /Gefunden für:\s*Freitextziel 1/);
+    assert.match(news.textContent, /Gefunden für:\s*Zuordnung nicht verfügbar/);
+    assert.doesNotMatch(news.textContent, /Gefunden für:\s*Freitextziel [23]/);
+    assert.equal(news.querySelectorAll(":scope > ul > li").length, 3);
+    assert.ok([...news.querySelectorAll(":scope > ul > li")].every((item) => (
+      item.querySelector(":scope > span")?.textContent.includes("Gefunden für:")
+    )));
+    const targets = [...textFindingUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => entry.querySelector("h3")?.textContent === "Meine Ziele");
+    assert.doesNotMatch(targets.textContent, /\d+\s+(?:Funde|Neuigkeiten)/iu);
   });
   await textFindingUi.cleanup();
 
@@ -999,7 +1018,7 @@ try {
     assert.match(targets.textContent, /Star Wars/);
     assert.doesNotMatch(targets.textContent, /Star Wars: Starfighter/);
     assert.match(news.textContent, /Star Wars: Starfighter/);
-    assert.match(news.textContent, /Ziel:\s*Star Wars/);
+    assert.match(news.textContent, /Gefunden für:\s*Star Wars/);
     assert.equal(news.querySelectorAll("a,button").length, 0);
   });
   await targetFoundUi.cleanup();
@@ -1128,7 +1147,7 @@ try {
   });
   await act(async () => { button(targetFoundReloadUi.container, "Radar").click(); await tick(); });
   check("Reihen-Suchziel und abgeleiteter Fund bleiben nach Reload getrennt", () => {
-    assert.doesNotMatch(targetFoundReloadUi.container.textContent, /Gefunden für:/);
+    assert.match(targetFoundReloadUi.container.textContent, /Gefunden für:\s*Star Wars/);
     assert.match(targetFoundReloadUi.container.textContent, /Star Wars: Starfighter/);
   });
   await targetFoundReloadUi.cleanup();

@@ -15,6 +15,7 @@ import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "../lib/radarNews.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
+import { entdeckenDailyFeedNotice } from "../services/entdeckenDailyFeed.js";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -227,15 +228,7 @@ function RecommendationsView({
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format);
-  const feedNotice = webDiscoveryStatus?.status === "stale"
-    ? webDiscoveryStatus?.responseMode === "degraded"
-      ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums und bleibt nur zur Orientierung sichtbar."
-      : "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar."
-    : webDiscoveryStatus?.responseMode === "partial"
-      ? "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel."
-      : webDiscoveryStatus?.responseMode === "degraded"
-        ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar."
-        : null;
+  const feedNotice = entdeckenDailyFeedNotice(webDiscoveryStatus);
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
   const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn
@@ -423,8 +416,9 @@ function RadarView({
         <h3>Neuigkeiten</h3>
         {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
-          <span>{formatPresentationDate(entry.date, { fallback: entry.date })} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
-          {target ? <span className="kd-radar-suchstatus">Ziel: {localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })}</span> : null}
+          <span>{formatPresentationDate(entry.date, { fallback: entry.date })} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""} · Gefunden für: {target
+            ? localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })
+            : "Zuordnung nicht verfügbar"}</span>
           {entry.kind === "season" ? <details className="kd-radar-folgen">
             <summary>{entry.episodes.length} {entry.episodes.length === 1 ? "Folge" : "Folgen"} anzeigen</summary>
             <ol>{entry.episodes.map((episode) => <li key={episode.eventVersionId}>

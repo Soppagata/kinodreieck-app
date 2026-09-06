@@ -25,7 +25,11 @@ import {
   publicDiscoveryCandidates,
 } from "./src/lib/entdeckenUi.js";
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
-import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
+import {
+  createEntdeckenDailyFeedService,
+  entdeckenDailyFeedNotice,
+  ENTDECKEN_DAILY_STALE_NOTICE,
+} from "./src/services/entdeckenDailyFeed.js";
 import { ENTDECKEN_MARKET_POOL_50 } from "./src/data/entdeckenMarketPool50.js";
 
 let checks = 0;
@@ -218,6 +222,8 @@ await checkAsync("Neuerer Format-6-Serverfeed gewinnt deterministisch gegen den 
   }).load();
   assert.equal(loaded.feed.format, 6);
   assert.equal(loaded.feed.refreshedOn, "2026-08-30");
+  assert.equal(loaded.status, "fresh");
+  assert.equal(entdeckenDailyFeedNotice(loaded), null);
 });
 
 await checkAsync("Aelterer Format-6-Serverfeed verschlechtert den neueren Format-7-Fallback nicht", async () => {
@@ -246,6 +252,16 @@ await checkAsync("Aelterer Format-6-Serverfeed verschlechtert den neueren Format
   }).load();
   assert.equal(loaded.feed.format, 7);
   assert.equal(loaded.feed.refreshedOn, "2026-08-29");
+});
+
+await checkAsync("Veralteter Format-7-Fallback bleibt ehrlich als stale gekennzeichnet", async () => {
+  const loaded = await createEntdeckenDailyFeedService({
+    config: { entdeckenDailyFeedEnabled: false },
+    fallbackFeed: ENTDECKEN_MARKET_POOL_50,
+    currentDay: () => "2026-09-06",
+  }).load();
+  assert.equal(loaded.status, "stale");
+  assert.equal(entdeckenDailyFeedNotice(loaded), ENTDECKEN_DAILY_STALE_NOTICE);
 });
 
 await checkAsync("HTML-Größengrenze stoppt schon die erste Joyn-Liste vor weiteren Reads", async () => {

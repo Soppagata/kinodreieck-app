@@ -45,7 +45,9 @@ export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
   "lifecycleStatus", "verificationStatus", "evidence",
 ]);
-export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber", "title", "targetType", "category"]);
+export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze([
+  "seasonNumber", "title", "targetType", "category", "sourceTargetKey",
+]);
 export const RADAR_PILOT_RECEIPT_KEYS = Object.freeze(["eventVersionId", "status", "updatedAt"]);
 export const RADAR_SEARCH_STATUSES = Object.freeze([
   "never", "searching", "confirmed", "no_change", "insufficient_evidence",
@@ -303,6 +305,10 @@ export function validateRadarPilotEvent(value) {
   if (value.region !== RADAR_DEFAULT_REGION
     && !(textFinding && ["global", "unspecified"].includes(value.region))) errors.push("feed-event-region-invalid");
   if (value.category !== undefined && (!textFinding || !["film", "series", "season", "special"].includes(value.category))) errors.push("feed-event-category-invalid");
+  if (value.sourceTargetKey !== undefined && (!textFinding
+      || !/^text:text:[a-f0-9]{16}$/.test(value.sourceTargetKey))) {
+    errors.push("feed-event-source-target-invalid");
+  }
   if (textFinding ? (typeof value.platform !== "string" || !value.platform || value.platform !== text(value.platform)
       || value.platform.length > 80 || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value.platform))
     : !validPlatform(value.eventType, value.platform)) {

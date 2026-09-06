@@ -195,6 +195,21 @@ check("Additive Browser-RPC ist auth.uid-gebunden, kontingentiert und providerfr
   );
 });
 
+check("Feedprojektion nutzt ausschließlich die bereits persistierte Textziel-Referenz", () => {
+  const migration = fs.readFileSync(
+    "./supabase/migrations/20260906170000_radar_text_finding_source_target.sql",
+    "utf8",
+  );
+  assert.match(migration, /^begin;$/mu);
+  assert.match(migration, /^commit;$/mu);
+  assert.equal((migration.match(/create or replace function public\.kd_radar_pilot_feed\s*\(/giu) || []).length, 1);
+  assert.match(migration, /join public\.kd_radar_subscriptions s on s\.account_id=f\.account_id and s\.target_id=f\.text_target_id/iu);
+  assert.match(migration, /join public\.kd_radar_targets t on t\.target_id=s\.target_id/iu);
+  assert.match(migration, /'sourceTargetKey','text:'\|\|t\.target_key/iu);
+  assert.match(migration, /f\.account_id=auth\.uid\(\)/iu);
+  assert.doesNotMatch(migration, /create table|alter table|insert into|update public|delete from|provider|anthropic|web_search|cron\.|net\.http/iu);
+});
+
 check("Providerquery entsteht ausschließlich aus dem gespeicherten Freitext", () => {
   const body = buildAnthropicRadarWebsearchBody(request, setup, checkedAt);
   const input = JSON.parse(body.messages[0].content);
@@ -333,11 +348,13 @@ check("Optionale Plattform bleibt bei Film, Serie und Staffel bis zum Feed gült
         eventVersionId: "83000000-0000-4000-8000-000000000002",
         targetId: found.targetId, targetType: found.targetType, title: found.title,
         eventType, date: found.date, region: "AT", platform: found.platform,
+        sourceTargetKey: `text:${request.targetId}`,
         lifecycleStatus: "scheduled", verificationStatus: "confirmed",
         evidence: found.evidence.map(({ sourceId, sourceDomain, url, retrievedAt }) => ({ sourceId, sourceDomain, url, retrievedAt })),
       };
       assert.equal(event.platform, platform || "-");
       assert.equal(validateRadarPilotEvent(event).ok, true, validateRadarPilotEvent(event).errors.join(","));
+      assert.equal(validateRadarPilotEvent({ ...event, sourceTargetKey: `text:${found.targetId}` }).ok, false);
       assert.equal(validateRadarPilotEvent({...event,targetId:123,region:"global"}).ok,false);
       if (eventType === "serienstart" && platform) {
         assert.equal(validateRadarPilotEvent({...event,targetId:"imdb:tt1234567"}).ok,false);

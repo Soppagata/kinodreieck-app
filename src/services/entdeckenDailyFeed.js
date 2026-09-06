@@ -11,8 +11,22 @@ export const ENTDECKEN_DAILY_PARTIAL_NOTICE =
   "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel.";
 export const ENTDECKEN_DAILY_DEGRADED_NOTICE =
   "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar.";
+export const ENTDECKEN_DAILY_STALE_NOTICE =
+  "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar.";
+export const ENTDECKEN_DAILY_STALE_DEGRADED_NOTICE =
+  "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums und bleibt nur zur Orientierung sichtbar.";
 export const ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS = 20_000;
 const READ_REFRESH_STATUSES = new Set(["read_only", "disabled", "unavailable"]);
+
+export function entdeckenDailyFeedNotice(value) {
+  if (value?.status === "stale") {
+    return value?.responseMode === "degraded"
+      ? ENTDECKEN_DAILY_STALE_DEGRADED_NOTICE : ENTDECKEN_DAILY_STALE_NOTICE;
+  }
+  if (value?.responseMode === "partial") return ENTDECKEN_DAILY_PARTIAL_NOTICE;
+  if (value?.responseMode === "degraded") return ENTDECKEN_DAILY_DEGRADED_NOTICE;
+  return null;
+}
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }

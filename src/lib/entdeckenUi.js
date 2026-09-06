@@ -227,14 +227,17 @@ export function localLibraryProjection(master) {
 export function radarSubscriptionForEvent(event, subscriptions = []) {
   const rows = list(subscriptions).filter((entry) => entry?.status === "active");
   const directSource = text(event?.sourceTargetKey);
-  const sourceTargetId = directSource.match(/^(?:work|franchise):(.+)$/)?.[1] || null;
+  const sourceTarget = directSource.match(/^(work|franchise|text):(.+)$/);
+  const sourceTargetKind = sourceTarget?.[1] || null;
+  const sourceTargetId = sourceTarget?.[2] || null;
   const unique = (matches) => matches.length === 1 ? matches[0] : null;
   /* sourceTargetKey bezeichnet das Ziel, dessen Suche den Fund erzeugt hat.
      Diese Herkunft muss vor der Identität des gefundenen Werks gewinnen:
      dasselbe Werk kann zusätzlich ein eigenes Ziel und Mitglied einer Reihe
      sein, ohne die belegte Suchherkunft dadurch mehrdeutig zu machen. */
   if (sourceTargetId) {
-    const source = unique(rows.filter((entry) => entry.targetId === sourceTargetId));
+    const source = unique(rows.filter((entry) => entry.targetId === sourceTargetId
+      && (sourceTargetKind !== "text" || entry.targetType === "text")));
     if (source) return source;
   }
   const direct = unique(rows.filter((entry) => entry.targetId === event?.targetId));
