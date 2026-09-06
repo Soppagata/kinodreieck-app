@@ -948,7 +948,9 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
   pruefe("Joyn-freier Functionkandidat ist separat und bytegenau gebunden",
     candidate.commit === ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT
       && candidate.sourceSha256 === ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256
-      && candidate.files.length === 2);
+      && candidate.files.length === 4
+      && candidate.files.some((entry) => entry.path
+        === "supabase/migrations/20260906180000_entdecken_current_diverse_pool.sql"));
   let stopp = null;
   try {
     await starteModus({

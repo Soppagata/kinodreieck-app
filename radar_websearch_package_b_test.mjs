@@ -32,6 +32,7 @@ import {
   ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256,
   ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
   ENTDECKEN_JOYN_FREE_CANDIDATE_FILES,
+  ENTDECKEN_JOYN_FREE_CANDIDATE_MIGRATION,
   ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
   ENTDECKEN_MIXED_POOL_DEPLOYED_COMMIT,
   ENTDECKEN_MIXED_POOL_FILES,
@@ -879,6 +880,14 @@ await check("Joyn-freier Functionkandidat ist belegt, der alte Deployzaun bleibt
   assert.equal(candidate.commit, ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT);
   assert.equal(candidate.sourceSha256, ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256);
   assert.deepEqual(candidate.files, ENTDECKEN_JOYN_FREE_CANDIDATE_FILES);
+  assert.deepEqual(candidate.migration, ENTDECKEN_JOYN_FREE_CANDIDATE_MIGRATION);
+  assert.equal(candidate.migration.version, "20260906180000");
+  assert.deepEqual(candidate.files.map((entry) => entry.path), [
+    "supabase/functions/entdecken-daily-task/contract.js",
+    "supabase/functions/entdecken-daily-task/publicMixAdapter.js",
+    "src/services/entdeckenDailyFeed.js",
+    "supabase/migrations/20260906180000_entdecken_current_diverse_pool.sql",
+  ]);
   assert.equal(ENTDECKEN_MIXED_POOL_DEPLOYED_COMMIT,
     "d7735be828f9be885cdf086d05e46143ff0a3cd1");
   for (const prove of [
