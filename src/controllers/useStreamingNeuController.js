@@ -33,6 +33,7 @@ export function useStreamingNeuController() {
   const [zustand, setZustand] = useState(LEER);
   const auftragRef = useRef(0);
   const snapshotRef = useRef(null);
+  const aktiveKatalogAuftraegeRef = useRef(0);
   const generation = useSyncExternalStore(
     subscribeStorageContext,
     storageContextGenerationSnapshot,
@@ -47,16 +48,17 @@ export function useStreamingNeuController() {
 
   const uebernehmeVollkatalog = useCallback(async ({ runId, titel } = {}) => {
     const auftrag = ++auftragRef.current;
+    aktiveKatalogAuftraegeRef.current += 1;
     const kontext = captureStorageContext();
     const key = streamingNeuStorageKey(kontext.owner);
     const legacyKey = streamingNeuLegacyStorageKey(kontext.owner);
-    if (!key || !String(runId == null ? "" : runId).trim() || !Array.isArray(titel)) {
-      if (kontext.isCurrent() && auftragRef.current === auftrag) {
-        setZustand({ ...LEER, status: "unavailable" });
-      }
-      return false;
-    }
     try {
+      if (!key || !String(runId == null ? "" : runId).trim() || !Array.isArray(titel)) {
+        if (kontext.isCurrent() && auftragRef.current === auftrag) {
+          setZustand({ ...LEER, status: "unavailable" });
+        }
+        return false;
+      }
       let gespeichert = await kontext.get(key);
       let ausLegacyKey = false;
       if (!gespeichert && legacyKey) {
@@ -83,6 +85,8 @@ export function useStreamingNeuController() {
         setZustand({ ...LEER, status: "error" });
       }
       return false;
+    } finally {
+      aktiveKatalogAuftraegeRef.current = Math.max(0, aktiveKatalogAuftraegeRef.current - 1);
     }
   }, []);
 
@@ -92,8 +96,16 @@ export function useStreamingNeuController() {
   useEffect(() => {
     if (!Number.isFinite(zustand.naechsterAblauf)) return undefined;
     const wartezeit = Math.max(0, zustand.naechsterAblauf - Date.now() + 5);
-    const timer = window.setTimeout(async () => {
-      const auftrag = ++auftragRef.current;
+    let timer = null;
+    const bereinige = async () => {
+      /* Ein schon laufender Vollkatalogauftrag besitzt Vorrang. Cleanup darf
+         ihn weder ueber den Zaehler abbrechen noch seinen alten Snapshot
+         darueber schreiben; nach seinem Abschluss wird kurz erneut geprueft. */
+      if (aktiveKatalogAuftraegeRef.current > 0) {
+        timer = window.setTimeout(bereinige, 50);
+        return;
+      }
+      const auftrag = auftragRef.current;
       const kontext = captureStorageContext();
       const key = streamingNeuStorageKey(kontext.owner);
       const ergebnis = bereinigeStreamingNeuSnapshot(snapshotRef.current, Date.now());
@@ -110,7 +122,8 @@ export function useStreamingNeuController() {
           setZustand({ ...LEER, status: "error" });
         }
       }
-    }, wartezeit);
+    };
+    timer = window.setTimeout(bereinige, wartezeit);
     return () => window.clearTimeout(timer);
   }, [zustand.naechsterAblauf]);
 

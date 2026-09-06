@@ -106,6 +106,21 @@ check("v1 migriert als leere Baseline statt den Altbestand als neu zu zeigen", (
   assert.deepEqual(streamingNeuIds(migration.snapshot, T0), []);
 });
 
+check("v1 übernimmt unabhängig von früherer oder späterer alter Zeitachse stets den aktuellen Vollstand", () => {
+  for (const alterRunId of [iso(T0 - 10 * TAG), iso(T0 + 10 * TAG)]) {
+    const migriert = aktualisiereStreamingNeuSnapshot(JSON.stringify({
+      format: 1, owner: ownerA, runId: alterRunId, ids: [1, 99], neueIds: [99],
+    }), {
+      owner: ownerA, runId: iso(T0), now: T0,
+      titel: [titel(2, "Aktuell"), titel(3, "Aktuell neu gegenüber v1")],
+    });
+    assert.equal(migriert.snapshot.runId, iso(T0));
+    assert.deepEqual(migriert.snapshot.ids, [2, 3]);
+    assert.deepEqual(migriert.snapshot.neu, []);
+    assert.equal(migriert.migriert, true);
+  }
+});
+
 check("Korrupte Historien und rückwärts laufende Katalogstände bleiben fail-closed", () => {
   assert.equal(parseStreamingNeuSnapshot(JSON.stringify({
     ...dritter.snapshot, neu: [{ id: 4, firstSeenAt: T0 + 9 * TAG }],
@@ -173,9 +188,18 @@ async function mount(Component, props) {
 }
 
 const gespeicherteWerte = new Map();
+let blockierterGet = null;
 const testDriver = {
   name: "test", owner: ownerA,
-  async get(key) { return gespeicherteWerte.has(key) ? { key, value: gespeicherteWerte.get(key) } : null; },
+  async get(key) {
+    if (blockierterGet) {
+      const blockade = blockierterGet;
+      blockierterGet = null;
+      blockade.gestartet();
+      await blockade.warte;
+    }
+    return gespeicherteWerte.has(key) ? { key, value: gespeicherteWerte.get(key) } : null;
+  },
   async set(key, value) { gespeicherteWerte.set(key, value); return { key, value }; },
   async delete(key) { gespeicherteWerte.delete(key); return { key, deleted: true }; },
   async list(prefix = "") { return { keys: [...gespeicherteWerte.keys()].filter((key) => key.startsWith(prefix)) }; },
@@ -205,10 +229,28 @@ check("Controller persistiert v2 asynchron und übernimmt nur den echten Folgela
   assert.equal(controllerUi.container.textContent, "ready:11");
   assert.equal(JSON.parse(gespeicherteWerte.get(streamingNeuStorageKey(ownerA))).format, 2);
 });
-await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); await tick(); });
-check("Offen bleibende UI entfernt und persistiert einen Titel an seiner Ablaufgrenze", () => {
-  assert.equal(controllerUi.container.textContent, "ready:");
-  assert.deepEqual(JSON.parse(gespeicherteWerte.get(streamingNeuStorageKey(ownerA))).neu, []);
+let getGestartet;
+let getFreigeben;
+const getGestartetPromise = new Promise((resolve) => { getGestartet = resolve; });
+const getBlockade = new Promise((resolve) => { getFreigeben = resolve; });
+blockierterGet = { gestartet: getGestartet, warte: getBlockade };
+const raceRunId = iso(Date.now());
+let raceLauf;
+await act(async () => {
+  raceLauf = controller.uebernehmeVollkatalog({
+    runId: raceRunId,
+    titel: [titel(10, "Baseline"), titel(11, "Läuft ab"), titel(12, "Race neu")],
+  });
+  await getGestartetPromise;
+});
+await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); });
+await act(async () => { getFreigeben(); await raceLauf; await tick(); });
+check("Ablauf-Cleanup verdrängt keinen gleichzeitig laufenden Vollkatalog-Read", () => {
+  assert.equal(controllerUi.container.textContent, "ready:12");
+  const gespeichert = JSON.parse(gespeicherteWerte.get(streamingNeuStorageKey(ownerA)));
+  assert.equal(gespeichert.runId, raceRunId);
+  assert.deepEqual(gespeichert.ids, [10, 11, 12]);
+  assert.deepEqual(gespeichert.neu.map((entry) => entry.id), [12]);
 });
 await controllerUi.cleanup();
 setStorageDriver(null);

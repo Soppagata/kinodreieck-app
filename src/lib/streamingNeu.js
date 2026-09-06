@@ -158,7 +158,11 @@ export function aktualisiereStreamingNeuSnapshot(vorher, {
   const alt = parseStreamingNeuSnapshot(raw, cleanOwner);
   const ids = streamingKatalogIds(titel);
 
-  if (!alt) {
+  /* v1 verwendete den Publikations-`stand`, v2 den echten `katalog_stand`.
+     Die beiden Zeitachsen sind nicht vergleichbar. Deshalb wird bei jeder
+     v1-Migration ausnahmslos der JETZT geladene Vollkatalog zur leeren
+     Baseline; weder alte IDs noch der alte runId duerfen weiterleben. */
+  if (warLegacy || !alt) {
     const snapshot = Object.freeze({
       format: STREAMING_NEU_FORMAT,
       owner: cleanOwner,
@@ -166,7 +170,9 @@ export function aktualisiereStreamingNeuSnapshot(vorher, {
       ids,
       neu: Object.freeze([]),
     });
-    return Object.freeze({ snapshot, geaendert: true, initialisiert: true });
+    return Object.freeze({
+      snapshot, geaendert: true, initialisiert: true, migriert: warLegacy,
+    });
   }
 
   const altRunAt = zeitpunkt(alt.runId);
@@ -180,7 +186,7 @@ export function aktualisiereStreamingNeuSnapshot(vorher, {
       : snapshotMit(alt, alt.ids, neu);
     return Object.freeze({
       snapshot,
-      geaendert: warLegacy || snapshot !== alt,
+      geaendert: snapshot !== alt,
       initialisiert: false,
     });
   }
