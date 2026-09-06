@@ -320,7 +320,7 @@ export const ENTDECKEN_MIXED_POOL_MIGRATION = Object.freeze({
 });
 export const ENTDECKEN_MIXED_POOL_RELEASE_SHA256 = "468f71521a3833ae12e029316031f57c0e6d1f11fe9f260bca4d47afafd8d1c0";
 
-export const ENTDECKEN_MIXED_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "1a89dad79daf4e4da74dc64e90a122295aacd67e11442560a6e40238f063178e";
+export const ENTDECKEN_MIXED_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "80db2533421469342e60e53b2f64f4d769a8fdcb4a6da33305bcdc714cd685aa";
 export const ENTDECKEN_MIXED_SINGLE_LIVE_FILES = Object.freeze([
   Object.freeze({ path: "AGENTS.md", sha256: "c78326afd5d1d44654580a95462fb141ac5f49257f765d67fe782ee275a2c19f" }),
   Object.freeze({ path: "package.json", sha256: "d0bffaccd345584c4cdd5367fec874893a428996188bff69356209849f19f935" }),
@@ -331,13 +331,13 @@ export const ENTDECKEN_MIXED_SINGLE_LIVE_FILES = Object.freeze([
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/providerProbe.js", sha256: "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/readbackContract.js", sha256: "e50df9891f7296ef3154f0a8cde8f2c0af772bb140179c8acbf7248272876892" }),
   Object.freeze({ path: "tools/ai_budget_guard.mjs", sha256: "d9de85711a0f9767c2ed310a27915d9b9e9bf3308310e004180c902a27beb920" }),
-  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "e773f27b06b727ced3b9f09b719f67510b28ad4de0b3625ce4fa0b21a558d9f3" }),
+  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "2d66b19075a9a09daec9f4edf55e8bcbed89d57f6f7fe096ee18fc15ef492fbc" }),
   Object.freeze({ path: "tools/entdecken_live_proof.mjs", sha256: "d66ba46783ebae776d8c07570542221d7e6b4fd95a3ef134be08c2e3a3db5321" }),
   Object.freeze({ path: "tools/filmwissen_live_target.mjs", sha256: "e4fcad77cbee2fef1930a78d1e78d155b23b704ab7c3ec20e5d84f1f3a46015c" }),
   Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "be1fad93316201bc079351cb580542554b08077a3d03c17e220cf29f67781ec0" }),
   Object.freeze({ path: "tools/provider_raw_capture.mjs", sha256: "359b761b920385c348be47da91c3690cf43e4170447075f7f466a5eb010a1fa0" }),
 ]);
-export const ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256 = "84f1b6c4a4e5b2b05d21be06697590149551fe5a922c974e74bf7496e6c465a4";
+export const ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256 = "135209eb46d818cd3d4ef7b077733219e890566a1de3df5681ece3e77748a5f2";
 
 /* Bytegenauer Releasebeleg fuer den ersten automatischen Radar-Tageslauf.
    Der historische E18-/Text-Target-Zaun bleibt unveraendert; dieser Vertrag

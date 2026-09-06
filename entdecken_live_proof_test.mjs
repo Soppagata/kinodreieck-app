@@ -25,6 +25,7 @@ import {
 import {
   EntdeckenDailyLiveProduktfehler,
   pruefeGemessenenEntdeckenAbschluss,
+  runEntdeckenDailyOnce,
 } from "./tools/entdecken_daily_live.mjs";
 
 let checks = 0;
@@ -547,6 +548,61 @@ await check("Gemessener Readback-Fehler bleibt Produktfehler ohne zweiten Provid
     assert.equal(error.exitCode, 1);
     return true;
   });
+});
+
+await check("Einmallauf authentifiziert den unabhängigen GET-Readback mit derselben Sitzung", async () => {
+  const token = "synthetic-owner-access-token";
+  const requests = [];
+  const json = (body, status = 200) => new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+  const budget = {
+    ok: true,
+    betrieb: {
+      stand: { monatVerbrauchtUsdCent: 0, budgetErschoepft: false },
+      monatsbudgetUsdCent: 1500,
+      anbieterRequestMaxUsdCent: 500,
+      anbieterRequestOwnerMaxUsdCent: 500,
+      anbieterRequestTimeoutMs: 135000,
+      anbieterRequestTimeoutOwnerMaxMs: 135000,
+    },
+  };
+  const fetchImpl = async (url, options = {}) => {
+    const request = { url: String(url), method: options.method || "GET", headers: options.headers || {} };
+    requests.push(request);
+    if (request.url.includes("/auth/v1/token")) return json({ access_token: token });
+    if (request.url.includes("/rest/v1/kd_account_access")) {
+      return json([{ role: "owner", active: true, personal_ai: true }]);
+    }
+    if (request.url.endsWith("/functions/v1/ai-task")) return json(budget);
+    if (request.url.endsWith("/functions/v1/entdecken-daily-task") && request.method === "POST") {
+      return json({});
+    }
+    if (request.url.endsWith("/functions/v1/entdecken-daily-task") && request.method === "GET") {
+      return request.headers.Authorization === `Bearer ${token}` ? json({}) : json({}, 403);
+    }
+    throw new Error("unexpected mock request");
+  };
+  await assert.rejects(() => runEntdeckenDailyOnce({
+    env: {
+      KD_SB_URL: "https://projekt-ref.supabase.co",
+      KD_SB_ANON: "synthetic-public-anon-key-value",
+      KD_TESTA_PASS: "synthetic-password",
+      KD_TESTA_USER: "testa",
+      KD_ORIGIN: "https://staging.kinodreieck.at",
+      KD_AI_OWNER_APPROVED_SERVER_BUDGET: "1",
+      KD_ENTDECKEN_DAILY_ONCE_GUARD: "keychain-budget-guard-v1",
+    },
+    fetchImpl,
+    ausgabe() {},
+  }), (error) => error instanceof EntdeckenDailyLiveProduktfehler
+    && error.code === "CLAIM_INVALID");
+  const readbacks = requests.filter((request) => (
+    request.method === "GET" && request.url.endsWith("/functions/v1/entdecken-daily-task")
+  ));
+  assert.equal(readbacks.length, 1);
+  assert.equal(readbacks[0].headers.Authorization, `Bearer ${token}`);
 });
 
 await check("Nicht messbarer Abschluss bleibt weiterhin BUDGET_UNBEKANNT", () => {

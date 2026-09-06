@@ -219,6 +219,7 @@ export async function runEntdeckenDailyOnce({
         headers: {
           Origin: verbindung.origin,
           apikey: verbindung.anon,
+          Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
       },
