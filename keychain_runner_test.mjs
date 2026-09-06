@@ -59,6 +59,11 @@ import {
   erstelleAnbieterPfadBelege,
 } from "./tools/ai_smoke_contract.mjs";
 import {
+  ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
+  ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
+  requireEntdeckenJoynFreeCandidateProvenance,
+} from "./tools/radar_websearch_remote_start.mjs";
+import {
   PROVIDER_DIAGNOSTIC_ENV,
   PROVIDER_DIAGNOSTIC_FIELD,
   PROVIDER_DIAGNOSTIC_HEADER,
@@ -939,31 +944,32 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     queueMicrotask(() => kind.emit("exit", 0, null));
     return kind;
   };
-  const code = await starteModus({
-    modus: "ai-live",
-    ambientEnv: {},
-    lokaleKonfig: PUBLIC,
-    keychainLeser(account) {
-      gelesen.push(account);
-      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
-    },
-    spawnImpl,
-    ownerApprovedServerBudget: true,
-    entdeckenDailyOnce: true,
-  });
+  const candidate = requireEntdeckenJoynFreeCandidateProvenance();
+  pruefe("Joyn-freier Functionkandidat ist separat und bytegenau gebunden",
+    candidate.commit === ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT
+      && candidate.sourceSha256 === ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256
+      && candidate.files.length === 2);
+  let stopp = null;
+  try {
+    await starteModus({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser(account) {
+        gelesen.push(account);
+        return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+      },
+      spawnImpl,
+      ownerApprovedServerBudget: true,
+      entdeckenDailyOnce: true,
+    });
+  } catch (error) { stopp = error; }
   pruefe("Entdecken-Einmallauf bleibt fest auf seinen einzelnen Client verdrahtet",
-    code === 0
-      && starts.length === 1
-      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
-      && starts[0].argv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
+    MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
       && !MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Bytegebundener Format-6-Einmallauf erreicht genau den Budgetwächter",
-    starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
-      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
-      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
-      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
-      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
-      && !(RADAR_WEBSEARCH_ONCE_ENV in starts[0].optionen.env));
+  pruefe("Nicht deployter Joyn-freier Kandidat stoppt vor Keychain und Budgetwächter",
+    stopp?.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT"
+      && starts.length === 0 && gelesen.length === 0);
 }
 
 {

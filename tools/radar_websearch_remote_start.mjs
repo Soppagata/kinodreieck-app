@@ -292,6 +292,15 @@ export const ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256 = "0599f19a1c82fdcd1b3fda13
    Remote-Function-/Ledger-Readback des Releaseaudits bindet diese Closure an
    den unveränderlichen Integrationscommit. */
 export const ENTDECKEN_MIXED_POOL_DEPLOYED_COMMIT = "d7735be828f9be885cdf086d05e46143ff0a3cd1";
+/* Lokaler JF-01-Kandidat. Dieser separate Anker belegt nur die restaurierten
+   Functionbytes und autorisiert weder Deploy noch Live-Lauf. Der bestehende
+   DEPLOYED-Anker bleibt bis zu einer echten Remote-Verifikation unveraendert. */
+export const ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT = "7b68ea3231dfa3f3cc206eb290b1b3e252791bf0";
+export const ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256 = "88f22ebe9c37a8ad56a338ed5f5fa9fff153e144e2199d73cd848ef3103f00b5";
+export const ENTDECKEN_JOYN_FREE_CANDIDATE_FILES = Object.freeze([
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/contract.js", sha256: "56cd2c3795d815a5c136b22eb751b42b352914456740861977d90ed865f48217" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/publicMixAdapter.js", sha256: "4548f777dcc48a8fe97e92e382b53a9a8d4eea3c19917c9ae8646949a64087f6" }),
+]);
 export const ENTDECKEN_MIXED_POOL_SOURCE_BUNDLE_SHA256 = "02ad0de5581f45b044aed1e808882e618634ef30d64125c06b5e5480eebcc8b3";
 export const ENTDECKEN_MIXED_POOL_FILES = Object.freeze([
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/anthropicAdapter.js", sha256: "d58ee4413cddcd590a44fb4534cd94f2c2fcffa21fed64007fd143135751b6f8" }),
@@ -704,6 +713,26 @@ function requireExactFileRows(entries, expectedClosure, code, options = {}) {
     stop(code, "Lokale Releaseclosure weicht vom exakten Bytevertrag ab.");
   }
   return Object.freeze(files.map((entry) => Object.freeze(entry)));
+}
+
+export function requireEntdeckenJoynFreeCandidateProvenance(options = {}) {
+  const files = requireExactFileRows(
+    ENTDECKEN_JOYN_FREE_CANDIDATE_FILES,
+    ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
+    "ENTDECKEN_JOYN_FREE_CANDIDATE_DRIFT",
+    options,
+  );
+  requireCommitFileRows(
+    ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
+    ENTDECKEN_JOYN_FREE_CANDIDATE_FILES,
+    "ENTDECKEN_JOYN_FREE_CANDIDATE_DRIFT",
+    options,
+  );
+  return Object.freeze({
+    commit: ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
+    sourceSha256: ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
+    files,
+  });
 }
 
 export function requireRadarEntdeckenV6ReleaseProvenance(options = {}) {
