@@ -112,10 +112,13 @@ try {
     await act(async()=>{ui.release();assert.equal((await first).status,"confirmed");});
     const saved=JSON.parse(localStorage.getItem(K.radar));assert.equal(saved.subscriptions[0].targetText,query);
     assert.equal(saved.pilot.events[0].title,event.title);await ui.radar();
-    /* TEXT-Funde bleiben im eigenen Feed gespeichert. Der reale Feed liefert
-       derzeit aber keine starke Zuordnung vom Fund zurück zum Textziel; die
-       Neuigkeitenansicht darf diese Herkunft deshalb nicht erraten. */
-    assert.doesNotMatch(ui.container.textContent,/Ein anderer Werktitel/);
+    /* Der kontogebundene Feed liefert ausschließlich Funde aktiver eigener
+       Textziele. Ohne starke Rückzuordnung bleibt das Ziel unbenannt, der
+       belegte Werktitel darf aber nicht vollständig verschwinden. */
+    assert.match(ui.container.textContent,/Ein anderer Werktitel/);
+    const news=[...ui.container.querySelectorAll(".kd-entdecken-panel")]
+      .find(entry=>entry.querySelector("h3")?.textContent==="Neuigkeiten");
+    assert.doesNotMatch(news.textContent,/Ziel:/);
     assert.doesNotMatch(ui.container.textContent,/alle sechs Tage|alle 6 Tage/);
     await act(async()=>{assert.equal((await controller.fuegeRadarTextHinzu(query)).status,"active");});
     assert.equal(ui.context.calls.filter(x=>x==="search").length,1);

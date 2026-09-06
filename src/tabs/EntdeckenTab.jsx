@@ -23,6 +23,7 @@ const ANSICHTEN = Object.freeze([
 ]);
 
 const ROLLEN_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
+const RADAR_TEXT_FINDING_ID = /^release:v1:[a-f0-9]{16}$/;
 function ereignisLabel(entry) {
   if (radarEpisodeIdentity(entry)?.episodeNumber) return "Staffel · Folge";
   if (entry?.targetId?.startsWith("release:v1:")) {
@@ -42,6 +43,11 @@ function ereignisLabel(entry) {
 function sichtbarePlattform(value) {
   const normalized = typeof value === "string" ? value.trim() : "";
   return normalized && !/^(?:-|unknown|unbekannt|n\/a)$/iu.test(normalized) ? normalized : null;
+}
+function istKontogebundenerTextfund(entry) {
+  if (RADAR_TEXT_FINDING_ID.test(entry?.targetId || "")) return true;
+  return entry?.kind === "season" && Array.isArray(entry.episodes) && entry.episodes.length > 0
+    && entry.episodes.every((episode) => RADAR_TEXT_FINDING_ID.test(episode?.targetId || ""));
 }
 
 function focusableElements(root) {
@@ -342,10 +348,18 @@ function RadarView({
   const syncProblem = radarSyncProblem(radarState?.outbox, syncStatus);
   const radarDay = radarViennaDay();
   const events = useMemo(() => projectRadarNews(radarPilotEvents, radarDay), [radarPilotEvents, radarDay]);
+  // Der kontogebundene Feed ist bereits auf aktive eigene Textziele begrenzt,
+  // enthält für release:v1-Funde aber bewusst keine erratene Query-Zuordnung.
   const news = useMemo(() => events.map((entry) => Object.freeze({
     entry,
     target: radarSubscriptionForEvent(entry, subscriptions),
-  })).filter(({ target }) => target !== null), [events, subscriptions]);
+  })).filter(({ entry, target }) => target !== null || (
+    accountMode
+      && istKontogebundenerTextfund(entry)
+      && subscriptions.some((subscription) => (
+        subscription.targetType === "text" && subscription.status === "active"
+      ))
+  )), [accountMode, events, subscriptions]);
   const searchStatuses = accountMode ? radarState?.pilot?.searchStatuses : undefined;
 
   const addTarget = async (event) => {

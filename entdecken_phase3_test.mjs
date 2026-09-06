@@ -32,6 +32,7 @@ import {
   applyPersonRadarCheckResult,
   acknowledgeAccountRadarPilotSubscription,
   createEmptyLocalRadar,
+  createLocalTextRadarTargetId,
   decodeLocalRadar,
   queueAccountPersonRadarChange,
   rejectAccountRadarChange,
@@ -871,6 +872,82 @@ try {
     assert.doesNotMatch(workReloadUi.container.textContent, /watchmode:|fixture:|work:/i);
   });
   await workReloadUi.cleanup();
+
+  const textNow = "2099-09-30";
+  const textSubscriptions = [1, 2, 3].map((number) => ({
+    targetId: createLocalTextRadarTargetId(`Freitextziel ${number}`),
+    targetType: "text",
+    title: `Freitextziel ${number}`,
+    region: "AT",
+    scope: "all",
+    status: "active",
+    updatedAt: now,
+  }));
+  const textFinding = {
+    eventId: "00000000-0000-4000-8000-000000000031",
+    eventVersionId: "00000000-0000-4000-8000-000000000032",
+    targetId: "release:v1:1234567890abcdef",
+    title: "Kommender Freitext-Fund",
+    targetType: "work",
+    category: "film",
+    eventType: "kinostart_at",
+    date: textNow,
+    region: "AT",
+    platform: "-",
+    lifecycleStatus: "scheduled",
+    verificationStatus: "confirmed",
+    evidence: [{ sourceId: "film-at", sourceDomain: "film.at", url: "https://film.at/text-start", retrievedAt: now }],
+  };
+  const textEpisodes = [1, 2].map((episodeNumber) => ({
+    ...textFinding,
+    eventId: `00000000-0000-4000-8000-00000000004${episodeNumber}`,
+    eventVersionId: `00000000-0000-4000-8000-00000000005${episodeNumber}`,
+    targetId: `release:v1:1234567890abcde${episodeNumber}`,
+    title: `Belegserie Staffel 2 Folge ${episodeNumber}`,
+    targetType: "series",
+    category: "series",
+    eventType: "staffelstart",
+    seasonNumber: 2,
+    date: `2099-10-0${episodeNumber}`,
+    platform: "Beleg+",
+    region: "global",
+    evidence: [{ sourceId: "film-at", sourceDomain: "film.at", url: `https://film.at/text-folge-${episodeNumber}`, retrievedAt: now }],
+  }));
+  const textFeed = {
+    format: "kd-radar-pilot-feed-v2",
+    revision: 1,
+    checksum,
+    reconciledAt: now,
+    subscriptions: textSubscriptions,
+    events: [textFinding, ...textEpisodes],
+    receipts: [],
+    operationAcks: [],
+    radarReview: true,
+    personResults: [],
+  };
+  const textStateResult = reconcileAccountRadarPilotFeed(
+    createEmptyLocalRadar({ authority: "account-cache" }),
+    textFeed,
+  );
+  assert.equal(textStateResult.ok, true);
+  const textFindingUi = await mount(EntdeckenTab, {
+    ...baseProps,
+    accountMode: true,
+    radarState: textStateResult.state,
+    radarPilotEvents: textStateResult.state.pilot.events,
+  });
+  await act(async () => { button(textFindingUi.container, "Radar").click(); await tick(); });
+  check("Kontogebundene Freitext-Funde bleiben ohne erfundene Zielzuordnung sichtbar", () => {
+    const news = [...textFindingUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
+    assert.match(news.textContent, /Kommender Freitext-Fund/);
+    assert.match(news.textContent, /Belegserie · Staffel 2/);
+    assert.match(news.textContent, /2 Folgen anzeigen/);
+    assert.ok(news.textContent.includes(formatPresentationDate(textNow)));
+    assert.doesNotMatch(news.textContent, /Ziel:/);
+    assert.equal(news.querySelectorAll(":scope > ul > li").length, 2);
+  });
+  await textFindingUi.cleanup();
 
   const starWarsTarget = {
     targetId: "title-group:v1:star-wars", targetType: "franchise", targetStatus: "active",
