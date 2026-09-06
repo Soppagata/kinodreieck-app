@@ -157,7 +157,8 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.doesNotMatch(streaming, /Absteigend sortiert|aufsteigend wechseln|↑|↓/);
   assert.match(streaming, /function SortierFilter[\s\S]*Sortieren nach[\s\S]*Richtung[\s\S]*Aufsteigend[\s\S]*Absteigend/);
   assert.match(streaming, /kd-streamfilter-panel[\s\S]*SortierFilter name="Mein Programm"/);
-  assert.match(streaming, /kd-streamfilter-panel[\s\S]*SortierFilter name="Entdecken"/);
+  assert.match(streaming, /kd-streamfilter-panel[\s\S]*SortierFilter name=\{katalogAnsicht\}/);
+  assert.match(streaming, /const katalogAnsicht = ansicht === "neu" \? "Neu" : "Entdecken"/);
   assert.match(streaming, /className="kd-nur-desktop"[\s\S]*Merkliste \(\{merkliste\.length\}\) exportieren/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*nurBewertet/);
   assert.match(streaming, /Gesehen \(\{statusAnzahlenE\}\)/);

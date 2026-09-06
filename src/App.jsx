@@ -100,6 +100,7 @@ import { LocalDataSafety } from "./components/LocalDataSafety.jsx";
 import { RadarSubscriptionPreview } from "./components/RadarSubscriptionPreview.jsx";
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { useEntdeckenPins } from "./controllers/useEntdeckenPins.js";
+import { useStreamingNeuController } from "./controllers/useStreamingNeuController.js";
 import { useVokabularController } from "./controllers/useVokabularController.js";
 import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
@@ -242,6 +243,7 @@ export default function App() {
   const [streamingInfo, setStreamingInfo] = useState(null);
   const [streamingBekannt, setStreamingBekannt] = useState(null);
   const [streamingEntdecken, setStreamingEntdecken] = useState(null);
+  const { streamingNeu, uebernehmeVollkatalog } = useStreamingNeuController();
   /* Dieser Zustand wird bereits vom Boot und von der gezielten
      Demo-Bereinigung gebraucht; seine Grenze muss deshalb vor diesen
      Callbacks liegen. */
@@ -450,8 +452,8 @@ export default function App() {
     setKinoPins(next);
     void persistPins(next);
   }, [kinoPins, persistPins]);
-  /* ---- Entdecken-Merkliste (in den App-State geliftet, damit Streaming und
-     Dashboard live synchron sind — vorher zwei getrennte localStorage-Leser).
+  /* ---- Entdecken-Merkliste (in den App-State geliftet, damit alle Streaming-
+     Katalogansichten dieselbe separate Export-/Importliste verwenden).
      Struktur: {watchmode_id, titel, jahr, hinzugefuegt_am}. ---- */
   const [merkliste, setMerkliste] = useState(() => {
     try { return JSON.parse(localStorage.getItem(K.merkliste) || "[]"); } catch { return []; }
@@ -1323,6 +1325,12 @@ export default function App() {
           entdeckenGeladen.current = true;
           const a = catalogService.buildStreamingViews(dateiRoh, master || []);
           setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
+          if (dateiRoh.entdeckenUmfang === "voll") {
+            await uebernehmeVollkatalog({
+              runId: dateiEntdecken?.stand,
+              titel: [...(dateiRoh.bekannt?.titel || []), ...(dateiEntdecken?.titel || [])],
+            });
+          }
           setStreamingInfo({ art: "snapshot", variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
           resolveError(ERROR_SCOPE.STREAMING_KNOWN);
           resolveError(ERROR_SCOPE.STREAMING_DISCOVER);
@@ -1337,10 +1345,16 @@ export default function App() {
       try {
         const r = await holeEinmal(streamingEntdeckenLaufRef, "streamingEntdecken", 20000);
         if (veraltet() || !snapshotFreigabeRef.current) return;
-        roh = { ...roh, entdecken: streamingPayloadMitMetadaten(r), entdeckenUmfang: "voll" };
+        const vollerEntdeckenStand = streamingPayloadMitMetadaten(r);
+        roh = { ...roh, entdecken: vollerEntdeckenStand, entdeckenUmfang: "voll" };
         streamingRohRef.current = roh;
         entdeckenGeladen.current = true;
         uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);
+        await uebernehmeVollkatalog({
+          runId: vollerEntdeckenStand?.stand,
+          titel: [...(roh.bekannt?.titel || []), ...(vollerEntdeckenStand?.titel || [])],
+        });
+        if (veraltet() || !snapshotFreigabeRef.current) return;
       } catch (e) {
         if (veraltet()) return;
         entdeckenGeladen.current = false;
@@ -1360,7 +1374,7 @@ export default function App() {
     setStreamingBekannt(a.bekannt);
     setStreamingEntdecken(a.entdecken);
     return a;
-  }, [snapshotFreigabe, master, reportError, resolveError]);
+  }, [snapshotFreigabe, master, reportError, resolveError, uebernehmeVollkatalog]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
   /* Der Hauptbereich Entdecken und „Mein Programm" leben zuerst aus dem
      kleinen, gebündelten Marktfeed beziehungsweise dem leichten Bekannt-
@@ -1757,6 +1771,8 @@ export default function App() {
             onAllesKatalogLaden={() => ladeStreamingDateien(true)}
             auswahl={auswahl} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
+            recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
+            streamingNeu={streamingNeu}
             entdeckenStatus={entdeckenStatus} schreibeEntdeckenStatus={schreibeEntdeckenStatus}
             heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}

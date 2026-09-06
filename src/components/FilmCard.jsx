@@ -36,6 +36,7 @@ export function FilmCard({
   film, kinoInfo, streamBadge, expanded, onToggle, onSave, onDelete, kommtVorIn, onArtikelKlick,
   vorbewertung = null, filmwissen = null,
   auswahlmodus = false, auswaehlbar = true, ausgewaehlt = false, onAuswahl = null,
+  headerAction = null,
 }) {
   const [editing, setEditing] = useState(false);
   const [prognoseEntwurf, setPrognoseEntwurf] = useState(false);
@@ -193,6 +194,7 @@ export function FilmCard({
             </div>
           )}
         </div>
+        {headerAction ? <div onClick={(event) => event.stopPropagation()}>{headerAction}</div> : null}
       </div>
       {expanded && !editing && vorbewertung && !auswahlmodus && (unbewertet || film.prognose) && (
         <div className="kd-film-prognose-breit" onClick={(e) => e.stopPropagation()}

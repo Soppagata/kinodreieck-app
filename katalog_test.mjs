@@ -142,6 +142,8 @@ const ansichten = baueStreamingAnsichten({
   entdecken: { stand: "x", dienste: ["Netflix"], titel: [{ watchmode_id: 2, titel: "Arrival", jahr: 2016, dienste: ["Netflix"] }] },
 }, [{ id: "alien_1979", titel: "Alien", jahr: 1979, bewertung: { wie: 5, was: 5, warum: 5 } }]);
 check("aktiver Master wird lokal zu Mein Programm gematcht", ansichten.bekannt.titel.length === 1 && ansichten.bekannt.titel[0].id === "alien_1979");
+check("Titel-/Jahr-Match behält die stabile Streaming-ID für Pinboard und Dashboard",
+  ansichten.bekannt.titel[0].watchmode_id === 1);
 check("übriger Titel bleibt in Entdecken", ansichten.entdecken.titel.length === 1 && ansichten.entdecken.titel[0].titel === "Arrival");
 check("Rohkatalog, Masterbestand und lokale Abzugsmengen bleiben getrennt belegt",
   ansichten.bekannt.katalogMengen.rohkatalog === 2

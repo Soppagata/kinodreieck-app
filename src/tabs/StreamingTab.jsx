@@ -18,6 +18,7 @@ import {
 } from "../lib/streamingSort.js";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
+import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -34,6 +35,9 @@ function download(dateiname, obj) {
   a.href = url; a.download = dateiname; a.click();
   URL.revokeObjectURL(url);
 }
+
+const istStreamingSerie = (titel) => ["tv_series", "serie", "series"]
+  .includes(String(titel?.typ || titel?.type || "").toLowerCase());
 
 function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className }) {
   /* Joyn-Fix: Badges UND web_urls-Links nur für Dienste der Abo-Auswahl
@@ -160,6 +164,8 @@ export function StreamingTab({
   mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false,
   fokusTreffer = null, onFokusVerbraucht,
   onAllesKatalogLaden,
+  recommendationPins = [], onRecommendationPinToggle,
+  streamingNeu = { status: "idle", neueIds: [] },
   entdeckenStatus = {}, schreibeEntdeckenStatus = async () => false,
 }) {
   const bereichRef = useRef(null);
@@ -181,7 +187,8 @@ export function StreamingTab({
   const [plattformE, setPlattformE] = useState(null);
   const [statusFilterE, setStatusFilterE] = useState(null);
   const [buchstabeE, setBuchstabeE] = useState(null);
-  /* Merkliste kommt jetzt als Prop (in App-State geliftet) — Streaming und Dashboard live synchron. */
+  /* Merkliste bleibt der separate Exportpfad; Dashboard-Pins laufen ausschliesslich
+     ueber recommendationPins und den bestehenden Entdecken-Pinboardvertrag. */
   const entdeckenStatusRef = useRef(entdeckenStatus);
   entdeckenStatusRef.current = entdeckenStatus;
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
@@ -324,10 +331,12 @@ export function StreamingTab({
   }, [auswahl, bekannt]);
   const plattformOptionenE = useMemo(() => {
     if (auswahl && auswahl.length) return [...auswahl].sort((a, b) => a.localeCompare(b, "de"));
-    const dienste = new Set([...(entdecken?.dienste || [])]);
-    for (const titel of entdecken?.titel || []) for (const dienst of titel.dienste || []) dienste.add(dienst);
+    const dienste = new Set([...(entdecken?.dienste || []), ...(bekannt?.dienste || [])]);
+    for (const titel of [...(bekannt?.titel || []), ...(entdecken?.titel || [])]) {
+      for (const dienst of titel.dienste || []) dienste.add(dienst);
+    }
     return [...dienste].sort((a, b) => a.localeCompare(b, "de"));
-  }, [auswahl, entdecken]);
+  }, [auswahl, bekannt, entdecken]);
   const plattformOkP = useCallback((t) => !plattformP || (t.dienste || []).includes(plattformP), [plattformP]);
   const plattformOkE = useCallback((t) => !plattformE || (t.dienste || []).includes(plattformE), [plattformE]);
 
@@ -346,10 +355,27 @@ export function StreamingTab({
     return sortiereStreamingTitel(l, sortP, sortRichtungP);
   }, [bekannt, datenDa, dienstOk, plattformOkP, nurWunsch, nurBewertet, buchstabeP, dekadeP, mustwatchIds, suche, sortP, sortRichtungP, fokusOverride]);
 
+  const vollKatalogTitel = useMemo(() => {
+    const eindeutig = new Map();
+    for (const titel of [...(bekannt?.titel || []), ...(entdecken?.titel || [])]) {
+      if (titel?.watchmode_id == null) continue;
+      eindeutig.set(String(titel.watchmode_id), {
+        ...titel,
+        genres: Array.isArray(titel.genres) ? titel.genres
+          : Array.isArray(titel.genre) ? titel.genre : [],
+      });
+    }
+    return [...eindeutig.values()];
+  }, [bekannt, entdecken]);
+  const neuIdSet = useMemo(() => new Set((streamingNeu?.neueIds || []).map(String)), [streamingNeu]);
+  const neuTitel = useMemo(() => streamingNeu?.status === "ready"
+    ? vollKatalogTitel.filter((titel) => neuIdSet.has(String(titel.watchmode_id)))
+    : [], [vollKatalogTitel, neuIdSet, streamingNeu?.status]);
+  const filterQuelleE = ansicht === "neu" ? neuTitel : (entdecken?.titel || []);
+
   const genresE = useMemo(() => {
-    if (!entdeckenDa) return [];
     const gruppen = new Map();
-    entdecken.titel.forEach((titel) => (titel.genres || []).forEach((genre) => {
+    filterQuelleE.forEach((titel) => (titel.genres || []).forEach((genre) => {
       const label = String(genre || "").trim();
       const key = norm(label);
       if (!key) return;
@@ -358,19 +384,18 @@ export function StreamingTab({
       gruppen.set(key, bisher);
     }));
     return [...gruppen.values()].sort((a, b) => b.anzahl - a.anzahl || a.label.localeCompare(b.label, "de"));
-  }, [entdecken, entdeckenDa]);
-  const genreFilterSichtbarE = useMemo(() => streamingGenreFilterSichtbar(entdecken?.titel || []), [entdecken]);
+  }, [filterQuelleE]);
+  const genreFilterSichtbarE = useMemo(() => streamingGenreFilterSichtbar(filterQuelleE), [filterQuelleE]);
   useEffect(() => {
     if (!genreFilterSichtbarE && genreE) setGenreE(null);
   }, [genreFilterSichtbarE, genreE]);
 
   const statusAnzahlenE = useMemo(() => {
-    if (!entdeckenDa) return 0;
-    return entdecken.titel.reduce((anzahl, titel) => {
+    return filterQuelleE.reduce((anzahl, titel) => {
       const status = entdeckenStatus[titel.watchmode_id];
       return anzahl + (statusVon(status) === "gesehen" ? 1 : 0);
     }, 0);
-  }, [entdecken, entdeckenDa, entdeckenStatus]);
+  }, [filterQuelleE, entdeckenStatus]);
 
   /* Starke Katalogkennungen gleichen Entdecken bidirektional mit der Mediathek
      ab. Vorhanden bedeutet ausdrücklich NICHT automatisch gesehen: Eine
@@ -380,35 +405,52 @@ export function StreamingTab({
     void schreibeEntdeckenStatus((prev) => gleicheMediathekStatusAb(prev, entdecken?.titel, master));
   }, [master, entdecken, schreibeEntdeckenStatus]);
 
-  const entdeckenListe = useMemo(() => {
-    if (!entdeckenDa) return [];
-    let l = entdecken.titel.filter((t) => (
-      fokusOverride?.art === "entdecken" && String(t.watchmode_id) === fokusOverride.ref
+  const katalogListe = useMemo(() => {
+    if (ansicht === "entdecken" && !entdeckenDa) return [];
+    if (ansicht === "neu" && streamingNeu?.status !== "ready") return [];
+    let l = filterQuelleE.filter((t) => (
+      ansicht === "entdecken" && fokusOverride?.art === "entdecken" && String(t.watchmode_id) === fokusOverride.ref
     ) || (dienstOk(t) && plattformOkE(t)));
     if (statusFilterE === "gesehen") l = l.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen");
     if (buchstabeE) l = l.filter((t) => streamingAnfangsbuchstabe(t.titel) === buchstabeE);
     if (genreFilterSichtbarE && genreE) l = l.filter((t) => (t.genres || []).some((genre) => norm(genre) === genreE));
     if (streamingJahrzehntBereich(dekadeE)) l = l.filter((t) => passtInJahrzehntMitKulanz(t.jahr, dekadeE));
-    if (typE) l = l.filter((t) => (t.typ || "") === typE);
+    if (typE === "movie") l = l.filter((t) => !istStreamingSerie(t));
+    if (typE === "tv_series") l = l.filter(istStreamingSerie);
     return sortiereStreamingTitel(l, sortE, sortRichtungE);
-  }, [entdecken, entdeckenDa, dienstOk, plattformOkE, statusFilterE, buchstabeE, genreE, genreFilterSichtbarE, dekadeE, typE, sortE, sortRichtungE, entdeckenStatus, fokusOverride]);
+  }, [ansicht, entdeckenDa, streamingNeu?.status, filterQuelleE, dienstOk, plattformOkE,
+    statusFilterE, buchstabeE, genreE, genreFilterSichtbarE, dekadeE, typE,
+    sortE, sortRichtungE, entdeckenStatus, fokusOverride]);
   // Bei Filterwechsel wieder bei 200 anfangen (sonst würden Tausende gerendert).
-  useEffect(() => { setSichtbarE(200); }, [entdeckenListe]);
-  const sichtbareEntdeckenTitel = useMemo(() => {
-    const basis = entdeckenListe.slice(0, sichtbarE);
-    if (fokusOverride?.art !== "entdecken") return basis;
-    const ziel = entdeckenListe.find((titel) => String(titel.watchmode_id) === fokusOverride.ref);
+  useEffect(() => { setSichtbarE(200); }, [katalogListe]);
+  const sichtbareKatalogTitel = useMemo(() => {
+    const basis = katalogListe.slice(0, sichtbarE);
+    if (ansicht !== "entdecken" || fokusOverride?.art !== "entdecken") return basis;
+    const ziel = katalogListe.find((titel) => String(titel.watchmode_id) === fokusOverride.ref);
     if (!ziel || basis.some((titel) => String(titel.watchmode_id) === fokusOverride.ref)) return basis;
     /* Der konkrete Navigationsauftrag muss auch dann ein DOM-Ziel erhalten,
        wenn seine sortierte Position hinter der 200er-Paginierungsgrenze liegt.
        Nur diese eine Karte wird ergänzt; der übrige Vollkatalog bleibt billig. */
     return [...basis, ziel];
-  }, [entdeckenListe, sichtbarE, fokusOverride]);
+  }, [ansicht, katalogListe, sichtbarE, fokusOverride]);
 
   const dekadenP = useMemo(() => streamingJahrzehnte(bekannt?.titel || []), [bekannt]);
-  const dekadenE = useMemo(() => streamingJahrzehnte(entdecken?.titel || []), [entdecken]);
+  const dekadenE = useMemo(() => streamingJahrzehnte(filterQuelleE), [filterQuelleE]);
 
   const gemerkt = (t) => merkliste.some((m) => m.watchmode_id === t.watchmode_id);
+  const pinButton = (t) => {
+    const gepinnt = isEntdeckenPinned(recommendationPins, t);
+    const titel = t.titel || t.title || "Titel";
+    return <button type="button" className={`kd-entdecken-pin${gepinnt ? " aktiv" : ""}`}
+      aria-label={gepinnt ? `${titel} vom Pinboard lösen` : `${titel} am Pinboard anpinnen`}
+      aria-pressed={gepinnt} title={gepinnt ? "Vom Pinboard lösen" : "Am Pinboard anpinnen"}
+      onClick={(event) => { event.stopPropagation(); onRecommendationPinToggle?.(t); }}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill={gepinnt ? "currentColor" : "none"}
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 4h8l-1 6 3 3v1H6v-1l3-3-1-6Z" /><path d="M12 14v6" />
+      </svg>
+    </button>;
+  };
   const aendereFilter = (setter, wert) => {
     setFokusOverride(null);
     setter(wert);
@@ -425,12 +467,22 @@ export function StreamingTab({
   };
   const aendereAnsicht = (naechsteAnsicht) => {
     setAnsicht(naechsteAnsicht);
-    if (naechsteAnsicht === "entdecken") void onAllesKatalogLaden?.();
+    if (naechsteAnsicht === "entdecken" || naechsteAnsicht === "neu") void onAllesKatalogLaden?.();
   };
   const aktiveFilterP = Number(!!plattformP) + Number(nurBewertet) + Number(nurWunsch)
     + Number(!!buchstabeP) + Number(!!streamingJahrzehntBereich(dekadeP));
   const aktiveFilterE = Number(!!plattformE) + Number(!!statusFilterE) + Number(!!typE)
     + Number(genreFilterSichtbarE && !!genreE) + Number(!!streamingJahrzehntBereich(dekadeE)) + Number(!!buchstabeE);
+  const katalogAnsicht = ansicht === "neu" ? "Neu" : "Entdecken";
+  const katalogAnsichtBereit = ansicht === "neu" ? streamingNeu?.status === "ready" : entdeckenDa;
+  const entdeckenAnzahlFuerAuswahl = useMemo(
+    () => (entdecken?.titel || []).filter(dienstOk).length,
+    [entdecken, dienstOk],
+  );
+  const neuAnzahlFuerAuswahl = useMemo(
+    () => neuTitel.filter(dienstOk).length,
+    [neuTitel, dienstOk],
+  );
 
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
@@ -449,7 +501,8 @@ export function StreamingTab({
       <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={aendereAnsicht}
         options={[
           { id: "programm", label: "Mein Programm", badge: datenDa ? programm.length : undefined },
-          { id: "entdecken", label: "Alles", badge: entdeckenDa ? entdeckenListe.length : undefined },
+          { id: "entdecken", label: "Alles", badge: entdeckenDa ? (ansicht === "entdecken" ? katalogListe.length : entdeckenAnzahlFuerAuswahl) : undefined },
+          { id: "neu", label: "Neu", badge: streamingNeu?.status === "ready" ? (ansicht === "neu" ? katalogListe.length : neuAnzahlFuerAuswahl) : undefined },
         ]} />
 
       {!datenDa && (
@@ -575,6 +628,7 @@ export function StreamingTab({
                     onRecherchieren: () => onFilmwissenRecherchieren?.(kartenFilm),
                   } : null}
                   kinoInfo={<DienstBadges dienste={f.dienste} webUrls={f.web_urls} auswahl={auswahl} />}
+                  headerAction={pinButton(kartenFilm)}
                   />
                 </div>
               );
@@ -583,29 +637,42 @@ export function StreamingTab({
         </>
       )}
 
-      {/* ===== Entdecken ===== */}
-      {ansicht === "entdecken" && datenDa && (
+      {/* ===== Alles / Neu ===== */}
+      {(ansicht === "entdecken" || ansicht === "neu") && datenDa && (
         <>
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.rauch }}>
-            Ungeprüfte Katalogtitel — kein Dreieck und keine Bewertung. Sortiert wird nur nach den sichtbaren Metadaten.
+            {ansicht === "neu"
+              ? streamingNeu?.initial
+                ? "Erster vollständiger Katalogstand — er bildet den Ausgangspunkt und wird hier einmal vollständig gezeigt."
+                : "Neu seit dem unmittelbar zuvor auf diesem Gerät vollständig geladenen Katalogstand."
+              : "Ungeprüfte Katalogtitel — kein Dreieck und keine Bewertung. Sortiert wird nur nach den sichtbaren Metadaten."}
           </div>
+          {!katalogAnsichtBereit ? (
+            <p style={{ color: T.rauch, fontSize: 14 }} role="status">
+              {streamingNeu?.status === "unavailable"
+                ? "Für diesen vollständigen Katalog fehlt eine verlässliche Standkennung; ein Diff wird vorsichtshalber nicht gebildet."
+                : streamingNeu?.status === "error"
+                  ? "Der lokale Vergleichsstand konnte nicht sicher gespeichert werden."
+                  : "Der vollständige Katalog wird geladen …"}
+            </p>
+          ) : <>
           <div className="kd-kompakt kd-streaming-werkzeuge" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter und Sortierung einklappen" : "Filter und Sortierung ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
               {streamFilterOffen ? "▾" : "▸"} Filter &amp; Sortierung{aktiveFilterE ? ` (${aktiveFilterE})` : ""}
             </button>
-            <button className="kd-nur-desktop" style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px" }}
+            {ansicht === "entdecken" && <button className="kd-nur-desktop" style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px" }}
               onClick={() => download("merkliste.json", { exportiert_am: new Date().toISOString(), eintraege: merkliste })}
               title="Merkliste als JSON-Datei exportieren">
               Merkliste ({merkliste.length}) exportieren
-            </button>
+            </button>}
           </div>
           {streamFilterOffen && (
             <div className="kd-streamfilter-panel">
               {/* data-tour umfasst Feld und Richtung gemeinsam; native Controls bleiben selbst bedienbar. */}
-              <SortierFilter name="Entdecken" feld={sortE} richtung={sortRichtungE}
+              <SortierFilter name={katalogAnsicht} feld={sortE} richtung={sortRichtungE}
                 onFeld={setSortE} onRichtung={setSortRichtungE} entdecken />
-              <PlattformFilter name="Entdecken" wert={plattformE} optionen={plattformOptionenE}
+              <PlattformFilter name={katalogAnsicht} wert={plattformE} optionen={plattformOptionenE}
                 onChange={(wert) => aendereFilter(setPlattformE, wert)} />
               <div className="kd-streamfilter-gruppe">
                 <span>Status</span>
@@ -637,19 +704,23 @@ export function StreamingTab({
             </div>
           )}
           <div className="kd-streamfilter-regler">
-            <AlphabetFilter name="Entdecken" wert={buchstabeE}
+            <AlphabetFilter name={katalogAnsicht} wert={buchstabeE}
               onChange={(wert) => aendereFilter(setBuchstabeE, wert)} />
-            <JahrzehntFilter name="Entdecken" wert={dekadeE} optionen={dekadenE}
+            <JahrzehntFilter name={katalogAnsicht} wert={dekadeE} optionen={dekadenE}
               onChange={aendereDekadeE} />
           </div>
+          {ansicht === "neu" && katalogListe.length === 0 && (
+            <p style={{ color: T.rauch, fontSize: 14 }}>Seit dem vorherigen vollständigen Katalogstand sind keine Titel hinzugekommen.</p>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {sichtbareEntdeckenTitel.map((t) => (
+            {sichtbareKatalogTitel.map((t) => (
               <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus" tabIndex={-1}
-                data-streaming-suchtreffer={`entdecken:${t.watchmode_id}`}
+                data-streaming-suchtreffer={ansicht === "entdecken" ? `entdecken:${t.watchmode_id}` : undefined}
                 onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
                 style={{ background: T.saalHoch, borderRadius: 6, padding: "10px 12px", cursor: "pointer" }}>
                 <div className="kd-entdecken-kopf">
                   <div className="kd-entdecken-aktionen">
+                  {pinButton(t)}
                   <button onClick={(e) => { e.stopPropagation(); toggleMerk(t); }}
                     title={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
                     aria-label={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
@@ -665,7 +736,7 @@ export function StreamingTab({
                   </div>
                   <div className="kd-entdecken-inhalt">
                   <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17 }}>
-                    {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{t.typ === "tv_series" ? " · Serie" : ""}
+                    {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
                     {entdeckenStatus[t.watchmode_id] && (
                       <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>
                         {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
@@ -700,7 +771,7 @@ export function StreamingTab({
                       <div style={{ marginTop: 8 }}>
                         <FilmForm startOffen
                           kennungenBearbeitbar={false}
-                          typOptionen={t.typ === "tv_series" ? ["serie"] : ["film"]}
+                          typOptionen={istStreamingSerie(t) ? ["serie"] : ["film"]}
                           initial={{
                             titel: t.titel, jahr: t.jahr, quelle: "must_watch",
                             genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id,
@@ -723,16 +794,17 @@ export function StreamingTab({
                 </div>
               </div>
             ))}
-            {entdeckenListe.length > sichtbarE && (
+            {katalogListe.length > sichtbarE && (
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
                 <button style={{ ...btnStyle(true), fontSize: 13, padding: "8px 14px" }}
                   onClick={() => setSichtbarE((n) => n + 100)}>
                   Weitere 100 laden
                 </button>
-                <span style={mono}>{sichtbarE} von {entdeckenListe.length} · noch {entdeckenListe.length - sichtbarE}</span>
+                <span style={mono}>{sichtbarE} von {katalogListe.length} · noch {katalogListe.length - sichtbarE}</span>
               </div>
             )}
           </div>
+          </>}
         </>
       )}
 

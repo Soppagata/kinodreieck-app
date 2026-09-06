@@ -458,11 +458,15 @@ export function baueStreamingAnsichten(streaming, master = []) {
     if (film) {
       meine.push({
         ...film,
-        ...(exakterFilm ? {
-          watchmode_id: t.watchmode_id,
-          tmdb_id: t.tmdb_id ?? film.tmdb_id ?? null,
-          imdb_id: t.imdb_id ?? film.imdb_id ?? null,
-        } : {}),
+        /* Auch ein ueber den bestehenden exakten Titel-/Jahr-Vertrag erkanntes
+           Streamingangebot bleibt ein echter Streamingtitel. Seine stabile
+           Katalog-ID wird fuer Pinboard und Vollkatalog-Diff benoetigt; sie nur
+           beim bereits vorab verknuepften Master zu tragen machte solche Karten
+           unpinnbar. */
+        watchmode_id: t.watchmode_id,
+        tmdb_id: t.tmdb_id ?? film.tmdb_id ?? null,
+        imdb_id: t.imdb_id ?? film.imdb_id ?? null,
+        genres: t.genres || film.genres || film.genre || [],
         dienste: t.dienste || [],
         web_urls: t.web_urls || null,
         staffeln_verfuegbar: t.staffeln_verfuegbar ?? film.staffeln_verfuegbar ?? null,
