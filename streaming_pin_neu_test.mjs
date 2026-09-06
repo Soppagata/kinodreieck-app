@@ -320,10 +320,16 @@ const entdeckenBegrenzt = {
 };
 let letzterToggle = null;
 let vollLadungen = 0;
+let synchronisierterStatus = {};
+let addFilmRufe = 0;
 const basisProps = {
   bekannt, entdecken: entdeckenBegrenzt, auswahl: ["Netflix"], merkliste: [], toggleMerk() {},
   master: bekannt.titel, mustwatchIds: new Set(), entdeckenStatus: {},
-  schreibeEntdeckenStatus: async () => true,
+  schreibeEntdeckenStatus: async (update) => {
+    synchronisierterStatus = update(synchronisierterStatus);
+    return true;
+  },
+  addFilm: async () => { addFilmRufe += 1; return "unerwartetes-duplikat"; },
   onAllesKatalogLaden() { vollLadungen++; },
   recommendationPins: [], onRecommendationPinToggle(entry) { letzterToggle = entry; },
   streamingNeu: { status: "ready", runId: iso(realNow), neueIds: [1, 2, 3, 4], naechsterAblauf: null },
@@ -356,6 +362,9 @@ check("Auch jede Karte in Alles besitzt den Pin-Button", () => {
 });
 
 await act(async () => { tabButton("Neu").click(); await tick(); await tick(); });
+await ui.render({
+  ...basisProps, entdecken: entdeckenVoll, entdeckenStatus: synchronisierterStatus,
+});
 check("Neu nutzt 14-Tage-Menge, Dienstewahl und dieselben Pin-Karten", () => {
   assert.match(ui.container.textContent, /14 Tage/u);
   assert.match(ui.container.textContent, /Bekannt/u);
@@ -364,6 +373,15 @@ check("Neu nutzt 14-Tage-Menge, Dienstewahl und dieselben Pin-Karten", () => {
   assert.doesNotMatch(ui.container.textContent, /Nur MUBI/u);
   assert.ok((pin("Bekannt") || pin("Bekannt", "lösen")) && pin("Entdeckung"));
   assert.equal(vollLadungen, 2);
+});
+const bekannteNeuKarte = [...ui.container.querySelectorAll(".kd-entdecken-karte")]
+  .find((karte) => /Bekannt/u.test(karte.textContent));
+await act(async () => { bekannteNeuKarte.click(); await tick(); });
+check("Ein bereits eindeutig gematchter Neu-Titel verlinkt die Mediathek und bietet keinen Duplikat-Create-Pfad", () => {
+  assert.match(bekannteNeuKarte.textContent, /in deiner Mediathek/u);
+  assert.equal([...bekannteNeuKarte.querySelectorAll("button")]
+    .some((entry) => /^(?:Eintrag erstellen|In Mediathek übernehmen)$/u.test(entry.textContent.trim())), false);
+  assert.equal(addFilmRufe, 0);
 });
 
 let dashboardSprung = null;

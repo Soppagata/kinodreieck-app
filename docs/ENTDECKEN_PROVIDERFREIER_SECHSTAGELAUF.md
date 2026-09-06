@@ -1,11 +1,11 @@
 # Entdecken: providerfreier Tages-Pool
 
-Ursprungsstand: 27. August 2026; lokale Kadenzfortschreibung: 4. September
-2026. Dies ist der lokale Produkt- und Betriebsvertrag. Die Fortschreibung
-authored nur den Kandidaten und aktiviert weder Remote-Zeitplan noch Migration
-oder Deployment. Radar bleibt ein getrennter Sechs-Tage-Vertrag.
+Ursprungsstand: 27. August 2026; aktueller Joyn-freier Releasevertrag:
+6. September 2026. Die folgenden Joyn-Abschnitte dokumentieren ausschließlich
+den abgelösten Vorabpfad. Der aktuell deployte Pfad steht unten unter
+„Zeit- und Kostengrenze“. Radar bleibt ein getrennter Sechs-Tage-Vertrag.
 
-## Reale Vorabspikes
+## Historischer Vorabspike (abgelöster Joyn-Pfad)
 
 Der Joyn-Spike nutzte genau einen unangemeldeten `GET` pro freigegebener
 Listen-URL, ohne Cookies, Token, Redirect, Retry oder Tarnung:
@@ -39,7 +39,7 @@ Primärverträge:
 - [Wikimedia User-Agent Policy](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy)
 - [Wikidata Licensing](https://www.wikidata.org/wiki/Wikidata:Licensing)
 
-## Gespeicherter Quellenvertrag
+## Historischer Quellenvertrag (abgelöster Joyn-Pfad)
 
 Aus dem flüchtigen Joyn-HTML bleiben je Poolzeile ausschließlich diese neun
 belegten Felder:
@@ -58,7 +58,7 @@ als `owner_private`, `commercial_enabled=false` eingetragen. Das behauptet
 keine Betreiberfreigabe und ist keine Freigabe für öffentliche oder
 kommerzielle Nutzung.
 
-## Wikidata: Zusatz, nicht Voraussetzung
+## Historische Wikidata-Grenze (abgelöster Joyn-Pfad)
 
 Nur im Cache noch unbekannte `sourceItemId`-/Titel-/Typ-Fingerprints werden
 seriell aufgelöst. Pro Lauf gelten:
@@ -74,7 +74,7 @@ Eine Annotation enthält nur `sourceItemId`, `qid`, `mediaType`, `releaseYear`,
 stabile IMDb-/TMDB-IDs und `resolvedAt`. Mehrdeutige Kandidaten werden nie
 geraten. Bekannte unveränderte Fingerprints lösen keinen erneuten Request aus.
 
-## Was persönlich verglichen wird
+## Historischer persönlicher Abgleich (abgelöster Joyn-Pfad)
 
 Mediathek, globaler Katalog und externer Pool bleiben getrennte Wahrheiten:
 
@@ -102,7 +102,7 @@ Der Gesehenfilter bevorzugt vorhandene Joyn-IDs. Fehlen sie, wird nur ein exakt
 normalisierter Titel plus Typ gleichgesetzt. Mehrdeutigkeit wird blockiert;
 False Negatives sind zugunsten von null False Positives akzeptiert.
 
-## Kino „Für mich“
+## Historische Kino-Trennung (abgelöster Joyn-Pfad)
 
 Joyn wird nicht mit dem Kinoprogramm gejoint. Stattdessen dürfen aktuelle reale
 Kinoeinträge außerhalb der Mediathek direkt in **Läuft & passt zu dir**
@@ -116,14 +116,15 @@ Lanes verschoben; Kino-, Detail- und Buchungslinks bleiben identisch.
 GitHub stößt täglich um `02:00 UTC` an: `03:00 CET` beziehungsweise `04:00
 CEST`. Der lokale Kandidat claimt atomar erst, wenn seit dem letzten
 erfolgreichen oder verbrauchten Versuch mindestens 24 Stunden vergangen sind.
-Der Lauf hat genau einen Versuch, dieselbe 180-Sekunden-Lease und drei
-providerfreie Quell-GETs für den Format-6-Pool aus zwei Joyn-Listen und ÖFI. Joyn,
-ÖFI-Quelle und Wikidata verursachen im implementierten Vertrag keine KI-
-Anbieterkosten; `providerRequests=0` und `searchRequests=0` sind harte
-Workflowbedingungen.
+Der Lauf hat genau einen Versuch, dieselbe 180-Sekunden-Lease und zwei
+providerfreie Quell-GETs: die offiziellen Netflix-AT-Wochencharts und die
+ÖFI-/Comscore-Wochenendcharts. Format 6 enthält exakt 25 Titel: 15 Kino,
+5 Netflix-Filme und 5 Netflix-Serien. Pro Lauf werden höchstens 12 unbekannte
+Titel mit zusammen maximal 24 Wikidata-GETs angereichert. Netflix, ÖFI und
+Wikidata verursachen im implementierten Vertrag keine KI-Anbieterkosten;
+`providerRequests=0` und `searchRequests=0` sind harte Workflowbedingungen.
 
-Die additive 24h-Migrationsdatei ist autorisiert lokal authored, aber nicht
-angewandt. Der Schedule wirkt erst, wenn die Workflowdatei im
-GitHub-Default-Branch liegt und die getrennten Releasegrenzen erfüllt sind.
-Push, CI, Migration-Apply, Function-Deploy und praktische Staging-Abnahme sind
-eigene Liefergrenzen und nicht Teil dieser lokalen Etappe.
+Der spätere additive Poolschritt
+`20260906180000_entdecken_current_diverse_pool.sql` deaktiviert den früheren
+Joyn-Chartpfad und bindet Netflix AT plus ÖFI. Scheduler-Aktivierung und erste
+natürliche Läufe bleiben davon getrennte Betriebswirkungen.

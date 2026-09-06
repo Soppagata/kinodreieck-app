@@ -10,7 +10,10 @@ import {
   radarSyncProblem,
 } from "../lib/entdeckenUi.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
-import { VERSIONED_DISCOVERY_FEED_FORMAT } from "../lib/webDiscoveryFeed.js";
+import {
+  VERSIONED_DISCOVERY_FEED_FORMAT,
+  VERSIONED_DISCOVERY_FEED_ID,
+} from "../lib/webDiscoveryFeed.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "../lib/radarNews.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
@@ -228,7 +231,12 @@ function RecommendationsView({
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format);
-  const feedNotice = entdeckenDailyFeedNotice(webDiscoveryStatus);
+  /* Format 7 ist der bewusst datierte, eingebettete 50er-Fallback. Sein Stand
+     bleibt sichtbar, ohne ihn nach Ablauf als aktuelle Serverantwort
+     auszugeben; Freshness-Warnungen echter Serverfeeds bleiben unverändert. */
+  const usesVersionedFallback = webDiscoveryFeed?.format === VERSIONED_DISCOVERY_FEED_FORMAT
+    && webDiscoveryFeed?.feedId === VERSIONED_DISCOVERY_FEED_ID;
+  const feedNotice = usesVersionedFallback ? null : entdeckenDailyFeedNotice(webDiscoveryStatus);
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
   const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn

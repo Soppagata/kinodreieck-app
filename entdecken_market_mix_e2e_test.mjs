@@ -31,8 +31,6 @@ import {
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import {
   createEntdeckenDailyFeedService,
-  entdeckenDailyFeedNotice,
-  ENTDECKEN_DAILY_STALE_NOTICE,
   selectEntdeckenFeed,
 } from "./src/services/entdeckenDailyFeed.js";
 
@@ -284,14 +282,14 @@ check("Ein neuerer Joyn-Format-6-Stand wird weder validiert noch ausgewaehlt", (
   assert.equal(JSON.stringify(selected.feed).match(/joyn/giu)?.length || 0, 0);
 });
 
-await checkAsync("Der Format-7-Sollmix bleibt nach Ablauf ehrlich als stale markiert", async () => {
+await checkAsync("Der eingebettete Format-7-Fallback bleibt nach Ablauf ehrlich als stale markiert", async () => {
   const loaded = await createEntdeckenDailyFeedService({
     config: { entdeckenDailyFeedEnabled: false },
     fallbackFeed: ENTDECKEN_MARKET_POOL_50,
     currentDay: () => "2026-09-06",
   }).load();
   assert.equal(loaded.status, "stale");
-  assert.equal(entdeckenDailyFeedNotice(loaded), ENTDECKEN_DAILY_STALE_NOTICE);
+  assert.equal(loaded.feed.validUntil, "2026-09-04");
 });
 
 await checkAsync("Netflix-Prefixgrenze stoppt auch einen einzelnen übergroßen Chunk vor ÖFI", async () => {

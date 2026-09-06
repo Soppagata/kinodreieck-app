@@ -18,7 +18,7 @@ Der neue `automatic-ai-check` liefert den Zehn-Feld-Drainvertrag. Ein alter
 Workflow erwartet dagegen exakt `{ok,code}` und kann erst nach bereits
 erfolgter Provider-, Ledger- oder Mailwirkung rot werden. Beim Entdecken-Pfad
 sendet der alte Workflow `scheduled-v1`; die neue Function akzeptiert
-`scheduled-24h-v1` und bindet drei Quellen sowie den Format-6-Readback. Eine
+`scheduled-24h-v1` und bindet zwei Quellen sowie den Format-6-Readback. Eine
 blosse Header-Aliasregel schliesst beide Mixed-Version-Fenster nicht.
 
 Deshalb muessen genau diese beiden Workflows waehrend des Backend-, Staging-
@@ -53,6 +53,9 @@ read-only Quellen erhoben:
   ist kein Sourcebeleg.
 - Supabase-Migrationsledger: die remote angewandten IDs. Fuer diesen Uebergang
   muss `20260905180000_entdecken_vienna_day_claim` explizit vorhanden sein.
+  Der spätere Joyn-freie Poolschritt
+  `20260906180000_entdecken_current_diverse_pool` muss für den aktuellen
+  Netflix-AT-/OeFI-Vertrag zusätzlich im vollständigen Ledger stehen.
 - Cloudflare-/Domain-Readback: `build-meta.json` der atomaren Deployment-URL
   und der festen Staging- beziehungsweise Production-Domain. Beide muessen den
   exakten Releasecommit melden; erst dann ist `readbackPassed: true` zulaessig.
@@ -78,18 +81,21 @@ ist der echte Web-/Sechs-Functions-/Migrationsreadback fuer dieses Manifest.
    und bytegleichen vollstaendigen Sourceabschluss ruecklesen.
 5. Migration `20260905180000_entdecken_vienna_day_claim` anwenden und ihren
    Eintrag sowie den ersetzten Claimvertrag ruecklesen.
-6. `entdecken-daily-task` deployen und denselben Function-Readback ausfuehren.
-7. Exakt denselben Releasecommit auf Staging ausliefern; atomare URL und feste
+6. Als späteren Poolschritt Migration
+   `20260906180000_entdecken_current_diverse_pool` anwenden und den
+   Joyn-freien Netflix-AT-/OeFI-Vertrag rücklesen.
+7. `entdecken-daily-task` deployen und denselben Function-Readback ausfuehren.
+8. Exakt denselben Releasecommit auf Staging ausliefern; atomare URL und feste
    Staging-Domain ruecklesen.
-8. Exakt denselben Commit nach `main` und Produktion bringen; atomare URL und
+9. Exakt denselben Commit nach `main` und Produktion bringen; atomare URL und
    feste Production-Domain ruecklesen.
-9. Beide Scheduler erneut als `disabled_manually` und ohne nicht abgeschlossene
+10. Beide Scheduler erneut als `disabled_manually` und ohne nicht abgeschlossene
    Runs ruecklesen. Die neuen Workflowbytes vom Default-Branch laden. Danach
    die vollstaendige Web-/Function-/Migrationsparitaet erfassen und
    `pre-resume` ausfuehren.
-10. Nur nach gruenem `pre-resume` beide Workflows wieder aktivieren und den
+11. Nur nach gruenem `pre-resume` beide Workflows wieder aktivieren und den
     Zustand `active` ruecklesen.
-11. Je Workflow den ersten nach der Aktivierung natuerlich durch `schedule`
+12. Je Workflow den ersten nach der Aktivierung natuerlich durch `schedule`
     gestarteten Lauf abwarten. Beide muessen im ersten Versuch
     (`runAttempt: 1`) `completed/success` erreichen; erst dann darf
     `post-resume` gruen werden. Ein GitHub-Rerun behaelt zwar das Ereignis

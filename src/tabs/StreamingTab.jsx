@@ -405,8 +405,8 @@ export function StreamingTab({
      Mediathek kann auch ungesehene und Must-Watch-Einträge enthalten. */
   useEffect(() => {
     if (!Array.isArray(master)) return;
-    void schreibeEntdeckenStatus((prev) => gleicheMediathekStatusAb(prev, entdecken?.titel, master));
-  }, [master, entdecken, schreibeEntdeckenStatus]);
+    void schreibeEntdeckenStatus((prev) => gleicheMediathekStatusAb(prev, vollKatalogTitel, master));
+  }, [master, vollKatalogTitel, schreibeEntdeckenStatus]);
 
   const katalogListe = useMemo(() => {
     if (ansicht === "entdecken" && !entdeckenDa) return [];
