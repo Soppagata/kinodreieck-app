@@ -48,6 +48,23 @@ export function streamingKatalogIds(titel) {
   return Object.freeze([...ids].sort((a, b) => a - b));
 }
 
+export function streamingCoverageSignatur(dienste) {
+  if (!Array.isArray(dienste)) return null;
+  const namen = dienste.map(text);
+  if (!namen.length || namen.some((name) => !name)) return null;
+  return JSON.stringify([...new Set(namen)].sort());
+}
+
+function parseCoverage(value) {
+  if (value == null) return null;
+  if (typeof value !== "string") return undefined;
+  try {
+    const dienste = JSON.parse(value);
+    const signatur = streamingCoverageSignatur(dienste);
+    return signatur === value ? signatur : undefined;
+  } catch { return undefined; }
+}
+
 function parseIds(value) {
   if (!Array.isArray(value)) return null;
   const ids = streamingKatalogIds(value.map((id) => ({ watchmode_id: id })));
@@ -66,6 +83,7 @@ function parseV1(value, owner) {
     format: STREAMING_NEU_FORMAT,
     owner: text(owner),
     runId: text(value.runId),
+    coverage: null,
     ids,
     neu: Object.freeze([]),
   });
@@ -81,7 +99,8 @@ export function parseStreamingNeuSnapshot(raw, owner) {
       || !text(value.runId)
       || runAt == null) return null;
   const ids = parseIds(value.ids);
-  if (!ids || !Array.isArray(value.neu)) return null;
+  const coverage = parseCoverage(value.coverage);
+  if (!ids || coverage === undefined || !Array.isArray(value.neu)) return null;
   const idSet = new Set(ids);
   const seen = new Set();
   const neu = [];
@@ -98,6 +117,7 @@ export function parseStreamingNeuSnapshot(raw, owner) {
     format: STREAMING_NEU_FORMAT,
     owner: text(owner),
     runId: text(value.runId),
+    coverage,
     ids,
     neu: Object.freeze(neu),
   });
@@ -125,6 +145,7 @@ function snapshotMit(snapshot, ids, neu) {
     format: STREAMING_NEU_FORMAT,
     owner: snapshot.owner,
     runId: snapshot.runId,
+    coverage: snapshot.coverage,
     ids,
     neu,
   });
@@ -145,13 +166,14 @@ export function bereinigeStreamingNeuSnapshot(snapshot, now = Date.now()) {
    fuegt die Differenz zum unmittelbar vorherigen Bestand hinzu. Schon aktive
    Eintraege behalten ihren ersten Erkennungszeitpunkt ueber weitere Laeufe. */
 export function aktualisiereStreamingNeuSnapshot(vorher, {
-  owner, runId, titel, now = Date.now(),
+  owner, runId, titel, dienste, now = Date.now(),
 } = {}) {
   const cleanOwner = text(owner);
   const cleanRunId = text(runId);
   const runAt = zeitpunkt(cleanRunId);
   const zeit = zeitpunkt(now);
-  if (!cleanOwner || runAt == null || zeit == null || !Array.isArray(titel)) return null;
+  const coverage = streamingCoverageSignatur(dienste);
+  if (!cleanOwner || runAt == null || zeit == null || !Array.isArray(titel) || coverage == null) return null;
 
   const raw = rawValue(vorher);
   const warLegacy = raw?.format === 1;
@@ -167,15 +189,44 @@ export function aktualisiereStreamingNeuSnapshot(vorher, {
       format: STREAMING_NEU_FORMAT,
       owner: cleanOwner,
       runId: cleanRunId,
+      coverage,
       ids,
       neu: Object.freeze([]),
     });
     return Object.freeze({
-      snapshot, geaendert: true, initialisiert: true, migriert: warLegacy,
+      snapshot, geaendert: true, initialisiert: true,
+      migriert: warLegacy,
+      coverageRebase: false,
     });
   }
 
   const altRunAt = zeitpunkt(alt.runId);
+  const coverageGeaendert = alt.coverage !== coverage;
+  /* Ein älterer Payload darf auch mit anderer Coverage niemals die neuere
+     Baseline zurückdrehen. Altes v2 ohne Signatur darf beim identischen Stand
+     einmalig still auf die aktuelle Coverage migrieren. */
+  if (runAt < altRunAt || (runAt === altRunAt && coverageGeaendert && alt.coverage != null)) {
+    const neu = aktiveNeueEintraege(alt, zeit);
+    const snapshot = gleicherSnapshot(alt, alt.ids, neu)
+      ? alt
+      : snapshotMit(alt, alt.ids, neu);
+    return Object.freeze({ snapshot, geaendert: snapshot !== alt, initialisiert: false });
+  }
+  if (coverageGeaendert) {
+    const snapshot = Object.freeze({
+      format: STREAMING_NEU_FORMAT,
+      owner: cleanOwner,
+      runId: cleanRunId,
+      coverage,
+      ids,
+      neu: Object.freeze([]),
+    });
+    return Object.freeze({
+      snapshot, geaendert: true, initialisiert: true,
+      migriert: alt.coverage == null,
+      coverageRebase: true,
+    });
+  }
   /* Derselbe oder ein aelterer Cache-Stand darf die Baseline nicht mit einer
      moeglicherweise gefilterten bzw. rueckwaerts gelaufenen Menge ersetzen.
      Ablauf wird trotzdem anhand der Uhr bereinigt. */
@@ -204,6 +255,7 @@ export function aktualisiereStreamingNeuSnapshot(vorher, {
     format: STREAMING_NEU_FORMAT,
     owner: cleanOwner,
     runId: cleanRunId,
+    coverage,
     ids,
     neu: Object.freeze(neu),
   });

@@ -1328,6 +1328,7 @@ export default function App() {
           if (dateiRoh.entdeckenUmfang === "voll") {
             await uebernehmeVollkatalog({
               runId: dateiEntdecken?.katalog_stand,
+              dienste: dateiEntdecken?.dienste,
               titel: [...(dateiRoh.bekannt?.titel || []), ...(dateiEntdecken?.titel || [])],
             });
           }
@@ -1352,6 +1353,7 @@ export default function App() {
         uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);
         await uebernehmeVollkatalog({
           runId: vollerEntdeckenStand?.katalog_stand,
+          dienste: vollerEntdeckenStand?.dienste,
           titel: [...(roh.bekannt?.titel || []), ...(vollerEntdeckenStand?.titel || [])],
         });
         if (veraltet() || !snapshotFreigabeRef.current) return;

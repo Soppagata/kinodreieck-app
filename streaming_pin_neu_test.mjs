@@ -12,6 +12,7 @@ import {
   bereinigeStreamingNeuSnapshot,
   parseStreamingNeuSnapshot,
   STREAMING_NEU_DAUER_MS,
+  streamingCoverageSignatur,
   streamingNeuIds,
   streamingNeuLegacyStorageKey,
   streamingNeuStorageKey,
@@ -29,9 +30,10 @@ const titel = (id, name, dienst = "Netflix") => ({
 const iso = (ms) => new Date(ms).toISOString();
 const TAG = 24 * 60 * 60 * 1000;
 const T0 = Date.parse("2026-08-01T08:00:00.000Z");
+const BASIS_DIENSTE = ["Netflix", "Disney+", "Prime Video"];
 
 const erster = aktualisiereStreamingNeuSnapshot(null, {
-  owner: ownerA, runId: iso(T0), now: T0,
+  owner: ownerA, runId: iso(T0), now: T0, dienste: BASIS_DIENSTE,
   titel: [titel(1, "Bekannt"), titel(2, "Entdeckung"), titel(2, "Dublette")],
 });
 check("Erster vollständiger Stand ist eine deduplizierte leere Baseline", () => {
@@ -50,7 +52,7 @@ check("Reload bleibt ownergebunden und v2-validiert", () => {
 });
 
 const nurGefilterterRender = aktualisiereStreamingNeuSnapshot(reload, {
-  owner: ownerA, runId: iso(T0), now: T0 + TAG, titel: [titel(2, "Entdeckung")],
+  owner: ownerA, runId: iso(T0), now: T0 + TAG, dienste: BASIS_DIENSTE, titel: [titel(2, "Entdeckung")],
 });
 check("Derselbe katalog_stand schreibt eine Filter-/Render-Teilmenge nicht als Lauf", () => {
   assert.equal(nurGefilterterRender.geaendert, false);
@@ -59,11 +61,11 @@ check("Derselbe katalog_stand schreibt eine Filter-/Render-Teilmenge nicht als L
 });
 
 const zweiter = aktualisiereStreamingNeuSnapshot(reload, {
-  owner: ownerA, runId: iso(T0 + 2 * TAG), now: T0 + 2 * TAG,
+  owner: ownerA, runId: iso(T0 + 2 * TAG), now: T0 + 2 * TAG, dienste: BASIS_DIENSTE,
   titel: [titel(2, "Entdeckung"), titel(3, "Neu A"), titel(3, "Neu A doppelt")],
 });
 const dritter = aktualisiereStreamingNeuSnapshot(zweiter.snapshot, {
-  owner: ownerA, runId: iso(T0 + 5 * TAG), now: T0 + 5 * TAG,
+  owner: ownerA, runId: iso(T0 + 5 * TAG), now: T0 + 5 * TAG, dienste: BASIS_DIENSTE,
   titel: [titel(2, "Entdeckung"), titel(3, "Neu A"), titel(4, "Neu B")],
 });
 check("Neue IDs sammeln sich über mehrere echte Läufe", () => {
@@ -73,11 +75,11 @@ check("Neue IDs sammeln sich über mehrere echte Läufe", () => {
 });
 
 const ohneDrei = aktualisiereStreamingNeuSnapshot(dritter.snapshot, {
-  owner: ownerA, runId: iso(T0 + 6 * TAG), now: T0 + 6 * TAG,
+  owner: ownerA, runId: iso(T0 + 6 * TAG), now: T0 + 6 * TAG, dienste: BASIS_DIENSTE,
   titel: [titel(2, "Entdeckung"), titel(4, "Neu B")],
 });
 const dreiWiederDa = aktualisiereStreamingNeuSnapshot(ohneDrei.snapshot, {
-  owner: ownerA, runId: iso(T0 + 7 * TAG), now: T0 + 7 * TAG,
+  owner: ownerA, runId: iso(T0 + 7 * TAG), now: T0 + 7 * TAG, dienste: BASIS_DIENSTE,
   titel: [titel(2, "Entdeckung"), titel(3, "Neu A zurück"), titel(4, "Neu B")],
 });
 check("Verschwundene IDs werden entfernt und beim Wiederauftauchen erneut neu", () => {
@@ -98,7 +100,7 @@ const legacy = {
   format: 1, owner: ownerA, runId: iso(T0), ids: [1, 2], neueIds: null,
 };
 const migration = aktualisiereStreamingNeuSnapshot(JSON.stringify(legacy), {
-  owner: ownerA, runId: iso(T0), now: T0, titel: [titel(1, "Alt"), titel(2, "Alt")],
+  owner: ownerA, runId: iso(T0), now: T0, dienste: BASIS_DIENSTE, titel: [titel(1, "Alt"), titel(2, "Alt")],
 });
 check("v1 migriert als leere Baseline statt den Altbestand als neu zu zeigen", () => {
   assert.equal(migration.snapshot.format, 2);
@@ -111,7 +113,7 @@ check("v1 übernimmt unabhängig von früherer oder späterer alter Zeitachse st
     const migriert = aktualisiereStreamingNeuSnapshot(JSON.stringify({
       format: 1, owner: ownerA, runId: alterRunId, ids: [1, 99], neueIds: [99],
     }), {
-      owner: ownerA, runId: iso(T0), now: T0,
+      owner: ownerA, runId: iso(T0), now: T0, dienste: BASIS_DIENSTE,
       titel: [titel(2, "Aktuell"), titel(3, "Aktuell neu gegenüber v1")],
     });
     assert.equal(migriert.snapshot.runId, iso(T0));
@@ -121,20 +123,67 @@ check("v1 übernimmt unabhängig von früherer oder späterer alter Zeitachse st
   }
 });
 
+check("Coverage-Signatur ist dedupliziert und stabil sortiert", () => {
+  assert.equal(
+    streamingCoverageSignatur(["Prime Video", "Netflix", "Disney+", "Netflix"]),
+    JSON.stringify(["Disney+", "Netflix", "Prime Video"]),
+  );
+});
+
+const vorCoverageWechsel = aktualisiereStreamingNeuSnapshot(erster.snapshot, {
+  owner: ownerA, runId: iso(T0 + 2 * TAG), now: T0 + 2 * TAG,
+  dienste: BASIS_DIENSTE, titel: [titel(1, "Bekannt"), titel(2, "Alt"), titel(3, "Neu")],
+});
+const nachCoverageWechsel = aktualisiereStreamingNeuSnapshot(vorCoverageWechsel.snapshot, {
+  owner: ownerA, runId: iso(T0 + 3 * TAG), now: T0 + 3 * TAG,
+  dienste: [...BASIS_DIENSTE, "MUBI"], titel: [titel(1, "Bekannt"), titel(2, "Alt"), titel(3, "Neu"), titel(4, "Coverage-Alt")],
+});
+const nachNormalemFolgelauf = aktualisiereStreamingNeuSnapshot(nachCoverageWechsel.snapshot, {
+  owner: ownerA, runId: iso(T0 + 4 * TAG), now: T0 + 4 * TAG,
+  dienste: ["MUBI", ...BASIS_DIENSTE].reverse(), titel: [titel(1, "Bekannt"), titel(2, "Alt"), titel(3, "Neu"), titel(4, "Coverage-Alt"), titel(5, "Echt neu")],
+});
+check("Coverage-Wechsel rebasiert still; gleicher Coverage folgt wieder der normalen Diff-Logik", () => {
+  assert.deepEqual(streamingNeuIds(vorCoverageWechsel.snapshot, T0 + 2 * TAG), [3]);
+  assert.equal(nachCoverageWechsel.coverageRebase, true);
+  assert.deepEqual(streamingNeuIds(nachCoverageWechsel.snapshot, T0 + 3 * TAG), []);
+  assert.deepEqual(nachCoverageWechsel.snapshot.ids, [1, 2, 3, 4]);
+  assert.deepEqual(streamingNeuIds(nachNormalemFolgelauf.snapshot, T0 + 4 * TAG), [5]);
+});
+
+const v2OhneCoverage = { ...dritter.snapshot };
+delete v2OhneCoverage.coverage;
+const v2Rebase = aktualisiereStreamingNeuSnapshot(v2OhneCoverage, {
+  owner: ownerA, runId: iso(T0 + 8 * TAG), now: T0 + 8 * TAG,
+  dienste: BASIS_DIENSTE, titel: [titel(20, "Aktueller Vollstand")],
+});
+check("Bestehendes v2 ohne Coverage wird defensiv als leere aktuelle Baseline migriert", () => {
+  assert.equal(v2Rebase.migriert, true);
+  assert.equal(v2Rebase.coverageRebase, true);
+  assert.deepEqual(v2Rebase.snapshot.ids, [20]);
+  assert.deepEqual(streamingNeuIds(v2Rebase.snapshot, T0 + 8 * TAG), []);
+});
+
 check("Korrupte Historien und rückwärts laufende Katalogstände bleiben fail-closed", () => {
   assert.equal(parseStreamingNeuSnapshot(JSON.stringify({
     ...dritter.snapshot, neu: [{ id: 4, firstSeenAt: T0 + 9 * TAG }],
   }), ownerA), null);
   const stale = aktualisiereStreamingNeuSnapshot(dritter.snapshot, {
-    owner: ownerA, runId: iso(T0 + 4 * TAG), now: T0 + 6 * TAG, titel: [titel(99, "Stale")],
+    owner: ownerA, runId: iso(T0 + 4 * TAG), now: T0 + 6 * TAG, dienste: BASIS_DIENSTE, titel: [titel(99, "Stale")],
   });
   assert.deepEqual(stale.snapshot.ids, dritter.snapshot.ids);
   assert.deepEqual(streamingNeuIds(stale.snapshot, T0 + 6 * TAG), [3, 4]);
+  const staleAndereCoverage = aktualisiereStreamingNeuSnapshot(dritter.snapshot, {
+    owner: ownerA, runId: iso(T0 + 4 * TAG), now: T0 + 6 * TAG,
+    dienste: [...BASIS_DIENSTE, "MUBI"], titel: [titel(99, "Stale mit anderer Coverage")],
+  });
+  assert.deepEqual(staleAndereCoverage.snapshot.ids, dritter.snapshot.ids);
+  assert.equal(staleAndereCoverage.snapshot.coverage, dritter.snapshot.coverage);
 });
 
 const appSource = fs.readFileSync(new URL("./src/App.jsx", import.meta.url), "utf8");
 check("App verwendet katalog_stand und lädt den Vollkatalog beim Öffnen von Streaming", () => {
   assert.equal((appSource.match(/runId:\s*[^\n]*\?\.katalog_stand/g) || []).length, 2);
+  assert.equal((appSource.match(/dienste:\s*[^\n]*\?\.dienste/g) || []).length, 2);
   assert.match(appSource, /tab === "streaming"[\s\S]{0,180}ladeStreamingDateien\(true\)/u);
   const streamingSource = fs.readFileSync(new URL("./src/tabs/StreamingTab.jsx", import.meta.url), "utf8");
   assert.match(streamingSource, /new Date\(bekannt\.katalog_stand \|\| bekannt\.stand\)/u);
@@ -214,13 +263,13 @@ const controllerUi = await mount(ControllerProbe, {});
 const realNow = Date.now();
 await act(async () => {
   await controller.uebernehmeVollkatalog({
-    runId: iso(realNow - STREAMING_NEU_DAUER_MS - 1_000), titel: [titel(10, "Baseline")],
+    runId: iso(realNow - STREAMING_NEU_DAUER_MS - 1_000), dienste: BASIS_DIENSTE, titel: [titel(10, "Baseline")],
   });
   await tick();
 });
 await act(async () => {
   await controller.uebernehmeVollkatalog({
-    runId: iso(realNow - STREAMING_NEU_DAUER_MS + 250),
+    runId: iso(realNow - STREAMING_NEU_DAUER_MS + 250), dienste: BASIS_DIENSTE,
     titel: [titel(10, "Baseline"), titel(11, "Controller neu")],
   });
   await tick();
@@ -228,6 +277,7 @@ await act(async () => {
 check("Controller persistiert v2 asynchron und übernimmt nur den echten Folgelauf-Diff", () => {
   assert.equal(controllerUi.container.textContent, "ready:11");
   assert.equal(JSON.parse(gespeicherteWerte.get(streamingNeuStorageKey(ownerA))).format, 2);
+  assert.equal(JSON.parse(gespeicherteWerte.get(streamingNeuStorageKey(ownerA))).coverage, streamingCoverageSignatur(BASIS_DIENSTE));
 });
 let getGestartet;
 let getFreigeben;
@@ -238,7 +288,7 @@ const raceRunId = iso(Date.now());
 let raceLauf;
 await act(async () => {
   raceLauf = controller.uebernehmeVollkatalog({
-    runId: raceRunId,
+    runId: raceRunId, dienste: BASIS_DIENSTE,
     titel: [titel(10, "Baseline"), titel(11, "Läuft ab"), titel(12, "Race neu")],
   });
   await getGestartetPromise;

@@ -46,14 +46,14 @@ export function useStreamingNeuController() {
     setZustand(LEER);
   }, [generation]);
 
-  const uebernehmeVollkatalog = useCallback(async ({ runId, titel } = {}) => {
+  const uebernehmeVollkatalog = useCallback(async ({ runId, titel, dienste } = {}) => {
     const auftrag = ++auftragRef.current;
     aktiveKatalogAuftraegeRef.current += 1;
     const kontext = captureStorageContext();
     const key = streamingNeuStorageKey(kontext.owner);
     const legacyKey = streamingNeuLegacyStorageKey(kontext.owner);
     try {
-      if (!key || !String(runId == null ? "" : runId).trim() || !Array.isArray(titel)) {
+      if (!key || !String(runId == null ? "" : runId).trim() || !Array.isArray(titel) || !Array.isArray(dienste)) {
         if (kontext.isCurrent() && auftragRef.current === auftrag) {
           setZustand({ ...LEER, status: "unavailable" });
         }
@@ -67,7 +67,7 @@ export function useStreamingNeuController() {
       }
       if (!kontext.isCurrent() || auftragRef.current !== auftrag) return false;
       const ergebnis = aktualisiereStreamingNeuSnapshot(gespeichert?.value, {
-        owner: kontext.owner, runId, titel,
+        owner: kontext.owner, runId, titel, dienste,
       });
       if (!ergebnis) {
         setZustand({ ...LEER, status: "unavailable" });
