@@ -41,6 +41,8 @@
 .kd-wochen-tagauswahl button.ist-ausgewaehlt,
 .kd-wochen-gesamt.ist-ausgewaehlt { border-color: var(--kd-wolfram); background: var(--kd-wolfram); color: var(--kd-wolframText); }
 .kd-wochen-gesamt { padding-inline: 12px; white-space: normal; }
+.kd-wochen-eintrag summary { grid-template-columns: minmax(0, 1fr) 44px 18px; }
+.kd-wochen-eintrag-download { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
 .kd-wochen-tag { border-radius: var(--kd-radius-karte); }
 .kd-wochen-ticketname b,
 .kd-wochen-eintragtitel { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; text-transform: none; }
@@ -83,6 +85,9 @@
 .kd-streaming-tab .kd-entdecken-karte,
 .kd-streaming-tab .kd-streaming-karte,
 .kd-streaming-tab .kd-karte { border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 34%, transparent); border-radius: var(--kd-radius-karte); box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent); }
+.kd-streaming-tab .kd-entdecken-kopf { display: block; }
+.kd-streaming-tab .kd-entdecken-aktionen { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--kd-space-3); }
+.kd-streaming-tab .kd-entdecken-aktionen button { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; margin: 0; padding: 0; border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 60%, transparent); border-radius: var(--kd-radius-control); }
 .kd-streaming-tab .kd-entdecken-titel,
 .kd-streaming-tab .kd-streaming-titel,
 .kd-streaming-tab .kd-film-titel { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: calc(22px * var(--kd-schriftfaktor, 1)); line-height: 1.2; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
@@ -118,8 +123,11 @@
 @media (max-width: 560px) {
   .kd-primary-start .kd-dash-karte { padding-inline: var(--kd-space-3); }
   .kd-wochen-ansicht { grid-template-columns: 1fr; }
-  .kd-wochen-tagauswahl { grid-template-columns: repeat(4, minmax(44px, 1fr)); }
   .kd-wochen-gesamt { width: 100%; }
   .kd-wochenplan-kopf { align-items: flex-start; }
   .kd-kino-tab .kd-kino-programmfilter { gap: var(--kd-space-2); }
+}
+
+@media (max-width: 360px) {
+  .kd-wochen-tagauswahl { grid-template-columns: repeat(4, minmax(44px, 1fr)); }
 }

@@ -7,11 +7,13 @@ Paketbasis: `36772f32c2f170e199c803d551f80eda86d897d8`.
 | Fläche | Lieferung |
 | --- | --- |
 | Start und Must-Watch | Papierkarten mit Barlow-600-Titeln in 22 px, vollständig umbrechenden Titeln, neutralen 12px-Dienstlabels sowie dem erhaltenen stabilen Fünf-Einträge-Pfad. |
-| Deine Woche | Sieben rollierende Tage bleiben unverändert berechnet. Eine reine lokale Tagesansicht als native Button-Gruppe mit `aria-pressed` und der sichtbare Schalter „Ganze Woche“ steuern nur die Darstellung; Eintrag, Bearbeiten, Löschen, Terminansicht und Export bleiben vorhanden. |
-| Kino | Die vorhandenen vorstellungsbezogenen Tickets, Pins, Filter und externen Kinolinks verwenden die Karten-, Titel-, Metadaten- und Controlrollen der Foundation. Gefüllte Selects und Eingaben bleiben mindestens 16px groß. |
-| Streaming | „Mein Programm“, „Alles“ und „Neu“ verwenden dieselben Papier-/Dunkelkarten sowie Titel-, Meta-, Anbieter- und Aktionsrollen. Titelpins, Nullwert „Alle“, Jahrzehnttoleranz, Sortierung und die Neu-Differenz bleiben unverändert. Die dichte Skala zeigt weniger 12px-Beschriftungen, behält aber ihre Rasterplätze per `visibility`. |
+| Deine Woche | Sieben rollierende Tage bleiben unverändert berechnet. Eine reine lokale Tagesansicht als native Button-Gruppe mit `aria-pressed` und der sichtbare Schalter „Ganze Woche“ steuern nur die Darstellung; ab 393px bleibt die Tageswahl einzeilig, darunter darf sie umbrechen. Kalenderaktionen haben 44px Zielgröße. Eintrag, Bearbeiten, Löschen, Terminansicht und Export bleiben vorhanden. |
+| Kino | Die vorhandenen vorstellungsbezogenen Tickets, Pins, Filter und externen Kinolinks verwenden die Karten-, Titel-, Metadaten- und Controlrollen der Foundation. Abschnittsüberschriften sind Grotesk 600 in 15px, Filmtitel Barlow 600 in 22px; gefüllte Selects und Eingaben bleiben mindestens 16px groß. |
+| Streaming | „Mein Programm“, „Alles“ und „Neu“ verwenden dieselben Papier-/Dunkelkarten sowie Titel-, Meta-, Anbieter- und Aktionsrollen. In Alles/Neu stehen die vollständigen Titel vor der eigenen umbrechenden 44px-Aktionsreihe. Titelpins, Nullwert „Alle“, Jahrzehnttoleranz, Sortierung und die Neu-Differenz bleiben unverändert. Die dichte Skala zeigt weniger 12px-Beschriftungen, behält aber ihre Rasterplätze per `visibility`. |
 | Mediathek und Formulare | Filmkarten, Must-Watch-Karten, Bewertungen und Film-/Medienformulare verwenden 12-px-Kartenrundungen, 16-px Innenabstand und die Foundation-Eingabegrößen. Auswahl, Bearbeiten, Löschen, Quellenwahl und Import-nahe Formulare bleiben unverändert bedienbar. |
 | P1-Komponenten | `FilmCard`, `Wochenplan`, `MustWatchListe`, `KinoLinks`, `KatalogAuditStatus`, `SelectionControl`, `EditPanel`, `EintragForm`, `MedienForm`, `QuellenWahl` und `DreieckRegler` wurden gegen die Foundation-Rollen geprüft; erforderliche Karten- und Formularquellen sind im Paket angepasst. |
+
+Die Text- und Iconbuttons in den primären Ansichten übernehmen ihre skalierbare 14px-Schrift wieder direkt aus `btnStyle`; lokale feste Schriftgrößen wurden entfernt. Die Suchfelder behalten die skalierbare Eingaberolle, einschließlich der Kino-Verknüpfungssuche. Streaming-Dienstnamen dürfen innerhalb ihrer vorhandenen Links umbrechen.
 
 ## Fokussierte Nachweise
 

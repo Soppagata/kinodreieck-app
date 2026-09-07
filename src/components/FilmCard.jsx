@@ -20,8 +20,8 @@ function BeschreibungEditor({ eintrag, onSave, onCancel, speichert, fehler }) {
         placeholder="Notiz (Edition, Fassung, Sehstand … — frei)" style={{ ...lightInput, width: "100%", boxSizing: "border-box", fontFamily: "'Space Grotesk', sans-serif" }} />
       {fehler && <div role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button disabled={speichert} style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px" }} onClick={() => onSave({ beschreibung: besch, notiz })}>{speichert ? "Speichert …" : "Speichern"}</button>
-        <button disabled={speichert} style={{ ...btnStyle(false), fontSize: 14, padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>Abbrechen</button>
+        <button disabled={speichert} style={{ ...btnStyle(true), padding: "7px 14px" }} onClick={() => onSave({ beschreibung: besch, notiz })}>{speichert ? "Speichert …" : "Speichern"}</button>
+        <button disabled={speichert} style={{ ...btnStyle(false), padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>Abbrechen</button>
       </div>
     </div>
   );
@@ -119,7 +119,7 @@ export function FilmCard({
                 <>
                   <UnbewertetTag />
                   {onSave && (
-                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", color: T.tinte, borderColor: T.tinteWeich }}
+                    <button style={{ ...btnStyle(false), padding: "4px 10px", color: T.tinte, borderColor: T.tinteWeich }}
                       onClick={jetztBewerten}>✎ Jetzt bewerten</button>
                   )}
                 </>
@@ -164,7 +164,7 @@ export function FilmCard({
               {(onSave || onDelete) && (
                 <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {onSave && (
-                  <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 12px", color: T.tinte, borderColor: T.tinteWeich }}
+                  <button style={{ ...btnStyle(false), padding: "6px 12px", color: T.tinte, borderColor: T.tinteWeich }}
                     onClick={(e) => { e.stopPropagation(); setSpeicherFehler(""); setPrognoseEntwurf(false); setEditing(true); }}>
                     ✎ {dreieck ? "Bewertung bearbeiten" : "Beschreibung bearbeiten"}
                   </button>

@@ -68,14 +68,14 @@ function VerknuepfungsPicker({ kandidaten, onWaehle, onAbbrechen }) {
         <input autoFocus value={suche} onChange={(e) => setSuche(e.target.value)}
           placeholder="Titel suchen (Mediathek · Kinoprogramm · Streaming) …"
           style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
-        <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }} onClick={onAbbrechen}>Abbrechen</button>
+        <button style={{ ...btnStyle(false), padding: "5px 10px" }} onClick={onAbbrechen}>Abbrechen</button>
       </div>
       {treffer.map((g) => (
         <div key={g.ziel}>
           <div style={{ ...monoKlein, fontSize: 10, textTransform: "uppercase", margin: "4px 0 2px" }}>{ZIEL_LABEL[g.ziel]}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {g.hits.map((k) => (
-              <button key={g.ziel + k.id} style={{ ...btnStyle(false), fontSize: 13, padding: "5px 10px", textAlign: "left" }}
+              <button key={g.ziel + k.id} style={{ ...btnStyle(false), padding: "5px 10px", textAlign: "left" }}
                 onClick={() => onWaehle({ ziel: g.ziel, id: k.id }, k.titel)}>
                 {k.titel}{k.jahr ? " (" + k.jahr + ")" : ""}
               </button>
@@ -130,7 +130,7 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
         <span style={{ ...monoKlein, color: T.tinteWeich }}>Verknüpfung:</span>
         {verkn
           ? <Chip active onClick={() => { setVerkn(null); setVerknTitel(""); }}>{ZIEL_LABEL[verkn.ziel]}: {verknTitel} ✕</Chip>
-          : <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }} onClick={() => setPickerOffen(!pickerOffen)}>{pickerOffen ? "Picker schließen" : "… wählen (optional)"}</button>}
+          : <button style={{ ...btnStyle(false), padding: "5px 10px" }} onClick={() => setPickerOffen(!pickerOffen)}>{pickerOffen ? "Picker schließen" : "… wählen (optional)"}</button>}
       </div>
       {pickerOffen && !verkn && (
         <VerknuepfungsPicker kandidaten={kandidaten}
@@ -259,11 +259,11 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
                     style={{ ...inputStyle, boxSizing: "border-box", background: T.leinwandTief, color: T.tinte }} />
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {e.verknuepfung
-                      ? <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", color: T.tinte, borderColor: T.tinteWeich }}
+                      ? <button style={{ ...btnStyle(false), padding: "5px 10px", color: T.tinte, borderColor: T.tinteWeich }}
                           onClick={() => onUpdate(e.id, { verknuepfung: null })}>Verknüpfung lösen</button>
-                      : <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", color: T.tinte, borderColor: T.tinteWeich }}
+                      : <button style={{ ...btnStyle(false), padding: "5px 10px", color: T.tinte, borderColor: T.tinteWeich }}
                           onClick={() => setPickerFuer(pickerFuer === e.id ? null : e.id)}>{pickerFuer === e.id ? "Picker schließen" : "Verknüpfen …"}</button>}
-                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", borderColor: T.gefahr, color: T.gefahr }}
+                    <button style={{ ...btnStyle(false), padding: "5px 10px", borderColor: T.gefahr, color: T.gefahr }}
                       onClick={() => { if (window.confirm('"' + e.titel + '" aus der Must-Watch-Liste löschen?')) onDelete(e.id); }}>
                       Entfernen
                     </button>

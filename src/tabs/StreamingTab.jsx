@@ -51,8 +51,7 @@ function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className })
           fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", lineHeight: 1.45,
           color: T.kartenTextWeich, background: "transparent", borderRadius: 5, padding: "2px 7px",
           border: "1px solid " + T.kartenTextWeich, textDecoration: "none", display: "inline-block",
-          maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          maxWidth: "100%", overflowWrap: "anywhere", whiteSpace: "normal",
         };
         return url
           ? <a key={label} href={url} target="_blank" rel="noopener noreferrer" style={stil} onClick={(e) => e.stopPropagation()} title={"Bei " + rohnamen.join(", ") + " öffnen"}>{label}&thinsp;↗</a>
@@ -565,7 +564,7 @@ export function StreamingTab({
           <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={suche} onChange={(e) => { setFokusOverride(null); setSuche(e.target.value); }} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
             <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter und Sortierung einklappen" : "Filter und Sortierung ausklappen"}
-              style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
+              style={{ ...btnStyle(false), padding: "5px 10px" }}>
               {streamFilterOffen ? "▾" : "▸"} Filter &amp; Sortierung{aktiveFilterP ? ` (${aktiveFilterP})` : ""}
             </button>
           </div>
@@ -658,10 +657,10 @@ export function StreamingTab({
           ) : <>
           <div className="kd-kompakt kd-streaming-werkzeuge" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter und Sortierung einklappen" : "Filter und Sortierung ausklappen"}
-              style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
+              style={{ ...btnStyle(false), padding: "5px 10px" }}>
               {streamFilterOffen ? "▾" : "▸"} Filter &amp; Sortierung{aktiveFilterE ? ` (${aktiveFilterE})` : ""}
             </button>
-            {ansicht === "entdecken" && <button className="kd-nur-desktop" style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px" }}
+            {ansicht === "entdecken" && <button className="kd-nur-desktop" style={{ ...btnStyle(false), padding: "7px 12px" }}
               onClick={() => download("merkliste.json", { exportiert_am: new Date().toISOString(), eintraege: merkliste })}
               title="Merkliste als JSON-Datei exportieren">
               Merkliste ({merkliste.length}) exportieren
@@ -719,32 +718,32 @@ export function StreamingTab({
                 onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
                 style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer" }}>
                 <div className="kd-entdecken-kopf">
-                  <div className="kd-entdecken-aktionen">
+                  <div className="kd-entdecken-inhalt">
+                    <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2 }}>
+                      {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
+                      {entdeckenStatus[t.watchmode_id] && (
+                        <span style={{ ...mono, color: T.kartenAkzent, marginLeft: 8 }}>
+                          {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
+                          {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="kd-entdecken-aktionen">
                   {pinButton(t)}
                   <button onClick={(e) => { e.stopPropagation(); toggleMerk(t); }}
                     title={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
                     aria-label={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? T.kartenAkzent : T.kartenTextWeich, padding: "0 2px" }}>
+                    style={{ background: "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? T.kartenAkzent : T.kartenTextWeich, padding: 0 }}>
                     {gemerkt(t) ? "★" : "☆"}
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); void toggleGesehen(t); }}
                     title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
                     aria-label={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.kartenAkzent : T.kartenTextWeich, padding: "0 2px" }}>
+                    style={{ background: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.kartenAkzent : T.kartenTextWeich, padding: 0 }}>
                     ✓
                   </button>
-                  </div>
-                  <div className="kd-entdecken-inhalt">
-                  <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2 }}>
-                    {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
-                    {entdeckenStatus[t.watchmode_id] && (
-                      <span style={{ ...mono, color: T.kartenAkzent, marginLeft: 8 }}>
-                        {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
-                        {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
-                      </span>
-                    )}
-                  </div>
-                  </div>
                 </div>
                 {gesehenFrage === t.watchmode_id && (
                   <div className="kd-entdecken-frage" onClick={(e) => e.stopPropagation()}>
@@ -762,7 +761,7 @@ export function StreamingTab({
                   <div style={{ marginTop: 6, fontSize: 12, color: T.kartenTextWeich }} onClick={(e) => e.stopPropagation()}>
                     {(t.genres || []).length > 0 && <span>{t.genres.join(", ")}</span>}
                     {addFilm && formFuer !== t.watchmode_id && !mediathekIdVon(entdeckenStatus[t.watchmode_id]) && (
-                      <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 11px", marginTop: 8 }}
+                      <button style={{ ...btnStyle(true), padding: "6px 11px", marginTop: 8 }}
                         onClick={() => setFormFuer(t.watchmode_id)}>
                         {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "In Mediathek übernehmen" : "Eintrag erstellen"}
                       </button>
@@ -796,7 +795,7 @@ export function StreamingTab({
             ))}
             {katalogListe.length > sichtbarE && (
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
-                <button style={{ ...btnStyle(true), fontSize: 13, padding: "8px 14px" }}
+                <button style={{ ...btnStyle(true), padding: "8px 14px" }}
                   onClick={() => setSichtbarE((n) => n + 100)}>
                   Weitere 100 laden
                 </button>
