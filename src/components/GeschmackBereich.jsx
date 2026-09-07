@@ -332,7 +332,7 @@ export function GeschmackBereich({
      Befund und die Wahl. */
   if (profil?.beschaedigt) {
     return (
-      <div>
+      <div className="kd-geschmack-bereich">
         <p style={{ color: T.gefahr, fontSize: 14, lineHeight: 1.6 }}>
           Dein gespeichertes Profil ist nicht lesbar. Es wurde nicht verändert und nicht
           überschrieben. Du kannst es verwerfen und neu anfangen — alles andere bleibt
@@ -347,7 +347,7 @@ export function GeschmackBereich({
   }
 
   return (
-    <div>
+    <div className="kd-geschmack-bereich">
       {frage ? (
         <DreiFragen
           laeuft={extraktLaeuft}

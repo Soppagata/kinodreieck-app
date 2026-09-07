@@ -96,7 +96,7 @@ export function PrognoseBereich({
   const kosten = kostenText(prognose.verbrauch.kostenUsdCent);
   return (
     <section className="kd-prognose" aria-label={`KI-Prognose für ${film?.titel || "Eintrag"}`}
-      style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${T.saal}`, borderRadius: 6, padding: "12px 14px", display: "grid", gap: 10 }}>
+      style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${T.saal}`, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <strong style={{ color: T.wolfram, letterSpacing: "0.05em" }}>KI-PROGNOSE</strong>
         <span style={{ ...mono }}>{STATUS_LABEL[prognose.status]}</span>

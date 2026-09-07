@@ -320,7 +320,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
      Die Karte selbst bleibt ein semantischer Artikel, damit Lesen, Bearbeiten,
      Löschen und Eingabefelder keine verschachtelten Bedienelemente sind. */
   return (
-    <section>
+    <section className="kd-blog">
       <div data-tour="blog" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
         <h2 style={{ ...h2, margin: 0 }}>Blog ({artikel.length})</h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -346,7 +346,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
           const detailsId = `${domId}-details`;
           return (
             <article key={a.id} className="kd-blog-karte"
-              style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px", opacity: wartend ? 0.6 : 1 }}>
+              style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", opacity: wartend ? 0.6 : 1 }}>
               <div className="kd-blog-kartenkopf">
                 <div style={{ minWidth: 0 }}>
                   <h3 id={titelId} style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 19, textTransform: "uppercase", letterSpacing: "0.03em", margin: 0 }}>

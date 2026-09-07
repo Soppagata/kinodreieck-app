@@ -96,7 +96,7 @@ export function DreiFragen({
   /* ---------- Vorschau ---------- */
   if (ergebnis) {
     return (
-      <div style={{ background: T.saalHoch, borderRadius: 8, padding: "18px 20px" }}>
+      <div className="kd-drei-fragen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
         <h3 style={h}>{istDegraded
           ? "Die Antwort ließ sich nicht sicher auswerten"
           : "Das habe ich aus deinen Antworten gelesen"}</h3>
@@ -251,7 +251,7 @@ export function DreiFragen({
 
   /* ---------- Die Fragen ---------- */
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 8, padding: "18px 20px" }}>
+    <div className="kd-drei-fragen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
       <h3 style={h}>Drei Fragen</h3>
       <p style={p}>
         Antworte so, wie du es einem Menschen erzählen würdest — Halbsätze sind in Ordnung.

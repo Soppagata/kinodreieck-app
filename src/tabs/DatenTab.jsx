@@ -163,7 +163,7 @@ export function DatenTab({
   }, [bekannteGenres, master]);
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <section className="kd-daten-tab" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* 1 — Darstellung */}
       {setzeEinstellung && (
         <Klappe titel="Darstellung & Verhalten" offen>

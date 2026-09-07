@@ -101,7 +101,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
     setListe(liste.includes(wert) ? liste.filter((x) => x !== wert) : [...liste, wert]);
 
   return (
-    <div style={{ background: nurKi ? "transparent" : T.saalHoch, borderRadius: 6, padding: nurKi ? "16px 0 0" : "16px 18px", marginTop: nurKi ? 14 : 0, borderTop: nurKi ? "1px solid " + T.saal : "none" }}>
+    <div className="kd-teilen-block" style={{ background: nurKi ? "transparent" : T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: nurKi ? "16px 0 0" : "16px", marginTop: nurKi ? 14 : 0, borderTop: nurKi ? "1px solid " + T.saal : "none" }}>
       <input ref={dateiRef} type="file" accept=".json" style={{ display: "none" }} onChange={dateiGewaehlt} />
       {nurKi ? (
         <>

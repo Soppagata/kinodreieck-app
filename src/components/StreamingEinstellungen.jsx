@@ -59,7 +59,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
 
   if (datenGesperrt) return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+    <div className="kd-streaming-einstellungen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
       <h2 style={h2}>Streaming gesperrt</h2>
       <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
         Für den zentralen Katalog sind noch keine Zugangsdaten eingerichtet. Gib den mitgeschickten Leseschlüssel unter „Datenmodus & Verbindung“ ein. Die PWA selbst lädt nie live von Watchmode.
@@ -68,11 +68,11 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="kd-streaming-einstellungen" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Etappe 2: Kästen als Accordions (Klappe). Streaming-Quellen startet
           offen, Status/Refresh zu. data-tour wandert an die Klappe (Tour-Anker). */}
       {(teil === "alle" || teil === "quellen") && <Klappe titel={`Streaming-Quellen (${auswahl.length} gewählt)`} offen tour="streaming-quellen">
-      <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+      <div style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
           Wähle die Dienste, die du tatsächlich nutzt. Die Auswahl filtert den gemeinsamen
           Katalog sofort. Die Filterung bezieht sich nur auf den bereits geladenen

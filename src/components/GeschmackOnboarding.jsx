@@ -128,7 +128,7 @@ export function GeschmackOnboarding({
     fontSize: 20, color: T.leinwand, margin: "0 0 10px" };
 
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 8, padding: "18px 20px" }}
+    <div className="kd-geschmack-onboarding" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}
       role="group" aria-label={"Geschmacksprofil anlegen — Schritt " + (schritt + 1) + " von " + SCHRITTE.length}>
 
       {/* ---------- 1. Einwilligung ---------- */}

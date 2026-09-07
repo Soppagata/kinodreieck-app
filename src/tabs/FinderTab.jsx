@@ -787,7 +787,7 @@ export function FinderTab({
   };
 
   return (
-    <section>
+    <section className="kd-finder">
       <div style={{ ...mono, marginBottom: 10 }}>
         Deterministische Suche — keine KI: Titel werden direkt gefunden, erkannte Signale steuern Filter & Ranking (abwählbar per Klick).
         Beispiele: „Wo spielt es Crank?“ · „Star Wars“ · „was Melancholisches aus den 80ern im Kino“ · „was Neues, das ich nicht kenne“
