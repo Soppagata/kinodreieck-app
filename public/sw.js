@@ -29,7 +29,10 @@ self.addEventListener("install", (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     const scope = self.registration.scope;
-    const shell = PRECACHE.map((pfad) => new URL(pfad, scope));
+    const shell = PRECACHE.map((pfad) => new Request(new URL(pfad, scope), {
+      cache: "reload",
+      credentials: "same-origin",
+    }));
     /* Cache.addAll ist absichtlich der atomare Gatekeeper: Scheitert auch nur
        eine Shell-Datei oder antwortet nicht erfolgreich, verwirft der Browser
        den Install-Versuch. Der bisher aktive Worker samt vollständigem alten
@@ -61,6 +64,16 @@ self.addEventListener("activate", (e) => {
       buildVersion: BUILD_VERSION,
     }));
   })());
+});
+
+self.addEventListener("message", (e) => {
+  if (e.data?.type !== "KD_GET_BUILD_VERSION") return;
+  const antwortKanal = e.ports?.[0];
+  if (!antwortKanal?.postMessage) return;
+  antwortKanal.postMessage({
+    type: "KD_BUILD_VERSION",
+    buildVersion: BUILD_VERSION,
+  });
 });
 
 self.addEventListener("fetch", (e) => {

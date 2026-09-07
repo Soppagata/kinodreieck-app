@@ -3,7 +3,20 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 const source = readFileSync("public/download/pwa-diagnostics.js", "utf8");
-const context = { URL, Response, Request, Headers, Date, Promise, console, setTimeout, clearTimeout };
+class FakeMessageChannel {
+  constructor() {
+    this.port1 = { onmessage: null, onmessageerror: null, close() {} };
+    this.port2 = {
+      close() {},
+      postMessage: (data) => Promise.resolve().then(() => this.port1.onmessage?.({ data })),
+    };
+  }
+}
+
+const context = {
+  URL, Response, Request, Headers, Date, Promise, console, setTimeout, clearTimeout,
+  MessageChannel: FakeMessageChannel,
+};
 vm.runInNewContext(source, context, { filename: "public/download/pwa-diagnostics.js" });
 const D = context.KdPwaDiagnostics;
 
@@ -19,6 +32,7 @@ await check("Alle stabilen Android-Diagnosecodes besitzen feste Texte und Maßna
     "KD-PWA-ANDROID-000", "KD-PWA-ANDROID-010", "KD-PWA-ANDROID-020",
     "KD-PWA-ANDROID-021", "KD-PWA-ANDROID-022", "KD-PWA-ANDROID-030",
     "KD-PWA-ANDROID-031", "KD-PWA-ANDROID-032", "KD-PWA-ANDROID-033",
+    "KD-PWA-ANDROID-034",
     "KD-PWA-ANDROID-040", "KD-PWA-ANDROID-041", "KD-PWA-ANDROID-042",
     "KD-PWA-ANDROID-050", "KD-PWA-ANDROID-060", "KD-PWA-ANDROID-090",
   ]);
@@ -54,7 +68,7 @@ await check("Positiv-Allowlist entfernt Token, Query, Hash, Stack und überlange
   assert.equal(json.includes("token="), false);
   assert.equal(json.includes("stacktrace"), false);
   assert.deepEqual(Object.keys(report), [
-    "format", "version", "createdAt", "build", "page", "browser",
+    "format", "version", "createdAt", "build", "workerBuild", "page", "browser",
     "capabilities", "checks", "primaryCode", "findings",
   ]);
 });
@@ -103,16 +117,28 @@ function fakeCaches() {
   };
 }
 
-function diagnosticEnvironment({ prompt = false, offlineOk = true } = {}) {
-  const registration = { scope: "https://kino.example/", active: {} };
+function diagnosticEnvironment({
+  prompt = false,
+  offlineOk = true,
+  candidateBuild = "abcdef1234567",
+  workerBuild = candidateBuild,
+} = {}) {
+  const controller = {
+    postMessage(message, ports) {
+      if (message?.type === "KD_GET_BUILD_VERSION") {
+        ports?.[0]?.postMessage({ type: "KD_BUILD_VERSION", buildVersion: workerBuild });
+      }
+    },
+  };
+  const registration = { scope: "https://kino.example/", active: { postMessage() {} } };
   const serviceWorker = {
-    controller: {},
+    controller,
     ready: Promise.resolve(registration),
     async register() { return registration; },
   };
   const fetch = async (url, init = {}) => {
     if (url.endsWith("build-meta.json")) {
-      return new Response(JSON.stringify({ buildVersion: "abcdef1234567" }), {
+      return new Response(JSON.stringify({ buildVersion: candidateBuild }), {
         status: 200, headers: { "content-type": "application/json" },
       });
     }
@@ -140,6 +166,7 @@ function diagnosticEnvironment({ prompt = false, offlineOk = true } = {}) {
       userAgent: "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/132.0.0.0 Mobile",
     },
     caches: fakeCaches(), fetch,
+    MessageChannel: FakeMessageChannel,
     promptState: { available: prompt, standalone: false, installed: false },
   };
 }
@@ -149,7 +176,24 @@ await check("Grüne App-Prüfung ohne Prompt bleibt ehrlich Browserhinweis 040",
   assert.equal(report.primaryCode, "KD-PWA-ANDROID-040");
   assert.equal(report.checks.offline, "pass");
   assert.equal(report.checks.controller, "pass");
+  assert.equal(report.checks.workerBuild, "pass");
+  assert.equal(report.workerBuild, report.build);
   assert.equal(report.capabilities.prompt, false);
+});
+
+await check("Alter kontrollierender Worker blockiert den grünen Kandidatenstatus", async () => {
+  const report = await D.runDiagnostics(diagnosticEnvironment({
+    prompt: true,
+    candidateBuild: "abcdef1234567",
+    workerBuild: "7654321fedcba",
+  }));
+  assert.equal(report.primaryCode, "KD-PWA-ANDROID-034");
+  assert.equal(report.build, "abcdef1234567");
+  assert.equal(report.workerBuild, "7654321fedcba");
+  assert.equal(report.checks.workerBuild, "fail");
+  assert.equal(report.findings.some((entry) => entry.code === "KD-PWA-ANDROID-000"), false);
+  assert.equal(D.withPromptOutcome(report, "installed").findings
+    .some((entry) => entry.code === "KD-PWA-ANDROID-000"), false);
 });
 
 await check("Grüne App-Prüfung mit Prompt liefert 000", async () => {
