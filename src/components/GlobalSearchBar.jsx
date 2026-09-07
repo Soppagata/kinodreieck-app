@@ -6,6 +6,7 @@ import {
   MIN_TASTATUR_HOEHENVERLUST,
 } from "../lib/visualViewport.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
+import { IconClose, IconSearch } from "./ui.jsx";
 
 const LABELS = Object.freeze({
   start: "Alles", kino: "Kino", mediathek: "Mediathek", streaming: "Streaming",
@@ -336,7 +337,7 @@ export function GlobalSearchBar({
               <span>Suchergebnisse</span>
               <strong>{antwort.frage}</strong>
             </div>
-            <button type="button" className="kd-globalsuche-schliessen" onClick={schliesseAntwort} aria-label="Suchergebnisse schließen">×</button>
+            <button type="button" className="kd-globalsuche-schliessen" onClick={schliesseAntwort} aria-label="Suchergebnisse schließen"><IconClose size={20} /></button>
           </div>
           <div className="kd-globalsuche-treffer" aria-live="polite">
             {antwort.items.length > 0 ? antwort.items.map((item) => (
@@ -367,7 +368,7 @@ export function GlobalSearchBar({
       <input ref={eingabeRef} value={text} onChange={(event) => setText(event.target.value)}
         aria-label="Sucheingabe"
         placeholder={bereich === "daten" ? "Wo finde ich …?" : `${LABELS[bereich] || "Alles"} durchsuchen …`} />
-      <button type="submit" className="kd-globalsuche-los" aria-label={laeuft ? "Suche läuft" : "Suchen"} disabled={laeuft}>⌕</button>
+      <button type="submit" className="kd-globalsuche-los" aria-label={laeuft ? "Suche läuft" : "Suchen"} disabled={laeuft}><IconSearch size={20} /></button>
       <button type="button" className={"kd-globalsuche-menu" + (menuOffen ? " offen" : "")}
         aria-label={menuOffen ? "Menü schließen" : "Menü öffnen"} aria-expanded={menuOffen}
         aria-controls="kd-mobile-menu" onClick={(event) => {

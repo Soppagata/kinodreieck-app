@@ -67,7 +67,7 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch, services 
   /* Nichts zu tun: weder hier noch im Konto liegt etwas. */
   if (inv.fall === "beide-leer") {
     return (
-      <div>
+      <div className="kd-konto-uebernahme">
         <p style={{ color: T.rauch, fontSize: 13 }}>
           Auf diesem Gerät und im Konto liegen noch keine Daten. Alles, was du ab jetzt einträgst,
           landet automatisch in deinem Konto.
@@ -88,7 +88,7 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch, services 
   /* Konto voll, Gerät leer: einfach holen. */
   if (inv.fall === "nur-konto") {
     return (
-      <div>
+      <div className="kd-konto-uebernahme">
         <p style={{ color: T.rauch, fontSize: 13 }}>
           Dein Konto enthält bereits Daten, dieses Gerät noch nicht. Sie werden jetzt geladen.
         </p>
@@ -112,7 +112,7 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch, services 
   if (ergebnis) {
     const v = ergebnis.verifikation;
     return (
-      <div>
+      <div className="kd-konto-uebernahme">
         <h4 style={{ margin: "0 0 8px", color: T.leinwand, fontSize: 14 }}>Prüfbericht</h4>
         <p style={{ color: v.allesGleich ? T.ok : T.gefahr, fontSize: 13, margin: "0 0 10px" }}>
           {v.allesGleich
@@ -163,7 +163,7 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch, services 
   }
 
   return (
-    <div>
+    <div className="kd-konto-uebernahme">
       {fremd && (
         <div style={{
           border: "1px solid " + T.gefahr, background: "rgba(217,106,90,0.12)",
@@ -207,7 +207,7 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch, services 
 
       <p style={{ color: T.rauch, fontSize: 12, opacity: 0.8, margin: "0 0 10px" }}>
         Vor jeder Übernahme wird ein Rückholpunkt gesichert. Eine Sicherheitskopie dieses Geräts
-        {onBackupWunsch ? <> kannst du zusätzlich <button style={{ ...btnStyle(false), fontSize: 12, padding: "2px 8px" }} onClick={onBackupWunsch}>jetzt herunterladen</button></> : " solltest du zusätzlich anlegen"}.
+        {onBackupWunsch ? <> kannst du zusätzlich <button style={{ ...btnStyle(false), padding: "2px 8px" }} onClick={onBackupWunsch}>jetzt herunterladen</button></> : " solltest du zusätzlich anlegen"}.
       </p>
 
       {fehler && <p style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>}

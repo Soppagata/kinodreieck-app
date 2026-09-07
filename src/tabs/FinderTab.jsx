@@ -787,7 +787,7 @@ export function FinderTab({
   };
 
   return (
-    <section>
+    <section className="kd-finder">
       <div style={{ ...mono, marginBottom: 10 }}>
         Deterministische Suche — keine KI: Titel werden direkt gefunden, erkannte Signale steuern Filter & Ranking (abwählbar per Klick).
         Beispiele: „Wo spielt es Crank?“ · „Star Wars“ · „was Melancholisches aus den 80ern im Kino“ · „was Neues, das ich nicht kenne“
@@ -915,7 +915,7 @@ export function FinderTab({
                             {(k.pf.g || []).length ? "  ·  " + (k.pf.g || []).slice(0, 3).join(", ") : ""}
                           </div>
                           {addFilm && formFuer !== kid && (
-                            <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", marginTop: 8 }} onClick={() => setFormFuer(kid)}>Eintrag erstellen</button>
+                            <button style={{ ...btnStyle(false), padding: "5px 10px", marginTop: 8 }} onClick={() => setFormFuer(kid)}>Eintrag erstellen</button>
                           )}
                           {formFuer === kid && (
                             <div style={{ marginTop: 8 }} onClick={(ev) => ev.stopPropagation()}>
@@ -950,7 +950,7 @@ export function FinderTab({
                             {gruppiereDienstBadges(sichtbareDienste(t.dienste, auswahl), { kompakt: true }).map(({ label }) => <span key={label} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{label}</span>)}
                           </div>
                           {addFilm && formFuer !== sid && (
-                            <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", marginTop: 8 }} onClick={() => setFormFuer(sid)}>Eintrag erstellen</button>
+                            <button style={{ ...btnStyle(false), padding: "5px 10px", marginTop: 8 }} onClick={() => setFormFuer(sid)}>Eintrag erstellen</button>
                           )}
                           {formFuer === sid && (
                             <div style={{ marginTop: 8 }} onClick={(ev) => ev.stopPropagation()}>

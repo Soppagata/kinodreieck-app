@@ -7,7 +7,7 @@ export const ROTLINK = "#E06C6C"; // Wikipedia-Prinzip: offene Referenz
    Kontrastpaare (in beiden Themes gültig):
      saal/saalHoch (Flächen)  ↔  leinwand/rauch (Text darauf)
      leinwand als Karten-BG   ↔  tinte/tinteWeich (Text darauf)
-     wolfram (Akzent/Buttons) ↔  tinte (Text darauf)
+     wolfram (Akzent/Buttons) ↔  wolframText / kontrastFarbe(wolfram)
    Im hellen "Foyer"-Theme bleiben die FilmCards bewusst dunkel —
    Leinwände im hellen Saal. */
 export const THEMES = {
@@ -18,14 +18,19 @@ export const THEMES = {
     leinwandTief: "#DFDACD",
     tinte: "#1C1A1E",
     tinteWeich: "#57525C",
-    rauch: "#948FA0",
+    rauch: "#B6AFBE",
     wolfram: "#E3A63B",
     wie: "#6FA8DC",
     was: "#B08BD9",
     warum: "#E3A63B",
     gefahr: "#D96A5A",
     ok: "#6FCE8F", // C4: Erfolg/„OK"-Grün
-    kartenFeld: "#FFFFFF", // Eingabefelder AUF den (hellen) FilmCards
+    kartenFeld: "#FBFAF7", // Eingabefelder AUF den (hellen) FilmCards
+    kartenText: "#1C1A1E",
+    kartenTextWeich: "#57525C",
+    kartenAkzent: "#76500F",
+    linie: "#8C8593",
+    wolframText: "#000000",
   },
   hell: {
     saal: "#EDEAE3",
@@ -33,15 +38,20 @@ export const THEMES = {
     leinwand: "#23202A",
     leinwandTief: "#3A3644",
     tinte: "#F0EDE6",
-    tinteWeich: "#B9B4C2",
-    rauch: "#6E6879",
-    wolfram: "#B07E1F",
+    tinteWeich: "#C8C2D1",
+    rauch: "#595363",
+    wolfram: "#825B14",
     wie: "#2F6CA8",
     was: "#7B4FB0",
     warum: "#B07E1F",
     gefahr: "#C14B3C",
     ok: "#2E8B57", // C4
     kartenFeld: "#2E2A36", // Eingabefelder AUF den (im Foyer dunklen) FilmCards
+    kartenText: "#F0EDE6",
+    kartenTextWeich: "#C8C2D1",
+    kartenAkzent: "#E3A63B",
+    linie: "#6A6473",
+    wolframText: "#FFFFFF",
   },
   /* ---- Egg-Modus SHOWA — Kaiju-Eiga 1954, heller S/W-Abzug ----
      Reiner Token-Swap (KEIN filter auf .kd-app — mobil-tauglich). Die freie
@@ -61,6 +71,11 @@ export const THEMES = {
     gefahr: "#A64E45",
     ok: "#5E7D63", // C4: gedämpftes S/W-Grün (Showa)
     kartenFeld: "#34322F",
+    kartenText: "#F2EFE7",
+    kartenTextWeich: "#C3BEB4",
+    kartenAkzent: "#ECE9E2",
+    linie: "#66635D",
+    wolframText: "#FFFFFF",
   },
   /* ---- Egg-Modus NEON NOIR — regennasse Stadt bei Nacht ----
      Kühles Schwarzblau hält die App ruhig; das Kinogelb bleibt der primäre
@@ -80,6 +95,11 @@ export const THEMES = {
     gefahr: "#E75E67",
     ok: "#3EAD7D",
     kartenFeld: "#F7FBFB",
+    kartenText: "#0C1720",
+    kartenTextWeich: "#465964",
+    kartenAkzent: "#76500F",
+    linie: "#465964",
+    wolframText: "#000000",
   },
 };
 
@@ -117,7 +137,7 @@ export function setzeTheme(name) {
     const root = document.documentElement;
     if (root && root.style) {
       root.dataset.kdTheme = THEMES[name] ? name : "dunkel";
-      for (const name of ["saal", "saalHoch", "leinwand", "leinwandTief", "tinte", "tinteWeich", "rauch", "wolfram", "gefahr", "ok", "wie", "was", "warum"]) {
+      for (const name of ["saal", "saalHoch", "leinwand", "leinwandTief", "tinte", "tinteWeich", "rauch", "wolfram", "gefahr", "ok", "wie", "was", "warum", "kartenFeld", "kartenText", "kartenTextWeich", "kartenAkzent", "linie", "wolframText"]) {
         root.style.setProperty("--" + name, T[name]);
         root.style.setProperty("--kd-" + name, T[name]);
       }
@@ -130,14 +150,14 @@ export function setzeTheme(name) {
    nutzen GETTER, damit auch {...inputStyle}-Spreads zur Renderzeit die
    aktuellen Theme-Werte ziehen. */
 export const btnStyle = (primary) => ({
-  fontFamily: "'Barlow Condensed', sans-serif",
+  fontFamily: "'Space Grotesk', sans-serif",
   fontWeight: 600,
-  fontSize: "calc(16px * var(--kd-schriftfaktor, 1))",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  padding: "10px 18px",
-  borderRadius: 4,
-  border: primary ? "none" : "1px solid " + T.rauch,
+  fontSize: "calc(14px * var(--kd-schriftfaktor, 1))",
+  lineHeight: 1.35,
+  padding: "10px 16px",
+  minHeight: 44,
+  borderRadius: 8,
+  border: primary ? "1px solid " + T.wolfram : "1px solid " + T.rauch,
   background: primary ? T.wolfram : "transparent",
   color: primary ? kontrastFarbe(T.wolfram) : T.leinwand,
   cursor: "pointer",
@@ -146,19 +166,23 @@ export const btnStyle = (primary) => ({
 export const inputStyle = {
   get background() { return T.saal; },
   get border() { return "1px solid " + T.rauch; },
-  borderRadius: 4,
+  borderRadius: 8,
   get color() { return T.leinwand; },
+  minHeight: 44,
   padding: "9px 12px",
   fontFamily: "'Space Grotesk', sans-serif",
-  fontSize: "calc(14px * var(--kd-schriftfaktor, 1))",
+  fontSize: "max(16px, calc(16px * var(--kd-schriftfaktor, 1)))",
+  lineHeight: 1.4,
 };
 
 export const lightInput = {
   get background() { return T.kartenFeld; },
   get border() { return "1px solid " + T.tinteWeich; },
-  borderRadius: 4,
+  borderRadius: 8,
   get color() { return T.tinte; },
-  padding: "6px 10px",
-  fontFamily: "'Space Mono', monospace",
-  fontSize: "calc(13px * var(--kd-schriftfaktor, 1))",
+  minHeight: 44,
+  padding: "8px 10px",
+  fontFamily: "'Space Grotesk', sans-serif",
+  fontSize: "max(16px, calc(16px * var(--kd-schriftfaktor, 1)))",
+  lineHeight: 1.4,
 };

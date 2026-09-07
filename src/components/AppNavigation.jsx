@@ -7,7 +7,7 @@ export const NAVIGATION = Object.freeze([
   { id: "kino", label: "Kino", mobil: true, icon: "K" },
   { id: "mediathek", label: "Mediathek", mobil: true, icon: "M" },
   { id: "streaming", label: "Streaming", mobil: true, icon: "S" },
-  { id: "finder", label: "Suche", desktopOnly: true, icon: "⌕" },
+  { id: "finder", label: "Suche", desktopOnly: true, icon: "search" },
   { id: "blog", label: "Entdecken", mehr: true, icon: "E" },
   { id: "daten", label: "Settings", mehr: true, icon: "⚙" },
 ]);

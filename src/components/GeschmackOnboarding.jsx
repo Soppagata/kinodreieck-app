@@ -124,11 +124,11 @@ export function GeschmackOnboarding({
   const zurueck = () => setSchritt((s) => Math.max(s - 1, ersterSchritt));
 
   const p = { color: T.leinwand, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px" };
-  const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.04em",
-    fontSize: 20, color: T.leinwand, margin: "0 0 10px" };
+  const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, letterSpacing: 0,
+    fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, color: T.leinwand, margin: "0 0 10px" };
 
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 8, padding: "18px 20px" }}
+    <div className="kd-geschmack-onboarding" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}
       role="group" aria-label={"Geschmacksprofil anlegen — Schritt " + (schritt + 1) + " von " + SCHRITTE.length}>
 
       {/* ---------- 1. Einwilligung ---------- */}
@@ -299,7 +299,7 @@ export function GeschmackOnboarding({
             <button style={btnStyle(true)} disabled={nichtsGewaehlt}
               title={nichtsGewaehlt ? "Es ist nichts ausgewählt" : undefined}
               onClick={() => onFertig?.(ergebnis)}>Ins Profil übernehmen</button>
-            <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => onAbbruch?.()}>Abbrechen</button>
+            <button style={btnStyle(false)} onClick={() => onAbbruch?.()}>Abbrechen</button>
           </div>
         </div>
       )}
@@ -310,7 +310,7 @@ export function GeschmackOnboarding({
 function Fussleiste({ zurueck, weiter, weiterText = "Weiter", stand }) {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
-      <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={zurueck}>Zurück</button>
+      <button style={btnStyle(false)} onClick={zurueck}>Zurück</button>
       <button style={btnStyle(true)} onClick={weiter}>{weiterText}</button>
       {/* aria-live, weil der Stand die einzige Rückmeldung auf das Antippen
           ist — ohne Ansage bekommt ein Screenreader-Nutzer nie mit, dass

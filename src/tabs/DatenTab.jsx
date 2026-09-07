@@ -90,9 +90,9 @@ export function DatenTab({
     || !!programmInfo?.fehler
     || programmInfo?.abgelaufen === true
     || programmInfo?.ausCache === true);
-  const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 8px" };
-  const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
-  const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
+  const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2, letterSpacing: 0, textTransform: "none", color: T.leinwand, margin: "0 0 8px" };
+  const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", color: T.rauch };
+  const kasten = { background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" };
   const showKatalogbestand = runtimeConfig.appEnvironment !== "production";
   const [ueberOffen, setUeberOffen] = useState(false);
   const anleitungKnopfRef = useRef(null);
@@ -163,29 +163,29 @@ export function DatenTab({
   }, [bekannteGenres, master]);
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <section className="kd-daten-tab" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* 1 — Darstellung */}
       {setzeEinstellung && (
         <Klappe titel="Darstellung & Verhalten" offen>
           <div style={kasten}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Erscheinung</span>
-                <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+                <span style={{ ...mono }}>Erscheinung</span>
+                <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 0 }}
                   value={einstellungen.modus ? null : (einstellungen.theme === "hell" ? "foyer" : "saal")}
                   onChange={(id) => waehleModus?.(id)}
                   options={[{ id: "saal", label: "Saal (dunkel)" }, { id: "foyer", label: "Foyer (hell)" }]} />
               </div>
               <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Schriftgröße</span>
-                <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+                <span style={{ ...mono }}>Schriftgröße</span>
+                <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 0 }}
                   value={einstellungen.schrift || "normal"}
                   onChange={(id) => setzeEinstellung("schrift", id)}
                   options={[{ id: "klein", label: "Klein" }, { id: "normal", label: "Normal" }, { id: "gross", label: "Groß" }]} />
               </div>
               <div className="kd-kompakt" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Startbereich</span>
-                <select value={einstellungen.startTab || "start"} onChange={(e) => setzeEinstellung("startTab", e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+                <span style={{ ...mono }}>Startbereich</span>
+                <select value={einstellungen.startTab || "start"} onChange={(e) => setzeEinstellung("startTab", e.target.value)} style={{ ...inputStyle, width: "100%" }}>
                   {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Entdecken"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
@@ -235,8 +235,8 @@ export function DatenTab({
             Profil-Funktionen dazu.
           </p>
           <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-            <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>KI insgesamt</span>
-            <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+            <span style={{ ...mono }}>KI insgesamt</span>
+            <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 0 }}
               value={kiStand.global === true ? "an" : "aus"}
               onChange={(id) => onKiGlobal?.(id === "an")}
               options={[{ id: "an", label: "Mit KI" }, { id: "aus", label: "Ohne KI" }]} />
@@ -249,7 +249,7 @@ export function DatenTab({
             <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingLeft: 4, borderLeft: "2px solid " + T.saalHoch }}>
               {Object.entries(KI_FUNKTIONEN).map(([id, f]) => (
                 <div key={id} style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <SegmentedControl style={{ marginBottom: 0, minWidth: 120 }}
+                  <SegmentedControl style={{ marginBottom: 0, minWidth: 0 }}
                     value={istEinzelfunktionAn(id, kiStand) ? "an" : "aus"}
                     onChange={(w) => onKiFunktion?.(id, w === "an")}
                     options={[{ id: "an", label: "An" }, { id: "aus", label: "Aus" }]} />
@@ -353,7 +353,7 @@ export function DatenTab({
             <br />© {new Date().getFullYear()} <span style={{ color: T.wolfram }}>Max</span> — Nutzung auf eigene Verantwortung.
           </p>
           <div style={{ marginTop: 14 }}>
-            <button ref={anleitungKnopfRef} style={{ ...btnStyle(false), fontSize: 13 }}
+            <button ref={anleitungKnopfRef} style={btnStyle(false)}
               aria-expanded={ueberOffen} onClick={() => setUeberOffen((v) => !v)}>Über Kinodreieck &amp; Anleitung</button>
             {ueberOffen && <UeberKinodreieck />}
           </div>

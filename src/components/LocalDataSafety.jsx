@@ -48,9 +48,9 @@ export function LocalDataSafety({ markiereExport = NICHT_MARKIEREN, controller =
   };
 
   return (
-    <section data-local-data-safety="guest-only" aria-labelledby="local-data-safety-title"
-      style={{ marginTop: 20, padding: "16px 18px", border: "1px solid " + T.tinteWeich, borderRadius: 8, background: T.saalHoch }}>
-      <h2 id="local-data-safety-title" style={{ margin: "0 0 8px", color: T.leinwand, fontSize: 18 }}>
+    <section className="kd-local-data-safety" data-local-data-safety="guest-only" aria-labelledby="local-data-safety-title"
+      style={{ marginTop: 20, padding: "16px 18px", border: "1px solid " + T.tinteWeich, borderRadius: 12, background: T.saalHoch }}>
+      <h2 id="local-data-safety-title" style={{ margin: "0 0 8px", color: T.leinwand, fontSize: "calc(15px * var(--kd-schriftfaktor, 1))" }}>
         Lokale Daten dieses Geräts
       </h2>
       <p style={{ margin: "0 0 12px", color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>

@@ -1582,7 +1582,7 @@ export default function App() {
             }
           }} />
       )}
-      <header style={{ padding: "26px 22px 12px", maxWidth: 860, margin: "0 auto" }}>
+      <header style={{ padding: "var(--kd-shell-header-padding, 26px 22px 12px)", maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Logo size={34} />
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "calc(34px * var(--kd-schriftfaktor, 1))", letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
@@ -1603,9 +1603,9 @@ export default function App() {
               aria-description={id === "daten" && sicherungOffen ? "Sicherung offen" : undefined}
               onClick={() => id === "daten" && sicherungOffen ? oeffneSicherung() : navigiere(id)}
               style={{
-                fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(17px * var(--kd-schriftfaktor, 1))",
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                padding: "8px 16px", border: "none", cursor: "pointer", borderRadius: "4px 4px 0 0",
+                fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: "calc(14px * var(--kd-schriftfaktor, 1))",
+                letterSpacing: 0, textTransform: "none", minHeight: 44,
+                padding: "8px 16px", border: "none", cursor: "pointer", borderRadius: 8,
                 background: tab === id ? T.leinwand : "transparent",
                 color: tab === id ? T.tinte : T.rauch,
                 position: "relative",

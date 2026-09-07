@@ -20,8 +20,8 @@ function BeschreibungEditor({ eintrag, onSave, onCancel, speichert, fehler }) {
         placeholder="Notiz (Edition, Fassung, Sehstand … — frei)" style={{ ...lightInput, width: "100%", boxSizing: "border-box", fontFamily: "'Space Grotesk', sans-serif" }} />
       {fehler && <div role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button disabled={speichert} style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px" }} onClick={() => onSave({ beschreibung: besch, notiz })}>{speichert ? "Speichert …" : "Speichern"}</button>
-        <button disabled={speichert} style={{ ...btnStyle(false), fontSize: 14, padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>Abbrechen</button>
+        <button disabled={speichert} style={{ ...btnStyle(true), padding: "7px 14px" }} onClick={() => onSave({ beschreibung: besch, notiz })}>{speichert ? "Speichert …" : "Speichern"}</button>
+        <button disabled={speichert} style={{ ...btnStyle(false), padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>Abbrechen</button>
       </div>
     </div>
   );
@@ -84,9 +84,9 @@ export function FilmCard({
         if (e.target !== e.currentTarget) return; // innere Buttons/Felder nicht doppelt auslösen
         if (e.key === "Enter" || e.key === " ") { if (e.key === " ") e.preventDefault(); kartenAktion(); }
       } : undefined}
-      className={`kd-karte${auswahlmodus ? " kd-auswahl-karte" : ""}${ausgewaehlt ? " kd-auswahl-karte--aktiv" : ""}`}
+      className={`kd-karte kd-filmkarte${auswahlmodus ? " kd-auswahl-karte" : ""}${ausgewaehlt ? " kd-auswahl-karte--aktiv" : ""}`}
       style={{
-        background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "14px 16px",
+        background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "16px",
         cursor: kartenAktion ? "pointer" : "default",
         boxShadow: ausgewaehlt ? `0 0 0 3px ${T.wolfram}, 0 2px 10px rgba(0,0,0,0.45)` : "0 2px 10px rgba(0,0,0,0.45)",
         opacity: auswahlmodus && !auswaehlbar ? 0.62 : 1,
@@ -101,7 +101,7 @@ export function FilmCard({
         {dreieck && <Dreieck bw={unbewertet ? null : film.bewertung} />}
         <div className="kd-filmhaupt" style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", alignItems: "baseline" }}>
-            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 22, lineHeight: 1.1, textTransform: "uppercase", letterSpacing: "0.02em" }}>
+            <span className="kd-film-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0 }}>
               {film.titel}
             </span>
             <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich }}>
@@ -119,7 +119,7 @@ export function FilmCard({
                 <>
                   <UnbewertetTag />
                   {onSave && (
-                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", color: T.tinte, borderColor: T.tinteWeich }}
+                    <button style={{ ...btnStyle(false), padding: "4px 10px", color: T.tinte, borderColor: T.tinteWeich }}
                       onClick={jetztBewerten}>✎ Jetzt bewerten</button>
                   )}
                 </>
@@ -164,7 +164,7 @@ export function FilmCard({
               {(onSave || onDelete) && (
                 <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {onSave && (
-                  <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 12px", color: T.tinte, borderColor: T.tinteWeich }}
+                  <button style={{ ...btnStyle(false), padding: "6px 12px", color: T.tinte, borderColor: T.tinteWeich }}
                     onClick={(e) => { e.stopPropagation(); setSpeicherFehler(""); setPrognoseEntwurf(false); setEditing(true); }}>
                     ✎ {dreieck ? "Bewertung bearbeiten" : "Beschreibung bearbeiten"}
                   </button>

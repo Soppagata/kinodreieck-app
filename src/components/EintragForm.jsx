@@ -154,7 +154,7 @@ export function FilmForm({
   };
 
   return (
-    <div className="kd-mediathek-neuformular" style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-mediathek-neuformular" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
       {/* Zeile 1: Titel, (Originaltitel nur bewertbar), Jahr */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input placeholder="Titel *" value={f.titel} onChange={set("titel")} style={{ ...inputStyle, flex: 2, minWidth: 160 }} />
