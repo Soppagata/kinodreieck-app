@@ -353,7 +353,7 @@ export function DatenTab({
             <br />© {new Date().getFullYear()} <span style={{ color: T.wolfram }}>Max</span> — Nutzung auf eigene Verantwortung.
           </p>
           <div style={{ marginTop: 14 }}>
-            <button ref={anleitungKnopfRef} style={{ ...btnStyle(false), fontSize: 13 }}
+            <button ref={anleitungKnopfRef} style={btnStyle(false)}
               aria-expanded={ueberOffen} onClick={() => setUeberOffen((v) => !v)}>Über Kinodreieck &amp; Anleitung</button>
             {ueberOffen && <UeberKinodreieck />}
           </div>

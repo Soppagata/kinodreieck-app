@@ -180,7 +180,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
           </p>
           <textarea id="kd-ingestion-prompt" readOnly value={ingestionPrompt(autorName)} rows={9}
             onFocus={(e) => e.target.select()}
-            style={{ ...inputStyle, width: "100%", maxWidth: "100%", minHeight: 240, maxHeight: "50vh", resize: "vertical", overflow: "auto", boxSizing: "border-box", fontFamily: "'Space Mono', monospace", fontSize: 11, lineHeight: 1.5 }} />
+            style={{ ...inputStyle, width: "100%", maxWidth: "100%", minHeight: 240, maxHeight: "50vh", resize: "vertical", overflow: "auto", boxSizing: "border-box", fontFamily: "'Space Mono', monospace", lineHeight: 1.5 }} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
             <button style={btnStyle(true)} onClick={kopierePrompt}>{kopiert ? "✓ Kopiert" : "Prompt kopieren"}</button>
             <button style={btnStyle(false)} onClick={() => dateiRef.current && dateiRef.current.click()}>Upload: Datei wählen</button>
@@ -190,7 +190,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
           <div style={{ marginTop: 10, borderTop: "1px solid " + T.saal, paddingTop: 10 }}>
             <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={3}
               placeholder="… oder das JSON aus der KI-Antwort hier einfügen"
-              style={{ ...inputStyle, width: "100%", boxSizing: "border-box", fontFamily: "'Space Mono', monospace", fontSize: 11 }} />
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box", fontFamily: "'Space Mono', monospace" }} />
             <button style={{ ...btnStyle(false), marginTop: 6 }} disabled={!pasteText.trim()}
               onClick={() => { ladePaketText(pasteText); setPasteText(""); }}>
               Eingefügtes importieren

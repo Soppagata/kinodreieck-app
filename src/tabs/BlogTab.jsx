@@ -409,7 +409,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                       </div>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <input value={loeschName} onChange={(e) => setLoeschName(e.target.value)} placeholder="Autor"
-                          style={{ ...inputStyle, width: 140, padding: "6px 9px", fontSize: 13 }} />
+                          style={{ ...inputStyle, width: 140, padding: "6px 9px" }} />
                         <button
                           disabled={loeschLaeuft || loeschName.trim().toLowerCase() !== a.autor.trim().toLowerCase()}
                           style={{ ...btnStyle(true), padding: "7px 14px", background: T.gefahr,

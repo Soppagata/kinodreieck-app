@@ -52,6 +52,10 @@ Theme-Setter gesetzte `--kd-saal`-Palette, die skalierte Blogtitelgröße,
 einen aufgeklappten Blogzustand und fehlendes Seiten-Overflow. Frische Screenshots bei 320 px für Chromium Saal/Normal und WebKit
 Foyer/Groß wurden zusätzlich visuell geprüft.
 
+## Typografie-Nachtrag
+
+Die verbleibenden lokalen `btnStyle`- und `inputStyle`-Schriftgrößen von 11–13 px wurden an ihren Quellen entfernt. Textbuttons folgen damit der gemeinsamen skalierbaren 14-px-Rolle; die beiden JSON-Textfelder behalten nur die Monospace-Familie und folgen der mindestens 16-px-Feldrolle.
+
 ## Feedbackliste
 
 Keine funktionale Abweichung im P2-Scope beobachtet. Der zuvor gemessene

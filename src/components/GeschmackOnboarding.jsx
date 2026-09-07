@@ -299,7 +299,7 @@ export function GeschmackOnboarding({
             <button style={btnStyle(true)} disabled={nichtsGewaehlt}
               title={nichtsGewaehlt ? "Es ist nichts ausgewählt" : undefined}
               onClick={() => onFertig?.(ergebnis)}>Ins Profil übernehmen</button>
-            <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => onAbbruch?.()}>Abbrechen</button>
+            <button style={btnStyle(false)} onClick={() => onAbbruch?.()}>Abbrechen</button>
           </div>
         </div>
       )}
@@ -310,7 +310,7 @@ export function GeschmackOnboarding({
 function Fussleiste({ zurueck, weiter, weiterText = "Weiter", stand }) {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
-      <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={zurueck}>Zurück</button>
+      <button style={btnStyle(false)} onClick={zurueck}>Zurück</button>
       <button style={btnStyle(true)} onClick={weiter}>{weiterText}</button>
       {/* aria-live, weil der Stand die einzige Rückmeldung auf das Antippen
           ist — ohne Ansage bekommt ein Screenreader-Nutzer nie mit, dass
