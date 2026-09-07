@@ -1610,3 +1610,8 @@ expect(
 );
 
 console.log(`private_ops_contract_test: ${checks} Checks bestanden.`);
+
+/* Der Kontoerstellungs-Zaun gehoert fachlich zum bestehenden Private-Ops-Gate.
+   Die Verdrahtung bleibt hier, damit package.json als bytegenauer Teil des
+   freigegebenen, derzeit deaktivierten Provider-Einmallaufs unveraendert bleibt. */
+await import("./account_readiness_boundaries_test.mjs");
