@@ -14,7 +14,7 @@
   --kd-kartenFeld: #FBFAF7;
   --kd-kartenText: #1C1A1E;
   --kd-kartenTextWeich: #57525C;
-  --kd-kartenAkzent: #76500F;
+  --kd-kartenAkzent: #E3A63B;
   --kd-linie: #8C8593;
   --kd-wolframText: #000000;
   --kd-focus: var(--kd-wolfram);
@@ -95,8 +95,8 @@ h2, h3, .kd-abschnitt-titel {
 .kd-karte, .kd-filmkarte, .kd-dash-karte, .kd-kino-ticket {
   color: var(--kd-kartenText, var(--kd-tinte));
   --kd-control-muted: var(--kd-kartenTextWeich, var(--kd-tinteWeich));
-  --kd-tag-text: var(--kd-kartenAkzent, var(--kd-kartenText));
-  --kd-achse-text: var(--kd-kartenAkzent, var(--kd-kartenText));
+  --kd-tag-text: var(--kd-kartenText);
+  --kd-achse-text: var(--kd-kartenText);
 }
 
 .kd-bereichshero {
@@ -184,7 +184,7 @@ h2, h3, .kd-abschnitt-titel {
   align-items: center;
   min-height: 24px;
   padding: 2px 6px;
-  border: 1px solid var(--kd-tag-text, var(--kd-tag-markierung, currentColor));
+  border: 1px solid var(--kd-tag-markierung, currentColor);
   border-radius: var(--kd-radius-label);
   box-shadow: inset 2px 0 var(--kd-tag-markierung, currentColor);
   color: var(--kd-tag-text, var(--kd-tag-markierung, currentColor));

@@ -28,7 +28,7 @@ export const THEMES = {
     kartenFeld: "#FBFAF7", // Eingabefelder AUF den (hellen) FilmCards
     kartenText: "#1C1A1E",
     kartenTextWeich: "#57525C",
-    kartenAkzent: "#76500F",
+    kartenAkzent: "#E3A63B",
     linie: "#8C8593",
     wolframText: "#000000",
   },
@@ -40,7 +40,7 @@ export const THEMES = {
     tinte: "#F0EDE6",
     tinteWeich: "#C8C2D1",
     rauch: "#595363",
-    wolfram: "#825B14",
+    wolfram: "#B07E1F",
     wie: "#2F6CA8",
     was: "#7B4FB0",
     warum: "#B07E1F",
@@ -51,7 +51,7 @@ export const THEMES = {
     kartenTextWeich: "#C8C2D1",
     kartenAkzent: "#E3A63B",
     linie: "#6A6473",
-    wolframText: "#FFFFFF",
+    wolframText: "#000000",
   },
   /* ---- Egg-Modus SHOWA — Kaiju-Eiga 1954, heller S/W-Abzug ----
      Reiner Token-Swap (KEIN filter auf .kd-app — mobil-tauglich). Die freie
@@ -97,7 +97,7 @@ export const THEMES = {
     kartenFeld: "#F7FBFB",
     kartenText: "#0C1720",
     kartenTextWeich: "#465964",
-    kartenAkzent: "#76500F",
+    kartenAkzent: "#D8A33F",
     linie: "#465964",
     wolframText: "#000000",
   },

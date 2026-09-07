@@ -17,14 +17,14 @@ check("Dunkel- und Hellthema haben die freigegebenen semantischen Kontrastrollen
   );
   assert.deepEqual(
     [THEMES.hell.saal, THEMES.hell.saalHoch, THEMES.hell.leinwand, THEMES.hell.tinte, THEMES.hell.tinteWeich, THEMES.hell.rauch, THEMES.hell.wolfram],
-    ["#EDEAE3", "#FBFAF7", "#23202A", "#F0EDE6", "#C8C2D1", "#595363", "#825B14"],
+    ["#EDEAE3", "#FBFAF7", "#23202A", "#F0EDE6", "#C8C2D1", "#595363", "#B07E1F"],
   );
   for (const theme of Object.values(THEMES)) {
     assert.ok(theme.kartenText && theme.kartenTextWeich && theme.kartenAkzent && theme.linie && theme.wolframText);
   }
 });
 
-check("Kartenakzente bleiben als Text auf der jeweiligen Kartenfläche lesbar", () => {
+check("Helles Gold und Kartenbeschriftung behalten getrennte lesbare Farbrollen", () => {
   const luminanz = (hex) => {
     const channels = String(hex).match(/[0-9a-f]{2}/gi).map((part) => parseInt(part, 16) / 255)
       .map((value) => (value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4));
@@ -34,8 +34,13 @@ check("Kartenakzente bleiben als Text auf der jeweiligen Kartenfläche lesbar", 
     const [hell, dunkel] = [luminanz(a), luminanz(b)].sort((left, right) => right - left);
     return (hell + .05) / (dunkel + .05);
   };
-  assert.ok(contrast(THEMES.dunkel.kartenAkzent, THEMES.dunkel.leinwand) >= 4.5);
-  assert.ok(contrast(THEMES.hell.kartenAkzent, THEMES.hell.leinwand) >= 4.5);
+  for (const theme of Object.values(THEMES)) {
+    assert.ok(contrast(theme.kartenText, theme.leinwand) >= 4.5);
+    assert.ok(contrast(kontrastFarbe(theme.kartenAkzent), theme.kartenAkzent) >= 4.5);
+  }
+  assert.equal(THEMES.dunkel.kartenAkzent, THEMES.dunkel.wolfram);
+  assert.match(source("./src/styles/design-foundation.css"), /--kd-tag-text: var\(--kd-kartenText\)/);
+  assert.match(source("./src/styles/design-foundation.css"), /--kd-achse-text: var\(--kd-kartenText\)/);
   assert.equal(THEMES.dunkel.wolframText, kontrastFarbe(THEMES.dunkel.wolfram));
   assert.equal(THEMES.hell.wolframText, kontrastFarbe(THEMES.hell.wolfram));
 });

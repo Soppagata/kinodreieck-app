@@ -338,7 +338,7 @@ export function DatenTab({
               Es gibt ungesicherte Änderungen im Browser. Die Sicherheitskopie hält Mediathek, Blog, Listen und Settings dieses Geräts gemeinsam in einer Datei fest.
             </p>
           )}
-          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den gebundenen persönlichen App-Stand dieses Browsers als portable JSON-Datei herunter. Serverweite Konto-Eigendaten und der gemeinsame Kino- und Streamingkatalog sind nicht enthalten. Dieser Release bietet dafür keinen Restore- oder Reimportweg.</p>
+          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den gebundenen persönlichen App-Stand dieses Browsers als portable JSON-Datei herunter. Serverweite Konto-Eigendaten und der gemeinsame Kino- und Streamingkatalog sind nicht enthalten.</p>
           {sicherheitskopieGeraet && <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={sicherheitskopieGeraet}><IconExport size={16} />Sicherheitskopie dieses Geräts herunterladen</button>}
           <FeldHinweis feld="backup" text="Enthält den gebundenen persönlichen App-Stand dieses Geräts, aber keine serverweiten Konto-Eigendaten." />
       </div>

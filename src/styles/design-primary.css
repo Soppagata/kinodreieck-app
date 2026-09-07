@@ -97,7 +97,7 @@
 .kd-streaming-tab .kd-entdecken-aktionen { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--kd-space-3); }
 .kd-streaming-tab .kd-entdecken-aktionen button { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; margin: 0; padding: 0; border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 60%, transparent); border-radius: var(--kd-radius-control); }
 .kd-streaming-tab .kd-entdecken-pin { min-width: 44px; min-height: 44px; border-radius: var(--kd-radius-control); color: var(--kd-kartenTextWeich); border-color: var(--kd-kartenTextWeich); }
-.kd-streaming-tab .kd-entdecken-pin:is(:hover, :focus-visible, .aktiv) { color: var(--kd-kartenAkzent); border-color: var(--kd-kartenAkzent); }
+.kd-streaming-tab .kd-entdecken-pin:is(:hover, :focus-visible, .aktiv) { color: #1C1A1E; background: var(--kd-kartenAkzent); border-color: var(--kd-kartenAkzent); }
 .kd-streaming-tab .kd-entdecken-titel,
 .kd-streaming-tab .kd-streaming-titel,
 .kd-streaming-tab .kd-film-titel { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: calc(22px * var(--kd-schriftfaktor, 1)); line-height: 1.2; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
@@ -114,12 +114,8 @@
 .kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--kd-linie); }
 .kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid var(--kd-saalHoch); border-radius: 50%; background: var(--kd-wolfram); }
 .kd-streaming-tab .kd-streamfilter-abc-skala span,
-.kd-streaming-tab .kd-streamfilter-dekade-skala span { visibility: hidden; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
-.kd-streaming-tab .kd-streamfilter-abc-skala span:nth-child(5n + 1),
-.kd-streaming-tab .kd-streamfilter-dekade-skala span:nth-child(3n + 1),
-.kd-streaming-tab .kd-streamfilter-abc-skala span.aktiv,
-.kd-streaming-tab .kd-streamfilter-dekade-skala span.aktiv { visibility: visible; }
-.kd-streaming-tab .kd-streamfilter-dekade-skala span { white-space: nowrap; }
+.kd-streaming-tab .kd-streamfilter-dekade-skala span { visibility: visible; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+.kd-streaming-tab .kd-streamfilter-dekade-skala span { font-family: 'Barlow Condensed', sans-serif; white-space: nowrap; }
 .kd-streaming-tab .kd-streamfilter-dekade-skala span:first-child { text-align: left; }
 .kd-streaming-tab .kd-streamfilter-dekade-skala span:last-child { text-align: right; }
 
@@ -160,6 +156,9 @@
 .kd-entdecken-ansicht .kd-radar-neuigkeit .kd-radar-folgen li span { color: var(--kd-kartenTextWeich); }
 
 @media (max-width: 560px) {
+  /* Lange Zeitspannen behalten jeden Skalenwert an seiner horizontalen Position. */
+  .kd-streaming-tab .kd-streamfilter-dekade-skala[data-dicht="1"] { padding-bottom: calc(18px * var(--kd-schriftfaktor, 1)); }
+  .kd-streaming-tab .kd-streamfilter-dekade-skala[data-dicht="1"] span:nth-child(2n) { transform: translateY(calc(18px * var(--kd-schriftfaktor, 1))); }
   .kd-primary-start .kd-dash-karte { padding-inline: var(--kd-space-3); }
   .kd-wochen-ansicht { grid-template-columns: 1fr; }
   .kd-wochen-gesamt { width: 100%; }

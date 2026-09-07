@@ -40,9 +40,18 @@ test("Streaming-Ansichten behalten Karten, Sliderwerte und Titelpins", async ({ 
   await decade.fill("0");
   await expect(decade).toHaveAttribute("aria-valuetext", /Alle/u);
   const scale = page.locator(".kd-streaming-tab .kd-streamfilter-abc-skala span");
+  await expect(scale).toHaveText(["•", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"]);
   await expect(scale.first()).toHaveCSS("font-size", "12px");
   expect(await scale.evaluateAll((items) => items.filter((item) => getComputedStyle(item).visibility === "visible").length))
-    .toBeLessThan(await scale.count());
+    .toBe(await scale.count());
+  const decades = page.locator(".kd-streamfilter-dekade-skala span");
+  await expect(decades).toHaveText(["•", "80er", "90er", "00er", "10er", "20er"]);
+  for (const label of await decades.all()) await expect(label).toBeVisible();
+  const alphabet = page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" });
+  await alphabet.fill("26");
+  await expect(alphabet).toHaveAttribute("aria-valuetext", "Buchstabe Z");
+  await alphabet.fill("0");
+  await expect(alphabet).toHaveAttribute("aria-valuetext", "Alle Anfangsbuchstaben");
   const neuAnsicht = views.filter({ hasText: /^Neu/u });
   await neuAnsicht.click();
   await expect(neuAnsicht).toHaveAttribute("aria-pressed", "true");

@@ -25,9 +25,9 @@ Die kompakte Mediathek-Navigation verwendet 13 px für Ansichten und 12 px für 
 ## Farben und Zustände
 
 - Dunkel: Saal `#17151A`, erhöhte Fläche `#211E26`, Papier `#ECE8DF`, Tinte `#1C1A1E`, Papierbegleittext `#57525C`, Saalbegleittext `#B6AFBE`, Gold `#E3A63B`.
-- Hell: Saal `#EDEAE3`, erhöhte Fläche `#FBFAF7`, Karten `#23202A`, Kartentext `#F0EDE6`, Kartenbegleittext `#C8C2D1`, Saalbegleittext `#595363`, Gold `#825B14` entsprechend der Studie.
+- Hell: Saal `#EDEAE3`, erhöhte Fläche `#FBFAF7`, Karten `#23202A`, Kartentext `#F0EDE6`, Kartenbegleittext `#C8C2D1`, Saalbegleittext `#595363`, Gold wieder `#B07E1F` wie vor dem Umbau.
 - Karten verwenden Tinte/TinteWeich (oder explizite semantische Kartenrollen), nie blind den Saaltext `rauch`. Anbieterlabels sind neutrale Informationen und sehen nicht wie primäre Buttons aus.
-- Für Akzenttext auf Karten gilt eine eigene kontrastreiche Kartenrolle. Das dunklere Gold des hellen Saals ist nicht automatisch auch auf dessen dunklen Karten lesbar. Bewertungsfarben können Punkte/Ränder markieren; der lesbare Zahlen-/Labeltext darf in der neutralen Kartenfarbe stehen.
+- Kartenakzente verwenden wieder das ursprüngliche helle Gold `#E3A63B`; der neue ockerbraune Kartenakzent entfällt. Bewertungs- und Kategoriebezeichnungen stehen in neutraler Kartenfarbe, ihre Punkte/Ränder behalten die Akzentfarben. Aktive Kartenaktionen verwenden eine goldene Fläche mit kontrastreicher Beschriftung. Im bestehenden Neon-Thema gilt dessen eigenes Gold `#D8A33F`.
 - Primäraktion und aktive exklusive Auswahl verwenden Gold mit über `kontrastFarbe()` bestimmtem Text. Sekundäraktionen verwenden eine feine Linie; Destruktives behält seine eindeutige Beschriftung und Fehlerfarbe.
 - Sichtbarer Tastaturfokus, Hover, gedrückt/ausgewählt, laufend, deaktiviert und Fehler bleiben unterscheidbar. Keine Information nur über Farbe vermitteln.
 - Kein pauschales `!important` über alle Buttons/Elemente. Geteilte Primitives korrigieren, verbleibende Rollen gezielt klassifizieren; vorhandene Inline-Stile an ihrer Quelle angleichen. Fokus- und Easteregg-Regeln nicht übermalen.
@@ -38,7 +38,7 @@ Die kompakte Mediathek-Navigation verwendet 13 px für Ansichten und 12 px für 
 2. **Filmkarte:** Papier/Dunkelkarte, Titel 22 px, Metadaten darunter; Aktionen in einer eigenen umbrechenden Reihe. Bewertungsdreieck, Quellen, Status und alle vorhandenen Detailaktionen bleiben zugänglich. Die Kino-Nebenliste „Läuft auch“ verwendet bewusst kleinere, schlichte Zeilen. Radar-Neuigkeiten erhalten dagegen die erkennbare Kartenfamilie der Haupteinträge mit Datum und Zielherkunft.
 3. **Must-Watch:** fünf vorhandene tägliche Einträge, Rang links, vollständiger Titel, darunter vollständige umbrechende Anbieter. Der schon korrigierte Screenshot-Overflow darf nicht zurückkehren.
 4. **Wochenplan:** kompakte Wochentagsauswahl plus ausgewählter Tag, mit sichtbarer Möglichkeit „Ganze Woche“. Das ist lokale Darstellungswahl; alle bisherigen Einträge, Hinzufügen-/Entfernen-/Terminauswahlaktionen und Wochenwechsel bleiben vorhanden. Bei sehr kleiner Breite darf die Tagesauswahl in zwei Reihen umbrechen.
-5. **Kino/Streaming:** gleiche Kartentypografie, Controlhöhen und Abstände. Filter funktionieren wie bisher. Kino-Pin bleibt vorstellungsbezogen, Streaming-Pin titelbezogen. „Mein Programm“, „Alles“, „Neu“, Jahrzehnt-Nullwert „Alle“, Toleranz-/Sortierverträge und Neu-Frist bleiben unverändert. Skalen weniger dicht beschriften, nicht die Werte verändern.
+5. **Kino/Streaming:** gleiche Kartentypografie, Controlhöhen und Abstände. Filter funktionieren wie bisher. Kino-Pin bleibt vorstellungsbezogen, Streaming-Pin titelbezogen. „Mein Programm“, „Alles“, „Neu“, Jahrzehnt-Nullwert „Alle“, Toleranz-/Sortierverträge und Neu-Frist bleiben unverändert. Alle Buchstaben A–Z und jedes Jahrzehnt bleiben sichtbar; die Jahrzehntskala verwendet kurze Labels wie „20er“, „30er“, „40er“. Bei langen Zeitspannen auf schmalen Displays stehen die Labels leicht versetzt in zwei Zeilen. Der gewählte Wert und sein zugänglicher Name behalten das volle Jahrhundert und den tatsächlichen Filterbereich.
 6. **Formulare/Dialogs/Hilfe:** dieselben Inputs, Buttons, Überschriften, Abstände und Fokuszustände. Keine ungestalteten Browserbuttons, unlesbar kleinen Kontrolltexte oder abgeschnittenen Aktionsleisten.
 7. **Icons:** bestehende Inline-SVGs wiederverwenden; für primäre UI-Symbole bei Bedarf kleine Inline-SVGs ergänzen. Keine neuen Betriebssystem-Emoji als Controls. Accessible Names bleiben erhalten.
 
@@ -75,6 +75,12 @@ Die Screenshots vom 7. September um 21:20–21:21 konkretisieren die gewünschte
 
 Umsetzung in drei disjunkten Paketen auf derselben Basis: R1/R2/R6 (Hauptansichten), R3/R4 (Settings), R5 (Menü). Alle sechs Korrekturen sind im gemeinsamen Integrationsstand gebaut und lokal belegt; siehe [refinement-integration.md](design-deliveries/refinement-integration.md). Anschließende Lieferung auf Staging im bereits autorisierten Designpfad. Keine Änderung von main oder der Funktionsarchitektur.
 
+## Korrekturen zur Ansicht um 22:40
+
+Auf Basis der bereits gelieferten Version `e58a643` kehren die vollständigen Streaming-Skalen und das frühere Gold zurück. Die Skalen blenden keine Zwischenwerte mehr aus; die Filtermechanik bleibt unverändert. Bei der Gerätesicherung entfällt ausschließlich der veraltete Satz „Dieser Release bietet dafür keinen Restore- oder Reimportweg.“ Download und Beschreibung des tatsächlichen Sicherungsumfangs bleiben erhalten. Auch diese Korrektur wird im bereits autorisierten Staging-Pfad geliefert.
+
+Lokal belegt: vollständige Skalen und unveränderte Sliderwerte in Chromium/WebKit, auch bei 320 px mit großer Schrift und einer Zeitspanne von 1880 bis 2020 ohne überlappende Beschriftung; Kontrast- und Sicherungswortlautprüfungen sowie die vollständige bestehende Mock-Suite einschließlich beider Builds erfolgreich.
+
 ## Ergebnisregister und Baufolge
 
 | ID | Nutzbares Ergebnis | Lokaler Abschluss |
@@ -88,4 +94,4 @@ Umsetzung in drei disjunkten Paketen auf derselben Basis: R1/R2/R6 (Hauptansicht
 
 Produktstand: `9e9465b52489090b1a2f1d0eddd1432afcd0873e`. Der vollständige Liefer- und Prüfbeleg steht in [design-deliveries/integration.md](design-deliveries/integration.md). Physische iPhone-PWA-Abnahme und externe Lieferung werden daraus nicht abgeleitet.
 
-Baufolge: gemeinsame Foundation → drei disjunkte Terra/high-Pakete auf demselben Nicht-main-Commit → Integration und einmaliger lokaler Abschluss. Astra besitzt Gestaltung, Suchleisten-Erhaltungsvertrag und Integration. Main und der primäre Checkout bleiben unberührt. Externe Lieferung ist nicht Teil dieses lokalen Designauftrags.
+Baufolge der Erstumsetzung: gemeinsame Foundation → drei disjunkte Terra/high-Pakete auf demselben Nicht-main-Commit → Integration und einmaliger lokaler Abschluss. Astra besitzt Gestaltung, Suchleisten-Erhaltungsvertrag und Integration. Max hat anschließend die Lieferung und Folgekorrekturen auf Staging autorisiert. Main und der primäre Checkout bleiben unberührt.

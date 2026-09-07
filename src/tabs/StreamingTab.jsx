@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { T, btnStyle, inputStyle } from "../lib/tokens.js";
+import { T, btnStyle, inputStyle, kontrastFarbe } from "../lib/tokens.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { norm } from "../lib/match.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
@@ -141,11 +141,11 @@ function JahrzehntFilter({ wert, optionen, onChange, name }) {
         }}
         aria-label={`${name}: Jahrzehnt filtern`}
         aria-valuetext={bereich ? `${Number(wert)}er: ${bereich.von} bis ${bereich.bis}` : "Alle Jahrzehnte"} />
-      <div className="kd-streamfilter-dekade-skala" aria-hidden="true"
+      <div className="kd-streamfilter-dekade-skala" aria-hidden="true" data-dicht={optionen.length > 10 ? "1" : "0"}
         style={{ gridTemplateColumns: `repeat(${optionen.length + 1}, minmax(0, 1fr))` }}>
         <span className={wert == null ? "aktiv alle" : "alle"}>•</span>
         {optionen.map((jahrzehnt) => (
-          <span key={jahrzehnt} className={wert === jahrzehnt ? "aktiv" : ""}>{streamingJahrzehntLabel(jahrzehnt)}</span>
+          <span key={jahrzehnt} className={wert === jahrzehnt ? "aktiv" : ""} title={streamingJahrzehntLabel(jahrzehnt)}>{String(jahrzehnt).slice(-2)}er</span>
         ))}
       </div>
     </div>
@@ -723,7 +723,7 @@ export function StreamingTab({
                     <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2 }}>
                       {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
                       {entdeckenStatus[t.watchmode_id] && (
-                        <span style={{ ...mono, color: T.kartenAkzent, marginLeft: 8 }}>
+                        <span style={{ ...mono, color: T.kartenTextWeich, marginLeft: 8 }}>
                           {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
                           {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
                         </span>
@@ -736,13 +736,13 @@ export function StreamingTab({
                   <button onClick={(e) => { e.stopPropagation(); toggleMerk(t); }}
                     title={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
                     aria-label={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
-                    style={{ background: "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? T.kartenAkzent : T.kartenTextWeich, padding: 0 }}>
+                    style={{ background: gemerkt(t) ? T.kartenAkzent : "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? kontrastFarbe(T.kartenAkzent) : T.kartenTextWeich, padding: 0 }}>
                     <IconStar size={18} filled={gemerkt(t)} />
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); void toggleGesehen(t); }}
                     title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
                     aria-label={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
-                    style={{ background: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.kartenAkzent : T.kartenTextWeich, padding: 0 }}>
+                    style={{ background: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.kartenAkzent : "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? kontrastFarbe(T.kartenAkzent) : T.kartenTextWeich, padding: 0 }}>
                     <IconCheck size={18} />
                   </button>
                 </div>
