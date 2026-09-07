@@ -6,10 +6,10 @@ Paketbasis: `36772f32c2f170e199c803d551f80eda86d897d8`.
 
 | Fläche | Lieferung |
 | --- | --- |
-| Start und Must-Watch | Papierkarten mit Barlow-600-Titeln in 22 px, vollständig umbrechenden Dienstlabels sowie dem erhaltenen stabilen Fünf-Einträge-Pfad. |
-| Deine Woche | Sieben rollierende Tage bleiben unverändert berechnet. Eine reine lokale Tagesansicht und der sichtbare Schalter „Ganze Woche“ steuern nur die Darstellung; Eintrag, Bearbeiten, Löschen, Terminansicht und Export bleiben vorhanden. |
-| Kino | Die vorhandenen vorstellungsbezogenen Tickets, Pins, Filter und externen Kinolinks verwenden die Karten-, Titel-, Metadaten- und Controlrollen der Foundation. |
-| Streaming | „Mein Programm“, „Alles“ und „Neu“ verwenden dieselbe Karten- und Titelsprache. Titelpins, Nullwert „Alle“, Jahrzehnttoleranz, Sortierung und die Neu-Differenz bleiben unverändert. Die dichte Skala blendet nur Zwischenbeschriftungen aus. |
+| Start und Must-Watch | Papierkarten mit Barlow-600-Titeln in 22 px, vollständig umbrechenden Titeln, neutralen 12px-Dienstlabels sowie dem erhaltenen stabilen Fünf-Einträge-Pfad. |
+| Deine Woche | Sieben rollierende Tage bleiben unverändert berechnet. Eine reine lokale Tagesansicht als native Button-Gruppe mit `aria-pressed` und der sichtbare Schalter „Ganze Woche“ steuern nur die Darstellung; Eintrag, Bearbeiten, Löschen, Terminansicht und Export bleiben vorhanden. |
+| Kino | Die vorhandenen vorstellungsbezogenen Tickets, Pins, Filter und externen Kinolinks verwenden die Karten-, Titel-, Metadaten- und Controlrollen der Foundation. Gefüllte Selects und Eingaben bleiben mindestens 16px groß. |
+| Streaming | „Mein Programm“, „Alles“ und „Neu“ verwenden dieselben Papier-/Dunkelkarten sowie Titel-, Meta-, Anbieter- und Aktionsrollen. Titelpins, Nullwert „Alle“, Jahrzehnttoleranz, Sortierung und die Neu-Differenz bleiben unverändert. Die dichte Skala zeigt weniger 12px-Beschriftungen, behält aber ihre Rasterplätze per `visibility`. |
 | Mediathek und Formulare | Filmkarten, Must-Watch-Karten, Bewertungen und Film-/Medienformulare verwenden 12-px-Kartenrundungen, 16-px Innenabstand und die Foundation-Eingabegrößen. Auswahl, Bearbeiten, Löschen, Quellenwahl und Import-nahe Formulare bleiben unverändert bedienbar. |
 | P1-Komponenten | `FilmCard`, `Wochenplan`, `MustWatchListe`, `KinoLinks`, `KatalogAuditStatus`, `SelectionControl`, `EditPanel`, `EintragForm`, `MedienForm`, `QuellenWahl` und `DreieckRegler` wurden gegen die Foundation-Rollen geprüft; erforderliche Karten- und Formularquellen sind im Paket angepasst. |
 
@@ -29,7 +29,7 @@ node mediathek_selection_dom_test.mjs
 node kartenlayout_test.mjs
 ```
 
-Alle genannten Läufe sind lokal grün. Die Must-Watch-Browserprüfung deckt Chromium und WebKit bei 320, 393 und 430 px sowie hell/dunkel und normal/groß ab. Das private Fixture sperrt alle unbekannten Netzpfade.
+Alle genannten Läufe sind lokal grün. Die Browserprüfung misst zusätzlich reale Streaming-Kartenfarben, neutrale Anbieterlabels, Skalenbeschriftungen und 16px-Kinoeingaben und erzeugt Leitansicht-Screenshots für Start, Streaming und Kino. Must-Watch deckt Chromium und WebKit bei 320, 393 und 430 px sowie hell/dunkel und normal/groß ab. Das private Fixture sperrt alle unbekannten Netzpfade.
 
 ## Funktionsfunde für Max
 

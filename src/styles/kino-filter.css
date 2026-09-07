@@ -59,6 +59,8 @@
 }
 .kd-kino-tab .kd-kino-zeitgrenze input {
   width: 86px;
-  font-size: 16px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1)));
+  line-height: 1.4;
   text-align: center;
 }

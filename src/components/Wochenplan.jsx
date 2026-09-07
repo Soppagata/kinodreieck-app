@@ -345,9 +345,9 @@ export function Wochenplan({
       <div className="kd-wochen-zeitraum">Heute bis {datumKurz(tage[6].iso)}</div>
 
       <div className="kd-wochen-ansicht" role="group" aria-label="Wochenansicht">
-        <div className="kd-wochen-tagauswahl" role="tablist" aria-label="Tag auswählen">
+        <div className="kd-wochen-tagauswahl" role="group" aria-label="Tag auswählen">
           {tage.map((tag) => (
-            <button key={tag.iso} type="button" role="tab" aria-selected={!ganzeWoche && tag.iso === ausgewaehlterTag}
+            <button key={tag.iso} type="button" aria-pressed={!ganzeWoche && tag.iso === ausgewaehlterTag}
               className={!ganzeWoche && tag.iso === ausgewaehlterTag ? "ist-ausgewaehlt" : ""}
               onClick={() => { setAusgewaehlterTag(tag.iso); setGanzeWoche(false); }}>
               <span>{tag.kurz}</span><b>{tageszahl(tag.iso)}</b>

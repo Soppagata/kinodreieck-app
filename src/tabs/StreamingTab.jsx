@@ -48,9 +48,9 @@ function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className })
         const d = rohnamen[0];
         const url = rohnamen.map((name) => webUrls && webUrls[name]).find(Boolean);
         const stil = {
-          fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.05em",
-          color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "2px 7px",
-          border: "1px solid " + T.wolfram, textDecoration: "none", display: "inline-block",
+          fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", lineHeight: 1.45,
+          color: T.kartenTextWeich, background: "transparent", borderRadius: 5, padding: "2px 7px",
+          border: "1px solid " + T.kartenTextWeich, textDecoration: "none", display: "inline-block",
           maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis",
           whiteSpace: "nowrap",
         };
@@ -717,20 +717,20 @@ export function StreamingTab({
               <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus" tabIndex={-1}
                 data-streaming-suchtreffer={ansicht === "entdecken" ? `entdecken:${t.watchmode_id}` : undefined}
                 onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
-                style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer" }}>
+                style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer" }}>
                 <div className="kd-entdecken-kopf">
                   <div className="kd-entdecken-aktionen">
                   {pinButton(t)}
                   <button onClick={(e) => { e.stopPropagation(); toggleMerk(t); }}
                     title={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
                     aria-label={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? T.wolfram : T.rauch, padding: "0 2px" }}>
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? T.kartenAkzent : T.kartenTextWeich, padding: "0 2px" }}>
                     {gemerkt(t) ? "★" : "☆"}
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); void toggleGesehen(t); }}
                     title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
                     aria-label={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.wolfram : T.rauch, padding: "0 2px" }}>
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.kartenAkzent : T.kartenTextWeich, padding: "0 2px" }}>
                     ✓
                   </button>
                   </div>
@@ -738,7 +738,7 @@ export function StreamingTab({
                   <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2 }}>
                     {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
                     {entdeckenStatus[t.watchmode_id] && (
-                      <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>
+                      <span style={{ ...mono, color: T.kartenAkzent, marginLeft: 8 }}>
                         {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
                         {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
                       </span>
@@ -759,7 +759,7 @@ export function StreamingTab({
                   </div>
                 )}
                 {expandedId === "e" + t.watchmode_id && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: T.rauch }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ marginTop: 6, fontSize: 12, color: T.kartenTextWeich }} onClick={(e) => e.stopPropagation()}>
                     {(t.genres || []).length > 0 && <span>{t.genres.join(", ")}</span>}
                     {addFilm && formFuer !== t.watchmode_id && !mediathekIdVon(entdeckenStatus[t.watchmode_id]) && (
                       <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 11px", marginTop: 8 }}

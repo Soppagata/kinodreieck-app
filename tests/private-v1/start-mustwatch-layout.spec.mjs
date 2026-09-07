@@ -148,8 +148,12 @@ for (const theme of ["dunkel", "hell"]) {
       await expect(page.locator("html")).toHaveAttribute("data-kd-theme", theme);
       await expect(page.locator("html")).toHaveAttribute("data-kd-schrift", schrift);
       for (const width of [320, 393, 430]) {
-        await page.setViewportSize({ width, height: 852 });
-        await assertReadableRows(page, schrift);
+      await page.setViewportSize({ width, height: 852 });
+      await assertReadableRows(page, schrift);
+      const anbieter = page.locator(".kd-dash-mustwatch .kd-dash-badge--neu").first();
+      await expect(anbieter).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      expect(parseFloat(await anbieter.evaluate((element) => getComputedStyle(element).fontSize)))
+        .toBeCloseTo(12 * (schrift === "gross" ? 1.12 : 1), 1);
         if (width === 393 && process.env.KD_DESIGN_EVIDENCE_DIR) {
           await mkdir(process.env.KD_DESIGN_EVIDENCE_DIR, { recursive: true });
           const block = page.locator(".kd-dash-modul").filter({ has: page.getByText("Must-Watch", { exact: true }) });
