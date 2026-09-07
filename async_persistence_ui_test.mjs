@@ -27,6 +27,7 @@ await esbuild.build({
   stdin: {
     contents: [
       'export { FilmCard } from "./src/components/FilmCard.jsx";',
+      'export { FilmForm } from "./src/components/EintragForm.jsx";',
       'export { MedienForm } from "./src/components/MedienForm.jsx";',
       'export { StapelImport } from "./src/components/StapelImport.jsx";',
       'export { GlobalErrorQueue } from "./src/components/GlobalErrorQueue.jsx";',
@@ -69,7 +70,7 @@ const React = await import("react");
 const { act, createElement: h } = React;
 const { createRoot } = await import("react-dom/client");
 const {
-  FilmCard, MedienForm, StapelImport, GlobalErrorQueue, ArtikelMaske, MustWatchListe, KontoUebernahme,
+  FilmCard, FilmForm, MedienForm, StapelImport, GlobalErrorQueue, ArtikelMaske, MustWatchListe, KontoUebernahme,
   Wochenplan, StreamingTab,
   useBackupExportController, useVokabularController, K, setGebundenerTestTreiber,
   alleStimmungen, setzeEigeneStimmungen, vokabularZuMap,
@@ -187,10 +188,27 @@ const artikelJahrFixture = await mounte(ArtikelMaske, {
 });
 await act(async () => { knopf(artikelJahrFixture.container, "Speichern").click(); await tick(); });
 check(artikelJahrWrites === 0
-  && /Referenz 1: Jahr muss leer oder eine plausible vierstellige Zahl/.test(artikelJahrFixture.container.textContent)
+  && /Referenz 1: Jahr muss leer oder eine ganze Zahl zwischen 1888/.test(artikelJahrFixture.container.textContent)
   && artikelJahrFixture.container.querySelector('input[placeholder="Jahr"]').getAttribute("aria-invalid") === "true",
 "Artikelmaske blockiert nicht-ganzzahlige Referenzjahre mit sichtbarem Feldfehler");
 await artikelJahrFixture.cleanup();
+
+let historischerArtikel = null;
+const historischerArtikelFixture = await mounte(ArtikelMaske, {
+  vorlage: {
+    id: "blog_historisch", titel: "Historisch", autor: "Max", text: "Text", geordnet: false,
+    geteilt: false, liste: [
+      { eingabe: "Hamlet", jahr: "1603", typ: "sonstiges" },
+      { eingabe: "Frühe Quelle", jahr: "814", typ: "" },
+    ],
+  },
+  onErstellen: async (daten) => { historischerArtikel = daten; return "blog_historisch"; },
+  onAbbrechen() {},
+});
+await act(async () => { knopf(historischerArtikelFixture.container, "Speichern").click(); await tick(); });
+check(historischerArtikel?.liste[0].jahr === 1603 && historischerArtikel?.liste[1].jahr === 814,
+  "Artikelmaske bewahrt historische Nicht-Film- und untypisierte Referenzjahre");
+await historischerArtikelFixture.cleanup();
 
 const kontoFixture = await mounte(ArtikelMaske, {
   vorlage: null, angemeldet: true, onErstellen: async () => null, onAbbrechen() {},
@@ -263,10 +281,42 @@ const medienJahrFixture = await mounte(MedienForm, {
 });
 await act(async () => { knopf(medienJahrFixture.container, "Hinzufügen").click(); await tick(); });
 check(medienJahrWrites === 0
-  && /Jahr muss leer oder eine plausible vierstellige Zahl/.test(medienJahrFixture.container.textContent)
+  && /Jahr muss leer oder eine ganze Zahl zwischen 1/.test(medienJahrFixture.container.textContent)
   && medienJahrFixture.container.querySelector('input[placeholder="Jahr"]').getAttribute("aria-invalid") === "true",
 "MedienForm blockiert Freitextjahre vor onAdd und erklärt die gültige Eingabe");
 await medienJahrFixture.cleanup();
+
+let historischesMedium = null;
+const historischesMedienFixture = await mounte(MedienForm, {
+  typ: "sonstiges", startOffen: true, initial: { titel: "Hamlet", jahr: "1603" },
+  onAdd: async (daten) => { historischesMedium = daten; return "hamlet_1603"; },
+});
+await act(async () => { knopf(historischesMedienFixture.container, "Hinzufügen").click(); await tick(); });
+check(historischesMedium?.jahr === 1603 && historischesMedium?.typ === "sonstiges",
+  "MedienForm persistiert ein historisches Nicht-Film-Jahr als ganze Zahl");
+await historischesMedienFixture.cleanup();
+
+let filmJahrWrites = 0;
+const filmJahrFixture = await mounte(FilmForm, {
+  typOptionen: ["film"], startOffen: true, initial: { titel: "Vor dem Kino", jahr: "1603" },
+  onAdd: async () => { filmJahrWrites++; return "vor_dem_kino_1603"; },
+});
+await act(async () => { knopf(filmJahrFixture.container, "Hinzufügen").click(); await tick(); });
+check(filmJahrWrites === 0
+  && /Jahr muss eine ganze Zahl zwischen 1888/.test(filmJahrFixture.container.textContent)
+  && filmJahrFixture.container.querySelector('input[placeholder="Jahr *"]').getAttribute("aria-invalid") === "true",
+  "Adaptive EintragForm blockiert historische Jahreszahlen gezielt nur im Filmtyp");
+await filmJahrFixture.cleanup();
+
+let historischePerson = null;
+const personJahrFixture = await mounte(FilmForm, {
+  typOptionen: ["sonstiges"], startOffen: true, initial: { titel: "William Shakespeare", jahr: "1564" },
+  onAdd: async (daten) => { historischePerson = daten; return "william_shakespeare_1564"; },
+});
+await act(async () => { knopf(personJahrFixture.container, "Hinzufügen").click(); await tick(); });
+check(historischePerson?.jahr === 1564 && historischePerson?.typ === "sonstiges",
+  "Adaptive EintragForm persistiert historische Personenjahre als ganze Zahl");
+await personJahrFixture.cleanup();
 
 /* Must-Watch: ein offener Editor darf einen späteren Syncstand nicht beim
    nächsten Blur mit seinem alten DOM-Wert überschreiben. Eigene parallele

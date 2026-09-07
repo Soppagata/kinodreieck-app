@@ -8,7 +8,7 @@ import { MedienForm } from "../components/MedienForm.jsx";
 import { IconClose, IconDelete } from "../components/ui.jsx";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
-import { lesePlausiblesJahr } from "../lib/match.js";
+import { lesePlausiblesJahr, plausiblerJahresbereich } from "../lib/match.js";
 
 /* ================= BLOG =================
    Flow (Spec): "Erstellen" speichert sofort mit status "wartet" -> Abgleich
@@ -34,13 +34,15 @@ export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   const speichern = async () => {
     if (speichertRef.current) return;
     if (!titel.trim() || !autor.trim() || !text.trim()) { setFehler("Titel, Autor und Text sind Pflicht."); return; }
-    const ungueltigeZeile = liste.findIndex((z) => z.eingabe.trim() && !lesePlausiblesJahr(z.jahr).ok);
+    const ungueltigeZeile = liste.findIndex((z) => z.eingabe.trim()
+      && !lesePlausiblesJahr(z.jahr, { typ: z.typ || null }).ok);
     if (ungueltigeZeile >= 0) {
-      setFehler(`Referenz ${ungueltigeZeile + 1}: Jahr muss leer oder eine plausible vierstellige Zahl zwischen 1888 und ${new Date().getUTCFullYear() + 10} sein.`);
+      const { min, max } = plausiblerJahresbereich(liste[ungueltigeZeile].typ || null);
+      setFehler(`Referenz ${ungueltigeZeile + 1}: Jahr muss leer oder eine ganze Zahl zwischen ${min} und ${max} sein.`);
       return;
     }
     const l = liste.filter((z) => z.eingabe.trim()).map((z) => ({
-      eingabe: z.eingabe.trim(), jahr: lesePlausiblesJahr(z.jahr).jahr, typ: z.typ || null, ref: null,
+      eingabe: z.eingabe.trim(), jahr: lesePlausiblesJahr(z.jahr, { typ: z.typ || null }).jahr, typ: z.typ || null, ref: null,
     }));
     speichertRef.current = true; setSpeichert(true); setFehler("");
     try {
@@ -77,7 +79,7 @@ export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
           </select>
           <input placeholder="Jahr" value={z.jahr} onChange={(e) => setzeZeile(i, "jahr", e.target.value)}
             inputMode="numeric" aria-label={`Erscheinungsjahr für Referenz ${i + 1} (optional)`}
-            aria-invalid={!!z.jahr.trim() && !lesePlausiblesJahr(z.jahr).ok}
+            aria-invalid={!!z.jahr.trim() && !lesePlausiblesJahr(z.jahr, { typ: z.typ || null }).ok}
             style={{ ...inputStyle, width: 70 }} />
           <button type="button" aria-label={`Referenz ${i + 1} entfernen`} title="Referenz entfernen"
             style={{ ...btnStyle(false), fontSize: 12, padding: "5px 9px" }}

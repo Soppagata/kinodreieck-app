@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { arrayZuQuelle, WUNSCH } from "../lib/quellen.js";
-import { lesePlausiblesJahr } from "../lib/match.js";
+import { lesePlausiblesJahr, plausiblerJahresbereich } from "../lib/match.js";
 import { QuellenWahl } from "./QuellenWahl.jsx";
 
 /* ---------- Eingabemaske für Musik & Sonstiges ----------
@@ -29,9 +29,10 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
   const speichern = async () => {
     if (speichertRef.current) return;
     if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
-    const jahrEingabe = lesePlausiblesJahr(f.jahr);
+    const jahrEingabe = lesePlausiblesJahr(f.jahr, { typ });
     if (!jahrEingabe.ok) {
-      setFehler(`Jahr muss leer oder eine plausible vierstellige Zahl zwischen 1888 und ${new Date().getUTCFullYear() + 10} sein.`);
+      const { min, max } = plausiblerJahresbereich(typ);
+      setFehler(`Jahr muss leer oder eine ganze Zahl zwischen ${min} und ${max} sein.`);
       return;
     }
     speichertRef.current = true; setSpeichert(true);
@@ -67,7 +68,7 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input placeholder="Titel *" value={f.titel} onChange={set("titel")} style={{ ...inputStyle, flex: 2, minWidth: 160 }} />
         <input placeholder="Jahr" value={f.jahr} onChange={set("jahr")} inputMode="numeric"
-          aria-label="Erscheinungsjahr (optional)" aria-invalid={!!f.jahr.trim() && !lesePlausiblesJahr(f.jahr).ok}
+          aria-label="Erscheinungsjahr (optional)" aria-invalid={!!f.jahr.trim() && !lesePlausiblesJahr(f.jahr, { typ }).ok}
           style={{ ...inputStyle, width: 80 }} />
         <select value={f.art} onChange={set("art")} title="Kategorie" style={{ ...inputStyle, flex: 2, minWidth: 180 }}>
           <option value="">Kategorie …</option>
