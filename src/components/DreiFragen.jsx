@@ -90,13 +90,13 @@ export function DreiFragen({
 
   const p = { color: T.leinwand, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px" };
   const klein = { ...p, color: T.rauch, fontSize: 13 };
-  const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.04em",
-    fontSize: 20, color: T.leinwand, margin: "0 0 10px" };
+  const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, letterSpacing: 0,
+    fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, color: T.leinwand, margin: "0 0 10px" };
 
   /* ---------- Vorschau ---------- */
   if (ergebnis) {
     return (
-      <div style={{ background: T.saalHoch, borderRadius: 8, padding: "18px 20px" }}>
+      <div className="kd-drei-fragen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
         <h3 style={h}>{istDegraded
           ? "Die Antwort ließ sich nicht sicher auswerten"
           : "Das habe ich aus deinen Antworten gelesen"}</h3>
@@ -138,7 +138,7 @@ export function DreiFragen({
                 <span style={{ color: s.sicherheit === "niedrig" ? T.wolfram : T.rauch, fontSize: 12 }}>
                   Sicherheit {s.sicherheit}
                 </span>
-                <button style={{ ...btnStyle(false), fontSize: 12, padding: "3px 9px" }}
+                <button style={{ ...btnStyle(false), padding: "3px 9px" }}
                   data-vorschlag-art="signal"
                   aria-pressed={weg}
                   onClick={() => setAbgewaehlt((v) => {
@@ -163,7 +163,7 @@ export function DreiFragen({
               {Object.entries(ergebnis.rahmen.achsen).map(([k, v]) => {
                 const weg = achsenAus.has(k);
                 return (
-                  <button key={k} style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
+                  <button key={k} style={{ ...btnStyle(false), padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
                     data-vorschlag-art="achse"
                     aria-pressed={!weg}
                     onClick={() => setAchsenAus((alt) => {
@@ -188,7 +188,7 @@ export function DreiFragen({
                 return (
                   <button key={"film-" + index} aria-pressed={!weg}
                     data-vorschlag-art="film"
-                    style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
+                    style={{ ...btnStyle(false), padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
                     onClick={() => setFilmeAus((v) => {
                       const n = new Set(v);
                       if (n.has(index)) n.delete(index); else n.add(index);
@@ -213,7 +213,7 @@ export function DreiFragen({
                 return (
                   <button key={"unklar-" + index} aria-pressed={!weg}
                     data-vorschlag-art="nicht-deutbar"
-                    style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
+                    style={{ ...btnStyle(false), padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
                     onClick={() => setNichtDeutbarAus((alt) => {
                       const neu = new Set(alt);
                       if (neu.has(index)) neu.delete(index); else neu.add(index);
@@ -251,7 +251,7 @@ export function DreiFragen({
 
   /* ---------- Die Fragen ---------- */
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 8, padding: "18px 20px" }}>
+    <div className="kd-drei-fragen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
       <h3 style={h}>Drei Fragen</h3>
       <p style={p}>
         Antworte so, wie du es einem Menschen erzählen würdest — Halbsätze sind in Ordnung.

@@ -9,12 +9,7 @@ const SICHERHEIT = {
   hoch: "hohe Sicherheit",
 };
 
-const mono = {
-  fontFamily: "'Space Mono', monospace",
-  fontSize: 10,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-};
+const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))" };
 
 export function FilmwissenBereich({
   phase = "idle",
@@ -26,8 +21,8 @@ export function FilmwissenBereich({
 }) {
   const status = daten?.status || null;
   return (
-    <section aria-label="Belegtes Filmwissen">
-      <div style={{ ...mono, color: T.warum, marginBottom: 7 }}>Belegtes Filmwissen</div>
+    <section className="kd-filmwissen" aria-label="Belegtes Filmwissen">
+      <div className="kd-filmwissen-titel" style={{ color: T.leinwand, marginBottom: 7 }}>Belegtes Filmwissen</div>
 
       {phase === "laedt" && (
         <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>Gemeinsamer Bericht wird geladen …</p>
@@ -47,7 +42,7 @@ export function FilmwissenBereich({
       {status === FILMWISSEN_STATUS.BELEGT && (
         <>
           <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-            <strong style={{ color: T.warum, fontFamily: "'Barlow Condensed', sans-serif", fontSize: 25 }}>
+            <strong style={{ color: T.warum, fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2 }}>
               WARUM {daten.warum.wert}/5
             </strong>
             <span style={{ ...mono, color: T.rauch }}>{SICHERHEIT[daten.warum.sicherheit]}</span>
@@ -117,7 +112,7 @@ export function FilmwissenBereich({
           </p>
           {rechercheMoeglich && (
             <>
-              <button style={{ ...btnStyle(false), fontSize: 12 }} disabled={rechercheLaeuft}
+              <button style={btnStyle(false)} disabled={rechercheLaeuft}
                 onClick={onRecherchieren}>
                 {rechercheLaeuft ? "Bericht wird erstellt …" : "Recherchebericht erstellen"}
               </button>
@@ -144,7 +139,7 @@ export function FilmwissenBereich({
           </p>
           {rechercheMoeglich && (
             <>
-              <button style={{ ...btnStyle(false), fontSize: 12 }} disabled={rechercheLaeuft}
+              <button style={btnStyle(false)} disabled={rechercheLaeuft}
                 onClick={onRecherchieren}>
                 {rechercheLaeuft ? "Bericht wird erstellt …" : "Recherchebericht erstellen"}
               </button>

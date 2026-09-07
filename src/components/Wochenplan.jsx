@@ -257,6 +257,10 @@ export function Wochenplan({
   const [jetzt, setJetzt] = useState(() => new Date());
   const [editor, setEditor] = useState(null);
   const [anlegenLauf, setAnlegenLauf] = useState(null);
+  // Die Ansicht gehört bewusst nur dieser Komponente: weder Termine noch
+  // Wochenplaninhalt werden dadurch gespeichert oder umsortiert.
+  const [ausgewaehlterTag, setAusgewaehlterTag] = useState(() => datumLokal(new Date()));
+  const [ganzeWoche, setGanzeWoche] = useState(false);
   const anlegenLaufRef = useRef(false);
   const [planSchreibt, setPlanSchreibt] = useState(false);
   const planSchreibtRef = useRef(false);
@@ -270,6 +274,9 @@ export function Wochenplan({
   const tage = useMemo(() => wochenansicht({
     wochenplan: plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, jetzt,
   }), [plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, jetzt]);
+  useEffect(() => {
+    if (!tage.some((tag) => tag.iso === ausgewaehlterTag)) setAusgewaehlterTag(tage[0]?.iso || "");
+  }, [tage, ausgewaehlterTag]);
 
   const schreibePlan = async (next, schliesseEditor = false) => {
     if (planSchreibtRef.current) return false;
@@ -337,6 +344,22 @@ export function Wochenplan({
       </header>
       <div className="kd-wochen-zeitraum">Heute bis {datumKurz(tage[6].iso)}</div>
 
+      <div className="kd-wochen-ansicht" role="group" aria-label="Wochenansicht">
+        <div className="kd-wochen-tagauswahl" role="group" aria-label="Tag auswählen">
+          {tage.map((tag) => (
+            <button key={tag.iso} type="button" aria-pressed={!ganzeWoche && tag.iso === ausgewaehlterTag}
+              className={!ganzeWoche && tag.iso === ausgewaehlterTag ? "ist-ausgewaehlt" : ""}
+              onClick={() => { setAusgewaehlterTag(tag.iso); setGanzeWoche(false); }}>
+              <span>{tag.kurz}</span><b>{tageszahl(tag.iso)}</b>
+            </button>
+          ))}
+        </div>
+        <button type="button" className={`kd-wochen-gesamt${ganzeWoche ? " ist-ausgewaehlt" : ""}`}
+          aria-pressed={ganzeWoche} onClick={() => setGanzeWoche((wert) => !wert)}>
+          Ganze Woche
+        </button>
+      </div>
+
       {editor && <ReminderEditor key={editor.id || `neu-${editor.startdatum}`} initial={editor}
         kinoKatalog={kinoKatalog} katalog={katalog} master={master}
         onStreamingKatalogLaden={onStreamingKatalogLaden}
@@ -344,7 +367,8 @@ export function Wochenplan({
 
       <div className="kd-wochen-tagesliste">
         {tage.map((tag) => (
-          <section key={tag.iso} className={`kd-wochen-tag ${tag.iso === datumLokal(jetzt) ? "ist-heute" : ""}`}>
+          <section key={tag.iso} hidden={!ganzeWoche && tag.iso !== ausgewaehlterTag}
+            className={`kd-wochen-tag ${tag.iso === datumLokal(jetzt) ? "ist-heute" : ""}`}>
             <header>
               <div className="kd-wochen-ticketstub"><b>{tageszahl(tag.iso)}</b><span>{tag.kurz}</span></div>
               <div className="kd-wochen-ticketname"><b>{tag.iso === datumLokal(jetzt) ? "Heute" : tag.name}</b><span>{datumKurz(tag.iso)}</span></div>

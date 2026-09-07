@@ -56,10 +56,10 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
   }, [quellenSuche, quellenIndex, auswahl]);
   const purchaseWarnung = quellenDefault.gruppen.find((x) => x.typ === "purchase")?.warnung;
 
-  const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
+  const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2, letterSpacing: 0, textTransform: "none", color: T.leinwand, margin: "0 0 10px" };
 
   if (datenGesperrt) return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+    <div className="kd-streaming-einstellungen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
       <h2 style={h2}>Streaming gesperrt</h2>
       <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
         Für den zentralen Katalog sind noch keine Zugangsdaten eingerichtet. Gib den mitgeschickten Leseschlüssel unter „Datenmodus & Verbindung“ ein. Die PWA selbst lädt nie live von Watchmode.
@@ -68,11 +68,11 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="kd-streaming-einstellungen" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Etappe 2: Kästen als Accordions (Klappe). Streaming-Quellen startet
           offen, Status/Refresh zu. data-tour wandert an die Klappe (Tour-Anker). */}
       {(teil === "alle" || teil === "quellen") && <Klappe titel={`Streaming-Quellen (${auswahl.length} gewählt)`} offen tour="streaming-quellen">
-      <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+      <div style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
           Wähle die Dienste, die du tatsächlich nutzt. Die Auswahl filtert den gemeinsamen
           Katalog sofort. Die Filterung bezieht sich nur auf den bereits geladenen
@@ -81,7 +81,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
         {/* Suchfeld: einzige Tür zu den nicht angehakten Quellen (~40 Namen). */}
         <input value={quellenSuche} onChange={(e) => setQuellenSuche(e.target.value)}
           placeholder="Quelle suchen (z. B. Hayu, MUBI, Joyn) …"
-          style={{ width: "100%", boxSizing: "border-box", background: T.saal, color: T.leinwand, border: "1px solid " + T.rauch, borderRadius: 4, padding: "10px 12px", fontSize: 14, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 8 }} />
+          style={{ width: "100%", boxSizing: "border-box", background: T.saal, color: T.leinwand, border: "1px solid " + T.rauch, borderRadius: "var(--kd-radius-control)", padding: "10px 12px", fontSize: "max(16px, calc(16px * var(--kd-schriftfaktor, 1)))", fontFamily: "'Space Grotesk', sans-serif", marginBottom: 8 }} />
         {quellenSuche.trim() !== "" && (
           <div style={{ marginBottom: 10 }}>
             {suchTreffer.length === 0 && (
@@ -93,7 +93,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {suchTreffer.map(({ name, typ }) => (
                 <button key={name} onClick={() => toggleQuelle(name)} title={"„" + name + "“ zur Auswahl hinzufügen"}
-                  style={{ display: "flex", gap: 8, alignItems: "center", textAlign: "left", background: "transparent", color: T.leinwand, border: "1px solid " + T.saal, borderRadius: 4, padding: "9px 10px", cursor: "pointer", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>
+                  style={{ display: "flex", gap: 8, alignItems: "center", textAlign: "left", background: "transparent", color: T.leinwand, border: "1px solid " + T.saal, borderRadius: "var(--kd-radius-control)", padding: "9px 10px", cursor: "pointer", fontSize: "calc(14px * var(--kd-schriftfaktor, 1))", fontFamily: "'Space Grotesk', sans-serif" }}>
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>+ {kurzQuelle(name)}</span>
                   <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: typ === "purchase" ? T.gefahr : T.rauch, flexShrink: 0 }}>{TYP_KURZ[typ] || typ}</span>
                 </button>
@@ -112,7 +112,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
           )}
           {[...auswahl].sort((a, b) => a.localeCompare(b)).map((q) => (
             <button key={q} onClick={() => toggleQuelle(q)} title={"„" + q + "“ abwählen"}
-              style={{ display: "flex", alignItems: "center", gap: 8, textAlign: "left", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, background: T.saal, border: "1px solid " + T.saalHoch, borderRadius: 4, padding: "7px 10px", cursor: "pointer" }}>
+              style={{ display: "flex", alignItems: "center", gap: 8, textAlign: "left", fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(14px * var(--kd-schriftfaktor, 1))", color: T.leinwandTief, background: T.saal, border: "1px solid " + T.saalHoch, borderRadius: "var(--kd-radius-control)", padding: "7px 10px", cursor: "pointer" }}>
               <span aria-hidden="true" style={{ color: T.wolfram, flexShrink: 0, fontSize: 13 }}>✓</span>
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kurzQuelle(q)}</span>
               <span aria-hidden="true" style={{ color: T.rauch, flexShrink: 0 }}>×</span>

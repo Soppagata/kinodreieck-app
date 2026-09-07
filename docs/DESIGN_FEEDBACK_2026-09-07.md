@@ -1,0 +1,15 @@
+# Feedbackliste aus dem Designaudit
+
+Hier stehen auffällige funktionale oder dokumentarische Punkte außerhalb des Gestaltungsauftrags. Sie sind kein Auftrag zur Veränderung der Funktionsarchitektur. Stand: 7. September 2026, lokaler Quellcode und netzgesperrte Browserbeispiele.
+
+| ID | Beobachtung und Fundstelle | Einordnung / späterer Schritt |
+| --- | --- | --- |
+| F01 | `docs/FUNKTIONSBERICHT.md`, Kapitel 12.16 beschreibt einen versteckten Max-Einstieg, während die aktuelle private Oberfläche und ihr Test ausdrücklich keinen solchen Touchtarget vorsehen. | Veraltete Beschreibung mit Produktentscheidung abgleichen; keinen Trigger im Designauftrag reaktivieren. |
+| F02 | `src/lib/modus.js` enthält Aktivflags für mehrere Eggs; die vorhandenen App-Verbindungen benutzen teils den globalen Schalter `EGGS_ENABLED`. Teppich/Crawl/Klaatu sind im Bestand pausiert. | Später die Dokumentation der effektiven Erreichbarkeit konsolidieren. Keine Aktivierung erforderlich. |
+| F03 | Die älteren umfangreichen Suchleisten-PWA-Browsertests stehen in `tests/mobile-layout.spec.mjs`; der aktuelle Standardlauf deckt diese Datei nicht mehr vollständig ab. | Für diesen Designpfad erledigt: die relevanten Anker-, Gesten-, Handoff-, Rotation- und Zoomprüfungen laufen jetzt in `tests/private-v1/design-search-shell.spec.mjs`; Login-Grenzen unverändert. |
+| F04 | Die mitgelieferten Fonts decken Deutsch/lateinische UI ab; beliebige internationale Filmtitel können weitere Schriftsysteme enthalten. | Vollständige Unicode-Abdeckung ist keine belegte Eigenschaft. Erst bei konkretem Bedarf zusätzliche lizenzierte Schriften/Subsetstrategie bewerten. |
+| F05 | Installierte iPhone-PWA: Tastatur, Rotation und reale Betriebssystemleisten lassen sich im Desktop-WebKit nur simulieren. | Physische Prüfung mit neuem Kandidaten: mittig scrollen → Suche → Tastatur → Ergebnisse intern scrollen → schließen → Ausgangsposition; anschließend Rotation. |
+| F06 | Bereits im Ausgangscode öffnen `KinoTab.jsx:KompaktEintrag` und die Katalogkarten in `StreamingTab.jsx` ihre Details über `div`-Klickhandler. Der Kino-Kopf hat kein Tastaturziel; die Streaming-Karte hat `tabIndex={-1}` und keinen Tastaturhandler. | Separater Bedienungsfix: semantische Detailaktion für Tab/Enter/Leertaste ergänzen, ohne verschachtelte Buttons zu erzeugen. Der Designauftrag erhält die vorhandenen Ereignisbindungen; dieser Tastaturpfad ist damit weiterhin offen. |
+| F07 | `geschmack_test.mjs` verwendet ohne `KD_DATEN` den historischen Pfad `/mnt/user-data/uploads/kinodreieck-app/dist-single-beta`. Im vollständigen lokalen Lauf wurden deshalb zwei optionale Beta-Datenprüfungen ausdrücklich übersprungen. | Später ein portables, synthetisches Datenfixture für diese beiden Prüfungen verwenden. Der grüne Standardlauf belegt diese externen Beta-Datenchecks nicht. |
+
+Weitere konkrete Funde werden paketweise ergänzt. Reine Designmängel, die in diesem Auftrag behoben werden, gehören in den Liefernachweis statt als offene Funktionsfehler in diese Liste.

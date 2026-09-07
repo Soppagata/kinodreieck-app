@@ -8,7 +8,7 @@
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--rauch, #948fa0) 42%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--saal-hoch, #211e26) 82%, transparent);
+  background: color-mix(in srgb, var(--saalHoch, #211e26) 82%, transparent);
 }
 .kd-kino-tab .kd-kino-filterzeile,
 .kd-kino-tab .kd-kino-filteroptionen {
@@ -59,6 +59,8 @@
 }
 .kd-kino-tab .kd-kino-zeitgrenze input {
   width: 86px;
-  font-size: 16px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1)));
+  line-height: 1.4;
   text-align: center;
 }

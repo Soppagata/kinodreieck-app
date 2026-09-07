@@ -1,6 +1,10 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import "./styles/design-foundation.css";
+import "./styles/design-primary.css";
+import "./styles/design-secondary.css";
+import "./styles/design-shell.css";
 import App from "./App.jsx";
 import { AppErrorBoundary } from "./components/AppErrorBoundary.jsx";
 import { sessionCoordinator, STORAGE_SESSION_STATES } from "./services/sessionCoordinator.js";
@@ -40,20 +44,22 @@ function PrivacyRecovery() {
     } finally { setLaeuft(false); }
   }
   return (
-    <main style={{ maxWidth: 680, margin: "48px auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ fontSize: 24 }}>Persönliche Daten sind geschützt</h1>
+    <main className="kd-privacy-recovery">
+      <section className="kd-privacy-recovery-karte" aria-labelledby="kd-privacy-recovery-titel">
+      <h1 id="kd-privacy-recovery-titel">Persönliche Daten sind geschützt</h1>
       <p>
         Der lokale Kontocache konnte nicht sicher vom Gastbetrieb getrennt werden.
         Deshalb zeigt Kinodreieck vorerst keine persönlichen Daten an. Lokale Kontodaten
         und noch ungesicherte Änderungen bleiben auf diesem Gerät geschützt. Melde dich
         mit demselben Konto erneut an oder lade die Seite neu; lösche bis dahin keine Browserdaten.
       </p>
-      <form onSubmit={anmelden} style={{ display: "grid", gap: 10, maxWidth: 360 }}>
-        <label>Benutzername<input value={benutzer} onChange={(e) => setBenutzer(e.target.value)} autoComplete="username" required style={{ display: "block", width: "100%", marginTop: 4 }} /></label>
-        <label>Passwort<input type="password" value={passwort} onChange={(e) => setPasswort(e.target.value)} autoComplete="current-password" required style={{ display: "block", width: "100%", marginTop: 4 }} /></label>
+      <form className="kd-privacy-recovery-form" onSubmit={anmelden}>
+        <label>Benutzername<input value={benutzer} onChange={(e) => setBenutzer(e.target.value)} autoComplete="username" required /></label>
+        <label>Passwort<input type="password" value={passwort} onChange={(e) => setPasswort(e.target.value)} autoComplete="current-password" required /></label>
         <button type="submit" disabled={laeuft}>{laeuft ? "Prüft …" : "Mit demselben Konto entsperren"}</button>
-        {fehler && <p role="alert" style={{ color: "#b42318", margin: 0 }}>{fehler}</p>}
+        {fehler && <p className="kd-privacy-recovery-fehler" role="alert">{fehler}</p>}
       </form>
+      </section>
     </main>
   );
 }

@@ -1,0 +1,146 @@
+/* D1/D3/D4 – Hauptansichten. Diese Regeln folgen bewusst den semantischen
+   Kartenrollen der Foundation; Daten, Handler und Steuerwerte bleiben in den
+   Komponenten unverändert. */
+.kd-primary-start,
+.kd-kino-tab,
+.kd-streaming-tab,
+.kd-mediathek-tab { min-width: 0; }
+
+/* Start: ruhige, papierne Reihen statt einer zweiten Display-Schrift. */
+.kd-primary-start .kd-dash-hero { padding-block: var(--kd-space-4) var(--kd-space-2); }
+.kd-primary-start .kd-dash-headline { font-size: clamp(calc(38px * var(--kd-schriftfaktor, 1)), 7.2vw, calc(46px * var(--kd-schriftfaktor, 1))); line-height: 1.08; }
+.kd-primary-start .kd-dash-kopf { margin-bottom: var(--kd-space-2); padding-bottom: var(--kd-space-2); border-color: color-mix(in srgb, var(--kd-rauch) 38%, transparent); }
+.kd-primary-start .kd-dash-kopfname { font-family: 'Space Grotesk', sans-serif; font-size: calc(15px * var(--kd-schriftfaktor, 1)); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.kd-primary-start .kd-dash-kopflink { min-height: 44px; padding: 8px 0; font-family: 'Space Grotesk', sans-serif; font-size: calc(14px * var(--kd-schriftfaktor, 1)); letter-spacing: 0; text-transform: none; }
+.kd-primary-start .kd-dash-karte { padding: var(--kd-space-1) var(--kd-space-4); border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 35%, transparent); border-radius: var(--kd-radius-karte); box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent); }
+.kd-primary-start .kd-dash-ztitel,
+.kd-primary-start .kd-pinboard-kino-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: calc(22px * var(--kd-schriftfaktor, 1)); line-height: 1.2; letter-spacing: 0; text-transform: none; }
+.kd-primary-start .kd-dash-zeile { min-height: 44px; padding-block: var(--kd-space-3); }
+.kd-primary-start .kd-dash-mustwatch .kd-dash-ztitel { font-size: calc(22px * var(--kd-schriftfaktor, 1)); line-height: 1.2; }
+.kd-primary-start .kd-dash-badge,
+.kd-primary-start .kd-pinboard-kino-meta { color: var(--kd-kartenTextWeich); font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); font-weight: 500; letter-spacing: 0; line-height: 1.45; text-transform: none; }
+.kd-primary-start .kd-dash-badge { border-radius: var(--kd-radius-label); }
+.kd-primary-start .kd-dash-mustwatch .kd-dash-badge--neu { color: var(--kd-kartenTextWeich); background: transparent; border-color: var(--kd-kartenTextWeich); }
+.kd-primary-start .kd-dash-rang { color: var(--kd-kartenAkzent); }
+.kd-primary-start .kd-dash-log .kd-dash-ztitel { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.kd-mustwatch-karte { border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 34%, transparent); box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent); }
+.kd-mustwatch-titel { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: calc(22px * var(--kd-schriftfaktor, 1)); line-height: 1.2; text-transform: none; }
+
+/* Woche: kompakte lokale Ansichtssteuerung über den bestehenden sieben Tagen. */
+.kd-wochenplan { gap: var(--kd-space-3); }
+.kd-wochenplan-kopf h2 { font-family: 'Space Grotesk', sans-serif; font-size: calc(15px * var(--kd-schriftfaktor, 1)); font-weight: 600; line-height: 1.4; }
+.kd-wochen-kicker,
+.kd-wochen-zeitraum { font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: .04em; }
+.kd-wochenplan button { min-height: 44px; border-radius: var(--kd-radius-control); font-family: 'Space Grotesk', sans-serif; font-size: calc(14px * var(--kd-schriftfaktor, 1)); line-height: 1.35; }
+.kd-wochen-kalenderknopf { min-width: 44px; height: 44px; }
+.kd-wochen-ansicht { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--kd-space-2); align-items: stretch; }
+.kd-wochen-tagauswahl { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 4px; min-width: 0; }
+.kd-wochen-tagauswahl button { display: grid; min-width: 44px; padding: 5px 3px; color: var(--kd-rauch); }
+.kd-wochen-tagauswahl button span { font-size: calc(11px * var(--kd-schriftfaktor, 1)); }
+.kd-wochen-tagauswahl button b { color: currentColor; font-family: 'Barlow Condensed', sans-serif; font-size: calc(20px * var(--kd-schriftfaktor, 1)); line-height: 1; }
+.kd-wochen-tagauswahl button.ist-ausgewaehlt,
+.kd-wochen-gesamt.ist-ausgewaehlt { border-color: var(--kd-wolfram); background: var(--kd-wolfram); color: var(--kd-wolframText); }
+.kd-wochen-gesamt { padding-inline: 12px; white-space: normal; }
+.kd-wochen-eintrag summary { grid-template-columns: minmax(0, 1fr) 44px 18px; }
+.kd-wochen-eintrag-download { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+.kd-wochen-tag { border-radius: var(--kd-radius-karte); }
+.kd-wochen-ticketname b,
+.kd-wochen-eintragtitel { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; text-transform: none; }
+.kd-wochen-ticketname b { font-size: calc(22px * var(--kd-schriftfaktor, 1)); }
+.kd-wochen-eintragtitel { font-size: calc(18px * var(--kd-schriftfaktor, 1)); line-height: 1.2; }
+.kd-wochen-eintragmeta,
+.kd-wochen-frei,
+.kd-wochen-details { font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: 0; text-transform: none; }
+.kd-wochen-editor { border-radius: var(--kd-radius-karte); padding: var(--kd-space-4); }
+.kd-wochen-editor input,
+.kd-wochen-editor select,
+.kd-wochen-editor textarea { min-height: 44px; border-radius: var(--kd-radius-control); font-family: 'Space Grotesk', sans-serif; font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1))); line-height: 1.4; }
+
+/* Kino, Streaming und Mediathek teilen Karte, Titel, Metadaten und Actions. */
+.kd-kino-tab .kd-bereichshero,
+.kd-streaming-tab .kd-bereichshero { margin-bottom: var(--kd-space-6); }
+.kd-kino-tab .kd-kino-programmfilter,
+.kd-kino-tab .kd-kino-zusatzfilter,
+.kd-streaming-tab .kd-streaming-werkzeuge,
+.kd-mediathek-tab .kd-mediathek-suchleiste { border-radius: var(--kd-radius-karte); }
+.kd-kino-tab .kd-kino-programmfilter label > span { font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); letter-spacing: 0; text-transform: none; }
+.kd-kino-tab .kd-kino-programmfilter select,
+.kd-kino-tab .kd-kino-zusatzfilter button,
+.kd-kino-tab .kd-kino-zusatzfilter input { border-radius: var(--kd-radius-control); font-family: 'Space Grotesk', sans-serif; font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1))); line-height: 1.4; }
+.kd-kino-tab .kd-kino-zusatzfilter button { font-size: calc(14px * var(--kd-schriftfaktor, 1)); line-height: 1.35; }
+.kd-kino-tab .kd-kino-filterhinweis,
+.kd-kino-tab .kd-kino-zeitgrenze { font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+.kd-kino-tab .kd-kino-ticket,
+.kd-filmkarte { border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 34%, transparent); border-radius: var(--kd-radius-karte); box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent); }
+.kd-kino-tab .kd-dash-film,
+.kd-kino-tab .kd-kino-pin-titel,
+.kd-filmkarte .kd-film-titel { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: calc(22px * var(--kd-schriftfaktor, 1)); line-height: 1.2; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
+.kd-kino-tab .kd-dash-film { display: block; overflow: visible; text-overflow: clip; }
+.kd-kino-tab .kd-dash-meta,
+.kd-kino-tab .kd-kino-pin-meta,
+.kd-kino-tab .kd-kino-ticket-kinos,
+.kd-kino-tab .kd-kino-ticket-beschreibung { color: var(--kd-kartenTextWeich); font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: 0; text-transform: none; }
+.kd-kino-tab .kd-kino-pin-loeschen { min-width: 44px; min-height: 44px; }
+
+.kd-streaming-tab .kd-entdecken-karte,
+.kd-streaming-tab .kd-streaming-karte,
+.kd-streaming-tab .kd-karte { border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 34%, transparent); border-radius: var(--kd-radius-karte); box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent); }
+.kd-streaming-tab .kd-entdecken-kopf { display: block; }
+.kd-streaming-tab .kd-entdecken-aktionen { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--kd-space-3); }
+.kd-streaming-tab .kd-entdecken-aktionen button { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; margin: 0; padding: 0; border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 60%, transparent); border-radius: var(--kd-radius-control); }
+.kd-streaming-tab .kd-entdecken-pin { min-width: 44px; min-height: 44px; border-radius: var(--kd-radius-control); color: var(--kd-kartenTextWeich); border-color: var(--kd-kartenTextWeich); }
+.kd-streaming-tab .kd-entdecken-pin:is(:hover, :focus-visible, .aktiv) { color: var(--kd-kartenAkzent); border-color: var(--kd-kartenAkzent); }
+.kd-streaming-tab .kd-entdecken-titel,
+.kd-streaming-tab .kd-streaming-titel,
+.kd-streaming-tab .kd-film-titel { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: calc(22px * var(--kd-schriftfaktor, 1)); line-height: 1.2; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
+.kd-streaming-tab .kd-entdecken-meta,
+.kd-streaming-tab .kd-entdecken-dienste,
+.kd-streaming-tab .kd-streaming-meta { font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: 0; text-transform: none; }
+.kd-streaming-tab input[type="range"] { accent-color: var(--kd-wolfram); }
+.kd-streaming-tab select { border-radius: var(--kd-radius-control); font-family: 'Space Grotesk', sans-serif; font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1))); font-weight: 400; }
+.kd-streaming-tab .kd-streamfilter-abc-kopf > span { font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.kd-streaming-tab .kd-streamfilter-abc-kopf strong { color: var(--kd-wolframText); font-weight: 700; }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"] { -webkit-appearance: none; appearance: none; height: 44px; background: transparent; }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--kd-linie); }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -7px; border: 2px solid var(--kd-saalHoch); border-radius: 50%; background: var(--kd-wolfram); }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--kd-linie); }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid var(--kd-saalHoch); border-radius: 50%; background: var(--kd-wolfram); }
+.kd-streaming-tab .kd-streamfilter-abc-skala span,
+.kd-streaming-tab .kd-streamfilter-dekade-skala span { visibility: hidden; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+.kd-streaming-tab .kd-streamfilter-abc-skala span:nth-child(5n + 1),
+.kd-streaming-tab .kd-streamfilter-dekade-skala span:nth-child(3n + 1),
+.kd-streaming-tab .kd-streamfilter-abc-skala span.aktiv,
+.kd-streaming-tab .kd-streamfilter-dekade-skala span.aktiv { visibility: visible; }
+.kd-streaming-tab .kd-streamfilter-dekade-skala span { white-space: nowrap; }
+.kd-streaming-tab .kd-streamfilter-dekade-skala span:first-child { text-align: left; }
+.kd-streaming-tab .kd-streamfilter-dekade-skala span:last-child { text-align: right; }
+
+.kd-mediathek-tab .kd-seg { gap: var(--kd-space-2); margin-bottom: var(--kd-space-4); }
+.kd-mediathek-tab .kd-mediathek-suchleiste { padding: var(--kd-space-2); background: var(--kd-saalHoch); }
+.kd-mediathek-tab .kd-filmkopf,
+.kd-mediathek-tab .kd-filmaktionen,
+.kd-mediathek-tab .kd-edit-aktionen { flex-wrap: wrap; }
+.kd-mediathek-tab .kd-filmkarte { padding: var(--kd-space-4); }
+.kd-mediathek-tab .kd-film-meta,
+.kd-mediathek-tab .kd-quellenbadge,
+.kd-mediathek-tab .kd-edit-hinweis { font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: 0; text-transform: none; }
+.kd-mediathek-tab .kd-mediathek-neuformular,
+.kd-mediathek-tab .kd-editpanel { border-radius: var(--kd-radius-karte); }
+.kd-mediathek-tab .kd-mediathek-neuformular input,
+.kd-mediathek-tab .kd-mediathek-neuformular select,
+.kd-mediathek-tab .kd-mediathek-neuformular textarea,
+.kd-mediathek-tab .kd-editpanel input,
+.kd-mediathek-tab .kd-editpanel select,
+.kd-mediathek-tab .kd-editpanel textarea { font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1))); }
+
+@media (max-width: 560px) {
+  .kd-primary-start .kd-dash-karte { padding-inline: var(--kd-space-3); }
+  .kd-wochen-ansicht { grid-template-columns: 1fr; }
+  .kd-wochen-gesamt { width: 100%; }
+  .kd-wochenplan-kopf { align-items: flex-start; }
+  .kd-kino-tab .kd-kino-programmfilter { gap: var(--kd-space-2); }
+}
+
+@media (max-width: 371px) {
+  .kd-wochen-tagauswahl { grid-template-columns: repeat(4, minmax(44px, 1fr)); }
+}
