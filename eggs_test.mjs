@@ -11,6 +11,7 @@ import {
 import { wuerfleTag, tagesSchluessel, schonGefeuertHeute, markiereGefeuert, istVorbeiGescrollt } from "./src/lib/eggFrequenz.js";
 import { istKlaatu, crawlHeute, istVierterMai, levenshtein } from "./src/lib/momentEggs.js";
 import { EGG_AKTIV } from "./src/lib/modus.js";
+import { runNeonNoirChecks } from "./neon_noir_test.mjs";
 
 const checks = [];
 const check = (n, p) => { checks.push([n, p]); console.log((p ? "✓ " : "✗ ") + n); };
@@ -160,6 +161,7 @@ check("Pause: Star-Wars-Crawl/4.-Mai ist stillgelegt", EGG_AKTIV.crawl === false
 check("Pause: Klaatu→Necronomicon ist stillgelegt", EGG_AKTIV.klaatu === false);
 
 const fails = checks.filter(([, p]) => !p);
+await runNeonNoirChecks();
 console.log(`\n${checks.length - fails.length}/${checks.length} Checks bestanden.`);
 console.log(fails.length ? "EGGS-TEST: BEFUNDE OBEN" : "EGGS-TEST BESTANDEN");
 process.exit(fails.length ? 1 : 0);
