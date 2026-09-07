@@ -27,6 +27,7 @@ Alle Textrollen folgen dem vorhandenen `--kd-schriftfaktor`; Eingabefelder unter
 - Dunkel: Saal `#17151A`, erhöhte Fläche `#211E26`, Papier `#ECE8DF`, Tinte `#1C1A1E`, Papierbegleittext `#57525C`, Saalbegleittext `#B6AFBE`, Gold `#E3A63B`.
 - Hell: Saal `#EDEAE3`, erhöhte Fläche `#FBFAF7`, Karten `#23202A`, Kartentext `#F0EDE6`, Kartenbegleittext `#C8C2D1`, Saalbegleittext `#595363`, Gold `#825B14` entsprechend der Studie.
 - Karten verwenden Tinte/TinteWeich (oder explizite semantische Kartenrollen), nie blind den Saaltext `rauch`. Anbieterlabels sind neutrale Informationen und sehen nicht wie primäre Buttons aus.
+- Für Akzenttext auf Karten gilt eine eigene kontrastreiche Kartenrolle. Das dunklere Gold des hellen Saals ist nicht automatisch auch auf dessen dunklen Karten lesbar. Bewertungsfarben können Punkte/Ränder markieren; der lesbare Zahlen-/Labeltext darf in der neutralen Kartenfarbe stehen.
 - Primäraktion und aktive exklusive Auswahl verwenden Gold mit über `kontrastFarbe()` bestimmtem Text. Sekundäraktionen verwenden eine feine Linie; Destruktives behält seine eindeutige Beschriftung und Fehlerfarbe.
 - Sichtbarer Tastaturfokus, Hover, gedrückt/ausgewählt, laufend, deaktiviert und Fehler bleiben unterscheidbar. Keine Information nur über Farbe vermitteln.
 - Kein pauschales `!important` über alle Buttons/Elemente. Geteilte Primitives korrigieren, verbleibende Rollen gezielt klassifizieren; vorhandene Inline-Stile an ihrer Quelle angleichen. Fokus- und Easteregg-Regeln nicht übermalen.
