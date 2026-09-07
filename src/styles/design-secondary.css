@@ -151,14 +151,63 @@
 .kd-finder .kd-apphilfe-antwort { color: var(--kd-leinwand); }
 .kd-finder .kd-apphilfe-antwort p { color: var(--kd-rauch); }
 
-.kd-daten-tab { display: grid; gap: var(--kd-space-4); }
-.kd-daten-tab .kd-klappe { background: var(--kd-saalHoch); }
+.kd-daten-tab { display: grid; gap: 0; }
+.kd-daten-tab .kd-klappe {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--kd-secondary-border);
+  border-radius: 0;
+  background: transparent;
+}
+.kd-daten-tab .kd-klappe:last-child { border-bottom: 1px solid var(--kd-secondary-border); }
+.kd-daten-tab .kd-klappe-kopf {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: var(--kd-space-2) 2px;
+  list-style: none;
+  font-size: calc(15px * var(--kd-schriftfaktor, 1));
+}
+.kd-daten-tab .kd-klappe-kopf::-webkit-details-marker { display: none; }
+.kd-daten-tab .kd-klappe-kopf::marker { content: ""; }
+.kd-daten-tab .kd-klappe-kopf::after {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: rotate(-45deg);
+  transform-origin: center;
+}
+.kd-daten-tab .kd-klappe[open] > .kd-klappe-kopf::after { transform: rotate(45deg); }
+.kd-daten-tab .kd-klappe-status { margin-left: var(--kd-space-2); }
+.kd-daten-tab .kd-klappe-inhalt {
+  margin: 0 0 var(--kd-space-3);
+  padding: 0 var(--kd-space-2) var(--kd-space-2);
+}
 .kd-daten-tab > *, .kd-daten-tab :is(.kd-klappe, .kd-klappe-inhalt, .kd-einstellzeile, .kd-kompakt, .kd-einstellzeile > *, .kd-kompakt > *) { min-width: 0; }
 .kd-daten-tab .kd-kompakt, .kd-daten-tab .kd-einstellzeile { gap: var(--kd-space-3); }
-.kd-daten-tab .kd-einstellzeile { align-items: stretch; }
-.kd-daten-tab .kd-einstellzeile > :first-child { flex: 1 1 100%; width: auto; }
-.kd-daten-tab .kd-einstellzeile .kd-seg { flex: 1 1 0; min-width: 0; }
-.kd-daten-tab .kd-seg-control { flex: 1 1 100px; min-width: 0; }
+.kd-daten-tab .kd-einstellzeile,
+.kd-daten-tab .kd-startbereich-zeile { display: grid; align-items: stretch; }
+.kd-daten-tab .kd-einstellzeile { grid-template-columns: minmax(0, 1fr); }
+.kd-daten-tab .kd-startbereich-zeile { grid-template-columns: minmax(0, 1fr); }
+.kd-daten-tab .kd-startbereich-zeile select { box-sizing: border-box; width: 100%; min-width: 0; height: 44px; }
+.kd-daten-tab .kd-einstelloptionen {
+  display: grid;
+  min-width: 0;
+  gap: var(--kd-space-2);
+}
+.kd-daten-tab .kd-einstelloptionen--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kd-daten-tab .kd-einstelloptionen--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kd-daten-tab .kd-einstelloptionen .kd-seg-control {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 6px;
+}
 .kd-daten-tab :is([data-private-mail-feedback], [data-private-mail-account-deletion], [data-manual-data-rights], [data-account-export], .kd-stapelimport, .kd-blogprofilanalyse, .kd-prognose, .kd-profil-eindruck) {
   padding: var(--kd-space-4);
   border: 1px solid var(--kd-secondary-border);

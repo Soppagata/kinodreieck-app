@@ -163,29 +163,29 @@ export function DatenTab({
   }, [bekannteGenres, master]);
 
   return (
-    <section className="kd-daten-tab" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <section className="kd-daten-tab">
       {/* 1 — Darstellung */}
       {setzeEinstellung && (
         <Klappe titel="Darstellung & Verhalten" offen>
           <div style={kasten}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="kd-einstellzeile">
                 <span style={{ ...mono }}>Erscheinung</span>
-                <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 0 }}
+                <SegmentedControl className="kd-einstelloptionen kd-einstelloptionen--2" style={{ marginBottom: 0 }}
                   value={einstellungen.modus ? null : (einstellungen.theme === "hell" ? "foyer" : "saal")}
                   onChange={(id) => waehleModus?.(id)}
                   options={[{ id: "saal", label: "Saal (dunkel)" }, { id: "foyer", label: "Foyer (hell)" }]} />
               </div>
-              <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="kd-einstellzeile">
                 <span style={{ ...mono }}>Schriftgröße</span>
-                <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 0 }}
+                <SegmentedControl className="kd-einstelloptionen kd-einstelloptionen--3" style={{ marginBottom: 0 }}
                   value={einstellungen.schrift || "normal"}
                   onChange={(id) => setzeEinstellung("schrift", id)}
                   options={[{ id: "klein", label: "Klein" }, { id: "normal", label: "Normal" }, { id: "gross", label: "Groß" }]} />
               </div>
-              <div className="kd-kompakt" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="kd-kompakt kd-startbereich-zeile">
                 <span style={{ ...mono }}>Startbereich</span>
-                <select value={einstellungen.startTab || "start"} onChange={(e) => setzeEinstellung("startTab", e.target.value)} style={{ ...inputStyle, width: "100%" }}>
+                <select value={einstellungen.startTab || "start"} onChange={(e) => setzeEinstellung("startTab", e.target.value)} style={inputStyle}>
                   {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Entdecken"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
@@ -234,9 +234,9 @@ export function DatenTab({
             und kostenlos auf diesem Gerät. Mit KI kommen Deutungs- und
             Profil-Funktionen dazu.
           </p>
-          <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+          <div className="kd-einstellzeile" style={{ marginBottom: 12 }}>
             <span style={{ ...mono }}>KI insgesamt</span>
-            <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 0 }}
+            <SegmentedControl className="kd-einstelloptionen kd-einstelloptionen--2" style={{ marginBottom: 0 }}
               value={kiStand.global === true ? "an" : "aus"}
               onChange={(id) => onKiGlobal?.(id === "an")}
               options={[{ id: "an", label: "Mit KI" }, { id: "aus", label: "Ohne KI" }]} />
