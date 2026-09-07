@@ -33,10 +33,14 @@ Remote- oder Geraetepruefungen fehlt. Unbekannt ist kein Gruen:
 
 1. Der Kandidat ist auf `staging` gepusht, von CI erfolgreich gebaut und auf
    der kanonischen Staging-Domain bytegenau zur erwarteten Commit-ID lesbar.
-2. Der naechste natuerliche Lauf von `Private Ops Monitor` ist gruen. Der Job
-   liest die Environment `staging`, checkt den Ref `staging` aus und leitet das
-   App-Build-Soll aus diesem Checkout ab. Seine Konto- und Service-Secrets
-   werden weiterhin nur als GitHub-Secrets bezogen.
+2. Solange die korrigierte Workflow-Datei nur auf `staging` liegt, ist genau ein
+   ausdruecklich autorisierter `workflow_dispatch` auf dem Ref `staging` gruen.
+   GitHub-Schedules laden ihre Workflow-Datei aus dem Default-Branch; ein
+   natuerlicher Lauf kann die Korrektur daher erst belegen, nachdem sie diesen
+   Branch spaeter erreicht hat. Ab dann muss auch der naechste natuerliche Lauf
+   gruen sein. Der Job liest die Environment `staging`, checkt den Ref `staging`
+   aus und leitet das App-Build-Soll aus diesem Checkout ab. Seine Konto- und
+   Service-Secrets werden weiterhin nur als GitHub-Secrets bezogen.
 3. Die beiden bezahl- oder providerwirksamen Scheduler sind weiterhin
    `disabled_manually`; sie werden nicht probeweise gestartet oder aktiviert.
 4. Supabase-Projekt, RLS-/Rollenvertrag und private Flags werden read-only

@@ -13,6 +13,7 @@ const sandboxContract = read("docs/STAGING_SANDBOX_SCHUTZVERTRAG.md");
 const accountBoundary = read("docs/privatrelease/e9c/ACCOUNT_CREATION_BOUNDARIES.md");
 
 assert.match(monitor, /read-only-check:[\s\S]*?environment:\s*staging/);
+assert.match(monitor, /workflow_dispatch\s*:/);
 assert.match(monitor, /ref:\s*staging/);
 assert.match(monitor, /KD_MONITOR_EXPECTED_BUILD:\s*\$\{\{\s*steps\.staging-checkout\.outputs\.sha\s*\}\}/);
 
@@ -36,6 +37,8 @@ assert.match(sandboxContract, /SUPABASE_PROJECT_NOT_SEPARATE/);
 assert.match(sandboxContract, /\*\*BLOCKED\*\*/);
 assert.match(accountBoundary, /DEDICATED_PILOT_ACCOUNTS_ONLY/);
 assert.match(accountBoundary, /NO_SANDBOX_EFFECTS/);
+assert.match(accountBoundary, /workflow_dispatch[^\n]*Ref `staging`/);
+assert.match(accountBoundary, /Schedules[\s\S]*Default-Branch/);
 assert.match(accountBoundary, /kein(?:e|en) (?:Migration|Function|Scheduler|Provider|Loesch|Datenkop)/i);
 
 console.log("ACCOUNT-READINESS-BOUNDARIES BESTANDEN");
