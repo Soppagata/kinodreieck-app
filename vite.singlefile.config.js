@@ -11,6 +11,10 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
    Auch die Doppelklick-Datei verwendet denselben Tester-Modus wie die PWA. */
 export default defineConfig({
   base: './',
+  /* Der Einzeldatei-Cache bleibt im Worktree (oder im explizit gesetzten
+     temporären Ziel) und schreibt nicht in ein gemeinsam verlinktes
+     node_modules/.vite. */
+  cacheDir: process.env.KD_VITE_CACHE_DIR || '.vite-single-cache',
   /* Die Einzeldatei bettet ihre kleine Demo-Beilage in build-single.mjs ein.
      public/ darf deshalb nicht zusätzlich als scheinbar nötiger Nebenordner in
      dist-single landen. Der normale Web-Build kopiert public/ weiterhin. */

@@ -18,6 +18,14 @@ const ROOT = dirname(fileURLToPath(import.meta.url));
 const OUT = join(ROOT, process.env.KD_OUT || "dist-single");
 mkdirSync(OUT, { recursive: true });
 
+const fontCss = readFileSync(join(ROOT, "src", "index.css"), "utf8");
+const verwendeteFontdateien = [...new Set([...fontCss.matchAll(/url\(['\"]?\.\/assets\/fonts\/([^'\")]+\.woff2)['\"]?\)/g)]
+  .map(([, datei]) => datei))];
+if (!verwendeteFontdateien.length) {
+  console.error("ABBRUCH: keine lokalen @font-face-WOFF2-Dateien gefunden.");
+  process.exit(1);
+}
+
 console.log("1/3 Vite-Single-File-Build …");
 execSync(`npx vite build --config vite.singlefile.config.js --outDir "${OUT}" --emptyOutDir`, { cwd: ROOT, stdio: "inherit" });
 
@@ -76,6 +84,19 @@ for (const bestandteil of [
 ]) {
   if (!html.includes(bestandteil)) fehler.push("eingebetteter Offline-Bestand fehlt: " + bestandteil);
 }
+/* Der Einzeldatei-Vertrag braucht alle tatsächlich referenzierten Faces. Ein
+   bloßes assetsInlineLimit wäre keine belastbare Aussage, falls ein Plugin
+   oder eine spätere CSS-Änderung einen Fontpfad aus der Datei herauslässt. */
+for (const datei of verwendeteFontdateien) {
+  const bytes = readFileSync(join(ROOT, "src", "assets", "fonts", datei));
+  if (!html.includes(bytes.toString("base64"))) {
+    fehler.push("eingebettete WOFF2-Bytes fehlen: " + datei);
+  }
+}
+const eingebetteteStyles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(([, css]) => css).join("\n");
+const fontFaceRules = eingebetteteStyles.match(/@font-face\s*\{[^}]*\}/gi) || [];
+if (fontFaceRules.some((regel) => /local\s*\(/i.test(regel))) fehler.push("local()-Fontvoraussetzung in der Einzeldatei");
+if (fontFaceRules.some((regel) => /url\(\s*(?!['\"]?data:)/i.test(regel))) fehler.push("externer Fontpfad in der Einzeldatei");
 if (fehler.length) { console.error("ABBRUCH — Datei NICHT geschrieben:"); fehler.forEach((f) => console.error("  - " + f)); process.exit(1); }
 
 const ziel = join(OUT, "Kinodreieck.html");
