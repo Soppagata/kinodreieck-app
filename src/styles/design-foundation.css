@@ -14,7 +14,9 @@
   --kd-kartenFeld: #FBFAF7;
   --kd-kartenText: #1C1A1E;
   --kd-kartenTextWeich: #57525C;
+  --kd-kartenAkzent: #76500F;
   --kd-linie: #8C8593;
+  --kd-wolframText: #000000;
   --kd-focus: var(--kd-wolfram);
   --kd-radius-karte: 12px;
   --kd-radius-control: 8px;
@@ -80,6 +82,9 @@ h2, h3, .kd-abschnitt-titel {
 }
 .kd-karte, .kd-filmkarte, .kd-dash-karte, .kd-kino-ticket {
   color: var(--kd-kartenText, var(--kd-tinte));
+  --kd-control-muted: var(--kd-kartenTextWeich, var(--kd-tinteWeich));
+  --kd-tag-text: var(--kd-kartenAkzent, var(--kd-kartenText));
+  --kd-achse-text: var(--kd-kartenAkzent, var(--kd-kartenText));
 }
 
 .kd-bereichshero {
@@ -167,16 +172,20 @@ h2, h3, .kd-abschnitt-titel {
   align-items: center;
   min-height: 24px;
   padding: 2px 6px;
-  border: 1px solid currentColor;
+  border: 1px solid var(--kd-tag-text, var(--kd-tag-markierung, currentColor));
   border-radius: var(--kd-radius-label);
-  font-family: 'Space Mono', monospace;
-  font-size: calc(10px * var(--kd-schriftfaktor, 1));
-  letter-spacing: .05em;
-  line-height: 1.35;
-  text-transform: uppercase;
+  box-shadow: inset 2px 0 var(--kd-tag-markierung, currentColor);
+  color: var(--kd-tag-text, var(--kd-tag-markierung, currentColor));
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: calc(12px * var(--kd-schriftfaktor, 1));
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-transform: none;
 }
 .kd-tag-unbewertet { border-style: dashed; }
-.kd-achse { font-family: 'Space Mono', monospace; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+.kd-achse { font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+.kd-achse-wert { color: var(--kd-achse-text, var(--kd-achse-markierung, currentColor)); text-decoration: underline 2px var(--kd-achse-markierung, currentColor); text-underline-offset: 3px; }
 
 .kd-privacy-recovery {
   min-height: 100vh;
@@ -213,7 +222,7 @@ h2, h3, .kd-abschnitt-titel {
   border: 1px solid var(--kd-wolfram);
   border-radius: var(--kd-radius-control);
   background: var(--kd-wolfram);
-  color: #000;
+  color: var(--kd-wolframText, #000);
   padding: 10px 16px;
   font-size: calc(14px * var(--kd-schriftfaktor, 1));
   font-weight: 600;

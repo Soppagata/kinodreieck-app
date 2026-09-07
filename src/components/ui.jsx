@@ -34,7 +34,7 @@ export function Dreieck({ bw, size = 44 }) {
 /* Sichtbarer unbewertet-Zustand (ersetzt den KategorieTag, solange bewertung null ist). */
 export function UnbewertetTag() {
   return (
-    <span className="kd-tag kd-tag-unbewertet" style={{ color: T.rauch, borderColor: T.rauch }}>
+    <span className="kd-tag kd-tag-unbewertet" style={{ "--kd-tag-markierung": T.rauch }}>
       UNBEWERTET
     </span>
   );
@@ -45,7 +45,7 @@ export function AxisChips({ bw }) {
   return (
     <span className="kd-achse" style={{ display: "inline-flex", gap: 8 }}>
       {items.map(([l, v, col]) => (
-        <span key={l} style={{ color: col }}>{l} {v ?? "–"}</span>
+        <span key={l} className="kd-achse-wert" style={{ "--kd-achse-markierung": col }}>{l} {v ?? "–"}</span>
       ))}
     </span>
   );
@@ -70,10 +70,10 @@ export function Chip({ active, onClick, children, color, title }) {
         lineHeight: 1.35,
         minHeight: 44,
         padding: "8px 12px",
-        borderRadius: 5,
-        border: "1px solid " + (active ? aktiveFarbe : T.rauch),
+        borderRadius: 8,
+        border: "1px solid " + (active ? aktiveFarbe : "var(--kd-control-muted, " + T.rauch + ")"),
         background: active ? aktiveFarbe : "transparent",
-        color: active ? kontrastFarbe(aktiveFarbe) : T.rauch,
+        color: active ? kontrastFarbe(aktiveFarbe) : "var(--kd-control-muted, " + T.rauch + ")",
         cursor: "pointer",
       }}
     >
@@ -158,7 +158,7 @@ export function KategorieTag({ k }) {
   const label = (bewertungskategorieLabel(k) || legacyLabel[k] || k || "—").toUpperCase();
   const col = farben[k] || T.rauch;
   return (
-    <span className="kd-tag" style={{ color: col, borderColor: col }}>
+    <span className="kd-tag" style={{ "--kd-tag-markierung": col }}>
       {label}
     </span>
   );

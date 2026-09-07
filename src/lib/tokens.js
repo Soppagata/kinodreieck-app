@@ -28,7 +28,9 @@ export const THEMES = {
     kartenFeld: "#FBFAF7", // Eingabefelder AUF den (hellen) FilmCards
     kartenText: "#1C1A1E",
     kartenTextWeich: "#57525C",
+    kartenAkzent: "#76500F",
     linie: "#8C8593",
+    wolframText: "#000000",
   },
   hell: {
     saal: "#EDEAE3",
@@ -47,7 +49,9 @@ export const THEMES = {
     kartenFeld: "#2E2A36", // Eingabefelder AUF den (im Foyer dunklen) FilmCards
     kartenText: "#F0EDE6",
     kartenTextWeich: "#C8C2D1",
+    kartenAkzent: "#E3A63B",
     linie: "#6A6473",
+    wolframText: "#FFFFFF",
   },
   /* ---- Egg-Modus SHOWA — Kaiju-Eiga 1954, heller S/W-Abzug ----
      Reiner Token-Swap (KEIN filter auf .kd-app — mobil-tauglich). Die freie
@@ -69,7 +73,9 @@ export const THEMES = {
     kartenFeld: "#34322F",
     kartenText: "#F2EFE7",
     kartenTextWeich: "#C3BEB4",
+    kartenAkzent: "#ECE9E2",
     linie: "#66635D",
+    wolframText: "#FFFFFF",
   },
   /* ---- Egg-Modus NEON NOIR — regennasse Stadt bei Nacht ----
      Kühles Schwarzblau hält die App ruhig; das Kinogelb bleibt der primäre
@@ -91,7 +97,9 @@ export const THEMES = {
     kartenFeld: "#F7FBFB",
     kartenText: "#0C1720",
     kartenTextWeich: "#465964",
+    kartenAkzent: "#76500F",
     linie: "#465964",
+    wolframText: "#000000",
   },
 };
 
@@ -129,7 +137,7 @@ export function setzeTheme(name) {
     const root = document.documentElement;
     if (root && root.style) {
       root.dataset.kdTheme = THEMES[name] ? name : "dunkel";
-      for (const name of ["saal", "saalHoch", "leinwand", "leinwandTief", "tinte", "tinteWeich", "rauch", "wolfram", "gefahr", "ok", "wie", "was", "warum", "kartenFeld", "kartenText", "kartenTextWeich", "linie"]) {
+      for (const name of ["saal", "saalHoch", "leinwand", "leinwandTief", "tinte", "tinteWeich", "rauch", "wolfram", "gefahr", "ok", "wie", "was", "warum", "kartenFeld", "kartenText", "kartenTextWeich", "kartenAkzent", "linie", "wolframText"]) {
         root.style.setProperty("--" + name, T[name]);
         root.style.setProperty("--kd-" + name, T[name]);
       }

@@ -20,8 +20,24 @@ check("Dunkel- und Hellthema haben die freigegebenen semantischen Kontrastrollen
     ["#EDEAE3", "#FBFAF7", "#23202A", "#F0EDE6", "#C8C2D1", "#595363", "#825B14"],
   );
   for (const theme of Object.values(THEMES)) {
-    assert.ok(theme.kartenText && theme.kartenTextWeich && theme.linie);
+    assert.ok(theme.kartenText && theme.kartenTextWeich && theme.kartenAkzent && theme.linie && theme.wolframText);
   }
+});
+
+check("Kartenakzente bleiben als Text auf der jeweiligen Kartenfläche lesbar", () => {
+  const luminanz = (hex) => {
+    const channels = String(hex).match(/[0-9a-f]{2}/gi).map((part) => parseInt(part, 16) / 255)
+      .map((value) => (value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4));
+    return .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
+  };
+  const contrast = (a, b) => {
+    const [hell, dunkel] = [luminanz(a), luminanz(b)].sort((left, right) => right - left);
+    return (hell + .05) / (dunkel + .05);
+  };
+  assert.ok(contrast(THEMES.dunkel.kartenAkzent, THEMES.dunkel.leinwand) >= 4.5);
+  assert.ok(contrast(THEMES.hell.kartenAkzent, THEMES.hell.leinwand) >= 4.5);
+  assert.equal(THEMES.dunkel.wolframText, kontrastFarbe(THEMES.dunkel.wolfram));
+  assert.equal(THEMES.hell.wolframText, kontrastFarbe(THEMES.hell.wolfram));
 });
 
 check("Primäraktionen bestimmen ihren Textkontrast aus der tatsächlichen Akzentfarbe", () => {
@@ -42,10 +58,17 @@ check("Eingaben bleiben auch bei kleiner Schrift mindestens 16px und 44px hoch",
 
 check("Gemeinsame CSS-Rollen frieren Schrift, Radien, Fokus und Kartenvertrag ein", () => {
   const css = source("./src/styles/design-foundation.css");
-  for (const role of ["--kd-radius-karte: 12px", "--kd-radius-control: 8px", "--kd-radius-label: 5px", "font-family: 'Fraunces'", "font-family: 'Barlow Condensed'", "font-family: 'Space Grotesk'", "font-family: 'Space Mono'", ":focus-visible", ".kd-bereichshero", ".kd-chip", ".kd-seg-control", ".kd-klappe", ".kd-tag"]) {
+  for (const role of ["--kd-radius-karte: 12px", "--kd-radius-control: 8px", "--kd-radius-label: 5px", "--kd-kartenAkzent", "--kd-wolframText", "font-family: 'Fraunces'", "font-family: 'Barlow Condensed'", "font-family: 'Space Grotesk'", "font-family: 'Space Mono'", ":focus-visible", ".kd-bereichshero", ".kd-chip", ".kd-seg-control", ".kd-klappe", ".kd-tag", ".kd-achse-wert"]) {
     assert.ok(css.includes(role), role);
   }
   assert.ok(!css.includes("!important"));
+});
+
+check("Alte gemeinsame Hero- und Segmentregeln überstimmen die Foundation nicht mehr", () => {
+  const css = source("./src/index.css");
+  assert.match(css, /\.kd-bereichshero h1 \{[^}]*clamp\(calc\(38px/);
+  assert.doesNotMatch(css, /\.kd-bereichshero h1 \{[^}]*!important/);
+  assert.doesNotMatch(css, /\.kd-seg > button \{[^}]*!important/);
 });
 
 check("Primitives bewahren ihre Props und exportieren die gemeinsamen SVG-Hilfsicons", () => {
@@ -56,6 +79,8 @@ check("Primitives bewahren ihre Props und exportieren die gemeinsamen SVG-Hilfsi
     "export function Klappe({ titel, offen = false, tour, id, markiert = false, status = null, children })",
     "IconSearch", "IconClose", "IconPlus", "IconChevronDown", "IconArrowRight", "IconPin", "IconClock", "IconHelp",
   ]) assert.ok(ui.includes(contract), contract);
+  assert.match(ui, /className="kd-chip"[\s\S]*?borderRadius: 8/);
+  assert.match(ui, /className="kd-seg-control"[\s\S]*?borderRadius: 8/);
 });
 
 check("Foundation wird vor den drei reservierten Bereichs-Slots geladen", () => {

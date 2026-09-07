@@ -12,8 +12,11 @@ Service Worker bleiben unverändert.
   reservierten Bereichsdateien geladen. Die Dateien `design-primary.css`,
   `design-secondary.css` und `design-shell.css` sind bewusst leer und gehören
   ihren späteren Write-Ownern.
-- `THEMES` stellt zusätzlich `kartenText`, `kartenTextWeich` und `linie` als
-  semantische Rollen bereit. Bestehende Token und `setzeTheme()` bleiben
+- `THEMES` stellt zusätzlich `kartenText`, `kartenTextWeich`, `kartenAkzent`,
+  `linie` und `wolframText` als semantische Rollen bereit. `kartenAkzent` ist
+  der lesbare Goldton für Text auf einer Karte (dunkel: Papierkarte,
+  hell: Dunkelkarte); `wolframText` ist der geprüfte Kontrasttext auf der
+  jeweiligen Primäraktion. Bestehende Token und `setzeTheme()` bleiben
   kompatibel; die bestehenden dunkel/hell Kontrastpaare entsprechen dem
   freigegebenen Schema.
 - `btnStyle(primary)`, `inputStyle` und `lightInput` behalten ihre Exporte und
@@ -23,12 +26,23 @@ Service Worker bleiben unverändert.
   unverändert. Ihre gefrorenen Klassen sind `kd-chip`, `kd-chiprow`, `kd-seg`,
   `kd-seg-control`, `kd-klappe`, `kd-klappe-kopf`, `kd-klappe-inhalt`,
   `kd-klappe-status`, `kd-tag` und `kd-achse`.
+- `Chip` und `SegmentedControl` bleiben 44px-Controls mit Radius 8px. Tags
+  sind Grotesk-Metadaten in 12px mit Labelradius 5px. Innerhalb der
+  Kartenklassen liegen `--kd-control-muted`, `--kd-tag-text` und
+  `--kd-achse-text` auf lesbaren Kartenrollen; Kategorie- und Achsenfarben
+  erscheinen dort nur ergänzend als Markierung. IDs, Labels und Werte ändern
+  sich dabei nicht.
+- Die gemeinsame Hero-Regel steht gezielt auch in `index.css`: 38px bis 46px,
+  Fraunces 900 und Schriftfaktor. Die frühere mobile `!important`-Übersteuerung
+  sowie die überholte Segment-Übersteuerung wurden entfernt, damit der
+  Foundation-Vertrag tatsächlich kaskadiert.
 - Verfügbare gemeinsame SVG-Exports: `IconSettings`, `IconImport`,
   `IconExport`, `IconDelete`, `IconClose`, `IconSearch`, `IconPlus`,
   `IconChevronDown`, `IconArrowRight`, `IconPin`, `IconClock`, `IconHelp`.
   Sie nehmen jeweils optional `{ size = 16 }` an und verwenden `currentColor`.
 - `BereichsHero` und Privacy-Recovery erhalten ausschließlich Darstellung:
-  keine neuen Zustände, Handler oder Auth-Entscheidungen.
+  keine neuen Zustände, Handler oder Auth-Entscheidungen. Die Privacy-
+  Primäraktion nutzt `--kd-wolframText` passend zur Akzentfläche.
 
 ## Lokale Fonts
 
