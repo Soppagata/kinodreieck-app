@@ -168,7 +168,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
   /* ---------- Gast ---------- */
   if (!angemeldet) {
     return (
-      <div>
+      <div className="kd-konto-bereich">
         {session.error && (
           <div style={{ border: "1px solid " + T.wolfram, background: "rgba(227,166,59,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
             <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>{session.error.message}</p>
@@ -208,7 +208,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
 
   /* ---------- Angemeldet ---------- */
   return (
-    <div>
+    <div className="kd-konto-bereich">
       {degradiert && remoteFreigegeben && (
         <div style={{ border: "1px solid " + T.wolfram, background: "rgba(227,166,59,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
           <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>

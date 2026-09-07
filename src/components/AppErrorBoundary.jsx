@@ -66,7 +66,7 @@ export class AppErrorBoundary extends Component {
   render() {
     if (!this.state.fehler) return this.props.children;
     return (
-      <main style={{
+      <main className="kd-app-error" style={{
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
@@ -75,7 +75,7 @@ export class AppErrorBoundary extends Component {
         color: "#ece8df",
         fontFamily: "system-ui, sans-serif",
       }}>
-        <section style={{
+        <section className="kd-app-error-panel" style={{
           width: "min(42rem, 100%)",
           border: "1px solid rgba(236,232,223,.2)",
           borderRadius: 12,

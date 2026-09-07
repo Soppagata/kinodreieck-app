@@ -30,7 +30,7 @@ export function SyncStatusChip() {
   const v = ableiten(useSyncStatus());
   if (!v) return null;
   return (
-    <span title={"Geräte-Sync: " + v.text} style={{
+    <span className="kd-syncchip" title={"Geräte-Sync: " + v.text} style={{
       display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 999,
       background: v.bg, color: v.farbe, fontFamily: "'Space Mono', monospace", fontSize: 11, whiteSpace: "nowrap",
     }}>
