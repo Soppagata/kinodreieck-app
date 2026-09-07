@@ -310,12 +310,16 @@ function StartDashboard({
           {mwTop.length > 0 ? (
             <div className="kd-dash-karte">
               {mwTop.map(({ entry: e, reasons }, i) => (
-                  <button type="button" key={e.id} className="kd-dash-zeile" onClick={() => zuEintrag(e.id, "mediathek")}>
+                  <button type="button" key={e.id} className="kd-dash-zeile kd-dash-mustwatch" onClick={() => zuEintrag(e.id, "mediathek")}>
                     <span className="kd-dash-rang">{i + 1}</span>
-                    <span className="kd-dash-ztitel">{e.titel}{e.jahr ? " (" + e.jahr + ")" : ""}</span>
-                    {reasons.streaming.map((dienst) => <span key={dienst} className="kd-dash-badge kd-dash-badge--neu">{dienst}</span>)}
-                    {reasons.cinema && <span className="kd-dash-badge kd-dash-badge--neu">IM KINO</span>}
-                    {reasons.owned && <span className="kd-dash-badge">IM BESITZ</span>}
+                    <span className="kd-dash-mw-inhalt">
+                      <span className="kd-dash-ztitel">{e.titel}{e.jahr ? " (" + e.jahr + ")" : ""}</span>
+                      <span className="kd-dash-mw-verfuegbar">
+                        {reasons.streaming.map((dienst) => <span key={dienst} className="kd-dash-badge kd-dash-badge--neu">{dienst}</span>)}
+                        {reasons.cinema && <span className="kd-dash-badge kd-dash-badge--neu">IM KINO</span>}
+                        {reasons.owned && <span className="kd-dash-badge">IM BESITZ</span>}
+                      </span>
+                    </span>
                   </button>
               ))}
             </div>

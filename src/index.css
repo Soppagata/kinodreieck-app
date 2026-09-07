@@ -1197,6 +1197,18 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-dash-log .kd-dash-ztitel { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 12px;
   letter-spacing: 0; text-transform: none; }
 
+/* Must-Watch: Der Titel behält eine eigene Zeile; beliebig viele vollständige
+   Anbieternamen umbrechen darunter, ohne seine Breite zu beanspruchen. */
+.kd-dash-zeile.kd-dash-mustwatch { display:grid; grid-template-columns:calc(24px * var(--kd-schriftfaktor,1)) minmax(0,1fr);
+  align-items:start; gap:10px; padding:12px 0; }
+.kd-dash-mustwatch .kd-dash-rang { width:auto; font-size:calc(20px * var(--kd-schriftfaktor,1)); line-height:1.2; }
+.kd-dash-mw-inhalt { display:grid; gap:7px; min-width:0; }
+.kd-dash-mustwatch .kd-dash-ztitel { overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:anywhere;
+  font-size:calc(17px * var(--kd-schriftfaktor,1)); line-height:1.25; }
+.kd-dash-mw-verfuegbar { display:flex; flex-wrap:wrap; align-items:flex-start; gap:5px 6px; min-width:0; }
+.kd-dash-mw-verfuegbar .kd-dash-badge { flex:0 1 auto; min-width:0; max-width:100%; box-sizing:border-box;
+  white-space:normal; overflow-wrap:anywhere; text-align:left; font-size:calc(10px * var(--kd-schriftfaktor,1)); line-height:1.45; }
+
 .kd-pinboard-radar { cursor:default; }
 .kd-pinboard-kino,.kd-pinboard-titel { appearance:none; border:0; background:none; color:inherit; cursor:pointer; text-align:left; }
 .kd-pinboard-kino:hover .kd-dash-ztitel,.kd-pinboard-titel:hover .kd-pinboard-kino-name { color:var(--kd-wolfram); }
