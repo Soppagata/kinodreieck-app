@@ -48,6 +48,12 @@ function sichtbarePlattform(value) {
   const normalized = typeof value === "string" ? value.trim() : "";
   return normalized && !/^(?:-|unknown|unbekannt|n\/a)$/iu.test(normalized) ? normalized : null;
 }
+function radarQuellenLabel(entry) {
+  const domains = [...new Set((entry?.evidence || [])
+    .map((evidence) => typeof evidence?.sourceDomain === "string" ? evidence.sourceDomain.trim() : "")
+    .filter(Boolean))];
+  return domains.length ? domains.join(" · ") : "Quelle nicht verfügbar";
+}
 function istKontogebundenerTextfund(entry) {
   if (RADAR_TEXT_FINDING_ID.test(entry?.targetId || "")) return true;
   return entry?.kind === "season" && Array.isArray(entry.episodes) && entry.episodes.length > 0
@@ -422,9 +428,13 @@ function RadarView({
       </article>
       <article className="kd-entdecken-panel">
         <h3>Neuigkeiten</h3>
-        {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId}>
-          <strong>{entry.title}</strong>
-          <span>{formatPresentationDate(entry.date, { fallback: entry.date })} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""} · Gefunden für: {target
+        {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId} className="kd-radar-neuigkeit">
+          <h4 className="kd-radar-neuigkeit-titel">{entry.title}</h4>
+          <span className="kd-radar-neuigkeit-meta">{entry.date
+            ? formatPresentationDate(entry.date, { fallback: entry.date })
+            : "Datum nicht verfügbar"} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel || "Starttermin"}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
+          <span className="kd-radar-neuigkeit-quelle">Quelle: {radarQuellenLabel(entry)}</span>
+          <span className="kd-radar-neuigkeit-herkunft">Gefunden für: {target
             ? localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })
             : "Zuordnung nicht verfügbar"}</span>
           {entry.kind === "season" ? <details className="kd-radar-folgen">

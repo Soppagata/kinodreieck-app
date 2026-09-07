@@ -509,7 +509,7 @@ export function KinoTab({
                     autorName={autorName}
                     istGepinnt={istGepinnt} togglePin={toggleKinoPin}
                     fokusAktiv={fokusTreffer?.art === "programm" && String(fokusTreffer.ref) === String(pf.film_at_id || pf.t)}
-                    master={master} updateFilm={updateFilm} />
+                    master={master} updateFilm={updateFilm} variante="nebenliste" />
                   </div>
                 ))}
               </div>
@@ -536,7 +536,7 @@ export function KinoTab({
    in "Läuft & passt zu dir". */
 function KompaktEintrag({
   pf, zeiten, kinos, addFilm, addFilmMitPrognose, vorbewertungAktiv, prognoseSperrgrund,
-  autorName, istGepinnt, togglePin, master, updateFilm, fokusAktiv = false,
+  autorName, istGepinnt, togglePin, master, updateFilm, fokusAktiv = false, variante = "standard",
 }) {
   const [offen, setOffen] = useState(false);
   const [formAn, setFormAn] = useState(false);
@@ -545,20 +545,20 @@ function KompaktEintrag({
     if (fokusAktiv) setOffen(true);
   }, [fokusAktiv]);
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px" }}>
+    <div className={`kd-kompakt-eintrag kd-kompakt-eintrag--${variante}`}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
         onClick={() => { setOffen(!offen); if (offen) setFormAn(false); }}
         title={offen ? "Zuklappen" : "Details & Eintrag erstellen"}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ color: T.leinwand, fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2, textTransform: "none" }}>
+          <div className="kd-kompakt-eintrag-titel">
             {pf.t}
             {pf.s ? <span style={{ color: T.wolfram, fontSize: 11, marginLeft: 8, fontFamily: "'Space Mono', monospace" }}>{pf.s}</span> : null}
             {pf.im_abo ? <span style={{ color: T.wolfram, fontSize: 11, marginLeft: 8, fontFamily: "'Space Mono', monospace" }}>✓Abo</span> : null}
           </div>
-          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, margin: "1px 0" }}>{pf.j || "Jahr unbekannt"}{pf.ot && pf.ot !== pf.t ? " · " + pf.ot : ""}</div>
+          <div className="kd-kompakt-eintrag-jahr">{pf.j || "Jahr unbekannt"}{pf.ot && pf.ot !== pf.t ? " · " + pf.ot : ""}</div>
           {/* Collapsed: kompakt in EINER Zeile. Bei vielen Kinos nur die Anzahl (Max 2026-07-19:
               die volle Kinoliste sprengte die Zeile). Kinos + Termine stehen aufgeklappt. */}
-          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="kd-kompakt-eintrag-meta">
             {kinos.length <= 2
               ? <span onClick={(e) => e.stopPropagation()}><KinoLinks kinos={kinos} /></span>
               : <span style={{ color: T.rauch }}>{kinos.length} Kinos</span>}

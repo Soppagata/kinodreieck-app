@@ -592,6 +592,11 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           onSpringeZuRef={onSpringeZuMustwatchRef} />
       )}
 
+      {ansicht !== "mustwatch" && (
+        <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={wechsleTyp}
+          options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
+      )}
+
       {ansicht !== "mustwatch" && (<>
       {auswahlmodus && <div className="kd-auswahl-werkzeuge" aria-label="Mediathek-Auswahl">
         <button ref={auswahlModusButtonRef} type="button" className="kd-auswahl-modus" style={btnStyle(auswahlmodus)}
@@ -642,10 +647,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           )}
         </div>
       )}
-      {/* Typ-Tabs (Filter auf typ) */}
-      <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={wechsleTyp}
-        options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
-
       <div className={`kd-kompakt kd-mediathek-suchleiste${auswahlmodus ? " kd-mediathek-suchleiste--auswahl" : ""}`}
         style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input className="kd-lokalsuche" value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel oder Originaltitel suchen …"

@@ -81,6 +81,14 @@
 .kd-kino-tab .kd-kino-ticket-kinos,
 .kd-kino-tab .kd-kino-ticket-beschreibung { color: var(--kd-kartenTextWeich); font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: 0; text-transform: none; }
 .kd-kino-tab .kd-kino-pin-loeschen { min-width: 44px; min-height: 44px; }
+.kd-kino-tab .kd-kompakt-eintrag { padding: 8px 12px; border-radius: var(--kd-radius-control); background: var(--kd-saalHoch); }
+.kd-kino-tab .kd-kompakt-eintrag-titel { color: var(--kd-leinwand); font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); font-weight: 600; line-height: 1.2; text-transform: none; overflow-wrap: anywhere; }
+.kd-kino-tab .kd-kompakt-eintrag-jahr { margin: 1px 0; color: var(--kd-rauch); font-family: 'Space Mono', monospace; font-size: calc(11px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+.kd-kino-tab .kd-kompakt-eintrag-meta { overflow: hidden; color: var(--kd-leinwandTief); font-family: 'Space Mono', monospace; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.kd-kino-tab .kd-kompakt-eintrag--nebenliste { padding: 8px 2px; border-top: 1px solid color-mix(in srgb, var(--kd-rauch) 28%, transparent); border-radius: 0; background: transparent; }
+.kd-kino-tab .kd-kompakt-eintrag--nebenliste .kd-kompakt-eintrag-titel { font-size: calc(17px * var(--kd-schriftfaktor, 1)); }
+.kd-kino-tab .kd-kompakt-eintrag--nebenliste .kd-kompakt-eintrag-jahr,
+.kd-kino-tab .kd-kompakt-eintrag--nebenliste .kd-kompakt-eintrag-meta { font-size: calc(12px * var(--kd-schriftfaktor, 1)); }
 
 .kd-streaming-tab .kd-entdecken-karte,
 .kd-streaming-tab .kd-streaming-karte,
@@ -116,6 +124,12 @@
 .kd-streaming-tab .kd-streamfilter-dekade-skala span:last-child { text-align: right; }
 
 .kd-mediathek-tab .kd-seg { gap: var(--kd-space-2); margin-bottom: var(--kd-space-4); }
+.kd-mediathek-tab .kd-mediathek-ansichten { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 6px; }
+.kd-mediathek-tab .kd-mediathek-ansichten .kd-seg-control { width: auto !important; min-width: 0; padding: 7px 6px !important; color: var(--kd-rauch) !important; background: transparent !important; }
+.kd-mediathek-tab .kd-mediathek-ansichten .kd-seg-control[aria-pressed="true"] { border-color: var(--kd-wolfram) !important; color: var(--kd-leinwand) !important; background: color-mix(in srgb, var(--kd-wolfram) 16%, transparent) !important; }
+.kd-mediathek-tab .kd-mediathek-typen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: var(--kd-space-3); }
+.kd-mediathek-tab .kd-mediathek-typen .kd-seg-control { width: auto !important; min-width: 0; padding: 6px 4px !important; color: var(--kd-rauch) !important; background: transparent !important; font-size: calc(12px * var(--kd-schriftfaktor, 1)) !important; }
+.kd-mediathek-tab .kd-mediathek-typen .kd-seg-control[aria-pressed="true"] { border-color: color-mix(in srgb, var(--kd-wolfram) 72%, var(--kd-rauch)) !important; color: var(--kd-leinwand) !important; background: color-mix(in srgb, var(--kd-wolfram) 11%, transparent) !important; }
 .kd-mediathek-tab .kd-mediathek-suchleiste { padding: var(--kd-space-2); background: var(--kd-saalHoch); }
 .kd-mediathek-tab .kd-filmkopf,
 .kd-mediathek-tab .kd-filmaktionen,
@@ -133,6 +147,18 @@
 .kd-mediathek-tab .kd-editpanel select,
 .kd-mediathek-tab .kd-editpanel textarea { font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1))); }
 
+/* Radar: bestätigte Funde bleiben reine Anzeige, erhalten aber eine eigene
+   Kartenhierarchie statt mit den aktiven Zielen zu verschmelzen. */
+.kd-entdecken-ansicht .kd-radar-neuigkeiten { display: grid; gap: var(--kd-space-2); margin: var(--kd-space-2) 0 0; padding: 0; list-style: none; }
+.kd-entdecken-ansicht .kd-radar-neuigkeiten > .kd-radar-neuigkeit { display: grid; gap: 4px; padding: var(--kd-space-4); border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 34%, transparent); border-radius: var(--kd-radius-karte); background: var(--kd-kartenFeld); color: var(--kd-kartenText); box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent); }
+.kd-entdecken-ansicht .kd-radar-neuigkeit-titel { margin: 0; color: var(--kd-kartenText); font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); font-weight: 600; line-height: 1.2; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
+.kd-entdecken-ansicht .kd-radar-neuigkeit :is(.kd-radar-neuigkeit-meta, .kd-radar-neuigkeit-quelle, .kd-radar-neuigkeit-herkunft) { color: var(--kd-kartenTextWeich); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: 0; text-transform: none; }
+.kd-entdecken-ansicht .kd-radar-neuigkeit-herkunft { color: var(--kd-kartenText); font-weight: 600; }
+.kd-entdecken-ansicht .kd-radar-neuigkeit .kd-radar-folgen { margin-top: var(--kd-space-2); border-top: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 32%, transparent); }
+.kd-entdecken-ansicht .kd-radar-neuigkeit .kd-radar-folgen summary { display: flex; align-items: center; min-height: 44px; color: var(--kd-kartenText); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(14px * var(--kd-schriftfaktor, 1)); }
+.kd-entdecken-ansicht .kd-radar-neuigkeit .kd-radar-folgen li { color: var(--kd-kartenText); }
+.kd-entdecken-ansicht .kd-radar-neuigkeit .kd-radar-folgen li span { color: var(--kd-kartenTextWeich); }
+
 @media (max-width: 560px) {
   .kd-primary-start .kd-dash-karte { padding-inline: var(--kd-space-3); }
   .kd-wochen-ansicht { grid-template-columns: 1fr; }
@@ -143,4 +169,7 @@
 
 @media (max-width: 371px) {
   .kd-wochen-tagauswahl { grid-template-columns: repeat(4, minmax(44px, 1fr)); }
+  .kd-mediathek-tab .kd-mediathek-typen { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+:root[data-kd-schrift="gross"] .kd-mediathek-tab .kd-mediathek-typen { grid-template-columns: repeat(2, minmax(0, 1fr)); }
