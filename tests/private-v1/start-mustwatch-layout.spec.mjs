@@ -107,7 +107,7 @@ async function assertReadableRows(page, schrift) {
     const film = FILMS.find((entry) => `${entry.titel} (${entry.jahr})` === measure.titleText);
     expect(film, "vollständiger Titel und Jahr bleiben erhalten").toBeTruthy();
     expect(measure.title.width).toBeGreaterThan(150);
-    expect(measure.titleFont).toBeCloseTo(17 * (schrift === "gross" ? 1.12 : 1), 1);
+    expect(measure.titleFont).toBeCloseTo(22 * (schrift === "gross" ? 1.12 : 1), 1);
     expect(measure.title.left).toBeGreaterThan(measure.rank.right);
     expect(measure.row.height).toBeGreaterThanOrEqual(44);
     expect(measure.badges.map((badge) => badge.text).sort()).toEqual([

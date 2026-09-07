@@ -31,7 +31,7 @@ export function EditPanel({ film, onSave, onCancel, autorName, herkunftHinweis =
     </label>
   );
   return (
-    <div className="kd-editpanel" onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: "12px 12px", background: T.leinwandTief, borderRadius: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-editpanel" onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: "12px", background: T.leinwandTief, borderRadius: "var(--kd-radius-karte)", display: "flex", flexDirection: "column", gap: 10 }}>
       {herkunftHinweis && (
         <div role="status" style={{ padding: "8px 10px", borderLeft: `3px solid ${T.wolfram}`, background: T.saalHoch, color: T.leinwand, fontSize: 12, lineHeight: 1.5 }}>
           {herkunftHinweis}

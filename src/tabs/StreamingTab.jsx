@@ -488,7 +488,7 @@ export function StreamingTab({
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
 
   if (datenGesperrt) return (
-    <section ref={bereichRef}>
+    <section ref={bereichRef} className="kd-streaming-tab">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "18px 20px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
         <strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings ein. Die App selbst ruft Watchmode nie live auf.
       </div>
@@ -496,7 +496,7 @@ export function StreamingTab({
   );
 
   return (
-    <section ref={bereichRef}>
+    <section ref={bereichRef} className="kd-streaming-tab">
       {/* dataTour="streaming-views" bleibt am SegmentedControl-Container — Tour-Anker. */}
       <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={aendereAnsicht}
         options={[
@@ -717,7 +717,7 @@ export function StreamingTab({
               <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus" tabIndex={-1}
                 data-streaming-suchtreffer={ansicht === "entdecken" ? `entdecken:${t.watchmode_id}` : undefined}
                 onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
-                style={{ background: T.saalHoch, borderRadius: 6, padding: "10px 12px", cursor: "pointer" }}>
+                style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer" }}>
                 <div className="kd-entdecken-kopf">
                   <div className="kd-entdecken-aktionen">
                   {pinButton(t)}
@@ -735,7 +735,7 @@ export function StreamingTab({
                   </button>
                   </div>
                   <div className="kd-entdecken-inhalt">
-                  <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17 }}>
+                  <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2 }}>
                     {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
                     {entdeckenStatus[t.watchmode_id] && (
                       <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>

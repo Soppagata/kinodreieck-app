@@ -572,7 +572,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   ]);
 
   return (
-    <section>
+    <section className="kd-mediathek-tab">
       <div className="kd-mediathek-dialog-hintergrund" inert={loeschDialog ? true : undefined}
         aria-hidden={loeschDialog ? "true" : undefined}>
       {/* Ansicht-Umschalter: Einträge · Im Besitz · Must-Watch (immer sichtbar).

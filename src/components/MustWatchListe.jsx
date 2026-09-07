@@ -117,7 +117,7 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
     } finally { setSpeichert(false); }
   };
   return (
-    <div className="kd-mustwatch-form" style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-mustwatch-form" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div className="kd-mustwatch-form-hauptfelder" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input placeholder="Titel *" value={titel} onChange={(e) => setTitel(e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 180 }} />
         <MetaFelder jahr={jahr} typ={typ} onJahr={setJahr} onTyp={setTyp} />
@@ -203,10 +203,10 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
           const typ = mustwatchTyp(e.typ);
           const meta = [e.jahr || null, typ ? TYP_LABEL[typ] : null].filter(Boolean).join(" · ");
           return (
-            <div key={e.id} id={"mw-" + e.id} onClick={() => setOffenId(offen ? null : e.id)}
-              style={{ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "12px 14px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)", borderLeft: status?.aktuell ? "4px solid " + T.wolfram : "4px solid transparent" }}>
+            <div key={e.id} id={"mw-" + e.id} className="kd-karte kd-mustwatch-karte" onClick={() => setOffenId(offen ? null : e.id)}
+              style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)", borderLeft: status?.aktuell ? "4px solid " + T.wolfram : "4px solid transparent" }}>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 20, lineHeight: 1.1, textTransform: "uppercase", letterSpacing: "0.02em", flex: 1, minWidth: 160, overflowWrap: "anywhere" }}>
+                <span className="kd-mustwatch-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0, flex: 1, minWidth: 160, overflowWrap: "anywhere" }}>
                   {e.titel}
                 </span>
                 {/* Statusbadge NUR bei belegter aktueller Verknüpfung — ohne

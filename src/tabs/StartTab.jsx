@@ -237,7 +237,7 @@ function StartDashboard({
   };
 
   return (
-    <section className="kd-dash" style={themeVars}>
+    <section className="kd-dash kd-primary-start" style={themeVars}>
       {/* ---- Marquee-Kopf ---- */}
       <header className="kd-dash-hero">
         <span className="kd-dash-bulbs" aria-hidden="true" />
