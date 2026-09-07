@@ -49,7 +49,7 @@ export function LocalDataSafety({ markiereExport = NICHT_MARKIEREN, controller =
 
   return (
     <section className="kd-local-data-safety" data-local-data-safety="guest-only" aria-labelledby="local-data-safety-title"
-      style={{ marginTop: 20, padding: "16px 18px", border: "1px solid " + T.tinteWeich, borderRadius: 8, background: T.saalHoch }}>
+      style={{ marginTop: 20, padding: "16px 18px", border: "1px solid " + T.tinteWeich, borderRadius: 12, background: T.saalHoch }}>
       <h2 id="local-data-safety-title" style={{ margin: "0 0 8px", color: T.leinwand, fontSize: 18 }}>
         Lokale Daten dieses Geräts
       </h2>

@@ -199,21 +199,6 @@ async function installNetworkFence(page, traffic) {
   });
 }
 
-const installVisualViewportHarness = async (page) => page.addInitScript(() => {
-  const listeners = new Map();
-  const viewport = {
-    width: innerWidth, height: innerHeight, offsetTop: 0, offsetLeft: 0, scale: 1,
-    addEventListener(type, listener) { const set = listeners.get(type) || new Set(); set.add(listener); listeners.set(type, set); },
-    removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
-    __set(next) {
-      Object.assign(viewport, next);
-      for (const type of ["resize", "scroll"]) listeners.get(type)?.forEach((listener) => listener(new Event(type)));
-    },
-  };
-  Object.defineProperty(window, "visualViewport", { configurable: true, value: viewport });
-  window.__kdDesignViewport = viewport;
-});
-
 export async function navigateMobile(page, name) {
   await page.getByRole("button", { name: "Menü öffnen" }).click();
   await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name, exact: true }).click();
@@ -247,19 +232,6 @@ export const test = base.extend({
       aborted: traffic.nonLocal.filter((entry) => entry.kind === "aborted").length,
       unknownFixturePaths: traffic.unknownFixturePaths.length,
     })}`);
-  },
-  privateViewportApp: async ({ page }, use, testInfo) => {
-    const traffic = { nonLocal: [], contracts: [], unknownFixturePaths: [] };
-    await page.setViewportSize({ width: 393, height: 852 });
-    await installVisualViewportHarness(page);
-    await seedAccount(page);
-    await installNetworkFence(page, traffic);
-    await page.goto("/");
-    await expect(page.locator(".kd-app")).toBeVisible();
-    await expect.poll(() => traffic.contracts.includes("account-access")).toBe(true);
-    await use({ page, traffic });
-    expect(traffic.unknownFixturePaths, "alle Fixture-Backendpfade sind explizit gestubbt").toEqual([]);
-    console.log(`[PRIVATE_V1_VIEWPORT_NET] ${JSON.stringify({ browser: testInfo.project.name, nonLocal: traffic.nonLocal.length })}`);
   },
 });
 

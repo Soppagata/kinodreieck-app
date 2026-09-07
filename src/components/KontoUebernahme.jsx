@@ -207,7 +207,7 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch, services 
 
       <p style={{ color: T.rauch, fontSize: 12, opacity: 0.8, margin: "0 0 10px" }}>
         Vor jeder Übernahme wird ein Rückholpunkt gesichert. Eine Sicherheitskopie dieses Geräts
-        {onBackupWunsch ? <> kannst du zusätzlich <button style={{ ...btnStyle(false), fontSize: 12, padding: "2px 8px" }} onClick={onBackupWunsch}>jetzt herunterladen</button></> : " solltest du zusätzlich anlegen"}.
+        {onBackupWunsch ? <> kannst du zusätzlich <button style={{ ...btnStyle(false), padding: "2px 8px" }} onClick={onBackupWunsch}>jetzt herunterladen</button></> : " solltest du zusätzlich anlegen"}.
       </p>
 
       {fehler && <p style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>}

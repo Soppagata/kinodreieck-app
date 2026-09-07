@@ -244,7 +244,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
             Bis zu deiner Entscheidung bleibt jede Änderung ausschließlich lokal und wird nicht ins Konto gesendet.
           </p>
           {!zeigeUebernahme && (
-            <button style={{ ...btnStyle(false), fontSize: 12 }} onClick={() => setZeigeUebernahme(true)}>
+            <button style={btnStyle(false)} onClick={() => setZeigeUebernahme(true)}>
               Bestand jetzt vergleichen
             </button>
           )}
@@ -281,12 +281,12 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           {status.conflict.map((key) => (
             <div key={key} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
               <span style={{ color: T.leinwand, fontSize: 13, minWidth: 150 }}>{topfLabel(key)}</span>
-              <button style={{ ...btnStyle(false), fontSize: 12 }} disabled={laeuft} onClick={async () => {
+              <button style={btnStyle(false)} disabled={laeuft} onClick={async () => {
                 setLaeuft(true);
                 try { await accountSync.resolveKeepLocal(key); setStatus(accountSync.status()); onDatenGeaendert?.(); }
                 finally { setLaeuft(false); }
               }}>Diesen Gerätestand behalten</button>
-              <button style={{ ...btnStyle(false), fontSize: 12 }} disabled={laeuft} onClick={async () => {
+              <button style={btnStyle(false)} disabled={laeuft} onClick={async () => {
                 setLaeuft(true);
                 try { await accountSync.resolveKeepRemote(key); setStatus(accountSync.status()); onDatenGeaendert?.(); }
                 finally { setLaeuft(false); }
@@ -332,7 +332,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
       </div>
       {meldung && <p style={{ color: T.ok, fontSize: 13 }}>{meldung}</p>}
 
-      <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => setPwOffen((v) => !v)}>
+      <button style={btnStyle(false)} onClick={() => setPwOffen((v) => !v)}>
         {pwOffen ? "Passwort ändern schließen" : "Passwort ändern"}
       </button>
       {pwOffen && (
@@ -358,7 +358,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           Luege. Deshalb ausblenden, nicht ersetzen. */}
       {ownerTechnikBestaetigt && personalAiFreigegeben && kiAn("diagnose") && (
       <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid " + T.saalHoch }}>
-        <button style={{ ...btnStyle(false), fontSize: 13 }} disabled={laeuft} onClick={async () => {
+        <button style={btnStyle(false)} disabled={laeuft} onClick={async () => {
           setLaeuft(true); setKiMeldung(null);
           try {
             const bericht = await aiService.runTask("health", {});
