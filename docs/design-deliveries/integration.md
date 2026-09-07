@@ -1,5 +1,7 @@
 # Integrierter Designstand vom 7. September 2026
 
+Nachtrag: Der folgende Bericht dokumentiert die ursprüngliche lokale Designlieferung. Der mit der aktuellen Production-Basis zusammengeführte Veröffentlichungskandidat und die frisch gelesenen Online-Versionen stehen in [release-preparation.md](release-preparation.md).
+
 Die freigegebene Kinoästhetik ist im Zweig `codex/design-ci-audit-20260907` umgesetzt. Produktstand: `9e9465b52489090b1a2f1d0eddd1432afcd0873e`, Ausgangsbasis: `98b5eca18d15f0a4ec8bed52b1d952c7cc8ec383`. Nach dem Produktcommit wurden ausschließlich Tests und diese Abschlussdokumentation präzisiert.
 
 ## Gelieferte Oberfläche
