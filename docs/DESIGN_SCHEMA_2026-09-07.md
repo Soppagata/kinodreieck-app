@@ -62,13 +62,15 @@ Keine Änderungen an `src/services`, Controllern, Rankings, Datenmodell, Persist
 
 ## Ergebnisregister und Baufolge
 
-| ID | Nutzbares Ergebnis | Ausgangsstand |
+| ID | Nutzbares Ergebnis | Lokaler Abschluss |
 | --- | --- | --- |
-| D1 | Must-Watch auf kleinen Displays vollständig lesbar | Im Basiscommit gebaut und geprüft; nach globalem Stil nochmals relevant |
-| D2 | Gemeinsame Schrift-, Größen-, Farb- und Abstandsrollen, vollständig lokale Fonts | Schema freigegeben; Umsetzung offen |
-| D3 | Einheitliche Start-/Kino-/Streaming-/Mediathek-Karten und Controls | Offen |
-| D4 | Kompakte Startwoche und ruhige, stabile mobile Such-/Menüleiste | Offen |
-| D5 | Alle übrigen Tabs, Formulare, Buttons, Links und Dialoge folgen dem Schema | Offen |
-| D6 | Eastereggs erhalten; konkrete Feedbackliste und nachvollziehbare lokale Abnahme | Inventar vorhanden; Gesamtprüfung offen |
+| D1 | Must-Watch auf kleinen Displays vollständig lesbar | DONE: fünf Einträge, vollständige Titel/Anbieter; Browserregression nach Integration grün |
+| D2 | Gemeinsame Schrift-, Größen-, Farb- und Abstandsrollen, vollständig lokale Fonts | DONE: Foundation, Kontrastrollen und 14 eingebettete WOFF2-Faces; ohne externe Font-Anfragen geprüft |
+| D3 | Einheitliche Start-/Kino-/Streaming-/Mediathek-Karten und Controls | DONE: Titel-, Abschnitts-, Karten- und Filterrollen; lesbare Skalen und getrennte Streaming-Aktionen |
+| D4 | Kompakte Startwoche und ruhige, stabile mobile Such-/Menüleiste | DONE lokal: Tagesauswahl/Ganze Woche; bestehende PWA-Mechanik unverändert und im privaten Fixture geprüft |
+| D5 | Alle übrigen Tabs, Formulare, Buttons, Links und Dialoge folgen dem Schema | DONE im dokumentierten Bestandsscope: gemeinsame Controls und Bereichsstile; alle bisherigen Link-/Form-/Handlerverträge erhalten; native Tastatur und F06 bleiben Grenzen |
+| D6 | Eastereggs erhalten; konkrete Feedbackliste und nachvollziehbare lokale Abnahme | DONE: nur Font-/Controlvereinheitlichung, Feedbackliste und lokale Abnahme; kreative Effekte liegen außerhalb dieses Auftrags |
+
+Produktstand: `9e9465b52489090b1a2f1d0eddd1432afcd0873e`. Der vollständige Liefer- und Prüfbeleg steht in [design-deliveries/integration.md](design-deliveries/integration.md). Physische iPhone-PWA-Abnahme und externe Lieferung werden daraus nicht abgeleitet.
 
 Baufolge: gemeinsame Foundation → drei disjunkte Terra/high-Pakete auf demselben Nicht-main-Commit → Integration und einmaliger lokaler Abschluss. Astra besitzt Gestaltung, Suchleisten-Erhaltungsvertrag und Integration. Main und der primäre Checkout bleiben unberührt. Externe Lieferung ist nicht Teil dieses lokalen Designauftrags.

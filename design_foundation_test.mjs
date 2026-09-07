@@ -61,7 +61,15 @@ check("Gemeinsame CSS-Rollen frieren Schrift, Radien, Fokus und Kartenvertrag ei
   for (const role of ["--kd-radius-karte: 12px", "--kd-radius-control: 8px", "--kd-radius-label: 5px", "--kd-kartenAkzent", "--kd-wolframText", "font-family: 'Fraunces'", "font-family: 'Barlow Condensed'", "font-family: 'Space Grotesk'", "font-family: 'Space Mono'", ":focus-visible", ".kd-bereichshero", ".kd-chip", ".kd-seg-control", ".kd-klappe", ".kd-tag", ".kd-achse-wert"]) {
     assert.ok(css.includes(role), role);
   }
-  assert.ok(!css.includes("!important"));
+  // Existing inline input shorthands require a narrow exception for the
+  // closed native select's CSS chevron. Text and button roles stay ordinary
+  // cascade rules; no other selector or property may use this escape hatch.
+  const nativeSelectProperties = new Set(["background-image", "background-position", "background-size", "background-repeat", "padding-right"]);
+  const uncommented = css.replace(/\/\*[\s\S]*?\*\//gu, "");
+  for (const [, selector, declarations] of uncommented.matchAll(/([^{}]+)\{([^{}]*!important[^{}]*)\}/gu)) {
+    assert.equal(selector.trim(), "select");
+    for (const [, property] of declarations.matchAll(/([a-z-]+)\s*:[^;{}]*!important/gu)) assert.ok(nativeSelectProperties.has(property));
+  }
 });
 
 check("Alte gemeinsame Hero- und Segmentregeln überstimmen die Foundation nicht mehr", () => {

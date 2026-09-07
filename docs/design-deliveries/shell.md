@@ -85,3 +85,7 @@ absichtlich weiterhin die dunkle Saalfläche, auch wenn die nachfolgende Shell
 hell eingestellt ist; die helle Darstellung ist für die reguläre App-Shell
 belegt. Die separate kreative Ausgestaltung der Eastereggs bleibt bewusst für
 spätere Einzelchats offen.
+
+## Integrierter Abschluss
+
+Der finale Review trennt die PWA-Treffer- und Menü-/Rotations-/Zoomszenarien in unabhängige Tests mit bestätigter Pointer-/Fokus- und Viewport-Reihenfolge. Alle 54 privaten Browserszenarien sind auf dem integrierten Produktstand `9e9465b` grün. Produktmechanik und gemeinsame Private-v1-Fixture bleiben unverändert; vollständige Belege und Abnahmegrenzen stehen in [integration.md](integration.md).

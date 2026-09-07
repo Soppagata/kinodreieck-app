@@ -1,25 +1,27 @@
 # Kinodreieck: Design-, CI- und Easteregg-Audit
 
-Stand: 7. September 2026. CI bedeutet hier Corporate Identity. Quellbasis: `98b5eca18d15f0a4ec8bed52b1d952c7cc8ec383`. Der Hauptcheckout bleibt unverändert. Dieses Dokument trennt nachgewiesene Befunde, Gestaltungsvorschläge und noch ausstehende Abnahme.
+Stand: 7. September 2026. CI bedeutet hier Corporate Identity. Dieses Dokument bewahrt das Ausgangsaudit auf Quellbasis `98b5eca18d15f0a4ec8bed52b1d952c7cc8ec383` und den ersten Screenshot-Fix. Die inzwischen umgesetzte, freigegebene Gestaltung steht im [verbindlichen Schema](DESIGN_SCHEMA_2026-09-07.md); den finalen Produktstand `9e9465b` und seine Prüfungen dokumentiert [der Integrationsbericht](design-deliveries/integration.md). Der Hauptcheckout wurde durch diesen Auftrag nicht verändert.
 
 Max hat im laufenden Audit ausdrücklich die Richtung **„Bestehende Kinoästhetik verfeinern“** gewählt.
 
-## Ergebnis
+## Ergebnis des Ausgangsaudits
 
 Kinodreieck besitzt eine erkennbare Identität: dunkler Kinosaal, warmes Papier, Wolframgold, das dreifarbige Bewertungsdreieck, Leuchtreihen und Ticketdetails. Die Uneinheitlichkeit entsteht vor allem durch unterschiedliche Schriftrollen, Kartenhierarchien und unabhängig gewachsene Bedienelemente. Die vorhandene Identität sollte präzisiert werden.
 
 Das Screenshot-Problem ist ein Layoutfehler: unverkürzbare Anbieter-Badges stehen neben einem schrumpfbaren Titel in einer einzigen Flexzeile. Schon wenige lange Dienste verbrauchen die gesamte Breite. Das Ziel ist ein vollständig lesbarer Titel mit einer separaten, umbrechenden Verfügbarkeitszeile.
 
-## Umfang und Evidenz
+## Umfang und Evidenz des Ausgangsaudits
 
 - Eingangsbeleg: iPhone-Screenshot `Bildschirmfoto 2026-09-07 um 17.58.47.png`.
-- Aktueller Code: alle acht Tabs, gemeinsame UI-Bausteine, Tokens, Basistyles, Kino-Filter, Navigation/Suche, Schriftdateien, Egg-Konfiguration, Controller und Effektstyles.
+- Damals geprüfter Code: alle acht Tabs, gemeinsame UI-Bausteine, Tokens, Basistyles, Kino-Filter, Navigation/Suche, Schriftdateien, Egg-Konfiguration, Controller und Effektstyles.
 - Lokale Browseransichten bei 393 CSS-Pixeln: Start, Kino, Streaming/Mein Programm, Streaming/Alles, Mediathek, Entdecken, Settings; zusätzlich Start und Kino mit der Einstellung Groß.
 - Der Browser verwendete synthetische Kontodaten und abgefangene Backendantworten aus dem vorhandenen Private-v1-Harness. Alle nichtlokalen App-Anfragen wurden beantwortet oder blockiert; keine echte Anmeldung, kein realer Kontozugriff oder Anbieteraufruf. Neun Ansichten, keine JavaScript-Seitenfehler. Das normale Fixture hatte keinen horizontalen Seitenüberlauf; der Screenshot-Stressfall wird gesondert geprüft.
 - Lokale Rohbelege: `/private/tmp/kd-design-ci-audit-evidence/baseline-*.png` und `baseline-measurements.json`. Die Baseline ist eine Kopie des gebundenen Commits und enthält keine späteren Produktänderungen.
 - Nicht abgedeckt: vollständige manuelle Durchklickabnahme jedes Dialogzustands, reale Datenbestände, Installation/Viewport/Tastatur auf einem physischen iPhone, VoiceOver, Live-Deploy oder eine vollständige WCAG-Zertifizierung. Die interaktive Designstudie ist ein Vorschlag, kein Screenshot eines ausgerollten Produkts.
 
-## Priorisierte Befunde
+## Priorisierte Ausgangsbefunde
+
+Die folgende Tabelle beschreibt die Baseline vor der Umsetzung. Sie ist keine aktuelle Liste offener Fehler; verbleibende Funktions- und Abnahmegrenzen stehen in [der Feedbackliste](DESIGN_FEEDBACK_2026-09-07.md).
 
 | ID | Priorität | Befund und Wirkung | Beleg | Empfohlene Änderung |
 | --- | --- | --- | --- | --- |
@@ -41,35 +43,13 @@ Das Screenshot-Problem ist ein Layoutfehler: unverkürzbare Anbieter-Badges steh
 
 Die Kontrastwerte sind aus den sRGB-Hexfarben berechnet, ohne Antialiasing. Für gewöhnlichen Text ist 4,5:1 der WCAG-AA-Mindestkontrast. Gold kann als dekorativer Marker bleiben; bei bedeutungstragendem Text reicht ein angenehmer Farbeindruck allein nicht. Quellen: [W3C Kontrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html), [W3C Reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html).
 
-## Gestaltungsvorschlag: „Saal & Leinwand“, verbindlich angewendet
+## Freigegebene und umgesetzte Gestaltung
 
-### Schriftrollen
+Der erste Gestaltungsvorschlag wurde durch das [verbindliche Gestaltungsschema](DESIGN_SCHEMA_2026-09-07.md) und die von Max freigegebene interaktive Studie präzisiert. Maßgeblich sind dessen gemeinsame Rollen: Fraunces 900 für Bereichstitel (38–46px), Barlow Condensed 600 für Filmtitel (22px), Space Grotesk für Abschnitte (15px), Controls (14px), Fließtext (15px) und Metadaten (12px). Space Mono bleibt ein gezielter Datums-/Uhrzeitakzent. Alle Rollen skalieren mit der vorhandenen Schrifteinstellung; Eingaben bleiben mindestens 16px groß.
 
-Alle vier vorhandenen Familien sind lokal eingebunden und besitzen OFL-Lizenzdateien. Ein neuer Fontdownload ist für diese Richtung unnötig.
+Die App verwendet 12px-Kartenradien, 8px-Controlradien, 44px-Bedienflächen und gemeinsame Abstände. Papier-/Dunkelkarten besitzen eigene lesbare Text- und Akzentfarben. Vollständige Titel und umbrechende Anbieter, die kompakte Woche mit „Ganze Woche“ und der ruhige Suchrahmen sind umgesetzt. Vier lokale Fontfamilien mit insgesamt 14 WOFF2-Faces sind auch in der Einzeldatei eingebettet und ohne externe Font-Anfragen geprüft.
 
-| Rolle | Familie | Mobile Richtgröße | Regel |
-| --- | --- | --- | --- |
-| Bereichstitel | Fraunces 900 | 36–40 px | Einmal pro Bereich; gleiche Größe und Abstände auf Start/Kino/Streaming. |
-| Film-/Serientitel | Barlow Condensed 600–700 | 20–22 px, Zeilenhöhe 1,15–1,25 | Gleich auf allen Karten; in der Studie gemischte Schreibweise. Versalien als vergleichbare Variante. |
-| Sektionsüberschrift | Barlow Condensed 600 | 20 px | Kurze Überschrift; untergeordneter Bereichslink in derselben Zeile, mobil umbrechbar. |
-| Fließtext | Space Grotesk 400 | 15–16 px, Zeilenhöhe 1,5 | Lesbar auch auf schmalen Screens; keine Monospace-Absätze. |
-| Controls | Space Grotesk 500–600 | 14–16 px | Einheitliche Buttons, Umschalter und Formfelder. |
-| Metadaten/Badges | Space Grotesk 400–500 | 12–13 px | Lesbarkeit vor dekorativer Sperrung; Anbieter dürfen umbrechen. |
-| Datum/Uhrzeit/kleiner Kicker | Space Mono 400 | 12 px | Gezielter Akzent für kurze Angaben; keine Mini-Alphabetskala. |
-
-Die mobile Vorlage und die Desktopvariante teilen Rollen; sie werden nicht auf dieselbe Inhaltsdichte gezwungen. Keine feste Kartenhöhe für variable Titel. Die Einstellung Klein/Normal/Groß multipliziert dieselben Rollen. 200-Prozent-Textvergrößerung und 320-CSS-Pixel-Reflow gehören in die spätere Gesamtprüfung.
-
-### Abstände und Elemente
-
-- Skala: **4 / 8 / 12 / 16 / 24 / 32 px**. 16 px Karteninnenraum, 12 px zwischen verwandten Inhalten, 24–32 px zwischen Abschnitten; mobiler Seitenrand 16–20 px.
-- Kartenradius 12 px, Controls 8 px, kompakte Statusmarken 4–6 px. Runde Formen für echte Chips oder Iconflächen gezielt verwenden.
-- Genau eine optisch starke Aktion pro Gruppe. Gold zeigt Auswahl, Hauptaktion oder einen kleinen Markenakzent. Anbieterinformationen bekommen eine ruhigere Fläche als Hauptbuttons.
-- Ein Kartenvertrag: Titel → Jahr/Art → Verfügbarkeit bzw. Termin → Bewertung, falls vorhanden → Aktionen. Unbewertete Katalogtitel bekommen keine erfundene Bewertung und kein Bewertungsdreieck.
-- Kontur, Hover, Fokus, aktiv, deaktiviert und Ladezustand zusammen gestalten. Touchflächen als Produktziel mindestens 44 × 44 px; das ist eine Gestaltungsentscheidung, keine Behauptung über das WCAG-AA-Minimum.
-- Ticketperforation und Leuchtpunkte an wenigen wiederkehrenden Stellen. Trennlinie, Punktreihe, Rahmen, Schatten und Badge müssen nicht gleichzeitig Aufmerksamkeit verlangen.
-- Dunkler Saal und helles Foyer teilen Flächenrollen. `onCanvasMuted` und `onCardMuted` sollen unterschiedliche Tokens sein; fachliche Farben des Dreiecks bleiben erhalten, Textwerte bekommen zusätzlich ausreichenden Kontrast.
-
-## Vollständiges Easteregg-Inventar des aktuellen Codes
+## Easteregg-Inventar der Ausgangsbasis
 
 | Element | Aktueller Status / Auslösung | Gestaltung und Grenzen | Maßgebliche Dateien |
 | --- | --- | --- | --- |
@@ -85,26 +65,19 @@ Die mobile Vorlage und die Desktopvariante teilen Rollen; sie werden nicht auf d
 
 **Dokumentationsabweichung:** `FUNKTIONSBERICHT.md` 12.16 beschreibt noch den versteckten Modusknopf hinter Max. Der aktuelle `DatenTab.jsx` rendert Max als gewöhnlichen Span; `private_release_settings_surface_test.mjs` verlangt ausdrücklich keinen versteckten Modus-Touchpunkt. Die alte Beschreibung ist keine Erlaubnis, diesen Zugang automatisch wieder einzubauen.
 
-**Gestaltungsentscheidung für Eggs:** Geheimnis und Atmosphäre behalten. Gemeinsam bleiben lesbare Größen, Positionen der Hauptaktionen, Kartenabstände und die Bedeutung von Farben/Icons. Derzeit überschreibt Deep Space viele Hauptbereichsbuttons und Karten global mit `!important`; eine neue gemeinsame Komponente muss in diesen Kontexten bewusst geprüft werden. Das ist ein konkretes Integrationsrisiko, noch kein belegter neuer Fehler in jedem Effektzustand.
+**Gestaltungsentscheidung für Eggs:** Max arbeitet die kreative Inszenierung später in separaten Chats aus. Dieser Auftrag vereinheitlicht ausschließlich vorhandene Schriften und Bedienelemente; Auslöser, Effekte, Animationen und Pausen bleiben erhalten. Gemeinsam bleiben lesbare Größen, Positionen der Hauptaktionen, Kartenabstände und die Bedeutung von Farben/Icons. Derzeit überschreibt Deep Space viele Hauptbereichsbuttons und Karten global mit `!important`; eine neue gemeinsame Komponente muss in diesen Kontexten bewusst geprüft werden. Das ist ein konkretes Integrationsrisiko, noch kein belegter neuer Fehler in jedem Effektzustand.
 
-Die Bühne darf anders aussehen; die Bedienung soll vertraut bleiben. Reduced Motion, sauberes Schließen, Fokus-Rückgabe, kein Verdecken von Formularen und kein Anspringen während einer kritischen Eingabe sind die Abnahmepunkte. Die vorhandenen Zufalls-/Freischaltregeln werden im ersten Designfix nicht verändert. Zum Umgang mit abschaltbarer Interaktionsanimation: [W3C Animation](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html).
+Die Bühne darf anders aussehen; die Bedienung soll vertraut bleiben. Reduced Motion, sauberes Schließen, Fokus-Rückgabe und störungsfreie Formulare sind Hinweise für die späteren kreativen Einzelaufträge. Eine neue praktische Effektabnahme wurde hier nicht durchgeführt. Die vorhandenen Zufalls-/Freischaltregeln sind unverändert. Zum Umgang mit abschaltbarer Interaktionsanimation: [W3C Animation](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html).
 
-## Ergebnisregister für diesen Designpfad
+## Abschluss dieses Designpfads
 
-| Ergebnis | Inhalt | Stand dieses Audits |
-| --- | --- | --- |
-| D1 — Lesbare Must-Watch-Vorschau | Screenshot-Overflow korrigieren, vollständige Titel/Anbieter, große Schrift, Navigation | DONE lokal: Produktcommit `46bba9a806349c9f70c9fce75998246032fa210b`, vollständiger lokaler Abschluss grün |
-| D2 — Einheitliche lesbare Typografie | Rollen, Kontraste, Schriftfaktor | Befunde und Vorschlag vollständig dokumentiert; Gesamtumsetzung offen |
-| D3 — Wiedererkennbare Karten und Controls | Start/Kino/Streaming, Filter, Pinaktionen, Zustände | Befunde und interaktive Designrichtung vorbereitet; Gesamtumsetzung offen |
-| D4 — Klare mobile Prioritäten | Wochenplan, Sektionen, Suche, leere Zustände | Vorschlag; Verdichtung des Wochenplans noch zu entscheiden |
-| D5 — Durchgängige Bedienbarkeit | Tastatur, Zoom, Umbruch, Touchflächen, Themes | Lokaler Basisvergleich vorhanden; vollständige praktische Abnahme offen |
-| D6 — Bewusste Easteregg-Integration | Bestand, erreichbare Trigger, Bewegungs-/Layoutgrenzen | Inventar abgeschlossen; Triggerreaktivierung und Effektpolitur offen |
+D1–D6 sind im vereinbarten lokalen Umfang umgesetzt und geprüft. Das aktuelle [Ergebnisregister](DESIGN_SCHEMA_2026-09-07.md#ergebnisregister-und-baufolge) und der [Integrationsbericht](design-deliveries/integration.md) enthalten die einzelnen Lieferungen und Belege. Das vollständige `npm test` und alle 54 privaten Browserszenarien sind grün; zwei optionale externe Beta-Datenchecks wurden ausdrücklich übersprungen.
 
-Empfohlene Reihenfolge: D1 abschließen → D2 und die gemeinsamen Bausteine von D3 → Start/Kino/Streaming gemeinsam angleichen → übrige Tabs und D4 → D5/D6 auf dem Gesamtkandidaten. Die Film-, Katalog-, Ranking-, Tagesauswahl- und Pinverträge werden dabei beibehalten.
+Alle bisherigen erfassten Link-, Form- und Handlerverträge sind erhalten. Die Funktionsarchitektur und die PWA-Viewport-/Scrolllock-Mechanik blieben unverändert. Offene funktionale Auffälligkeiten und Grenzen sind separat in der Feedbackliste dokumentiert. Die kreative Weiterentwicklung von Eastereggs gehört nicht zu diesem Auftrag.
 
-Dies ist eine lokale Audit- und Gestaltungsgrundlage. Ein lokaler Build oder Mocknachweis belegt keinen Push, CI-Lauf, Deploy oder installierte iPhone-PWA-Abnahme.
+Der Stand ist lokal gebaut, getestet und committed. Es gab keinen Push, Remote-CI-Lauf oder Deploy. Die installierte iPhone-PWA wurde nicht praktisch abgenommen.
 
-## Abgeschlossener erster Fix
+## Historischer Zwischenstand: abgeschlossener erster Fix
 
 Produktcommit `46bba9a806349c9f70c9fce75998246032fa210b` auf `codex/design-ci-audit-20260907`:
 
@@ -114,6 +87,6 @@ Produktcommit `46bba9a806349c9f70c9fce75998246032fa210b` auf `codex/design-ci-au
 - Must-Watch-Tests 65/65, Controller-Tests 82/82; vollständiges `npm test` Exit 0 einschließlich Single-File-/Web-Build und Pages-Prüfung 72/72.
 - Screenshot: `/private/tmp/kd-design-ci-audit-evidence/mustwatch-webkit-dunkel-gross-393.png`. Logs: `mustwatch-browser-test.log`, `mustwatch-npm-test.log` im selben Ordner.
 
-Die separate interaktive Studie vergleicht Start, Kino und Streaming mit derselben Typografie/Kartensprache und synthetischen Beispielen. Sie illustriert zusätzlich eine kompaktere Wochenansicht, ruhigere Anbieterlabels und den gemeinsamen Suchrahmen. Diese größeren Entwurfsänderungen sind **noch nicht in der App umgesetzt**. Die Studie zeigt zur Erklärung drei Must-Watch-Zeilen; die App behält ihre fünf täglichen Einträge.
+Die anschließend freigegebene interaktive Studie wurde inzwischen in den gemeinsamen Produktstand übernommen: Start, Kino und Streaming teilen Typografie und Kartensprache, einschließlich kompakter Woche, ruhiger Anbieterlabels und Suchrahmen. Die Studie zeigt zur Erklärung drei Must-Watch-Zeilen; die App behält ihre fünf täglichen Einträge. Maßgeblicher Abschluss ist der oben verlinkte Integrationsbericht.
 
 Lieferstand: **gebaut / lokal getestet / committed**. **Nicht gepusht**, kein neuer Remote-CI-Lauf oder Deploy; physische iPhone-Abnahme **NICHT BELEGT**.

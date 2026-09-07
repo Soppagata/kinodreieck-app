@@ -4,6 +4,8 @@ Basis: `7232fec6bdd523ccccbe117d27f41abaf7e52045`. Das statische Inventar erfass
 
 Gesamt: **469 Controldefinitionen**, **576 JSX-Ereignisbindungen**. Die stillgelegten Legacy-Treiber sind im Inventar sichtbar, aber kein neu zu aktivierender Produktweg. Dynamisch erzeugte Downloadanker in Kalender-/Backup-Helfern bleiben unverändert.
 
+**Abschluss:** Der AST-Vergleich auf Produktstand `9e9465b` findet **keine entfernten oder veränderten Bestandsverträge** bei Ereignisbindungen, href/Targets, Formularwerten/-validierung und den erfassten ARIA-Beziehungen. Hinzu kommen genau zwei Controls/Ereignisbindungen in `Wochenplan.jsx` für die lokale Tages-/Gesamtansicht: insgesamt 471 bzw. 578. Statische Bestandsvollständigkeit ist keine Behauptung, jede bedingte Dialogvariante manuell durchgeklickt zu haben. Browserumfang und bekannte Grenzen: [Integration](design-deliveries/integration.md).
+
 | Datei | Elemente | Write-Owner |
 | --- | --- | --- |
 | `src/App.jsx` | 3 button | P3 – Shell/Suche |

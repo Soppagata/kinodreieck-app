@@ -7,7 +7,7 @@ Paketbasis: `36772f32c2f170e199c803d551f80eda86d897d8`.
 | Fläche | Lieferung |
 | --- | --- |
 | Start und Must-Watch | Papierkarten mit Barlow-600-Titeln in 22 px, vollständig umbrechenden Titeln, neutralen 12px-Dienstlabels sowie dem erhaltenen stabilen Fünf-Einträge-Pfad. |
-| Deine Woche | Sieben rollierende Tage bleiben unverändert berechnet. Eine reine lokale Tagesansicht als native Button-Gruppe mit `aria-pressed` und der sichtbare Schalter „Ganze Woche“ steuern nur die Darstellung; ab 393px bleibt die Tageswahl einzeilig, darunter darf sie umbrechen. Kalenderaktionen haben 44px Zielgröße. Eintrag, Bearbeiten, Löschen, Terminansicht und Export bleiben vorhanden. |
+| Deine Woche | Sieben rollierende Tage bleiben unverändert berechnet. Eine reine lokale Tagesansicht als native Button-Gruppe mit `aria-pressed` und der sichtbare Schalter „Ganze Woche“ steuern nur die Darstellung; im final integrierten Stand bleibt die Tageswahl ab 372px einzeilig, darunter bricht sie in zwei Reihen um. Kalenderaktionen haben 44px Zielgröße. Eintrag, Bearbeiten, Löschen, Terminansicht und Export bleiben vorhanden. |
 | Kino | Die vorhandenen vorstellungsbezogenen Tickets, Pins, Filter und externen Kinolinks verwenden die Karten-, Titel-, Metadaten- und Controlrollen der Foundation. Abschnittsüberschriften sind Grotesk 600 in 15px, Filmtitel Barlow 600 in 22px; gefüllte Selects und Eingaben bleiben mindestens 16px groß. |
 | Streaming | „Mein Programm“, „Alles“ und „Neu“ verwenden dieselben Papier-/Dunkelkarten sowie Titel-, Meta-, Anbieter- und Aktionsrollen. In Alles/Neu stehen die vollständigen Titel vor der eigenen umbrechenden 44px-Aktionsreihe. Titelpins, Nullwert „Alle“, Jahrzehnttoleranz, Sortierung und die Neu-Differenz bleiben unverändert. Die dichte Skala zeigt weniger 12px-Beschriftungen, behält aber ihre Rasterplätze per `visibility`. |
 | Mediathek und Formulare | Filmkarten, Must-Watch-Karten, Bewertungen und Film-/Medienformulare verwenden 12-px-Kartenrundungen, 16-px Innenabstand und die Foundation-Eingabegrößen. Auswahl, Bearbeiten, Löschen, Quellenwahl und Import-nahe Formulare bleiben unverändert bedienbar. |
@@ -36,3 +36,7 @@ Alle genannten Läufe sind lokal grün. Die Browserprüfung misst zusätzlich re
 ## Funktionsfunde für Max
 
 Keine Funktionsabweichung im P1-Scope festgestellt. Die Darstellungsauswahl der Woche ist absichtlich nicht persistiert.
+
+## Integrierter Abschluss
+
+Der abschließende Astra-Review ergänzte kleine SVG-, Theme- und Umbruchkorrekturen auf Produktstand `9e9465b`. Die vollständige lokale Prüfung des integrierten Standes ist in [integration.md](integration.md) dokumentiert.

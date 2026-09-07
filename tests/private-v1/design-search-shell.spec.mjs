@@ -79,7 +79,9 @@ test("D4 PWA-Keyboard-Anker, Gesten, Ergebnis-Scroll und Handoffs bleiben im pri
     spacer.setAttribute("aria-hidden", "true");
     document.body.append(spacer);
   });
+  await frames(page, 4);
   await page.evaluate(() => window.scrollTo(0, Math.min(180, document.documentElement.scrollHeight - innerHeight)));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(180);
   const scrollBeforeKeyboard = await page.evaluate(() => window.scrollY);
   expect(scrollBeforeKeyboard).toBeGreaterThan(0);
 
@@ -106,6 +108,7 @@ test("D4 PWA-Keyboard-Anker, Gesten, Ergebnis-Scroll und Handoffs bleiben im pri
   expect(await touchMovePrevented(page.locator("main"), -30)).toBe(false);
 
   await input.focus();
+  await frames(page, 4);
   await page.evaluate(() => window.__kdDesignViewport.__set({ height: 500, offsetTop: 60, width: 393, scale: 1 }));
   await expect(form).toHaveClass(/tastatur-offen/);
   await input.fill("Netflix");
@@ -140,23 +143,50 @@ test("D4 PWA-Keyboard-Anker, Gesten, Ergebnis-Scroll und Handoffs bleiben im pri
   const treffer = page.getByRole("dialog", { name: /Suchergebnisse für Netflix/ }).locator("[data-globaler-suchtreffer]").first();
   await treffer.click();
   await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe("");
-  await input.focus();
-  await page.evaluate(() => window.__kdDesignViewport.__set({ height: 260, offsetTop: 60, width: 393, scale: 1 }));
+  await expect(page.getByRole("dialog", { name: /Suchergebnisse für Netflix/ })).toBeHidden();
+});
+
+test("D4 PWA-Menü, Rotation und Zoom geben den Tastatur-Lock frei", async ({ privateViewportApp }) => {
+  const { page } = privateViewportApp;
+  await navigateMobile(page, "Settings");
+  await page.getByRole("button", { name: "Groß", exact: true }).click();
+  await navigateMobile(page, "Start");
+  const form = page.locator(".kd-globalsuche");
+  const input = form.getByRole("textbox", { name: "Sucheingabe" });
+  const menuButton = form.getByRole("button", { name: "Menü öffnen" });
+  const openKeyboard = async () => {
+    // Each scenario starts with the keyboard actually dismissed and uses a
+    // native pointer/focus sequence, independent of another view's autofocus.
+    await input.blur();
+    await page.evaluate(() => window.__kdDesignViewport.__set({ height: 852, offsetTop: 0, width: 393, scale: 1 }));
+    await frames(page, 4);
+    const box = await input.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(input).toBeFocused();
+    await frames(page, 4);
+    await page.evaluate(() => window.__kdDesignViewport.__set({ height: 260, offsetTop: 60, width: 393, scale: 1 }));
+    await expect(form).toHaveClass(/tastatur-offen/);
+    await expect.poll(() => form.evaluate((element) => Math.round(element.getBoundingClientRect().bottom - visualViewport.offsetTop - visualViewport.height))).toBe(-8);
+  };
+  await openKeyboard();
   await menuButton.click();
   await expect(page.getByRole("dialog", { name: "Menü" })).toBeVisible();
+  await page.evaluate(() => window.__kdDesignViewport.__set({ height: 852, offsetTop: 0, width: 393, scale: 1 }));
+  await frames(page, 4);
   await page.keyboard.press("Escape");
   await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe("");
 
-  await input.focus();
-  await page.evaluate(() => window.__kdDesignViewport.__set({ height: 260, offsetTop: 60, width: 393, scale: 1 }));
-  await expect(form).toHaveClass(/tastatur-offen/);
+  await openKeyboard();
   await page.setViewportSize({ width: 852, height: 393 });
   await page.evaluate(() => window.__kdDesignViewport.__set({ height: 393, offsetTop: 0, width: 852, scale: 1 }));
   await expect(form).not.toHaveClass(/tastatur-offen/);
   await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe("");
   await page.setViewportSize({ width: 393, height: 852 });
+  await openKeyboard();
   await page.evaluate(() => window.__kdDesignViewport.__set({ height: 260, offsetTop: 0, width: 393, scale: 1.35 }));
   await expect(form).not.toHaveClass(/tastatur-offen/);
+  await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe("");
 });
 
 test("D5 helle Shell bleibt vollständig sichtbar", async ({ privateApp }, testInfo) => {
