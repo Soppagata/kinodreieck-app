@@ -58,6 +58,8 @@ Die bestehenden WOFF2-Dateien in `src/assets/fonts` sind die Quelle. Web/PWA lad
 
 Keine Änderungen an `src/services`, Controllern, Rankings, Datenmodell, Persistenz-/Kontogrenzen, Supabase, Workflows, Providern, Service Worker oder Funktionen. Keine neuen Abhängigkeiten. Ereignishandler, href/Targets, Formvalidierung, Such-/Filterwerte, IDs/Tour-Anker, Accessibility-Beziehungen, Datenmengen und Rechte bleiben erhalten. Neue Klassen und rein lokale Darstellungsauswahl sind erlaubt. Keine versteckten Funktionen oder deaktivierten Eastereggs reaktivieren. Bei einem Funktionsverdacht: konkreter Pfad/Beobachtung in die Feedbackliste; nicht nebenbei Architektur reparieren.
 
+**Präzisierung von Max während der Umsetzung:** Eastereggs werden später in separaten Chats einzeln kreativ ausgearbeitet. In diesem Auftrag ausschließlich ihre Schriften und Bedienelemente vereinheitlichen; keine zusätzliche Effekt-, Theme- oder Animationsgestaltung. Der Schwerpunkt bleibt die gemeinsame App-Oberfläche.
+
 ## Ergebnisregister und Baufolge
 
 | ID | Nutzbares Ergebnis | Ausgangsstand |
