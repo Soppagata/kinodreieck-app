@@ -199,9 +199,9 @@ export function KinoTicket({ titel, jahr, kino, termin, expanded, onToggle, chil
         <span className="kd-dash-tbody">
           <span className="kd-dash-film">{titel}</span>
           <span className="kd-dash-meta">{[jahr, kino].filter(Boolean).join(" · ")}</span>
-          {termin && <span className="kd-dash-showtime">◷ {termin}</span>}
+          {termin && <span className="kd-dash-showtime"><IconClock size={12} /> {termin}</span>}
         </span>
-        {klappbar && <span className="kd-kino-ticket-pfeil" aria-hidden="true">⌄</span>}
+        {klappbar && <span className="kd-kino-ticket-pfeil" aria-hidden="true"><IconChevronDown /></span>}
       </button>
       {expanded && children && <div className="kd-kino-ticket-details">{children}</div>}
     </article>
@@ -232,6 +232,12 @@ export function IconSearch({ size = 16 }) {
 }
 export function IconPlus({ size = 16 }) {
   return <svg {...svgProps(size)}><path fill="currentColor" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z" /></svg>;
+}
+export function IconStar({ size = 16, filled = false }) {
+  return <svg {...svgProps(size)} fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>;
+}
+export function IconCheck({ size = 16 }) {
+  return <svg {...svgProps(size)} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6" /></svg>;
 }
 export function IconChevronDown({ size = 16 }) {
   return <svg {...svgProps(size)}><path fill="currentColor" d="m6.7 8.5 5.3 5.3 5.3-5.3 1.4 1.4-6.7 6.7-6.7-6.7 1.4-1.4Z" /></svg>;

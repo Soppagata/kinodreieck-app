@@ -3,7 +3,7 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { norm } from "../lib/match.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
-import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
+import { Chip, ChipReihe, SegmentedControl, IconStar, IconCheck, IconArrowRight } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import {
@@ -54,7 +54,7 @@ function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className })
           maxWidth: "100%", overflowWrap: "anywhere", whiteSpace: "normal",
         };
         return url
-          ? <a key={label} href={url} target="_blank" rel="noopener noreferrer" style={stil} onClick={(e) => e.stopPropagation()} title={"Bei " + rohnamen.join(", ") + " öffnen"}>{label}&thinsp;↗</a>
+          ? <a key={label} href={url} target="_blank" rel="noopener noreferrer" style={{ ...stil, display: "inline-flex", alignItems: "center", minHeight: 44 }} onClick={(e) => e.stopPropagation()} title={"Bei " + rohnamen.join(", ") + " öffnen"}>{label}<span aria-hidden="true" style={{ display: "inline-flex", marginLeft: 4, transform: "rotate(-45deg)" }}><IconArrowRight size={12} /></span></a>
           : <span key={label} title={rohnamen.join(", ")} style={stil}>{label}</span>;
       })}
     </span>
@@ -736,13 +736,13 @@ export function StreamingTab({
                     title={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
                     aria-label={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
                     style={{ background: "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? T.kartenAkzent : T.kartenTextWeich, padding: 0 }}>
-                    {gemerkt(t) ? "★" : "☆"}
+                    <IconStar size={18} filled={gemerkt(t)} />
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); void toggleGesehen(t); }}
                     title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
                     aria-label={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
                     style={{ background: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.kartenAkzent : T.kartenTextWeich, padding: 0 }}>
-                    ✓
+                    <IconCheck size={18} />
                   </button>
                 </div>
                 {gesehenFrage === t.watchmode_id && (

@@ -7,7 +7,7 @@ export const ROTLINK = "#E06C6C"; // Wikipedia-Prinzip: offene Referenz
    Kontrastpaare (in beiden Themes gültig):
      saal/saalHoch (Flächen)  ↔  leinwand/rauch (Text darauf)
      leinwand als Karten-BG   ↔  tinte/tinteWeich (Text darauf)
-     wolfram (Akzent/Buttons) ↔  tinte (Text darauf)
+     wolfram (Akzent/Buttons) ↔  wolframText / kontrastFarbe(wolfram)
    Im hellen "Foyer"-Theme bleiben die FilmCards bewusst dunkel —
    Leinwände im hellen Saal. */
 export const THEMES = {

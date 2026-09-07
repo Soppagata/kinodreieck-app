@@ -8,7 +8,7 @@
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--rauch, #948fa0) 42%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--saal-hoch, #211e26) 82%, transparent);
+  background: color-mix(in srgb, var(--saalHoch, #211e26) 82%, transparent);
 }
 .kd-kino-tab .kd-kino-filterzeile,
 .kd-kino-tab .kd-kino-filteroptionen {

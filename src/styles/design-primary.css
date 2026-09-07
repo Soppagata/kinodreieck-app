@@ -88,6 +88,8 @@
 .kd-streaming-tab .kd-entdecken-kopf { display: block; }
 .kd-streaming-tab .kd-entdecken-aktionen { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--kd-space-3); }
 .kd-streaming-tab .kd-entdecken-aktionen button { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; margin: 0; padding: 0; border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 60%, transparent); border-radius: var(--kd-radius-control); }
+.kd-streaming-tab .kd-entdecken-pin { min-width: 44px; min-height: 44px; border-radius: var(--kd-radius-control); color: var(--kd-kartenTextWeich); border-color: var(--kd-kartenTextWeich); }
+.kd-streaming-tab .kd-entdecken-pin:is(:hover, :focus-visible, .aktiv) { color: var(--kd-kartenAkzent); border-color: var(--kd-kartenAkzent); }
 .kd-streaming-tab .kd-entdecken-titel,
 .kd-streaming-tab .kd-streaming-titel,
 .kd-streaming-tab .kd-film-titel { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: calc(22px * var(--kd-schriftfaktor, 1)); line-height: 1.2; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
@@ -95,12 +97,23 @@
 .kd-streaming-tab .kd-entdecken-dienste,
 .kd-streaming-tab .kd-streaming-meta { font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: 0; text-transform: none; }
 .kd-streaming-tab input[type="range"] { accent-color: var(--kd-wolfram); }
+.kd-streaming-tab select { border-radius: var(--kd-radius-control); font-family: 'Space Grotesk', sans-serif; font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1))); font-weight: 400; }
+.kd-streaming-tab .kd-streamfilter-abc-kopf > span { font-family: 'Space Grotesk', sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.kd-streaming-tab .kd-streamfilter-abc-kopf strong { color: var(--kd-wolframText); font-weight: 700; }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"] { -webkit-appearance: none; appearance: none; height: 44px; background: transparent; }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--kd-linie); }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -7px; border: 2px solid var(--kd-saalHoch); border-radius: 50%; background: var(--kd-wolfram); }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--kd-linie); }
+.kd-streaming-tab .kd-streamfilter-abc input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid var(--kd-saalHoch); border-radius: 50%; background: var(--kd-wolfram); }
 .kd-streaming-tab .kd-streamfilter-abc-skala span,
 .kd-streaming-tab .kd-streamfilter-dekade-skala span { visibility: hidden; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
 .kd-streaming-tab .kd-streamfilter-abc-skala span:nth-child(5n + 1),
-.kd-streaming-tab .kd-streamfilter-dekade-skala span:nth-child(odd),
+.kd-streaming-tab .kd-streamfilter-dekade-skala span:nth-child(3n + 1),
 .kd-streaming-tab .kd-streamfilter-abc-skala span.aktiv,
 .kd-streaming-tab .kd-streamfilter-dekade-skala span.aktiv { visibility: visible; }
+.kd-streaming-tab .kd-streamfilter-dekade-skala span { white-space: nowrap; }
+.kd-streaming-tab .kd-streamfilter-dekade-skala span:first-child { text-align: left; }
+.kd-streaming-tab .kd-streamfilter-dekade-skala span:last-child { text-align: right; }
 
 .kd-mediathek-tab .kd-seg { gap: var(--kd-space-2); margin-bottom: var(--kd-space-4); }
 .kd-mediathek-tab .kd-mediathek-suchleiste { padding: var(--kd-space-2); background: var(--kd-saalHoch); }
@@ -128,6 +141,6 @@
   .kd-kino-tab .kd-kino-programmfilter { gap: var(--kd-space-2); }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 371px) {
   .kd-wochen-tagauswahl { grid-template-columns: repeat(4, minmax(44px, 1fr)); }
 }

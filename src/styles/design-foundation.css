@@ -41,6 +41,18 @@ body {
 }
 
 button, input, select, textarea { font: inherit; }
+/* The native menu and value semantics stay intact. The closed select gets
+   the same CSS chevron in every engine; these longhands must survive
+   existing inline background/padding shorthands on the shared inputs. */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%) !important;
+  background-position: right 16px center, right 12px center !important;
+  background-size: 4px 4px !important;
+  background-repeat: no-repeat !important;
+  padding-right: 32px !important;
+}
 button, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
 button:not(:disabled), summary { touch-action: manipulation; }
 button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opacity: .58; }
@@ -231,5 +243,6 @@ h2, h3, .kd-abschnitt-titel {
 .kd-privacy-recovery-fehler { color: var(--kd-gefahr); font-weight: 600; }
 
 @media (max-width: 360px) {
+  .kd-app { --kd-page-gutter: 16px; }
   .kd-bereichshero { margin-bottom: var(--kd-space-4); }
 }

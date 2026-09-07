@@ -75,7 +75,7 @@ export function KatalogZugang({ onFertig, onAbbrechen, zwingend = false }) {
       padding: "max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left))" }}>
       <div ref={dialog} className="kd-katalogzugang-dialog" role="dialog" aria-modal="true" aria-label="Programmdaten verbinden"
         style={{ width: "100%", maxWidth: 500, boxSizing: "border-box", background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 12, padding: "24px", boxShadow: "0 12px 48px rgba(0,0,0,.65)" }}>
-        <h2 style={{ margin: "0 0 8px", color: T.wolfram, fontFamily: "'Barlow Condensed', sans-serif", fontSize: 25, letterSpacing: ".05em", textTransform: "uppercase" }}>Programmdaten verbinden</h2>
+        <h2 style={{ margin: "0 0 8px", color: T.wolfram, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, letterSpacing: 0, textTransform: "none" }}>Programmdaten verbinden</h2>
         <p style={{ margin: "0 0 16px", color: T.leinwandTief, fontSize: 14, lineHeight: 1.6 }}>
           Der Zugang lädt das gemeinsame Wiener Kinoprogramm und den vorbereiteten Streamingkatalog. Im Demo-Modus kommen zusätzlich Max’ Beispieldaten dazu. Der Schlüssel wird nur in diesem Browser gespeichert.
         </p>
