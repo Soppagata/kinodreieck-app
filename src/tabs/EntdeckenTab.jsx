@@ -52,7 +52,7 @@ function radarQuellenLabel(entry) {
   const domains = [...new Set((entry?.evidence || [])
     .map((evidence) => typeof evidence?.sourceDomain === "string" ? evidence.sourceDomain.trim() : "")
     .filter(Boolean))];
-  return domains.length ? domains.join(" · ") : "Quelle nicht verfügbar";
+  return domains.length ? domains.join(" · ") : "nicht verfügbar";
 }
 function istKontogebundenerTextfund(entry) {
   if (RADAR_TEXT_FINDING_ID.test(entry?.targetId || "")) return true;

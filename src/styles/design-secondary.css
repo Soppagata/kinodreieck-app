@@ -195,6 +195,7 @@
 .kd-daten-tab .kd-startbereich-zeile { grid-template-columns: minmax(0, 1fr); }
 .kd-daten-tab .kd-startbereich-zeile select { box-sizing: border-box; width: 100%; min-width: 0; height: 44px; }
 .kd-daten-tab .kd-einstelloptionen {
+  --kd-seg-padding: 6px;
   display: grid;
   min-width: 0;
   gap: var(--kd-space-2);
@@ -206,8 +207,8 @@
   width: 100%;
   min-width: 0;
   height: 44px;
-  padding: 6px;
 }
+.kd-daten-tab .kd-einstelloptionen--3 .kd-seg-control { white-space: nowrap; }
 .kd-daten-tab :is([data-private-mail-feedback], [data-private-mail-account-deletion], [data-manual-data-rights], [data-account-export], .kd-stapelimport, .kd-blogprofilanalyse, .kd-prognose, .kd-profil-eindruck) {
   padding: var(--kd-space-4);
   border: 1px solid var(--kd-secondary-border);

@@ -106,7 +106,7 @@ export function SegmentedControl({ options, value, onChange, dataTour, style, cl
         <button className="kd-seg-control" key={o.id} onClick={() => onChange(o.id)} aria-pressed={value === o.id}
           style={{
             fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: "calc(14px * var(--kd-schriftfaktor, 1))",
-            lineHeight: 1.35, minHeight: 44, padding: "8px 12px",
+            lineHeight: 1.35, minHeight: 44, padding: "var(--kd-seg-padding, 8px 12px)",
             border: "1px solid " + (value === o.id ? T.wolfram : T.rauch), borderRadius: 8, cursor: "pointer",
             background: value === o.id ? T.wolfram : "transparent", color: value === o.id ? kontrastFarbe(T.wolfram) : T.rauch,
           }}>

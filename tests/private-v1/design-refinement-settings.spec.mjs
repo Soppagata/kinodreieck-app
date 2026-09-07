@@ -41,6 +41,15 @@ for (const viewport of VIEWPORTS) {
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const geometry = await controlGeometry(page);
       expectCompactGrid(geometry);
+      const labels = await page.locator('.kd-einstelloptionen--3 button').evaluateAll((buttons) => buttons.map((button) => {
+        const text = document.createRange();
+        text.selectNodeContents(button);
+        return {
+          rows: new Set([...text.getClientRects()].map((rect) => Math.round(rect.top))).size,
+          fits: button.scrollWidth <= button.clientWidth,
+        };
+      }));
+      for (const label of labels) expect(label).toEqual({ rows: 1, fits: true });
       if (measurements.has(font)) expect(geometry).toEqual(measurements.get(font));
       else measurements.set(font, geometry);
     }

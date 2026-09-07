@@ -1,5 +1,9 @@
 # Veröffentlichung des Designs vorbereitet
 
+Historische Vorbereitung vor der ersten Veröffentlichung. Danach wurde `46a2a2c`
+erfolgreich auf Staging ausgeliefert. Die Nutzerkorrekturen dieser ersten Ansicht
+sind in [refinement-integration.md](refinement-integration.md) dokumentiert.
+
 Stand: 7. September 2026. Auslöser: Max sieht in installierter PWA und iPhone-Safari keine Designänderung. Die bisherige Lieferung war ausschließlich lokal; der Designzweig war nicht veröffentlicht.
 
 ## Frisch gelesener Online-Stand

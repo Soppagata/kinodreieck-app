@@ -10,7 +10,7 @@ Ein dunkler Kinosaal, warme Papierkarten, sparsam gesetztes Gold. Im vorhandenen
 | --- | --- |
 | Seitenüberschrift | Fraunces 900, 38 px mobil / bis 46 px Desktop, Zeilenhöhe 1.08, normale Groß-/Kleinschreibung; vorhandene Startbegrüßung darf gleichwertig behandelt werden |
 | Abschnitt | Space Grotesk 600, 15 px / 1.4; kein weit gesperrtes Mono-Versalband |
-| Filmtitel/Kartentitel | Barlow Condensed 600, 22 px / 1.2, normale Groß-/Kleinschreibung; vollständig umbrechend |
+| Filmtitel/Kartentitel | Haupteinträge: Barlow Condensed 600, 22 px / 1.2, vollständig umbrechend. Die bewusst untergeordnete Kino-Liste „Läuft auch“ bleibt mit etwa 17 px kleiner. |
 | Fließtext | Space Grotesk 400, 15 px / 1.55 |
 | Button/Tab/Filter | Space Grotesk 600, 14 px / 1.35, normale Groß-/Kleinschreibung |
 | Metadaten/Anbieterlabel | Space Grotesk 400–500, 12 px / 1.45; lesbare Fläche/Text-Paare |
@@ -20,7 +20,7 @@ Ein dunkler Kinosaal, warme Papierkarten, sparsam gesetztes Gold. Im vorhandenen
 | Rundungen | Karte 12 px, Controls 8 px, reine Labels 5 px; keine beliebigen zusätzlichen Radien |
 | Bedienflächen | Einzelne Buttons/Schaltlinks mindestens 44 × 44 px oder äquivalente volle Zeile; Textlinks im Fließtext bleiben Fließtextlinks |
 
-Alle Textrollen folgen dem vorhandenen `--kd-schriftfaktor`; Eingabefelder unterschreiten auch bei Einstellung „klein“ 16 px nicht. Kein fester Höhenzwang auf Textkarten. Markenwortzug, Bewertungssignatur und ausdrückliche Easteregg-Gestaltung bleiben als solche erkennbar.
+Die kompakte Mediathek-Navigation verwendet 13 px für Ansichten und 12 px für die leisere Typenreihe. Alle Textrollen folgen dem vorhandenen `--kd-schriftfaktor`; Eingabefelder unterschreiten auch bei Einstellung „klein“ 16 px nicht. Kein fester Höhenzwang auf Textkarten. Markenwortzug, Bewertungssignatur und ausdrückliche Easteregg-Gestaltung bleiben als solche erkennbar.
 
 ## Farben und Zustände
 
@@ -35,7 +35,7 @@ Alle Textrollen folgen dem vorhandenen `--kd-schriftfaktor`; Eingabefelder unter
 ## Wiederkehrende Bausteine
 
 1. **Kopf:** identische Typografie und Sektionabstände; eine dezente Lichtpunktlinie als Kinozitat. Vorhandene Navigation bleibt vollständig erhalten.
-2. **Filmkarte:** Papier/Dunkelkarte, Titel 22 px, Metadaten darunter; Aktionen in einer eigenen umbrechenden Reihe. Bewertungsdreieck, Quellen, Status und alle vorhandenen Detailaktionen bleiben zugänglich.
+2. **Filmkarte:** Papier/Dunkelkarte, Titel 22 px, Metadaten darunter; Aktionen in einer eigenen umbrechenden Reihe. Bewertungsdreieck, Quellen, Status und alle vorhandenen Detailaktionen bleiben zugänglich. Die Kino-Nebenliste „Läuft auch“ verwendet bewusst kleinere, schlichte Zeilen. Radar-Neuigkeiten erhalten dagegen die erkennbare Kartenfamilie der Haupteinträge mit Datum und Zielherkunft.
 3. **Must-Watch:** fünf vorhandene tägliche Einträge, Rang links, vollständiger Titel, darunter vollständige umbrechende Anbieter. Der schon korrigierte Screenshot-Overflow darf nicht zurückkehren.
 4. **Wochenplan:** kompakte Wochentagsauswahl plus ausgewählter Tag, mit sichtbarer Möglichkeit „Ganze Woche“. Das ist lokale Darstellungswahl; alle bisherigen Einträge, Hinzufügen-/Entfernen-/Terminauswahlaktionen und Wochenwechsel bleiben vorhanden. Bei sehr kleiner Breite darf die Tagesauswahl in zwei Reihen umbrechen.
 5. **Kino/Streaming:** gleiche Kartentypografie, Controlhöhen und Abstände. Filter funktionieren wie bisher. Kino-Pin bleibt vorstellungsbezogen, Streaming-Pin titelbezogen. „Mein Programm“, „Alles“, „Neu“, Jahrzehnt-Nullwert „Alle“, Toleranz-/Sortierverträge und Neu-Frist bleiben unverändert. Skalen weniger dicht beschriften, nicht die Werte verändern.
@@ -59,6 +59,21 @@ Die bestehenden WOFF2-Dateien in `src/assets/fonts` sind die Quelle. Web/PWA lad
 Keine Änderungen an `src/services`, Controllern, Rankings, Datenmodell, Persistenz-/Kontogrenzen, Supabase, Workflows, Providern, Service Worker oder Funktionen. Keine neuen Abhängigkeiten. Ereignishandler, href/Targets, Formvalidierung, Such-/Filterwerte, IDs/Tour-Anker, Accessibility-Beziehungen, Datenmengen und Rechte bleiben erhalten. Neue Klassen und rein lokale Darstellungsauswahl sind erlaubt. Keine versteckten Funktionen oder deaktivierten Eastereggs reaktivieren. Bei einem Funktionsverdacht: konkreter Pfad/Beobachtung in die Feedbackliste; nicht nebenbei Architektur reparieren.
 
 **Präzisierung von Max während der Umsetzung:** Eastereggs werden später in separaten Chats einzeln kreativ ausgearbeitet. In diesem Auftrag ausschließlich ihre Schriften und Bedienelemente vereinheitlichen; keine zusätzliche Effekt-, Theme- oder Animationsgestaltung. Der Schwerpunkt bleibt die gemeinsame App-Oberfläche.
+
+## Präzisierung nach der ersten Staging-Ansicht
+
+Die Screenshots vom 7. September um 21:20–21:21 konkretisieren die gewünschte Dichte. Ein gemeinsamer Stil bedeutet passende Gewichtung je Inhalt. Die erste Lieferung auf Staging war `46a2a2c`; diese Korrekturen bauen darauf auf.
+
+| ID | Nutzerergebnis | Verbindliche Korrektur | Stand |
+| --- | --- | --- | --- |
+| R1 | Kino-Nebenliste bleibt bewusst schlicht | Nur „Läuft auch“ erhält kleinere Titel und ruhige Zeilen; persönliche Treffer behalten ihre Priorität. | GEBAUT |
+| R2 | Mediathek-Menü direkt unter dem Kopf | Drei Ansichten nebeneinander, darunter eine leisere Typenzeile; alle Zähler und Funktionen erhalten. | GEBAUT |
+| R3 | Stabile Schriftwahl | Zwei Erscheinungsoptionen und drei Schriftoptionen in stabilen Reihen; kein Prozent-Flex in vertikalen Einstellungszeilen. Wechsel Klein/Normal/Groß ohne aufgeblähte Controls. | GEBAUT |
+| R4 | Vertraute Einstellungs-Accordions | Schlichte Aufklappzeilen, sichtbare Chevron, kompakte Abstände; vorhandene native Öffnungszustände erhalten. | GEBAUT |
+| R5 | Praktisches Menü für die rechte Hand | Kleines Paneel unten rechts, sechs Bereiche in zwei Spalten; „Nach oben“ rechts in der integrierten Fußzeile. Bestehende Fokus-/Scroll- und Navigationsmechanik erhalten. | GEBAUT |
+| R6 | Neuigkeiten deutlicher wahrnehmen | Eintragskarten wie Kino/Streaming; Titel, Datum, Quelle und „Gefunden für“ klar lesbar, bestehende Folgendetails erhalten. | GEBAUT |
+
+Umsetzung in drei disjunkten Paketen auf derselben Basis: R1/R2/R6 (Hauptansichten), R3/R4 (Settings), R5 (Menü). Alle sechs Korrekturen sind im gemeinsamen Integrationsstand gebaut und lokal belegt; siehe [refinement-integration.md](design-deliveries/refinement-integration.md). Anschließende Lieferung auf Staging im bereits autorisierten Designpfad. Keine Änderung von main oder der Funktionsarchitektur.
 
 ## Ergebnisregister und Baufolge
 

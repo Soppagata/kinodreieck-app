@@ -18,7 +18,7 @@ function NavigationSymbol({ id }) {
     case "start": return <svg {...common}><path d="M4 10.6 12 4l8 6.6v8.2a1.2 1.2 0 0 1-1.2 1.2H5.2A1.2 1.2 0 0 1 4 18.8v-8.2Z" /><path d="M9.2 20v-5.7h5.6V20" /></svg>;
     case "kino": return <svg {...common}><rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="m10.2 9 5.1 3-5.1 3V9Z" /></svg>;
     case "mediathek": return <svg {...common}><path d="M4 7h16v12H4zM8 4h8M7 4l-2 3m12-3 2 3" /><path d="m10.2 10 4.6 2-4.6 2v-4Z" /></svg>;
-    case "streaming": return <svg {...common}><rect x="3.5" y="5" width="17" height="11.5" rx="2" /><path d="M8 20h8m-4-3.5V20m-1.8-7 4.1-2.3v4.6L10.2 13Z" /></svg>;
+    case "streaming": return <svg {...common}><rect x="3.5" y="5" width="17" height="11.5" rx="2" /><path d="M8 20h8m-4-3.5V20M10.2 8.5l4.6 2.3-4.6 2.3V8.5Z" /></svg>;
     case "blog": return <svg {...common}><circle cx="12" cy="12" r="7.5" /><path d="m14.7 9.3-1.8 4.4-4.4 1.8 1.8-4.4 4.4-1.8Z" /></svg>;
     case "daten": return <svg {...common}><path d="M5 7h14M5 12h14M5 17h14" /><circle cx="9" cy="7" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="11" cy="17" r="1.5" /></svg>;
     default: return null;

@@ -125,7 +125,7 @@
 
 .kd-mediathek-tab .kd-seg { gap: var(--kd-space-2); margin-bottom: var(--kd-space-4); }
 .kd-mediathek-tab .kd-mediathek-ansichten { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 6px; }
-.kd-mediathek-tab .kd-mediathek-ansichten .kd-seg-control { width: auto !important; min-width: 0; padding: 7px 6px !important; color: var(--kd-rauch) !important; background: transparent !important; }
+.kd-mediathek-tab .kd-mediathek-ansichten .kd-seg-control { width: auto !important; min-width: 0; padding: 7px 6px !important; color: var(--kd-rauch) !important; background: transparent !important; font-size: calc(13px * var(--kd-schriftfaktor, 1)) !important; }
 .kd-mediathek-tab .kd-mediathek-ansichten .kd-seg-control[aria-pressed="true"] { border-color: var(--kd-wolfram) !important; color: var(--kd-leinwand) !important; background: color-mix(in srgb, var(--kd-wolfram) 16%, transparent) !important; }
 .kd-mediathek-tab .kd-mediathek-typen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: var(--kd-space-3); }
 .kd-mediathek-tab .kd-mediathek-typen .kd-seg-control { width: auto !important; min-width: 0; padding: 6px 4px !important; color: var(--kd-rauch) !important; background: transparent !important; font-size: calc(12px * var(--kd-schriftfaktor, 1)) !important; }
@@ -150,7 +150,7 @@
 /* Radar: bestätigte Funde bleiben reine Anzeige, erhalten aber eine eigene
    Kartenhierarchie statt mit den aktiven Zielen zu verschmelzen. */
 .kd-entdecken-ansicht .kd-radar-neuigkeiten { display: grid; gap: var(--kd-space-2); margin: var(--kd-space-2) 0 0; padding: 0; list-style: none; }
-.kd-entdecken-ansicht .kd-radar-neuigkeiten > .kd-radar-neuigkeit { display: grid; gap: 4px; padding: var(--kd-space-4); border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 34%, transparent); border-radius: var(--kd-radius-karte); background: var(--kd-kartenFeld); color: var(--kd-kartenText); box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent); }
+.kd-entdecken-ansicht .kd-radar-neuigkeiten > .kd-radar-neuigkeit { display: grid; gap: 4px; padding: var(--kd-space-4); border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich) 34%, transparent); border-radius: var(--kd-radius-karte); background: var(--kd-leinwand); color: var(--kd-kartenText); box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent); }
 .kd-entdecken-ansicht .kd-radar-neuigkeit-titel { margin: 0; color: var(--kd-kartenText); font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); font-weight: 600; line-height: 1.2; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
 .kd-entdecken-ansicht .kd-radar-neuigkeit :is(.kd-radar-neuigkeit-meta, .kd-radar-neuigkeit-quelle, .kd-radar-neuigkeit-herkunft) { color: var(--kd-kartenTextWeich); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; letter-spacing: 0; text-transform: none; }
 .kd-entdecken-ansicht .kd-radar-neuigkeit-herkunft { color: var(--kd-kartenText); font-weight: 600; }
