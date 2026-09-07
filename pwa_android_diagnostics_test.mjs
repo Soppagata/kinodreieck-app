@@ -181,6 +181,55 @@ await check("Prompt-Ablehnung, ausstehende Annahme und appinstalled werden stabi
   assert.equal(D.withPromptOutcome(report, "installed").primaryCode, "KD-PWA-ANDROID-000");
 });
 
+await check("App-Installationsstatus verbraucht abgelehnte oder fehlerhafte Prompt-Ereignisse fail-closed", async () => {
+  const installationSource = readFileSync("src/lib/installation.js", "utf8")
+    .replace(/^import[^;]+;\s*/m, "const useEffect = () => {}; const useState = () => {};\n")
+    .replace(/export\s+/g, "")
+    + "\nglobalThis.KdInstallationTest = { installationsStatus, installiereApp };";
+  const listeners = {};
+  const installationContext = {
+    window: {
+      navigator: {},
+      addEventListener(name, fn) { listeners[name] = fn; },
+      matchMedia() { return { matches: false }; },
+    },
+    navigator: { userAgent: "Android", maxTouchPoints: 0 },
+    location: { protocol: "https:" },
+    Set, Promise,
+  };
+  vm.runInNewContext(installationSource, installationContext, { filename: "src/lib/installation.js" });
+  const I = installationContext.KdInstallationTest;
+
+  let dismissedPrompts = 0;
+  listeners.beforeinstallprompt({
+    preventDefault() {}, prompt() { dismissedPrompts++; },
+    userChoice: Promise.resolve({ outcome: "dismissed" }),
+  });
+  assert.equal(I.installationsStatus().installierbar, true);
+  const dismissed = await I.installiereApp();
+  assert.equal(dismissed.status, "abgebrochen");
+  assert.equal(I.installationsStatus().installierbar, false);
+  await I.installiereApp();
+  assert.equal(dismissedPrompts, 1);
+
+  listeners.beforeinstallprompt({
+    preventDefault() {}, async prompt() { throw new Error("prompt-unavailable"); },
+    userChoice: Promise.resolve({ outcome: "dismissed" }),
+  });
+  const failed = await I.installiereApp();
+  assert.equal(failed.status, "fehlgeschlagen");
+  assert.equal(I.installationsStatus().installierbar, false);
+
+  let acceptedPrompts = 0;
+  listeners.beforeinstallprompt({
+    preventDefault() {}, prompt() { acceptedPrompts++; },
+    userChoice: Promise.resolve({ outcome: "accepted" }),
+  });
+  const accepted = await I.installiereApp();
+  assert.equal(accepted.status, "angenommen");
+  assert.equal(acceptedPrompts, 1);
+});
+
 await check("Diagnose persistiert keine Historie und kennt keinen Fremdtransport", () => {
   assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB|sendBeacon|XMLHttpRequest/);
   assert.doesNotMatch(source, /https?:\/\/(?!kino\.example)/);

@@ -7,6 +7,7 @@ const diagnoseErgebnis = document.querySelector("#diagnose-ergebnis");
 let installAufruf = null;
 let diagnoseBericht = null;
 let installationBestaetigt = false;
+let letzterPromptStatus = "missing";
 
 function zeigeHinweis(text) {
   if (installHinweis) installHinweis.textContent = text;
@@ -38,24 +39,28 @@ function berichtJson() {
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   installAufruf = event;
+  letzterPromptStatus = "available";
   zeigeHinweis("Bereit zur Installation.");
 });
 
 installButton?.addEventListener("click", async () => {
   if (!installAufruf) {
+    letzterPromptStatus = "missing";
     zeigeHinweis("Falls kein Dialog erscheint: Browsermenü öffnen und „App installieren“ wählen.");
     return;
   }
 
   const aufruf = installAufruf;
   installAufruf = null;
+  installButton.disabled = true;
   try {
     const promptResult = await aufruf.prompt();
     const ergebnis = promptResult?.outcome ? promptResult : await aufruf.userChoice;
     const angenommen = ergebnis?.outcome === "accepted";
+    letzterPromptStatus = angenommen ? "accepted" : "dismissed";
     zeigeHinweis(angenommen
       ? "Installation wurde angenommen; der Browser schließt sie jetzt ab."
-      : "Installation nicht gestartet. Du kannst es jederzeit erneut versuchen.");
+      : "Dialog geschlossen. Ein neuer Versuch ist möglich, sobald der Browser ihn wieder anbietet; sonst nutze das Browsermenü.");
     if (diagnoseBericht && window.KdPwaDiagnostics) {
       zeigeDiagnose(window.KdPwaDiagnostics.withPromptOutcome(
         diagnoseBericht, angenommen ? "accepted" : "dismissed",
@@ -67,13 +72,20 @@ installButton?.addEventListener("click", async () => {
       }
     }, 5000);
   } catch {
-    zeigeHinweis("Der Installationsdialog konnte nicht sicher geöffnet werden. Bitte Diagnose ausführen.");
+    letzterPromptStatus = "missing";
+    zeigeHinweis("Der Installationsdialog ist gerade nicht verfügbar. Nutze das Browsermenü oder führe die Diagnose aus.");
+    if (diagnoseBericht && window.KdPwaDiagnostics) {
+      zeigeDiagnose(window.KdPwaDiagnostics.withPromptOutcome(diagnoseBericht, "missing"));
+    }
+  } finally {
+    installButton.disabled = false;
   }
 });
 
 window.addEventListener("appinstalled", () => {
   installationBestaetigt = true;
   installAufruf = null;
+  letzterPromptStatus = "installed";
   zeigeHinweis("Kinodreieck ist installiert.");
   if (diagnoseBericht && window.KdPwaDiagnostics) {
     zeigeDiagnose(window.KdPwaDiagnostics.withPromptOutcome(diagnoseBericht, "installed"));
@@ -87,13 +99,16 @@ diagnoseButton?.addEventListener("click", async () => {
   if (downloadButton) downloadButton.hidden = true;
   try {
     if (!window.KdPwaDiagnostics) throw new Error("diagnostics-unavailable");
-    const bericht = await window.KdPwaDiagnostics.runDiagnostics({
+    let bericht = await window.KdPwaDiagnostics.runDiagnostics({
       promptState: {
         available: !!installAufruf,
         standalone: standalone(),
         installed: installationBestaetigt,
       },
     });
+    if (["accepted", "dismissed", "installed"].includes(letzterPromptStatus)) {
+      bericht = window.KdPwaDiagnostics.withPromptOutcome(bericht, letzterPromptStatus);
+    }
     zeigeDiagnose(bericht);
   } catch {
     const definition = window.KdPwaDiagnostics?.finding?.("KD-PWA-ANDROID-090");

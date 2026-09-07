@@ -9,6 +9,15 @@ class FakeCache {
   constructor() { this.eintraege = new Map(); }
   async match(req) { return this.eintraege.get(schluessel(req))?.clone(); }
   async put(req, res) { this.eintraege.set(schluessel(req), res.clone()); }
+  async addAll(requests) {
+    const neueEintraege = [];
+    for (const request of requests) {
+      const response = await fetchImpl(request);
+      if (!response?.ok) throw new Error("precache-response-not-ok");
+      neueEintraege.push([schluessel(request), response.clone()]);
+    }
+    for (const [key, response] of neueEintraege) this.eintraege.set(key, response);
+  }
 }
 
 const caches = {
@@ -68,20 +77,41 @@ async function fetchEvent(req) {
 }
 
 const AKTUELLER_CACHE = "kd-shell-v3-__KD_BUILD_VERSION__";
+const ALTER_CACHE = "kd-shell-v2-alt";
+speicher.set(ALTER_CACHE, new FakeCache());
+fetchImpl = async (request) => {
+  if (String(request).endsWith("index.html")) throw new Error("simulierter Teilfehler");
+  return new Response("shell", { status: 200 });
+};
+let fehlgeschlageneInstallation;
+listeners.install({ waitUntil(p) { fehlgeschlageneInstallation = Promise.resolve(p); } });
+let installFehler = null;
+try { await fehlgeschlageneInstallation; } catch (error) { installFehler = error; }
+check("Partieller Precache-Fehler verwirft den neuen Worker vor skipWaiting",
+  installFehler?.message === "simulierter Teilfehler" && skipWaitingAufrufe === 0);
+check("Partieller Precache-Fehler bewahrt den letzten vollständigen alten App-Shell-Cache",
+  speicher.has(ALTER_CACHE) && speicher.get(AKTUELLER_CACHE)?.eintraege.size === 0);
+let blockierteAktivierung;
+listeners.activate({ waitUntil(p) { blockierteAktivierung = Promise.resolve(p); } });
+let aktivierungsFehler = null;
+try { await blockierteAktivierung; } catch (error) { aktivierungsFehler = error; }
+check("Activate löscht bei unvollständiger neuer Shell keinen alten Cache",
+  aktivierungsFehler?.message === "KD_APP_SHELL_UNVOLLSTAENDIG"
+  && speicher.has(ALTER_CACHE) && claimAufrufe === 0);
+
 fetchImpl = async () => new Response("shell", { status: 200 });
 let installation;
 listeners.install({ waitUntil(p) { installation = Promise.resolve(p); } });
 await installation;
 check("Install legt die aktuelle Shell an und übernimmt den Worker ohne Seitennavigation",
-  speicher.has(AKTUELLER_CACHE) && skipWaitingAufrufe === 1);
+  speicher.get(AKTUELLER_CACHE)?.eintraege.size === 3 && skipWaitingAufrufe === 1);
 
-speicher.set("kd-shell-v2-alt", new FakeCache());
 speicher.set("kinodreieck-katalog-v1", new FakeCache());
 let aktivierung;
 listeners.activate({ waitUntil(p) { aktivierung = Promise.resolve(p); } });
 await aktivierung;
 check("Activate löscht alte App-Shell-Caches und bewahrt nur den aktuellen Build",
-  !speicher.has("kd-shell-v2-alt") && speicher.has(AKTUELLER_CACHE));
+  !speicher.has(ALTER_CACHE) && speicher.has(AKTUELLER_CACHE));
 check("Activate entwertet den alten öffentlichen Katalog-Fallback",
   !speicher.has("kinodreieck-katalog-v1"));
 check("Activate übernimmt Clients und meldet die aktive Build-Version",
