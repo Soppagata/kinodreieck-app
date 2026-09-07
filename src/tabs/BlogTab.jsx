@@ -16,8 +16,8 @@ import { formatPresentationDate } from "../lib/presentationDate.js";
    Bearbeiten nach Freigabe: Maske vorbefüllt, Speichern -> wartet,
    unveränderte refs bleiben stabil. */
 
-const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", get color() { return T.wolfram; }, margin: "0 0 10px" };
-const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, get color() { return T.rauch; } };
+const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2, letterSpacing: 0, textTransform: "none", get color() { return T.leinwand; }, margin: "0 0 10px" };
+const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", get color() { return T.rauch; } };
 /* ---------- Eingabemaske ---------- */
 export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   const [titel, setTitel] = useState(vorlage ? vorlage.titel : "");
@@ -49,7 +49,7 @@ export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   };
 
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-blog kd-blog-formular" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
       <h2 style={h2}>{vorlage ? "Artikel bearbeiten" : "Neuer Artikel"}</h2>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input placeholder="Titel *" value={titel} onChange={(e) => setTitel(e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 220 }} />
@@ -71,12 +71,12 @@ export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
           </select>
           <input placeholder="Jahr" value={z.jahr} onChange={(e) => setzeZeile(i, "jahr", e.target.value)} style={{ ...inputStyle, width: 70 }} />
           <button type="button" aria-label={`Referenz ${i + 1} entfernen`} title="Referenz entfernen"
-            style={{ ...btnStyle(false), fontSize: 12, padding: "5px 9px" }}
+            style={{ ...btnStyle(false), padding: "5px 9px" }}
             onClick={() => setListe(liste.filter((_, j) => j !== i))}><IconClose /></button>
         </div>
       ))}
       {liste.length < MAX_LISTE && (
-        <button style={{ ...btnStyle(false), alignSelf: "flex-start", fontSize: 13, padding: "6px 12px" }}
+        <button style={{ ...btnStyle(false), alignSelf: "flex-start", padding: "6px 12px" }}
           onClick={() => setListe([...liste, { eingabe: "", jahr: "", typ: "" }])}>+ Referenz</button>
       )}
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
@@ -97,7 +97,7 @@ function AbgleichPopup({ artikel, master, onSetzeRef, onFreigeben, onLoeschen, o
   const frei = s.mehrfach === 0;
 
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", border: "1px solid " + T.wolfram }}>
+    <div className="kd-blog kd-blog-abgleich" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", border: "1px solid " + T.wolfram }}>
       <h2 style={h2}>Abgleich abgeschlossen — „{artikel.titel}“</h2>
       <div style={{ fontSize: 14, marginBottom: 10, color: T.leinwandTief }}>
         {s.mehrfach > 0
@@ -125,13 +125,13 @@ function AbgleichPopup({ artikel, master, onSetzeRef, onFreigeben, onLoeschen, o
                   <select defaultValue="" onChange={(e) => {
                     if (e.target.value === "__rot__") onSetzeRef(artikel.id, i, null, true);
                     else if (e.target.value) onSetzeRef(artikel.id, i, e.target.value, false);
-                  }} style={{ ...inputStyle, padding: "7px 6px", fontSize: 13 }}>
+                  }} style={{ ...inputStyle, padding: "7px 6px" }}>
                     <option value="" disabled>Kandidat wählen …</option>
                     {le.abgleich.kandidaten.map((k) => <option key={k.id} value={k.id}>{k.titel} ({k.jahr}){k.typ !== "film" ? " · " + k.typ : ""}</option>)}
                     <option value="__rot__">Keiner davon → Rotlink</option>
                   </select>
                 )}
-                <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}
+                <button style={{ ...btnStyle(false), padding: "5px 10px" }}
                   onClick={() => { setNeuFuer(neuFuer === i ? null : i); setNeuTyp(normalisiereTyp(le.typ)); }}>
                   {neuFuer === i ? "Schließen" : "+ Neu anlegen"}
                 </button>
@@ -141,7 +141,7 @@ function AbgleichPopup({ artikel, master, onSetzeRef, onFreigeben, onLoeschen, o
               <div style={{ marginTop: 8 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                   <span style={mono}>Typ des neuen Eintrags:</span>
-                  <select value={neuTyp} onChange={(e) => setNeuTyp(e.target.value)} style={{ ...inputStyle, padding: "6px", fontSize: 12 }}>
+                  <select value={neuTyp} onChange={(e) => setNeuTyp(e.target.value)} style={{ ...inputStyle, padding: "6px" }}>
                     {ALLE_TYPEN.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -184,12 +184,12 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
   const [rotTyp, setRotTyp] = useState("film");
   const proId = useMemo(() => new Map(master.map((f) => [f.id, f])), [master]);
   return (
-    <div style={{ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "26px 30px", maxWidth: 760, margin: "0 auto" }}>
+    <div className="kd-blog kd-blog-leseansicht" style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "24px", maxWidth: 760, margin: "0 auto" }}>
       <div style={{ display: "flex", gap: 8, justifyContent: "space-between", flexWrap: "wrap", marginBottom: 6 }}>
-        <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, fontSize: 13, padding: "6px 12px" }} onClick={onZurueck}>← Blog</button>
-        <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, fontSize: 13, padding: "6px 12px" }} onClick={() => onBearbeiten(artikel.id)}>✎ Bearbeiten</button>
+        <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, padding: "6px 12px" }} onClick={onZurueck}>← Blog</button>
+        <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, padding: "6px 12px" }} onClick={() => onBearbeiten(artikel.id)}>✎ Bearbeiten</button>
       </div>
-      <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 32, lineHeight: 1.15, textTransform: "uppercase", letterSpacing: "0.02em", margin: "6px 0 4px" }}>
+      <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0, margin: "6px 0 4px" }}>
         {artikel.titel}
       </h1>
       <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, marginBottom: 18 }}>
@@ -349,7 +349,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
               style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", opacity: wartend ? 0.6 : 1 }}>
               <div className="kd-blog-kartenkopf">
                 <div style={{ minWidth: 0 }}>
-                  <h3 id={titelId} style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 19, textTransform: "uppercase", letterSpacing: "0.03em", margin: 0 }}>
+                  <h3 id={titelId} style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0, margin: 0 }}>
                     {a.titel}{wartend && <span style={{ color: T.wolfram, fontSize: 13, marginLeft: 10 }}>· WARTET</span>}
                   </h3>
                   <div style={{ ...mono, marginTop: 3 }}>
@@ -378,9 +378,9 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                   )}
                   <div className="kd-blog-aktionen" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                     {wartend
-                      ? <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "popup", id: a.id })}>Abgleich öffnen</button>
-                      : <button style={{ ...btnStyle(true), minWidth: 118, fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "lese", id: a.id })}>Lesen</button>}
-                    <button style={{ ...btnStyle(false), minWidth: 118, fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "maske", id: a.id })}>✎ Bearbeiten</button>
+                      ? <button style={{ ...btnStyle(true), padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "popup", id: a.id })}>Abgleich öffnen</button>
+                      : <button style={{ ...btnStyle(true), minWidth: 118, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "lese", id: a.id })}>Lesen</button>}
+                    <button style={{ ...btnStyle(false), minWidth: 118, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "maske", id: a.id })}>✎ Bearbeiten</button>
                     <button style={{ ...btnStyle(false), width: 36, minWidth: 36, padding: 0, borderColor: T.gefahr, color: T.gefahr, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                       disabled={publiziertLaufend || unpubliziertLaufend}
                       aria-label="Artikel löschen" title="Artikel löschen"
@@ -412,7 +412,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                           style={{ ...inputStyle, width: 140, padding: "6px 9px", fontSize: 13 }} />
                         <button
                           disabled={loeschLaeuft || loeschName.trim().toLowerCase() !== a.autor.trim().toLowerCase()}
-                          style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px", background: T.gefahr,
+                          style={{ ...btnStyle(true), padding: "7px 14px", background: T.gefahr,
                             opacity: loeschName.trim().toLowerCase() === a.autor.trim().toLowerCase() ? 1 : 0.35 }}
                           onClick={async () => {
                             if (loeschLaeuft) return;

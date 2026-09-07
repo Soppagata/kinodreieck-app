@@ -74,8 +74,9 @@
 }
 .kd-entdecken-primaer { background: var(--kd-wolfram); border-color: var(--kd-wolfram); color: var(--kd-wolframText); }
 .kd-entdecken-einleitung { gap: var(--kd-space-6); margin-bottom: var(--kd-space-6); padding-bottom: var(--kd-space-4); border-color: var(--kd-secondary-border); }
-.kd-entdecken-einleitung span, .kd-entdecken-kicker, .kd-entdecken-dialog-kopf span, .kd-entdecken-sektionskopf span {
-  color: var(--kd-kartenAkzent);
+.kd-entdecken .kd-entdecken-einleitung span, .kd-entdecken .kd-entdecken-kicker,
+.kd-entdecken-layer .kd-entdecken-dialog-kopf span, .kd-entdecken .kd-entdecken-sektionskopf span {
+  color: var(--kd-wolfram);
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: calc(12px * var(--kd-schriftfaktor, 1));
   font-weight: 500;
@@ -112,8 +113,8 @@
 }
 .kd-entdecken-auswahlkarte :is(h3, p, small, a) { color: var(--kd-kartenText); }
 .kd-entdecken-auswahlkarte .kd-entdecken-grund { color: var(--kd-kartenTextWeich); }
-.kd-entdecken-pin { width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: var(--kd-radius-control); }
-.kd-entdecken-pin.aktiv { background: var(--kd-wolfram); color: var(--kd-wolframText); }
+.kd-entdecken .kd-entdecken-pin, .kd-entdecken-layer .kd-entdecken-pin { width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: var(--kd-radius-control); }
+.kd-entdecken .kd-entdecken-pin.aktiv, .kd-entdecken-layer .kd-entdecken-pin.aktiv { background: var(--kd-wolfram); color: var(--kd-wolframText); }
 .kd-entdecken-weitere { margin-top: var(--kd-space-8); padding-top: var(--kd-space-6); border-color: var(--kd-wolfram); }
 .kd-entdecken-beliebtliste { gap: var(--kd-space-2); }
 .kd-entdecken-beliebtliste .kd-entdecken-neutral { padding: var(--kd-space-3) var(--kd-space-4); border: 1px solid var(--kd-secondary-border); border-radius: var(--kd-radius-karte); background: var(--kd-saalHoch); }
@@ -123,11 +124,11 @@
 .kd-entdecken-formzeile label, .kd-radar-suchstatus, .kd-radar-neuigkeiten span { color: var(--kd-rauch); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); letter-spacing: 0; text-transform: none; }
 .kd-entdecken-formzeile input { background: var(--kd-saal); color: var(--kd-leinwand); }
 .kd-entdecken-layer { padding: var(--kd-space-6); }
-.kd-entdecken-dialog { box-shadow: 0 24px 64px rgba(0, 0, 0, .38); }
-.kd-entdecken-schliessen { width: 44px; height: 44px; border-radius: var(--kd-radius-control); }
-.kd-entdecken-manage-grid { gap: var(--kd-space-3); }
-.kd-entdecken-manage-grid > section { background: var(--kd-saal); }
-.kd-radar-folgen, .kd-radar-ablehnungen { border-radius: var(--kd-radius-karte); }
+.kd-entdecken-layer .kd-entdecken-dialog { box-shadow: 0 24px 64px rgba(0, 0, 0, .38); }
+.kd-entdecken-layer .kd-entdecken-schliessen { width: 44px; height: 44px; border-radius: var(--kd-radius-control); }
+.kd-entdecken-layer .kd-entdecken-manage-grid { gap: var(--kd-space-3); }
+.kd-entdecken-layer .kd-entdecken-manage-grid > section { background: var(--kd-saal); }
+.kd-entdecken .kd-radar-folgen, .kd-entdecken .kd-radar-ablehnungen { border-radius: var(--kd-radius-karte); }
 
 .kd-blog, .kd-finder { display: grid; gap: var(--kd-space-4); }
 .kd-blog-karte, .kd-finder [data-finder-card], .kd-finder .kd-apphilfe-antwort {
@@ -138,7 +139,7 @@
 }
 .kd-blog [data-tour="blog"] { margin-bottom: var(--kd-space-4); }
 .kd-blog h2, .kd-blog h3 { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; text-transform: none; letter-spacing: 0; }
-.kd-blog h2 { font-size: calc(28px * var(--kd-schriftfaktor, 1)); }
+.kd-blog h2 { font-size: calc(22px * var(--kd-schriftfaktor, 1)); }
 .kd-blog h3 { font-size: calc(22px * var(--kd-schriftfaktor, 1)); }
 .kd-blog-expand { border-color: var(--kd-secondary-border); color: var(--kd-leinwand); background: transparent; }
 .kd-blog-aktionen, .kd-blog-form-actions { gap: var(--kd-space-2); }
@@ -152,8 +153,13 @@
 
 .kd-daten-tab { display: grid; gap: var(--kd-space-4); }
 .kd-daten-tab .kd-klappe { background: var(--kd-saalHoch); }
+.kd-daten-tab > *, .kd-daten-tab :is(.kd-klappe, .kd-klappe-inhalt, .kd-einstellzeile, .kd-kompakt, .kd-einstellzeile > *, .kd-kompakt > *) { min-width: 0; }
 .kd-daten-tab .kd-kompakt, .kd-daten-tab .kd-einstellzeile { gap: var(--kd-space-3); }
-.kd-daten-tab :is([data-private-mail-feedback], [data-private-mail-account-deletion], [data-manual-data-rights], [data-account-export], [data-manual-data-rights], .kd-stapelimport, .kd-blogprofilanalyse, .kd-prognose, .kd-profil-eindruck) {
+.kd-daten-tab .kd-einstellzeile { align-items: stretch; }
+.kd-daten-tab .kd-einstellzeile > :first-child { flex: 1 1 100%; width: auto; }
+.kd-daten-tab .kd-einstellzeile .kd-seg { flex: 1 1 0; min-width: 0; }
+.kd-daten-tab .kd-seg-control { flex: 1 1 100px; min-width: 0; }
+.kd-daten-tab :is([data-private-mail-feedback], [data-private-mail-account-deletion], [data-manual-data-rights], [data-account-export], .kd-stapelimport, .kd-blogprofilanalyse, .kd-prognose, .kd-profil-eindruck) {
   padding: var(--kd-space-4);
   border: 1px solid var(--kd-secondary-border);
   border-radius: var(--kd-radius-karte);
@@ -161,7 +167,7 @@
 }
 .kd-daten-tab :is(summary, label) { min-height: 44px; font-size: calc(14px * var(--kd-schriftfaktor, 1)); }
 .kd-daten-tab :is(p, li, dd) { color: var(--kd-rauch); }
-.kd-daten-tab a, [data-private-mail-feedback] a, [data-private-mail-account-deletion] a { color: var(--kd-kartenAkzent); text-underline-offset: 3px; }
+.kd-daten-tab a, [data-private-mail-feedback] a, [data-private-mail-account-deletion] a { color: var(--kd-wolfram); text-underline-offset: 3px; }
 .kd-statusliste > div { border-color: var(--kd-secondary-border); border-radius: var(--kd-radius-control); background: var(--kd-saalHoch); }
 .kd-statusliste dt { color: var(--kd-rauch); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); letter-spacing: 0; text-transform: none; }
 .kd-statusliste dd { color: var(--kd-leinwand); font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); }
@@ -187,8 +193,12 @@
 [data-private-mail-feedback] :is(strong, label), [data-private-mail-account-deletion] :is(strong, label), [data-manual-data-rights] strong, [data-account-export] strong { color: var(--kd-leinwand); font-size: calc(14px * var(--kd-schriftfaktor, 1)); }
 [data-private-mail-feedback] :is(p, span), [data-private-mail-account-deletion] p, [data-manual-data-rights] p, [data-account-export] p { color: var(--kd-rauch); font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.55; }
 .kd-profil-infogruppe { border-radius: var(--kd-radius-karte); border-color: var(--kd-secondary-border); }
-.kd-profil-infogruppe > summary { min-height: 44px; padding: var(--kd-space-3); color: var(--kd-kartenAkzent); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(14px * var(--kd-schriftfaktor, 1)); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.kd-profil-infogruppe > summary { min-height: 44px; padding: var(--kd-space-3); color: var(--kd-wolfram); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(14px * var(--kd-schriftfaktor, 1)); font-weight: 600; letter-spacing: 0; text-transform: none; }
 .kd-profil-dialog-schliessen, .kd-profil-widerrufen { min-width: 44px; min-height: 44px; border-radius: var(--kd-radius-control); }
+.kd-filmwissen { display: grid; gap: var(--kd-space-2); }
+.kd-filmwissen-titel { font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); font-weight: 600; line-height: 1.2; }
+.kd-filmwissen :is(p, a, summary, span) { font-size: calc(12px * var(--kd-schriftfaktor, 1)); }
+.kd-filmwissen a { color: var(--kd-wolfram); text-underline-offset: 3px; }
 
 @media (max-width: 520px) {
   .kd-entdecken-layer { padding: 0; }

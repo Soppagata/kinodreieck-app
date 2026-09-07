@@ -124,8 +124,8 @@ export function GeschmackOnboarding({
   const zurueck = () => setSchritt((s) => Math.max(s - 1, ersterSchritt));
 
   const p = { color: T.leinwand, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px" };
-  const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.04em",
-    fontSize: 20, color: T.leinwand, margin: "0 0 10px" };
+  const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, letterSpacing: 0,
+    fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, color: T.leinwand, margin: "0 0 10px" };
 
   return (
     <div className="kd-geschmack-onboarding" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}

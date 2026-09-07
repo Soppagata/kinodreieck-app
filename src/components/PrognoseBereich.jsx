@@ -4,11 +4,7 @@ import {
   lesePrognose, passungsBand, prognoseIstVeraltet,
 } from "../lib/prognose.js";
 
-const mono = {
-  fontFamily: "'Space Mono', monospace",
-  fontSize: 11,
-  color: T.rauch,
-};
+const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", color: T.rauch };
 const SICHERHEIT_LABEL = {
   sehr_niedrig: "sehr unsicher",
   niedrig: "unsicher",
@@ -98,7 +94,7 @@ export function PrognoseBereich({
     <section className="kd-prognose" aria-label={`KI-Prognose für ${film?.titel || "Eintrag"}`}
       style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${T.saal}`, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <strong style={{ color: T.wolfram, letterSpacing: "0.05em" }}>KI-PROGNOSE</strong>
+        <strong style={{ color: T.leinwand, fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2 }}>KI-Prognose</strong>
         <span style={{ ...mono }}>{STATUS_LABEL[prognose.status]}</span>
       </div>
 

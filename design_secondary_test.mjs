@@ -29,6 +29,8 @@ assert.match(css, /\.kd-stapelimport/);
 assert.match(css, /\.kd-profil-dialog/);
 assert.match(css, /min-height: 44px/);
 assert.match(css, /font-size: max\(16px/);
+assert.match(css, /\.kd-entdecken \.kd-entdecken-pin, \.kd-entdecken-layer \.kd-entdecken-pin/);
+assert.match(css, /\.kd-entdecken \.kd-entdecken-einleitung span[\s\S]*?var\(--kd-wolfram\)/);
 assert.doesNotMatch(css, /\.kd-streamfilter|\.kd-filmkarte/, "secondary styles do not reach primary surfaces");
 assert.doesNotMatch(css, /!important/, "secondary design must not flatten shared styles with !important");
 
@@ -42,5 +44,11 @@ for (const [path, marker] of requiredRoots) {
   const source = sources[["src/tabs/EntdeckenTab.jsx", "src/tabs/BlogTab.jsx", "src/tabs/FinderTab.jsx", "src/tabs/DatenTab.jsx"].indexOf(path)];
   assert.ok(source.includes(marker), `${path} exposes its secondary design root`);
 }
+
+const blog = sources[1];
+const dreiFragen = sources[10];
+assert.match(blog, /fontSize: "calc\(22px \* var\(--kd-schriftfaktor, 1\)\)"/);
+assert.doesNotMatch(blog, /<h3 id=\{titelId\}[\s\S]{0,260}textTransform: "uppercase"/);
+assert.match(dreiFragen, /fontSize: "calc\(22px \* var\(--kd-schriftfaktor, 1\)\)"/);
 
 console.log("design secondary: local roots, 44px controls, and scoped secondary roles verified");

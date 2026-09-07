@@ -46,15 +46,15 @@ KD_PRIVATE_V1_TEST_PORT=4492 playwright test --config=/private/tmp/kd-design-sec
 Der Browsernachweis lief mit privatem, netzgesperrtem Mockkonto auf Port
 4492: Chromium und WebKit bei 320, 393 und 430 px, jeweils Saal/Normal und
 Foyer/Groß. Er prüft Erreichbarkeit der Entdecken-Subtabs, Blogvorschau und
-Settings-Controls; dabei wurden zwölf Screenshots erzeugt. Der frische
-Chromium-Screenshot bei 320 px im Saal/Normal-Modus wurde zusätzlich visuell
-geprüft.
+Settings-Controls; dabei werden das echte Theme über „Saal/Foyer“ und die
+Schriftgröße über die Settings-Control gesetzt. Der Test misst die vom
+Theme-Setter gesetzte `--kd-saal`-Palette, die skalierte Blogtitelgröße,
+einen aufgeklappten Blogzustand und fehlendes Seiten-Overflow. Frische Screenshots bei 320 px für Chromium Saal/Normal und WebKit
+Foyer/Groß wurden zusätzlich visuell geprüft.
 
 ## Feedbackliste
 
-Keine funktionale Abweichung im P2-Scope beobachtet. Die Screenshots zeigen
-in Settings eine weit überlaufende Gesamtfläche, obwohl die getesteten
-Controls selbst sichtbar und erreichbar bleiben. Das liegt an bestehenden
-breiten Settings-Inhalten außerhalb einer einzelnen P2-Form; für die
-Integration sollte Max entscheiden, ob die Shell die gesamte Seite noch
-gegen horizontales Überlaufen absichert.
+Keine funktionale Abweichung im P2-Scope beobachtet. Der zuvor gemessene
+Settings-Überlauf ist durch umbruchfähige Einstellzeilen und `min-width: 0`
+an den lokalen Flex-/Grid-Teilnehmern behoben; Inhalte werden nicht
+abgeschnitten.

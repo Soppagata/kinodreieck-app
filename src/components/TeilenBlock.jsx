@@ -14,7 +14,7 @@ import { formatPresentationDate } from "../lib/presentationDate.js";
    Ingestion-Popup: Prompt für eine fremde KI, die gebunchte Listen im
    selben Format erzeugt. Eigenes wird beim Import NIE überschrieben. */
 
-const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", get color() { return T.wolfram; }, margin: "0 0 10px" };
+const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2, letterSpacing: 0, textTransform: "none", get color() { return T.leinwand; }, margin: "0 0 10px" };
 const monoKlein = { fontFamily: "'Space Mono', monospace", fontSize: 11, get color() { return T.rauch; } };
 
 /* ohneKopf: Kopfzeile weglassen, wenn der Titel außen an einer Klappe steht
