@@ -4,6 +4,7 @@
    Aufruf: node blog_test.mjs */
 
 const A = await import("./src/lib/artikel.js");
+const Match = await import("./src/lib/match.js");
 
 const checks = [];
 const check = (n, p) => checks.push([n, !!p]);
@@ -72,6 +73,23 @@ check("gezogene IDs kollisionsfrei", a1.id !== a2.id);
    automatisch entfernt. */
 check("Snapshot-Modul exportiert keine löschende Reconciliation mehr",
   typeof A.reconcileGezogene === "undefined");
+
+/* Titel-/Jahresgrenzen, die Blog-Referenzen und neue Medieneintraege teilen. */
+check("ß und ss sind in der Titelsuche äquivalent",
+  Match.norm("Die Straße") === Match.norm("Strasse"));
+check("Nicht-lateinische Titel bleiben als Suchschlüssel erhalten",
+  Match.norm("七人の侍") === "七人の侍" && Match.norm("Сталкер") === "сталкер");
+const japanId = Match.slugId("七人の侍", 1954);
+check("Nicht-lateinische IDs sind stabil, ASCII-sicher und titelabhängig",
+  japanId === Match.slugId("七人の侍", 1954)
+  && japanId !== Match.slugId("羅生門", 1950)
+  && /^[a-z0-9_]+$/.test(japanId));
+check("Jahresgrenze trennt leer, gültig und ungültig",
+  Match.lesePlausiblesJahr("").ok && Match.lesePlausiblesJahr("").jahr === null
+  && Match.lesePlausiblesJahr("1979").jahr === 1979
+  && !Match.lesePlausiblesJahr("1979.5").ok
+  && !Match.lesePlausiblesJahr("bald").ok
+  && !Match.lesePlausiblesJahr("1200").ok);
 
 /* ---------- Ergebnis ---------- */
 const fails = checks.filter(([, p]) => !p);
