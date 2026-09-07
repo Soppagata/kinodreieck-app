@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
    isolierter Port über KD_TEST_PORT gewählt werden. */
 const testPort = process.env.KD_TEST_PORT || "4174";
 const testUrl = `http://127.0.0.1:${testPort}`;
-const privateReleaseTests = ["kino-mobile-filter.spec.mjs", "private-release-login.spec.mjs"];
+const privateReleaseTests = ["kino-mobile-filter.spec.mjs", "private-release-login.spec.mjs", "neon-noir.spec.mjs"];
 const testMatch = process.env.KD_LEGACY_PUBLIC_MOBILE === "1"
   ? ["mobile-layout.spec.mjs", ...privateReleaseTests]
   : privateReleaseTests;

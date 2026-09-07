@@ -1,8 +1,4 @@
-/* Neon Noir wird in einer eigenen Datei gehalten, damit das dekorative
-   Stadtbild unabhängig von den übrigen Theme-Regeln weiterentwickelt werden kann.
-   Baseline: Regen + seltenes Hologrammflackern. Dunst und Bodenschleier bleiben
-   statisch; beim Vorbeiflug pausiert das Hologramm. */
-
+/* One adaptive SVG scene; its local animation loop also owns reduced motion. */
 .kd-neon-noir-overlay {
   position: fixed;
   inset: 0;
@@ -12,129 +8,14 @@
   contain: strict;
   pointer-events: none;
   user-select: none;
-  background: #070913;
-}
-
-/* Flacher Bodenschleier: horizontale Licht- und Dunstschichten verschlucken
-   die Straße, ohne wolkige Einzelinseln zu bilden. */
-.kd-neon-noir-overlay::after {
-  content: "";
-  position: absolute;
-  z-index: 3;
-  inset: 48% -8% -12%;
-  pointer-events: none;
-  background:
-    repeating-linear-gradient(180deg, transparent 0 27px, rgba(183, 218, 220, 0.055) 31px, transparent 36px 62px),
-    linear-gradient(96deg, transparent 1%, rgba(150, 199, 204, 0.14) 23%, rgba(91, 147, 157, 0.055) 44%, rgba(128, 184, 192, 0.12) 69%, transparent 96%),
-    linear-gradient(180deg, transparent 0 8%, rgba(139, 184, 191, 0.15) 28%, rgba(36, 56, 66, 0.58) 59%, rgba(4, 7, 14, 0.97) 100%);
-  filter: blur(9px);
+  background: #031226;
 }
 
 .kd-neon-noir__city {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
-}
-
-.kd-neon-noir__city--mobile {
-  display: none;
-}
-
-.kd-neon-noir__mist {
-  position: absolute;
-  z-index: 2;
-  inset: -12%;
-  opacity: 0.42;
-  background:
-    radial-gradient(ellipse 31% 26% at 12% 48%, rgba(69, 202, 218, 0.2), transparent 72%),
-    radial-gradient(ellipse 28% 24% at 88% 56%, rgba(40, 151, 181, 0.17), transparent 74%),
-    linear-gradient(90deg, rgba(42, 148, 170, 0.06), transparent 28% 72%, rgba(42, 148, 170, 0.05));
-  filter: blur(14px);
-  transform: translate3d(-1.5%, 0, 0) scale(1.025);
-}
-
-.kd-neon-noir__city--desktop .kd-neon-noir__kino-hologram {
-  transform-box: fill-box;
-  transform-origin: 50% 0;
-  animation: kd-neon-noir-hologram 14.8s linear infinite;
-  will-change: opacity, filter;
-}
-
-.kd-neon-noir__rain {
-  position: absolute;
-  z-index: 4;
-  inset: -24%;
-  width: 148%;
-  height: 148%;
-  opacity: 0.39;
-  filter: blur(0.12px);
-  mix-blend-mode: screen;
-  transform: translate3d(-2%, -20%, 0);
-  animation: kd-neon-noir-rain 0.66s linear infinite;
-  will-change: transform, opacity;
-}
-
-.kd-neon-noir__flyby {
-  position: absolute;
-  z-index: 3;
-  left: 46%;
-  top: 61%;
-  display: flex;
-  gap: 5px;
-  opacity: 0;
-  transform: translate3d(-12vw, 3vh, 0) scale(0.7);
-  transform-origin: center;
-  will-change: transform, opacity;
-}
-
-.kd-neon-noir__flyby span {
-  display: block;
-  width: 3px;
-  height: 2px;
-  border-radius: 50%;
-  background: #D82D24;
-  box-shadow: 0 0 4px rgba(216, 45, 36, 0.76);
-}
-
-.kd-neon-noir--flyby .kd-neon-noir__mist {
-  animation: none;
-}
-
-.kd-neon-noir--flyby .kd-neon-noir__kino-hologram {
-  animation: none !important;
-  will-change: auto;
-}
-
-.kd-neon-noir--flyby .kd-neon-noir__flyby {
-  animation: kd-neon-noir-flyby 1.05s cubic-bezier(0.22, 0.68, 0.2, 1) both;
-}
-
-@keyframes kd-neon-noir-flyby {
-  0% {
-    opacity: 0;
-    transform: translate3d(-12vw, 3vh, 0) scale(0.7);
-  }
-
-  14% {
-    opacity: 0.1;
-  }
-
-  24% {
-    opacity: 0.58;
-  }
-
-  68% {
-    opacity: 0.38;
-    transform: translate3d(6vw, -1vh, 0) scale(0.34);
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate3d(22vw, -7vh, 0) scale(0.12);
-  }
+  pointer-events: none;
 }
 
 /* Ruhige UI-Einbindung: Die Stadt darf Cyan/Pink tragen; alle interaktiven
@@ -194,104 +75,7 @@
   outline-color: #D8A33F;
 }
 
-@keyframes kd-neon-noir-rain {
-  0% {
-    opacity: 0.34;
-    transform: translate3d(-2%, -17%, 0);
-  }
-
-  100% {
-    opacity: 0.44;
-    transform: translate3d(3%, 18%, 0);
-  }
-}
-
-@keyframes kd-neon-noir-hologram {
-  0%,
-  71.8%,
-  73.1%,
-  88.4%,
-  89.7%,
-  100% {
-    opacity: 1;
-    filter: brightness(1);
-  }
-
-  72.1% {
-    opacity: 0.46;
-    filter: brightness(0.72);
-  }
-
-  72.45% {
-    opacity: 0.88;
-    filter: brightness(1.22);
-  }
-
-  72.72%,
-  88.9% {
-    opacity: 0.3;
-    filter: brightness(0.62);
-  }
-
-  89.18% {
-    opacity: 0.76;
-    filter: brightness(1.14);
-  }
-}
-
 @media (max-width: 760px) {
-  .kd-neon-noir__city--desktop {
-    display: none;
-  }
-
-  .kd-neon-noir__city--mobile {
-    display: block;
-  }
-
-  .kd-neon-noir__city--desktop .kd-neon-noir__kino-hologram {
-    animation: none;
-    will-change: auto;
-  }
-
-  .kd-neon-noir__city--mobile .kd-neon-noir__kino-hologram {
-    transform-box: fill-box;
-    transform-origin: 50% 0;
-    animation: kd-neon-noir-hologram 14.8s linear infinite;
-    will-change: opacity, filter;
-  }
-
-  .kd-neon-noir__mist {
-    inset: -8% -20%;
-    opacity: 0.28;
-    background:
-      radial-gradient(ellipse 34% 28% at 8% 52%, rgba(69, 202, 218, 0.12), transparent 74%),
-      radial-gradient(ellipse 28% 25% at 92% 62%, rgba(255, 91, 167, 0.07), transparent 76%);
-    filter: blur(11px);
-  }
-
-  .kd-neon-noir-overlay::after {
-    inset: 44% -18% -10%;
-    background:
-      repeating-linear-gradient(180deg, transparent 0 21px, rgba(183, 218, 220, 0.052) 25px, transparent 30px 49px),
-      linear-gradient(94deg, transparent 0, rgba(150, 199, 204, 0.12) 24%, rgba(87, 143, 154, 0.045) 48%, rgba(128, 184, 192, 0.1) 73%, transparent 100%),
-      linear-gradient(180deg, transparent 0 7%, rgba(139, 184, 191, 0.14) 26%, rgba(31, 51, 61, 0.62) 58%, rgba(4, 7, 14, 0.98) 100%);
-    filter: blur(8px);
-  }
-
-  .kd-neon-noir__rain {
-    inset: -28%;
-    width: 156%;
-    height: 156%;
-    opacity: 0.37;
-    filter: blur(0.08px);
-  }
-
-  .kd-neon-noir__flyby {
-    left: 44%;
-    top: 58%;
-    gap: 4px;
-  }
-
   :where(.kd-neon-noir, [data-kd-theme="neon-noir"]) .kd-app {
     background: linear-gradient(
       90deg,
@@ -301,29 +85,5 @@
       rgba(7, 9, 19, 0.46) 76%,
       rgba(7, 9, 19, 0.06)
     );
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .kd-neon-noir__mist,
-  .kd-neon-noir__rain,
-  .kd-neon-noir__flyby,
-  .kd-neon-noir__kino-hologram {
-    animation: none !important;
-    will-change: auto;
-  }
-
-  .kd-neon-noir__mist {
-    opacity: 0.37;
-    transform: none;
-  }
-
-  .kd-neon-noir__rain {
-    opacity: 0.14;
-    transform: none;
-  }
-
-  .kd-neon-noir__flyby {
-    display: none !important;
   }
 }
