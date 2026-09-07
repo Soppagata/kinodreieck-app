@@ -71,7 +71,7 @@ Die Screenshots vom 7. September um 21:20–21:21 konkretisieren die gewünschte
 | R3 | Stabile Schriftwahl | Zwei Erscheinungsoptionen und drei Schriftoptionen in stabilen Reihen; kein Prozent-Flex in vertikalen Einstellungszeilen. Wechsel Klein/Normal/Groß ohne aufgeblähte Controls. | GEBAUT |
 | R4 | Vertraute Einstellungs-Accordions | Schlichte Aufklappzeilen, sichtbare Chevron, kompakte Abstände; vorhandene native Öffnungszustände erhalten. | GEBAUT |
 | R5 | Praktisches Menü für die rechte Hand | Kleines Paneel unten rechts, sechs Bereiche in zwei Spalten; „Nach oben“ rechts in der integrierten Fußzeile. Bestehende Fokus-/Scroll- und Navigationsmechanik erhalten. | GEBAUT |
-| R6 | Neuigkeiten deutlicher wahrnehmen | Eintragskarten wie Kino/Streaming; Titel, Datum, Quelle und „Gefunden für“ klar lesbar, bestehende Folgendetails erhalten. | GEBAUT |
+| R6 | Neuigkeiten deutlicher wahrnehmen | Eintragskarten wie Kino/Streaming; Titel, Datum, Plattform und „Gefunden für“ klar lesbar, bestehende Folgendetails erhalten. | GEBAUT |
 
 Umsetzung in drei disjunkten Paketen auf derselben Basis: R1/R2/R6 (Hauptansichten), R3/R4 (Settings), R5 (Menü). Alle sechs Korrekturen sind im gemeinsamen Integrationsstand gebaut und lokal belegt; siehe [refinement-integration.md](design-deliveries/refinement-integration.md). Anschließende Lieferung auf Staging im bereits autorisierten Designpfad. Keine Änderung von main oder der Funktionsarchitektur.
 

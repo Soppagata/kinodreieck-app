@@ -59,7 +59,7 @@ test("Kino-Nebenliste und Radar-Neuigkeiten nutzen ihre ruhigen Kartenrollen", a
   const news = page.locator(".kd-radar-neuigkeit");
   await expect(news).toHaveCount(1);
   await expect(news.getByRole("heading", { name: "Fight Club" })).toHaveCSS("font-size", "22px");
-  await expect(news).toContainText("Quelle: news.example.test · example.test");
+  await expect(news).toContainText("Netflix");
   await expect(news).toContainText("Gefunden für: Fight Club");
   await expect(news.locator("button")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);

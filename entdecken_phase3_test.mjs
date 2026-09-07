@@ -398,7 +398,9 @@ check("Empfehlungen übernehmen ausschließlich die echten Kino-Stile und keine 
   assert.match(cssSource, /\.kd-dash-film[^}]*font-family:\s*'Fraunces'[^}]*font-weight:\s*900[^}]*font-size:\s*20px[^}]*line-height:\s*1\.05/);
   assert.match(cssSource, /\.kd-entdecken-auswahlkarte[^}]*padding:11px 58px 11px 13px[^}]*border-radius:8px[^}]*background:var\(--leinwand[^}]*box-shadow:0 3px 14px rgba\(0,0,0,\.4\)/);
   assert.match(cssSource, /\.kd-entdecken-auswahlkarte h3[^}]*font:900 20px\/1\.05 'Fraunces'/);
-  assert.match(kinoSource, /background:\s*T\.saalHoch, borderRadius:\s*6, padding:\s*"8px 12px"/);
+  const primaryDesignSource = fs.readFileSync(path.join(wurzel, "src/styles/design-primary.css"), "utf8");
+  assert.match(kinoSource, /kd-kompakt-eintrag/);
+  assert.match(primaryDesignSource, /\.kd-kino-tab \.kd-kompakt-eintrag \{[^}]*padding: 8px 12px;[^}]*background: var\(--kd-saalHoch\)/);
   assert.match(cssSource, /\.kd-entdecken-beliebtliste \.kd-entdecken-neutral[^}]*padding:8px 12px[^}]*border-radius:6px[^}]*background:var\(--saalHoch/);
   assert.match(cssSource, /\.kd-entdecken-beliebtliste \.kd-entdecken-neutral h3[^}]*font:600 14px\/1\.3 'Space Grotesk'/);
   assert.doesNotMatch(entdeckenSource, /kd-kino-ticket|kd-dash-showtime|<KinoTicket|<KinoLinks|kd-quellenbadge/);
@@ -972,7 +974,7 @@ try {
     assert.doesNotMatch(news.textContent, /Gefunden für:\s*Freitextziel [23]/);
     assert.equal(news.querySelectorAll(":scope > ul > li").length, 3);
     assert.ok([...news.querySelectorAll(":scope > ul > li")].every((item) => (
-      item.querySelector(":scope > span")?.textContent.includes("Gefunden für:")
+      item.querySelector(":scope > .kd-radar-neuigkeit-herkunft")?.textContent.includes("Gefunden für:")
     )));
     const targets = [...textFindingUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => entry.querySelector("h3")?.textContent === "Meine Ziele");
@@ -1085,9 +1087,9 @@ try {
   check("Radar zeigt fünf Folgen als eine Staffelkarte mit nativer Detailsteuerung und Suchstatus",() => {
     const list=seasonUi.container.querySelector(".kd-radar-neuigkeiten");
     assert.equal(list.children.length,1);
-    assert.match(list.firstElementChild.querySelector("strong").textContent,/Beispieldorf · Staffel 29/);
-    assert.match(list.firstElementChild.querySelector("span").textContent,/02\.09\.2099 · Staffel · Nächste Folge/);
-    assert.doesNotMatch(list.firstElementChild.querySelector("span").textContent,/Beispiel\+|Staffelstart/);
+    assert.match(list.firstElementChild.querySelector(".kd-radar-neuigkeit-titel").textContent,/Beispieldorf · Staffel 29/);
+    assert.match(list.firstElementChild.querySelector(".kd-radar-neuigkeit-meta").textContent,/02\.09\.2099 · Staffel · Nächste Folge/);
+    assert.doesNotMatch(list.firstElementChild.querySelector(".kd-radar-neuigkeit-meta").textContent,/Beispiel\+|Staffelstart/);
     assert.equal(list.querySelector("summary").textContent,"5 Folgen anzeigen");
     assert.equal(list.querySelectorAll("details ol li").length,5);
     assert.match(list.querySelector("details").textContent,/Folge 4 · Nacht/);

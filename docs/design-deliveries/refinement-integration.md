@@ -18,12 +18,22 @@ Bei der Bildkontrolle wurde der Umbruch „Norm/al“ auf 320px mit großer Schr
 korrigiert: ein lokaler CSS-Padding-Wert ersetzt die zu breiten Standardabstände
 der Schriftwahl. Der Standardwert des gemeinsamen Controls bleibt unverändert.
 Die Mediathek-Ansichten skalieren nun ebenfalls mit der Schriftwahl. Radar-Karten
-verwenden exakt die vorhandene Leinwandfläche für beide Themes; Quelle und
+verwenden exakt die vorhandene Leinwandfläche für beide Themes; Plattform und
 Zielherkunft bleiben getrennt lesbar. Der Streaming-SVG-Pfeil zeigt nach rechts.
 
 Die alte mobile Testannahme für einen frei stehenden Nach-oben-Knopf mit 60px
 Abstand wurde an die angeforderte Fußzeile angepasst. Der statische Shell-Check
 prüft die Mindesttouchhöhe, statt eine überholte exakte Buttonhöhe festzuschreiben.
+
+Der erste Staging-CI-Lauf für `95ef228` bestand beide Browserzweige, stoppte aber
+am alten Inline-CSS-Nachweis in `entdecken_phase3_test.mjs`. Die Erwartung folgt
+jetzt derselben unveränderten Standardfläche in der CSS-Datei. Der nachfolgende
+DOM-Vertrag verlangt weiterhin keine Evidenzdomains oder Quellenlinks in den
+Neuigkeiten. Die zunächst ergänzte Quellenzeile wurde deshalb entfernt;
+Plattform, Zielherkunft und alle bisherigen Informationen bleiben erhalten.
+Die Titel-/Datums-/Zuordnungsprüfungen verwenden die entsprechenden neuen Klassen
+statt die erste beliebige `strong`-/`span`-Position. Die fachlichen Erwartungen
+für Zuordnung, Altbestand und Staffel-/Folgentermine bleiben unverändert.
 
 ## Lokaler Nachweis
 
@@ -34,6 +44,12 @@ prüft die Mindesttouchhöhe, statt eine überholte exakte Buttonhöhe festzusch
   Neuigkeiten dunkel/hell sowie das Menü nach abgeschlossener Öffnungsanimation.
 - Mediathek-Auswahl und Draft-Erhalt: 120/120 DOM-Checks; Kino-Empfehlungen 5/5;
   Radar-Oberfläche 9/9; Foundation 8/8, Shell und Nebenansichten grün.
+- Standard-Mocksuite: alle Schritte vor dem Phase3-Halt waren grün; der korrigierte
+  Phase3-Test und alle anschließenden fachlichen Schritte ebenfalls. Der
+  Fortsetzungsaufruf hatte für den abschließenden nackten `vite`-Befehl nicht den
+  npm-Pfad; Web-Build, Paketvorbereitung und Pages wurden deshalb regulär über
+  `npm run build`, `node tools/prepare-online-build.mjs` und `node pages_test.mjs`
+  abgeschlossen. Kein erneuter Lauf der schon grünen Fachprüfungen.
 - Die visuellen Fixtures blockieren unbekannte externe Anfragen. Der erste
   Bildlauf wartete nach erneutem Öffnen von Entdecken fälschlich auf den Radar-Tab;
   nach dem ausdrücklich ergänzten Tabwechsel war der Rundgang grün.
