@@ -185,3 +185,131 @@ test("Neon Noir lässt Flug und Animation beim Themewechsel sauber auslaufen", a
   expect(requests).toEqual([]);
   await keineDokumentUeberbreite(page);
 });
+
+/* A mock account opens the existing private Settings surface. App.jsx,
+   DatenTab, ModusFx and the settings writer all run unchanged. No session,
+   backend response or special-mode value is taken from a real account. */
+async function oeffneAppMitMockkonto(page) {
+  const extern = [];
+  await page.route("**/*", async route => {
+    const url = new URL(route.request().url());
+    if (!["127.0.0.1", "localhost"].includes(url.hostname)) {
+      extern.push(url.href);
+      await route.abort();
+    } else if (url.pathname === "/src/services/sessionCoordinator.js") {
+      await route.fulfill({ contentType: "application/javascript", body: `
+        const session = Object.freeze({ mode: "account", state: "ready",
+          account: Object.freeze({ id: "neon-trigger-fixture", role: "member" }),
+          capabilities: Object.freeze({ remoteStorage: true, personalAi: false }) });
+        export const STORAGE_SESSION_STATES = Object.freeze({ GUEST: "guest",
+          AWAITING_ADOPTION: "account-awaiting-adoption", READY: "account-ready",
+          PRIVACY_LOCKED: "privacy-locked", ACCESS_BLOCKED: "account-access-blocked" });
+        export const sessionCoordinator = Object.freeze({ getSnapshot: () => session,
+          getStorageState: () => "account-ready", subscribe: () => () => {},
+          initialize: async () => session, refresh: async () => session });
+      ` });
+    } else await route.continue();
+  });
+  await seedAppMitDarstellung(page, { modus: "", beibehaltenBeiReload: true });
+  await page.goto("/");
+  await expect(page.locator('.kd-app[data-session-mode="account"]')).toBeVisible();
+  return extern;
+}
+
+for (const input of ["tap", "keyboard", "click"]) {
+  test.describe(`Max-Einstieg per ${input}`, () => {
+    // Keep the account module mock in force on reload; a service worker
+    // would otherwise serve the unmocked module outside Playwright routing.
+    test.use({ hasTouch: input === "tap", reducedMotion: "reduce", serviceWorkers: "block" });
+    for (const theme of ["dunkel", "hell"]) {
+      test(`Max öffnet ${theme === "hell" ? "Classix" : "Schon kuhl"} aus ${theme} und führt zurück`, async ({ page, browserName }, testInfo) => {
+        const viewport = input === "keyboard" ? { width: 1440, height: 900 }
+          : { width: theme === "hell" ? 430 : 393, height: theme === "hell" ? 932 : 852 };
+        await page.setViewportSize(viewport);
+        const errors = [];
+        page.on("pageerror", error => errors.push(String(error)));
+        const extern = await oeffneAppMitMockkonto(page);
+        // macOS WebKit uses Option-Tab to include native buttons in its
+        // default tab order; Chromium and Linux WebKit use plain Tab.
+        const nextControl = browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+        const activate = async (locator, key = "Enter") => {
+          if (input === "tap") await locator.tap();
+          else if (input === "keyboard") { await locator.focus(); await page.keyboard.press(key); }
+          else await locator.click();
+        };
+        const openSettings = async () => {
+          if (viewport.width > 760) {
+            await activate(page.getByRole("navigation", { name: "Hauptnavigation" }).getByRole("button", { name: "Settings", exact: true }));
+          } else {
+            await activate(page.getByRole("button", { name: "Menü öffnen", exact: true }));
+            await activate(page.getByRole("dialog", { name: "Menü", exact: true }).getByRole("button", { name: "Settings", exact: true }));
+          }
+          await expect(page.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
+        };
+        const legal = page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ });
+        const max = page.getByRole("button", { name: "Max", exact: true });
+        const label = theme === "hell" ? "Classix" : "Schon kuhl";
+        const modus = theme === "hell" ? "showa" : "neon-noir";
+        const modeButton = page.getByRole("button", { name: label, exact: true });
+        const overlay = page.locator(`.kd-fx-${modus}[aria-hidden="true"]`);
+        const settings = () => page.evaluate(() => JSON.parse(localStorage.getItem("kd:einstellungen") || "null"));
+
+        const revealMode = async () => {
+          await activate(legal);
+          await expect(max).toHaveAttribute("aria-expanded", "false");
+          await expect(modeButton).toHaveCount(0);
+          await expect(max).toHaveCSS("text-decoration-style", "dotted");
+          const box = await max.boundingBox();
+          expect(box.width).toBeGreaterThanOrEqual(44);
+          expect(box.height).toBeGreaterThanOrEqual(44);
+          const region = page.locator(`[id="${await max.getAttribute("aria-controls")}"]`);
+          await expect(region).toBeHidden();
+          if (input === "keyboard") {
+            await page.keyboard.press(nextControl);
+            await expect(max).toBeFocused();
+            await page.keyboard.press("Space");
+          } else await activate(max);
+          await expect(max).toHaveAttribute("aria-expanded", "true");
+          await expect(region).toBeVisible();
+          await expect(modeButton).toBeVisible();
+          if (input === "keyboard") {
+            await page.keyboard.press(nextControl);
+            await expect(modeButton).toBeFocused();
+          }
+        };
+
+        await openSettings();
+        await activate(page.getByRole("button", { name: theme === "hell" ? "Foyer (hell)" : "Saal (dunkel)", exact: true }));
+        await expect.poll(settings).toMatchObject({ modus: "", theme });
+        await revealMode();
+        await expect(page.locator(".kd-fx-neon-noir, .kd-fx-showa")).toHaveCount(0);
+        await expect.poll(settings).toMatchObject({ modus: "", theme });
+        await expect(modeButton).toHaveAttribute("aria-pressed", "false");
+        await activate(modeButton);
+        await expect(overlay).toBeVisible();
+        await expect(overlay).toHaveCSS("pointer-events", "none");
+        await expect(overlay.locator('button, a[href], input, [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
+        await expect(modeButton).toHaveAttribute("aria-pressed", "true");
+        await expect.poll(settings).toMatchObject({ modus, theme: "dunkel", basisTheme: theme });
+        await keineDokumentUeberbreite(page);
+        if (!process.env.CI && input === "tap") await page.screenshot({ path: testInfo.outputPath("max-trigger-active.png") });
+
+        await page.reload();
+        await expect(overlay).toBeVisible();
+        await expect.poll(settings).toMatchObject({ modus, basisTheme: theme });
+        await openSettings();
+        await revealMode();
+        await expect(modeButton).toHaveAttribute("aria-pressed", "true");
+        await activate(modeButton);
+        await expect(page.locator(".kd-fx-neon-noir, .kd-fx-showa")).toHaveCount(0);
+        await expect(page.locator(`[data-kd-theme="${theme}"]`)).toHaveCount(1);
+        await expect.poll(settings).toMatchObject({ modus: "", theme });
+        expect((await settings()).basisTheme).toBeUndefined();
+        await expect(modeButton).toHaveAttribute("aria-pressed", "false");
+        await keineDokumentUeberbreite(page);
+        expect(errors).toEqual([]);
+        expect(extern).toEqual([]);
+      });
+    }
+  });
+}

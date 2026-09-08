@@ -219,11 +219,26 @@ check("Blogprofilanalyse besitzt weder Text noch Container in der Release-DOM",
 check("Einzeldatei-Download besitzt keinen Link in der Release-DOM",
   ![...rootElement.querySelectorAll("a")].some((link) => /\/download\/?$/.test(link.getAttribute("href") || ""))
     && !text().includes("Einzeldatei herunterladen"));
-const maxName = [...rootElement.querySelectorAll("span")]
-  .find((node) => (node.textContent || "").trim() === "Max");
-check("Max bleibt Legal-Text ohne verstecktes Modus-Touchziel",
-  !!maxName && maxName.style.cursor !== "pointer" && !maxName.title
+const maxName = button("Max");
+check("Max ist ein nativer Textbutton; der Modusknopf bleibt zunächst geschlossen",
+  !!maxName && maxName.type === "button" && maxName.getAttribute("aria-expanded") === "false"
+    && document.getElementById(maxName.getAttribute("aria-controls"))?.hidden
+    && maxName.style.textDecorationStyle === "dotted"
     && !button("Classix") && !button("Schon kuhl"));
+await act(async () => { maxName.click(); });
+check("Max öffnet nur den kleinen Modusbereich, ohne einen Modus zu wählen",
+  maxName.getAttribute("aria-expanded") === "true"
+    && !document.getElementById(maxName.getAttribute("aria-controls"))?.hidden
+    && !!button("Schon kuhl") && !button("Classix") && modusWahlen.length === 0);
+await act(async () => { button("Schon kuhl").click(); });
+check("Der versteckte Knopf erreicht ausschließlich den bestehenden Neon-Modushandler",
+  modusWahlen.length === 1 && modusWahlen[0] === "neon-noir");
+await act(async () => { maxName.click(); });
+check("Max schließt den Bereich wieder und legt keine weiteren Release-Pfade frei",
+  maxName.getAttribute("aria-expanded") === "false"
+    && !button("Classix") && !button("Schon kuhl")
+    && !hatSummary("Technik & Support") && !hatSummary("Masterliste"));
+modusWahlen.length = 0;
 
 await act(async () => { button("Mit KI").click(); });
 check("KI-Wahl bleibt funktional verdrahtet", kiWahlen.length === 1 && kiWahlen[0] === true);

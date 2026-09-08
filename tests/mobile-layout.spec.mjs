@@ -1164,7 +1164,7 @@ test("Der vierte Film zeigt genau vier Sekunden nur den unsichtbaren Achievement
   await waehleMobileTab(page, "Settings");
   await page.getByRole("button", { name: /Saal \(Dunkel\)/i }).click();
   await page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ }).click();
-  await page.locator('span[title="…"]', { hasText: /^Max$/ }).evaluate((el) => el.click());
+  await page.getByRole("button", { name: "Max", exact: true }).click();
   await page.getByRole("button", { name: /Schon kuhl/i }).click();
   await expect(page.locator('.kd-wrap.kd-deep-space-horror[data-kd-effect="deep-space-horror"]')).toHaveCount(1);
   daten = await lokaleDeepDaten(page);
