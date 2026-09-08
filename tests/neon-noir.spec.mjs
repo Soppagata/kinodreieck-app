@@ -336,34 +336,44 @@ async function waehleEggAppTab(page, name) {
 async function pruefeShowaVerankerung(page) {
   const result = await page.locator(".kd-showa-scene").evaluate(svg => {
     const box = el => { const r = el.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, bottom:r.bottom }; };
-    const front = svg.querySelector(".kd-city-front > path");
+    const quarters = [...svg.querySelectorAll(".kd-city-front use")].map(use => {
+      const source = svg.ownerDocument.getElementById(use.getAttribute("href").slice(1));
+      const view = use.parentElement.viewBox.baseVal;
+      return { shapes:[source.querySelector("path"),source.querySelector("rect")],
+        inverse:use.getScreenCTM().inverse(), view:{x:view.x,y:view.y,width:view.width,height:view.height} };
+    });
+    // Check the rendered, clipped quarters, including their opaque house walls.
+    // The definition alone is invisible and must never count as an occluder.
+    const covered = screen => quarters.some(({shapes,inverse,view}) => {
+      const p = screen.matrixTransform(inverse);
+      return p.x >= view.x && p.x <= view.x+view.width && p.y >= view.y && p.y <= view.y+view.height
+        && shapes.some(shape=>shape.isPointInFill(p));
+    });
     const kaiju = svg.querySelector(".kd-kaiju-shape > path");
     const toScreen = kaiju.getScreenCTM();
-    const toFront = front.getScreenCTM().inverse();
-    // Both feet must meet the actual foreground polygons, rather than just
-    // sharing a broad group bounding box somewhere else in the city.
-    const feetCovered = [151, 217].map(x => {
-      const screen = new DOMPoint(x, 336).matrixTransform(toScreen);
-      return front.isPointInFill(screen.matrixTransform(toFront));
-    });
+    const feetCovered = [151,217].map(x=>covered(new DOMPoint(x,336).matrixTransform(toScreen)));
     const uncoveredLegPoints = [];
     for (let x = 116; x <= 241; x += 3) for (let y = 281; y <= 344; y += 3) {
       const point = new DOMPoint(x,y);
       if (!kaiju.isPointInFill(point)) continue;
       const screen = point.matrixTransform(toScreen);
-      if (screen.y >= innerHeight) continue;
-      if (!front.isPointInFill(screen.matrixTransform(toFront))) uncoveredLegPoints.push({x,y});
+      if (screen.y >= innerHeight || screen.x < 0 || screen.x > innerWidth) continue;
+      if (!covered(screen)) uncoveredLegPoints.push({x,y});
     }
     const head = new DOMPoint(215,75).matrixTransform(toScreen);
+    const back = svg.querySelector(".kd-city-back > path");
+    const backInverse = back.getScreenCTM().inverse();
     return {
       motifs: [box(svg.querySelector(".kd-clock")), box(svg.querySelectorAll(".kd-diet > path")[1])],
-      foundations: [...svg.querySelectorAll(".kd-city-foundation")].map(el => ({
-        base: box(el), building: box(el.parentElement.querySelector("path")),
-      })),
-      front: box(front), frontOpacity: getComputedStyle(front.parentElement).opacity,
+      foundations: [...svg.querySelectorAll(".kd-city-foundation")].map(el => {
+        const b = el.getBBox();
+        const foot = new DOMPoint(b.x+b.width/2,b.y+b.height).matrixTransform(el.getScreenCTM());
+        return { base:box(el),building:box(el.parentElement.querySelector("path")),
+          grounded:covered(foot)||back.isPointInFill(foot.matrixTransform(backInverse))||foot.y>=innerHeight };
+      }),
+      frontOpacity: getComputedStyle(svg.querySelector(".kd-city-front")).opacity,
       feetCovered, uncoveredLegPoints,
-      headVisible: head.x >= 0 && head.x <= innerWidth && head.y >= 0 && head.y <= innerHeight
-        && !front.isPointInFill(head.matrixTransform(toFront)),
+      headVisible: head.x >= 0 && head.x <= innerWidth && head.y >= 0 && head.y <= innerHeight && !covered(head),
       kaiju: box(kaiju),
     };
   });
@@ -373,17 +383,15 @@ async function pruefeShowaVerankerung(page) {
     expect(motif.top).toBeGreaterThanOrEqual(0);
     expect(motif.bottom).toBeLessThanOrEqual(page.viewportSize().height);
   }
-  for (const {base, building} of result.foundations) {
+  for (const {base,building,grounded} of result.foundations) {
     expect(base.top).toBeLessThanOrEqual(building.bottom);
-    expect(base.bottom).toBeGreaterThan(result.front.top);
+    expect(grounded).toBe(true);
   }
-  expect(result.feetCovered).toEqual([true, true]);
+  expect(result.feetCovered).toEqual([true,true]);
   expect(result.frontOpacity).toBe("1");
   expect(result.uncoveredLegPoints).toEqual([]);
   expect(result.headVisible).toBe(true);
-  if (page.viewportSize().width === 1440 && await page.locator(".kd-bereichshero").count()) {
-    expect(result.kaiju.right).toBeLessThan((await page.locator(".kd-bereichshero").first().boundingBox()).x);
-  }
+  if (page.viewportSize().width === 1440) expect(result.kaiju.right).toBeLessThan(285);
 }
 
 test.describe("Egg-Oberflächen in der echten App", () => {
@@ -404,7 +412,10 @@ test.describe("Egg-Oberflächen in der echten App", () => {
         await expect(page.locator(`.kd-fx-${modus}`)).toBeVisible();
         await expect(page.locator(".kd-app")).toHaveCSS("filter", "none");
         await expect(page.locator(".kd-app")).toHaveCSS("transform", "none");
-        if (modus === "showa") await pruefeShowaVerankerung(page);
+        if (modus === "showa") {
+          await pruefeShowaVerankerung(page);
+          await expect(page.locator(".kd-klappe:not([open])").first()).toHaveCSS("background-color","rgba(0, 0, 0, 0)");
+        }
         await legal.click();
         await page.getByRole("button", { name:"Klein", exact:true }).click();
         await keineDokumentUeberbreite(page);
@@ -472,13 +483,24 @@ test("Showa bewegt die Miniatur ruhig und stoppt bei Verbergen, Reduced Motion u
   const beam = overlay.locator(".kd-beam");
   for (const part of [kaiju, smoke, beam]) {
     await expect(part).toHaveCSS("animation-play-state","running");
-    const initial = await part.evaluate(el=>getComputedStyle(el).transform);
-    await expect.poll(()=>part.evaluate(el=>getComputedStyle(el).transform)).not.toBe(initial);
   }
+  const motionPosition = () => overlay.evaluate(el => {
+    const eye = el.querySelector(".kd-kaiju-eye");
+    const p = new DOMPoint(241,105).matrixTransform(eye.getScreenCTM());
+    const smoke = el.querySelector(".kd-city-smoke").getScreenCTM();
+    return {head:{x:p.x,y:p.y},smoke:{x:smoke.e,y:smoke.f}};
+  });
+  const start = await motionPosition();
+  await page.waitForTimeout(3200);
+  const end = await motionPosition();
+  // A real 3.2-second interval must move visible features by useful screen
+  // distances; a subpixel transform change is not perceptible animation.
+  expect(Math.hypot(end.head.x-start.head.x,end.head.y-start.head.y)).toBeGreaterThanOrEqual(10);
+  expect(Math.hypot(end.smoke.x-start.smoke.x,end.smoke.y-start.smoke.y)).toBeGreaterThanOrEqual(15);
   for (const viewport of [{width:393,height:852},{width:430,height:932},{width:1440,height:900}]) {
     await page.setViewportSize(viewport);
     await kaiju.evaluate(el=>el.getAnimations()[0].pause());
-    for (const time of [0,2250,4500,6750,9000,13500,18000]) {
+    for (const time of [0,900,1800,2700,3312,3900,4608,5400,6300,7200]) {
       await kaiju.evaluate((el,time)=>{el.getAnimations()[0].currentTime=time;},time);
       await pruefeShowaVerankerung(page);
     }
