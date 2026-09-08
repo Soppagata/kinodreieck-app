@@ -119,7 +119,7 @@ export async function runNeonNoirChecks() {
       assert.equal(doc.querySelectorAll(".kd-neon-noir__city").length, 1);
       assert.equal(doc.querySelector(".kd-fx-neon-noir").getAttribute("aria-hidden"), "true");
       assert.equal(scene().getAttribute("focusable"), "false");
-      assert.equal(scene().querySelectorAll('a, button, input, [tabindex], image, foreignObject').length, 0);
+      assert.equal(scene().querySelectorAll('a, button, input, [tabindex], image:not([data-neon-part="fog-texture"]), foreignObject').length, 0);
       // Accepted source contours, independently bound before the JSX transfer.
       for (const [name, digest] of Object.entries({
         "loca-wordmark": "a180186b5fbf6530fed984da961483209791224bd4e15bcfa06f402b1a2a8677",
@@ -131,10 +131,28 @@ export async function runNeonNoirChecks() {
       assert.equal(part("scanlines").firstElementChild.getAttribute("fill-opacity"), ".86");
       assert.equal(part("bob-scanlines").firstElementChild.getAttribute("fill"), "#16bcff");
     });
+    check("Nebel bleibt eine lokale weiche Textur mit den Originalkonturen und ohne Vollbildfilter", () => {
+      assert.equal(scene().querySelectorAll("image").length, 1);
+      const href = part("fog-texture").getAttribute("href");
+      assert.ok(href.startsWith("data:image/svg+xml;charset=utf-8,"));
+      const texture = new window.DOMParser().parseFromString(decodeURIComponent(href.slice(href.indexOf(",") + 1)), "image/svg+xml");
+      assert.equal(texture.querySelectorAll("parsererror, script, foreignObject, image, style").length, 0);
+      const paths = [...texture.querySelectorAll("path")].map(element => element.getAttribute("d"));
+      assert.equal(createHash("sha256").update(paths.join("\n")).digest("hex"), "a9f561b07f063dcfc61c200ccf45d4396dbb851df7044837619afec23222402a");
+      assert.deepEqual([...texture.querySelectorAll("stop")].map(element => [element.getAttribute("stop-color"), element.getAttribute("stop-opacity")]), [
+        ["#9cbecb", "0"], ["#85aebb", ".17"], ["#53798c", "0"],
+      ]);
+      for (const element of texture.querySelectorAll("*")) for (const { name, value } of element.attributes) {
+        if (name === "href") assert.ok(value.startsWith("#"), "Textur darf keine fremden Ressourcen laden");
+        const referencedId = value.match(/^url\(#(.+)\)$/)?.[1] || (name === "href" ? value.slice(1) : null);
+        if (referencedId) assert.ok(texture.getElementById(referencedId), `fehlende Texturreferenz ${referencedId}`);
+      }
+      for (const name of ["fog-far", "fog-middle", "fog-front"]) assert.equal(part(name).getAttribute("filter"), null);
+    });
     const still = scene().outerHTML;
     advance(2000);
     check("Regen, Kopf, Nebel und Dampf bewegen sich bei konstanter Hologrammhelligkeit", () => {
-      for (const name of ["rain-far", "rain-near", "holo-head", "fog-far-pattern", "steam-left"]) {
+      for (const name of ["rain-far", "rain-near", "holo-head", "fog-far-pattern", "fog-middle-pattern", "fog-front-pattern", "steam-left"]) {
         assert.ok(!still.includes(part(name).outerHTML), `${name} bewegt sich nicht`);
       }
       assert.equal(part("hologram").getAttribute("opacity"), ".96");

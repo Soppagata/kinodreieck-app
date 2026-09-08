@@ -1,4 +1,5 @@
 import React from "react";
+import { NEON_FOG_TEXTURE } from "./fogTexture.js";
 
 /* Native SVG from the accepted Neon Noir motion study, 7 September 2026.
    Keep its geometry and the Loca/NYSO/RIATA wordmark contours intact. */
@@ -13,7 +14,6 @@ export function NeonNoirScene({ sceneRef, idPrefix }) {
       <linearGradient id={id("depth")} data-neon-part="depth" x2="0" y2="1"><stop stopColor="#183d55" stopOpacity="0"/><stop offset="1" stopColor="#234b60" stopOpacity=".44"/></linearGradient>
       <radialGradient id={id("pink-spill")} data-neon-part="pink-spill"><stop stopColor="#ff279b" stopOpacity=".20"/><stop offset="1" stopColor="#ff279b" stopOpacity="0"/></radialGradient>
       <radialGradient id={id("cyan-spill")} data-neon-part="cyan-spill"><stop stopColor="#24eafa" stopOpacity=".18"/><stop offset="1" stopColor="#24eafa" stopOpacity="0"/></radialGradient>
-      <linearGradient id={id("fog-fill")} data-neon-part="fog-fill" x2="0" y2="1"><stop stopColor="#9cbecb" stopOpacity="0"/><stop offset=".43" stopColor="#85aebb" stopOpacity=".17"/><stop offset="1" stopColor="#53798c" stopOpacity="0"/></linearGradient>
       <linearGradient id={id("beam")} data-neon-part="beam" x2="1" y2="0"><stop stopColor="#a8f4f0" stopOpacity=".3"/><stop offset="1" stopColor="#a8f4f0" stopOpacity="0"/></linearGradient>
       <linearGradient id={id("holo-fade")} data-neon-part="holo-fade" x2="0" y2="1"><stop offset="0" stopColor="white"/><stop offset=".62" stopColor="white" stopOpacity=".92"/><stop offset="1" stopColor="white" stopOpacity="0"/></linearGradient>
       <mask id={id("holo-mask")} data-neon-part="holo-mask" maskUnits="userSpaceOnUse" x="-60" y="-40" width="300" height="430"><rect x="-60" y="-40" width="300" height="430" fill={"url(#" + id("holo-fade") + ")"}/></mask>
@@ -26,7 +26,7 @@ export function NeonNoirScene({ sceneRef, idPrefix }) {
       <filter id={id("mist-soft")} data-neon-part="mist-soft" x="-10%" y="-60%" width="120%" height="220%"><feGaussianBlur stdDeviation="4"/></filter>
       <pattern id={id("rain-far")} data-neon-part="rain-far" width="157" height="192" patternUnits="userSpaceOnUse"><g stroke="#76a8c2" strokeWidth="1.05" strokeLinecap="round" opacity=".31"><path d="M20 13l-4 16M104 44l-3 13M59 138l-4 17M139 119l-4 16M89 174l-3 14M3 78l-3 13M48 57l-3 12M75 19l-4 16M119 87l-3 14M26 156l-4 16M79 99l-3 12"/></g></pattern>
       <pattern id={id("rain-near")} data-neon-part="rain-near" width="231" height="264" patternUnits="userSpaceOnUse"><g stroke="#8bbbd0" strokeWidth="1.8" strokeLinecap="round" opacity=".38"><path d="M61 8l-6 25M192 60l-6 24M24 169l-5 21M126 224l-6 26M165 151l-5 21M113 78l-5 21M211 211l-6 24M33 100l-4 19M156 24l-5 21"/></g></pattern>
-      <g id={id("fog-bank")} data-neon-part="fog-bank"><path d="M0 30C44 30 51 8 97 18S166 51 216 33 278 13 325 26 396 54 451 34 501 14 546 20 571 30 600 30V110H0Z" fill={"url(#" + id("fog-fill") + ")"}/><path d="M0 42C44 42 62 31 98 33S160 56 218 43 287 29 326 39 392 50 451 41 501 33 547 37 572 42 600 42" fill="none" stroke="#9fc3cb" strokeWidth="8" opacity=".055"/></g>
+      <g id={id("fog-bank")} data-neon-part="fog-bank"><image data-neon-part="fog-texture" href={NEON_FOG_TEXTURE} x="0" y="-12" width="600" height="144"/></g>
       <pattern id={id("fog-far-pattern")} data-neon-part="fog-far-pattern" width="300" height="932" patternUnits="userSpaceOnUse"><g transform="scale(.5 1)"><use href={"#" + id("fog-bank")}  y="475"/><use href={"#" + id("fog-bank")}  y="630"/><use href={"#" + id("fog-bank")}  y="805"/></g></pattern>
       <pattern id={id("fog-middle-pattern")} data-neon-part="fog-middle-pattern" width="400" height="932" patternUnits="userSpaceOnUse"><g transform="scale(.666666667 1)"><use href={"#" + id("fog-bank")}  y="530"/><use href={"#" + id("fog-bank")}  y="714"/></g></pattern>
       <pattern id={id("fog-front-pattern")} data-neon-part="fog-front-pattern" width="600" height="932" patternUnits="userSpaceOnUse"><use href={"#" + id("fog-bank")}  y="849"/></pattern>
@@ -46,7 +46,7 @@ export function NeonNoirScene({ sceneRef, idPrefix }) {
       <g stroke="#23475c" strokeWidth="2"><path d="M151 274v-26M142 278v-15M300 402v-16"/></g><g fill="#8d3d65"><circle cx="151" cy="248" r=".85"/><circle cx="142" cy="263" r=".65"/><circle cx="300" cy="386" r=".65"/></g>
     </g>
     <rect id={id("depth-rect")} data-neon-part="depth-rect" y="550" width="430" height="382" fill={"url(#" + id("depth") + ")"}/>
-    <g id={id("fog-far")} data-neon-part="fog-far" opacity=".62" filter={"url(#" + id("mist-soft") + ")"}><rect id={id("fog-far-rect")} data-neon-part="fog-far-rect" width="430" height="932" fill={"url(#" + id("fog-far-pattern") + ")"}/></g>
+    <g id={id("fog-far")} data-neon-part="fog-far" opacity=".62"><rect id={id("fog-far-rect")} data-neon-part="fog-far-rect" width="430" height="932" fill={"url(#" + id("fog-far-pattern") + ")"}/></g>
     <g id={id("flyby")} data-neon-part="flyby" opacity="0"><use href={"#" + id("spinner-shape")} /></g>
 
     <g id={id("left-back")} data-neon-part="left-back">
@@ -118,7 +118,7 @@ export function NeonNoirScene({ sceneRef, idPrefix }) {
       </g>
     </g>
 
-    <g id={id("fog-middle")} data-neon-part="fog-middle" opacity=".8" filter={"url(#" + id("mist-soft") + ")"}><rect id={id("fog-middle-rect")} data-neon-part="fog-middle-rect" width="430" height="932" fill={"url(#" + id("fog-middle-pattern") + ")"}/></g>
+    <g id={id("fog-middle")} data-neon-part="fog-middle" opacity=".8"><rect id={id("fog-middle-rect")} data-neon-part="fog-middle-rect" width="430" height="932" fill={"url(#" + id("fog-middle-pattern") + ")"}/></g>
 
     <g id={id("left-front")} data-neon-part="left-front">
       <path d="M0 572l14-14v-54l18-8v-17l28-2 20 10v31l26 5v30l37 8v48l13 7v107l14 7v75L134 821v111H0z" fill="#061a2c"/>
@@ -170,7 +170,7 @@ export function NeonNoirScene({ sceneRef, idPrefix }) {
       <g transform="translate(290 483) skewY(-5)" filter={"url(#" + id("neon") + ")"}><rect width="20" height="47" fill="#102035" stroke="#d53c91" strokeWidth=".8"/><path d="M4 7v13m6-10v10m6-15v15M4 27v13m6-13v13m6-13v13" stroke="#ff50b4" strokeWidth="2"/></g>
     </g>
     <g id={id("steam-left")} data-neon-part="steam-left">{Array.from({ length: 5 }, (_, index) => <circle key={index} fill="#92afc2" />)}</g><g id={id("steam-right")} data-neon-part="steam-right">{Array.from({ length: 5 }, (_, index) => <circle key={index} fill="#92afc2" />)}</g>
-    <g id={id("fog-front")} data-neon-part="fog-front" opacity=".65" filter={"url(#" + id("mist-soft") + ")"}><rect id={id("fog-front-rect")} data-neon-part="fog-front-rect" width="430" height="932" fill={"url(#" + id("fog-front-pattern") + ")"}/></g>
+    <g id={id("fog-front")} data-neon-part="fog-front" opacity=".65"><rect id={id("fog-front-rect")} data-neon-part="fog-front-rect" width="430" height="932" fill={"url(#" + id("fog-front-pattern") + ")"}/></g>
     <rect id={id("rain-back-rect")} data-neon-part="rain-back-rect" width="430" height="932" fill={"url(#" + id("rain-far") + ")"}/>
     <rect id={id("rain-front-rect")} data-neon-part="rain-front-rect" width="430" height="932" fill={"url(#" + id("rain-near") + ")"}/>
   </svg>
