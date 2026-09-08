@@ -1,89 +1,98 @@
 /* One adaptive SVG scene; its local animation loop also owns reduced motion. */
 .kd-neon-noir-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  isolation: isolate;
-  contain: strict;
-  pointer-events: none;
-  user-select: none;
-  background: #031226;
+  position:fixed; inset:0; z-index:0; overflow:hidden; isolation:isolate;
+  contain:strict; pointer-events:none; user-select:none; background:#031226;
 }
+.kd-neon-noir__city { display:block; width:100%; height:100%; pointer-events:none; }
 
-.kd-neon-noir__city {
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
+/* Neon trägt seine eigene Oberfläche. Die vorhandenen Text-/Kartenrollen
+   bleiben erhalten: helle Fototafeln mit dunkler Tinte im petrolfarbenen Saal. */
+:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) {
+  --kd-radius-karte:4px; --kd-radius-control:3px; --kd-radius-label:2px;
+  --kd-neon-edge:#43EAF2; --kd-neon-pink:#FF63B8;
 }
-
-/* Ruhige UI-Einbindung: Die Stadt darf Cyan/Pink tragen; alle interaktiven
-   Oberflächen bleiben dagegen im gelb-ambernen Kinodreieck-Akzent. */
-:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) header svg[aria-label="Kinodreieck"] {
-  filter:
-    drop-shadow(0 1px 5px rgba(216, 163, 63, 0.2))
-    drop-shadow(0 0 8px rgba(216, 163, 63, 0.14));
+.kd-neon-noir header svg[aria-label="Kinodreieck"] {
+  filter:drop-shadow(0 0 3px rgba(67,234,242,.24));
 }
-
-:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) header h1 {
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.56);
+.kd-neon-noir header h1 { text-shadow:0 2px 12px #020A13; }
+.kd-neon-noir .kd-app > header::after,
+.kd-neon-noir .kd-bereichshero::after {
+  background:linear-gradient(90deg,var(--kd-neon-edge) 0 65%,var(--kd-neon-pink) 65% 82%,transparent 82%);
+  border-radius:0;
 }
-
-:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) .kd-karte {
-  border-color: rgba(216, 163, 63, 0.34) !important;
-  box-shadow:
-    0 1px 0 rgba(230, 240, 241, 0.06) inset,
-    0 12px 34px rgba(1, 4, 10, 0.48),
-    0 0 0 1px rgba(216, 163, 63, 0.05) !important;
+.kd-neon-noir :is(button,input,select,textarea) { border-radius:3px !important; }
+.kd-neon-noir :is(.kd-karte,.kd-filmkarte,.kd-dash-karte,.kd-kino-ticket) {
+  border:1px solid #75C7D0;
+  border-radius:4px !important;
+  box-shadow:3px 3px 0 #05111E,4px 4px 0 rgba(67,234,242,.5),0 14px 32px rgba(0,5,13,.45) !important;
 }
-
-:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) .kd-menu {
-  box-shadow:
-    0 1px 0 rgba(216, 163, 63, 0.24),
-    0 10px 28px rgba(2, 5, 13, 0.32);
+.kd-neon-noir .kd-auswahl-karte--aktiv {
+  outline:3px solid var(--kd-neon-pink); outline-offset:2px;
 }
-
-:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) :is(
-  .kd-nav-aktiv,
-  .kd-mobile-menu button[aria-current="page"]
-) {
-  box-shadow:
-    0 -2px 0 rgba(216, 163, 63, 0.62) inset,
-    0 0 13px rgba(216, 163, 63, 0.1);
+.kd-neon-noir .kd-klappe {
+  border:1px solid #376573; border-left:2px solid #43A2B2;
+  border-radius:3px; background:#091F2D;
+  box-shadow:2px 2px 0 rgba(0,5,12,.52);
 }
-
-:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) :is(
-  .kd-mobile-menu,
-  .kd-mobile-menu-dialog
-) {
-  border-color: rgba(216, 163, 63, 0.34);
-  box-shadow:
-    0 0 0 1px rgba(216, 163, 63, 0.05),
-    0 18px 50px rgba(1, 3, 10, 0.62);
+.kd-neon-noir .kd-klappe[open] { border-left-color:var(--kd-neon-pink); }
+.kd-neon-noir .kd-klappe > summary { padding-inline:10px; }
+.kd-neon-noir :is(.kd-klappe-inhalt,.kd-klappe > div) { padding-inline:10px; }
+.kd-neon-noir :is(.kd-seg-control,.kd-seg > button)[aria-pressed="true"] {
+  box-shadow:2px 2px 0 #071623,3px 3px 0 rgba(67,234,242,.65);
 }
-
-:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) :is(
-  button,
-  a,
-  input,
-  select,
-  textarea,
-  summary,
-  [tabindex]
-):focus-visible {
-  outline-color: #D8A33F;
+.kd-neon-noir :is(.kd-chip,.kd-seg-control,.kd-seg > button):hover:not(:disabled) {
+  box-shadow:0 0 0 1px var(--kd-neon-edge);
 }
-
-@media (max-width: 760px) {
-  :where(.kd-neon-noir, [data-kd-theme="neon-noir"]) .kd-app {
-    background: linear-gradient(
-      90deg,
-      rgba(7, 9, 19, 0.06),
-      rgba(7, 9, 19, 0.46) 24%,
-      rgba(7, 9, 19, 0.56) 50%,
-      rgba(7, 9, 19, 0.46) 76%,
-      rgba(7, 9, 19, 0.06)
-    );
+.kd-neon-noir :is(input,select,textarea) {
+  box-shadow:inset 0 -2px 0 rgba(67,234,242,.11);
+}
+.kd-neon-noir :is(button,input,select,textarea):disabled {
+  opacity:.5; box-shadow:none; cursor:not-allowed;
+}
+.kd-neon-noir .kd-menu { border-color:#376573; background:#071D29;
+  box-shadow:0 2px 0 #0A3E4F,0 8px 22px rgba(0,4,12,.48); }
+.kd-neon-noir .kd-menu button.kd-nav-aktiv {
+  box-shadow:inset 0 -2px var(--kd-neon-edge),inset 0 2px var(--kd-neon-pink);
+}
+.kd-neon-noir :is(.kd-mobile-menu,.kd-mobile-menu-dialog,.kd-globalsuche,.kd-globalsuche-antwort) {
+  border-color:#43A2B2; border-radius:4px; background:#071D29;
+  box-shadow:3px 3px 0 #040F1A,4px 4px 0 rgba(67,234,242,.45),0 16px 40px rgba(0,4,12,.62);
+}
+.kd-neon-noir .kd-mobile-menu-liste button.aktiv {
+  border-color:var(--kd-neon-edge); background:#123B48;
+  box-shadow:inset 3px 0 var(--kd-neon-pink);
+}
+.kd-neon-noir .kd-mobile-menu-liste button.aktiv::before { background:var(--kd-neon-pink); }
+/* Die ältere Produktions-Suchleiste besitzt noch feste Grundfarben. */
+.kd-neon-noir .kd-globalsuche input {
+  border-color:#508B9A; background:#040F1A; color:#DDF7F6;
+}
+.kd-neon-noir .kd-globalsuche input::placeholder { color:#A0BCC5; opacity:1; }
+.kd-neon-noir .kd-globalsuche input:focus { outline-color:var(--kd-neon-edge); }
+.kd-neon-noir .kd-globalsuche button {
+  border-color:#508B9A; background:#0A2330; color:#DDF7F6;
+}
+.kd-neon-noir .kd-globalsuche .kd-globalsuche-los {
+  border-color:var(--kd-neon-edge); background:var(--kd-neon-edge); color:#06212C;
+}
+.kd-neon-noir :is(.kd-globalsuche-antwortkopf span,.kd-globalsuche-ziel span) { color:var(--kd-neon-edge); }
+.kd-neon-noir :is(.kd-globalsuche-ziel small,.kd-globalsuche-treffer p) { color:#A0BCC5; }
+.kd-neon-noir .kd-globalsuche :is(.kd-globalsuche-alle,.kd-globalsuche-aktionen button) {
+  border-color:var(--kd-neon-edge); color:var(--kd-neon-edge);
+}
+.kd-neon-noir .kd-globalsuche:focus-within {
+  border-color:var(--kd-neon-edge);
+  box-shadow:0 0 0 2px #071D29,0 0 0 3px var(--kd-neon-edge),0 14px 32px rgba(0,4,12,.6);
+}
+.kd-neon-noir :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible {
+  outline:2px solid var(--kd-neon-edge); outline-offset:3px;
+}
+.kd-neon-noir :is(.kd-karte,.kd-filmkarte,.kd-dash-karte) :focus-visible {
+  outline-color:#076879;
+}
+@media (max-width:760px) {
+  .kd-neon-noir .kd-app {
+    background:linear-gradient(90deg,rgba(4,15,26,.04),rgba(4,15,26,.40) 24%,rgba(4,15,26,.5) 50%,rgba(4,15,26,.40) 76%,rgba(4,15,26,.04));
   }
+  .kd-neon-noir .kd-globalsuche .kd-globalsuche-menu { color:var(--kd-neon-pink); }
 }

@@ -62,24 +62,24 @@ export const THEMES = {
     ok: "#5E7D63", // C4: gedämpftes S/W-Grün (Showa)
     kartenFeld: "#34322F",
   },
-  /* ---- Egg-Modus NEON NOIR — regennasse Stadt bei Nacht ----
-     Kühles Schwarzblau hält die App ruhig; das Kinogelb bleibt der primäre
-     Interface-Akzent, während die Stadt fast farblos in der Tiefe liegt. */
+  /* ---- Egg-Modus NEON NOIR — Cyan und Pink auf dunklem Petrol ----
+     Leinwand bleibt zugleich heller Saaltext und kühle Kartenfläche.
+     Die Karten behalten ihre dunkle Tinte; Cyan führt durch die Controls. */
   "neon-noir": {
-    saal: "#070913",
-    saalHoch: "#111827",
-    leinwand: "#E6F0F1",
-    leinwandTief: "#CBDADB",
-    tinte: "#0C1720",
-    tinteWeich: "#465964",
-    rauch: "#9BAAB5",
-    wolfram: "#D8A33F",
-    wie: "#36BBD8",
-    was: "#A968D4",
-    warum: "#D89524",
-    gefahr: "#E75E67",
-    ok: "#3EAD7D",
-    kartenFeld: "#F7FBFB",
+    saal: "#040F1A",
+    saalHoch: "#0A2330",
+    leinwand: "#DDF7F6",
+    leinwandTief: "#C2E5E7",
+    tinte: "#06212C",
+    tinteWeich: "#385C67",
+    rauch: "#A0BCC5",
+    wolfram: "#43EAF2",
+    wie: "#19BCD8",
+    was: "#F253AC",
+    warum: "#F2B95D",
+    gefahr: "#FF7587",
+    ok: "#62D9AA",
+    kartenFeld: "#F0FFFF",
   },
 };
 
