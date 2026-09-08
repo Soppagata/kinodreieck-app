@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { btnStyle } from "../lib/tokens.js";
+import { buchstabeUndTitel } from "../lib/cageAlphabet.js";
 
 /* ---- Easter-Egg „A? B! C! D!…" — Das Cage-Alphabet (Block 3) ----
    Vampire's-Kiss-Stakkato: goldene Karte tippen → eskalierendes Buchstaben-
@@ -10,16 +11,6 @@ import { btnStyle } from "../lib/tokens.js";
    Ergebnis. Test-Hooks: window.__cage.{stakkato,ergebnis}. */
 
 const setzeHook = (patch) => { try { window.__cage = { ...(window.__cage || {}), ...patch }; } catch { /* */ } };
-
-/* Liefert {b, titel} — den A–Z-Anfangsbuchstaben und den dazu passenden Titel
-   (bevorzugt der angezeigte titel; sonst der originaltitel). null = kein Buchstabe. */
-function buchstabeUndTitel(f) {
-  const tA = (f.titel || "").trim(), tB = (f.originaltitel || "").trim();
-  const a = tA.charAt(0).toUpperCase(), b = tB.charAt(0).toUpperCase();
-  if (a >= "A" && a <= "Z") return { b: a, titel: tA, jahr: f.jahr, film: f };
-  if (b >= "A" && b <= "Z") return { b, titel: tB, jahr: f.jahr, film: f };
-  return null;
-}
 
 const istFokusziel = (node) => {
   if (!(node instanceof HTMLElement) || node.disabled || node.hidden) return false;
@@ -209,10 +200,10 @@ export function CageAlphabet({ filme = [], onClose, reduced = false, herkunftVon
         )}
 
         {phase === "karte" && (
-          <>
-            <div className="kd-cage-titel" style={{ fontSize: 44 }}>A? B! C! D!…</div>
-            <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: "#3A2A08", margin: 0, lineHeight: 1.6 }}>Ein Buchstabe. Ein Cage. Tippen.</p>
-          </>
+          <button type="button" className="kd-cage-start" aria-label="Cage-Alphabet starten" onClick={start}>
+            <span className="kd-cage-titel kd-cage-auftakt" style={{ fontSize: 44 }}><span>A?</span>{" "}<span>B!</span>{" "}<span>C!</span>{" "}<span>D!…</span></span>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: "#3A2A08", lineHeight: 1.6 }}>Ein Buchstabe. Ein Cage. Tippen.</span>
+          </button>
         )}
 
         {phase === "stakkato" && flash && (

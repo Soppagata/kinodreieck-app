@@ -1197,7 +1197,9 @@ test("Das Musik-Hauptformular speichert eine CD als physische Besitzquelle", asy
   })).toBe("musik:cd:2024");
 });
 
-test("Lokale Deep-Space-Animationswerkstatt steuert alle Effekte ohne echten Eintritt", async ({ page }) => {
+// EGGS-04: Werkstatt pausiert; aktive App-Sperre steht in neon-noir.spec.mjs.
+// Die unabhängigen Deep-Space-Engineprüfungen bleiben erhalten.
+test.skip("Pausierte Deep-Space-Animationswerkstatt steuert alle Effekte ohne echten Eintritt", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);
   await seedDeepSpaceApp(page, { achievement: false, modus: "", rng: 0, eventRng: 0 });

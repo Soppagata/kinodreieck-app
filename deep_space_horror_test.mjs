@@ -258,11 +258,12 @@ test("gespeicherter Zustand enthält ausschließlich die spezifizierten Rhythmus
   ]);
 });
 
-test("Animationswerkstatt ist an DEV und einen ausdrücklichen Query-Parameter gebunden", () => {
+test("Pause sperrt auch die lokale DEV-Animationswerkstatt und App-Darstellung", () => {
   const appQuelle = readFileSync(new URL("./src/App.jsx", import.meta.url), "utf8");
-  assert.match(appQuelle, /deepSpaceTestmodusAktiv\s*=\s*import\.meta\.env\.DEV/);
+  assert.match(appQuelle, /deepSpaceTestmodusAktiv\s*=\s*EGGS_ENABLED\s*&&\s*EGG_AKTIV\.deepSpace\s*&&\s*import\.meta\.env\.DEV/);
   assert.match(appQuelle, /get\("deep-space-test"\)\s*===\s*"1"/);
-  assert.match(appQuelle, /neonNoirAktiv:\s*!deepSpaceTestmodusAktiv/);
+  assert.match(appQuelle, /neonNoirAktiv:\s*EGG_AKTIV\.deepSpace\s*&&\s*!deepSpaceTestmodusAktiv/);
+  assert.match(appQuelle, /deepSpaceSichtbar\s*=\s*EGGS_ENABLED\s*&&\s*EGG_AKTIV\.deepSpace/);
   assert.match(appQuelle, /data-kd-deep-space-test=/);
 });
 

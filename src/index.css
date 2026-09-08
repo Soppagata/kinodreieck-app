@@ -809,17 +809,24 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Animation ist JS-getaktet (Stakkato eskaliert) — reduced-motion springt im
    Component direkt zum Ergebnis. */
 .kd-cage-karte {
-  box-sizing: border-box; max-width: calc(100vw - 24px) !important;
+  box-sizing: border-box; max-width: min(360px, calc(100vw - 24px)) !important;
+  max-height: calc(100dvh - 44px); overflow-y: auto;
   background: radial-gradient(122% 104% at 50% 0%, #F6D67A 0%, #E7B740 44%, #C8912A 100%);
   border: 7px solid #7A5A16;
   box-shadow: 0 0 0 2px #F3D072 inset, 0 18px 60px rgba(0,0,0,0.62);
-  overflow: hidden;
+  overflow-x: hidden;
 }
 .kd-cage-karte::before {   /* Schuppen-Textur */
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .16; mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='34' height='30'><g fill='none' stroke='%235A3E0E' stroke-width='1.4'><path d='M0 15 q8 -12 17 0 q9 12 17 0'/><path d='M-17 30 q8 -12 17 0 q9 12 17 0'/><path d='M17 30 q8 -12 17 0 q9 12 17 0'/><path d='M0 0 q8 -12 17 0'/></g></svg>");
   background-size: 34px 30px;
 }
+.kd-cage-karte::after { content:""; position:absolute; inset:7px; border:1px solid rgba(255,234,168,.7); border-radius:7px; pointer-events:none; }
+.kd-cage-start { display:flex; flex-direction:column; align-items:center; gap:14px; width:100%; padding:0; border:0; background:transparent; cursor:pointer; }
+.kd-cage-start:hover:not(:disabled) { filter:none; }
+.kd-cage-auftakt span { display:inline-block; }
+.kd-cage-auftakt span:nth-child(2) { transform:translateY(-2px) rotate(-4deg); }
+.kd-cage-auftakt span:nth-child(3) { transform:rotate(3deg); }
 .kd-cage-titel { font-family: 'Fraunces', Georgia, serif; font-weight: 900; color: #2A1E06; letter-spacing: .01em; position: relative; }
 .kd-cage-flash { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; line-height: .86; color: #201705;
   text-shadow: 2px 3px 0 rgba(122,90,22,.45); position: relative; }

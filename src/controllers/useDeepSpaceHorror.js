@@ -3,6 +3,7 @@
    App-Start mit gespeichertem Neon oder bewusstes Einschalten. */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { EGGS_ENABLED, EGG_AKTIV } from "../lib/modus.js";
 import {
   DEEP_SPACE_HORROR_ID,
   pruefeDeepSpaceEintritt,
@@ -37,7 +38,7 @@ export function useDeepSpaceHorror({
   const ownerRef = useRef(ownerKey);
 
   const versucheEintritt = useCallback(() => {
-    if (!achievements?.has?.(DEEP_SPACE_HORROR_ID)) return null;
+    if (!EGGS_ENABLED || !EGG_AKTIV.deepSpace || !achievements?.has?.(DEEP_SPACE_HORROR_ID)) return null;
     const rhythmusStorage = storage || browserStorage();
     const ergebnis = pruefeDeepSpaceEintritt({
       jetzt: jetzt(),
@@ -53,7 +54,7 @@ export function useDeepSpaceHorror({
      Wird ein Altbestand erst während dieses Boots still freigeschaltet, ist
      dieser Eintritt bereits vorbei; der erste Wurf folgt beim nächsten Start. */
   useEffect(() => {
-    if (bootGeprueftRef.current || !bootDone || achievements == null) return;
+    if (!EGGS_ENABLED || !EGG_AKTIV.deepSpace || bootGeprueftRef.current || !bootDone || achievements == null) return;
     bootGeprueftRef.current = true;
     if (neonNoirAktiv && achievements.has(DEEP_SPACE_HORROR_ID)) versucheEintritt();
   }, [achievements, bootDone, neonNoirAktiv, versucheEintritt]);
@@ -61,7 +62,7 @@ export function useDeepSpaceHorror({
   /* Das Serial ändert sich nur beim bewussten Wechsel von Saal/Foyer/Showa zu
      Neon Noir. Achievement-Änderungen oder Re-Renders erzeugen keinen Eintritt. */
   useEffect(() => {
-    if (manuellerEintrittRef.current === manuellerEintritt) return;
+    if (!EGGS_ENABLED || !EGG_AKTIV.deepSpace || manuellerEintrittRef.current === manuellerEintritt) return;
     if (!bootDone || achievements == null) return;
     manuellerEintrittRef.current = manuellerEintritt;
     if (neonNoirAktiv && achievements.has(DEEP_SPACE_HORROR_ID)) versucheEintritt();
@@ -79,5 +80,5 @@ export function useDeepSpaceHorror({
     if (!neonNoirAktiv) setDeepSpaceAktiv(false);
   }, [neonNoirAktiv]);
 
-  return { deepSpaceAktiv };
+  return { deepSpaceAktiv: EGGS_ENABLED && EGG_AKTIV.deepSpace && deepSpaceAktiv };
 }

@@ -86,7 +86,7 @@ import { StreamingTab } from "./tabs/StreamingTab.jsx";
 import { EntdeckenTab } from "./tabs/EntdeckenTab.jsx";
 import { FinderTab, erstelleFinderAntwort, kompakteFinderTreffer } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
-import { EGGS_ENABLED } from "./lib/modus.js";
+import { EGGS_ENABLED, EGG_AKTIV } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { MobileNavigation, NAVIGATION } from "./components/AppNavigation.jsx";
 import { ModusFx } from "./components/ModusOverlay.jsx";
@@ -114,7 +114,7 @@ export default function App() {
   /* Lokale Animationswerkstatt: nur der Vite-Entwicklungsserver wertet den
      Query-Parameter aus. Der Modus schreibt weder Settings noch Rhythmus und
      kann deshalb keinen echten Deep-Space-Eintritt verbrauchen. */
-  const deepSpaceTestmodusAktiv = import.meta.env.DEV
+  const deepSpaceTestmodusAktiv = EGGS_ENABLED && EGG_AKTIV.deepSpace && import.meta.env.DEV
     && typeof window !== "undefined"
     && new URLSearchParams(window.location.search).get("deep-space-test") === "1";
   const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
@@ -1519,7 +1519,7 @@ export default function App() {
     auswahl,
     bootDone,
     setupWarnung,
-    startModalOffen: false,
+    startModalOffen: katalogZugangOffen || mehrOffen,
     setTab,
     springeZuFilm,
   });
@@ -1528,12 +1528,12 @@ export default function App() {
   const { deepSpaceAktiv } = useDeepSpaceHorror({
     achievements,
     bootDone,
-    neonNoirAktiv: !deepSpaceTestmodusAktiv && einstellungen.modus === "neon-noir",
+    neonNoirAktiv: EGG_AKTIV.deepSpace && !deepSpaceTestmodusAktiv && einstellungen.modus === "neon-noir",
     manuellerEintritt: neonEintrittSerial,
     ownerKey: deepSpaceOwner,
   });
-  const deepSpaceSichtbar = deepSpaceTestmodusAktiv
-    || (deepSpaceAktiv && einstellungen.modus === "neon-noir");
+  const deepSpaceSichtbar = EGGS_ENABLED && EGG_AKTIV.deepSpace && (deepSpaceTestmodusAktiv
+    || (deepSpaceAktiv && einstellungen.modus === "neon-noir"));
   const effektiverModus = deepSpaceSichtbar ? "deep-space-horror" : einstellungen.modus;
 
   const refreshKatalog = useCallback(async () => {
@@ -1861,7 +1861,7 @@ export default function App() {
           ))}
         </div>
       )}
-      {EGGS_ENABLED && cageOffen && (
+      {EGGS_ENABLED && EGG_AKTIV.cage && cageOffen && (
         <CageAlphabet filme={cageFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
           onZeigeEintrag={eggZeigeEintrag} onClose={() => setCageOffen(false)} />
       )}
