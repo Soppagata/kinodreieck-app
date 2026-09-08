@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { IconDelete, IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
 import { FeldHinweis } from "../components/FeldHinweis.jsx";
@@ -94,6 +94,8 @@ export function DatenTab({
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
   const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
   const showKatalogbestand = runtimeConfig.appEnvironment !== "production";
+  const [eggOffen, setEggOffen] = useState(false);
+  const eggBereichId = useId();
   const [ueberOffen, setUeberOffen] = useState(false);
   const anleitungKnopfRef = useRef(null);
   useEffect(() => {
@@ -161,6 +163,17 @@ export function DatenTab({
 
     return ausgang;
   }, [bekannteGenres, master]);
+
+  /* Der versteckte Knopf richtet sich nach dem Grundtheme. Im Spezialmodus
+     bleibt sein Ziel stabil, damit derselbe Knopf zum Grundtheme zurückführt. */
+  const eggZiel = einstellungen.modus || ((einstellungen.basisTheme || einstellungen.theme) === "hell" ? "showa" : "neon-noir");
+  const eggAktiv = einstellungen.modus === eggZiel;
+  const eggLabel = eggZiel === "showa" ? "Classix" : "Schon kuhl";
+  const eggToggle = () => {
+    if (!waehleModus) return;
+    if (eggAktiv) waehleModus(einstellungen.basisTheme === "hell" ? "foyer" : "saal");
+    else waehleModus(eggZiel);
+  };
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -350,8 +363,17 @@ export function DatenTab({
         <div style={kasten}>
           <p style={{ fontSize: 12, color: T.rauch, lineHeight: 1.7, margin: 0 }}>
             Kinodreieck — privates, nicht-kommerzielles Projekt. Persönliche Daten liegen lokal und bei aktiviertem Kontospeicher zusätzlich im eigenen Konto; die App verwendet keine allgemeine Telemetrie. Programmdaten: film.at &amp; nonstopkino.at · Streaming-Kataloge: Watchmode. Alle Angaben ohne Gewähr — verbindlich sind die Kino- bzw. Anbieterseiten. Bewertungen und Texte sind persönliche Meinungen ihrer Autoren.
-            <br />© {new Date().getFullYear()} <span style={{ color: T.wolfram }}>Max</span> — Nutzung auf eigene Verantwortung.
+            <br />© {new Date().getFullYear()} <button type="button"
+              aria-expanded={eggOffen} aria-controls={eggBereichId}
+              onClick={() => setEggOffen((offen) => !offen)}
+              style={{ color: T.wolfram, background: "transparent", border: 0,
+                font: "inherit", minWidth: 44, minHeight: 44, padding: "0 6px", cursor: "pointer",
+                textDecorationLine: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}>Max</button> — Nutzung auf eigene Verantwortung.
           </p>
+          <div id={eggBereichId} hidden={!eggOffen} style={{ marginTop: 12 }}>
+            {eggOffen && waehleModus && <button type="button" onClick={eggToggle}
+              aria-pressed={eggAktiv} style={btnStyle(eggAktiv)}>{eggLabel}</button>}
+          </div>
           <div style={{ marginTop: 14 }}>
             <button ref={anleitungKnopfRef} style={{ ...btnStyle(false), fontSize: 13 }}
               aria-expanded={ueberOffen} onClick={() => setUeberOffen((v) => !v)}>Über Kinodreieck &amp; Anleitung</button>

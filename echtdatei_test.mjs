@@ -355,10 +355,12 @@ check("Gast-Settings behalten die Streaming-Auswahl, aber keine Betriebs-/Suppor
 check("Datenschutz liegt erreichbar unter dem letzten Rechtliches-Block",
   !!datenschutzSummary && !!rechtlichesSummary
   && datenschutzSummary.closest("details.kd-klappe") === rechtlichesSummary.parentElement);
-/* Der Legal-Name bleibt im Privatrelease reiner Text. */
-const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
-check("Legal-Name 'Max' besitzt keinen Easter-Egg-Einstieg", !maxLink);
-check("Kein versteckter Modus-Knopf in den Release-Settings", !knopf(/^(Classix|Schon kuhl)$/));
+/* Der versteckte Modusknopf erscheint erst nach Betätigung von Max. */
+const maxLink = knopf(/^Max$/);
+check("Max ist ein geschlossener nativer Einstieg",
+  !!maxLink && maxLink.getAttribute("aria-expanded") === "false"
+    && doc.getElementById(maxLink.getAttribute("aria-controls"))?.hidden);
+check("Vor Max-Klick ist kein Modusknopf in den Release-Settings sichtbar", !knopf(/^(Classix|Schon kuhl)$/));
 check("KI-Vokabular vorhanden", /KI-Vokabular/.test(text()));
 const sicherheitskopieKnopf = knopf(/Sicherheitskopie dieses Geräts herunterladen/i);
 check("Knopf für die Sicherheitskopie dieses Geräts vorhanden", !!sicherheitskopieKnopf);

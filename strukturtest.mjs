@@ -250,10 +250,11 @@ if (einstellungenTab) { einstellungenTab.click(); await warte(500); }
 const klappen = [...doc.querySelectorAll("details.kd-klappe")];
 check("Etappe 2: Einstellungen-Accordions (kd-klappe), Darstellung startet offen",
   klappen.length >= 6 && klappen.some((d) => d.open && /Darstellung & Verhalten/.test((d.querySelector("summary") || {}).textContent || "")));
-// Der Legal-Name bleibt Text und öffnet im Privatrelease keinen versteckten Modus.
-const maxName = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max");
-check("Legal-Name 'Max' besitzt keinen Easter-Egg-Einstieg",
-  !!maxName && maxName.style?.cursor !== "pointer"
+// Der Max-Einstieg öffnet den Modusbereich erst nach einer bewussten Betätigung.
+const maxName = knopf(/^Max$/);
+check("Max ist ein geschlossener nativer Einstieg ohne vorab sichtbaren Modusknopf",
+  !!maxName && maxName.getAttribute("aria-expanded") === "false"
+    && doc.getElementById(maxName.getAttribute("aria-controls"))?.hidden
     && !knopf(/^(Classix|Schon kuhl)$/)
     && !/kd-(showa|neon-noir|nerv)/.test(wrapper().className || ""));
 // Schriftgröße: Zustandsklasse statt mobilem Layout-Zoom

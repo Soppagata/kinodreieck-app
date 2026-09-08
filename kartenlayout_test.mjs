@@ -208,12 +208,14 @@ check("Blog-Datenwerkzeuge sind aus der Release-Oberfläche entfernt", () => {
   assert.doesNotMatch(lies("./src/tabs/BlogTab.jsx"), /kd-blog-daten|MasterImport|Artikel exportieren|Artikel importieren/);
 });
 
-check("Blog-Bearbeitung bleibt knapp und entfernte Altmodi kehren nicht als tote Release-Projektion zurück", () => {
+check("Blog-Bearbeitung bleibt knapp und der Max-Einstieg öffnet keine entfernten Release-Nebenwege", () => {
   const blog = lies("./src/tabs/BlogTab.jsx");
   const daten = lies("./src/tabs/DatenTab.jsx");
   assert.match(blog, /vorlage \? "Speichern" : "Erstellen"/);
   assert.doesNotMatch(blog, /Speichern & neu abgleichen/i);
-  assert.doesNotMatch(daten, /RELEASE_NEBENWEGE_SICHTBAR|eggOffen|eggToggle/);
+  assert.doesNotMatch(daten, /RELEASE_NEBENWEGE_SICHTBAR|MasterImport|Masterliste importieren|Technik & Support/);
+  assert.match(daten, /aria-expanded=\{eggOffen\} aria-controls=\{eggBereichId\}/);
+  assert.match(daten, /eggOffen && waehleModus && <button/);
   assert.match(daten, /blogProfilAnalyseSichtbar=\{false\}/);
 });
 
