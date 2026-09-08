@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -29,7 +30,11 @@ export async function buildNeonNoirFixture() {
   });
   return {
     js: result.outputFiles.find(file => file.path.endsWith(".js")).text,
-    css: result.outputFiles.find(file => file.path.endsWith(".css")).text,
+    css: result.outputFiles.find(file => file.path.endsWith(".css")).text
+      + readFileSync(path.join(rootDir, "src/index.css"), "utf8")
+        .split("/* ================= EGG-MODI: SHOWA & NEON NOIR =================")[1]
+        .split("/* ================= ENDE EGG-MODI: SHOWA & NEON NOIR =================")[0]
+        .replace(/^[\s\S]*?\*\//, ""),
   };
 }
 
@@ -41,6 +46,17 @@ export async function runNeonNoirChecks() {
   });
   const { window } = dom;
   const doc = window.document;
+  const visibilityListeners = new Set();
+  const addListener = doc.addEventListener.bind(doc);
+  const removeListener = doc.removeEventListener.bind(doc);
+  doc.addEventListener = (type, listener, ...options) => {
+    if (type === "visibilitychange") visibilityListeners.add(listener);
+    return addListener(type, listener, ...options);
+  };
+  doc.removeEventListener = (type, listener, ...options) => {
+    if (type === "visibilitychange") visibilityListeners.delete(listener);
+    return removeListener(type, listener, ...options);
+  };
   window.MessageChannel = class {
     port1 = {};
     port2 = { postMessage: () => window.setTimeout(() => this.port1.onmessage?.(), 0) };
@@ -96,9 +112,9 @@ export async function runNeonNoirChecks() {
         "riata-wordmark": "b4ebf7db033310454d349893c711e70d1e422a4017fa6e47baa9420bd5ea7e60",
       })) assert.equal(createHash("sha256").update(part(name).getAttribute("d")).digest("hex"), digest);
       assert.equal(doc.querySelectorAll('[data-neon-part="hologram"]').length, 1);
-      assert.equal(part("scanlines").firstElementChild.getAttribute("fill"), "#d365a2");
-      assert.equal(part("scanlines").firstElementChild.getAttribute("fill-opacity"), ".30");
-      assert.equal(part("bob-scanlines").firstElementChild.getAttribute("fill"), "#3ba4db");
+      assert.equal(part("scanlines").firstElementChild.getAttribute("fill"), "#ff40c3");
+      assert.equal(part("scanlines").firstElementChild.getAttribute("fill-opacity"), ".86");
+      assert.equal(part("bob-scanlines").firstElementChild.getAttribute("fill"), "#16bcff");
     });
     const still = scene().outerHTML;
     advance(2000);
@@ -106,7 +122,7 @@ export async function runNeonNoirChecks() {
       for (const name of ["rain-far", "rain-near", "holo-head", "fog-far-pattern", "steam-left"]) {
         assert.ok(!still.includes(part(name).outerHTML), `${name} bewegt sich nicht`);
       }
-      assert.equal(part("hologram").getAttribute("opacity"), ".64");
+      assert.equal(part("hologram").getAttribute("opacity"), ".96");
       assert.equal(frames.size, 1, "StrictMode darf keine doppelten Loops hinterlassen");
       assert.equal(observers.size, 1);
     });
@@ -172,6 +188,31 @@ export async function runNeonNoirChecks() {
       assert.ok(scene());
       assert.equal(part("flyby").getAttribute("opacity"), "0");
       assert.equal(frames.size, 0);
+      assert.equal(requests, 0);
+    });
+    await api.act(async () => api.mount("showa"));
+    const showa = doc.querySelector(".kd-fx-showa");
+    check("Showa bewahrt alle 30 originalen Motivkonturen in einer dekorativen Szene", () => {
+      const paths = [...showa.querySelectorAll("svg path")].map(element => element.getAttribute("d"));
+      assert.equal(createHash("sha256").update(paths.sort().join("\n")).digest("hex"), "912362530bbdfc27c1de477a27c6fa12a219c11a3c2d51b9628d0b19d5174c2d");
+      assert.equal(showa.querySelector("svg").getAttribute("focusable"), "false");
+      assert.equal(showa.querySelectorAll('a, button, input, [tabindex], image, foreignObject').length, 0);
+      assert.equal(frames.size, 0, "Showa benötigt keinen JavaScript-Animationsloop");
+      assert.equal(visibilityListeners.size, 1, "StrictMode hinterlässt genau einen Sichtbarkeitslistener");
+    });
+    check("Showa pausiert beim Verbergen und nimmt bei Sichtbarkeit wieder auf", () => {
+      setHidden(true);
+      assert.equal(showa.dataset.paused, "true");
+      setHidden(false);
+      assert.equal(showa.dataset.paused, "false");
+    });
+    await api.act(async () => api.mount(""));
+    const detachedShowa = showa.outerHTML;
+    check("Showa räumt beim Themewechsel seinen Listener auf", () => {
+      assert.equal(visibilityListeners.size, 0);
+      setHidden(true);
+      assert.equal(showa.outerHTML, detachedShowa);
+      assert.equal(doc.querySelector(".kd-fx-showa"), null);
       assert.equal(requests, 0);
     });
     console.log(`\n${checks}/${checks} Neon-Noir-Checks bestanden; 0 Netzwerkrequests.`);

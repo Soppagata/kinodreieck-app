@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { NeonNoirOverlay } from "./NeonNoirOverlay.jsx";
 import { DeepSpaceHorrorOverlay } from "./DeepSpaceHorrorOverlay.jsx";
 
@@ -8,7 +8,7 @@ import { DeepSpaceHorrorOverlay } from "./DeepSpaceHorrorOverlay.jsx";
 
 function Kaiju() {
   return (
-    <g className="kd-kaiju-shape" transform="translate(520 63) scale(.75)">
+    <g className="kd-kaiju-shape">
       {/* Zusammenhängende Suitmation-Silhouette: nach vorn geneigter Kopf,
           schwerer Bauch, massive Oberschenkel und langer schleifender Schwanz. */}
       <path d="M12 326 C45 318 69 304 91 284 C87 259 86 237 90 213 C94 184 104 158 122 137 C126 115 136 94 152 75 C165 59 181 49 199 45 C217 41 235 46 248 56 C260 66 267 79 266 92 C265 102 258 109 247 114 L281 116 C296 117 305 122 304 130 C303 139 292 144 276 145 L249 144 C244 155 246 166 255 178 C267 190 278 198 287 204 C298 211 304 220 300 228 C296 236 287 237 277 232 L249 218 C238 212 229 208 218 208 C224 236 223 261 216 284 L234 318 C241 331 234 341 219 342 H198 C188 339 188 331 195 322 L201 309 L184 281 C179 303 176 319 180 329 C184 339 175 344 163 344 H129 C116 342 109 334 116 322 L124 302 L120 281 C108 283 100 286 91 293 C69 313 45 329 17 336 Z" />
@@ -35,7 +35,7 @@ function Kaiju() {
 
 function ShowaScene() {
   return (
-    <svg className="kd-showa-scene" viewBox="0 0 1200 320" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <svg className="kd-showa-scene" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
       {/* Rauch und entfernte Dachlandschaft. */}
       <g className="kd-city-smoke">
         <path d="M0 220 C94 185 136 210 208 176 C270 146 318 178 388 152 C458 126 508 156 572 137 C642 116 708 148 778 132 C866 111 925 147 1010 124 C1085 105 1144 131 1200 112 V320 H0 Z" />
@@ -48,6 +48,7 @@ function ShowaScene() {
 
       {/* Mittlere Ebene: Ginza/Wako-Uhrturm und Godzilla. */}
       <g className="kd-city-mid kd-wako">
+        <rect className="kd-city-foundation" x="262" y="319" width="138" height="610" />
         <path d="M262 320 V207 Q331 171 400 207 V320 Z" />
         <path d="M306 207 V135 H356 V207 Z M313 135 L331 105 L349 135 Z" />
         <rect x="326" y="83" width="10" height="23" />
@@ -55,10 +56,11 @@ function ShowaScene() {
         <path className="kd-clock-hand" d="M331 159 L331 149 M331 159 L339 164" />
         <path className="kd-city-window" d="M279 226 h16 v24 h-16z M307 226h16v24h-16z M339 226h16v24h-16z M367 226h16v24h-16z M279 268h16v24h-16z M307 268h16v24h-16z M339 268h16v24h-16z M367 268h16v24h-16z" />
       </g>
-      <Kaiju />
+      <g className="kd-showa-kaiju-position"><Kaiju /></g>
 
       {/* Japanisches Parlamentsgebäude als rechter Bildanker. */}
       <g className="kd-city-mid kd-diet">
+        <rect className="kd-city-foundation" x="820" y="319" width="304" height="610" />
         <path d="M820 320 V222 H878 V184 H918 V130 H1006 V184 H1048 V222 H1124 V320 Z" />
         <path d="M902 130 L962 67 L1022 130 Z M915 130 L962 88 L1009 130 Z" />
         <path d="M932 184 V143 H992 V184 Z" />
@@ -81,8 +83,17 @@ function ShowaScene() {
 }
 
 function ShowaFx() {
+  const overlayRef = useRef(null);
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    const doc = overlay.ownerDocument;
+    const update = () => { overlay.dataset.paused = String(doc.hidden); };
+    update();
+    doc.addEventListener("visibilitychange", update);
+    return () => doc.removeEventListener("visibilitychange", update);
+  }, []);
   return (
-    <div className="kd-fx kd-fx-showa" aria-hidden="true">
+    <div ref={overlayRef} className="kd-fx kd-fx-showa" aria-hidden="true">
       <div className="grade" />
       <div className="korn" />
       <div className="kd-beam" />

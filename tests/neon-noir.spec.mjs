@@ -69,8 +69,8 @@ for (const viewport of [...VIEWPORTS, { name: "1440x900", width: 1440, height: 9
       await expect(overlay.locator(`[data-neon-part="${name}"]`)).toHaveAttribute("d", /^M/);
     }
     await expect(overlay.locator('[data-neon-part="hologram"]')).toHaveCount(1);
-    await expect(overlay.locator('[data-neon-part="hologram"]')).toHaveAttribute("opacity", ".64");
-    await expect(overlay.locator('[data-neon-part="bob-scanlines"] rect')).toHaveAttribute("fill", "#3ba4db");
+    await expect(overlay.locator('[data-neon-part="hologram"]')).toHaveAttribute("opacity", ".96");
+    await expect(overlay.locator('[data-neon-part="bob-scanlines"] rect')).toHaveAttribute("fill", "#16bcff");
     expect(await page.evaluate(() => typeof window.neonPreview)).toBe("undefined");
 
     const geometrie = await city.evaluate((el) => {
@@ -91,7 +91,7 @@ for (const viewport of [...VIEWPORTS, { name: "1440x900", width: 1440, height: 9
       await page.clock.runFor(640);
       expect(await element.getAttribute(attribute), name).not.toBe(before);
     }
-    await expect(overlay.locator('[data-neon-part="hologram"]')).toHaveAttribute("opacity", ".64");
+    await expect(overlay.locator('[data-neon-part="hologram"]')).toHaveAttribute("opacity", ".96");
     await page.emulateMedia({ reducedMotion: "reduce" });
     if (!process.env.CI && ["393x852", "430x932", "1440x900"].includes(viewport.name)) {
       await page.screenshot({ path: testInfo.outputPath("neon-app.png") });
@@ -189,7 +189,7 @@ test("Neon Noir lässt Flug und Animation beim Themewechsel sauber auslaufen", a
 /* A mock account opens the existing private Settings surface. App.jsx,
    DatenTab, ModusFx and the settings writer all run unchanged. No session,
    backend response or special-mode value is taken from a real account. */
-async function oeffneAppMitMockkonto(page) {
+async function oeffneAppMitMockkonto(page, { filme = [] } = {}) {
   const extern = [];
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -211,6 +211,9 @@ async function oeffneAppMitMockkonto(page) {
     } else await route.continue();
   });
   await seedAppMitDarstellung(page, { modus: "", beibehaltenBeiReload: true });
+  if (filme.length) await page.addInitScript(filme => {
+    localStorage.setItem("kd:master", JSON.stringify({ meta: { version: "egg-surface-fixture" }, filme, gespeichertAm: Date.now() }));
+  }, filme);
   await page.goto("/");
   await expect(page.locator('.kd-app[data-session-mode="account"]')).toBeVisible();
   return extern;
@@ -313,3 +316,194 @@ for (const input of ["tap", "keyboard", "click"]) {
     }
   });
 }
+
+const EGG_FILM = {
+  id: "egg-surface-night", typ: "film", titel: "Die Nacht der Lichter", originaltitel: "Die Nacht der Lichter",
+  jahr: 1982, quelle: "dvd", kategorie: "sehenswert", bewertet_von: "max",
+  bewertung: { wie: 4, was: 3, warum: 4 }, genre: ["scifi"], tags: [],
+  begruendung: "Eine Stadt aus Regen und Licht. Ein ruhiger Abend im Kino.", notiz: "",
+};
+
+async function waehleEggAppTab(page, name) {
+  if (page.viewportSize().width > 760) {
+    await page.getByRole("navigation", { name: "Hauptnavigation" }).getByRole("button", { name, exact: true }).click();
+  } else {
+    await page.getByRole("button", { name: "Menü öffnen", exact: true }).click();
+    await page.getByRole("dialog", { name: "Menü", exact: true }).getByRole("button", { name, exact: true }).click();
+  }
+}
+
+async function pruefeShowaVerankerung(page) {
+  const result = await page.locator(".kd-showa-scene").evaluate(svg => {
+    const box = el => { const r = el.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, bottom:r.bottom }; };
+    const front = svg.querySelector(".kd-city-front > path");
+    const kaiju = svg.querySelector(".kd-kaiju-shape > path");
+    const toScreen = kaiju.getScreenCTM();
+    const toFront = front.getScreenCTM().inverse();
+    // Both feet must meet the actual foreground polygons, rather than just
+    // sharing a broad group bounding box somewhere else in the city.
+    const feetCovered = [151, 217].map(x => {
+      const screen = new DOMPoint(x, 336).matrixTransform(toScreen);
+      return front.isPointInFill(screen.matrixTransform(toFront));
+    });
+    const uncoveredLegPoints = [];
+    for (let x = 116; x <= 241; x += 3) for (let y = 281; y <= 344; y += 3) {
+      const point = new DOMPoint(x,y);
+      if (!kaiju.isPointInFill(point)) continue;
+      const screen = point.matrixTransform(toScreen);
+      if (screen.y >= innerHeight) continue;
+      if (!front.isPointInFill(screen.matrixTransform(toFront))) uncoveredLegPoints.push({x,y});
+    }
+    const head = new DOMPoint(215,75).matrixTransform(toScreen);
+    return {
+      motifs: [box(svg.querySelector(".kd-clock")), box(svg.querySelectorAll(".kd-diet > path")[1])],
+      foundations: [...svg.querySelectorAll(".kd-city-foundation")].map(el => ({
+        base: box(el), building: box(el.parentElement.querySelector("path")),
+      })),
+      front: box(front), frontOpacity: getComputedStyle(front.parentElement).opacity,
+      feetCovered, uncoveredLegPoints,
+      headVisible: head.x >= 0 && head.x <= innerWidth && head.y >= 0 && head.y <= innerHeight
+        && !front.isPointInFill(head.matrixTransform(toFront)),
+      kaiju: box(kaiju),
+    };
+  });
+  for (const motif of result.motifs) {
+    expect(motif.left).toBeGreaterThanOrEqual(0);
+    expect(motif.right).toBeLessThanOrEqual(page.viewportSize().width);
+    expect(motif.top).toBeGreaterThanOrEqual(0);
+    expect(motif.bottom).toBeLessThanOrEqual(page.viewportSize().height);
+  }
+  for (const {base, building} of result.foundations) {
+    expect(base.top).toBeLessThanOrEqual(building.bottom);
+    expect(base.bottom).toBeGreaterThan(result.front.top);
+  }
+  expect(result.feetCovered).toEqual([true, true]);
+  expect(result.frontOpacity).toBe("1");
+  expect(result.uncoveredLegPoints).toEqual([]);
+  expect(result.headVisible).toBe(true);
+  if (page.viewportSize().width === 1440 && await page.locator(".kd-bereichshero").count()) {
+    expect(result.kaiju.right).toBeLessThan((await page.locator(".kd-bereichshero").first().boundingBox()).x);
+  }
+}
+
+test.describe("Egg-Oberflächen in der echten App", () => {
+  test.use({ reducedMotion: "reduce", serviceWorkers: "block" });
+  for (const viewport of [{ width:393, height:852 }, { width:430, height:932 }, { width:1440, height:900 }]) {
+    for (const modus of ["showa", "neon-noir"]) {
+      test(`${modus}: Settings, Filmkarte und Controls bei ${viewport.width}x${viewport.height}`, async ({page}, testInfo) => {
+        await page.setViewportSize(viewport);
+        const errors = [];
+        page.on("pageerror", error => errors.push(String(error)));
+        const extern = await oeffneAppMitMockkonto(page, { filme: [EGG_FILM] });
+        await waehleEggAppTab(page, "Settings");
+        await page.getByRole("button", { name: modus === "showa" ? "Foyer (hell)" : "Saal (dunkel)", exact:true }).click();
+        const legal = page.locator("summary", { hasText:/^Über Kinodreieck, Anleitung & Rechtliches$/ });
+        await legal.click();
+        await page.getByRole("button", { name:"Max", exact:true }).click();
+        await page.getByRole("button", { name:modus === "showa" ? "Classix" : "Schon kuhl", exact:true }).click();
+        await expect(page.locator(`.kd-fx-${modus}`)).toBeVisible();
+        await expect(page.locator(".kd-app")).toHaveCSS("filter", "none");
+        await expect(page.locator(".kd-app")).toHaveCSS("transform", "none");
+        if (modus === "showa") await pruefeShowaVerankerung(page);
+        await legal.click();
+        await page.getByRole("button", { name:"Klein", exact:true }).click();
+        await keineDokumentUeberbreite(page);
+        const normal = page.getByRole("button", { name:"Normal", exact:true });
+        await normal.focus();
+        await page.keyboard.press("Space");
+        await expect(normal).toHaveAttribute("aria-pressed", "true");
+        if (modus === "neon-noir") {
+          await expect(normal).toHaveCSS("background-color", "rgb(67, 234, 242)");
+          await expect(normal).toHaveCSS("color", "rgb(0, 0, 0)");
+          await expect(normal).toHaveCSS("border-radius", "3px");
+          await expect(normal).toHaveCSS("outline-style", "solid");
+          await expect(normal).toHaveCSS("outline-width", "2px");
+        }
+        await keineDokumentUeberbreite(page);
+        if (!process.env.CI) await page.screenshot({ path:testInfo.outputPath(`${modus}-settings.png`) });
+        await waehleEggAppTab(page, "Mediathek");
+        const card = page.locator(".kd-filmkarte").filter({ hasText:EGG_FILM.titel });
+        await card.click();
+        await expect(card).toContainText(EGG_FILM.begruendung);
+        const colors = await card.evaluate(el => ({ text:getComputedStyle(el).color, background:getComputedStyle(el).backgroundColor }));
+        if (modus === "neon-noir") {
+          await expect(card).toHaveCSS("border-radius", "4px");
+          expect(colors).toEqual({text:"rgb(6, 33, 44)",background:"rgb(221, 247, 246)"});
+        } else expect(colors.text).not.toBe(colors.background);
+        if (!process.env.CI) await page.screenshot({ path:testInfo.outputPath(`${modus}-card.png`) });
+        const search = page.locator(".kd-globalsuche input");
+        if (viewport.width <= 760) {
+          await search.fill("Nacht");
+          await expect(search).toHaveValue("Nacht");
+          await search.fill("");
+          await page.getByRole("button", { name:"Menü öffnen", exact:true }).click();
+          const menu = page.getByRole("dialog", {name:"Menü",exact:true});
+          await expect(menu).toBeVisible();
+          await expect(menu.getByRole("button",{name:"Mediathek",exact:true})).toHaveAttribute("aria-current","page");
+          if (!process.env.CI) await page.screenshot({ path:testInfo.outputPath(`${modus}-menu.png`) });
+          await page.keyboard.press("Escape");
+          await expect(menu).toBeHidden();
+        }
+        await keineDokumentUeberbreite(page);
+        expect(errors).toEqual([]);
+        expect(extern).toEqual([]);
+      });
+    }
+  }
+});
+
+test("Showa bewegt die Miniatur ruhig und stoppt bei Verbergen, Reduced Motion und Unmount", async ({page}) => {
+  const { buildNeonNoirFixture } = await import("../neon_noir_test.mjs");
+  const fixture = await buildNeonNoirFixture();
+  const extern = [];
+  await page.route("**/*", async route => {
+    if (route.request().url() === "http://showa-fixture.test/") {
+      await route.fulfill({contentType:"text/html",body:'<!doctype html><html><body style="margin:0;background:#E5E2DA"><div id="fixture"></div></body></html>'});
+    } else { extern.push(route.request().url()); await route.abort(); }
+  });
+  await page.setViewportSize({width:393,height:852});
+  await page.goto("http://showa-fixture.test/");
+  await page.addStyleTag({content:fixture.css});
+  await page.addScriptTag({content:fixture.js});
+  await page.evaluate(()=>window.neonTest.mount("showa"));
+  const overlay = page.locator(".kd-fx-showa");
+  const kaiju = overlay.locator(".kd-kaiju-shape");
+  const smoke = overlay.locator(".kd-city-smoke");
+  const beam = overlay.locator(".kd-beam");
+  for (const part of [kaiju, smoke, beam]) {
+    await expect(part).toHaveCSS("animation-play-state","running");
+    const initial = await part.evaluate(el=>getComputedStyle(el).transform);
+    await expect.poll(()=>part.evaluate(el=>getComputedStyle(el).transform)).not.toBe(initial);
+  }
+  for (const viewport of [{width:393,height:852},{width:430,height:932},{width:1440,height:900}]) {
+    await page.setViewportSize(viewport);
+    await kaiju.evaluate(el=>el.getAnimations()[0].pause());
+    for (const time of [0,2250,4500,6750,9000,13500,18000]) {
+      await kaiju.evaluate((el,time)=>{el.getAnimations()[0].currentTime=time;},time);
+      await pruefeShowaVerankerung(page);
+    }
+    await kaiju.evaluate(el=>el.getAnimations()[0].play());
+  }
+  await page.setViewportSize({width:393,height:852});
+  await page.evaluate(()=>{
+    Object.defineProperty(document,"hidden",{configurable:true,get:()=>true});
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(overlay).toHaveAttribute("data-paused","true");
+  for (const part of [kaiju,smoke,beam]) await expect(part).toHaveCSS("animation-play-state","paused");
+  await page.evaluate(()=>{
+    delete document.hidden;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(kaiju).toHaveCSS("animation-play-state","running");
+  await page.emulateMedia({reducedMotion:"reduce"});
+  for (const part of [kaiju,smoke,beam]) await expect(part).toHaveCSS("animation-name","none");
+  await pruefeShowaVerankerung(page);
+  await expect(smoke).not.toHaveCSS("transform","none");
+  await page.emulateMedia({reducedMotion:"no-preference"});
+  await expect(kaiju).toHaveCSS("animation-play-state","running");
+  await page.evaluate(()=>window.neonTest.unmount());
+  await expect(overlay).toHaveCount(0);
+  await keineDokumentUeberbreite(page);
+  expect(extern).toEqual([]);
+});

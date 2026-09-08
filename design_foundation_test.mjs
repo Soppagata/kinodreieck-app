@@ -103,4 +103,25 @@ check("Foundation wird vor den drei reservierten Bereichs-Slots geladen", () => 
   assert.deepEqual([...positions].sort((a, b) => a - b), positions);
 });
 
+
+
+check("Neon-Cyan erhält Text-, Karten- und Eingabekontrast in beiden Flächenrollen", () => {
+  const luminanz = hex => {
+    const [r, g, b] = hex.slice(1).match(/../g).map(c => parseInt(c, 16) / 255)
+      .map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
+    return .2126 * r + .7152 * g + .0722 * b;
+  };
+  const contrast = (a, b) => {
+    const [hell, dunkel] = [luminanz(a), luminanz(b)].sort((a, b) => b - a);
+    return (hell + .05) / (dunkel + .05);
+  };
+  const neon = THEMES["neon-noir"];
+  for (const [text, background] of [[neon.leinwand, neon.saal], [neon.leinwand, neon.saalHoch],
+    [neon.rauch, neon.saalHoch], [neon.kartenText, neon.leinwand], [neon.kartenTextWeich, neon.leinwand],
+    [neon.tinte, neon.kartenFeld], [neon.wolframText, neon.wolfram]]) {
+    assert.ok(contrast(text, background) >= 4.5, `${text} auf ${background}`);
+  }
+  assert.ok(contrast(neon.linie, neon.saalHoch) >= 3);
+});
+
 console.log(`design_foundation_test: ${checks} Checks bestanden.`);
