@@ -64,7 +64,34 @@ for (const viewport of [...VIEWPORTS, { name: "1440x900", width: 1440, height: 9
     await expect(city).toHaveAttribute("focusable", "false");
     await expect(page.locator('.kd-wrap.kd-neon-noir')).toHaveCount(1);
     await expect(page.locator('[data-kd-theme="neon-noir"]')).toHaveCount(1);
-    await expect(overlay.locator('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"]), image, foreignObject')).toHaveCount(0);
+    await expect(overlay.locator('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"]), image:not([data-neon-part="fog-texture"]), foreignObject')).toHaveCount(0);
+    await expect(city.locator("image")).toHaveCount(1);
+    const fogTexture = city.locator('[data-neon-part="fog-texture"]');
+    await expect(fogTexture).toHaveAttribute("href", /^data:image\/svg\+xml;charset=utf-8,/);
+    if (viewport.name === "393x852") {
+      // A fast but missing SVG image must not pass as a rendering improvement.
+      const alpha = await fogTexture.evaluate(async element => {
+        const image = new Image(); image.src = element.getAttribute("href"); await image.decode();
+        const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+        const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let visible = 0, maximum = 0, edgeDifference = 0;
+        for (let index = 3; index < pixels.length; index += 4) {
+          if (pixels[index] > 0) visible++;
+          maximum = Math.max(maximum, pixels[index]);
+        }
+        for (let y = 0; y < canvas.height; y++) {
+          edgeDifference = Math.max(edgeDifference, Math.abs(pixels[y * canvas.width * 4 + 3] - pixels[(y * canvas.width + canvas.width - 1) * 4 + 3]));
+        }
+        return { width: image.naturalWidth, height: image.naturalHeight, coverage: visible / (canvas.width * canvas.height), maximum, edgeDifference };
+      });
+      expect([alpha.width, alpha.height]).toEqual([600, 144]);
+      expect(alpha.coverage).toBeGreaterThan(0.4);
+      expect(alpha.coverage).toBeLessThan(0.9);
+      expect(alpha.maximum).toBeGreaterThan(20);
+      expect(alpha.maximum).toBeLessThan(80);
+      expect(alpha.edgeDifference).toBeLessThanOrEqual(2);
+    }
     for (const name of ["loca-wordmark", "nyso-wordmark", "riata-wordmark"]) {
       await expect(overlay.locator(`[data-neon-part="${name}"]`)).toHaveAttribute("d", /^M/);
     }
@@ -85,7 +112,7 @@ for (const viewport of [...VIEWPORTS, { name: "1440x900", width: 1440, height: 9
     expect(geometrie.viewBox[1]).toBe(932);
     await keineDokumentUeberbreite(page);
 
-    for (const [name, attribute] of [["rain-far", "patternTransform"], ["holo-head", "transform"], ["fog-middle-pattern", "patternTransform"]]) {
+    for (const [name, attribute] of [["rain-far", "patternTransform"], ["holo-head", "transform"], ["fog-far-pattern", "patternTransform"], ["fog-middle-pattern", "patternTransform"], ["fog-front-pattern", "patternTransform"]]) {
       const element = overlay.locator(`[data-neon-part="${name}"]`);
       const before = await element.getAttribute(attribute);
       await page.clock.runFor(640);
