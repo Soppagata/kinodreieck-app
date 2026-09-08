@@ -212,6 +212,9 @@ export async function runNeonNoirChecks() {
       assert.equal(createHash("sha256").update(paths.sort().join("\n")).digest("hex"), "912362530bbdfc27c1de477a27c6fa12a219c11a3c2d51b9628d0b19d5174c2d");
       assert.equal(showa.querySelector("svg").getAttribute("focusable"), "false");
       assert.equal(showa.querySelectorAll('a, button, input, [tabindex], image, foreignObject').length, 0);
+      for (const use of showa.querySelectorAll("use")) {
+        assert.ok(showa.contains(doc.getElementById(use.getAttribute("href").slice(1))), "Hausreferenzen bleiben innerhalb derselben Szene");
+      }
       assert.equal(frames.size, 0, "Showa benötigt keinen JavaScript-Animationsloop");
       assert.equal(visibilityListeners.size, 1, "StrictMode hinterlässt genau einen Sichtbarkeitslistener");
     });

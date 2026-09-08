@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useId, useRef } from "react";
 import { NeonNoirOverlay } from "./NeonNoirOverlay.jsx";
 import { DeepSpaceHorrorOverlay } from "./DeepSpaceHorrorOverlay.jsx";
 
@@ -34,6 +34,7 @@ function Kaiju() {
 }
 
 function ShowaScene() {
+  const housesId = `kd-showa-houses-${useId().replace(/:/g, "")}`;
   return (
     <svg className="kd-showa-scene" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
       {/* Rauch und entfernte Dachlandschaft. */}
@@ -48,7 +49,7 @@ function ShowaScene() {
 
       {/* Mittlere Ebene: Ginza/Wako-Uhrturm und Godzilla. */}
       <g className="kd-city-mid kd-wako">
-        <rect className="kd-city-foundation" x="262" y="319" width="138" height="610" />
+        <rect className="kd-city-foundation" x="262" y="319" width="138" height="120" />
         <path d="M262 320 V207 Q331 171 400 207 V320 Z" />
         <path d="M306 207 V135 H356 V207 Z M313 135 L331 105 L349 135 Z" />
         <rect x="326" y="83" width="10" height="23" />
@@ -60,7 +61,7 @@ function ShowaScene() {
 
       {/* Japanisches Parlamentsgebäude als rechter Bildanker. */}
       <g className="kd-city-mid kd-diet">
-        <rect className="kd-city-foundation" x="820" y="319" width="304" height="610" />
+        <rect className="kd-city-foundation" x="820" y="319" width="304" height="120" />
         <path d="M820 320 V222 H878 V184 H918 V130 H1006 V184 H1048 V222 H1124 V320 Z" />
         <path d="M902 130 L962 67 L1022 130 Z M915 130 L962 88 L1009 130 Z" />
         <path d="M932 184 V143 H992 V184 Z" />
@@ -68,11 +69,27 @@ function ShowaScene() {
         <path className="kd-city-detail" d="M812 222 H1132 M868 184 H1058 M918 130 H1006 M827 286 H1117" />
       </g>
 
-      {/* Vordergrund: kleinteilige Miniaturhäuser verdecken Kaiju-Füße. */}
-      <g className="kd-city-front">
+      {/* Dieselben Häuser stehen in versetzten Vierteln, nicht als Dachbordüre.
+          Ihre Wandflächen reichen bis unter den Bildrand. */}
+      <defs><g id={housesId}>
         <path d="M0 320 V276 L45 242 L92 276 V320 Z M82 320 V264 L132 231 L182 264 V320 Z M168 320 V279 L205 250 L246 279 V320 Z M230 320 V255 L286 219 L342 255 V320 Z M332 320 V273 L375 239 L421 273 V320 Z M410 320 V260 L468 226 L526 260 V320 Z M511 320 V281 L556 247 L603 281 V320 Z M594 320 V267 L649 232 L705 267 V320 Z M694 320 V282 L739 250 L786 282 V320 Z M776 320 V264 L829 228 L884 264 V320 Z M872 320 V279 L917 247 L964 279 V320 Z M951 320 V263 L1006 227 L1063 263 V320 Z M1048 320 V280 L1093 249 L1140 280 V320 Z M1128 320 V266 L1164 237 L1200 266 V320 Z" />
-        <path className="kd-city-window" d="M31 282h13v19H31z M58 282h13v19H58z M110 272h14v20h-14z M143 272h14v20h-14z M255 265h16v22h-16z M298 265h16v22h-16z M438 269h16v21h-16z M480 269h16v21h-16z M620 276h15v20h-15z M663 276h15v20h-15z M802 273h16v21h-16z M843 273h16v21h-16z M978 272h16v21h-16z M1020 272h16v21h-16z M1150 279h14v19h-14z" />
-        <path className="kd-city-detail" d="M0 276 H92 M82 264 H182 M230 255 H342 M410 260 H526 M594 267 H705 M776 264 H884 M951 263 H1063" />
+        <path className="kd-city-window" fill="#E5E2DA" opacity=".72" d="M31 282h13v19H31z M58 282h13v19H58z M110 272h14v20h-14z M143 272h14v20h-14z M255 265h16v22h-16z M298 265h16v22h-16z M438 269h16v21h-16z M480 269h16v21h-16z M620 276h15v20h-15z M663 276h15v20h-15z M802 273h16v21h-16z M843 273h16v21h-16z M978 272h16v21h-16z M1020 272h16v21h-16z M1150 279h14v19h-14z" />
+        <path className="kd-city-detail" fill="none" stroke="#E5E2DA" strokeWidth="3" opacity=".68" d="M0 276 H92 M82 264 H182 M230 255 H342 M410 260 H526 M594 267 H705 M776 264 H884 M951 263 H1063" />
+        <rect x="0" y="319" width="1200" height="230" />
+      </g></defs>
+      <g className="kd-city-front">
+        <g className="kd-showa-quarter kd-showa-quarter-left"><svg className="kd-showa-quarter-crop" width="342" height="330" viewBox="0 210 342 330">
+          <use href={`#${housesId}`} />
+        </svg></g>
+        <g className="kd-showa-quarter kd-showa-quarter-middle"><svg className="kd-showa-quarter-crop" width="295" height="330" viewBox="410 210 295 330">
+          <use href={`#${housesId}`} />
+        </svg></g>
+        <g className="kd-showa-quarter kd-showa-quarter-low"><svg className="kd-showa-quarter-crop" width="253" height="330" viewBox="168 210 253 330">
+          <use href={`#${housesId}`} />
+        </svg></g>
+        <g className="kd-showa-quarter kd-showa-quarter-right"><svg className="kd-showa-quarter-crop" width="288" height="330" viewBox="776 210 288 330">
+          <use href={`#${housesId}`} />
+        </svg></g>
       </g>
       <g className="kd-utility" fill="none">
         <path d="M188 320 V202 M173 218 H203 M181 235 H197 M1068 320 V210 M1052 226 H1084 M1060 244 H1076" />
