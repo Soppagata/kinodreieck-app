@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+const CAGE_FILM = { id: "egg-cage-con-air", typ: "film", titel: "Con Air", originaltitel: "Con Air", jahr: 1997, quelle: "dvd" };
+
 const VIEWPORTS = [
   { name: "320x568", width: 320, height: 568 },
   { name: "375x667", width: 375, height: 667 },
@@ -245,6 +247,178 @@ async function oeffneAppMitMockkonto(page, { filme = [] } = {}) {
   await expect(page.locator('.kd-app[data-session-mode="account"]')).toBeVisible();
   return extern;
 }
+
+test.describe("Cage und Space-Pause", () => {
+  test.use({ hasTouch: true, serviceWorkers: "block", timezoneId: "Europe/Vienna" });
+
+  const cageStand = page => page.evaluate(() => JSON.parse(localStorage.getItem("kd:eggroll:cage") || "null"));
+  const sichtbarkeit = (page, sichtbar) => page.evaluate(sichtbar => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => !sichtbar });
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => sichtbar ? "visible" : "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, sichtbar);
+  const seedCage = async (page, stand = null) => page.addInitScript(stand => {
+    localStorage.setItem("kd:achievements", JSON.stringify({ eggs: ["cage-alphabet"] }));
+    if (stand && !localStorage.getItem("kd:eggroll:cage")) localStorage.setItem("kd:eggroll:cage", JSON.stringify(stand));
+    Math.random = () => 0.99;
+  }, stand);
+
+  test("Cage prüft lokale Tagesgrenzen und PWA-Rückkehr bis zum fünften Nutzungstag", async ({ page }) => {
+    await page.setViewportSize({ width: 393, height: 852 });
+    await page.clock.install({ time: new Date("2026-09-08T21:59:00Z") });
+    await seedCage(page);
+    const extern = await oeffneAppMitMockkonto(page, { filme: [CAGE_FILM] });
+    await expect.poll(() => cageStand(page)).toMatchObject({ tag: "2026-09-08", fehlTage: 1, treffer: false });
+    await page.reload();
+    await expect(page.locator('.kd-app[data-session-mode="account"]')).toBeVisible();
+    expect(await cageStand(page)).toMatchObject({ tag: "2026-09-08", fehlTage: 1 });
+    await sichtbarkeit(page, false);
+    await page.clock.setFixedTime(new Date("2026-09-08T22:01:00Z"));
+    await sichtbarkeit(page, false);
+    expect(await cageStand(page)).toMatchObject({ tag: "2026-09-08", fehlTage: 1 });
+    await sichtbarkeit(page, true);
+    await expect.poll(() => cageStand(page)).toMatchObject({ tag: "2026-09-09", fehlTage: 2 });
+    for (const [tag, fehlTage] of [["2026-09-15", 3], ["2026-10-02", 4]]) {
+      await sichtbarkeit(page, false);
+      await page.clock.setFixedTime(new Date(`${tag}T10:00:00Z`));
+      await sichtbarkeit(page, true);
+      await expect.poll(() => cageStand(page)).toMatchObject({ tag, fehlTage, treffer: false });
+    }
+    await expect(page.getByRole("dialog", { name: "Cage-Alphabet" })).toHaveCount(0);
+    await page.clock.setFixedTime(new Date("2026-10-17T10:00:00Z"));
+    await sichtbarkeit(page, true);
+    const dialog = page.getByRole("dialog", { name: "Cage-Alphabet" });
+    await expect(dialog).toBeVisible();
+    expect(await cageStand(page)).toMatchObject({ tag: "2026-10-17", fehlTage: 0, treffer: true });
+    await dialog.getByRole("button", { name: "Schließen", exact: true }).click();
+    await sichtbarkeit(page, true);
+    await page.reload();
+    await expect(page.locator('.kd-app[data-session-mode="account"]')).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem("kd:eggfired:cage"))).toBe("2026-10-17");
+    expect(extern).toEqual([]);
+  });
+
+  for (const scenario of [
+    { width: 393, height: 852, reduced: false, input: "tap" },
+    { width: 1440, height: 900, reduced: false, input: "keyboard" },
+    { width: 430, height: 932, reduced: true, input: "tap" },
+  ]) test(`Cage-Karte: ${scenario.width}px ${scenario.input}, Stakkato/Ergebnis, Fokus und Reduced Motion ${scenario.reduced}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(scenario);
+    await page.emulateMedia({ reducedMotion: scenario.reduced ? "reduce" : "no-preference" });
+    await page.clock.install({ time: new Date("2026-09-08T10:00:00Z") });
+    await seedCage(page, { version: 2, tag: "2026-09-08", treffer: false, fehlTage: 4 });
+    await oeffneAppMitMockkonto(page, { filme: [CAGE_FILM] });
+    const ausloeser = scenario.width > 760
+      ? page.getByRole("navigation", { name: "Hauptnavigation" }).getByRole("button", { name: "Settings", exact: true })
+      : page.getByRole("button", { name: "Menü öffnen", exact: true });
+    await ausloeser.focus();
+    await page.clock.setFixedTime(new Date("2026-09-09T10:00:00Z"));
+    await sichtbarkeit(page, true);
+    const dialog = page.getByRole("dialog", { name: "Cage-Alphabet" });
+    await expect(dialog).toBeVisible();
+    await page.clock.runFor(32);
+    await expect(dialog.getByRole("button", { name: "Schließen", exact: true })).toBeFocused();
+    const box = await dialog.locator(".kd-cage-karte").boundingBox();
+    expect(box.width).toBeLessThanOrEqual(360);
+    expect(box.width).toBeLessThanOrEqual(scenario.width - 24);
+    await keineDokumentUeberbreite(page);
+    await page.evaluate(() => document.fonts.ready);
+    if (!process.env.CI) await page.screenshot({ path: testInfo.outputPath("cage-card.png") });
+    const start = dialog.getByRole("button", { name: "Cage-Alphabet starten", exact: true });
+    if (scenario.input === "keyboard") { await page.keyboard.press("Tab"); await expect(start).toBeFocused(); await page.keyboard.press("Enter"); }
+    else await start.tap();
+    if (!scenario.reduced) {
+      await expect.poll(() => page.evaluate(() => window.__cage?.stakkato || 0)).toBeGreaterThan(0);
+      await page.clock.runFor(2400);
+      expect(await page.evaluate(() => window.__cage.stakkato)).toBe(15);
+    } else expect(await page.evaluate(() => window.__cage?.stakkato || 0)).toBe(0);
+    await expect(dialog.getByText("Con Air", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Zum Eintrag", exact: true })).toBeVisible();
+    await page.clock.runFor(32);
+    await page.keyboard.press("Tab");
+    expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+    if (!process.env.CI) await page.screenshot({ path: testInfo.outputPath("cage-result.png") });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(ausloeser).toBeFocused();
+    expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
+  });
+
+  test("Cage-Blocker und Live-Pool lassen den geeigneten Nutzungstag unberührt", async ({ page }) => {
+    const { buildEggControllerFixture } = await import("../egg_controller_test.mjs");
+    const fixture = await buildEggControllerFixture();
+    await page.route("**/*", route => route.request().url() === "http://egg-fixture.test/"
+      ? route.fulfill({ contentType: "text/html", body: '<!doctype html><div id="fixture"></div>' }) : route.abort());
+    await page.goto("http://egg-fixture.test/");
+    await page.addScriptTag({ content: fixture });
+    await page.evaluate(() => {window.IS_REACT_ACT_ENVIRONMENT=true;window.eggDraws=0;window.eggTest.draw=()=>{window.eggDraws++;return 0;};localStorage.setItem("kd:achievements",JSON.stringify({eggs:["cage-alphabet"]}));});
+    const render = patch => page.evaluate(patch => window.eggTest.act(async () => window.eggTest.render(patch)), patch);
+    await render({ master: [CAGE_FILM], setupWarnung: true });
+    await render({ setupWarnung: false, startModalOffen: true });
+    await render({ startModalOffen: false, bootDone: false });
+    await sichtbarkeit(page, false);
+    await render({ bootDone: true });
+    await render({ master: [] });
+    await sichtbarkeit(page, true);
+    await render({ master: [{ id: "8mm", typ: "film", titel: "8MM – Acht Millimeter", originaltitel: "8MM", jahr: 1999, quelle: "dvd" }] });
+    await render({ master: [{ ...CAGE_FILM, quelle: "" }] });
+    expect(await cageStand(page)).toBeNull();
+    expect(await page.evaluate(() => window.eggDraws)).toBe(0);
+    await render({ kinoMatches: { matched: [{ film: CAGE_FILM }] } });
+    expect(await page.evaluate(() => window.eggTest.state().cageOffen)).toBe(true);
+    expect(await page.evaluate(() => window.eggDraws)).toBe(1);
+    await page.evaluate(() => window.eggTest.act(async () => window.eggTest.unmount()));
+    await sichtbarkeit(page, true);
+    expect(await page.evaluate(() => window.eggDraws)).toBe(1);
+  });
+
+  test("Cage wartet vor dem tatsächlichen privaten Einstieg", async ({ page }) => {
+    await blockiereFremdnetz(page);
+    await page.clock.install({ time: new Date("2026-09-09T10:00:00Z") });
+    await seedCage(page, { version: 2, tag: "2026-09-08", treffer: false, fehlTage: 4 });
+    await page.addInitScript(film => {
+      localStorage.setItem("kd:master", JSON.stringify({ filme: [film], gespeichertAm: Date.now() }));
+      localStorage.setItem("kd:einstieg", JSON.stringify({ version: "private-v1", abgeschlossen: false }));
+    }, CAGE_FILM);
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Ohne Konto fortfahren", exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Cage-Alphabet" })).toHaveCount(0);
+    expect(await cageStand(page)).toMatchObject({ tag: "2026-09-08", fehlTage: 4 });
+    await page.getByRole("button", { name: "Ohne Konto fortfahren", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Cage-Alphabet" })).toBeVisible();
+  });
+
+  test("Space-Pause hält alten Unlock, gespeichertes und manuelles Neon sowie DEV-Query still", async ({ page }) => {
+    await page.setViewportSize({ width: 393, height: 852 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.addInitScript(() => {
+      localStorage.setItem("kd:achievements", JSON.stringify({ eggs: ["deep-space-horror"] }));
+      localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", modus: "neon-noir", basisTheme: "dunkel" }));
+      localStorage.setItem("kd:deep-space-horror:rhythmus:gast", "alter-unveraenderter-stand");
+    });
+    const extern = await oeffneAppMitMockkonto(page);
+    await page.goto("/?deep-space-test=1");
+    const still = async () => {
+      await expect(page.locator('.kd-fx-neon-noir[aria-hidden="true"]')).toBeVisible();
+      await expect(page.locator(".kd-fx-deep-space, .kd-deep-space-horror, [data-kd-deep-space-test], .kd-deep-space-testpanel")).toHaveCount(0);
+      expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith("kd:deep-space-horror:")))).toEqual(["kd:deep-space-horror:rhythmus:gast"]);
+      expect(await page.evaluate(() => localStorage.getItem("kd:deep-space-horror:rhythmus:gast"))).toBe("alter-unveraenderter-stand");
+    };
+    await still();
+    await page.getByRole("button", { name: "Menü öffnen", exact: true }).click();
+    await page.getByRole("dialog", { name: "Menü", exact: true }).getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ }).click();
+    await page.getByRole("button", { name: "Max", exact: true }).click();
+    const mode = page.getByRole("button", { name: "Schon kuhl", exact: true });
+    await mode.click();
+    await expect(page.locator(".kd-fx-neon-noir")).toHaveCount(0);
+    await mode.click();
+    await still();
+    await expect(page.getByText("Easteregg freigeschalten!", { exact: true })).toHaveCount(0);
+    expect(extern).toEqual([]);
+  });
+});
 
 for (const input of ["tap", "keyboard", "click"]) {
   test.describe(`Max-Einstieg per ${input}`, () => {

@@ -2,7 +2,7 @@
    Overlayzustände und sichere Navigation. App.jsx rendert nur die Overlays. */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { EGGS_ENABLED } from "../lib/modus.js";
+import { EGGS_ENABLED, EGG_AKTIV } from "../lib/modus.js";
 import {
   berechneUnlocks,
   ladeAchievements,
@@ -10,17 +10,17 @@ import {
   liveVertreter,
   SCHWELLEN_EGGS,
 } from "../lib/eggs.js";
-import {
-  wuerfleTag,
-  schonGefeuertHeute,
-  markiereGefeuert,
-} from "../lib/eggFrequenz.js";
+import { versucheCageTag } from "../lib/eggFrequenz.js";
+import { buchstabeUndTitel } from "../lib/cageAlphabet.js";
 import { filmHerkunft } from "../lib/finder.js";
 import { sichtbareDienste } from "../lib/dienste.js";
 import {
   DEEP_SPACE_HORROR_ID,
   istDeepSpaceFreigeschaltet,
 } from "../lib/deepSpaceHorror.js";
+
+const aktuelleZeit = () => new Date();
+const browserZufall = () => Math.random();
 
 export function useEggController({
   master,
@@ -32,6 +32,8 @@ export function useEggController({
   startModalOffen,
   setTab,
   springeZuFilm,
+  jetzt = aktuelleZeit,
+  zufall = browserZufall,
 }) {
   const [achievements, setAchievements] = useState(null);
   const backfillRef = useRef(false);
@@ -61,7 +63,7 @@ export function useEggController({
     if (!EGGS_ENABLED || achievements == null || master == null) return;
     for (const id of achievements) unlockPendingRef.current.delete(id);
     const kandidaten = berechneUnlocks(master);
-    if (istDeepSpaceFreigeschaltet(master)) kandidaten.add(DEEP_SPACE_HORROR_ID);
+    if (EGG_AKTIV.deepSpace && istDeepSpaceFreigeschaltet(master)) kandidaten.add(DEEP_SPACE_HORROR_ID);
     const neu = [...kandidaten].filter((id) =>
       !achievements.has(id) && !unlockPendingRef.current.has(id));
     if (!neu.length) {
@@ -94,10 +96,18 @@ export function useEggController({
     ),
   }), [auswahl, kinoMatches, streamingBekannt]);
 
+  const cagePool = useMemo(() => cageEgg
+    ? liveVertreter(master || [], cageEgg, eggCtx).filter(buchstabeUndTitel) : [],
+  [cageEgg, master, eggCtx]);
+  const modalOffen = setupWarnung || startModalOffen;
+  const cageBereit = EGGS_ENABLED && EGG_AKTIV.cage && bootDone
+    && achievements?.has("cage-alphabet") && !modalOffen && cagePool.length > 0;
   const zeigeCage = useCallback(() => {
-    cageFilmeRef.current = cageEgg ? liveVertreter(master || [], cageEgg, eggCtx) : [];
+    if (!cageBereit || document.hidden) return false;
+    cageFilmeRef.current = cagePool;
     setCageOffen(true);
-  }, [cageEgg, master, eggCtx]);
+    return true;
+  }, [cageBereit, cagePool]);
 
   const eggHerkunft = useCallback((film) => {
     const herkunft = filmHerkunft(film, { kinoMatches, streamingBekannt });
@@ -119,20 +129,15 @@ export function useEggController({
     else if (film) springeZuFilm(film.id);
   }, [setTab, springeZuFilm]);
 
-  const modalOffen = setupWarnung || startModalOffen;
-  const cageAutoRef = useRef(false);
   useEffect(() => {
-    if (!EGGS_ENABLED || !bootDone || achievements == null || master == null) return;
-    if (!achievements.has("cage-alphabet") || cageAutoRef.current) return;
-    if (cageOffen || modalOffen) return;
-    cageAutoRef.current = true;
-    if (!schonGefeuertHeute("cage") && wuerfleTag("cage", 1 / 30)) {
-      markiereGefeuert("cage");
-      zeigeCage();
-    }
-  }, [
-    bootDone, achievements, master, cageOffen, modalOffen, zeigeCage,
-  ]);
+    if (!cageBereit || cageOffen) return undefined;
+    const pruefeTag = () => {
+      if (!document.hidden && versucheCageTag({ jetzt: jetzt(), rnd: zufall })) zeigeCage();
+    };
+    pruefeTag();
+    document.addEventListener("visibilitychange", pruefeTag);
+    return () => document.removeEventListener("visibilitychange", pruefeTag);
+  }, [cageBereit, cageOffen, zeigeCage, jetzt, zufall]);
 
   useEffect(() => {
     if (!EGGS_ENABLED || !cageOffen) return undefined;

@@ -8,10 +8,11 @@ import {
   berechneUnlocks, istVerfuegbar, liveVertreter,
   parseAchievements, serialisiereAchievements, ladeAchievements, speichereAchievements,
 } from "./src/lib/eggs.js";
-import { wuerfleTag, tagesSchluessel, schonGefeuertHeute, markiereGefeuert, istVorbeiGescrollt } from "./src/lib/eggFrequenz.js";
+import { wuerfleTag, versucheCageTag, tagesSchluessel, schonGefeuertHeute, markiereGefeuert, istVorbeiGescrollt } from "./src/lib/eggFrequenz.js";
 import { istKlaatu, crawlHeute, istVierterMai, levenshtein } from "./src/lib/momentEggs.js";
 import { EGG_AKTIV } from "./src/lib/modus.js";
 import { runNeonNoirChecks } from "./neon_noir_test.mjs";
+import { runEggControllerChecks } from "./egg_controller_test.mjs";
 
 const checks = [];
 const check = (n, p) => { checks.push([n, p]); console.log((p ? "✓ " : "✗ ") + n); };
@@ -119,6 +120,35 @@ check("Teppich: Karte passiert die Lesezone beim Abwärtsscrollen", istVorbeiGes
 check("Teppich: Karte noch lesbar -> kein Trigger", istVorbeiGescrollt({ bottom: 360 }, { viewportHoehe: 800, scrolltAbwaerts: true }) === false);
 check("Teppich: Aufwärtsscrollen -> kein Trigger", istVorbeiGescrollt({ bottom: 120 }, { viewportHoehe: 800, scrolltAbwaerts: false }) === false);
 check("Teppich: 1:10-Chance ist deterministisch injizierbar", wuerfleTag("teppich-10", 1 / 10, { jetzt: MO, rnd: () => 0.09 }) === true);
+
+/* Cage zählt geeignete Nutzungstage, keine verstrichenen Kalenderabstände. */
+lsMap.clear();
+let cageWuerfe = 0;
+const cageMiss = () => { cageWuerfe++; return 0.9; };
+const cageStand = () => JSON.parse(lsMap.get("kd:eggroll:cage") || "null");
+for (const [index, jetzt] of [new Date(2026, 8, 8), new Date(2026, 8, 12), new Date(2026, 9, 3), new Date(2026, 10, 20)].entries()) {
+  check(`Cage: geeigneter Miss-Tag ${index + 1} bleibt aus`, versucheCageTag({ jetzt, rnd: cageMiss }) === false);
+  check(`Cage: Miss-Zähler ${index + 1} bleibt über Reload stabil`, !versucheCageTag({ jetzt, rnd: () => 0 }) && cageStand().fehlTage === index + 1);
+}
+const fuenfter = new Date(2027, 0, 2);
+check("Cage: fünfter geeigneter Tag trifft ohne weiteren Zufallswurf", versucheCageTag({ jetzt: fuenfter, rnd: cageMiss }) && cageWuerfe === 4);
+check("Cage: Auftritt setzt Miss-Zähler zurück und erhält bestehenden fired-Schlüssel", cageStand().fehlTage === 0 && schonGefeuertHeute("cage", fuenfter));
+check("Cage: Reload und Rückkehr feuern denselben Tag niemals erneut", !versucheCageTag({ jetzt: fuenfter, rnd: () => { throw new Error("erneuter Wurf"); } }));
+check("Cage: nach einem Auftritt beginnt die Fünftagesfolge neu", !versucheCageTag({ jetzt: new Date(2027, 0, 3), rnd: cageMiss }) && cageStand().fehlTage === 1);
+lsMap.clear();
+check("Cage: Zufallswert knapp unter 1:5 trifft", versucheCageTag({ jetzt: MO, rnd: () => 0.1999 }));
+lsMap.clear();
+check("Cage: Zufallswert 1:5 trifft nicht", !versucheCageTag({ jetzt: MO, rnd: () => 0.2 }));
+lsMap.clear();
+lsMap.set("kd:eggroll:cage", JSON.stringify({ tag: tagesSchluessel(MO), treffer: false }));
+check("Cage: alter heutiger Miss bleibt bei Migration unverändert", !versucheCageTag({ jetzt: MO, rnd: () => { throw new Error("Migration würfelt neu"); } }) && cageStand().version === 2 && cageStand().fehlTage === 1);
+lsMap.set("kd:eggroll:cage", JSON.stringify({ tag: tagesSchluessel(DI), treffer: true }));
+check("Cage: alter ungefeuerter Treffer wird genau einmal eingelöst", versucheCageTag({ jetzt: DI, rnd: () => { throw new Error("Migration würfelt neu"); } }) && !versucheCageTag({ jetzt: DI }));
+lsMap.clear(); markiereGefeuert("cage", MO);
+check("Cage: alter fired-Marker sperrt unabhängig vom Roll-Schema", !versucheCageTag({ jetzt: MO, rnd: () => { throw new Error("alter Marker ignoriert"); } }) && cageStand() === null);
+check("Cage: rückwärts gestellte Uhr verbraucht keinen zusätzlichen Tag", !versucheCageTag({ jetzt: new Date(2026, 6, 19), rnd: () => { throw new Error("Uhr zurück"); } }));
+const defekterSpeicher = { getItem: () => null, setItem: () => { throw new Error("Speicher voll"); } };
+check("Cage: ohne persistierbaren Tagesmarker kein Auftritt", !versucheCageTag({ jetzt: MO, rnd: () => 0, storage: defekterSpeicher }));
 delete globalThis.localStorage;
 
 /* ---- Moment-Eggs (B4): Klaatu (Tippfehler-tolerant) + Crawl (ganzer 4. Mai) ---- */
@@ -155,13 +185,14 @@ check("Klaatu: deterministisch + robust (null/leer -> false, kein Throw)",
    die Engines sind weiterhin korrekt und getestet, nur nicht verdrahtet. */
 check("Pause: EGG_AKTIV ist eingefroren (kein stilles Umschalten)", Object.isFrozen(EGG_AKTIV));
 check("Pause: Cage-Alphabet bleibt aktiv", EGG_AKTIV.cage === true);
-check("Deep Space Horror ist nach Neon-Abnahme aktiv", EGG_AKTIV.deepSpace === true);
+check("Pause: Deep Space Horror ist stillgelegt", EGG_AKTIV.deepSpace === false);
 check("Pause: Teppich ist stillgelegt", EGG_AKTIV.teppich === false);
 check("Pause: Star-Wars-Crawl/4.-Mai ist stillgelegt", EGG_AKTIV.crawl === false);
 check("Pause: Klaatu→Necronomicon ist stillgelegt", EGG_AKTIV.klaatu === false);
 
 const fails = checks.filter(([, p]) => !p);
 await runNeonNoirChecks();
+await runEggControllerChecks();
 console.log(`\n${checks.length - fails.length}/${checks.length} Checks bestanden.`);
 console.log(fails.length ? "EGGS-TEST: BEFUNDE OBEN" : "EGGS-TEST BESTANDEN");
 process.exit(fails.length ? 1 : 0);
