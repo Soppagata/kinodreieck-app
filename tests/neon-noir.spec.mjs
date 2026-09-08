@@ -218,7 +218,7 @@ test("Neon Noir lässt Flug und Animation beim Themewechsel sauber auslaufen", a
 /* A mock account opens the existing private Settings surface. App.jsx,
    DatenTab, ModusFx and the settings writer all run unchanged. No session,
    backend response or special-mode value is taken from a real account. */
-async function oeffneAppMitMockkonto(page, { filme = [] } = {}) {
+async function oeffneAppMitMockkonto(page, { filme = [], katalog = null } = {}) {
   const extern = [];
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -236,6 +236,31 @@ async function oeffneAppMitMockkonto(page, { filme = [] } = {}) {
         export const sessionCoordinator = Object.freeze({ getSnapshot: () => session,
           getStorageState: () => "account-ready", subscribe: () => () => {},
           initialize: async () => session, refresh: async () => session });
+      ` });
+    } else if (katalog && url.pathname === "/src/services/catalog.js") {
+      await route.fulfill({ contentType: "application/javascript", body: `
+        import { baueStreamingAnsichten } from "/src/lib/katalog.js";
+        const fixture = ${JSON.stringify(katalog)};
+        let freigeben;
+        const warten = new Promise(resolve => { freigeben = resolve; });
+        window.cageCatalog = { calls: {}, release: freigeben };
+        export const catalogService = {
+          storedVariant: () => "live", hasConnection: () => true,
+          buildStreamingViews: baueStreamingAnsichten,
+          async loadArea(area) {
+            window.cageCatalog.calls[area] = (window.cageCatalog.calls[area] || 0) + 1;
+            if (area === "streamingEntdecken") {
+              await warten;
+              if (fixture.failDiscover) throw new Error("Lokaler Katalogfehler");
+            }
+            const meta = { stand: "2026-09-09T06:00:00Z", gueltigBis: "2026-09-10T23:59:00Z" };
+            const payload = area === "programm"
+              ? { ...meta, filme: fixture.kino || [] }
+              : { ...meta, katalog_stand: "2026-09-09T06:00:00Z", dienste: ["Netflix"],
+                  titel: (area === "streamingBekannt" ? fixture.bekannt : fixture.entdecken) || [] };
+            return { ...meta, payload, quelle: "datenbank", variante: "live", abgelaufen: false };
+          },
+        };
       ` });
     } else await route.continue();
   });
@@ -365,7 +390,7 @@ test.describe("Cage und Space-Pause", () => {
     await render({ master: [{ ...CAGE_FILM, quelle: "" }] });
     expect(await cageStand(page)).toBeNull();
     expect(await page.evaluate(() => window.eggDraws)).toBe(0);
-    await render({ kinoMatches: { matched: [{ film: CAGE_FILM }] } });
+    await render({ programmInfo: { gueltigBis: "2099-09-10T10:00:00Z" }, kinoMatches: { matched: [{ film: CAGE_FILM, prog: { t: "Con Air", j: 1997 } }] } });
     expect(await page.evaluate(() => window.eggTest.state().cageOffen)).toBe(true);
     expect(await page.evaluate(() => window.eggDraws)).toBe(1);
     await page.evaluate(() => window.eggTest.act(async () => window.eggTest.unmount()));
@@ -418,6 +443,70 @@ test.describe("Cage und Space-Pause", () => {
     await expect(page.getByText("Easteregg freigeschalten!", { exact: true })).toHaveCount(0);
     expect(extern).toEqual([]);
   });
+});
+
+test.describe("Cage-Pool und echte Eintrag-Sprünge", () => {
+  test.use({ hasTouch: true, serviceWorkers: "block", timezoneId: "Europe/Vienna", reducedMotion: "reduce" });
+  const kino = { t: "Con Air", ot: "Con Air", j: 1997, film_at_id: "cage-kino-only", k: ["Filmcasino"], z: ["Mi 9.9. 20:00 · Filmcasino"], f: "OmU" };
+  const stream = { titel: "Mandy", originaltitel: "Mandy", jahr: 2018, typ: "movie", watchmode_id: 90042, dienste: ["Netflix"] };
+  for (const width of [393, 1440]) {
+    for (const scenario of [
+      { name: "Kino-only ohne Master nach Streamingfehler", filme: [], katalog: { kino: [kino], failDiscover: true }, titel: "Con Air", ziel: '[data-kino-suchtreffer="programm:cage-kino-only"]', herkunft: "Läuft gerade im Kino" },
+      { name: "Kino mit passender Master-Karte", filme: [{ ...CAGE_FILM, quelle: "" }], katalog: { kino: [kino] }, titel: "Con Air", ziel: `[data-kino-suchtreffer="film:${CAGE_FILM.id}"]`, herkunft: "Läuft gerade im Kino" },
+      { name: "Entdecken ergänzt den kleinen Besitzpool vor dem Wurf", filme: [CAGE_FILM], katalog: { entdecken: [stream] }, titel: "Mandy", ziel: '[data-streaming-suchtreffer="entdecken:90042"]', herkunft: "Streamst du auf Netflix" },
+      { name: "Bekannter Stream mit echter Master-ID", filme: [{ ...CAGE_FILM, quelle: "" }], katalog: { bekannt: [{ ...CAGE_FILM, watchmode_id: 90043, dienste: ["Netflix"] }] }, titel: "Con Air", ziel: `[data-streaming-suchtreffer="programm:${CAGE_FILM.id}"]`, herkunft: "Streamst du auf Netflix" },
+    ]) test(`${width}px: ${scenario.name}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 393 ? 852 : 900 });
+      await page.clock.install({ time: new Date("2026-09-09T10:00:00Z") });
+      await page.addInitScript(() => {
+        localStorage.setItem("kd:achievements", JSON.stringify({ eggs: ["cage-alphabet"] }));
+        localStorage.setItem("kd:eggroll:cage", JSON.stringify({ version: 2, tag: "2026-09-08", treffer: false, fehlTage: 4 }));
+        localStorage.setItem("kd:streaming-dienste", JSON.stringify({ dienste: ["Netflix"], heuristik: false }));
+        Math.random = () => 0.99;
+      });
+      const extern = await oeffneAppMitMockkonto(page, scenario);
+      const dialog = page.getByRole("dialog", { name: "Cage-Alphabet" });
+      await expect.poll(() => page.evaluate(() => window.cageCatalog?.calls.streamingEntdecken)).toBe(1);
+      await expect(dialog).toHaveCount(0);
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem("kd:eggroll:cage")).tag)).toBe("2026-09-08");
+      // The normal app remains usable while only the Egg waits for its catalog.
+      if (width === 393) {
+        await page.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
+        await expect(page.getByRole("dialog", { name: "Menü", exact: true })).toBeVisible();
+        await page.evaluate(() => window.cageCatalog.release());
+        await expect(dialog).toHaveCount(0);
+        await page.getByRole("dialog", { name: "Menü", exact: true }).getByRole("button", { name: "Settings", exact: true }).tap();
+      } else {
+        await page.getByRole("navigation", { name: "Hauptnavigation" }).getByRole("button", { name: "Settings", exact: true }).click();
+        await page.evaluate(() => window.cageCatalog.release());
+      }
+      await expect(dialog).toBeVisible();
+      const start = dialog.getByRole("button", { name: "Cage-Alphabet starten", exact: true });
+      if (width === 393) await start.tap();
+      else { await start.focus(); await page.keyboard.press("Enter"); }
+      await expect(dialog.getByText(scenario.titel, { exact: true })).toBeVisible();
+      await expect(dialog.getByText(scenario.herkunft, { exact: true })).toBeVisible();
+      if (!process.env.CI) await page.screenshot({ path: testInfo.outputPath("cage-pool-result.png") });
+      const ziel = page.locator(scenario.ziel);
+      if (width === 393) await dialog.getByRole("button", { name: "Zum Eintrag", exact: true }).tap();
+      else { await dialog.getByRole("button", { name: "Zum Eintrag", exact: true }).focus(); await page.keyboard.press("Enter"); }
+      await expect(dialog).toHaveCount(0);
+      await expect.poll(async () => {
+        await page.clock.runFor(80);
+        return ziel.evaluateAll(elements => elements.some(element => element === document.activeElement));
+      }).toBe(true);
+      await expect(ziel).toBeVisible();
+      await expect(ziel).toContainText(scenario.titel);
+      const box = await ziel.boundingBox();
+      expect(box.y).toBeLessThan(width === 393 ? 852 : 900);
+      expect(box.y + box.height).toBeGreaterThan(0);
+      expect(await page.evaluate(() => window.cageCatalog.calls.streamingEntdecken)).toBe(1);
+      expect(await page.evaluate(() => localStorage.getItem("kd:eggfired:cage"))).toBe("2026-09-09");
+      await keineDokumentUeberbreite(page);
+      if (!process.env.CI) await page.screenshot({ path: testInfo.outputPath("cage-pool-target.png") });
+      expect(extern).toEqual([]);
+    });
+  }
 });
 
 for (const input of ["tap", "keyboard", "click"]) {

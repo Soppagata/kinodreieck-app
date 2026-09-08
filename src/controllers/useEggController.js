@@ -1,19 +1,15 @@
 /* Easteregg-Lebenszyklus: Freischaltung, Verfügbarkeit, Tagesfrequenz,
    Overlayzustände und sichere Navigation. App.jsx rendert nur die Overlays. */
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { EGGS_ENABLED, EGG_AKTIV } from "../lib/modus.js";
 import {
   berechneUnlocks,
   ladeAchievements,
   speichereAchievements,
-  liveVertreter,
-  SCHWELLEN_EGGS,
 } from "../lib/eggs.js";
 import { versucheCageTag } from "../lib/eggFrequenz.js";
-import { buchstabeUndTitel } from "../lib/cageAlphabet.js";
-import { filmHerkunft } from "../lib/finder.js";
-import { sichtbareDienste } from "../lib/dienste.js";
+import { baueCagePool } from "../lib/cagePool.js";
 import {
   DEEP_SPACE_HORROR_ID,
   istDeepSpaceFreigeschaltet,
@@ -25,13 +21,21 @@ const browserZufall = () => Math.random();
 export function useEggController({
   master,
   kinoMatches,
+  programmInfo,
   streamingBekannt,
+  streamingEntdecken,
+  streamingRoh,
+  ladeCageKatalog,
+  katalogFreigegeben = false,
+  katalogKontext = "lokal",
+  kinoLaedt = false,
   auswahl,
   bootDone,
   setupWarnung,
   startModalOffen,
-  setTab,
   springeZuFilm,
+  springeZuKino,
+  springeZuStreaming,
   jetzt = aktuelleZeit,
   zufall = browserZufall,
 }) {
@@ -78,7 +82,6 @@ export function useEggController({
     backfillRef.current = true;
   }, [master, achievements, zeigeToast]);
 
-  const [cageEgg] = useState(() => SCHWELLEN_EGGS.find((e) => e.id === "cage-alphabet"));
   const cageFilmeRef = useRef([]);
   const [cageOffen, setCageOffen] = useState(false);
   const [reducedMotion] = useState(() => {
@@ -88,56 +91,73 @@ export function useEggController({
     } catch { return false; }
   });
 
-  const eggCtx = useMemo(() => ({
-    auswahl,
-    kinoIds: new Set((kinoMatches?.matched || []).map((m) => m.film.id)),
-    dienstePro: new Map(
-      ((streamingBekannt?.titel) || []).map((titel) => [titel.id, titel.dienste || []]),
-    ),
-  }), [auswahl, kinoMatches, streamingBekannt]);
-
-  const cagePool = useMemo(() => cageEgg
-    ? liveVertreter(master || [], cageEgg, eggCtx).filter(buchstabeUndTitel) : [],
-  [cageEgg, master, eggCtx]);
   const modalOffen = setupWarnung || startModalOffen;
-  const cageBereit = EGGS_ENABLED && EGG_AKTIV.cage && bootDone
-    && achievements?.has("cage-alphabet") && !modalOffen && cagePool.length > 0;
+  const cageStartBereit = EGGS_ENABLED && EGG_AKTIV.cage && bootDone
+    && achievements?.has("cage-alphabet") && !modalOffen;
+  const [katalogFertig, setKatalogFertig] = useState(null);
+  const katalogLaufRef = useRef(null);
+  const katalogNoetig = katalogFreigegeben && !!ladeCageKatalog;
+  const cageBereit = cageStartBereit && !kinoLaedt && (!katalogNoetig || katalogFertig === katalogKontext);
+  const aktuellerCagePool = useCallback(() => baueCagePool({
+    master, kinoMatches, programmInfo, streamingRoh, streamingBekannt,
+    streamingEntdecken, auswahl, jetzt: jetzt(),
+  }), [master, kinoMatches, programmInfo, streamingRoh, streamingBekannt, streamingEntdecken, auswahl, jetzt]);
+
+  /* Ein gezielter, mit dem vorhandenen App-Lader geteilter Katalogversuch pro
+     Sitzungskontext. StrictMode/Rerender teilen das Promise; ein Fehler lässt
+     bewiesene andere Quellen zu. Niemals vor seinem Abschluss würfeln. */
+  useEffect(() => {
+    if (!cageStartBereit || cageOffen || !katalogNoetig || katalogFertig === katalogKontext) return undefined;
+    let aktiv = true;
+    const vorbereiten = () => {
+      if (document.hidden) return;
+      if (katalogLaufRef.current?.kontext !== katalogKontext) {
+        katalogLaufRef.current = { kontext: katalogKontext,
+          promise: Promise.resolve().then(() => ladeCageKatalog()).catch(() => {}) };
+      }
+      const lauf = katalogLaufRef.current;
+      void lauf.promise.then(() => {
+        if (aktiv && katalogLaufRef.current === lauf) setKatalogFertig(katalogKontext);
+      });
+    };
+    vorbereiten();
+    document.addEventListener("visibilitychange", vorbereiten);
+    return () => { aktiv = false; document.removeEventListener("visibilitychange", vorbereiten); };
+  }, [cageStartBereit, cageOffen, katalogNoetig, katalogFertig, katalogKontext, ladeCageKatalog]);
+
   const zeigeCage = useCallback(() => {
     if (!cageBereit || document.hidden) return false;
-    cageFilmeRef.current = cagePool;
+    const pool = aktuellerCagePool();
+    if (!pool.length) return false;
+    cageFilmeRef.current = pool;
     setCageOffen(true);
     return true;
-  }, [cageBereit, cagePool]);
+  }, [cageBereit, aktuellerCagePool]);
 
-  const eggHerkunft = useCallback((film) => {
-    const herkunft = filmHerkunft(film, { kinoMatches, streamingBekannt });
-    if (herkunft.kino) return { text: "Läuft gerade im Kino", tab: "kino" };
-    const dienste = herkunft.streaming
-      ? sichtbareDienste(herkunft.streaming.dienste, auswahl)
-      : [];
-    if (dienste.length) {
-      return { text: "Streamst du auf " + dienste.slice(0, 2).join(" / "), tab: "streaming" };
-    }
-    if (herkunft.dvd) return { text: "In deinem Besitz", tab: "mediathek" };
-    return { text: "In deiner Mediathek", tab: "mediathek" };
-  }, [kinoMatches, streamingBekannt, auswahl]);
+  const eggHerkunft = useCallback((film) => film?.cageHerkunft, []);
 
-  const eggZeigeEintrag = useCallback((film, zielTab) => {
+  const eggZeigeEintrag = useCallback((film) => {
+    const ziel = film?.cageZiel;
     setCageOffen(false);
-    if (zielTab === "kino") setTab("kino");
-    else if (zielTab === "streaming") setTab("streaming");
-    else if (film) springeZuFilm(film.id);
-  }, [setTab, springeZuFilm]);
+    if (ziel?.tab === "kino") springeZuKino(ziel);
+    else if (ziel?.tab === "streaming") void springeZuStreaming(ziel);
+    else if (ziel?.tab === "mediathek") springeZuFilm(ziel.ref);
+  }, [springeZuKino, springeZuStreaming, springeZuFilm]);
 
   useEffect(() => {
     if (!cageBereit || cageOffen) return undefined;
     const pruefeTag = () => {
-      if (!document.hidden && versucheCageTag({ jetzt: jetzt(), rnd: zufall })) zeigeCage();
+      if (document.hidden) return;
+      const pool = aktuellerCagePool();
+      if (pool.length && versucheCageTag({ jetzt: jetzt(), rnd: zufall })) {
+        cageFilmeRef.current = pool;
+        setCageOffen(true);
+      }
     };
     pruefeTag();
     document.addEventListener("visibilitychange", pruefeTag);
     return () => document.removeEventListener("visibilitychange", pruefeTag);
-  }, [cageBereit, cageOffen, zeigeCage, jetzt, zufall]);
+  }, [cageBereit, cageOffen, aktuellerCagePool, jetzt, zufall]);
 
   useEffect(() => {
     if (!EGGS_ENABLED || !cageOffen) return undefined;

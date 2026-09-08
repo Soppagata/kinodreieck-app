@@ -13,6 +13,7 @@ import { istKlaatu, crawlHeute, istVierterMai, levenshtein } from "./src/lib/mom
 import { EGG_AKTIV } from "./src/lib/modus.js";
 import { runNeonNoirChecks } from "./neon_noir_test.mjs";
 import { runEggControllerChecks } from "./egg_controller_test.mjs";
+import { baueCagePool, cageReferenz, cageSnapshotAktuell } from "./src/lib/cagePool.js";
 
 const checks = [];
 const check = (n, p) => { checks.push([n, p]); console.log((p ? "✓ " : "✗ ") + n); };
@@ -78,6 +79,45 @@ check("Verfügbar: nichts davon -> false", !istVerfuegbar({ id: "z", quelle: "" 
 const ctx = { kinoIds: new Set(["5"]), dienstePro: new Map([["2", ["Netflix"]]]), auswahl: ["Netflix"] };
 const live = liveVertreter(master, cage, ctx).map((f) => f.id).sort();
 check("Live-Vertreter cage = {1,2,4,5} (Besitz∨Kino∨Abo)", JSON.stringify(live) === JSON.stringify(["1", "2", "4", "5"]));
+
+/* Cage-Pool: Quellen werden streng qualifiziert, unabhängig von master.
+   Ein Referenzfilm verbindet Sprachalias; IDs bleiben echte Kartenziele. */
+const poolJetzt = new Date("2026-09-09T10:00:00Z");
+const frisch = { gueltigBis: "2026-09-10T10:00:00Z" };
+const alt = { gueltigBis: "2026-09-08T10:00:00Z" };
+const poolVon = patch => baueCagePool({ jetzt: poolJetzt, ...patch });
+const cageKino = { t: "Con Air", ot: "Con Air", j: 1997, film_at_id: "film-at-con-air" };
+const cageStream = { watchmode_id: 9001, titel: "Arizona Junior", originaltitel: "Raising Arizona", jahr: 1987, typ: "movie", dienste: ["Netflix"] };
+const streamingPool = {
+  streamingRoh: { bekannt: { ...frisch, titel: [cageStream] } },
+  streamingEntdecken: { titel: [cageStream] }, auswahl: ["Netflix"],
+};
+check("Cage-Pool: Kino-only ohne Master mit echter externer Karten-ID", poolVon({ programmInfo: frisch, kinoMatches: { rest: [cageKino] } })[0]?.cageZiel.ref === "film-at-con-air");
+check("Cage-Pool: Kino ohne film.at-ID nutzt den vorhandenen DOM-Titelref", poolVon({ programmInfo: frisch, kinoMatches: { rest: [{ ...cageKino, film_at_id: null }] } })[0]?.cageZiel.ref === "Con Air");
+check("Cage-Pool: Streaming-only aus Bekannt-Rohdaten landet in echter Entdecken-Karte", poolVon(streamingPool)[0]?.cageZiel.art === "entdecken" && poolVon(streamingPool)[0]?.cageZiel.ref === 9001);
+check("Cage-Pool: Entdecken-Rohdaten ohne Master sind ebenfalls enthalten", poolVon({ ...streamingPool, streamingRoh: { entdecken: { ...frisch, titel: [cageStream] } } }).length === 1);
+check("Cage-Pool: abgewählte Dienste sperren Kandidaten", poolVon({ ...streamingPool, auswahl: ["Disney+"] }).length === 0);
+check("Cage-Pool: leere Dienstauswahl behält bestehenden Alle-Vertrag", poolVon({ ...streamingPool, auswahl: [] }).length === 1);
+const arizonaMaster = { id: "arizona-master", titel: "Raising Arizona", jahr: 1987, typ: "film", quelle: "dvd" };
+const aliasPool = poolVon({ ...streamingPool, master: [arizonaMaster, { ...arizonaMaster, id: "zweite-dvd", titel: "Arizona Junior" }],
+  programmInfo: frisch, kinoMatches: { matched: [{ film: arizonaMaster, prog: { t: "Arizona Junior", ot: "Raising Arizona", j: 1987 } }] } });
+check("Cage-Pool: mehrere Quellen und Sprachalias bleiben genau ein Referenzfilm", aliasPool.length === 1 && aliasPool[0].cageZiel.ref === "arizona-master" && aliasPool[0].cageHerkunft.tab === "kino");
+check("Cage-Pool: bekannte Streamingkarte navigiert mit Master-ID", poolVon({ ...streamingPool, streamingEntdecken: null, streamingBekannt: { titel: [{ ...arizonaMaster, watchmode_id: 9001 }] } })[0]?.cageZiel.ref === "arizona-master");
+check("Cage-Pool: Originaltitel aus Rohdaten überlebt verlustbehaftete Ansicht", poolVon({ ...streamingPool, streamingRoh: { bekannt: { ...frisch, titel: [{ ...cageStream, titel: "Anderer Anzeigetitel" }] } }, streamingEntdecken: { titel: [{ ...cageStream, titel: "Anderer Anzeigetitel", originaltitel: undefined }] } }).length === 1);
+check("Cage-Matching: falsches Jahr, Prefix und fehlendes Jahr bleiben ausgeschlossen", [
+  { titel: "Con Air", jahr: 1998 }, { titel: "Con Air Extended", jahr: 1997 }, { titel: "Con", jahr: 1997 }, { titel: "Con Air" },
+  { titel: "The Wicker Man", jahr: 1973 }, { titel: "Con Air", jahr: 1997, typ: "serie" },
+].every(film => cageReferenz(film).status === "kein-match"));
+check("Cage-Matching: widersprechende gültige Titel/Originaltitel sind mehrdeutig", cageReferenz({ titel: "Con Air", originaltitel: "Face/Off", jahr: 1997 }).status === "mehrdeutig");
+check("Cage-Pool: allgemeiner Kino-Jahresfallback verleiht einem Remake keine Verfügbarkeit", poolVon({ programmInfo: frisch, kinoMatches: { matched: [{ film: { id: "falsch", titel: "Con Air", jahr: 1998 }, prog: cageKino }] } }).length === 0);
+check("Cage-Pool: allgemeiner Streaming-Match darf keine falsche Master-Karte adressieren", poolVon({ ...streamingPool, streamingEntdecken: null, streamingBekannt: { titel: [{ ...arizonaMaster, jahr: 1988, watchmode_id: 9001 }] } }).length === 0);
+check("Cage-Pool: abgelaufenes oder undatiertes Kino ist nicht gerade verfügbar", [alt, {}, { ...frisch, abgelaufen: true }].every(programmInfo => poolVon({ programmInfo, kinoMatches: { rest: [cageKino] } }).length === 0));
+check("Cage-Pool: abgelaufener Streaming-Stand sperrt trotz aktueller Anzeige-Metadaten", poolVon({ ...streamingPool, streamingRoh: { bekannt: { ...alt, titel: [cageStream] } }, streamingEntdecken: { ...frisch, titel: [cageStream] } }).length === 0);
+check("Cage-Pool: getrennte frische Quelle bleibt neben altem Snapshot nutzbar", poolVon({ ...streamingPool, streamingRoh: { bekannt: { ...alt, titel: [cageStream] }, entdecken: { ...frisch, titel: [cageStream] } } }).length === 1);
+check("Cage-Pool: Snapshot läuft auch in unverändert offener PWA ab", cageSnapshotAktuell(frisch, poolJetzt) && !cageSnapshotAktuell(frisch, new Date("2026-09-11T10:00:00Z")));
+check("Cage-Pool: fehlende oder mehrdeutige Kartenziele werden nicht erfunden", poolVon({ ...streamingPool, streamingEntdecken: null }).length === 0 && poolVon({ ...streamingPool, streamingBekannt: { titel: [cageStream] } }).length === 0);
+check("Cage-Pool: physischer Besitz bleibt ohne Snapshots verfügbar; virtuelle Quelle nicht", poolVon({ master: [arizonaMaster, { ...arizonaMaster, id: "cage-virt", titel: "Mandy", jahr: 2018, quelle: "netflix" }] }).length === 1);
+check("Cage-Pool: bekannte Referenz liefert A–Z-Originaltitel für numerischen deutschen Titel", poolVon({ master: [{ id: "trinkgeld", titel: "2 Millionen Dollar Trinkgeld", jahr: 1994, quelle: "dvd" }] })[0]?.originaltitel === "It Could Happen to You");
 
 /* ---- Achievement-Persistenz (kd:achievements) ---- */
 check("parse: Array-Form", parseAchievements(JSON.stringify(["teppich"])).has("teppich"));
