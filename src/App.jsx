@@ -1502,6 +1502,12 @@ export default function App() {
     return undefined;
   }, [remoteKontoAktiv, bootDone, snapshotFreigabe, ladeProgrammDatei, ladeStreamingDateien]);
 
+  const ladeCageKatalog = useCallback(() => ladeStreamingDateienRef.current?.(true), []);
+  const springeZuCageKino = useCallback((fokus) => {
+    setZeigeAlles(true);
+    setKinoFokus(fokus);
+    navigiere("kino");
+  }, [navigiere]);
   const {
     achievements,
     toasts,
@@ -1514,14 +1520,22 @@ export default function App() {
     eggZeigeEintrag,
   } = useEggController({
     master,
-    kinoMatches,
+    kinoMatches: remoteKontoAktiv ? kinoMatches : null,
+    programmInfo,
+    kinoLaedt: loading === "programm",
     streamingBekannt,
+    streamingEntdecken,
+    streamingRoh: remoteKontoAktiv && snapshotFreigabe ? streamingRohRef.current : null,
+    ladeCageKatalog,
+    katalogFreigegeben: remoteKontoAktiv && snapshotFreigabe,
+    katalogKontext: `${session.mode}:${session.state}:${session.account?.id || ""}:${snapshotFreigabe}:${betriebsartGen.current}`,
     auswahl,
     bootDone,
     setupWarnung,
     startModalOffen: katalogZugangOffen || mehrOffen,
-    setTab,
     springeZuFilm,
+    springeZuKino: springeZuCageKino,
+    springeZuStreaming,
   });
 
   const deepSpaceOwner = deepSpaceOwnerKey(session);
