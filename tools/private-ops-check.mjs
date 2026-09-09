@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { appendFileSync } from "node:fs";
+
 /* Payloadfreier, ausschließlich lesender Private-Pilot-Check. Jeder einzelne
    Netzruf endet nach 20 Sekunden, der gesamte Lauf spätestens nach fünf
    Minuten. Fehlende Secrets werden je Check NOT_CONFIGURED und verhindern
@@ -8,6 +10,137 @@ const RUN_TIMEOUT_MS = 5 * 60_000;
 
 const safeCode = (value) => String(value || "UNKNOWN").replace(/[^A-Z0-9_]/gi, "_").slice(0, 60).toUpperCase();
 const result = (id, code, extra = {}) => ({ id, code: safeCode(code), ...extra });
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const CHECK_LABELS = Object.freeze({
+  build: "Staging-Build",
+  function: "AI-Function",
+  access: "Monitor-Zugang",
+  flags: "Private-Ops-Schalter",
+  radar_flags: "Radar-Schalter",
+  budget: "KI-Budgetgrenzen",
+  purge: "Aufbewahrung",
+  entdecken_feed: "Entdecken-Feed",
+  run: "Monitor-Lauf",
+});
+
+function viennaDate(now) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Vienna",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+function feedReport(row, today) {
+  const status = typeof row?.status === "string" ? row.status : "";
+  const refreshedOn = ISO_DATE.test(String(row?.refreshed_on || "")) ? row.refreshed_on : null;
+  const validUntil = ISO_DATE.test(String(row?.valid_until || "")) ? row.valid_until : null;
+  const lastAttemptOn = ISO_DATE.test(String(row?.last_attempt_on || "")) ? row.last_attempt_on : null;
+  const lastErrorCode = row?.last_error_code == null ? null : safeCode(row.last_error_code);
+  const sourceIds = Array.isArray(row?.payload?.sourceIds) ? row.payload.sourceIds : [];
+  const sourcesValid = sourceIds.length > 0
+    && sourceIds.every((sourceId) => typeof sourceId === "string" && sourceId.trim())
+    && new Set(sourceIds).size === sourceIds.length;
+  const payloadFormat = Number.isInteger(row?.payload?.format) && row.payload.format > 0
+    ? row.payload.format : null;
+  const extra = {
+    status: safeCode(status || "unknown"),
+    refreshedOn,
+    validUntil,
+    lastAttemptOn,
+    lastErrorCode,
+    payloadFormat,
+    sourceCount: sourcesValid ? sourceIds.length : null,
+  };
+
+  if (status === "error") {
+    return result("entdecken_feed", `FEED_ERROR_${lastErrorCode || "UNKNOWN"}`, extra);
+  }
+  if (status === "empty") return result("entdecken_feed", "FEED_EMPTY", extra);
+  if (status === "refreshing") return result("entdecken_feed", "FEED_REFRESHING", extra);
+  if (status !== "ready" || !refreshedOn || !validUntil || validUntil < refreshedOn
+      || payloadFormat == null || !sourcesValid) {
+    return result("entdecken_feed", "FEED_CONTRACT_INVALID", extra);
+  }
+  return result("entdecken_feed", validUntil < today ? "FEED_EXPIRED" : "OK", extra);
+}
+
+function reportExplanation(entry) {
+  if (entry.code === "OK") return "Vertrag erfüllt.";
+  if (entry.code === "PURGE_DUE") return `${entry.warningCount ?? 0} Datensätze sind zur Löschprüfung fällig.`;
+  if (entry.code === "FEED_REFRESHING") return "Der Feed wird gerade aktualisiert; der Zustand ist noch nicht abschließend.";
+  if (entry.code.startsWith("FEED_ERROR_")) return `Der letzte Feedversuch endete mit ${entry.code.slice("FEED_ERROR_".length)}.`;
+  const explanations = {
+    NOT_CONFIGURED: "Die benötigte GitHub-Environment-Konfiguration fehlt.",
+    EXPECTED_MATRIX_NOT_CONFIGURED: "Für die gewählte Umgebung ist keine Sollmatrix definiert.",
+    BUILD_UNREACHABLE: "Die Build-Metadaten waren nicht lesbar.",
+    BUILD_MISMATCH: "Die ausgelieferte App entspricht nicht dem ausgecheckten Staging-Commit.",
+    AUTH_UNREACHABLE: "Die Anmeldung des Monitor-Kontos ist fehlgeschlagen.",
+    FUNCTION_UNAVAILABLE: "Der Health-Vertrag der AI-Function war nicht erreichbar.",
+    FUNCTION_BUILD_MISMATCH: "Die AI-Function entspricht nicht der erwarteten Build-Version.",
+    ACCESS_UNAVAILABLE: "Der Rollenstatus war nicht lesbar.",
+    ACCESS_DENIED: "Das Monitor-Konto besitzt keine aktive Rollenfreigabe.",
+    DATABASE_UNAVAILABLE: "Der benötigte lesende Datenbankvertrag war nicht verfügbar.",
+    FLAG_MATRIX_MISMATCH: "Die aktiven Betriebsschalter weichen von der Sollmatrix ab.",
+    BUDGET_UNKNOWN: "Die serverseitigen KI-Budgetgrenzen waren nicht sicher bestimmbar.",
+    FEED_UNAVAILABLE: "Der Entdecken-Feedzustand war nicht lesbar.",
+    FEED_EMPTY: "Es ist kein gespeicherter Entdecken-Feed vorhanden.",
+    FEED_EXPIRED: "Der gespeicherte Entdecken-Feed ist abgelaufen.",
+    FEED_CONTRACT_INVALID: "Der gespeicherte Feed erfüllt den minimalen Format- und Quellenvertrag nicht.",
+    RUN_TIMEOUT: "Der gesamte Monitor hat sein Fünf-Minuten-Limit erreicht.",
+  };
+  return explanations[entry.code] || `Betriebscheck meldet ${entry.code}.`;
+}
+
+function githubEscape(value) {
+  return String(value).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+}
+
+export function formatPrivateOpsGitHub(output) {
+  const annotations = [];
+  const rows = output.reports.map((entry) => {
+    const label = CHECK_LABELS[entry.id] || entry.id;
+    const explanation = reportExplanation(entry);
+    if (entry.code !== "OK") {
+      const level = output.critical.includes(entry.id) ? "error" : "warning";
+      annotations.push(`::${level} title=${githubEscape(`Private Ops: ${label}`)}::${githubEscape(explanation)}`);
+    }
+    return `| ${label} | \`${entry.code}\` | ${explanation} |`;
+  });
+  const feed = output.reports.find((entry) => entry.id === "entdecken_feed");
+  const feedDetails = feed
+    ? [
+      "",
+      "Entdecken-Feed (nur Metadaten):",
+      `- letzter Versuch: ${feed.lastAttemptOn || "unbekannt"}`,
+      `- zuletzt gespeichert: ${feed.refreshedOn || "unbekannt"}`,
+      `- gültig bis: ${feed.validUntil || "unbekannt"}`,
+      `- Format: ${feed.payloadFormat ?? "unbekannt"}; Quellenzahl: ${feed.sourceCount ?? "unbekannt"}`,
+    ] : [];
+  const markdown = [
+    `## Private Ops Monitor: ${output.ok ? "OK" : "Störung"}`,
+    "",
+    "| Prüfung | Code | Einordnung |",
+    "| --- | --- | --- |",
+    ...rows,
+    ...feedDetails,
+    "",
+    "Der Bericht enthält keine Secrets, Kontokennungen oder Feed-Payloads.",
+    "",
+  ].join("\n");
+  return { annotations, markdown };
+}
+
+function publishGitHubReport(output, env = process.env) {
+  const formatted = formatPrivateOpsGitHub(output);
+  for (const annotation of formatted.annotations) console.error(annotation);
+  if (env.GITHUB_STEP_SUMMARY) {
+    try { appendFileSync(env.GITHUB_STEP_SUMMARY, formatted.markdown, "utf8"); }
+    catch { console.error("::warning title=Private Ops::GitHub-Schrittzusammenfassung konnte nicht geschrieben werden."); }
+  }
+}
 
 const STAGING_PRIVATE_FLAGS = Object.freeze({
   provider_requests_enabled: true,
@@ -55,7 +188,11 @@ async function jsonFetch(fetchImpl, url, init = {}) {
   return { ok: response.ok, status: response.status, data };
 }
 
-export async function runPrivateOpsCheck({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
+export async function runPrivateOpsCheck({
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+  now = () => new Date(),
+} = {}) {
   const reports = [];
   const critical = [];
   const add = (entry, isCritical = false) => {
@@ -153,17 +290,36 @@ export async function runPrivateOpsCheck({ env = process.env, fetchImpl = global
     }
   } catch { add(result("purge", "DATABASE_UNAVAILABLE"), true); }
 
+  try {
+    if (!base || !adminHeaders) add(result("entdecken_feed", "NOT_CONFIGURED"), true);
+    else {
+      const response = await jsonFetch(
+        fetchImpl,
+        `${base}/rest/v1/kd_entdecken_daily_feed?select=status,refreshed_on,valid_until,last_attempt_on,last_error_code,payload&singleton=eq.true&limit=1`,
+        { headers: adminHeaders },
+      );
+      const row = Array.isArray(response.data) && response.data.length === 1 ? response.data[0] : null;
+      const entry = response.ok && row
+        ? feedReport(row, viennaDate(now()))
+        : result("entdecken_feed", "FEED_UNAVAILABLE");
+      add(entry, entry.code !== "FEED_REFRESHING");
+    }
+  } catch { add(result("entdecken_feed", "FEED_UNAVAILABLE"), true); }
+
   return { ok: critical.length === 0, reports, critical };
 }
 
 async function main() {
   const timeout = setTimeout(() => {
-    console.log(JSON.stringify({ ok: false, reports: [result("run", "RUN_TIMEOUT")], critical: ["run"] }));
+    const output = { ok: false, reports: [result("run", "RUN_TIMEOUT")], critical: ["run"] };
+    publishGitHubReport(output);
+    console.log(JSON.stringify(output));
     process.exit(1);
   }, RUN_TIMEOUT_MS);
   timeout.unref?.();
   const output = await runPrivateOpsCheck();
   clearTimeout(timeout);
+  publishGitHubReport(output);
   console.log(JSON.stringify(output, null, 2));
   if (!output.ok) process.exitCode = 1;
 }

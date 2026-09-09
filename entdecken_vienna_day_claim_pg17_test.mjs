@@ -136,7 +136,7 @@ try {
   `);
 
   psql(readFileSync(
-    "supabase/migrations/20260905180000_entdecken_vienna_day_claim.sql",
+    "supabase/migrations/20260909120000_entdecken_delayed_daily_claim.sql",
     "utf8",
   ));
 
@@ -146,14 +146,45 @@ try {
   assert.equal(denied.claimStatus, "disabled");
   assert.equal(denied.refresh, false);
 
-  const claimed = JSON.parse(psql(`
+  const scheduled = JSON.parse(psql(`
     set request.jwt.claim.role = 'service_role';
-    select public.kd_entdecken_weekly_refresh_claim('owner')::text;
+    select public.kd_entdecken_weekly_refresh_claim('scheduled')::text;
   `).split("\n").at(-1));
-  assert.equal(claimed.claimStatus, "claimed");
-  assert.equal(claimed.refresh, true);
-  assert.equal(claimed.attemptCount, 1);
-  assert.equal(claimed.maxAttempts, 1);
+  assert.equal(scheduled.claimStatus, "claimed");
+  assert.equal(scheduled.refresh, true);
+  assert.equal(scheduled.attemptCount, 1);
+  assert.equal(scheduled.maxAttempts, 1);
+
+  const duplicate = JSON.parse(psql(`
+    set request.jwt.claim.role = 'service_role';
+    select public.kd_entdecken_weekly_refresh_claim('scheduled')::text;
+  `).split("\n").at(-1));
+  assert.equal(duplicate.claimStatus, "in_progress");
+  assert.equal(duplicate.refresh, false);
+  assert.equal(duplicate.attemptCount, 0);
+  assert.equal(duplicate.maxAttempts, 1);
+
+  psql(`
+    update public.kd_entdecken_daily_feed
+       set status = 'error', lease_expires_at = clock_timestamp() - interval '1 second';
+  `);
+  const failedToday = JSON.parse(psql(`
+    set request.jwt.claim.role = 'service_role';
+    select public.kd_entdecken_weekly_refresh_claim('scheduled')::text;
+  `).split("\n").at(-1));
+  assert.equal(failedToday.claimStatus, "failed");
+  assert.equal(failedToday.refresh, false);
+
+  psql(`
+    update public.kd_entdecken_daily_feed
+       set status = 'ready', last_success_at = clock_timestamp(), lease_expires_at = null;
+  `);
+  const completedToday = JSON.parse(psql(`
+    set request.jwt.claim.role = 'service_role';
+    select public.kd_entdecken_weekly_refresh_claim('scheduled')::text;
+  `).split("\n").at(-1));
+  assert.equal(completedToday.claimStatus, "not_due");
+  assert.equal(completedToday.refresh, false);
 
   assert.equal(psql(`
     select
@@ -165,8 +196,9 @@ try {
   assert.equal(psql(`
     select last_attempt_on = (clock_timestamp() at time zone 'Europe/Vienna')::date
       and attempt_count = 1
-      and status = 'refreshing'
-      and lease_expires_at > clock_timestamp()
+      and status = 'ready'
+      and (last_success_at at time zone 'Europe/Vienna')::date = last_attempt_on
+      and lease_expires_at is null
     from public.kd_entdecken_daily_feed where singleton;
   `), "t");
 

@@ -12,6 +12,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: staging
     steps:
       - name: Oeffentlichen Supabase-Auth-Health-Vertrag pruefen
         env:
@@ -19,17 +20,31 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           set -euo pipefail
+          summary() {
+            {
+              echo "## Supabase Keep-alive: $1"
+              echo
+              echo "$2"
+              echo
+              echo "Der Lauf liest ausschließlich den öffentlichen Auth-Health-Vertrag und schreibt keine Nutzdaten."
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+          fail() {
+            echo "::error title=Supabase Keep-alive::$1"
+            summary "Störung" "$1"
+            exit 1
+          }
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
-            echo "SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY nicht gesetzt."; exit 1
+            fail "SUPABASE_URL oder SUPABASE_PUBLISHABLE_KEY fehlt im staging-Environment."
           fi
           case "$SUPABASE_URL" in
             https://*.supabase.co) ;;
-            *) echo "Supabase-URL ist ungueltig."; exit 1 ;;
+            *) fail "SUPABASE_URL hat nicht das erwartete Supabase-HTTPS-Format." ;;
           esac
 
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
-          response_meta="$(
+          if ! response_meta="$(
             curl --silent --show-error \
               --connect-timeout 10 \
               --max-time 60 \
@@ -37,12 +52,13 @@ jobs:
               --write-out "%{http_code} %{content_type}" \
               "${SUPABASE_URL%/}/auth/v1/health" \
               --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}"
-          )"
+          )"; then
+            fail "Supabase Auth-Health war innerhalb des Zeitlimits nicht erreichbar."
+          fi
           http_status="${response_meta%% *}"
           content_type="${response_meta#* }"
           if [ "$http_status" != "200" ] || [[ "$content_type" != application/json* ]]; then
-            echo "Supabase Auth-Health lieferte keinen sicheren Erfolg (HTTP ${http_status})."
-            exit 1
+            fail "Supabase Auth-Health lieferte keinen sicheren Erfolg (HTTP ${http_status})."
           fi
           if ! node -e '
             const { readFileSync } = require("node:fs");
@@ -56,7 +72,7 @@ jobs:
               process.exit(3);
             }
           ' "$response_file"; then
-            echo "Supabase Auth-Health lieferte keinen gueltigen Antwortvertrag."
-            exit 1
+            fail "Supabase Auth-Health lieferte keinen gültigen Antwortvertrag."
           fi
           echo "keep-alive ok"
+          summary "OK" "Auth-Health antwortet mit HTTP 200 und dem erwarteten JSON-Vertrag."

@@ -3,6 +3,7 @@
 
 import { readFileSync } from "node:fs";
 import {
+  formatPrivateOpsGitHub,
   PRIVATE_OPS_FLAG_MATRICES,
   runPrivateOpsCheck,
 } from "./private-ops-check.mjs";
@@ -78,19 +79,29 @@ const okFetch = createFetchMock((url) => {
   if (url.includes("/rest/v1/rpc/kd_private_retention_run")) {
     return fakeAntwort(200, { due: {} });
   }
+  if (url.includes("/rest/v1/kd_entdecken_daily_feed")) {
+    return fakeAntwort(200, [{
+      status: "ready",
+      refreshed_on: "2026-09-09",
+      valid_until: "2026-09-15",
+      last_attempt_on: "2026-09-09",
+      last_error_code: null,
+      payload: { format: 7, sourceIds: ["source:a", "source:b"], items: [{ secret: "nicht-ausgeben" }] },
+    }]);
+  }
   throw new Error(`Unhandled fetch in happy path: ${url}`);
 });
 
 const healthyReports = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: okFetch });
 const healthy = Object.fromEntries(healthyReports.reports.map((r) => [r.id, r.code]));
-check("grüner Build/Function/Rolle/Fünffeld-Flags/Budget/Purge", healthy.build === "OK" && healthy.function === "OK" && healthy.access === "OK" && healthy.flags === "OK" && healthy.radar_flags === "OK" && healthy.budget === "OK" && healthy.purge === "OK");
+check("grüner Build/Function/Rolle/Flags/Budget/Purge/Feed", healthy.build === "OK" && healthy.function === "OK" && healthy.access === "OK" && healthy.flags === "OK" && healthy.radar_flags === "OK" && healthy.budget === "OK" && healthy.purge === "OK" && healthy.entdecken_feed === "OK");
 check("grüne Check-Läufe liefern kein kritisches Ergebnis", healthyReports.ok === true && healthyReports.critical.length === 0);
 check("Purge als Warnung darf weiterlaufen und nicht kritisch sein", healthy.purge === "OK" && healthyReports.critical.includes("purge") === false);
 
 const missing = await runPrivateOpsCheck({ env: { KD_MONITOR_ENVIRONMENT: "staging" }, fetchImpl: createFetchMock(() => { throw new Error("should not run"); }) });
 const missingById = Object.fromEntries(missing.reports.map((r) => [r.id, r.code]));
-check("fehlende Secrets je Check melden NOT_CONFIGURED", missingById.build === "NOT_CONFIGURED" && missingById.function === "NOT_CONFIGURED" && missingById.access === "NOT_CONFIGURED" && missingById.flags === "NOT_CONFIGURED" && missingById.radar_flags === "NOT_CONFIGURED" && missingById.budget === "NOT_CONFIGURED" && missingById.purge === "NOT_CONFIGURED");
-check("fehlende Secrets brechen den Ablauf nicht ab, aber machen ihn rot", missing.ok === false && missing.reports.map((r) => r.id).length === 7 && missing.critical.length === 7);
+check("fehlende Secrets je Check melden NOT_CONFIGURED", missingById.build === "NOT_CONFIGURED" && missingById.function === "NOT_CONFIGURED" && missingById.access === "NOT_CONFIGURED" && missingById.flags === "NOT_CONFIGURED" && missingById.radar_flags === "NOT_CONFIGURED" && missingById.budget === "NOT_CONFIGURED" && missingById.purge === "NOT_CONFIGURED" && missingById.entdecken_feed === "NOT_CONFIGURED");
+check("fehlende Secrets brechen den Ablauf nicht ab, aber machen ihn rot", missing.ok === false && missing.reports.map((r) => r.id).length === 8 && missing.critical.length === 8);
 
 const buildMismatch = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
   if (url.endsWith("/build-meta.json")) return fakeAntwort(200, { buildVersion: "build-v2" });
@@ -223,6 +234,7 @@ const redactedRun = await runPrivateOpsCheck({ env: { ...BASIS_ENV, ...redactedP
     { schluessel: "anbieter_request_max_usd_cent", wert: 500 },
   ]);
   if (url.includes("/rest/v1/rpc/kd_private_retention_run")) return fakeAntwort(200, { due: {} });
+  if (url.includes("/rest/v1/kd_entdecken_daily_feed")) return okFetch(url);
   return okFetch(url);
 }) });
 const redactedText = JSON.stringify(redactedRun.reports);
@@ -230,11 +242,78 @@ const sensitiveFound = Object.entries(redactedPayload).some(([_, wert]) => redac
 check("keine IDs/Secrets/Payload in Reports", sensitiveFound === false);
 check("Reports enthalten nur erlaubte Felder", redactedRun.reports.every((entry) => {
   const keys = Object.keys(entry);
-  return keys.every((key) => ["id", "code", "warningCount"].includes(key))
+  return keys.every((key) => [
+    "id", "code", "warningCount", "status", "refreshedOn", "validUntil",
+    "lastAttemptOn", "lastErrorCode", "payloadFormat", "sourceCount",
+  ].includes(key))
     && keys.includes("id")
     && keys.includes("code")
-    && keys.length <= 3;
+    && keys.length <= 10;
 }));
+check("Feedreport enthält nur Metadaten, nie Payload oder Quellen-IDs",
+  redactedText.includes("nicht-ausgeben") === false
+  && redactedText.includes("source:a") === false
+  && redactedRun.reports.find((entry) => entry.id === "entdecken_feed")?.sourceCount === 2);
+
+const feedErrorRun = await runPrivateOpsCheck({ env: BASIS_ENV, now: () => new Date("2026-09-09T12:00:00Z"), fetchImpl: createFetchMock((url) => {
+  if (url.includes("/rest/v1/kd_entdecken_daily_feed")) return fakeAntwort(200, [{
+    status: "error", refreshed_on: "2026-09-06", valid_until: "2026-09-12",
+    last_attempt_on: "2026-09-09", last_error_code: "source_error",
+    payload: { format: 7, sourceIds: ["source:a"] },
+  }]);
+  return okFetch(url);
+}) });
+const feedError = feedErrorRun.reports.find((entry) => entry.id === "entdecken_feed");
+check("fachlicher Feedfehler wird mit sicherem Grundcode rot", feedError?.code === "FEED_ERROR_SOURCE_ERROR"
+  && feedErrorRun.critical.includes("entdecken_feed") && feedErrorRun.ok === false);
+check("Feedfehler nennt letzte Versuchs- und Bestandsdaten ohne Payload", feedError?.lastAttemptOn === "2026-09-09"
+  && feedError?.refreshedOn === "2026-09-06" && feedError?.validUntil === "2026-09-12");
+
+const expiredFeedRun = await runPrivateOpsCheck({ env: BASIS_ENV, now: () => new Date("2026-09-16T12:00:00Z"), fetchImpl: createFetchMock((url) => {
+  if (url.includes("/rest/v1/kd_entdecken_daily_feed")) return fakeAntwort(200, [{
+    status: "ready", refreshed_on: "2026-09-09", valid_until: "2026-09-15",
+    last_attempt_on: "2026-09-09", last_error_code: null,
+    payload: { format: 19, sourceIds: ["source:a", "source:b", "source:c"] },
+  }]);
+  return okFetch(url);
+}) });
+const expiredFeed = expiredFeedRun.reports.find((entry) => entry.id === "entdecken_feed");
+check("Monitor erkennt abgelaufenen Feed ohne feste Format- oder Quellenzahl", expiredFeed?.code === "FEED_EXPIRED"
+  && expiredFeed?.payloadFormat === 19 && expiredFeed?.sourceCount === 3
+  && expiredFeedRun.critical.includes("entdecken_feed"));
+
+const invalidFeedRun = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+  if (url.includes("/rest/v1/kd_entdecken_daily_feed")) return fakeAntwort(200, [{
+    status: "ready", refreshed_on: "2026-09-09", valid_until: "2026-09-15",
+    last_attempt_on: "2026-09-09", last_error_code: null,
+    payload: { format: 7, sourceIds: [] },
+  }]);
+  return okFetch(url);
+}) });
+check("leerer Quellenvertrag wird fail-closed statt über 25/50-Annahmen bewertet",
+  invalidFeedRun.reports.find((entry) => entry.id === "entdecken_feed")?.code === "FEED_CONTRACT_INVALID"
+  && invalidFeedRun.critical.includes("entdecken_feed"));
+
+const refreshingFeedRun = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+  if (url.includes("/rest/v1/kd_entdecken_daily_feed")) return fakeAntwort(200, [{
+    status: "refreshing", refreshed_on: "2026-09-09", valid_until: "2026-09-15",
+    last_attempt_on: "2026-09-09", last_error_code: null,
+    payload: { format: 7, sourceIds: ["source:a"] },
+  }]);
+  return okFetch(url);
+}) });
+check("laufender Feedrefresh bleibt sichtbare Warnung ohne falschen Fehler",
+  refreshingFeedRun.reports.find((entry) => entry.id === "entdecken_feed")?.code === "FEED_REFRESHING"
+  && refreshingFeedRun.critical.includes("entdecken_feed") === false && refreshingFeedRun.ok === true);
+
+const githubReport = formatPrivateOpsGitHub(feedErrorRun);
+check("GitHub-Ausgabe enthält Fehlerannotation und verständliche Schrittzusammenfassung",
+  githubReport.annotations.some((line) => line.startsWith("::error title=Private Ops: Entdecken-Feed::"))
+  && githubReport.markdown.includes("## Private Ops Monitor: Störung")
+  && githubReport.markdown.includes("letzter Versuch: 2026-09-09"));
+check("GitHub-Ausgabe enthält keine Secrets, Kontodaten, Payloads oder Quellen-IDs",
+  ![...Object.values(BASIS_ENV), "source:a", "nicht-ausgeben", "items"].some((value) => githubReport.markdown.includes(String(value)))
+  && !githubReport.annotations.some((line) => /source:a|nicht-ausgeben|monitor@example/.test(line)));
 
 const abortCalls = [];
 const originalTimeout = AbortSignal.timeout;
@@ -255,11 +334,12 @@ const timeoutCheckFetch = createFetchMock((url) => {
     { schluessel: "anbieter_request_max_usd_cent", wert: 500 },
   ]);
   if (url.includes("/rest/v1/rpc/kd_private_retention_run")) return fakeAntwort(200, { due: {} });
+  if (url.includes("/rest/v1/kd_entdecken_daily_feed")) return okFetch(url);
   throw new Error(`Unhandled fetch in timeout test: ${url}`);
 });
 await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: timeoutCheckFetch });
 AbortSignal.timeout = originalTimeout;
-check("je Netzcheck max 20s Timeout", abortCalls.length >= 7 && abortCalls.every((ms) => ms === 20000));
+check("je Netzcheck max 20s Timeout", abortCalls.length >= 8 && abortCalls.every((ms) => ms === 20000));
 
 const monitorCheckSource = readFileSync("tools/private-ops-check.mjs", "utf8");
 check("Run-Timeout für den Check ist 5 Minuten", /RUN_TIMEOUT_MS\s*=\s*5\s*\*\s*60_000/.test(monitorCheckSource));
@@ -267,6 +347,21 @@ const monitorWorkflow = readFileSync(".github/workflows/private-ops-monitor.yml"
 check("Workflow ist auf 5 Minuten begrenzt", /timeout-minutes:\s*5/.test(monitorWorkflow));
 check("Workflow verwendet ausschließlich den Check-Entrypoint", /node tools\/private-ops-check\.mjs/.test(monitorWorkflow));
 check("Workflow bindet die explizite Staging-Sollmatrix", /KD_MONITOR_ENVIRONMENT:\s*staging/.test(monitorWorkflow));
+check("Workflow bindet das GitHub-Environment staging", /read-only-check:[\s\S]*?environment:\s*staging/.test(monitorWorkflow));
+check("Workflow checkt unabhängig vom Schedule-Default den staging-Ref aus",
+  /uses:\s*actions\/checkout@v7[\s\S]*?with:\s*\n\s+ref:\s*staging/.test(monitorWorkflow));
+check("App-Build-Soll stammt aus dem tatsächlich ausgecheckten staging-Commit",
+  /id:\s*staging-checkout[\s\S]*?git rev-parse HEAD[\s\S]*?KD_MONITOR_EXPECTED_BUILD:\s*\$\{\{\s*steps\.staging-checkout\.outputs\.sha\s*\}\}/.test(monitorWorkflow));
+check("Workflow verwendet die kanonischen Environment-Variablen des Deployments",
+  /KD_MONITOR_STAGING_URL:\s*\$\{\{\s*vars\.APP_URL\s*\}\}/.test(monitorWorkflow)
+  && /KD_MONITOR_SUPABASE_URL:\s*\$\{\{\s*vars\.SUPABASE_URL\s*\}\}/.test(monitorWorkflow)
+  && /KD_MONITOR_PUBLISHABLE_KEY:\s*\$\{\{\s*vars\.SUPABASE_PUBLISHABLE_KEY\s*\}\}/.test(monitorWorkflow));
+check("alte driftende App-Sollvariablen und falsche Supabase-Secret-Namen sind entfernt",
+  !/STAGING_APP_URL|STAGING_EXPECTED_BUILD|secrets\.VITE_SUPABASE_(?:URL|PUBLISHABLE_KEY)/.test(monitorWorkflow));
+check("Workflow schreibt annotierte Gründe und eine GitHub-Schrittzusammenfassung über den Check",
+  /GITHUB_STEP_SUMMARY/.test(monitorCheckSource)
+  && /::\$\{level\} title=/.test(monitorCheckSource)
+  && /formatPrivateOpsGitHub/.test(monitorCheckSource));
 
 console.log(`\n${ok}/${ok + fehler.length} Private-Ops-Monitor-Checks bestanden.`);
 if (fehler.length) {

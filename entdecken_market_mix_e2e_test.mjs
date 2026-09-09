@@ -31,6 +31,7 @@ import {
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import {
   createEntdeckenDailyFeedService,
+  entdeckenDailyFeedNotice,
   selectEntdeckenFeed,
 } from "./src/services/entdeckenDailyFeed.js";
 
@@ -243,7 +244,7 @@ function legacyJoynFormat6() {
   };
 }
 
-check("Ein neuerer Netflix-OeFI-Format-6-Stand gewinnt gegen den aelteren Format-7-Fallback", () => {
+check("Ein neuerer 25er-Teilstand ersetzt den bestaetigten 50er-Fallback nicht", () => {
   const newerFormat6 = structuredClone(mixedFeed);
   newerFormat6.refreshedOn = "2026-08-30";
   newerFormat6.validUntil = "2026-09-05";
@@ -253,8 +254,8 @@ check("Ein neuerer Netflix-OeFI-Format-6-Stand gewinnt gegen den aelteren Format
     { status: "fresh", feed: newerFormat6 },
     { status: "fresh", feed: ENTDECKEN_MARKET_POOL_50 },
   );
-  assert.equal(selected.feed.format, 6);
-  assert.deepEqual(selected.feed, newerFormat6);
+  assert.equal(selected.feed.format, 7);
+  assert.deepEqual(selected.feed, ENTDECKEN_MARKET_POOL_50);
 });
 
 check("Ein neuerer Format-7-Stand gewinnt gegen einen aelteren Netflix-OeFI-Format-6-Stand", () => {
@@ -290,6 +291,10 @@ await checkAsync("Der eingebettete Format-7-Fallback bleibt nach Ablauf ehrlich 
   }).load();
   assert.equal(loaded.status, "stale");
   assert.equal(loaded.feed.validUntil, "2026-09-04");
+  assert.equal(loaded.feedOrigin, "embedded_fallback");
+  assert.equal(loaded.retrievalStatus, "not_requested");
+  assert.match(entdeckenDailyFeedNotice(loaded), /ältere eingebettete Ersatzstand/u);
+  assert.match(entdeckenDailyFeedNotice(loaded), /Gültigkeitszeitraum ist abgelaufen/u);
 });
 
 await checkAsync("Netflix-Prefixgrenze stoppt auch einen einzelnen übergroßen Chunk vor ÖFI", async () => {

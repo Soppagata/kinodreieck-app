@@ -12,9 +12,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  activation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Repository-Opt-in ausweisen
+        env:
+          SCHEDULE_ENABLED: ${{ vars.KD_AUTOMATIC_AI_SCHEDULE_ENABLED == 'true' && 'true' || 'false' }}
+        run: |
+          if [ "$SCHEDULE_ENABLED" = "true" ]; then
+            state="aktiviert"
+            detail="Der kostenpflichtige Automatic-AI-Zeitplan darf den fälligen Check starten."
+          else
+            state="wirkungsgesperrt"
+            detail="KD_AUTOMATIC_AI_SCHEDULE_ENABLED ist nicht exakt true; es wurde kein Anbieterrequest gestartet."
+          fi
+          {
+            echo "## Automatic AI: ${state}"
+            echo
+            echo "$detail"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   due-check:
+    needs: activation
+    if: ${{ vars.KD_AUTOMATIC_AI_SCHEDULE_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: staging
     steps:
       - name: Bis zu drei faellige automatische KI-Jobs seriell pruefen
         env:
@@ -22,23 +46,34 @@ jobs:
           SUPABASE_RADAR_SCHEDULER: ${{ secrets.SUPABASE_RADAR_SCHEDULER }}
         run: |
           set -euo pipefail
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_RADAR_SCHEDULER" ]; then
-            echo "::error::Checker-Konfiguration fehlt."
+          summary() {
+            {
+              echo "## Automatic AI: $1"
+              echo
+              echo "$2"
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+          fail() {
+            echo "::error title=Automatic AI::$1"
+            summary "Störung" "$1"
             exit 1
+          }
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_RADAR_SCHEDULER" ]; then
+            fail "SUPABASE_URL oder SUPABASE_RADAR_SCHEDULER fehlt im staging-Environment."
           fi
           case "$SUPABASE_URL" in
             https://*.supabase.co) ;;
-            *) echo "::error::Checker-URL ist ungueltig."; exit 1 ;;
+            *) fail "SUPABASE_URL hat nicht das erwartete Supabase-HTTPS-Format." ;;
           esac
           case "$SUPABASE_RADAR_SCHEDULER" in
             sb_secret_*) ;;
-            *) echo "::error::Checker-Key hat nicht das erwartete Format."; exit 1 ;;
+            *) fail "SUPABASE_RADAR_SCHEDULER hat nicht das erwartete Secret-Key-Format." ;;
           esac
 
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
-          response_meta="$(
-            curl --silent --show-error --fail-with-body \
+          if ! response_meta="$(
+            curl --silent --show-error \
               --request POST \
               --connect-timeout 10 \
               --max-time 240 \
@@ -47,12 +82,13 @@ jobs:
               "${SUPABASE_URL%/}/functions/v1/automatic-ai-check" \
               --header "apikey: ${SUPABASE_RADAR_SCHEDULER}" \
               --header "x-kd-automatic-check: scheduled-v1"
-          )"
+          )"; then
+            fail "Automatic-AI-Checker war innerhalb des Zeitlimits nicht erreichbar; es erfolgt kein Workflow-Retry."
+          fi
           http_status="${response_meta%% *}"
           content_type="${response_meta#* }"
           if [ "$http_status" != "200" ] || [[ "$content_type" != application/json* ]]; then
-            echo "::error::Automatic-AI-Checker lieferte keinen sicheren Erfolg (HTTP ${http_status})."
-            exit 1
+            fail "Automatic-AI-Checker lieferte keinen sicheren Erfolg (HTTP ${http_status}); es erfolgt kein Workflow-Retry."
           fi
           if ! outcome="$(node -e '
             const { readFileSync } = require("node:fs");
@@ -89,11 +125,12 @@ jobs:
               stopReason: body.stopReason,
             }));
           ' "$response_file")"; then
-            echo "::error::Automatic-AI-Checker lieferte keinen gueltigen Antwortvertrag."
-            exit 1
+            fail "Automatic-AI-Checker lieferte keinen gültigen Antwortvertrag."
           fi
           if [[ "$outcome" == *'"code":"backlog"'* ]]; then
-            echo "::warning::Automatic-AI-Checker: ${outcome}."
+            echo "::warning title=Automatic AI: Rückstand::Der Checker meldet nach höchstens drei seriellen Jobs weiteren Rückstand."
+            summary "Rückstand" "Der Checker war erfolgreich, meldet aber nach höchstens drei seriellen Jobs weiteren Rückstand: ${outcome}."
           else
             echo "Automatic-AI-Checker: ${outcome}."
+            summary "OK" "Der fällige Check endete mit gültigem Vertrag: ${outcome}."
           fi

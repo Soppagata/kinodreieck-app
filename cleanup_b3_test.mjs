@@ -9,7 +9,7 @@ import { PRIVATE_OPS_FLAG_MATRICES } from "./tools/private-ops-check.mjs";
 
 const read = (path) => readFileSync(path, "utf8");
 
-test("Entdecken meldet fachliches failed rot, erwartete No-ops bleiben erlaubt", () => {
+test("Entdecken meldet ausgebliebene Aktualisierung rot und benennt alle Ergebniszustaende", () => {
   const workflow = read(".github/workflows/entdecken-six-day.yml");
   const failedBranch = workflow.match(/failed\)[\s\S]*?;;/)?.[0] || "";
   assert.match(failedBranch, /::error::Entdecken/);
@@ -23,6 +23,9 @@ test("Entdecken meldet fachliches failed rot, erwartete No-ops bleiben erlaubt",
 
 test("Keep-alive validiert nur den belegten Auth-Health-Vertrag und mutiert nichts", () => {
   const workflow = read(".github/workflows/keepalive.yml");
+  assert.match(workflow, /ping:[\s\S]*?environment:\s*staging/);
+  assert.match(workflow, /GITHUB_STEP_SUMMARY/);
+  assert.match(workflow, /::error title=Supabase Keep-alive/);
   assert.match(workflow, /\/auth\/v1\/health/);
   assert.match(workflow, /keys !== "description,name,version"/);
   assert.match(workflow, /http_status" != "200"/);
@@ -58,6 +61,9 @@ test("Private Ops bindet exakte, fail-closed ausgewählte Umgebungsmatrizen", ()
   const workflow = read(".github/workflows/private-ops-monitor.yml");
   assert.match(checker, /EXPECTED_MATRIX_NOT_CONFIGURED/);
   assert.match(checker, /FLAG_MATRIX_MISMATCH/);
+  assert.match(checker, /kd_entdecken_daily_feed\?select=status,refreshed_on,valid_until,last_attempt_on,last_error_code,payload/);
+  assert.match(checker, /GITHUB_STEP_SUMMARY/);
+  assert.doesNotMatch(checker, /items\.length\s*[!=]==?\s*(?:25|50)|sourceIds\.length\s*[!=]==?\s*(?:2|5)/);
   assert.match(workflow, /KD_MONITOR_ENVIRONMENT:\s*staging/);
 });
 
@@ -71,6 +77,28 @@ test("R-04 verdrahtet höchstens drei serielle Retries ohne Workflow-Retry", () 
   assert.equal((runtime.match(/createAutomaticAiDrainHandler\(runtimeDependencies\(\)\)/g) || []).length, 1);
   assert.equal((workflow.match(/\bcurl\b/g) || []).length, 1);
   assert.doesNotMatch(workflow, /seq\s+1\s+5|workflow_dispatch|--retry/);
+  assert.match(workflow, /if:\s*\$\{\{\s*vars\.KD_AUTOMATIC_AI_SCHEDULE_ENABLED\s*==\s*'true'\s*\}\}/);
+  assert.match(workflow, /due-check:[\s\S]*?environment:\s*staging/);
+  assert.match(workflow, /GITHUB_STEP_SUMMARY/);
+});
+
+test("Radar besitzt einen getrennten, hart und per Repository-Opt-in gesperrten Zeitplan", () => {
+  const radar = read(".github/workflows/radar-six-day.yml");
+  const combined = read(".github/workflows/entdecken-six-day.yml");
+  const targetStart = radar.indexOf("  radar-six-day-trigger:");
+  const targetJob = targetStart >= 0 ? radar.slice(targetStart) : "";
+
+  assert.match(radar, /^name: Radar – fällige Ziele prüfen$/m);
+  assert.match(radar, /cron:\s*"0 2 \* \* \*"/);
+  assert.doesNotMatch(radar, /workflow_dispatch|push:|pull_request:/);
+  assert.match(radar, /if:\s*\$\{\{\s*false\s*&&\s*vars\.KD_RADAR_SCHEDULE_ENABLED\s*==\s*'true'\s*\}\}/);
+  assert.match(radar, /radar-six-day-trigger:[\s\S]*?environment:\s*staging/);
+  assert.match(radar, /GITHUB_STEP_SUMMARY/);
+  assert.doesNotMatch(combined, /radar-six-day-trigger|radar-websearch-task|SUPABASE_RADAR_SCHEDULER/);
+  assert.match(combined, /^name: Entdecken – täglicher Quellenabgleich$/m);
+  assert.equal((targetJob.match(/\bcurl\b/g) || []).length, 1);
+  assert.match(targetJob, /for claim_number in \$\(seq 1 10\)/);
+  assert.doesNotMatch(targetJob, /--retry|SUPABASE_SERVICE_ROLE_KEY/);
 });
 
 test("Run-Audit deckt alle fünf Workflows und die vier Zustandsklassen ab", () => {

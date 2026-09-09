@@ -16,19 +16,25 @@ jobs:
   read-only-check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: staging
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: staging
+      - name: Staging-Checkout als Build-Soll festhalten
+        id: staging-checkout
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Read-only operational checks
         env:
           KD_MONITOR_ENVIRONMENT: staging
-          KD_MONITOR_STAGING_URL: ${{ vars.STAGING_APP_URL }}
-          KD_MONITOR_EXPECTED_BUILD: ${{ vars.STAGING_EXPECTED_BUILD }}
+          KD_MONITOR_STAGING_URL: ${{ vars.APP_URL }}
+          KD_MONITOR_EXPECTED_BUILD: ${{ steps.staging-checkout.outputs.sha }}
           KD_MONITOR_EXPECTED_FUNCTION_BUILD: ${{ vars.STAGING_EXPECTED_FUNCTION_BUILD }}
-          KD_MONITOR_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          KD_MONITOR_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          KD_MONITOR_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          KD_MONITOR_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
           KD_MONITOR_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           KD_MONITOR_EMAIL: ${{ secrets.MONITOR_ACCOUNT_EMAIL }}
           KD_MONITOR_PASSWORD: ${{ secrets.MONITOR_ACCOUNT_PASSWORD }}
