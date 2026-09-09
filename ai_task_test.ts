@@ -8298,6 +8298,46 @@ test("FF3g FlixPatrol-Cachefehler erhält den bisherigen Prognoseweg", async () 
   gleich(anbieterAufrufe().length, 1, "weiterhin genau ein bestehender Anbieterrequest");
 });
 
+test("FF3h widersprüchliche IMDb- und TMDB-Kennungen stoppen vor Cache und Kosten", async () => {
+  for (const fall of [
+    { namespace: "imdb", extern: "tt0078748", filmwissen: "tt0137523" },
+    { namespace: "tmdb", extern: "348", filmwissen: "550" },
+  ]) {
+    const payload = ffAendere((p) => {
+      (p.film as Record<string, unknown>).externeIds = { [fall.namespace]: fall.extern };
+      p.filmkennung = { namespace: fall.namespace, kennung: fall.filmwissen };
+    });
+    const r = await forecastRuf(payload);
+    gleich(r.status, 400, `${fall.namespace}: terminaler Status`);
+    gleich(r.daten.grund, "forecast-externe-id-konflikt", `${fall.namespace}: sichtbare Konfliktklasse`);
+    gleich(rpc("kd_filmwissen_aktuell_lesen").length, 0, `${fall.namespace}: kein Filmwissen-Cache`);
+    gleich(rpc("kd_flixpatrol_chart_read").length, 0, `${fall.namespace}: kein Chart-Cache`);
+    gleich(rpc("kd_flixpatrol_titles_read").length, 0, `${fall.namespace}: kein Titel-Cache`);
+    gleich(starten().length, 0, `${fall.namespace}: keine Reservierung`);
+    gleich(anbieterAufrufe().length, 0, `${fall.namespace}: kein Anbieteraufruf`);
+    stelleZurueck();
+  }
+});
+
+test("FF3i derselbe normalisierte IMDb- oder TMDB-Wert bleibt gültig", async () => {
+  for (const fall of [
+    { namespace: "imdb", extern: "TT0078748", filmwissen: "tt0078748" },
+    { namespace: "tmdb", extern: "00348", filmwissen: "348" },
+  ]) {
+    const payload = ffAendere((p) => {
+      (p.film as Record<string, unknown>).externeIds = { [fall.namespace]: fall.extern };
+      p.filmkennung = { namespace: fall.namespace, kennung: fall.filmwissen };
+    });
+    forecastMit(FF_ANTWORT());
+    const r = await forecastRuf(payload);
+    gleich(r.status, 200, `${fall.namespace}: gültiger Forecast`);
+    gleich(rpc("kd_filmwissen_aktuell_lesen").length, 1, `${fall.namespace}: normaler Cachepfad`);
+    gleich(starten().length, 1, `${fall.namespace}: genau eine Reservierung`);
+    gleich(anbieterAufrufe().length, 1, `${fall.namespace}: genau ein Anbieteraufruf`);
+    stelleZurueck();
+  }
+});
+
 test("FF4 das Structured-Output-Schema fordert alle drei Achsen und begrenzt alle Enums", async () => {
   forecastMit(FF_ANTWORT());
   await forecastRuf();

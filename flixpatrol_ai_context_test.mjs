@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   FLIXPATROL_CONTEXT_AT_CHARTS,
+  baueFlixpatrolKontextIdentitaet,
   baueFlixpatrolProfilHinweise,
   createFlixpatrolFactsContextReader,
   findeFlixpatrolKontextFakt,
@@ -98,6 +99,70 @@ await check("ID-Konflikt, Remake und fehlender Typ bleiben ohne Kontext", () => 
   assert.equal(findeFlixpatrolKontextFakt({ titel: "Alien", jahr: 1979, typ: "film", imdb_id: "tt9999999" }, facts), null);
   assert.equal(findeFlixpatrolKontextFakt({ titel: "Dune", jahr: 1984, typ: "film" }, facts), null);
   assert.equal(findeFlixpatrolKontextFakt({ titel: "Alien", jahr: 1979 }, facts), null);
+});
+
+await check("der gemeinsame Identitätsbauer erhält führende IMDb-Nullen und sperrt den Cache-ID-Konflikt", () => {
+  const built = baueFlixpatrolKontextIdentitaet({
+    titel: "Fight Club",
+    jahr: 1999,
+    typ: "film",
+    targetId: "imdb:tt0137523",
+  });
+  assert.equal(built.ok, true);
+  assert.equal(built.identity.imdb_id, "tt0137523");
+  const [wrongIdFact] = normalisiereFlixpatrolKontextTitel([{
+    sourceId: "ttl_bHyGTvopBHPVtIKhR2CF68WZ",
+    mediaType: "film",
+    status: "resolved",
+    title: "Fight Club",
+    releaseYear: 1999,
+    imdbId: "0137524",
+    checkedAt: "2026-09-09T11:00:00.000Z",
+    fresh: true,
+    sourceUrl: "https://flixpatrol.com/title/fight-club/",
+  }]);
+  assert.equal(findeFlixpatrolKontextFakt(built.identity, [wrongIdFact]), null);
+});
+
+await check("der gemeinsame Identitätsbauer akzeptiert nur identische normalisierte Doppelkennungen", () => {
+  const same = baueFlixpatrolKontextIdentitaet({
+    titel: "Alien", jahr: 1979, typ: "film",
+    externeIds: { imdb: "TT0078748", tmdb: "00348" },
+    filmkennung: { namespace: "tmdb", kennung: "348" },
+  });
+  assert.equal(same.ok, true);
+  assert.equal(same.identity.imdb_id, "tt0078748");
+  assert.equal(same.identity.tmdb_id, "348");
+
+  const conflict = baueFlixpatrolKontextIdentitaet({
+    titel: "Alien", jahr: 1979, typ: "film",
+    externeIds: { imdb: "tt0078748" },
+    filmkennung: { namespace: "imdb", kennung: "tt0137523" },
+  });
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.reason, "external-id-conflict");
+  assert.equal(conflict.namespace, "imdb");
+});
+
+await check("TMDB-Untertyp und strukturierter Radar-Medientyp müssen zusammenpassen", () => {
+  const mismatch = baueFlixpatrolKontextIdentitaet({
+    titel: "Gleichnamiges Werk",
+    jahr: 2020,
+    typ: "film",
+    targetId: "tmdb:tv:550",
+  });
+  assert.equal(mismatch.ok, false);
+  assert.equal(mismatch.reason, "target-media-type-conflict");
+  assert.equal(mismatch.namespace, "tmdb");
+
+  const movie = baueFlixpatrolKontextIdentitaet({
+    titel: "Gleichnamiges Werk",
+    jahr: 2020,
+    typ: "film",
+    targetId: "tmdb:movie:550",
+  });
+  assert.equal(movie.ok, true);
+  assert.equal(movie.identity.tmdb_id, "550");
 });
 
 await check("Forecast-Projektion enthält neutrale Fakten, aber keinen Chart- oder Geschmackswert", () => {
