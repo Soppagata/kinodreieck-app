@@ -39,10 +39,18 @@ GitHub-Staging-Environment auf den bestätigten Kandidaten gesetzt. Ein
 authentifizierter Health-Readback prüft den Marker ohne KI-Anbieteraufruf.
 
 Die reale Berechtigungsprüfung verwendet ausschließlich die vorhandenen
-Testkonten A/B und markierte temporäre Testdatensätze mit anschließendem
-Cleanup. B bleibt inaktiv. Der Umfang ist der vorhandene
-`KD_RLS_ACCESS_MODE=inactive npm run test:rls`-Pfad; keine Kontoaktivierung und
-kein Zugriff auf beliebige persönliche Daten.
+Testkonten A/B. Der vorhandene
+`KD_RLS_ACCESS_MODE=inactive npm run test:rls`-Pfad prüft zuerst A als aktiv
+und B als inaktiv. Anschließend versucht B seine eigene Freigabe zu erhöhen
+und markierte Testdaten in den vorhandenen Personal-/Serien-/Shared-Pfaden
+zu schreiben. Alle diese Versuche müssen abgewiesen werden. Bei korrekten
+Berechtigungen entsteht kein Write. Ein unerwartet erfolgreicher Versuch
+erfordert Stop, Readback und gezieltes Bereinigen der Testwirkung; keinen
+blinden Wiederholungslauf. Eine reguläre Kontoaktivierung gehört nicht dazu.
+
+Erst nach bestätigter Backend-Kompatibilität wird der bereits integrierte
+E6-Frontend-Stand auf Staging veröffentlicht. Sein neues optionales
+Forecast-ID-Feld wird vom bisherigen Backend noch nicht akzeptiert.
 
 ## Erster Datenlauf und natürlicher Betrieb
 
@@ -77,5 +85,6 @@ Der geplante reale RLS-Test wurde vor Ausführung von der automatischen
 Freigabeprüfung abgelehnt, weil die ausdrückliche Zustimmung zur Mutation
 der gemeinsam genutzten Testdaten nicht belegt war. Die hier beschriebenen
 Shared-Wirkungen sowie ein gegebenenfalls gewünschter Initiallauf warten auf
-die konkrete Zustimmung zu Ziel und Umfang; die lokale Umsetzung und die
-Frontend-Lieferung laufen davon unabhängig zu Ende.
+die konkrete Zustimmung zu Ziel und Umfang. Lokale Umsetzung, Integration
+und CI-Prüfung werden vorher abgeschlossen; die letzte Staging-Lieferung
+folgt wegen der benötigten Backend-Kompatibilität danach.

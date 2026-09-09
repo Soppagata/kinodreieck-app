@@ -1,6 +1,6 @@
 # FlixPatrol und Betriebsreparatur – Masterplan
 
-Stand: 9. September 2026. Master ist dieser Task. Max hat die tägliche
+Stand: 10. September 2026. Master ist dieser Task. Max hat die tägliche
 FlixPatrol-Automatik mit den gespeicherten Schlüsseln und höchstens einem
 Quota-Request pro Tag / 31 pro Monat ausdrücklich bestätigt und die Umsetzung
 mit je einem Baumeister pro Etappe beauftragt. Das Gesamtabo umfasst 1000
@@ -23,12 +23,12 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
-| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | Vorreparatur integriert; E1 |
+| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | GEBAUT; lokal und in CI geprüft; natürlicher Monitorlauf offen; E1 |
 | M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | Lokal gebaut und vollständig geprüft; Backend-/Datenlieferung offen; E2 → E4 |
-| M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | Vorreparatur integriert; E4 |
+| M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT; isolierte PG-Verträge grün; Migration und natürlicher Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
 | M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | OFFEN; Master nach den Wellen |
-| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Inventur GEPRÜFT; Umsetzung E2, E3, E5, E6 |
+| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | GEBAUT; E2, E3, E5, E6 integriert und gemeinsam lokal grün; Backend-Lieferung offen |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | Server gebaut/live geprüft; täglicher Workflow active; erster natürlicher Lauf offen; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -183,15 +183,44 @@ unveränderlichen Git-Bytes geprüft; der neue Produktstand bleibt dort gesperrt
   Außenwirkung/PG-Starts oder weiteren Agenten. Master besitzt die
   Testeinbindung und gemeinsame Lieferung; größere Deltas gehen an E6 zurück.
 
-E6 ist als `9480c34` aus `b2a33134c683ae18fed83154cd745167bc612769`
-integriert. Der Baumeister belegt die fokussierten Kontext-/Radar-/UI-Tests
-und genau einen Function-Mocklauf mit 338/338. Zwei konkrete Identitätsnähte
-gehen vor der Abnahme als Delta an E6 zurück: Widerspruch zwischen
-`film.externeIds` und `filmkennung` darf keine ID verdecken; strukturierte
-Radar-IDs wie `imdb:tt0137523` müssen mit führender Null erhalten bleiben.
+E6 ist als `9480c34` plus `4239a29` aus den Baumeister-Commits
+`b2a33134c683ae18fed83154cd745167bc612769` und
+`5ea014e32d24d78098cef8307914f6572611440c` integriert und angenommen.
+Die fokussierten Kontext-/Radar-/UI-Tests sind grün; nach dem angeforderten
+Delta besteht der Function-Mocklauf 340/340. Widersprüche zwischen
+`film.externeIds` und `filmkennung` stoppen vor Cache-/Kosten-/Providerzugriff.
+Strukturierte Radar-IDs erhalten führende IMDb-Nullen; TMDB-IDs bleiben an
+Film beziehungsweise Serie gebunden. Herkunft und Aktualität der neutralen
+Fakten sind getrennt von Geschmack, Nutzerprofil und Verfügbarkeitsbehauptungen.
+
+Benannte Master-Nähte in `2cb43a9`: TMDB-TV verwendet den gemeinsamen
+kanonischen Typ `series`, abgesichert durch positive Aliasfälle und einen
+negativen Filmfall. Präzise JSDoc-Optionen und der optionale Setup-Parameter
+beseitigen die tatsächlichen Deno-Typfehler; keine fachliche Freigabe erweitert.
+Der Deno-Check des Radar-Handlers ist grün.
+
 Das neue Forecast-Requestfeld verlangt die neue Function. Deshalb erfolgt
 die E6-Frontend-Lieferung erst nach der passenden Backend-Lieferung; Staging
 bleibt bis dahin auf der vollständig kompatiblen zweiten Welle.
+
+### Gemeinsamer lokaler Abschluss
+
+Produktkandidat: `2cb43a9734d4ca7ac952a08754a1a3500cdef4e0`.
+`npm test` ist vollständig mit Exit 0 abgeschlossen: Vorprüfung, sämtliche
+Mock-Suiten, isolierte PostgreSQL-Verträge, Einzeldatei-Build und Pages-Build.
+Belege: `/private/tmp/kd-flixpatrol-final-test.log` und
+`/private/tmp/kd-flixpatrol-wave3-deno.log`.
+Der abschließende Dokumentationscommit verändert keine Produktbytes und
+wird als vollständiger Kandidat zusätzlich durch GitHub-CI geprüft.
+
+Die E6-Staging-Integration ist lokal bis `c634d7a` vorbereitet, noch nicht
+gepusht. Sie erhält die eigenständigen Staging-Änderungen einschließlich
+der vorhandenen Button-Typografie. 407 Extraktions- und 278 Geschmack-UI-
+Checks sind grün. Alle 33 lokalen Quelldateien der vier auszuliefernden
+Functions sind zwischen Master und vorbereitetem Staging bytegleich.
+`package.json`, sämtliche Lockfiles und bezahlte Live-Provenienzhashes bleiben
+unverändert. Die sechs bestehenden Änderungen im Hauptcheckout sind erhalten.
+Neue echte FlixPatrol- oder KI-Anbieterrequests: null.
 
 ## Lieferung und Verbrauch
 
