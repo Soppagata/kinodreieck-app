@@ -2,6 +2,7 @@ import {
   createEntdeckenWeeklyQueryContext,
   ENTDECKEN_WEEKLY_DEGRADED_NOTICE,
   evaluateEntdeckenDailyResponse,
+  evaluateEntdeckenFlixPatrolResponse,
   evaluateEntdeckenMixedResponse,
   evaluateEntdeckenPublicResponse,
   validateEntdeckenDailyFeed,
@@ -32,7 +33,7 @@ function validDay(value) {
 }
 function weekStatus(feed, today, isoWeek) {
   if (!feed) return "empty";
-  if ([5, 6].includes(feed.format)) return feed.refreshedOn <= today && feed.validUntil >= today ? "fresh" : "stale";
+  if ([5, 6, 8].includes(feed.format)) return feed.refreshedOn <= today && feed.validUntil >= today ? "fresh" : "stale";
   if (feed.format === 4) return feed.isoWeek === isoWeek ? "fresh" : "stale";
   return feed.refreshedOn === today ? "fresh" : "stale";
 }
@@ -155,8 +156,8 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   /* Quellenpolitik wird vor dem ersten externen GET validiert. Ein driftendes
      Register darf weder die zwei gebundenen Chart-Reads noch optionale Wikidata-Reads
      ausloesen und verbraucht nur den bereits atomar geclaimten Versuch. */
-  const expectedPublicMode = ["public-chart", "public-mix"].includes(adapter?.mode);
-  const sources = adapter?.mode === "public-mix"
+  const expectedPublicMode = ["public-chart", "public-mix", "flixpatrol-mix"].includes(adapter?.mode);
+  const sources = ["public-mix", "flixpatrol-mix"].includes(adapter?.mode)
     ? validateEntdeckenMixedSourceRegistry(sourceRows)
     : expectedPublicMode ? validateEntdeckenPublicSourceRegistry(sourceRows)
       : validateEntdeckenSourceRegistry(sourceRows);
@@ -177,7 +178,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   }
   catch (error) {
     const publicFailure = expectedPublicMode
-      || /^public_(?:chart|mix)_/.test(String(error?.message || ""));
+      || /^(?:public_(?:chart|mix)|flixpatrol_mix)_/.test(String(error?.message || ""));
     const providerFailure = normalizeEntdeckenProviderFailure(error?.providerFailure);
     await failSafely(repository, publicFailure ? "source_error" : "provider_error", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
@@ -187,7 +188,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       refresh: refreshState(context, "failed"),
     });
   }
-  const publicSourceMode = ["public-chart", "public-mix"].includes(envelope?.sourceMode);
+  const publicSourceMode = ["public-chart", "public-mix", "flixpatrol-mix"].includes(envelope?.sourceMode);
   if (publicSourceMode !== expectedPublicMode || (publicSourceMode && envelope.sourceMode !== adapter.mode)) {
     await failSafely(repository, "invalid_response", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
@@ -195,7 +196,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       refresh: refreshState(context, "failed"),
     });
   }
-  if (publicSourceMode) {
+  if (["public-chart", "public-mix"].includes(envelope?.sourceMode)) {
     let annotations = [];
     try {
       if (typeof repository.enrichPublicItems === "function") {
@@ -212,11 +213,16 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   const providerEnvelope = envelope && typeof envelope === "object" && !Array.isArray(envelope)
     ? Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "providerReceipt"))
     : envelope;
-  const evaluated = envelope?.sourceMode === "public-mix"
-    ? evaluateEntdeckenMixedResponse(providerEnvelope, sources.value, {
+  const evaluated = envelope?.sourceMode === "flixpatrol-mix"
+    ? evaluateEntdeckenFlixPatrolResponse(providerEnvelope, sources.value, {
       retrievedOn: context.today,
       claimedIsoWeek: context.isoWeek,
     })
+    : envelope?.sourceMode === "public-mix"
+      ? evaluateEntdeckenMixedResponse(providerEnvelope, sources.value, {
+      retrievedOn: context.today,
+      claimedIsoWeek: context.isoWeek,
+      })
     : publicSourceMode ? evaluateEntdeckenPublicResponse(providerEnvelope, sources.value, {
       retrievedOn: context.today,
       claimedIsoWeek: context.isoWeek,

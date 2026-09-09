@@ -21,11 +21,19 @@ import {
   ENTDECKEN_MIXED_POOL_SIZE,
   ENTDECKEN_MIXED_SOURCE_ID,
 } from "./publicMixAdapter.js";
+import {
+  ENTDECKEN_FLIXPATROL_FEED_FORMAT,
+  ENTDECKEN_FLIXPATROL_FEED_ID,
+  ENTDECKEN_FLIXPATROL_POOL_SIZE,
+  ENTDECKEN_FLIXPATROL_SOURCE_ID,
+  ENTDECKEN_FLIXPATROL_SOURCE_IDS,
+} from "./flixpatrolMixAdapter.js";
 import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
 
 export const ENTDECKEN_WEEKLY_READBACK_VERSION = "entdecken-weekly-readback-v1";
 export const ENTDECKEN_PUBLIC_READBACK_VERSION = "entdecken-public-weekly-readback-v1";
 export const ENTDECKEN_MIXED_READBACK_VERSION = "entdecken-mixed-weekly-readback-v2";
+export const ENTDECKEN_FLIXPATROL_READBACK_VERSION = "entdecken-flixpatrol-daily-readback-v1";
 
 const OPERATION_ID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -159,6 +167,40 @@ export function normalizeEntdeckenPublicPersistenceReadback(value, {
 } = {}) {
   const persisted = validateEntdeckenDailyFeed(value?.feed);
   const expected = validateEntdeckenDailyFeed(expectedFeed);
+  const flixpatrol = persisted.ok && persisted.value.format === ENTDECKEN_FLIXPATROL_FEED_FORMAT;
+  if (flixpatrol) {
+    if (!expected.ok || expected.value.format !== ENTDECKEN_FLIXPATROL_FEED_FORMAT
+        || persisted.value.feedId !== ENTDECKEN_FLIXPATROL_FEED_ID
+        || persisted.value.sourceId !== ENTDECKEN_FLIXPATROL_SOURCE_ID
+        || persisted.value.items.length !== ENTDECKEN_FLIXPATROL_POOL_SIZE
+        || !positiveInteger(fenceToken)
+        || !exactKeys(value, ["ok", "status", "feed", "fenceToken", "provenance"])
+        || value.ok !== true || value.status !== "verified" || value.fenceToken !== fenceToken
+        || !sameJson(persisted.value, expected.value)
+        || !exactKeys(value.provenance, ["itemCount", "sourceCount", "sourceIds", "rightsStatus"])
+        || value.provenance.itemCount !== ENTDECKEN_FLIXPATROL_POOL_SIZE
+        || value.provenance.sourceCount !== ENTDECKEN_FLIXPATROL_SOURCE_IDS.length
+        || value.provenance.rightsStatus !== "owner_private"
+        || !Array.isArray(value.provenance.sourceIds)
+        || !sameJson([...value.provenance.sourceIds].sort(), [...ENTDECKEN_FLIXPATROL_SOURCE_IDS].sort())) return null;
+    return freezeDeep({
+      feed: persisted.value,
+      readback: {
+        schemaVersion: ENTDECKEN_FLIXPATROL_READBACK_VERSION,
+        feedId: persisted.value.feedId,
+        region: persisted.value.region,
+        isoWeek: persisted.value.isoWeek,
+        refreshedOn: persisted.value.refreshedOn,
+        validUntil: persisted.value.validUntil,
+        chartDate: persisted.value.chartDate,
+        itemCount: persisted.value.items.length,
+        sourceCount: ENTDECKEN_FLIXPATROL_SOURCE_IDS.length,
+        sourceIds: [...persisted.value.sourceIds],
+        rightsStatus: "owner_private",
+        providerRequests: 0,
+      },
+    });
+  }
   const mixed = persisted.ok && persisted.value.format === ENTDECKEN_MIXED_FEED_FORMAT;
   if (mixed) {
     if (!expected.ok || expected.value.format !== ENTDECKEN_MIXED_FEED_FORMAT

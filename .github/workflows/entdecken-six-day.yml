@@ -62,8 +62,14 @@ jobs:
             ]);
             const countsValid = Number.isInteger(body?.providerRequests) && body.providerRequests === 0
               && Number.isInteger(body?.searchRequests) && body.searchRequests === 0
-              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0 && body.sourceRequests <= 5
-              && Number.isInteger(body?.wikidataRequests) && body.wikidataRequests >= 0 && body.wikidataRequests <= 24
+              && Number.isInteger(body?.publicSourceRequests) && body.publicSourceRequests >= 0 && body.publicSourceRequests <= 2
+              && Number.isInteger(body?.flixpatrolChartRequests) && body.flixpatrolChartRequests >= 0 && body.flixpatrolChartRequests <= 5
+              && Number.isInteger(body?.flixpatrolTitleRequests) && body.flixpatrolTitleRequests >= 0 && body.flixpatrolTitleRequests <= 25
+              && Number.isInteger(body?.flixpatrolRequests)
+              && body.flixpatrolRequests === body.flixpatrolChartRequests + body.flixpatrolTitleRequests
+              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0 && body.sourceRequests <= 32
+              && body.sourceRequests === body.publicSourceRequests + body.flixpatrolRequests
+              && Number.isInteger(body?.wikidataRequests) && body.wikidataRequests === 0
               && Number.isInteger(body?.writes) && body.writes >= 0 && body.writes <= 1;
             if (!body || body.ok !== true || !statuses.has(body.status)
                 || !modes.has(body.responseMode) || !countsValid
@@ -81,12 +87,11 @@ jobs:
                 : item?.availability?.service === "Netflix" ? "netflix"
                   : item?.availability?.service === "Prime Video" ? "prime"
                     : item?.availability?.service === "Disney+" ? "disney"
-                      : item?.availability?.service === "Apple TV+" ? "apple" : "unknown";
+                      : item?.availability?.service === "Apple TV" ? "apple" : "unknown";
               counts[key] = (counts[key] || 0) + 1;
               return counts;
             }, {});
-            const fullMixFeedValid = Number.isInteger(body?.feed?.format)
-              && body.feed.format >= 7
+            const fullMixFeedValid = body?.feed?.format === 8
               && items.length === 50
               && marketCounts.cinema === 15
               && marketCounts.netflix === 10
@@ -104,17 +109,20 @@ jobs:
               && body.feedReadback.rightsStatus === "owner_private"
               && body.feedReadback.providerRequests === 0;
             if (body.refresh.status === "refreshed" && body.status === "fresh"
-                && body.sourceRequests >= 2 && body.writes === 1 && fullMixReadbackValid) {
+                && body.publicSourceRequests === 2 && body.sourceRequests >= 2
+                && body.writes === 1 && fullMixReadbackValid) {
               process.stdout.write("refreshed");
             } else if (body.refresh.status === "failed" && body.responseMode === "degraded"
                 && body.writes === 0) {
               process.stdout.write("failed");
             } else if (body.refresh.status === "not_due" && body.status === "fresh"
-                && body.sourceRequests === 0 && body.wikidataRequests === 0 && body.writes === 0
+                && body.sourceRequests === 0 && body.publicSourceRequests === 0
+                && body.flixpatrolRequests === 0 && body.writes === 0
                 && fullMixFeedValid) {
               process.stdout.write("not_due");
             } else if (["outside_window", "in_progress", "held"].includes(body.refresh.status)
-                && body.sourceRequests === 0 && body.wikidataRequests === 0 && body.writes === 0) {
+                && body.sourceRequests === 0 && body.publicSourceRequests === 0
+                && body.flixpatrolRequests === 0 && body.writes === 0) {
               process.stdout.write(body.refresh.status);
             } else process.exit(4);
           ' "$response_file")"; then

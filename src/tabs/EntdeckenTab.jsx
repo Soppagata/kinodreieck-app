@@ -11,6 +11,7 @@ import {
 } from "../lib/entdeckenUi.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import {
+  FLIXPATROL_DISCOVERY_FEED_FORMAT,
   VERSIONED_DISCOVERY_FEED_FORMAT,
   VERSIONED_DISCOVERY_FEED_ID,
 } from "../lib/webDiscoveryFeed.js";
@@ -230,14 +231,16 @@ function RecommendationsView({
   const titleHeading = (entry) => <h3>{source(entry) ? <a className="kd-entdecken-titellink"
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
-  const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format);
+  const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+    .includes(webDiscoveryFeed?.format);
   /* Format 7 ist der bewusst datierte, eingebettete 50er-Fallback. Abruf- und
      Quellenstand werden getrennt benannt; auch sein Ablauf bleibt sichtbar. */
   const usesVersionedFallback = webDiscoveryFeed?.format === VERSIONED_DISCOVERY_FEED_FORMAT
     && webDiscoveryFeed?.feedId === VERSIONED_DISCOVERY_FEED_ID;
   const feedNotice = entdeckenDailyFeedNotice(webDiscoveryStatus);
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
-  const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
+  const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+    .includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn
     ? `${webDiscoveryStatus?.feedOrigin === "embedded_fallback" || usesVersionedFallback
       ? "Ersatzstand gepflegt" : "Zuletzt erfolgreich abgerufen"} ${formatPresentationDate(webDiscoveryFeed.refreshedOn)}`
@@ -275,7 +278,9 @@ function RecommendationsView({
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
-        <p>{webDiscoveryFeed?.format === 6
+        <p>{webDiscoveryFeed?.format === FLIXPATROL_DISCOVERY_FEED_FORMAT
+          ? "Täglich belegte Österreich-Titel aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney+ und Apple TV. Popularität ist kein persönlicher Passungsgrund."
+          : webDiscoveryFeed?.format === 6
           ? "Österreichische Kinocharts des Österreichischen Filminstituts sowie Netflix-Filme und -Serien. Popularität ist kein persönlicher Passungsgrund."
           : webDiscoveryFeed?.format === VERSIONED_DISCOVERY_FEED_FORMAT
             ? "Datierter Österreich-Snapshot aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney+ und Apple TV+. Popularität ist kein persönlicher Passungsgrund."

@@ -103,7 +103,7 @@ export function buildEntdeckenTitleGateTrace({
     gates,
     conclusion,
     marketAbsenceProven: false,
-    preferredAction: "apply-authored-provider-free-refresh-migration",
-    migrationState: "authorized-authored-not-applied",
+    preferredAction: "observe-natural-daily-refresh",
+    migrationState: "format-8-runtime-contract",
   });
 }

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { entdeckenDailyFeedService } from "../services/entdeckenDailyFeed.js";
 
-/* Genau ein globaler Feed-Ladevorgang je App-Lauf. Der versionierte
+/* Genau ein globaler Feed-Ladevorgang je App-Lauf. Der tägliche Format-8-Feed
+   und der versionierte
    Staging-Fallback ist netzfrei; der Service kennt weder Konto noch
    Profil/Katalog. Bei Fehler bleibt ein bereits sichtbarer Feed. */
 export function useWebDiscoveryFeed(active) {
