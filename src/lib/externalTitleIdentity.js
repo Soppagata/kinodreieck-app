@@ -34,12 +34,12 @@ export function normalisiereExterneTitelkennung(namespace, wert) {
   if (!roh) return null;
   if (namespace === "imdb") {
     const match = roh.match(/^(?:imdb:)?(?:tt)?([0-9]{5,12})$/);
-    return match ? `tt${match[1]}` : null;
+    return match && /[1-9]/.test(match[1]) ? `tt${match[1]}` : null;
   }
   if (["tmdb", "watchmode"].includes(namespace)) {
     const prefix = new RegExp(`^(?:${namespace}:)?([0-9]+)$`);
     const match = roh.match(prefix);
-    return match ? String(BigInt(match[1])) : null;
+    return match && BigInt(match[1]) > 0n ? String(BigInt(match[1])) : null;
   }
   if (namespace === "flixpatrol" && ["string", "number"].includes(typeof wert)) {
     const id = roh.replace(/^flixpatrol:/, "");
@@ -100,9 +100,6 @@ function idVergleich(extern, eigen) {
 export function pruefeExterneTitelIdentitaet(extern, eigen) {
   const ids = idVergleich(extern, eigen);
   const titelPasst = gemeinsamerTitel(extern, eigen);
-  /* Verschiedene Datensaetze mit verschiedenen IDs sind noch kein Konflikt.
-     Die Konfliktsperre greift erst bei einem wirklichen Identitaetssignal:
-     mindestens einer gleichen starken ID oder demselben exakten Titel. */
   if (!ids.passend.length && !titelPasst) {
     return Object.freeze({ status: "unmatched", reason: "identity-not-equal" });
   }
@@ -113,13 +110,18 @@ export function pruefeExterneTitelIdentitaet(extern, eigen) {
   if (!externTyp || !eigenTyp || externJahr == null || eigenJahr == null) {
     return Object.freeze({ status: "unmatched", reason: "identity-evidence-missing" });
   }
-  if (externTyp !== eigenTyp) {
-    return Object.freeze({ status: "conflict", reason: "media-type-conflict",
-      matchingNamespaces: Object.freeze(ids.passend) });
-  }
-  if (externJahr !== eigenJahr) {
-    return Object.freeze({ status: "conflict", reason: "reference-year-conflict",
-      matchingNamespaces: Object.freeze(ids.passend) });
+  if (externTyp !== eigenTyp || externJahr !== eigenJahr) {
+    /* Ohne gemeinsame starke ID belegen Jahr und Typ gerade, dass ein
+       gleichnamiger Eintrag ein anderes Werk ist (z. B. ein Remake oder eine
+       Serie). Mit derselben starken ID ist der Widerspruch dagegen real. */
+    if (!ids.passend.length) {
+      return Object.freeze({ status: "unmatched", reason: "different-work" });
+    }
+    return Object.freeze({
+      status: "conflict",
+      reason: externTyp !== eigenTyp ? "media-type-conflict" : "reference-year-conflict",
+      matchingNamespaces: Object.freeze(ids.passend),
+    });
   }
 
   if (ids.widerspruch.length) {
@@ -173,10 +175,11 @@ export function ordneExternenTitelZu(extern, eigeneEintraege = []) {
    fehlende Kennungen werden aus der externen Projektion ergaenzt. */
 export function ergaenzeFehlendeExterneKennungen(eigen, extern) {
   const ergebnis = { ...eigen };
-  for (const felder of Object.values(ID_FIELDS)) {
+  for (const [namespace, felder] of Object.entries(ID_FIELDS)) {
     const eigenWert = ersterWert(eigen, felder);
     const externWert = ersterWert(extern, felder);
-    if (eigenWert !== null || externWert === null) continue;
+    if (eigenWert !== null || externWert === null
+        || !normalisiereExterneTitelkennung(namespace, externWert)) continue;
     ergebnis[felder[0]] = externWert;
   }
   return ergebnis;

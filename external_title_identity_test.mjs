@@ -22,6 +22,9 @@ test("normalisiert nur belegte Identitaetsfelder", () => {
   assert.equal(externesReferenzjahr({ jahr: "ungewiss" }), null);
   assert.equal(normalisiereExterneTitelkennung("imdb", "1234567"), "tt1234567");
   assert.equal(normalisiereExterneTitelkennung("watchmode", "00042"), "42");
+  assert.equal(normalisiereExterneTitelkennung("watchmode", 0), null);
+  assert.equal(normalisiereExterneTitelkennung("tmdb", "000"), null);
+  assert.equal(normalisiereExterneTitelkennung("imdb", "tt0000000"), null);
   assert.deepEqual(externeTitelKennungen({ imdbId: "TT1234567", tmdb_id: 438631 }), {
     imdb: "tt1234567", tmdb: "438631",
   });
@@ -37,9 +40,14 @@ test("matcht den eindeutigen exakten Titel oder Originaltitel nur mit Jahr und T
 });
 
 test("blockiert Remakes und die alte Plus-minus-zwei-Jahre-Heuristik", () => {
-  assert.equal(pruefeExterneTitelIdentitaet(extern({ jahr: 1984 }), film()).status, "conflict");
-  assert.equal(pruefeExterneTitelIdentitaet(extern({ jahr: 2019 }), film()).status, "conflict");
-  assert.equal(pruefeExterneTitelIdentitaet(extern({ jahr: 2023 }), film()).status, "conflict");
+  assert.equal(pruefeExterneTitelIdentitaet(extern({ jahr: 1984 }), film()).status, "unmatched");
+  assert.equal(pruefeExterneTitelIdentitaet(extern({ jahr: 2019 }), film()).status, "unmatched");
+  assert.equal(pruefeExterneTitelIdentitaet(extern({ jahr: 2023 }), film()).status, "unmatched");
+  const zuordnung = ordneExternenTitelZu(extern(), [
+    film({ id: "remake", jahr: 1984 }), film({ id: "richtig" }),
+  ]);
+  assert.equal(zuordnung.status, "matched");
+  assert.equal(zuordnung.match.id, "richtig");
 });
 
 test("blockiert fehlende oder unklare Pflichtbelege", () => {
@@ -53,9 +61,11 @@ test("blockiert fehlende oder unklare Pflichtbelege", () => {
 
 test("trennt gleiche Titel zwischen Film und Serie", () => {
   const ergebnis = pruefeExterneTitelIdentitaet(extern(), film({ typ: "serie" }));
-  assert.deepEqual(ergebnis, {
-    status: "conflict", reason: "media-type-conflict", matchingNamespaces: [],
-  });
+  assert.deepEqual(ergebnis, { status: "unmatched", reason: "different-work" });
+  const zuordnung = ordneExternenTitelZu(extern(), [
+    film({ id: "serie", typ: "serie" }), film({ id: "film" }),
+  ]);
+  assert.equal(zuordnung.match.id, "film");
 });
 
 test("starke IDs schlagen Titelmehrdeutigkeit, widersprechende IDs blockieren", () => {
@@ -117,6 +127,20 @@ test("ergaenzt nur fehlende IDs und mutiert keine Eingabe", () => {
   assert.deepEqual(eigen, eigenVorher);
   assert.deepEqual(quelle, quelleVorher);
   assert.notEqual(ergaenzt, eigen);
+});
+
+test("ergaenzt keine vom Normalisierer verworfenen Raw-IDs", () => {
+  const eigen = film();
+  const ergaenzt = ergaenzeFehlendeExterneKennungen(eigen, extern({
+    watchmode_id: 0, tmdb_id: "0", imdb_id: "tt0000000", flixpatrol_id: "ungueltig id",
+  }));
+  assert.deepEqual(ergaenzt, eigen);
+
+  const nullPlatzhalter = ordneExternenTitelZu(
+    extern({ titel: "Anderer Titel", watchmode_id: 0 }),
+    [film({ watchmode_id: 0 })],
+  );
+  assert.equal(nullPlatzhalter.status, "unmatched");
 });
 
 test("verbindet fremde Datensaetze mit abweichenden IDs nicht als Konflikt", () => {

@@ -24,6 +24,8 @@ Zuerst werden gemeinsame Watchmode-, IMDb-, TMDB- oder FlixPatrol-IDs
 verglichen. Eine passende starke ID gewinnt vor titelbasierten Kandidaten.
 Widerspricht eine weitere gemeinsame ID, bleibt das Paar `conflict`. TMDB-IDs
 werden wegen moeglicher Film-/Serien-Kollisionen nie ohne den Typguard benutzt.
+Numerische Watchmode-/TMDB-IDs muessen positiv sein; reine Null-IMDb-Kennungen
+und ungueltige Rawwerte sind weder Matchbeleg noch uebernehmbare Ergaenzung.
 
 Ohne gemeinsame starke ID gilt ausschließlich: genau gleicher normalisierter
 Titel oder Originaltitel, exakt gleiches Referenzjahr und gleicher Werktyp.
@@ -31,6 +33,11 @@ Jahrestoleranzen, Prefix-, Teilstring- und Fuzzy-Matches sind fuer diese
 automatische Zuordnung verboten. Mehrere passende eigene Eintraege liefern
 `ambiguous` und damit keine Verbindung. Tolerante Suchvorschlaege koennen
 ausserhalb dieses Helpers bestehen bleiben.
+
+Ein gleichnamiger Eintrag mit anderem Jahr oder anderem Werktyp ist ohne
+gemeinsame starke ID ein anderes Werk und blockiert keinen daneben vorhandenen,
+vollstaendig passenden Kandidaten. Teilt er eine starke ID mit dem externen
+Titel, bleibt der Jahr-/Typwiderspruch dagegen `conflict`.
 
 `ergaenzeFehlendeExterneKennungen(eigen, extern)` erzeugt eine neue Projektion.
 Vorhandene eigene IDs bleiben bytegetreu fuehrend; nur fehlende ID-Felder werden
