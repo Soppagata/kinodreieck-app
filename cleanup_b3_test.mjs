@@ -9,7 +9,7 @@ import { PRIVATE_OPS_FLAG_MATRICES } from "./tools/private-ops-check.mjs";
 
 const read = (path) => readFileSync(path, "utf8");
 
-test("Entdecken meldet fachliches failed rot, erwartete No-ops bleiben erlaubt", () => {
+test("Entdecken meldet ausgebliebene Aktualisierung rot und benennt alle Ergebniszustaende", () => {
   const workflow = read(".github/workflows/entdecken-six-day.yml");
   const failedBranch = workflow.match(/failed\)[\s\S]*?;;/)?.[0] || "";
   assert.match(failedBranch, /::error::Entdecken/);
@@ -85,14 +85,8 @@ test("R-04 verdrahtet höchstens drei serielle Retries ohne Workflow-Retry", () 
 test("Radar besitzt einen getrennten, hart und per Repository-Opt-in gesperrten Zeitplan", () => {
   const radar = read(".github/workflows/radar-six-day.yml");
   const combined = read(".github/workflows/entdecken-six-day.yml");
-  const sourceStart = combined.indexOf("  radar-six-day-trigger:");
-  const sourceEnd = combined.indexOf("  entdecken-six-day-trigger:");
-  const sourceJob = sourceStart >= 0 && sourceEnd > sourceStart
-    ? combined.slice(sourceStart, sourceEnd) : "";
-  const sourceSteps = sourceJob.slice(sourceJob.indexOf("    steps:"));
   const targetStart = radar.indexOf("  radar-six-day-trigger:");
   const targetJob = targetStart >= 0 ? radar.slice(targetStart) : "";
-  const targetSteps = targetJob.slice(targetJob.indexOf("    steps:"));
 
   assert.match(radar, /^name: Radar – fällige Ziele prüfen$/m);
   assert.match(radar, /cron:\s*"0 2 \* \* \*"/);
@@ -100,7 +94,8 @@ test("Radar besitzt einen getrennten, hart und per Repository-Opt-in gesperrten 
   assert.match(radar, /if:\s*\$\{\{\s*false\s*&&\s*vars\.KD_RADAR_SCHEDULE_ENABLED\s*==\s*'true'\s*\}\}/);
   assert.match(radar, /radar-six-day-trigger:[\s\S]*?environment:\s*staging/);
   assert.match(radar, /GITHUB_STEP_SUMMARY/);
-  assert.equal(targetSteps.trimEnd(), sourceSteps.trimEnd());
+  assert.doesNotMatch(combined, /radar-six-day-trigger|radar-websearch-task|SUPABASE_RADAR_SCHEDULER/);
+  assert.match(combined, /^name: Entdecken – täglicher Quellenabgleich$/m);
   assert.equal((targetJob.match(/\bcurl\b/g) || []).length, 1);
   assert.match(targetJob, /for claim_number in \$\(seq 1 10\)/);
   assert.doesNotMatch(targetJob, /--retry|SUPABASE_SERVICE_ROLE_KEY/);
