@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { historicalSourceReader } from "./tools/historical-source-fixture.mjs";
 import {
   existsSync,
   readFileSync,
@@ -60,6 +61,7 @@ import {
 } from "./tools/ai_smoke_contract.mjs";
 import {
   ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
+  ENTDECKEN_JOYN_FREE_CANDIDATE_FILES,
   ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
   ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT,
   ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256,
@@ -949,8 +951,15 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     queueMicrotask(() => kind.emit("exit", 0, null));
     return kind;
   };
-  const candidate = requireEntdeckenJoynFreeCandidateProvenance();
-  pruefe("Joyn-freier Functionkandidat ist separat und bytegenau gebunden",
+  let candidateDrift = null;
+  try { requireEntdeckenJoynFreeCandidateProvenance(); } catch (error) { candidateDrift = error; }
+  pruefe("Aktuelle Produktreparatur erweitert den historischen Kandidatenzaun nicht",
+    candidateDrift?.code === "ENTDECKEN_JOYN_FREE_CANDIDATE_DRIFT");
+  const candidate = requireEntdeckenJoynFreeCandidateProvenance({
+    readFile: historicalSourceReader(ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
+      ENTDECKEN_JOYN_FREE_CANDIDATE_FILES, REPO_ROOT),
+  });
+  pruefe("Historischer Joyn-freier Functionkandidat ist separat und bytegenau gebunden",
     candidate.commit === ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT
       && candidate.sourceSha256 === ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256
       && candidate.files.length === 4

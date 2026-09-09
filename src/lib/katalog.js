@@ -55,6 +55,10 @@
 import { K } from "./storage.js";
 import { SB_DEFAULT_URL, SB_DEFAULT_ANON } from "./supabaseDefaults.js";
 import { istSupabaseProjektUrl } from "./supabasePublic.js";
+import {
+  ergaenzeFehlendeExterneKennungen,
+  ordneExternenTitelZu,
+} from "./externalTitleIdentity.js";
 
 const TABLE = "kd_catalog";
 const CACHE = "kinodreieck-katalog-v1";
@@ -423,10 +427,18 @@ export function baueStreamingAnsichten(streaming, master = []) {
   for (const t of entdeckenAlt.titel || []) map.set(String(t.watchmode_id), { ...t });
   for (const t of bekanntAlt.titel || []) {
     const key = String(t.watchmode_id);
+    const entdeckenTitel = map.get(key) || {};
     const neutral = {
-      watchmode_id: t.watchmode_id, titel: t.titel, jahr: t.jahr,
-      typ: t.typ || "movie", genres: t.genres || t.genre || null,
-      user_score: t.user_score ?? null, tmdb_id: t.tmdb_id ?? null, imdb_id: t.imdb_id ?? null,
+      watchmode_id: t.watchmode_id,
+      titel: t.titel ?? entdeckenTitel.titel,
+      jahr: t.jahr ?? entdeckenTitel.jahr,
+      /* Der neutrale Entdecken-Datensatz traegt den Werktyp explizit. Ein
+         historischer Bekannt-Datensatz ohne Typ darf ihn daraus uebernehmen,
+         wird aber nie pauschal zum Film erklaert. */
+      typ: t.typ ?? entdeckenTitel.typ ?? null, genres: t.genres || t.genre || null,
+      user_score: t.user_score ?? entdeckenTitel.user_score ?? null,
+      tmdb_id: t.tmdb_id ?? entdeckenTitel.tmdb_id ?? null,
+      imdb_id: t.imdb_id ?? entdeckenTitel.imdb_id ?? null,
       dienste: t.dienste || [], web_urls: t.web_urls || null,
       relevanz: t.relevanz ?? 0, relevanz_signale: t.relevanz_signale || [],
       staffeln_verfuegbar: t.staffeln_verfuegbar ?? null,
@@ -440,32 +452,16 @@ export function baueStreamingAnsichten(streaming, master = []) {
       staffel_dienste: t.staffel_dienste || [],
       staffelstand_geprueft_am: t.staffelstand_geprueft_am ?? null,
     };
-    map.set(key, { ...(map.get(key) || {}), ...neutral });
+    map.set(key, { ...entdeckenTitel, ...neutral });
   }
 
   const meine = [], entdecken = [];
   for (const t of map.values()) {
-    /* Lokaler Import vermeiden: kleine, exakte Matching-Variante. App.jsx stellt
-       bereits sicher, dass Master-IDs/Titel normalisiert sind. */
-    const n = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-    const tt = n(t.titel);
-    const exakterFilm = (master || []).find((f) =>
-      f.watchmode_id != null && String(f.watchmode_id) === String(t.watchmode_id));
-    const film = exakterFilm || (master || []).find((f) => {
-      const jahrOk = !t.jahr || !f.jahr || Math.abs(Number(f.jahr) - Number(t.jahr)) <= 2;
-      return jahrOk && (n(f.titel) === tt || n(f.originaltitel) === tt);
-    });
-    if (film) {
+    const zuordnung = ordneExternenTitelZu(t, master);
+    if (zuordnung.status === "matched") {
+      const film = ergaenzeFehlendeExterneKennungen(zuordnung.match, t);
       meine.push({
         ...film,
-        /* Auch ein ueber den bestehenden exakten Titel-/Jahr-Vertrag erkanntes
-           Streamingangebot bleibt ein echter Streamingtitel. Seine stabile
-           Katalog-ID wird fuer Pinboard und Vollkatalog-Diff benoetigt; sie nur
-           beim bereits vorab verknuepften Master zu tragen machte solche Karten
-           unpinnbar. */
-        watchmode_id: t.watchmode_id,
-        tmdb_id: t.tmdb_id ?? film.tmdb_id ?? null,
-        imdb_id: t.imdb_id ?? film.imdb_id ?? null,
         genres: t.genres || film.genres || film.genre || [],
         dienste: t.dienste || [],
         web_urls: t.web_urls || null,
@@ -480,8 +476,7 @@ export function baueStreamingAnsichten(streaming, master = []) {
         staffel_dienste: t.staffel_dienste || film.staffel_dienste || [],
         staffelstand_geprueft_am: t.staffelstand_geprueft_am ?? film.staffelstand_geprueft_am ?? null,
       });
-    }
-    else entdecken.push(t);
+    } else entdecken.push(t);
   }
   const meta = { ...entdeckenAlt, ...bekanntAlt, titel: undefined };
   /* Der geladene Rohkatalog, der erkannte Mediathekbestand und die daraus

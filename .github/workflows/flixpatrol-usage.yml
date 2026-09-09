@@ -1,0 +1,81 @@
+name: FlixPatrol – Nutzung täglich erfassen
+
+on:
+  schedule:
+    - cron: "11 5 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kinodreieck-flixpatrol-usage
+  cancel-in-progress: false
+
+jobs:
+  quota:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Quota einmal abgleichen und Zähler lesen
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          summary() {
+            {
+              echo "## FlixPatrol-Nutzung: $1"
+              echo
+              echo "$2"
+              echo
+              echo "Der Lauf wiederholt fehlgeschlagene Requests nicht."
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+          fail() {
+            echo "::error title=FlixPatrol-Nutzung::$1"
+            summary "Störung" "$1"
+            exit 1
+          }
+
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            fail "SUPABASE_URL oder SUPABASE_SERVICE_ROLE_KEY fehlt im staging-Environment."
+          fi
+          case "$SUPABASE_URL" in
+            https://*.supabase.co) ;;
+            *) fail "SUPABASE_URL hat nicht das erwartete Supabase-HTTPS-Format." ;;
+          esac
+          case "$SUPABASE_SERVICE_ROLE_KEY" in
+            sb_secret_*) ;;
+            *) fail "SUPABASE_SERVICE_ROLE_KEY enthält nicht den erwarteten modernen Supabase-Secret-Key." ;;
+          esac
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          if ! response_meta="$(
+            curl --silent --show-error \
+              --request POST \
+              --connect-timeout 10 \
+              --max-time 60 \
+              --output "$response_file" \
+              --write-out "%{http_code} %{content_type}" \
+              "${SUPABASE_URL%/}/functions/v1/flixpatrol-usage" \
+              --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "x-kd-flixpatrol-usage: scheduled-daily-v1"
+          )"; then
+            fail "FlixPatrol-Ticker war innerhalb des Zeitlimits nicht erreichbar; kein Retry."
+          fi
+
+          http_status="${response_meta%% *}"
+          content_type="${response_meta#* }"
+          if [ "$http_status" != "200" ] || [[ "$content_type" != application/json* ]]; then
+            fail "FlixPatrol-Ticker lieferte keinen sicheren JSON-Erfolg (HTTP ${http_status}); kein Retry."
+          fi
+          if ! node tools/flixpatrol-usage.mjs "$response_file" >> "$GITHUB_STEP_SUMMARY"; then
+            fail "FlixPatrol-Ticker lieferte keinen gültigen Zähler-/Quota-Vertrag; kein Retry."
+          fi

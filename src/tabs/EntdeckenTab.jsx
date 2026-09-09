@@ -231,16 +231,16 @@ function RecommendationsView({
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format);
-  /* Format 7 ist der bewusst datierte, eingebettete 50er-Fallback. Sein Stand
-     bleibt sichtbar, ohne ihn nach Ablauf als aktuelle Serverantwort
-     auszugeben; Freshness-Warnungen echter Serverfeeds bleiben unverändert. */
+  /* Format 7 ist der bewusst datierte, eingebettete 50er-Fallback. Abruf- und
+     Quellenstand werden getrennt benannt; auch sein Ablauf bleibt sichtbar. */
   const usesVersionedFallback = webDiscoveryFeed?.format === VERSIONED_DISCOVERY_FEED_FORMAT
     && webDiscoveryFeed?.feedId === VERSIONED_DISCOVERY_FEED_ID;
-  const feedNotice = usesVersionedFallback ? null : entdeckenDailyFeedNotice(webDiscoveryStatus);
+  const feedNotice = entdeckenDailyFeedNotice(webDiscoveryStatus);
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
   const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn
-    ? `Stand ${formatPresentationDate(webDiscoveryFeed.refreshedOn)}`
+    ? `${webDiscoveryStatus?.feedOrigin === "embedded_fallback" || usesVersionedFallback
+      ? "Ersatzstand gepflegt" : "Zuletzt erfolgreich abgerufen"} ${formatPresentationDate(webDiscoveryFeed.refreshedOn)}`
     : weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   const pinButton = (entry) => {
     const pinned = isEntdeckenPinned(recommendationPins, entry);

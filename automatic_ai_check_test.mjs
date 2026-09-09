@@ -900,7 +900,10 @@ test("Function, Workflow und Tests bleiben bodylos, seriell und ohne Retryschlei
   assert.doesNotMatch(workflow, /--header "(?:Authorization|Origin):/i);
   assert.match(workflow, /const codes = new Set\(\["idle", "drained", "backlog"\]\)/);
   assert.match(workflow, /body\.maxJobs !== 3 \|\| body\.timeBudgetMs !== 225000/);
-  assert.match(workflow, /::warning::Automatic-AI-Checker/);
+  assert.match(workflow, /::warning title=Automatic AI: Rückstand::/);
+  assert.match(workflow, /if:\s*\$\{\{\s*vars\.KD_AUTOMATIC_AI_SCHEDULE_ENABLED\s*==\s*'true'\s*\}\}/);
+  assert.match(workflow, /due-check:[\s\S]*?environment:\s*staging/);
+  assert.match(workflow, /GITHUB_STEP_SUMMARY/);
 
   assert.match(config, /\[functions\.automatic-ai-check\][\s\S]*?verify_jwt = false/);
   assert.equal(

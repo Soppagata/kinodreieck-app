@@ -49,3 +49,9 @@ verify_jwt = true
 # New API Keys sind keine JWTs. Der periodische Checker akzeptiert deshalb nur
 # seinen bodylosen Serverrequest mit exaktem Header und passendem sb_secret_-Key.
 verify_jwt = false
+
+[functions.flixpatrol-usage]
+# New API Keys sind keine JWTs. Der nur serverseitig aufgerufene Ticker prueft
+# apikey und Bearer-Header selbst bytegenau gegen die vorhandenen
+# SUPABASE_SECRET_KEYS beziehungsweise den Legacy-Service-Role-Key.
+verify_jwt = false

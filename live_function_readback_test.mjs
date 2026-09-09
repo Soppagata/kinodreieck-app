@@ -228,7 +228,7 @@ await test("jede deploybare Function besitzt genau einen expliziten JWT-Konfigve
     .sort();
   assert.deepEqual(deployable, [
     "account-self-service", "ai-task", "automatic-ai-check",
-    "entdecken-daily-task", "private-mail-request", "radar-websearch-task",
+    "entdecken-daily-task", "flixpatrol-usage", "private-mail-request", "radar-websearch-task",
   ]);
   for (const name of deployable) {
     const marker = `[functions.${name}]`;
@@ -309,3 +309,15 @@ await test("Pages-Workflow erklaert zwei Deployment-Metadaten, aber keinen Funct
 });
 
 console.log(`\n${tests}/${tests} Live-Function-Readback-Tests bestanden.`);
+
+// Der serverinterne Ticker ergaenzt diesen bestehenden Function-Testeinstieg.
+// Alle Provider sind gemockt; PostgreSQL nutzt ausschliesslich eine temporaere DB.
+await import("./flixpatrol_client_test.mjs");
+await import("./flixpatrol_data_contract_test.mjs");
+await import("./flixpatrol_usage_function_test.mjs");
+await import("./flixpatrol_usage_tool_test.mjs");
+await import("./flixpatrol_usage_contract_test.mjs");
+await import("./flixpatrol_usage_workflow_test.mjs");
+await import("./rls_live_preconditions_test.mjs");
+await import("./flixpatrol_usage_pg17_test.mjs");
+await import("./flixpatrol_data_pg17_test.mjs");

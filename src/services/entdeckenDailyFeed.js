@@ -15,10 +15,24 @@ export const ENTDECKEN_DAILY_STALE_NOTICE =
   "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar.";
 export const ENTDECKEN_DAILY_STALE_DEGRADED_NOTICE =
   "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums und bleibt nur zur Orientierung sichtbar.";
+export const ENTDECKEN_DAILY_FALLBACK_NOTICE =
+  "Angezeigt wird der ältere eingebettete Ersatzstand mit 50 Titeln aus fünf Bereichen.";
 export const ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS = 20_000;
 const READ_REFRESH_STATUSES = new Set(["read_only", "disabled", "unavailable"]);
 
 export function entdeckenDailyFeedNotice(value) {
+  if (value?.feedOrigin === "embedded_fallback") {
+    const retrieval = ({
+      unavailable: "Der aktuelle Abruf war nicht erreichbar. ",
+      invalid_response: "Der aktuelle Abruf war nicht verlässlich lesbar. ",
+      server_feed_rejected: "Der aktuelle Serverstand enthielt nicht den bestätigten Umfang von 50 Titeln aus fünf Bereichen. ",
+      server_feed_older: "Der aktuelle Serverstand war älter als der eingebettete Ersatzstand. ",
+    })[value?.retrievalStatus] || "";
+    const expired = value?.status === "stale"
+      ? " Sein bestätigter Gültigkeitszeitraum ist abgelaufen."
+      : "";
+    return `${retrieval}${ENTDECKEN_DAILY_FALLBACK_NOTICE}${expired}`;
+  }
   if (value?.status === "stale") {
     return value?.responseMode === "degraded"
       ? ENTDECKEN_DAILY_STALE_DEGRADED_NOTICE : ENTDECKEN_DAILY_STALE_NOTICE;
@@ -89,13 +103,18 @@ function refreshState(value, feedFormat = null) {
       || value.attemptCount > value.maxAttempts) return null;
   return Object.freeze({ ...value });
 }
-function frozen(status, feed = null, response = null, refresh = null) {
+function frozen(status, feed = null, response = null, refresh = null, metadata = null) {
   return Object.freeze({
     status,
     feed,
     ...(response || presentation({})),
     ...(refresh ? { refresh } : {}),
+    ...(metadata || {}),
   });
+}
+function withRetrieval(state, retrievalStatus) {
+  if (!state || typeof state !== "object") return state;
+  return Object.freeze({ ...state, retrievalStatus });
 }
 function exactResult(value, today) {
   const allowed = [
@@ -145,6 +164,9 @@ function fallbackState(fallbackFeed, today) {
     ? "fresh" : "stale";
   return frozen(status, checked.value, presentation({}), Object.freeze({
     requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1,
+  }), Object.freeze({
+    feedOrigin: "embedded_fallback",
+    retrievalStatus: "not_requested",
   }));
 }
 function feedHasJoynSource(feed) {
@@ -158,22 +180,27 @@ function feedHasJoynSource(feed) {
   return sourceValues.some((value) => /(?:^|[^a-z])joyn(?:[^a-z]|$)/iu.test(text(value)));
 }
 export function selectEntdeckenFeed(serverState, localState) {
-  if (feedHasJoynSource(serverState?.feed)) return localState;
+  const fallback = (retrievalStatus) => localState?.feedOrigin === "embedded_fallback"
+    ? withRetrieval(localState, retrievalStatus) : localState;
+  if (feedHasJoynSource(serverState?.feed)) return fallback("server_feed_rejected");
   if (!localState?.feed) return serverState;
-  if (!serverState?.feed) return localState;
+  if (!serverState?.feed) return fallback("server_feed_rejected");
+  if (localState.feed.items?.length === 50 && serverState.feed.items?.length !== 50) {
+    return fallback("server_feed_rejected");
+  }
   if (serverState.feed.refreshedOn !== localState.feed.refreshedOn) {
     return serverState.feed.refreshedOn > localState.feed.refreshedOn
-      ? serverState : localState;
+      ? serverState : fallback("server_feed_older");
   }
-  return serverState.feed.format > localState.feed.format ? serverState : localState;
+  return serverState.feed.format >= localState.feed.format ? serverState : fallback("server_feed_older");
 }
 
 /* Nur ein aktiv freigeschaltetes, waehrend Token- und Requestphase identisches
    Konto versucht den privaten GET. Der versionierte Pool bleibt oeffentlicher
    Fail-safe. Ein Joyn-haltiger Serverfeed darf ihn auch bei neuerem Datum
-   nicht ersetzen; zwischen Joyn-freien Feeds gewinnt primaer refreshedOn und
-   das Format entscheidet nur bei Gleichstand. Body, Profil, Seen-Stand,
-   Dienste und Katalogdaten bleiben vollstaendig lokal. */
+   nicht ersetzen. Der bestaetigte 50er-Umfang darf auch nicht durch einen
+   neueren Teilstand schrumpfen; danach entscheiden refreshedOn und Format.
+   Body, Profil, Seen-Stand, Dienste und Katalogdaten bleiben lokal. */
 export function createEntdeckenDailyFeedService({
   config = runtimeConfig,
   auth = authService,
@@ -190,29 +217,29 @@ export function createEntdeckenDailyFeedService({
   async function load() {
     const today = currentDay();
     const localState = fallbackState(fallbackFeed, today);
-    const failSafe = (status) => localState?.feed || localState?.status === "invalid_response"
-      ? localState : frozen(status);
+    const failSafe = (status, retrievalStatus = status) => localState?.feed || localState?.status === "invalid_response"
+      ? withRetrieval(localState, retrievalStatus) : frozen(status);
     if (config.entdeckenDailyFeedEnabled !== true || typeof fetchImpl !== "function") {
-      return failSafe("disabled");
+      return failSafe("disabled", "not_requested");
     }
     const session = auth?.getSnapshot?.();
     const accountId = text(session?.account?.id);
     if (session?.mode !== "account" || session?.state !== "ready"
         || session?.capabilities?.remoteStorage !== true || !accountId
         || text(getAccount?.()?.id) !== accountId) {
-      return failSafe("disabled");
+      return failSafe("disabled", "not_requested");
     }
     const basis = text(config.supabaseUrl).replace(/\/+$/, "");
     const publishableKey = text(config.supabasePublishableKey);
-    if (!basis || !publishableKey) return failSafe("unavailable");
+    if (!basis || !publishableKey) return failSafe("unavailable", "unavailable");
 
     let token;
     try { token = await getAccessToken({ erwarteteKontoId: accountId }); }
-    catch { return failSafe("unavailable"); }
+    catch { return failSafe("unavailable", "unavailable"); }
     const accountUnchanged = () => (
       auth.getSnapshot() === session && text(getAccount()?.id) === accountId
     );
-    if (!token || !accountUnchanged()) return failSafe("disabled");
+    if (!token || !accountUnchanged()) return failSafe("disabled", "not_requested");
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
@@ -228,17 +255,26 @@ export function createEntdeckenDailyFeedService({
         },
         signal: controller.signal,
       });
-      if (!accountUnchanged()) return failSafe("disabled");
+      if (!accountUnchanged()) return failSafe("disabled", "not_requested");
       try { payload = await response.json(); }
       catch {
-        return failSafe(controller.signal.aborted ? "unavailable" : "invalid_response");
+        return failSafe(controller.signal.aborted ? "unavailable" : "invalid_response",
+          controller.signal.aborted ? "unavailable" : "invalid_response");
       }
-    } catch { return failSafe("unavailable"); }
+    } catch { return failSafe("unavailable", "unavailable"); }
     finally { clearTimeout(timer); }
-    if (!accountUnchanged()) return failSafe("disabled");
+    if (!accountUnchanged()) return failSafe("disabled", "not_requested");
     const checked = exactResult(payload, today);
-    if (!response.ok || !checked) return failSafe(response.ok ? "invalid_response" : "unavailable");
-    return selectEntdeckenFeed(checked, localState) || failSafe("invalid_response");
+    if (!response.ok || !checked) {
+      return failSafe(response.ok ? "invalid_response" : "unavailable",
+        response.ok ? "invalid_response" : "unavailable");
+    }
+    const serverState = Object.freeze({
+      ...checked,
+      feedOrigin: "server",
+      retrievalStatus: "loaded",
+    });
+    return selectEntdeckenFeed(serverState, localState) || failSafe("invalid_response", "invalid_response");
   }
   return Object.freeze({ load });
 }

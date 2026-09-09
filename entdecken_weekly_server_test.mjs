@@ -1067,6 +1067,8 @@ await check("Aktives Konto versucht GET und behaelt bei Transportfehler den eing
   assert.equal(result.status, "fresh");
   assert.deepEqual(result.feed, ENTDECKEN_MARKET_POOL_50);
   assert.equal(result.feed.items.length, 50);
+  assert.equal(result.feedOrigin, "embedded_fallback");
+  assert.equal(result.retrievalStatus, "unavailable");
   assert.equal(tokenCalls, 1);
   assert.equal(fetchCalls, 1);
 });
@@ -1095,6 +1097,8 @@ await check("Ungueltige Serverantwort ersetzt den strikt validierten Fallback ni
   }).load();
   assert.equal(result.status, "fresh");
   assert.deepEqual(result.feed, ENTDECKEN_MARKET_POOL_50);
+  assert.equal(result.feedOrigin, "embedded_fallback");
+  assert.equal(result.retrievalStatus, "invalid_response");
 });
 
 const migration = fs.readFileSync("./supabase/migrations/20260822190000_entdecken_weekly_feed.sql", "utf8");

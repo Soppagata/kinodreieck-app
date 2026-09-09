@@ -1,0 +1,67 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { createFlixPatrolClient } from "../_shared/flixpatrolClient.js";
+import {
+  createFlixPatrolUsageHandler,
+  parseFlixPatrolServiceKeys,
+} from "./core.js";
+
+function supabaseBaseUrl(value: string | undefined): string {
+  if (typeof value !== "string" || !value) return "";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:"
+        && /^[a-z0-9-]+\.supabase\.co$/i.test(url.hostname)
+        && !url.username && !url.password && !url.port
+        && (url.pathname === "/" || url.pathname === "")
+        && !url.search && !url.hash
+      ? url.origin : "";
+  } catch {
+    return "";
+  }
+}
+
+function runtimeDependencies() {
+  const supabaseUrl = supabaseBaseUrl(Deno.env.get("SUPABASE_URL"));
+  const serviceKeys = parseFlixPatrolServiceKeys(
+    Deno.env.get("SUPABASE_SECRET_KEYS") || "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+  );
+  const admin = supabaseUrl && serviceKeys[0]
+    ? createClient(supabaseUrl, serviceKeys[0], {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    : null;
+
+  async function rpc(name: string, args?: Record<string, unknown>) {
+    if (!admin) throw new Error("flixpatrol-usage-rpc-unavailable");
+    const result = args === undefined ? await admin.rpc(name) : await admin.rpc(name, args);
+    if (result.error) throw new Error("flixpatrol-usage-rpc-failed");
+    return result.data;
+  }
+
+  const client = createFlixPatrolClient({
+    apiKey: Deno.env.get("FLIXPATROL_API_KEY") || "",
+    beginOperation: ({ operationId, requestKind }) => rpc("kd_flixpatrol_usage_begin", {
+      p_operation_id: operationId,
+      p_request_kind: requestKind,
+    }),
+    finishOperation: ({ operationId, status, httpStatus, quota }) => rpc("kd_flixpatrol_usage_finish", {
+      p_operation_id: operationId,
+      p_status: status,
+      p_http_status: httpStatus,
+      p_quota: quota,
+    }),
+  });
+
+  return {
+    serviceKeys,
+    readUsage: () => rpc("kd_flixpatrol_usage_status"),
+    refreshUsage: () => client.fetchQuota(),
+  };
+}
+
+export function createRuntimeFlixPatrolUsageHandler() {
+  return createFlixPatrolUsageHandler(runtimeDependencies());
+}
+
+if (import.meta.main) Deno.serve(createRuntimeFlixPatrolUsageHandler());
