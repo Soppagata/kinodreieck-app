@@ -82,8 +82,8 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   const oefiSourceId = "chart:oefi-weekend-at";
   const netflixSourceId = "chart:netflix-weekly-at";
   const sourceIds = [
-    oefiSourceId, netflixSourceId, "snapshot:prime-video-at",
-    "snapshot:disney-plus-at", "snapshot:apple-tv-plus-at",
+    oefiSourceId, netflixSourceId, "chart:flixpatrol-prime-at",
+    "chart:flixpatrol-disney-at", "chart:flixpatrol-apple-tv-at",
   ];
   const poolItems = [
     ...Array.from({ length: 15 }, (_, id) => ({
@@ -94,7 +94,7 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
       [netflixSourceId, "Netflix", 10],
       [sourceIds[2], "Prime Video", 10],
       [sourceIds[3], "Disney+", 10],
-      [sourceIds[4], "Apple TV+", 5],
+      [sourceIds[4], "Apple TV", 5],
     ].flatMap(([sourceId, service, count]) => Array.from({ length: count }, (_, id) => ({
       id: `${service}-${id}`, sourceId, mediaType: "film",
       availability: { market: "streaming", service },
@@ -103,12 +103,14 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   const common = {
     ok: true, status: "fresh", responseMode: "structured",
     providerRequests: 0, searchRequests: 0, sourceRequests: 0,
+    publicSourceRequests: 0, flixpatrolRequests: 0, flixpatrolChartRequests: 0, flixpatrolTitleRequests: 0,
     wikidataRequests: 0, writes: 0,
   };
   assert.doesNotMatch(triggerStep, /Joyn|chart:joyn-at/iu);
   const refreshed = runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 2, wikidataRequests: 17, writes: 1,
-    feed: { format: 7, sourceIds, items: poolItems },
+    ...common, sourceRequests: 32, publicSourceRequests: 2, flixpatrolRequests: 30,
+    flixpatrolChartRequests: 5, flixpatrolTitleRequests: 25, writes: 1,
+    feed: { format: 8, sourceIds, items: poolItems },
     feedReadback: {
       itemCount: 50, sourceCount: 5, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
@@ -116,11 +118,11 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   }));
   const notDue = runResponseParser(JSON.stringify({
-    ...common, feed: { format: 7, sourceIds, items: poolItems },
+    ...common, feed: { format: 8, sourceIds, items: poolItems },
     refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
   }));
   const failed = runResponseParser(JSON.stringify({
-    ...common, status: "stale", responseMode: "degraded", sourceRequests: 1,
+    ...common, status: "stale", responseMode: "degraded", sourceRequests: 1, publicSourceRequests: 1,
     refresh: { requested: true, mode: "scheduled", status: "failed", attemptCount: 1, maxAttempts: 1 },
   }));
   assert.deepEqual([refreshed.status, refreshed.stdout], [0, "refreshed"]);
@@ -135,8 +137,9 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
     refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 6, writes: 1,
-    feed: { format: 7, sourceIds, items: poolItems },
+    ...common, sourceRequests: 33, publicSourceRequests: 2, flixpatrolRequests: 31,
+    flixpatrolChartRequests: 6, flixpatrolTitleRequests: 25, writes: 1,
+    feed: { format: 8, sourceIds, items: poolItems },
     feedReadback: {
       itemCount: 50, sourceCount: 5, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
@@ -144,8 +147,8 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 2, writes: 1,
-    feed: { format: 7, sourceIds, items: poolItems.slice(0, 49) },
+    ...common, sourceRequests: 2, publicSourceRequests: 2, writes: 1,
+    feed: { format: 8, sourceIds, items: poolItems.slice(0, 49) },
     feedReadback: {
       itemCount: 50, sourceCount: 5, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
@@ -153,9 +156,9 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 2, writes: 1,
+    ...common, sourceRequests: 2, publicSourceRequests: 2, writes: 1,
     feed: {
-      format: 7, sourceIds,
+      format: 8, sourceIds,
       items: poolItems.map((item, index) => (
         index === 15 ? { ...item, availability: { market: "streaming", service: "Prime Video" } } : item
       )),
@@ -168,7 +171,7 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   })).status, 0);
   const joynSourceId = "chart:joyn-at";
   assert.notEqual(runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 2, writes: 1,
+    ...common, sourceRequests: 2, publicSourceRequests: 2, writes: 1,
     feed: {
       format: 6, sourceIds: [joynSourceId, oefiSourceId],
       items: poolItems.map((item) => (

@@ -1,6 +1,7 @@
 /* Fokussierter React-/JSDOM-Mockpfad fuer partielle Medienstapel.
    Kein Netz, kein Anbieter und keine Persistenz ausser dem injizierten Spy. */
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -175,3 +176,9 @@ check(!knopf(degradedFixture.container, "Liste mit KI ordnen"),
 await degradedFixture.cleanup();
 
 console.log(`stapelimport_partial_ui_test: ${checks} Checks bestanden.`);
+
+// Eigener DOM-Prozess für den sichtbaren Mediathek-Importweg.
+const flixpatrolUi = spawnSync(process.execPath, [path.join(wurzel, "flixpatrol_facts_mediathek_ui_test.mjs")], {
+  cwd: wurzel, stdio: "inherit", timeout: 60000,
+});
+assert.equal(flixpatrolUi.status, 0, "FlixPatrol-Mediathek-UI");

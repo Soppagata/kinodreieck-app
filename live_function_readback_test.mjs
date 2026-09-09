@@ -321,3 +321,7 @@ await import("./flixpatrol_usage_workflow_test.mjs");
 await import("./rls_live_preconditions_test.mjs");
 await import("./flixpatrol_usage_pg17_test.mjs");
 await import("./flixpatrol_data_pg17_test.mjs");
+await import("./entdecken_flixpatrol_mix_test.mjs");
+await import("./entdecken_flixpatrol_frontend_test.mjs");
+await import("./entdecken_flixpatrol_function_test.mjs");
+await import("./entdecken_flixpatrol_pg17_test.mjs");

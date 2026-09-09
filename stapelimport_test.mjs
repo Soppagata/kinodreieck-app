@@ -99,3 +99,6 @@ check("Free-tauglicher Fotoweg nutzt drei lesbare Abschnitte mit Überlappung", 
 check("Fotoweg belegt Bearbeitungsende und fordert fehlende Titel als Text an", /Abgedeckter Bereich/.test(prompt) && /Auswertung gestoppt nach/.test(prompt) && /offenen Stellen und mögliche Lücken/.test(prompt) && /zeilenweise als Text/.test(prompt));
 
 console.log(`stapelimport_test: ${ok} Checks bestanden.`);
+
+await import("./flixpatrol_facts_lib_test.mjs");
+await import("./flixpatrol_facts_service_test.mjs");

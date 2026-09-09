@@ -944,7 +944,9 @@ await check("Joyn-freier Kandidat stoppt bei einer einzelnen Closure-Byteänderu
 });
 
 await check("Joyn-freier Deployvertrag bindet die volle Function-Closure an 01383bc", () => {
-  const release = requireEntdeckenJoynFreeDeployedReleaseProvenance();
+  const readHistorical = historicalSourceReader("f981d91688414b2e71bf591a146c8f6e8990a750",
+    [...ENTDECKEN_JOYN_FREE_DEPLOYED_FILES, ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION], REPO_ROOT);
+  const release = requireEntdeckenJoynFreeDeployedReleaseProvenance({ readFile: readHistorical });
   assert.equal(release.commit, ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT);
   assert.equal(release.commit, "01383bc5ff0a2212f8f753adb30d25111e426b06");
   assert.equal(release.releaseSha256, ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256);
@@ -957,9 +959,14 @@ await check("Joyn-freier Deployvertrag bindet die volle Function-Closure an 0138
   const deployedFunctionPaths = ENTDECKEN_JOYN_FREE_DEPLOYED_FILES
     .filter(({ path }) => path.startsWith("supabase/functions/entdecken-daily-task/"))
     .map(({ path }) => path.split("/").at(-1)).sort();
-  assert.deepEqual(deployedFunctionPaths,
-    fs.readdirSync(resolve(REPO_ROOT, "supabase/functions/entdecken-daily-task"))
-      .filter((name) => name !== "anthropicAdapter.js").sort());
+  const historicalTree = spawnSync("git", ["ls-tree", "-r", "--name-only",
+    ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT, "supabase/functions/entdecken-daily-task/"], {
+    cwd: REPO_ROOT, encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(historicalTree.status, 0);
+  assert.deepEqual(deployedFunctionPaths, historicalTree.stdout.trim().split("\n")
+    .map((name) => name.split("/").at(-1))
+    .filter((name) => name !== "anthropicAdapter.js").sort());
   assert.equal(ENTDECKEN_JOYN_FREE_DEPLOYED_FILES
     .some(({ path }) => path.endsWith("/anthropicAdapter.js")), false);
   assert.deepEqual(ENTDECKEN_JOYN_FREE_DEPLOYED_FILES
@@ -973,24 +980,31 @@ await check("Joyn-freier Deployvertrag bindet die volle Function-Closure an 0138
 });
 
 await check("Joyn-freier Deploy- und Einmallaufzaun stoppen bei Byte-Drift", () => {
+  const readHistorical = historicalSourceReader("f981d91688414b2e71bf591a146c8f6e8990a750",
+    [...ENTDECKEN_JOYN_FREE_DEPLOYED_FILES, ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION,
+      ...ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES], REPO_ROOT);
+  assert.throws(() => requireEntdeckenJoynFreeDeployedReleaseProvenance(), (error) =>
+    error.code === "ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT");
+  assert.throws(() => requireEntdeckenJoynFreeSingleLiveReleaseProvenance(), (error) =>
+    ["ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT", "ENTDECKEN_JOYN_FREE_SINGLE_LIVE_PROVENANCE_DRIFT"].includes(error.code));
   const changedFunctionPath = "supabase/functions/_shared/entdeckenFacts.js";
   assert.throws(() => requireEntdeckenJoynFreeDeployedReleaseProvenance({
     readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
+      const bytes = readHistorical(absolutePath);
       const pathname = relative(REPO_ROOT, String(absolutePath)).split("\\").join("/");
       return pathname === changedFunctionPath ? Buffer.concat([bytes, Buffer.from("\n")]) : bytes;
     },
   }), (error) => error instanceof RadarRemoteStartStop
     && error.code === "ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT");
 
-  const live = requireEntdeckenJoynFreeSingleLiveReleaseProvenance();
+  const live = requireEntdeckenJoynFreeSingleLiveReleaseProvenance({ readFile: readHistorical });
   assert.equal(live.command, ENTDECKEN_SINGLE_LIVE_COMMAND);
   assert.equal(live.releaseSha256, ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256);
   assert.deepEqual(live.files, ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES);
   const changedLivePath = "tools/entdecken_daily_live.mjs";
   assert.throws(() => requireEntdeckenJoynFreeSingleLiveReleaseProvenance({
     readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
+      const bytes = readHistorical(absolutePath);
       const pathname = relative(REPO_ROOT, String(absolutePath)).split("\\").join("/");
       return pathname === changedLivePath ? Buffer.concat([bytes, Buffer.from("\n")]) : bytes;
     },
