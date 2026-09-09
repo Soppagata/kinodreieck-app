@@ -36,7 +36,12 @@ function run(binary, binaryArgs, input) {
   const result = spawnSync(join(PG, binary), binaryArgs, {
     input, encoding: "utf8", timeout: 60_000, maxBuffer: 5_000_000, env,
   });
-  if (result.status !== 0) throw new Error(`${binary}: ${result.stderr || result.error}`);
+  if (result.status !== 0) {
+    const log = join(root, "postgres.log");
+    const serverDetail = binary === "pg_ctl" && existsSync(log)
+      ? readFileSync(log, "utf8").slice(-2000) : "";
+    throw new Error(`${binary}: ${result.stderr || result.error}\n${serverDetail}`);
+  }
   return result.stdout.trim();
 }
 function runFailure(binaryArgs, input) {
@@ -109,7 +114,7 @@ const chart = (overrides = {}) => ({
 try {
   run("initdb", ["--no-locale", "--encoding=UTF8", "--auth=trust", "--username=postgres", "--set", "shared_memory_type=mmap", "--pgdata", data]);
   run("pg_ctl", ["--pgdata", data, "--log", join(root, "postgres.log"), "--options",
-    `-c listen_addresses=127.0.0.1 -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix`,
+    `-c listen_addresses=127.0.0.1 -c unix_socket_directories= -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix`,
     "--wait", "start"]);
   running = true;
   sql(`
