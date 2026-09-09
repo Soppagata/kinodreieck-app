@@ -93,31 +93,41 @@ function normalizedTitle(value) {
   return String(value || "").normalize("NFKC").toLocaleLowerCase("de-AT")
     .replace(/[\p{P}\p{S}]+/gu, " ").replace(/\s+/gu, " ").trim();
 }
-function checkedChart(value, spec, chartDate) {
-  const chart = value?.ok === true ? value.chart : null;
-  const fetchedAt = canonicalInstant(chart?.fetchedAt);
-  const freshUntil = canonicalInstant(chart?.freshUntil);
-  if (!chart || chart.companyId !== spec.source.companyId
-      || chart.countryId !== FLIXPATROL_AT_SOURCES.country.id
-      || chart.chartType !== spec.chartType || chart.chartDate !== chartDate
-      || chart.fresh !== true || !fetchedAt || !freshUntil
-      || !Array.isArray(chart.items) || chart.items.length !== 10) return null;
+function identityKey(mediaType, title) {
+  const normalized = normalizedTitle(title);
+  return normalized && ["film", "series"].includes(mediaType) ? `${mediaType}|${normalized}` : null;
+}
+function checkedChartItems(items, spec) {
+  if (!Array.isArray(items) || items.length < spec.take || items.length > 10) return null;
   const ranks = new Set();
   const ids = new Set();
-  for (const item of chart.items) {
+  for (const item of items) {
     if (!item || item.mediaType !== spec.mediaType
         || !/^ttl_[A-Za-z0-9]{20,40}$/.test(item.sourceId || "")
         || !Number.isInteger(item.ranking) || item.ranking < 1 || item.ranking > 10
         || ranks.has(item.ranking) || ids.has(item.sourceId)) return null;
     ranks.add(item.ranking); ids.add(item.sourceId);
   }
+  return Object.freeze([...items].sort((a, b) => a.ranking - b.ranking));
+}
+function checkedChart(value, spec, chartDate) {
+  const chart = value?.ok === true ? value.chart : null;
+  const fetchedAt = canonicalInstant(chart?.fetchedAt);
+  const freshUntil = canonicalInstant(chart?.freshUntil);
+  const items = checkedChartItems(chart?.items, spec);
+  if (!chart || chart.companyId !== spec.source.companyId
+      || chart.countryId !== FLIXPATROL_AT_SOURCES.country.id
+      || chart.chartType !== spec.chartType || chart.chartDate !== chartDate
+      || chart.fresh !== true || !fetchedAt || !freshUntil
+      || !items) return null;
   return Object.freeze({
     ...chart, fetchedAt, freshUntil,
-    items: Object.freeze([...chart.items].sort((a, b) => a.ranking - b.ranking)),
+    items,
   });
 }
-function selectedChartRows(charts, titleById) {
+function selectedChartRows(charts, titleById, publicItems) {
   const seen = new Set();
+  const identities = new Set(publicItems.map((item) => identityKey(item?.mediaType, item?.title)).filter(Boolean));
   const rows = [];
   for (const { chart, spec } of charts) {
     const selected = [];
@@ -128,7 +138,11 @@ function selectedChartRows(charts, titleById) {
       }
       if (cached?.fresh === true && ["not_found", "incomplete_blocked"].includes(cached.status)) continue;
       if (seen.has(item.sourceId)) continue;
+      const cachedFact = normalizeEntdeckenFlixPatrolFact(cached);
+      const cachedIdentity = cachedFact ? identityKey(cachedFact.mediaType, cachedFact.title) : null;
+      if (cachedIdentity && identities.has(cachedIdentity)) continue;
       seen.add(item.sourceId);
+      if (cachedIdentity) identities.add(cachedIdentity);
       selected.push(Object.freeze({ ...item, spec, chart }));
       if (selected.length === spec.take) break;
     }
@@ -255,7 +269,8 @@ export function createFlixPatrolMixAdapter({
             });
             throw error;
           }
-          if (!Array.isArray(fetched.items) || fetched.items.length !== 10) {
+          const fetchedItems = checkedChartItems(fetched.items, spec);
+          if (!fetchedItems) {
             await recordFailure({
               operationId: fetched.operationId, resourceType: "chart",
               sourceId: spec.source.companyId, mediaType: spec.mediaType,
@@ -269,7 +284,7 @@ export function createFlixPatrolMixAdapter({
               countryId: FLIXPATROL_AT_SOURCES.country.id,
               chartType: spec.chartType,
               chartDate,
-              items: fetched.items,
+              items: fetchedItems,
               fetchedAt: checkedAt,
               freshUntil: plusDays(checkedAt, 1),
             });
@@ -301,7 +316,7 @@ export function createFlixPatrolMixAdapter({
         throw new Error("flixpatrol_mix_titles_read_invalid");
       }
       let titleById = new Map(titleRows.map((row) => [row.sourceId, row]));
-      const selected = selectedChartRows(charts, titleById);
+      const selected = selectedChartRows(charts, titleById, publicEnvelope.items);
       const selectedIds = selected.map((row) => row.sourceId);
       for (const row of selected) {
         const cached = titleById.get(row.sourceId);

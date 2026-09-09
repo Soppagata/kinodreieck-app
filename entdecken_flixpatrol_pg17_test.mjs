@@ -121,6 +121,14 @@ const feed = {
   sourceIds: ["chart:oefi-weekend-at", "chart:netflix-weekly-at", "chart:flixpatrol-prime-at", "chart:flixpatrol-disney-at", "chart:flixpatrol-apple-tv-at"],
   isoWeek: isoWeek(today), chartDate, refreshedOn: today, validUntil: today, items,
 };
+const nullFetched = structuredClone(feed);
+nullFetched.items[0].fetchedAt = null;
+const invalidMeasured = structuredClone(feed);
+invalidMeasured.items[0].popularity.measuredOn = "2026-02-30";
+const untypedMeasured = structuredClone(feed);
+untypedMeasured.items[0].popularity.measuredOn = 20260908;
+const untypedSourceUrl = structuredClone(feed);
+untypedSourceUrl.items[0].sourceUrl = 7;
 
 try {
   run("initdb", ["--no-locale", "--encoding=UTF8", "--auth=trust", "--username=postgres", "--set", "shared_memory_type=mmap", "--pgdata", data]);
@@ -190,12 +198,22 @@ try {
     assert.equal(session(`select public.kd_entdecken_public_payload_valid_v8(${jsonb(duplicate)},${quote(today)}::date)`), "f");
     assert.equal(session(`select public.kd_entdecken_public_payload_valid_v8(${jsonb(store)},${quote(today)}::date)`), "f");
   });
+  check("NULL, untypisierte Felder und ungültige Datumswerte werden verworfen", () => {
+    for (const candidate of [nullFetched, invalidMeasured, untypedMeasured, untypedSourceUrl]) {
+      assert.equal(session(`select public.kd_entdecken_public_payload_valid_v8(${jsonb(candidate)},${quote(today)}::date)`), "f");
+    }
+  });
   check("Fehlerrow behält den alten Format-6-Payload bis zum vollständigen Save", () => {
     const before = JSON.parse(session("select public.kd_entdecken_weekly_feed_status()"));
     assert.equal(before.feed.sentinel, "last-good");
     const claim = JSON.parse(session("select public.kd_entdecken_weekly_refresh_claim('scheduled')"));
     assert.equal(claim.refresh, true);
     assert.equal(sql("select payload->>'sentinel' from public.kd_entdecken_daily_feed"), "last-good");
+    for (const candidate of [nullFetched, invalidMeasured]) {
+      const rejected = JSON.parse(session(`select public.kd_entdecken_daily_save(${jsonb(candidate)},${claim.fenceToken})`));
+      assert.deepEqual(rejected, { ok: false, code: "invalid_response" });
+      assert.equal(sql("select payload->>'sentinel' from public.kd_entdecken_daily_feed"), "last-good");
+    }
     const saved = JSON.parse(session(`select public.kd_entdecken_daily_save(${jsonb(feed)},${claim.fenceToken})`));
     assert.equal(saved.status, "saved");
     const readback = JSON.parse(session(`select public.kd_entdecken_public_feed_readback(${claim.fenceToken})`));

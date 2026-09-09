@@ -44,7 +44,7 @@ for (const [type, offset, path] of [["film", 15, "films"], ["series", 20, "tv"]]
 }
 publicItems.forEach((item) => { delete item._offset; });
 
-function createHarness({ duplicateAcrossCharts = false, negativeId = null } = {}) {
+function createHarness({ duplicateAcrossCharts = false, negativeId = null, chartLengths = {} } = {}) {
   const charts = new Map();
   const titles = new Map();
   const counts = { chart: 0, title: 0, titleReads: 0, saves: 0, failures: 0, titleIds: [] };
@@ -64,10 +64,11 @@ function createHarness({ duplicateAcrossCharts = false, negativeId = null } = {}
       const number = chartNumber.size + 1;
       if (!chartNumber.has(key)) chartNumber.set(key, number);
       const prefix = chartNumber.get(key);
+      const chartLength = chartLengths[prefix] ?? 10;
       return {
         operationId: `00000000-0000-4000-8000-${String(counts.chart).padStart(12, "0")}`,
         providerRequests: 1,
-        items: Array.from({ length: 10 }, (_, index) => ({
+        items: Array.from({ length: chartLength }, (_, index) => ({
           sourceId: duplicateAcrossCharts && prefix === 5
             ? `ttl_Chart${index < 5 ? 1 : 3}Title${String((index % 5) + 1).padStart(9, "0")}`
             : `ttl_Chart${prefix}Title${String(index + 1).padStart(9, "0")}`,
@@ -130,6 +131,14 @@ function createHarness({ duplicateAcrossCharts = false, negativeId = null } = {}
   return { adapter, charts, titles, counts, client, publicAdapter };
 }
 
+function cacheResolved(harness, sourceId, mediaType, title, releaseYear = 2001) {
+  harness.titles.set(sourceId, {
+    sourceId, mediaType, status: "resolved", title, releaseYear,
+    imdbId: null, tmdbId: null, sourceUrl: `https://flixpatrol.com/title/${sourceId.toLowerCase()}/`,
+    checkedAt, freshUntil: "2026-09-10T02:00:00.000Z", fresh: true,
+  });
+}
+
 const query = createEntdeckenWeeklyQueryContext(today, "2026-W37");
 const cold = createHarness();
 const envelope = await cold.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" });
@@ -151,6 +160,21 @@ const evaluated = evaluateEntdeckenFlixPatrolResponse(envelope, sources, { retri
 assert.equal(evaluated.ok, true);
 assert.equal(evaluated.feed.format, 8);
 assert.equal(evaluated.feed.validUntil, today);
+
+for (const [available, sourceItemCount] of [[5, 70], [7, 72]]) {
+  const shortApple = createHarness({ chartLengths: { 5: available } });
+  const shortAppleEnvelope = await shortApple.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" });
+  assert.equal(shortAppleEnvelope.items.length, 50);
+  assert.equal(shortApple.counts.title, 25);
+  assert.equal(shortApple.adapter.telemetry().sourceItemCount, sourceItemCount);
+}
+const incompleteApple = createHarness({ chartLengths: { 5: 4 } });
+await assert.rejects(
+  incompleteApple.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" }),
+  /flixpatrol_mix_chart_incomplete/,
+);
+assert.equal(incompleteApple.counts.chart, 5);
+assert.equal(incompleteApple.counts.title, 0);
 
 const warm = createFlixPatrolMixAdapter({
   publicAdapter: cold.publicAdapter, client: cold.client, now: () => checkedAt,
@@ -179,6 +203,23 @@ const negativeEnvelope = await negativeHarness.adapter.search(query, { retrieved
 assert.equal(negativeEnvelope.items.length, 50);
 assert.equal(negativeHarness.counts.title, 25);
 assert.equal(negativeHarness.counts.titleIds.includes(negative), false);
+
+const publicDuplicateHarness = createHarness();
+cacheResolved(publicDuplicateHarness, "ttl_Chart1Title000000001", "film", "Cinema 1");
+const publicDuplicateEnvelope = await publicDuplicateHarness.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" });
+assert.equal(publicDuplicateEnvelope.items.length, 50);
+assert.equal(publicDuplicateHarness.counts.titleIds.includes("ttl_Chart1Title000000001"), false);
+assert.equal(publicDuplicateHarness.counts.titleIds.includes("ttl_Chart1Title000000006"), true);
+assert.equal(publicDuplicateHarness.counts.title, 25);
+
+const cachedDuplicateHarness = createHarness();
+cacheResolved(cachedDuplicateHarness, "ttl_Chart1Title000000001", "film", "Shared cached title");
+cacheResolved(cachedDuplicateHarness, "ttl_Chart3Title000000001", "film", "Shared cached title");
+const cachedDuplicateEnvelope = await cachedDuplicateHarness.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" });
+assert.equal(cachedDuplicateEnvelope.items.length, 50);
+assert.equal(cachedDuplicateEnvelope.items.some((item) => item.sourceItemId === "ttl_Chart3Title000000001"), false);
+assert.equal(cachedDuplicateEnvelope.items.some((item) => item.sourceItemId === "ttl_Chart3Title000000006"), true);
+assert.equal(cachedDuplicateHarness.counts.title, 24);
 
 const duplicateHarness = createHarness({ duplicateAcrossCharts: true });
 await assert.rejects(
@@ -236,4 +277,4 @@ assert.equal(failed.writes, 0);
 assert.deepEqual(failed.feed, evaluated.feed);
 assert.equal(failureMarked.code, "source_error");
 
-console.log("Entdecken FlixPatrol adapter/runner: 37 checks passed");
+console.log("Entdecken FlixPatrol adapter/runner: 53 checks passed");

@@ -25,6 +25,7 @@ declare
   v_distinct integer;
   v_measured date;
   v_chart_date date;
+  v_fetched timestamptz;
 begin
   if p_today is null or jsonb_typeof(p_payload) is distinct from 'object'
      or (select count(*) from pg_catalog.jsonb_object_keys(p_payload)) is distinct from 10::bigint
@@ -32,6 +33,14 @@ begin
        'format','feedId','region','sourceId','sourceIds','isoWeek','chartDate',
        'refreshedOn','validUntil','items'
      ])
+     or jsonb_typeof(p_payload->'format') is distinct from 'number'
+     or jsonb_typeof(p_payload->'feedId') is distinct from 'string'
+     or jsonb_typeof(p_payload->'region') is distinct from 'string'
+     or jsonb_typeof(p_payload->'sourceId') is distinct from 'string'
+     or jsonb_typeof(p_payload->'isoWeek') is distinct from 'string'
+     or jsonb_typeof(p_payload->'chartDate') is distinct from 'string'
+     or jsonb_typeof(p_payload->'refreshedOn') is distinct from 'string'
+     or jsonb_typeof(p_payload->'validUntil') is distinct from 'string'
      or p_payload->>'format' is distinct from '8'
      or p_payload->>'feedId' is distinct from 'public:daily-market-mix-at-v2'
      or p_payload->>'region' is distinct from 'AT'
@@ -66,6 +75,13 @@ begin
          'title','sourceItemId','sourceId','sourceLabel','mediaType','releaseYear',
          'externalIds','genres','availability','popularity','sourceUrl','fetchedAt'
        ])
+       or jsonb_typeof(v_item->'title') is distinct from 'string'
+       or jsonb_typeof(v_item->'sourceItemId') is distinct from 'string'
+       or jsonb_typeof(v_item->'sourceId') is distinct from 'string'
+       or jsonb_typeof(v_item->'sourceLabel') is distinct from 'string'
+       or jsonb_typeof(v_item->'mediaType') is distinct from 'string'
+       or jsonb_typeof(v_item->'sourceUrl') is distinct from 'string'
+       or jsonb_typeof(v_item->'fetchedAt') is distinct from 'string'
        or btrim(v_item->>'title') is distinct from v_item->>'title'
        or length(v_item->>'title') not between 1 and 200
        or v_item->>'sourceId' not in (
@@ -79,11 +95,16 @@ begin
        or jsonb_typeof(v_item->'availability') is distinct from 'object'
        or (select count(*) from pg_catalog.jsonb_object_keys(v_item->'availability')) is distinct from 4::bigint
        or not (v_item->'availability' ?& array['region','market','service','licenseTypes'])
+       or jsonb_typeof(v_item#>'{availability,region}') is distinct from 'string'
+       or jsonb_typeof(v_item#>'{availability,market}') is distinct from 'string'
+       or jsonb_typeof(v_item#>'{availability,service}') not in ('string','null')
        or v_item#>>'{availability,region}' is distinct from 'AT'
        or jsonb_typeof(v_item#>'{availability,licenseTypes}') is distinct from 'array'
        or jsonb_typeof(v_item->'popularity') is distinct from 'object'
        or (select count(*) from pg_catalog.jsonb_object_keys(v_item->'popularity')) is distinct from 4::bigint
        or not (v_item->'popularity' ?& array['metric','rank','measuredOn','value'])
+       or jsonb_typeof(v_item#>'{popularity,metric}') is distinct from 'string'
+       or jsonb_typeof(v_item#>'{popularity,measuredOn}') is distinct from 'string'
        or jsonb_typeof(v_item#>'{popularity,rank}') is distinct from 'number'
        or v_item#>>'{popularity,rank}' !~ '^[0-9]+$'
        or (v_item#>>'{popularity,rank}')::integer not between 1 and 50
@@ -93,6 +114,7 @@ begin
        or jsonb_typeof(v_item->'externalIds') is distinct from 'object' then
       return false;
     end if;
+    v_fetched := (v_item->>'fetchedAt')::timestamptz;
 
     select count(*), count(distinct lower(value #>> '{}'))
       into v_count, v_distinct
