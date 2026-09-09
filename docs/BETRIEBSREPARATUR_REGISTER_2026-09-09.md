@@ -82,6 +82,17 @@ Abschlusslauf auf dem integrierten Kandidaten; keine parallelen PG-Serverstarts.
 Baumeister führen nur fokussierte Tests aus, PostgreSQL-Tests dieser Welle
 gehören exklusiv E2. Der Master startet währenddessen keine PG-Suite.
 
+### Vorbereitete Folgewelle E4/E5
+
+Nach E2/E3-Integration und dem gemeinsamen Abschlusslauf wird der konkrete
+Basiscommit hier eingetragen. E4 erhält den Entdecken-Function-/Feedpfad,
+seine Frontend-Leseverträge und genau eine additive Format-Migration. E5
+erhält Importvorschau, die neutrale Frontend-Faktenprojektion und deren
+Katalogverbraucher. Beide lesen den dann eingefrorenen E2-Cachevertrag und
+E3-Identitätshelper; E5 hängt nicht von einem bereits befüllten Livefeed ab.
+Gemeinsame Testeinbindung bleibt beim Master, PostgreSQL exklusiv bei E4.
+Die endgültige Dateiliste wird vor Dispatch auf Überlappungen geprüft.
+
 ## Lieferung und Verbrauch
 
 Der Master übernimmt nach DELIVERED die Commits sequenziell, löst nur kleine
