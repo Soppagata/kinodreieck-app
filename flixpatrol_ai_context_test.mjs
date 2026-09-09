@@ -163,6 +163,19 @@ await check("TMDB-Untertyp und strukturierter Radar-Medientyp müssen zusammenpa
   });
   assert.equal(movie.ok, true);
   assert.equal(movie.identity.tmdb_id, "550");
+
+  for (const typ of ["serie", "series"]) {
+    const series = baueFlixpatrolKontextIdentitaet({
+      titel: "Gleichnamiges Werk", jahr: 2020, typ, targetId: "tmdb:tv:550",
+    });
+    assert.equal(series.ok, true);
+    assert.equal(series.identity.tmdb_id, "550");
+    const wrongMovie = baueFlixpatrolKontextIdentitaet({
+      titel: "Gleichnamiges Werk", jahr: 2020, typ, targetId: "tmdb:movie:550",
+    });
+    assert.equal(wrongMovie.ok, false);
+    assert.equal(wrongMovie.reason, "target-media-type-conflict");
+  }
 });
 
 await check("Forecast-Projektion enthält neutrale Fakten, aber keinen Chart- oder Geschmackswert", () => {

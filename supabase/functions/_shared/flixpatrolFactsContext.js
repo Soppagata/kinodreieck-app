@@ -47,7 +47,7 @@ function targetKennung(targetId) {
   if (tmdb) return {
     namespace: "tmdb",
     value: tmdb[2],
-    mediaType: tmdb[1] === "movie" ? "film" : "serie",
+    mediaType: tmdb[1] === "movie" ? "film" : "series",
   };
   if (targetId.startsWith("watchmode:")) return { namespace: "watchmode", value: targetId.slice(10) };
   if (targetId.startsWith("flixpatrol:")) return { namespace: "flixpatrol", value: targetId.slice(11) };
@@ -58,6 +58,7 @@ function targetKennung(targetId) {
    wird mit dem E3-Vertrag normalisiert. Zwei Werte desselben Namensraums
    duerfen sich danach entweder gleichen oder ergeben einen sichtbaren
    Konflikt; kein spaeteres Objekt-Spread kann ihn ueberschreiben. */
+/** @param {{titel?: unknown, originaltitel?: unknown, jahr?: unknown, typ?: unknown, externeIds?: Record<string, unknown>, filmkennung?: {namespace: string, kennung: unknown} | null, targetId?: unknown}} [options] */
 export function baueFlixpatrolKontextIdentitaet({
   titel,
   originaltitel = null,
@@ -214,6 +215,7 @@ export function baueFlixpatrolProfilHinweise(mentions, facts) {
   return Object.freeze(hints);
 }
 
+/** @param {{rpc?: (name: string, args: Record<string, unknown>) => unknown, timeoutMs?: number, now?: () => number, setTimer?: typeof setTimeout, clearTimer?: typeof clearTimeout}} [options] */
 export function createFlixpatrolFactsContextReader({
   rpc,
   timeoutMs = 1500,
