@@ -661,18 +661,17 @@ try {
     assert.match(versionedSection.textContent, /Beliebte Titel/u);
     assert.match(versionedSection.textContent, /Datierter Österreich-Snapshot aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney\+ und Apple TV\+/u);
     assert.match(versionedSection.textContent, /Popularität ist kein persönlicher Passungsgrund/u);
-    assert.match(versionedSection.textContent, /Stand 29\.08\.2026/u);
+    assert.match(versionedSection.textContent, /Ersatzstand gepflegt 29\.08\.2026/u);
     assert.doesNotMatch(versionedSection.textContent, /Aktuelle österreichische Liste|Diese Woche beliebt|Aktuelle Kino-/u);
   });
   await versionedUi.render({
     ...versionedProps,
     webDiscoveryStatus: { status: "stale", responseMode: "structured" },
   });
-  check("Der bekannte eingebettete Format-7-Fallback bleibt datiert sichtbar, aber ohne Gültigkeitswarnung", () => {
-    assert.equal(versionedUi.container.querySelector('[role="status"]'), null);
-    assert.match(versionedUi.container.textContent, /Stand 29\.08\.2026/u);
-    assert.doesNotMatch(versionedUi.container.textContent,
-      /außerhalb seines bestätigten Gültigkeitszeitraums/u);
+  check("Der bekannte eingebettete Format-7-Fallback bleibt datiert und abgelaufen sichtbar", () => {
+    assert.equal(versionedUi.container.querySelector('[role="status"]')?.textContent,
+      "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar.");
+    assert.match(versionedUi.container.textContent, /Ersatzstand gepflegt 29\.08\.2026/u);
   });
   await versionedUi.render({
     ...versionedProps,

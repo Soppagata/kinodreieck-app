@@ -20,7 +20,7 @@ const mixedPoolMigration = readFileSync(
   "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql", "utf8",
 );
 const viennaDayClaimMigration = readFileSync(
-  "supabase/migrations/20260905180000_entdecken_vienna_day_claim.sql", "utf8",
+  "supabase/migrations/20260909120000_entdecken_delayed_daily_claim.sql", "utf8",
 );
 const viennaDayClaimCode = viennaDayClaimMigration.replace(/^--.*$/gmu, "");
 const forbiddenDiversePoolMigration =
@@ -76,19 +76,26 @@ check("Workflow-Shell und eingebetteter Parser sind syntaktisch gueltig", () => 
 });
 
 check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
-  const netflixSourceId = "chart:netflix-weekly-at";
   const oefiSourceId = "chart:oefi-weekend-at";
-  const sourceIds = [netflixSourceId, oefiSourceId];
+  const netflixSourceId = "chart:netflix-weekly-at";
+  const sourceIds = [
+    oefiSourceId, netflixSourceId, "snapshot:prime-video-at",
+    "snapshot:disney-plus-at", "snapshot:apple-tv-plus-at",
+  ];
   const poolItems = [
     ...Array.from({ length: 15 }, (_, id) => ({
       id: `oefi-${id}`, sourceId: oefiSourceId, mediaType: "film",
+      availability: { market: "cinema", service: null },
     })),
-    ...Array.from({ length: 5 }, (_, id) => ({
-      id: `netflix-film-${id}`, sourceId: netflixSourceId, mediaType: "film",
-    })),
-    ...Array.from({ length: 5 }, (_, id) => ({
-      id: `netflix-series-${id}`, sourceId: netflixSourceId, mediaType: "series",
-    })),
+    ...[
+      [netflixSourceId, "Netflix", 10],
+      [sourceIds[2], "Prime Video", 10],
+      [sourceIds[3], "Disney+", 10],
+      [sourceIds[4], "Apple TV+", 5],
+    ].flatMap(([sourceId, service, count]) => Array.from({ length: count }, (_, id) => ({
+      id: `${service}-${id}`, sourceId, mediaType: "film",
+      availability: { market: "streaming", service },
+    }))),
   ];
   const common = {
     ok: true, status: "fresh", responseMode: "structured",
@@ -98,15 +105,15 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   assert.doesNotMatch(triggerStep, /Joyn|chart:joyn-at/iu);
   const refreshed = runResponseParser(JSON.stringify({
     ...common, sourceRequests: 2, wikidataRequests: 17, writes: 1,
-    feed: { format: 6, sourceIds, items: poolItems },
+    feed: { format: 7, sourceIds, items: poolItems },
     feedReadback: {
-      itemCount: 25, sourceCount: 2, sourceIds,
+      itemCount: 50, sourceCount: 5, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
     },
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   }));
   const notDue = runResponseParser(JSON.stringify({
-    ...common,
+    ...common, feed: { format: 7, sourceIds, items: poolItems },
     refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
   }));
   const failed = runResponseParser(JSON.stringify({
@@ -125,19 +132,19 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
     refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
-    ...common, sourceRequests: 3, writes: 1,
-    feed: { format: 6, sourceIds, items: poolItems },
+    ...common, sourceRequests: 6, writes: 1,
+    feed: { format: 7, sourceIds, items: poolItems },
     feedReadback: {
-      itemCount: 25, sourceCount: 2, sourceIds,
+      itemCount: 50, sourceCount: 5, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
     },
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
     ...common, sourceRequests: 2, writes: 1,
-    feed: { format: 6, sourceIds, items: poolItems.slice(0, 24) },
+    feed: { format: 7, sourceIds, items: poolItems.slice(0, 49) },
     feedReadback: {
-      itemCount: 25, sourceCount: 2, sourceIds,
+      itemCount: 50, sourceCount: 5, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
     },
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
@@ -145,13 +152,13 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   assert.notEqual(runResponseParser(JSON.stringify({
     ...common, sourceRequests: 2, writes: 1,
     feed: {
-      format: 6, sourceIds,
+      format: 7, sourceIds,
       items: poolItems.map((item, index) => (
-        index === 15 ? { ...item, mediaType: "series" } : item
+        index === 15 ? { ...item, availability: { market: "streaming", service: "Prime Video" } } : item
       )),
     },
     feedReadback: {
-      itemCount: 25, sourceCount: 2, sourceIds,
+      itemCount: 50, sourceCount: 5, sourceIds,
       rightsStatus: "owner_private", providerRequests: 0,
     },
     refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
@@ -174,13 +181,16 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   assert.notEqual(runResponseParser("<!doctype html><title>Login</title>").status, 0);
 });
 
-check("Fachliches Entdecken-failed ist rot, erwartete No-ops bleiben gruen", () => {
+check("Nur belegter Tageserfolg bleibt gruen; wirkungslose oder fehlgeschlagene Faelligkeit ist rot", () => {
   const failedTerminal = triggerShell.match(/failed\)[\s\S]*?;;/)?.[0] || "";
   assert.match(failedTerminal, /::error::Entdecken/u);
   assert.match(failedTerminal, /exit 1/u);
   assert.doesNotMatch(failedTerminal, /::warning::/u);
-  for (const status of ["not_due", "outside_window", "in_progress", "held"]) {
-    assert.match(triggerShell, new RegExp(`${status}\\)`));
+  assert.match(triggerShell, /not_due\) echo "Entdecken: vollstaendiger Fuenf-Bereiche-Stand/u);
+  for (const status of ["outside_window", "in_progress", "held"]) {
+    const branch = triggerShell.match(new RegExp(`${status}\\)[\\s\\S]*?;;`))?.[0] || "";
+    assert.match(branch, /::error::Entdecken/u);
+    assert.match(branch, /exit 1/u);
   }
 });
 
@@ -206,11 +216,13 @@ check("Additive Claim-Ersetzung nutzt den Wiener Kalendertag und einen Versuch",
   assert.match(claim, /Europe\/Vienna/u);
   assert.match(claim, /v_last_attempt_day := coalesce\([\s\S]*at time zone 'Europe\/Vienna'/u);
   assert.match(claim, /v_due := v_last_attempt_day is null or v_last_attempt_day < v_today/u);
-  assert.match(claim, /extract\(hour from v_utc\)::integer <> 2/u);
   assert.match(claim, /::date|date_trunc\('day'/u);
+  assert.doesNotMatch(claim, /v_utc|extract\(hour|outside_window/u);
   assert.doesNotMatch(claim, /interval '24 hours'|interval '144 hours'|v_anchor \+/u);
   assert.match(claim, /p_source = 'owner' and not coalesce\(v_owner_override,false\)/u);
   assert.match(claim, /lease_expires_at = v_now \+ interval '180 seconds'/u);
+  assert.match(claim, /v_feed\.status = 'ready'[\s\S]*last_success_at[\s\S]*then 'not_due'/u);
+  assert.match(claim, /v_feed\.status = 'error' then 'failed'/u);
   assert.match(claim, /'maxAttempts',1/u);
   assert.match(claim, /last_success_at/u);
   assert.match(claim, /last_public_attempt_at/u);

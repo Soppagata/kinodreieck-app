@@ -58,6 +58,9 @@ jobs:
   entdecken-six-day-trigger:
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    concurrency:
+      group: kinodreieck-entdecken-daily
+      cancel-in-progress: false
     steps:
       - name: Entdecken taeglich um 02 Uhr UTC faelligkeitsgeprueft anstossen
         timeout-minutes: 3
@@ -105,7 +108,7 @@ jobs:
             ]);
             const countsValid = Number.isInteger(body?.providerRequests) && body.providerRequests === 0
               && Number.isInteger(body?.searchRequests) && body.searchRequests === 0
-              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0 && body.sourceRequests <= 2
+              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0 && body.sourceRequests <= 5
               && Number.isInteger(body?.wikidataRequests) && body.wikidataRequests >= 0 && body.wikidataRequests <= 24
               && Number.isInteger(body?.writes) && body.writes >= 0 && body.writes <= 1;
             if (!body || body.ok !== true || !statuses.has(body.status)
@@ -116,34 +119,47 @@ jobs:
                 || !Number.isInteger(body.refresh.attemptCount)
                 || body.refresh.attemptCount < 0 || body.refresh.attemptCount > 1
                 || body.refresh.maxAttempts !== 1) process.exit(3);
-            const netflixSourceId = "chart:netflix-weekly-at";
-            const oefiSourceId = "chart:oefi-weekend-at";
-            const expectedSourceIds = [netflixSourceId, oefiSourceId].sort();
             const items = Array.isArray(body?.feed?.items) ? body.feed.items : [];
-            const format6ReadbackValid = body?.feed?.format === 6
-              && items.length === 25
-              && items.filter((item) => item?.sourceId === oefiSourceId).length === 15
-              && items.filter((item) => item?.sourceId === netflixSourceId
-                && item?.mediaType === "film").length === 5
-              && items.filter((item) => item?.sourceId === netflixSourceId
-                && item?.mediaType === "series").length === 5
-              && Array.isArray(body.feed.sourceIds)
-              && JSON.stringify([...body.feed.sourceIds].sort())
-                === JSON.stringify(expectedSourceIds)
-              && body?.feedReadback?.itemCount === 25
-              && body.feedReadback.sourceCount === 2
+            const sourceIds = Array.isArray(body?.feed?.sourceIds) ? [...body.feed.sourceIds].sort() : [];
+            const itemSourceIds = [...new Set(items.map((item) => item?.sourceId))].sort();
+            const marketCounts = items.reduce((counts, item) => {
+              const key = item?.availability?.market === "cinema" ? "cinema"
+                : item?.availability?.service === "Netflix" ? "netflix"
+                  : item?.availability?.service === "Prime Video" ? "prime"
+                    : item?.availability?.service === "Disney+" ? "disney"
+                      : item?.availability?.service === "Apple TV+" ? "apple" : "unknown";
+              counts[key] = (counts[key] || 0) + 1;
+              return counts;
+            }, {});
+            const fullMixFeedValid = Number.isInteger(body?.feed?.format)
+              && body.feed.format >= 7
+              && items.length === 50
+              && marketCounts.cinema === 15
+              && marketCounts.netflix === 10
+              && marketCounts.prime === 10
+              && marketCounts.disney === 10
+              && marketCounts.apple === 5
+              && !marketCounts.unknown
+              && sourceIds.length === 5
+              && JSON.stringify(itemSourceIds) === JSON.stringify(sourceIds);
+            const fullMixReadbackValid = fullMixFeedValid
+              && body?.feedReadback?.itemCount === 50
+              && body.feedReadback.sourceCount === 5
               && Array.isArray(body.feedReadback.sourceIds)
-              && JSON.stringify([...body.feedReadback.sourceIds].sort())
-                === JSON.stringify(expectedSourceIds)
+              && JSON.stringify([...body.feedReadback.sourceIds].sort()) === JSON.stringify(sourceIds)
               && body.feedReadback.rightsStatus === "owner_private"
               && body.feedReadback.providerRequests === 0;
             if (body.refresh.status === "refreshed" && body.status === "fresh"
-                && body.sourceRequests === 2 && body.writes === 1 && format6ReadbackValid) {
+                && body.sourceRequests >= 2 && body.writes === 1 && fullMixReadbackValid) {
               process.stdout.write("refreshed");
             } else if (body.refresh.status === "failed" && body.responseMode === "degraded"
                 && body.writes === 0) {
               process.stdout.write("failed");
-            } else if (["not_due", "outside_window", "in_progress", "held"].includes(body.refresh.status)
+            } else if (body.refresh.status === "not_due" && body.status === "fresh"
+                && body.sourceRequests === 0 && body.wikidataRequests === 0 && body.writes === 0
+                && fullMixFeedValid) {
+              process.stdout.write("not_due");
+            } else if (["outside_window", "in_progress", "held"].includes(body.refresh.status)
                 && body.sourceRequests === 0 && body.wikidataRequests === 0 && body.writes === 0) {
               process.stdout.write(body.refresh.status);
             } else process.exit(4);
@@ -153,11 +169,20 @@ jobs:
           fi
 
           case "$outcome" in
-            refreshed) echo "Entdecken: neuer Netflix-/OeFI-Pool gespeichert." ;;
-            not_due) echo "Entdecken: naechster taeglicher Lauf noch nicht faellig." ;;
-            outside_window) echo "Entdecken: verspaeteter Trigger ausserhalb des UTC-02-Uhr-Fensters." ;;
-            in_progress) echo "Entdecken: eine aktive Lease laeuft; kein zweiter Abruf." ;;
-            held) echo "Entdecken: Claim nicht frei; kein Abruf." ;;
+            refreshed) echo "Entdecken: neuer 50-Titel-Stand aus fuenf Bereichen gespeichert." ;;
+            not_due) echo "Entdecken: vollstaendiger Fuenf-Bereiche-Stand wurde heute bereits erfolgreich verarbeitet." ;;
+            outside_window)
+              echo "::error::Entdecken: der Server hat den verspaeteten Tageslauf wegen der Uhrzeit verworfen."
+              exit 1
+              ;;
+            in_progress)
+              echo "::error::Entdecken: Lauf endete ohne Readback, weil eine Lease aktiv war."
+              exit 1
+              ;;
+            held)
+              echo "::error::Entdecken: Claim blieb ohne belegten Tageserfolg gesperrt."
+              exit 1
+              ;;
             failed)
               echo "::error::Entdecken: Quellen-/Anreicherungsversuch endete degraded; kein Retry in diesem Fenster."
               exit 1
