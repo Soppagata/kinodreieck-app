@@ -26,6 +26,11 @@ Widerspricht eine weitere gemeinsame ID, bleibt das Paar `conflict`. TMDB-IDs
 werden wegen moeglicher Film-/Serien-Kollisionen nie ohne den Typguard benutzt.
 Numerische Watchmode-/TMDB-IDs muessen positiv sein; reine Null-IMDb-Kennungen
 und ungueltige Rawwerte sind weder Matchbeleg noch uebernehmbare Ergaenzung.
+FlixPatrol-IDs folgen ausschließlich der belegten Form
+`ttl_[A-Za-z0-9]{20,40}`. Sie sind opaque und case-sensitiv: Der Helper behaelt
+ihre Schreibweise bytegetreu. Ein optionales, exakt kleingeschriebenes
+`flixpatrol:`-Praefix wird vor dem Vergleich entfernt; andere ID-Formen oder
+Praefixvarianten werden nicht toleriert.
 
 Ohne gemeinsame starke ID gilt ausschließlich: genau gleicher normalisierter
 Titel oder Originaltitel, exakt gleiches Referenzjahr und gleicher Werktyp.
