@@ -9,6 +9,8 @@ import { requestHasForbiddenBody, validateEntdeckenDailyFeed } from "./contract.
 import { runEntdeckenDailyRefresh } from "./runner.js";
 import { createEntdeckenDailyResponse } from "./responseContract.js";
 import { createMixedPublicChartAdapter } from "./publicMixAdapter.js";
+import { createFlixPatrolMixAdapter } from "./flixpatrolMixAdapter.js";
+import { createFlixPatrolClient } from "../_shared/flixpatrolClient.js";
 import { createWikidataResolver } from "./wikidataResolver.js";
 import {
   createAnthropicEntdeckenProviderProbe,
@@ -387,7 +389,7 @@ export function createEntdeckenDailyHandler({
     }
     let claimContext: Record<string, unknown> | null = null;
     let cachedSources: Array<Record<string, unknown>> | null = null;
-    const publicProduct = adapter === null || ["public-chart", "public-mix"].includes(adapter?.mode || "");
+    const publicProduct = adapter === null || ["public-chart", "public-mix", "flixpatrol-mix"].includes(adapter?.mode || "");
     const loadSources = async () => {
       if (cachedSources) return cachedSources;
       let query = admin.from("kd_entdecken_sources")
@@ -428,7 +430,7 @@ export function createEntdeckenDailyHandler({
         providerReceipt?: { server?: { logId?: unknown } };
         sourceMode?: string;
       }) {
-        if (["public-chart", "public-mix"].includes(sourceMode || "")) {
+        if (["public-chart", "public-mix", "flixpatrol-mix"].includes(sourceMode || "")) {
           const { data, error } = await admin.rpc("kd_entdecken_public_feed_readback", {
             p_fence_token: fenceToken,
           });
@@ -488,7 +490,66 @@ export function createEntdeckenDailyHandler({
         if (error) throw error;
       },
     });
-    const productAdapter = (adapter ?? createMixedPublicChartAdapter({ fetchImpl })) as {
+    const flixpatrolApiKey = Deno.env.get("FLIXPATROL_API_KEY") || "";
+    const flixpatrolClient = createFlixPatrolClient({
+      apiKey: flixpatrolApiKey,
+      fetchImpl,
+      async beginOperation({ operationId, requestKind }) {
+        const { data, error } = await admin.rpc("kd_flixpatrol_usage_begin", {
+          p_operation_id: operationId,
+          p_request_kind: requestKind,
+        });
+        if (error) throw error;
+        return data;
+      },
+      async finishOperation({ operationId, status, httpStatus, quota }) {
+        const { data, error } = await admin.rpc("kd_flixpatrol_usage_finish", {
+          p_operation_id: operationId,
+          p_status: status,
+          p_http_status: httpStatus,
+          p_quota: quota,
+        });
+        if (error) throw error;
+        return data;
+      },
+    });
+    const callDataRpc = async (name: string, parameters: Record<string, unknown>) => {
+      const { data, error } = await admin.rpc(name, parameters);
+      if (error) throw error;
+      return data;
+    };
+    const productAdapter = (adapter ?? createFlixPatrolMixAdapter({
+      publicAdapter: createMixedPublicChartAdapter({ fetchImpl }),
+      providerConfigured: flixpatrolApiKey.length > 0,
+      client: flixpatrolClient,
+      readChart: ({ companyId, countryId, chartType }: Record<string, unknown>) => callDataRpc(
+        "kd_flixpatrol_chart_read",
+        { p_company_id: companyId, p_country_id: countryId, p_chart_type: chartType },
+      ),
+      readTitles: (sourceIds: Array<string>) => callDataRpc(
+        "kd_flixpatrol_titles_read", { p_source_ids: sourceIds },
+      ),
+      saveChart: (chart: unknown) => callDataRpc("kd_flixpatrol_data_save_chart", { p_chart: chart }),
+      saveTitle: ({ title, fetchedAt, freshUntil }: Record<string, unknown>) => callDataRpc(
+        "kd_flixpatrol_data_save_title",
+        { p_title: title, p_fetched_at: fetchedAt, p_fresh_until: freshUntil },
+      ),
+      saveTitleMiss: ({ sourceId, mediaType, status, checkedAt, freshUntil }: Record<string, unknown>) => callDataRpc(
+        "kd_flixpatrol_data_save_title_miss",
+        {
+          p_source_id: sourceId, p_media_type: mediaType, p_status: status,
+          p_checked_at: checkedAt, p_fresh_until: freshUntil,
+        },
+      ),
+      recordFailure: ({ operationId, resourceType, sourceId, mediaType, errorCode, failedAt }: Record<string, unknown>) => callDataRpc(
+        "kd_flixpatrol_data_record_failure",
+        {
+          p_operation_id: operationId, p_resource_type: resourceType,
+          p_source_id: sourceId, p_media_type: mediaType,
+          p_error_code: errorCode, p_failed_at: failedAt,
+        },
+      ),
+    })) as {
       mode?: string;
       search(...args: Array<unknown>): Promise<unknown>;
       telemetry?: () => Record<string, unknown>;

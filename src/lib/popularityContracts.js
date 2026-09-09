@@ -8,7 +8,7 @@ export const POPULARITY_SOURCE_MODES = Object.freeze(["fixture", "manual_link", 
 export const POPULARITY_RIGHTS_STATUSES = Object.freeze(["fixture", "approved", "blocked", "re_audit", "manual_only", "parked"]);
 export const POPULARITY_MATCH_STATUSES = Object.freeze(["matched", "unmatched", "ambiguous", "blocked"]);
 
-const ALLOWED_EXTERNAL_IDS = Object.freeze(["watchmode", "imdb", "tmdb", "wikidata"]);
+const ALLOWED_EXTERNAL_IDS = Object.freeze(["watchmode", "imdb", "tmdb", "wikidata", "flixpatrol"]);
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function result(errors) { return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) }); }

@@ -23,6 +23,7 @@ import {
 } from "./entdeckenFacts.js";
 import {
   discoveryExternalIdsFromCatalog,
+  FLIXPATROL_DISCOVERY_FEED_FORMAT,
   matchWebDiscoveryFeed,
   MIXED_DISCOVERY_FEED_FORMAT,
   normalizeDiscoveryTitle,
@@ -103,7 +104,7 @@ function discoveryRecordIdsWithExcludedStrongId(webDiscoveryFeed, excludedTarget
   const watchmodeIds = new Set([...excludedTargetIds]
     .filter((targetId) => targetId.startsWith("watchmode:"))
     .map((targetId) => targetId.slice("watchmode:".length)));
-  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
     .includes(checked.value.format)) return new Set();
   return new Set(checked.value.items
     .filter((record) => watchmodeIds.has(record.externalIds?.watchmode))
@@ -393,6 +394,7 @@ function strongIds(entry) {
     qid: text(entry?.qid ?? entry?.wikidata?.qid ?? external.qid) || null,
     imdb: text(external.imdb ?? entry?.imdb_id ?? entry?.imdbId).toLowerCase() || null,
     tmdb: text(external.tmdb ?? entry?.tmdb_id ?? entry?.tmdbId) || null,
+    flixpatrol: text(external.flixpatrol ?? entry?.flixpatrol_id ?? entry?.flixpatrolId) || null,
   });
 }
 function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wikidata) {
@@ -407,7 +409,7 @@ function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wiki
   ];
   return seenEntries.some((entry) => {
     const entryIds = strongIds(entry);
-    const comparable = ["joyn", "qid", "imdb", "tmdb"].filter((namespace) => (
+    const comparable = ["joyn", "qid", "imdb", "tmdb", "flixpatrol"].filter((namespace) => (
       itemIds[namespace] && entryIds[namespace]
     ));
     if (comparable.length) {
@@ -433,9 +435,10 @@ export function publicDiscoveryCandidates({
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok || ![
     PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
+    FLIXPATROL_DISCOVERY_FEED_FORMAT,
   ]
     .includes(checked.value.format)) return Object.freeze([]);
-  const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+  const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
     .includes(checked.value.format);
   const services = selectedServiceSet(selectedServices);
   if (!mixed && services.size && !services.has("joyn")) return Object.freeze([]);
@@ -449,7 +452,8 @@ export function publicDiscoveryCandidates({
     .map((decision) => [decision.record.sourceItemId, decision]));
   const projected = checked.value.items.map((item) => {
     const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
-    const facts = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT ? Object.freeze({
+    const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+      .includes(checked.value.format) ? Object.freeze({
       qid: enriched?.strongId?.startsWith("wikidata:")
         ? enriched.strongId.slice("wikidata:".length) : null,
       releaseYear: item.releaseYear,
@@ -531,9 +535,9 @@ export function webDiscoveryFeedCards({
 } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
-  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
     .includes(checked.value.format)) {
-    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
       .includes(checked.value.format);
     const annotations = new Map((checked.value.annotations || []).map((entry) => [entry.sourceItemId, entry]));
     const checkedFactsSnapshot = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT
@@ -545,7 +549,8 @@ export function webDiscoveryFeedCards({
       .map((decision) => [decision.record.sourceItemId, decision]));
     const projected = checked.value.items.map((item) => {
       const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
-      const facts = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT ? Object.freeze({
+      const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+        .includes(checked.value.format) ? Object.freeze({
         qid: enriched?.strongId?.startsWith("wikidata:")
           ? enriched.strongId.slice("wikidata:".length) : null,
         releaseYear: item.releaseYear,
@@ -724,11 +729,12 @@ export function createEntdeckenRecommendations({
   const checkedFeed = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (checkedFeed.ok && [
     PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
+    FLIXPATROL_DISCOVERY_FEED_FORMAT,
   ]
     .includes(checkedFeed.value.format)) {
     /* Fuer den marktuebergreifenden Feed ist die lokale Streaming-Dienstewahl
        kein Quellenfilter. Sie beschreibt Verfuegbarkeit, nicht Geschmack. */
-    const broadCatalog = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+    const broadCatalog = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
       .includes(checkedFeed.value.format)
       ? localRecommendationCandidates(streamingEntdecken, {
         streamingKnown, selectedServices: [], entdeckenStatus, includeSeenForMatching: true,
@@ -743,7 +749,7 @@ export function createEntdeckenRecommendations({
       profile: profile && profile.beschaedigt !== true ? profile : {},
       library: localLibraryProjection(master), useLibrary, excludedTargetIds: [],
     });
-    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
       .includes(checkedFeed.value.format);
     const personal = selectDailyRecommendations(ranked, {
       /* Persoenliche Auswahl bleibt im neuen Pfad immer bestes, stabiles

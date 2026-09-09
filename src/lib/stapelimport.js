@@ -1,4 +1,6 @@
 import { norm } from "./match.js";
+import { uebernehmeFlixpatrolVorschlag } from "./flixpatrolFacts.js";
+import { normalisiereExterneTitelkennung } from "./externalTitleIdentity.js";
 
 export const STAPEL_MAX_ZEILEN = 60;
 export const STAPEL_MAX_ZEICHEN = 12_000;
@@ -50,6 +52,11 @@ const sichererGrund = (wert) => {
 const sichereWarnung = (wert) => {
   const warnung = kurz(wert, 180);
   return warnung && !STAPEL_WARNUNG_UNSICHER.test(warnung) ? warnung : "";
+};
+const externeKennung = (kandidat, namespace, felder) => {
+  const roh = felder.map((feld) => eigenerWert(kandidat, feld))
+    .find((wert) => wert !== undefined && wert !== null && String(wert).trim());
+  return normalisiereExterneTitelkennung(namespace, roh);
 };
 
 function normalisiereIndex(lokalerIndex, indexMap) {
@@ -172,15 +179,20 @@ export function normalisiereStapelAntwort(antwort, master = [], { indexMap = nul
     const gemeldeteBegruendung = kurz(kandidat?.begruendung, 300);
     const vorbeurteilung = ["passt", "eher_nicht"].includes(kandidat?.vorbeurteilung) && gemeldeteBegruendung
       ? kandidat.vorbeurteilung : "offen";
+    const originaltitel = kurz(kandidat?.originaltitel ?? kandidat?.originalTitle, 160) || titel;
     kandidaten.push({
       id: `stapel-${stabilerIndex}`,
       index: stabilerIndex,
       zustand: "ok",
-      titel, typ, jahr, quelle, staffeln, vorbeurteilung,
+      titel, originaltitel, typ, jahr, quelle, staffeln, vorbeurteilung,
       begruendung: vorbeurteilung === "offen" ? "" : gemeldeteBegruendung,
       sicherheit: ["hoch", "mittel", "niedrig"].includes(kandidat?.sicherheit) ? kandidat.sicherheit : "niedrig",
       ausgewaehlt: true,
       vorhandenMediathek: masterKeys.has(`${norm(titel)}|${jahr ?? ""}`),
+      watchmode_id: externeKennung(kandidat, "watchmode", ["watchmode_id", "watchmodeId"]),
+      imdb_id: externeKennung(kandidat, "imdb", ["imdb_id", "imdbId"]),
+      tmdb_id: externeKennung(kandidat, "tmdb", ["tmdb_id", "tmdbId"]),
+      flixpatrol_id: externeKennung(kandidat, "flixpatrol", ["flixpatrol_id", "flixpatrolId"]),
     });
   }
   const serverFehlmenge = Array.isArray(daten?.fehlmenge) ? daten.fehlmenge : [];
@@ -233,13 +245,18 @@ export function baueStapelUebernahme(kandidaten) {
   for (const k of kandidaten || []) {
     if (!k.ausgewaehlt || k.vorhandenMediathek || (k.zustand && k.zustand !== "ok") || !STAPEL_TYPEN.includes(k.typ)) continue;
     const quelle = STAPEL_QUELLEN_KEYS.has(k.quelle) ? k.quelle : "unklar";
-    mediathek.push({
-      titel: k.titel, originaltitel: k.titel, jahr: k.jahr, jahr_bis: null,
+    const basis = {
+      titel: k.titel, originaltitel: k.originaltitel || k.titel, jahr: k.jahr, jahr_bis: null,
       typ: k.typ,
       quelle, quelle_unklar: quelle === "unklar", kategorie: null, bewertung: null,
       genre: [], tags: [], begruendung: "", beschreibung: "", notiz: notizFuer(k),
       status: "gesetzt", bewertet_von: null,
-    });
+    };
+    for (const feld of ["watchmode_id", "imdb_id", "tmdb_id", "flixpatrol_id"]) {
+      if (k[feld]) basis[feld] = k[feld];
+    }
+    const angereichert = uebernehmeFlixpatrolVorschlag({ ...basis, flixpatrolVorschlag: k.flixpatrolVorschlag });
+    mediathek.push(angereichert);
   }
   return { mediathek, mustwatch: [] };
 }
@@ -250,19 +267,22 @@ export function baueStapelUebernahme(kandidaten) {
    Ein Teilausfall fuehrt nie zu einem automatischen Vollretry. */
 export async function persistiereStapelAuswahl(
   kandidaten,
-  { addFilme, addFilm } = {},
+  { addFilme, addFilm, istAktuell = () => true } = {},
 ) {
   const { mediathek } = baueStapelUebernahme(kandidaten);
-  if (!mediathek.length) return { eintraege: 0 };
+  if (!mediathek.length || !istAktuell()) return { eintraege: 0, abgebrochen: !istAktuell() };
   if (typeof addFilme === "function") {
     const ids = await addFilme(mediathek);
+    if (!istAktuell()) return { eintraege: 0, abgebrochen: true };
     if (ids == null) return null;
     if (!Array.isArray(ids)) throw new Error("Stapelimport: Speicherantwort ist nicht lesbar.");
     return { eintraege: ids.length };
   }
   let eintraege = 0;
   for (const film of mediathek) {
+    if (!istAktuell()) return { eintraege, abgebrochen: true };
     if (await addFilm?.(film)) eintraege += 1;
+    if (!istAktuell()) return { eintraege, abgebrochen: true };
   }
   return { eintraege };
 }

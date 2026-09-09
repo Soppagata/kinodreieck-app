@@ -30,6 +30,11 @@ function ersterWert(eintrag, felder) {
 }
 
 export function normalisiereExterneTitelkennung(namespace, wert) {
+  if (namespace === "flixpatrol" && typeof wert === "string") {
+    const roh = wert.trim();
+    const id = roh.startsWith("flixpatrol:") ? roh.slice("flixpatrol:".length) : roh;
+    return /^ttl_[A-Za-z0-9]{20,40}$/.test(id) ? id : null;
+  }
   const roh = String(wert ?? "").trim().toLowerCase();
   if (!roh) return null;
   if (namespace === "imdb") {
@@ -40,10 +45,6 @@ export function normalisiereExterneTitelkennung(namespace, wert) {
     const prefix = new RegExp(`^(?:${namespace}:)?([0-9]+)$`);
     const match = roh.match(prefix);
     return match && BigInt(match[1]) > 0n ? String(BigInt(match[1])) : null;
-  }
-  if (namespace === "flixpatrol" && ["string", "number"].includes(typeof wert)) {
-    const id = roh.replace(/^flixpatrol:/, "");
-    return /^[a-z0-9][a-z0-9._:-]*$/.test(id) ? id : null;
   }
   return null;
 }

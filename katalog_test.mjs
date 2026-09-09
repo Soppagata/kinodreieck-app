@@ -219,6 +219,27 @@ const ohneTypbeleg = baueStreamingAnsichten({
 }, [{ id: "kein-typ", titel: "Kein Typ", jahr: 2022, typ: "film" }]);
 check("fehlender Streamingtyp wird nicht pauschal als Film erfunden",
   ohneTypbeleg.bekannt.titel.length === 0 && ohneTypbeleg.entdecken.titel.length === 1);
+const flixpatrolProjektion = baueStreamingAnsichten({
+  bekannt: { titel: [{ watchmode_id: 903, titel: "Alien", jahr: 1979, typ: "movie", dienste: ["MUBI"] }] },
+  entdecken: { titel: [] },
+}, [{
+  id: "alien-eigen", titel: "Alien", jahr: 1979, typ: "film", beschreibung: "Eigene Beschreibung",
+  bewertung: { wie: 5, was: 4, warum: 5 }, tags: ["eigen"], notiz: "eigene Notiz", gesehen: true,
+}], [{
+  sourceId: "ttl_bHyGTvopBHPVtIKhR2CF68WD", flixpatrol_id: "ttl_bHyGTvopBHPVtIKhR2CF68WD",
+  titel: "Alien", jahr: 1979, typ: "film", imdb_id: "tt0078748", tmdb_id: 348,
+  beschreibung: "Externe Beschreibung", laufzeit_minuten: 117, premiere: "1979-05-25", charts: [],
+}]);
+check("Katalogprojektion ergänzt bekannte neutrale IDs und Metadaten",
+  flixpatrolProjektion.bekannt.titel[0]?.flixpatrol_id === "ttl_bHyGTvopBHPVtIKhR2CF68WD"
+  && flixpatrolProjektion.bekannt.titel[0]?.imdb_id === "tt0078748"
+  && flixpatrolProjektion.bekannt.titel[0]?.laufzeit_minuten === 117);
+check("Katalogprojektion lässt eigene Beschreibung, Bewertung, Tags, Notiz und Sehstand führend",
+  flixpatrolProjektion.bekannt.titel[0]?.beschreibung === "Eigene Beschreibung"
+  && flixpatrolProjektion.bekannt.titel[0]?.bewertung?.wie === 5
+  && flixpatrolProjektion.bekannt.titel[0]?.tags?.[0] === "eigen"
+  && flixpatrolProjektion.bekannt.titel[0]?.notiz === "eigene Notiz"
+  && flixpatrolProjektion.bekannt.titel[0]?.gesehen === true);
 
 /* ================= Etappe 4: Token-Naht (src/lib/katalog.js) =================
    Bis hierher lief das Modul OHNE Token-Provider — die beiden Header-Checks oben

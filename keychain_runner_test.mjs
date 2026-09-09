@@ -64,7 +64,10 @@ import {
   ENTDECKEN_JOYN_FREE_CANDIDATE_FILES,
   ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256,
   ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_FILES,
+  ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION,
   ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256,
+  ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES,
   ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256,
   requireEntdeckenJoynFreeCandidateProvenance,
   requireEntdeckenJoynFreeDeployedReleaseProvenance,
@@ -965,13 +968,17 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && candidate.files.length === 4
       && candidate.files.some((entry) => entry.path
         === "supabase/migrations/20260906180000_entdecken_current_diverse_pool.sql"));
-  const deployed = requireEntdeckenJoynFreeDeployedReleaseProvenance();
-  const live = requireEntdeckenJoynFreeSingleLiveReleaseProvenance();
+  const readHistorical = historicalSourceReader("f981d91688414b2e71bf591a146c8f6e8990a750",
+    [...ENTDECKEN_JOYN_FREE_DEPLOYED_FILES, ENTDECKEN_JOYN_FREE_DEPLOYED_MIGRATION,
+      ...ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES], REPO_ROOT);
+  const deployed = requireEntdeckenJoynFreeDeployedReleaseProvenance({ readFile: readHistorical });
+  const live = requireEntdeckenJoynFreeSingleLiveReleaseProvenance({ readFile: readHistorical });
   pruefe("Joyn-freier Deploy- und Einmallaufvertrag sind separat promotiert",
     deployed.commit === ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT
       && deployed.releaseSha256 === ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256
       && live.releaseSha256 === ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256);
-  const code = await starteModus({
+  let singleRunStop = null;
+  try { await starteModus({
     modus: "ai-live",
     ambientEnv: {},
     lokaleKonfig: PUBLIC,
@@ -982,14 +989,13 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     spawnImpl,
     ownerApprovedServerBudget: true,
     entdeckenDailyOnce: true,
-  });
+  }); } catch (error) { singleRunStop = error; }
   pruefe("Entdecken-Einmallauf bleibt fest auf seinen einzelnen Client verdrahtet",
     MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
       && !MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Promotierter Joyn-freier Einmallauf erreicht Keychain und genau ein Budgetkind",
-    code === 0 && starts.length === 1
-      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
-      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner);
+  pruefe("Geänderter Produktstand stoppt den historischen Einmallauf vor Keychain und Budgetkind",
+    ["ENTDECKEN_JOYN_FREE_DEPLOYED_PROVENANCE_DRIFT", "ENTDECKEN_JOYN_FREE_SINGLE_LIVE_PROVENANCE_DRIFT"]
+      .includes(singleRunStop?.code) && starts.length === 0 && gelesen.length === 0);
 }
 
 {

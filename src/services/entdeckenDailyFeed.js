@@ -91,7 +91,7 @@ function refreshState(value, feedFormat = null) {
   /* Direkt nach der Forward-Migration darf der letzte gute Format-3/4-Feed
      noch unter dem neuen Ein-Versuch-Serververtrag sichtbar sein. Format 5
      selbst ist dagegen ausschliesslich mit maxAttempts=1 gueltig. */
-  const expectedAttempts = [5, 6, 7].includes(feedFormat) ? 1 : null;
+  const expectedAttempts = [5, 6, 7, 8].includes(feedFormat) ? 1 : null;
   if (!plain(value)
       || Object.keys(value).sort().join(",")
         !== ["attemptCount", "maxAttempts", "mode", "requested", "status"].sort().join(",")
@@ -119,12 +119,16 @@ function withRetrieval(state, retrievalStatus) {
 function exactResult(value, today) {
   const allowed = [
     "ok", "status", "feed", "writes", "providerRequests", "searchRequests",
-    "sourceRequests", "wikidataRequests", "responseMode", "displayText", "warnings", "providerReceipt", "feedReadback", "refresh",
+    "sourceRequests", "publicSourceRequests", "flixpatrolRequests", "flixpatrolChartRequests",
+    "flixpatrolTitleRequests", "wikidataRequests", "responseMode", "displayText", "warnings", "providerReceipt", "feedReadback", "refresh",
   ];
   if (!plain(value) || !["ok", "status", "feed"].every((key) => key in value)
       || Object.keys(value).some((key) => !allowed.includes(key))
       || value.ok !== true || !["fresh", "stale", "empty", "disabled"].includes(value.status)) return null;
-  for (const key of ["writes", "providerRequests", "searchRequests", "sourceRequests", "wikidataRequests"]) {
+  for (const key of [
+    "writes", "providerRequests", "searchRequests", "sourceRequests", "publicSourceRequests",
+    "flixpatrolRequests", "flixpatrolChartRequests", "flixpatrolTitleRequests", "wikidataRequests",
+  ]) {
     if (key in value && (!Number.isInteger(value[key]) || value[key] < 0)) return null;
   }
   /* Der Browser benoetigt die inhaltsfreien Live-/Persistenzbelege nicht,
@@ -145,7 +149,7 @@ function exactResult(value, today) {
     const currentWeek = isoWeekForDay(today);
     if (!currentWeek || (value.status === "fresh") !== (checked.value.isoWeek === currentWeek)) return null;
     if (value.status === "fresh" && checked.value.validUntil < today) return null;
-  } else if ([5, 6, 7].includes(checked.value.format)) {
+  } else if ([5, 6, 7, 8].includes(checked.value.format)) {
     if ((value.status === "fresh") !== (
       checked.value.refreshedOn <= today && checked.value.validUntil >= today
     )) return null;

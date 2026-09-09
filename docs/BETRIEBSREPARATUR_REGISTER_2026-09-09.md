@@ -24,12 +24,12 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | Vorreparatur integriert; E1 |
-| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | OFFEN; E2 → E4 |
+| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | Lokal gebaut und vollständig geprüft; Backend-/Datenlieferung offen; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | Vorreparatur integriert; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
 | M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | OFFEN; Master nach den Wellen |
 | M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Inventur GEPRÜFT; Umsetzung E2, E3, E5, E6 |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | Server gebaut/live geprüft; tägliche Aktivierung jetzt freigegeben; E1 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | Server gebaut/live geprüft; täglicher Workflow active; erster natürlicher Lauf offen; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
 
@@ -61,9 +61,9 @@ keine zusätzliche Freigaberunde.
 
 | Paket / zugewiesene IDs | Eigener Task / Branch / Worktree | Exklusive Write-Flächen | Zustand |
 | --- | --- | --- | --- |
-| E1 / M1, M4, M7 | `etappe_01_betrieb`; `codex/flixpatrol-e1-betrieb-20260909`; `/private/tmp/kd-flixpatrol-e1-betrieb-20260909` | Die sechs Betriebsworkflows private-ops-monitor, keepalive, automatic-ai-check, radar-six-day, entdecken-six-day, flixpatrol-usage; tools/private-ops-check.mjs und dessen Tests; tools/rls_test_personal.mjs und dedizierte RLS-Vorbereitungstests; automatic_ai_check_test.mjs, cleanup_b3_test.mjs, entdecken_weekly_trigger_test.mjs, neuer flixpatrol_usage_workflow_test.mjs; docs/BETRIEBSLAEUFE*.md | INTEGRATED als `d7bc9eb` + `66d7ee1`; 114 Paketchecks und 15 Delta-Checks grün; gemeinsamer Abschlusslauf offen |
+| E1 / M1, M4, M7 | `etappe_01_betrieb`; `codex/flixpatrol-e1-betrieb-20260909`; `/private/tmp/kd-flixpatrol-e1-betrieb-20260909` | Die sechs Betriebsworkflows private-ops-monitor, keepalive, automatic-ai-check, radar-six-day, entdecken-six-day, flixpatrol-usage; tools/private-ops-check.mjs und dessen Tests; tools/rls_test_personal.mjs und dedizierte RLS-Vorbereitungstests; automatic_ai_check_test.mjs, cleanup_b3_test.mjs, entdecken_weekly_trigger_test.mjs, neuer flixpatrol_usage_workflow_test.mjs; docs/BETRIEBSLAEUFE*.md | INTEGRATED als `d7bc9eb` + `66d7ee1`; 114 Paketchecks und 15 Delta-Checks grün; gemeinsamer lokaler und CI-Abschlusslauf grün |
 | E2 / M2, M6 | `etappe_02_daten`; `codex/flixpatrol-e2-daten-20260909`; `/private/tmp/kd-flixpatrol-e2-daten-20260909` | supabase/functions/_shared/flixpatrol*.js; genau neue Migration 20260909190000_flixpatrol_data_cache.sql; flixpatrol_client_test.mjs, flixpatrol_usage_contract_test.mjs und neue flixpatrol_data_*_test.mjs; docs/FLIXPATROL_DATENVERTRAG.md | INTEGRATED als `c99447e` + `c9a8c54`; 58 JS- und 10 PG-Checks grün, einschließlich paralleler Titelwrites |
-| E3 / M6 | `etappe_03_identitaet`; `codex/flixpatrol-e3-identitaet-20260909`; `/private/tmp/kd-flixpatrol-e3-identitaet-20260909` | src/lib/katalog.js; neuer src/lib/externalTitleIdentity.js; katalog_test.mjs und neuer external_title_identity_test.mjs; docs/FLIXPATROL_IDENTITAET.md | INTEGRATED als `9eacb18` + `f27252b`; 12 Helper-Tests und 104 Katalogchecks grün; gemeinsamer Abschlusslauf offen |
+| E3 / M6 | `etappe_03_identitaet`; `codex/flixpatrol-e3-identitaet-20260909`; `/private/tmp/kd-flixpatrol-e3-identitaet-20260909` | src/lib/katalog.js; neuer src/lib/externalTitleIdentity.js; katalog_test.mjs und neuer external_title_identity_test.mjs; docs/FLIXPATROL_IDENTITAET.md | INTEGRATED als `9eacb18` + `f27252b`; 12 Helper-Tests und 104 Katalogchecks grün; gemeinsamer lokaler und CI-Abschlusslauf grün |
 
 Eingefroren: alle bestehenden SQL-Migrationsbytes; Function-Handler und
 Runtime-Verdrahtung außerhalb der jeweils benannten Fläche; Entdecken- und
@@ -101,7 +101,8 @@ Belege: `/private/tmp/kd-flixpatrol-wave1-test.log` und
 ### Parallelwelle 2 – E4/E5
 
 Gemeinsame geprüfte Basis: `f981d91688414b2e71bf591a146c8f6e8990a750`.
-Die vollständige erste Welle ist lokal grün; ihre Paketlieferungen sind integriert.
+Die vollständige erste Welle ist lokal und in beiden GitHub-CI-Läufen grün;
+ihre Paketlieferungen sind integriert und auf Staging zurückgelesen.
 
 | Paket | Task / Branch / Worktree | Exklusive Write-Flächen |
 | --- | --- | --- |
@@ -114,6 +115,14 @@ eingefrorenen E2-Cachevertrag und E3-Identitätshelper. E5 nutzt die fünf
 Chart-Read-RPCs und ein gebündeltes Titles-Read für höchstens 50 konkrete IDs;
 die echte Cache-MediaType ist maßgeblich. E5 benötigt keinen E4-Output.
 Gemeinsame Testeinbindung bleibt beim Master, PostgreSQL exklusiv bei E4.
+
+Bestätigte E5-Naht: `StapelImport` war im Ausgangsstand nirgends in der App
+eingebunden. E5 erhält deshalb zusätzlich ausschließlich die nötige
+Prop-/Schalterverdrahtung in `src/App.jsx`, einen aufklappbaren Einstieg bei der
+Eintragserfassung in `src/tabs/MediathekTab.jsx` und einen dedizierten
+Mediathek-UI-Test. E4 berührt diese Dateien nicht. Konto-/Kontextwechsel und
+Unmount müssen laufende Vorschauen beziehungsweise weitere Importwrites
+abbrechen; bestehende Einzelanlage und Auswahl bleiben erhalten.
 
 E4 plant höchstens fünf Chartabfragen und 25 gezielte Titelabfragen pro
 Tageslauf, nur für benötigte fehlende/veraltete Cacheeinträge. Zusammen mit
@@ -128,6 +137,51 @@ Datentöpfe und sämtliche bezahlten Livekommandos/Provenienzhashes. Keine
 Baumeister-Außenwirkung, keine weiteren Agenten. Fachlicher Scope-Drift geht
 vor einem Edit zum Master; nur die betroffene Fläche wartet. Integration E4 → E5,
 danach ein gemeinsamer lokaler Abschlusslauf. E6 startet auf dessen Ergebnis.
+
+E5 ist DELIVERED und nach statischer Abnahme angenommen: `0eedc126` plus
+`2e65d55`, 308 fokussierte Checks grün. Die Nachbesserung erhält vorhandene
+IDs/Originaltitel, zeigt Ergänzungswerte verständlich und begrenzt den
+kontogebundenen Cache zeitlich. Konto-/Projektwechsel, explizites Verwerfen
+und React-StrictMode sind geprüft. Im Master integriert als `ad2e23b` + `520cd3b`.
+Vor E4/E5 wurde das gelieferte E3-Delta `e83188d15b80112df2810834041f9c485030aee5`
+als `56dce92` übernommen: opaque FlixPatrol-IDs bleiben bytegetreu und case-sensitiv.
+
+E4 ist als `29f57dd` plus `c258f77` integriert und angenommen. Die gezielte
+Nachbesserung akzeptiert vollständige Charts mit fünf bis zehn Werken, ersetzt
+cachebekannte Dubletten aus vorhandenen Rangfolgern und weist ungültige
+SQL-Datumsfelder ab. 53 Adapter-, 17 Function- und fünf PG-Delta-Checks grün.
+
+Welle 2 vollständig lokal bestanden auf `c258f7732a0bc08fe2f6c8b8f7567505dccec884`:
+`npm run pretest` und anschließend `npm --ignore-scripts test`, jeweils Exit 0,
+einschließlich isolierter PostgreSQL-Datenbanken, Einzeldatei- und Pages-Build.
+Belege: `/private/tmp/kd-flixpatrol-wave2-pretest.log` und
+`/private/tmp/kd-flixpatrol-wave2-test.log`. Die erste Vorlaufunterbrechung war
+eine durch E3 ungültig gewordene kurze Test-ID; jetzt prüft dieselbe Assertion
+eine gültige case-sensitive ID. Kein Produktguard gelockert.
+Die Master-Testnähte bestehen zusätzlich 14 Trigger-, 108 Keychain- und
+48 Radar-Vertragschecks. Historische bezahlte Freigaben werden aus ihren
+unveränderlichen Git-Bytes geprüft; der neue Produktstand bleibt dort gesperrt.
+`package.json` und alle bezahlten Freigabehashes sind unverändert.
+
+### Folgewelle 3 – E6
+
+- Exakte geprüfte Basis: `c258f7732a0bc08fe2f6c8b8f7567505dccec884`.
+- Baumeister `etappe_06_ki`, Branch `codex/flixpatrol-e6-ki-20260909`, Worktree
+  `/private/tmp/kd-flixpatrol-e6-ki-20260909`; Sol/high für die komplexe
+  serverseitige Provider-/Auth-/Privacy-Grenze.
+- M6: Cachekontext für Prognose, flüchtige Hinweise zu Profil-Filmerwähnungen
+  und Identität geeigneter strukturierter Radar-Ziele. E5-Importnachprüfung
+  bleibt der einzige Importresolver; keine zweite Kopie oder zusätzliche KI.
+- Exklusive Flächen: ai-task/index.ts und neuer gemeinsamer reiner
+  FlixPatrol-Faktenkontext; nötige reine Identity-/Facts-Module mit kompatiblen
+  Frontend-Reexports; Prognoseauftrag/-Service und ggf. Promptversion;
+  extraktion.js, GeschmackBereich/DreiFragen/ProfilAnsicht; gezielte
+  Radar-Handler-/Runner-/Adapter-/Vertragsnähte; eigene Mock-/UI-/Functiontests
+  und FLIXPATROL_KI_KONTEXT.md. Kein persönliches Schema oder Speicherformat.
+- Alle SQL-Dateien, E2-Client/RPCs, E4-Entdecken, E5-Importservice/-Komponente,
+  package/Lockfiles, Styles und bezahlte Gates sind eingefroren. Keine
+  Außenwirkung/PG-Starts oder weiteren Agenten. Master besitzt die
+  Testeinbindung und gemeinsame Lieferung; größere Deltas gehen an E6 zurück.
 
 ## Lieferung und Verbrauch
 
@@ -146,6 +200,30 @@ Die bestehende Production-Umgebungsfreigabe bleibt eine Nutzerhandlung.
 Die getrennten Zustände gebaut / getestet / committed / gepusht / CI-grün /
 deployed / natürliche Ausführung / praktische PWA-Abnahme bleiben sichtbar.
 Keine neue Aktivierung kostenpflichtiger KI durch diesen Datenauftrag.
+
+Erste Welle veröffentlicht: `main` bei `5dbdf6b`, `staging` bei `2057494`.
+Staging wurde mit dem eigenen Task-Diff auf `ce846a3` aufgebaut; die dortigen
+UI-Änderungen bleiben erhalten. Die drei Integrationsprüfungen liefern
+64 Monitor-, 70 Entdecken- und 108 Keychainchecks. Nach einer gezielten
+Linux-Korrektur am temporären PG-Serverstart sind die CI-Tests in
+[main](https://github.com/Soppagata/kinodreieck-app/actions/runs/34402755863) und
+[staging](https://github.com/Soppagata/kinodreieck-app/actions/runs/34402746417)
+grün: vollständige Suiten/Function-Mocks, Chromium und WebKit. Staging-Deploy
+und direkte Domain-Metadaten bestätigen `2057494189a480689f61f3f8032cea79757a3732`.
+Production wartet weiterhin an der bestehenden Umgebungsfreigabe. Die
+Linux-Naht deaktiviert nur den nicht benötigten System-Unix-Socket und lässt
+alle PG-Vertragsprüfungen aktiv; keine Migration oder Produktlogik geändert.
+Der Ticker ist jetzt bei GitHub als `active` registriert (Workflow 354372774),
+erster natürlicher Lauf noch ausstehend. Entdecken und Automatic-AI bleiben
+`disabled_manually`; der separate Radar-Workflow hat weiterhin sein hartes
+`false` vor dem wirksamen Job.
+
+Die automatische Freigabeprüfung hat den geplanten Live-RLS-Test mit temporären
+Shared-Testwrites abgelehnt: Eine ausdrückliche Freigabe von Ziel/Umfang sei in
+den Nutzernachrichten nicht belegt. Dieser Test wurde nicht gestartet. Keine
+Umgehung; die lokalen Tests und lesenden Vorbedingungen bleiben gültig. Eine
+konkrete gemeinsame Datenbank-/Backend-Lieferung einschließlich nötiger Tests
+wird erst am fertigen, überprüfbaren Kandidaten zur Freigabe vorgelegt.
 
 ## Aktuell belegter Ausgang
 

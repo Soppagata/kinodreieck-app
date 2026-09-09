@@ -38,6 +38,7 @@ const MODEL_FORM = /^claude-haiku-4-5(?:-[0-9]{8})?$/;
 const QID_FORM = /^Q[1-9]\d*$/;
 const IMDB_FORM = /^tt\d{7,10}$/;
 const TMDB_FORM = /^[1-9]\d{0,8}$/;
+const FLIXPATROL_FORM = /^ttl_[A-Za-z0-9]{20,40}$/;
 
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function text(value) { return String(value == null ? "" : value).trim(); }
@@ -59,6 +60,42 @@ function safeEntityName(value) {
 function canonicalInstant(value) {
   const parsed = Date.parse(typeof value === "string" ? value : "");
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+/* Kleine gemeinsame Projektion fuer alle FlixPatrol-Verbraucher. Das
+   titles_read-RPC bleibt die Wahrheit fuer mediaType und Cachefrische; weder
+   Chart-Embeds noch Provider-Rohobjekte duerfen diese Felder ersetzen. */
+export function normalizeEntdeckenFlixPatrolFact(value, { requireFresh = false } = {}) {
+  if (!plain(value) || !FLIXPATROL_FORM.test(text(value.sourceId))
+      || !["film", "series"].includes(value.mediaType)
+      || value.status !== "resolved" || !safeTitle(value.title)
+      || !Number.isInteger(value.releaseYear) || value.releaseYear < 1888 || value.releaseYear > 2100
+      || typeof value.fresh !== "boolean" || (requireFresh && value.fresh !== true)) return null;
+  const checkedAt = canonicalInstant(value.checkedAt);
+  const freshUntil = canonicalInstant(value.freshUntil);
+  const sourceUrl = directHttpsUrl(value.sourceUrl);
+  if (!checkedAt || !freshUntil || !sourceUrl || Date.parse(freshUntil) < Date.parse(checkedAt)) return null;
+  const externalIds = { flixpatrol: value.sourceId };
+  if (value.imdbId != null) {
+    if (typeof value.imdbId !== "string" || !IMDB_FORM.test(value.imdbId)) return null;
+    externalIds.imdb = value.imdbId;
+  }
+  if (value.tmdbId != null) {
+    const tmdb = text(value.tmdbId);
+    if (!TMDB_FORM.test(tmdb)) return null;
+    externalIds.tmdb = tmdb;
+  }
+  return Object.freeze({
+    sourceId: value.sourceId,
+    mediaType: value.mediaType,
+    title: value.title,
+    releaseYear: value.releaseYear,
+    externalIds: Object.freeze(externalIds),
+    sourceUrl,
+    checkedAt,
+    freshUntil,
+    fresh: value.fresh,
+  });
 }
 function directHttpsUrl(value) {
   if (typeof value !== "string" || value !== value.trim() || value.length > 2048) return null;

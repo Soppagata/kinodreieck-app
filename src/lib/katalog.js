@@ -59,6 +59,7 @@ import {
   ergaenzeFehlendeExterneKennungen,
   ordneExternenTitelZu,
 } from "./externalTitleIdentity.js";
+import { baueFlixpatrolVorschlaege, uebernehmeFlixpatrolVorschlag } from "./flixpatrolFacts.js";
 
 const TABLE = "kd_catalog";
 const CACHE = "kinodreieck-katalog-v1";
@@ -420,7 +421,9 @@ export async function testeKatalogZugang({
 /* Aus den bisher getrennt gelieferten Ansichten entsteht ein neutraler Katalog.
    Danach wird „Mein Programm“ immer im Browser gegen die AKTIVE Masterliste
    gebildet. Damit funktionieren Demo- und Clean-Modus mit derselben DB-Payload. */
-export function baueStreamingAnsichten(streaming, master = []) {
+export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten = []) {
+  const masterMitFakten = baueFlixpatrolVorschlaege(master, flixpatrolFakten)
+    .map(uebernehmeFlixpatrolVorschlag);
   const bekanntAlt = (streaming && streaming.bekannt) || {};
   const entdeckenAlt = (streaming && streaming.entdecken) || {};
   const map = new Map();
@@ -457,7 +460,7 @@ export function baueStreamingAnsichten(streaming, master = []) {
 
   const meine = [], entdecken = [];
   for (const t of map.values()) {
-    const zuordnung = ordneExternenTitelZu(t, master);
+    const zuordnung = ordneExternenTitelZu(t, masterMitFakten);
     if (zuordnung.status === "matched") {
       const film = ergaenzeFehlendeExterneKennungen(zuordnung.match, t);
       meine.push({

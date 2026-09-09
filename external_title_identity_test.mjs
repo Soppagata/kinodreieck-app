@@ -13,6 +13,8 @@ import {
 
 const film = (werte = {}) => ({ titel: "Dune", jahr: 2021, typ: "film", ...werte });
 const extern = (werte = {}) => ({ titel: "Dune", jahr: 2021, typ: "movie", ...werte });
+const FLIXPATROL_ID = "ttl_AbCdEfGhIjKlMnOpQrSt";
+const FLIXPATROL_ID_ANDERE_CASE = "ttl_abCdEfGhIjKlMnOpQrSt";
 
 test("normalisiert nur belegte Identitaetsfelder", () => {
   assert.equal(normalisiereExternenTitel("  Mondsüchtig!  "), "mondsuchtig");
@@ -25,6 +27,11 @@ test("normalisiert nur belegte Identitaetsfelder", () => {
   assert.equal(normalisiereExterneTitelkennung("watchmode", 0), null);
   assert.equal(normalisiereExterneTitelkennung("tmdb", "000"), null);
   assert.equal(normalisiereExterneTitelkennung("imdb", "tt0000000"), null);
+  assert.equal(normalisiereExterneTitelkennung("flixpatrol", FLIXPATROL_ID), FLIXPATROL_ID);
+  assert.equal(normalisiereExterneTitelkennung("flixpatrol", `flixpatrol:${FLIXPATROL_ID}`),
+    FLIXPATROL_ID);
+  assert.equal(normalisiereExterneTitelkennung("flixpatrol", "ttl_kurz"), null);
+  assert.equal(normalisiereExterneTitelkennung("flixpatrol", `FlixPatrol:${FLIXPATROL_ID}`), null);
   assert.deepEqual(externeTitelKennungen({ imdbId: "TT1234567", tmdb_id: 438631 }), {
     imdb: "tt1234567", tmdb: "438631",
   });
@@ -100,6 +107,23 @@ test("blockiert doppelt vergebene starke IDs mit widersprechenden Belegen", () =
   assert.deepEqual(ergebnis, { status: "conflict", reason: "shared-strong-id-conflict" });
 });
 
+test("behandelt opaque FlixPatrol-IDs case-sensitiv", () => {
+  const gleich = pruefeExterneTitelIdentitaet(
+    extern({ flixpatrol_id: FLIXPATROL_ID }),
+    film({ flixpatrol_id: FLIXPATROL_ID }),
+  );
+  assert.equal(gleich.status, "matched");
+  assert.equal(gleich.matchedBy, "strong-id");
+  assert.deepEqual(gleich.namespaces, ["flixpatrol"]);
+
+  const andereCase = pruefeExterneTitelIdentitaet(
+    extern({ flixpatrol_id: FLIXPATROL_ID }),
+    film({ flixpatrol_id: FLIXPATROL_ID_ANDERE_CASE }),
+  );
+  assert.equal(andereCase.status, "conflict");
+  assert.deepEqual(andereCase.namespaces, ["flixpatrol"]);
+});
+
 test("laesst mehrdeutige titelbasierte Kandidaten leer", () => {
   const ergebnis = ordneExternenTitelZu(extern(), [film({ id: "a" }), film({ id: "b" })]);
   assert.deepEqual(ergebnis, { status: "ambiguous", reason: "multiple-title-year-type-matches" });
@@ -116,14 +140,14 @@ test("waehlt keinen ID-losen Titel neben einem gleichnamigen ID-Konflikt", () =>
 test("ergaenzt nur fehlende IDs und mutiert keine Eingabe", () => {
   const eigen = film({ watchmode_id: "77", imdb_id: "tt1111111" });
   const quelle = extern({ watchmode_id: 77, imdb_id: "tt9999999", tmdb_id: 438631,
-    flixpatrol_id: "title-123" });
+    flixpatrol_id: FLIXPATROL_ID });
   const eigenVorher = structuredClone(eigen);
   const quelleVorher = structuredClone(quelle);
   const ergaenzt = ergaenzeFehlendeExterneKennungen(eigen, quelle);
   assert.equal(ergaenzt.watchmode_id, "77");
   assert.equal(ergaenzt.imdb_id, "tt1111111");
   assert.equal(ergaenzt.tmdb_id, 438631);
-  assert.equal(ergaenzt.flixpatrol_id, "title-123");
+  assert.equal(ergaenzt.flixpatrol_id, FLIXPATROL_ID);
   assert.deepEqual(eigen, eigenVorher);
   assert.deepEqual(quelle, quelleVorher);
   assert.notEqual(ergaenzt, eigen);
