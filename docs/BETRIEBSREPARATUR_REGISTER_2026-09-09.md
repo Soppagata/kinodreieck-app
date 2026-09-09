@@ -98,16 +98,36 @@ Radar-Workflow. Kein Provenienzhash, Livekommando oder Providerzaun geändert.
 Belege: `/private/tmp/kd-flixpatrol-wave1-test.log` und
 `/private/tmp/kd-flixpatrol-wave1-deno.log`. Keine neuen FlixPatrol-/KI-Requests.
 
-### Vorbereitete Folgewelle E4/E5
+### Parallelwelle 2 – E4/E5
 
-Nach E2/E3-Integration und dem gemeinsamen Abschlusslauf wird der konkrete
-Basiscommit hier eingetragen. E4 erhält den Entdecken-Function-/Feedpfad,
-seine Frontend-Leseverträge und genau eine additive Format-Migration. E5
-erhält Importvorschau, die neutrale Frontend-Faktenprojektion und deren
-Katalogverbraucher. Beide lesen den dann eingefrorenen E2-Cachevertrag und
-E3-Identitätshelper; E5 hängt nicht von einem bereits befüllten Livefeed ab.
+Gemeinsame geprüfte Basis: `f981d91688414b2e71bf591a146c8f6e8990a750`.
+Die vollständige erste Welle ist lokal grün; ihre Paketlieferungen sind integriert.
+
+| Paket | Task / Branch / Worktree | Exklusive Write-Flächen |
+| --- | --- | --- |
+| E4 / M2, M3, M6 | `etappe_04_entdecken`; `codex/flixpatrol-e4-entdecken-20260909`; `/private/tmp/kd-flixpatrol-e4-entdecken-20260909` | supabase/functions/entdecken-daily-task/{index.ts,runner.js,contract.js,responseContract.js,readbackContract.js,publicMixAdapter.js} und neuer flixpatrolMixAdapter.js; _shared/entdeckenFacts.js; src/services/entdeckenDailyFeed.js; src/lib/{webDiscoveryFeed,popularityContracts,entdeckenFacts,entdeckenFreshness,entdeckenUi}.js; src/controllers/useWebDiscoveryFeed.js; src/tabs/EntdeckenTab.jsx; .github/workflows/entdecken-six-day.yml; genau neue 20260909210000_entdecken_flixpatrol_feed.sql; dedizierte entdecken_*_test.mjs außer Provenienz-/Live-Testwerkzeugen; neue docs/FLIXPATROL_ENTDECKEN.md |
+| E5 / M6 | `etappe_05_import`; `codex/flixpatrol-e5-import-20260909`; `/private/tmp/kd-flixpatrol-e5-import-20260909` | src/components/StapelImport.jsx; src/lib/stapelimport.js; neue src/{services,lib}/flixpatrolFacts.js; src/services/catalog.js; src/lib/katalog.js; katalog_test.mjs, stapelimport_test.mjs, stapelimport_partial_ui_test.mjs und neue flixpatrol_facts_*_test.mjs; neue docs/FLIXPATROL_IMPORT.md |
+
+Kollisionsprüfung E4×E5: PARALLEL_OK für Dateien, Exports, Datenzustand,
+Generatoren, Tests und Dependencies. Beide lesen ausschließlich den
+eingefrorenen E2-Cachevertrag und E3-Identitätshelper. E5 nutzt die fünf
+Chart-Read-RPCs und ein gebündeltes Titles-Read für höchstens 50 konkrete IDs;
+die echte Cache-MediaType ist maßgeblich. E5 benötigt keinen E4-Output.
 Gemeinsame Testeinbindung bleibt beim Master, PostgreSQL exklusiv bei E4.
-Die endgültige Dateiliste wird vor Dispatch auf Überlappungen geprüft.
+
+E4 plant höchstens fünf Chartabfragen und 25 gezielte Titelabfragen pro
+Tageslauf, nur für benötigte fehlende/veraltete Cacheeinträge. Zusammen mit
+dem Ticker ergibt der reguläre Tagespfad selbst ohne Cachetreffer höchstens
+961 Requests in 31 Tagen. Keine Such-/Paginationsloops und kein Quota-Gate.
+Chartdatum, Abrufzeit und Verfügbarkeit bleiben getrennt; fehlende Abdeckung
+darf weder erfundene Titel noch einen als aktuell bezeichneten August-Pool ergeben.
+
+Eingefroren bleiben alle älteren Migrationen, E2-Client/Cache-RPCs,
+E3-Identitätshelper, package.json/Lockfiles, globale Styles, persönliche
+Datentöpfe und sämtliche bezahlten Livekommandos/Provenienzhashes. Keine
+Baumeister-Außenwirkung, keine weiteren Agenten. Fachlicher Scope-Drift geht
+vor einem Edit zum Master; nur die betroffene Fläche wartet. Integration E4 → E5,
+danach ein gemeinsamer lokaler Abschlusslauf. E6 startet auf dessen Ergebnis.
 
 ## Lieferung und Verbrauch
 
