@@ -40,7 +40,7 @@ check("gültiger unbewerteter Film und bestätigtes Profil ergeben einen Auftrag
 check("Payload hat ausschließlich Film, Profil und serverlesbare Filmkennung", () =>
   Object.keys(gebaut.payload).sort().join(",") === "film,filmkennung,profil"
   && gebaut.payload.filmkennung === null);
-check("Film-Payload enthält nur die sechs erlaubten Felder", () =>
+check("Film-Payload enthält ohne bekannte externe ID nur die sechs erlaubten Felder", () =>
   Object.keys(gebaut.payload.film).sort().join(",") === "genres,jahr,originaltitel,tags,titel,typ");
 check("Profil-Payload enthält nur Signale und Achsen", () =>
   Object.keys(gebaut.payload.profil).sort().join(",") === "achsen,signale");
@@ -93,6 +93,28 @@ check("Eine starke Filmkennung reist ohne Filmwissen-Texte mit", () => {
     && JSON.stringify(auftrag.payload.filmkennung)
       === JSON.stringify({ namespace: "imdb", kennung: "tt0078748" })
     && !("filmwissen" in auftrag.payload);
+});
+check("bekannte externe Filmkennungen reisen normalisiert als reine IDs mit", () => {
+  const auftrag = bauePrognoseAuftrag({
+    ...film,
+    flixpatrol_id: "ttl_abcdefghijklmnopqrstuvwx",
+    imdb_id: "TT0078748",
+    tmdb_id: "348",
+    watchmode_id: "12345",
+    source_url: "DARF-NICHT-RAUS",
+  }, profil);
+  return auftrag.ok
+    && JSON.stringify(auftrag.payload.film.externeIds) === JSON.stringify({
+      watchmode: "12345",
+      imdb: "tt0078748",
+      tmdb: "348",
+      flixpatrol: "ttl_abcdefghijklmnopqrstuvwx",
+    })
+    && !JSON.stringify(auftrag.payload).includes("source_url");
+});
+check("ungültige externe Kennungen werden nicht in den Forecast-Auftrag kopiert", () => {
+  const auftrag = bauePrognoseAuftrag({ ...film, flixpatrol_id: "../../falsch" }, profil);
+  return auftrag.ok && !("externeIds" in auftrag.payload.film);
 });
 
 console.log(`\n${ok}/${ok + rot.length} Prognose-Auftrag-Checks bestanden.`);

@@ -62,6 +62,7 @@ type Netzaufruf = {
 
 const KONTO = "11111111-2222-3333-4444-555555555555";
 const LOG_ID = 42;
+const FLIXPATROL_TEST_ID = "ttl_bHyGTvopBHPVtIKhR2CF68WD";
 
 const aufrufe: Netzaufruf[] = [];
 
@@ -247,6 +248,9 @@ const z = {
     format: "filmwissen-cache-v1",
     status: "cache_miss",
   } as unknown,
+  flixpatrolCharts: null as null | ((body: Record<string, unknown> | null) => unknown),
+  flixpatrolTitles: { ok: true, items: [] } as unknown,
+  flixpatrolRpcStatus: 200,
   filmwissenVorbereitung: {
     status: "quellen_nicht_verfuegbar",
     werkId: crypto.randomUUID(),
@@ -294,6 +298,9 @@ function stelleZurueck() {
   z.startHttpFehler = null;
   z.stand = { heute: 0 };
   z.filmwissenAktuell = { format: "filmwissen-cache-v1", status: "cache_miss" };
+  z.flixpatrolCharts = null;
+  z.flixpatrolTitles = { ok: true, items: [] };
+  z.flixpatrolRpcStatus = 200;
   z.filmwissenVorbereitung = {
     status: "quellen_nicht_verfuegbar",
     werkId: crypto.randomUUID(),
@@ -386,6 +393,13 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
   if (url.includes("/rest/v1/rpc/kd_ai_stand")) return antwort(z.stand);
   if (url.includes("/rest/v1/rpc/kd_filmwissen_aktuell_lesen")) {
     return antwort(z.filmwissenAktuell);
+  }
+  if (url.includes("/rest/v1/rpc/kd_flixpatrol_chart_read")) {
+    const result = z.flixpatrolCharts ? z.flixpatrolCharts(koerper) : { ok: true, chart: null };
+    return antwort(result, z.flixpatrolRpcStatus);
+  }
+  if (url.includes("/rest/v1/rpc/kd_flixpatrol_titles_read")) {
+    return antwort(z.flixpatrolTitles, z.flixpatrolRpcStatus);
   }
   if (url.includes("/rest/v1/rpc/kd_filmwissen_synthese_vorbereiten")) {
     return antwort(z.filmwissenVorbereitung);
@@ -6645,6 +6659,45 @@ test("PEF1 ein wörtlich genannter Titel kommt durch", async () => {
   gleich(f[0].richtung, "zieht_an", "Richtung");
 });
 
+test("PEF1a gecachte Titel bleiben flüchtige unbestätigte Profilhinweise", async () => {
+  z.flixpatrolCharts = (body) => ({ ok: true, chart: {
+    companyId: body?.p_company_id,
+    countryId: body?.p_country_id,
+    chartType: body?.p_chart_type,
+    items: body?.p_chart_type === "movies"
+      ? [{ sourceId: FLIXPATROL_TEST_ID, ranking: 1, mediaType: "film" }]
+      : [],
+  } });
+  z.flixpatrolTitles = { ok: true, items: [{
+    sourceId: FLIXPATROL_TEST_ID,
+    mediaType: "film",
+    status: "resolved",
+    title: "Stalker",
+    releaseYear: 1979,
+    description: "Neutrale Cachebeschreibung, die nicht zum Anbieter gehen darf.",
+    checkedAt: "2026-09-09T11:00:00.000Z",
+    fresh: true,
+    sourceUrl: "https://flixpatrol.com/title/stalker/",
+  }] };
+  const r = await extrakt({
+    filme: [{ titel: "Stalker", jahr: null, richtung: null }],
+  });
+  gleich(r.status, 200, "Status");
+  // deno-lint-ignore no-explicit-any
+  const d = daten(r) as any;
+  gleich(d.filme.length, 1, "die belegte persönliche Erwähnung bleibt unverändert");
+  gleich(d.filme[0].jahr, null, "Cachejahr bestätigt die persönliche Angabe nicht");
+  gleich(d.flixpatrol_hinweise.length, 1, "ein separater transienter Hinweis");
+  gleich(d.flixpatrol_hinweise[0].filmIndex, 0, "Hinweis ist nur der Erwähnung zugeordnet");
+  gleich(d.flixpatrol_hinweise[0].candidates[0].title, "Stalker", "mögliches Werk");
+  falsch("sicher" in d.flixpatrol_hinweise[0].candidates[0], "keine Bestätigung aus dem Cache");
+  gleich(rpc("kd_flixpatrol_chart_read").length, 5, "fünf feste Chartreads");
+  gleich(rpc("kd_flixpatrol_titles_read").length, 1, "ein gebündelter Titelread");
+  falsch(nutzertext().includes("FlixPatrol"), "Fakten gehen nicht in den Profil-Providerprompt");
+  falsch(nutzertext().includes("Neutrale Cachebeschreibung"), "Cachetext bleibt außerhalb des Providers");
+  gleich(anbieterAufrufe().length, 1, "kein zusätzlicher KI-Request");
+});
+
 test("PEF2 ein erfundener Titel fällt raus — sonst wäre filme die Umgehung", async () => {
   const r = await extrakt({
     filme: [
@@ -8171,6 +8224,78 @@ test("FF3d Cache-Miss bleibt persönliche Schätzung und löst keine Recherche a
     0,
     "Prognose und Recherche bleiben zwei getrennte Kostenentscheidungen",
   );
+});
+
+test("FF3e gecachte FlixPatrol-Fakten werden serverseitig streng zugeordnet", async () => {
+  z.flixpatrolCharts = (body) => ({ ok: true, chart: {
+    companyId: body?.p_company_id,
+    countryId: body?.p_country_id,
+    chartType: body?.p_chart_type,
+    items: body?.p_chart_type === "movies" ? [{ sourceId: FLIXPATROL_TEST_ID, ranking: 1, mediaType: "series" }] : [],
+  } });
+  z.flixpatrolTitles = { ok: true, items: [{
+    sourceId: FLIXPATROL_TEST_ID,
+    mediaType: "film",
+    status: "resolved",
+    title: "Testfilm",
+    releaseYear: 1999,
+    imdbId: "1234567",
+    tmdbId: "99",
+    description: "Neutrale Beschreibung aus dem gemeinsamen Cache.",
+    runtimeMinutes: 101,
+    premiere: "1999-01-02",
+    checkedAt: "2026-09-09T11:00:00.000Z",
+    fresh: true,
+    sourceUrl: "https://flixpatrol.com/title/testfilm/",
+    genreId: "gnr_unaufgeloest1234567890",
+  }] };
+  forecastMit(FF_ANTWORT());
+  const r = await forecastRuf();
+  gleich(r.status, 200, "Status");
+  const gesendet = forecastAusNutzertext() as Record<string, unknown>;
+  const facts = gesendet.flixpatrolFakten as Record<string, unknown>;
+  gleich(facts.source, "FlixPatrol", "serverseitige Herkunft");
+  gleich(facts.description, "Neutrale Beschreibung aus dem gemeinsamen Cache.", "Kurzbeschreibung");
+  gleich((facts.identity as Record<string, unknown>).mediaType, "film", "Titles-Typ gewinnt gegen Chart-Platzhalter");
+  falsch(JSON.stringify(facts).includes("ranking"), "kein Chartplatz im Prognosekontext");
+  falsch(JSON.stringify(facts).includes("genreId"), "keine unaufgelöste Genre-ID im Prompt");
+  gleich(rpc("kd_flixpatrol_chart_read").length, 5, "fünf feste Chartreads");
+  gleich(rpc("kd_flixpatrol_titles_read").length, 1, "ein gebündelter Titelread");
+  gleich(anbieterAufrufe().length, 1, "kein zusätzlicher KI-Request");
+});
+
+test("FF3f direkte FlixPatrol-ID liest genau einen Titel und Browserfakten bleiben gesperrt", async () => {
+  z.flixpatrolTitles = { ok: true, items: [{
+    sourceId: FLIXPATROL_TEST_ID, mediaType: "film", status: "resolved",
+    title: "Testfilm", releaseYear: 1999, description: "Neutral",
+    checkedAt: "2026-09-09T11:00:00.000Z", fresh: true,
+    sourceUrl: "https://flixpatrol.com/title/testfilm/",
+  }] };
+  const payload = ffAendere((p) => {
+    (p.film as Record<string, unknown>).externeIds = { flixpatrol: FLIXPATROL_TEST_ID };
+  });
+  forecastMit(FF_ANTWORT());
+  let r = await forecastRuf(payload);
+  gleich(r.status, 200, "direkter ID-Weg");
+  gleich(rpc("kd_flixpatrol_chart_read").length, 0, "kein Chartscan bei belegter ID");
+  gleich(rpc("kd_flixpatrol_titles_read").length, 1, "genau ein direkter Titelread");
+
+  stelleZurueck();
+  r = await forecastRuf(ffPayload({ flixpatrolFakten: { source: "Browser" } }));
+  gleich(r.status, 400, "Browserinjektion wird abgewiesen");
+  gleich(r.daten.grund, "forecast-flixpatrol-nur-server", "sichtbare Grenze");
+  gleich(rpc("kd_flixpatrol_chart_read").length, 0, "keine Cachearbeit");
+  gleich(starten().length, 0, "keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieteraufruf");
+});
+
+test("FF3g FlixPatrol-Cachefehler erhält den bisherigen Prognoseweg", async () => {
+  z.flixpatrolRpcStatus = 500;
+  forecastMit(FF_ANTWORT());
+  const r = await forecastRuf();
+  gleich(r.status, 200, "Prognose bleibt nutzbar");
+  falsch("flixpatrolFakten" in forecastAusNutzertext(), "kein ungeprüfter Zusatzkontext");
+  gleich(anbieterAufrufe().length, 1, "weiterhin genau ein bestehender Anbieterrequest");
 });
 
 test("FF4 das Structured-Output-Schema fordert alle drei Achsen und begrenzt alle Enums", async () => {

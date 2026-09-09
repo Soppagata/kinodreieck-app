@@ -78,7 +78,7 @@ await check("Aufgabe, Payload und Profilversion gehen an die richtige Grenze", a
   await erstelleVorbewertung(film, { profil, ai: d.ai });
   const [task, payload, optionen] = d.rufe[0];
   return task === "film-forecast" && optionen.profilVersion === "p2"
-    && optionen.promptVersion === "v2"
+    && optionen.promptVersion === "v3"
     && Object.keys(payload).sort().join(",") === "film,filmkennung,profil";
 });
 await check("Vorgangs-ID und Abbruchsignal werden ohne Retry durchgereicht", async () => {

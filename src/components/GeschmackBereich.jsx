@@ -89,6 +89,7 @@ export function GeschmackBereich({
   const [extraktLaeuft, setExtraktLaeuft] = useState(false);
   const [extraktFehler, setExtraktFehler] = useState(null);
   const [extrakt, setExtrakt] = useState(null);
+  const [filmFaktenHinweise, setFilmFaktenHinweise] = useState([]);
 
   /* FAIL-CLOSED wie ueberall beim Schalter: Ohne beantwortete Frage, ohne
      Konto und ohne eingeschaltete Funktion gibt es den KI-Weg nicht -- er
@@ -210,6 +211,7 @@ export function GeschmackBereich({
   const extrahiere = async (antworten) => {
     setExtraktLaeuft(true);
     setExtraktFehler(null);
+    setFilmFaktenHinweise([]);
     try {
       const antwort = await ai.runTask(
         "profile-extract",
@@ -246,7 +248,9 @@ export function GeschmackBereich({
         setExtraktFehler("Die Antwort des Dienstes hatte nicht die erwartete Form.");
         return;
       }
-      setExtrakt(ausExtraktion(daten, antwort));
+      const gelesen = ausExtraktion(daten, antwort);
+      setFilmFaktenHinweise(gelesen.flixpatrolHinweise || []);
+      setExtrakt(gelesen);
     } catch (e) {
       /* `errorText` statt `e.message`: Die Fehlercodes dieses Pfads haben
          eigene, verständliche Texte (LIMIT, AI_DISABLED, FORBIDDEN …), und
@@ -267,7 +271,19 @@ export function GeschmackBereich({
      Schreiben. */
   const uebernehmeExtrakt = async (auswahl) => {
     const ok = await uebernehmen(auswahl);
-    if (ok !== false) { setFrage(false); setExtrakt(null); }
+    if (ok !== false) {
+      const filme = auswahl?.rahmen?.filme || [];
+      setFilmFaktenHinweise((auswahl?.flixpatrolHinweise || []).flatMap((hinweis) => {
+        const film = filme[hinweis.filmIndex];
+        return film ? [{
+          ...hinweis,
+          filmTitel: film.titel,
+          filmJahr: film.jahr ?? null,
+        }] : [];
+      }));
+      setFrage(false);
+      setExtrakt(null);
+    }
   };
 
   const richtungAendern = async (index, richtung) => {
@@ -355,7 +371,7 @@ export function GeschmackBereich({
           ergebnis={extrakt}
           onExtrahieren={extrahiere}
           onUebernehmen={uebernehmeExtrakt}
-          onAbbruch={() => { setFrage(false); setExtrakt(null); setExtraktFehler(null); }}
+          onAbbruch={() => { setFrage(false); setExtrakt(null); setExtraktFehler(null); setFilmFaktenHinweise([]); }}
         />
       ) : erhebe ? (
         <GeschmackOnboarding
@@ -369,14 +385,15 @@ export function GeschmackBereich({
         <>
           <ProfilAnsicht
             profil={profil}
+            filmFaktenHinweise={filmFaktenHinweise}
             kiGeraeteweiseAus={kiGeraeteweiseAus}
             onRichtungAendern={richtungAendern}
             onEntfernen={entfernen}
             onNichtDeutbarEntfernen={nichtDeutbarEntfernen}
             onWiderrufen={widerrufen}
-            onNeuErheben={() => { setMeldung(null); setErhebe(true); }}
+            onNeuErheben={() => { setMeldung(null); setFilmFaktenHinweise([]); setErhebe(true); }}
             kiWegOffen={kiWegOffen}
-            onKiErheben={() => { setMeldung(null); setExtrakt(null); setExtraktFehler(null); setFrage(true); }}
+            onKiErheben={() => { setMeldung(null); setExtrakt(null); setExtraktFehler(null); setFilmFaktenHinweise([]); setFrage(true); }}
           />
           {blogProfilAnalyseSichtbar && <BlogProfilAnalyse
             artikelListe={artikelListe}

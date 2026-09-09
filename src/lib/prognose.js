@@ -1,7 +1,7 @@
 import { BEWERTUNGSKATEGORIE_IDS } from "./kategorien.js";
 
 export const PROGNOSE_FORMAT = "film-prognose-v1";
-export const PROGNOSE_PROMPT_VERSION = "v2";
+export const PROGNOSE_PROMPT_VERSION = "v3";
 export const PROGNOSE_STATUS = Object.freeze(["offen", "angenommen", "korrigiert", "verworfen"]);
 export const PROGNOSE_SICHERHEIT = Object.freeze(["sehr_niedrig", "niedrig", "mittel", "hoch"]);
 export const PROGNOSE_WARUM_HERKUNFT = Object.freeze(["persoenlich_geschaetzt", "filmwissen"]);
