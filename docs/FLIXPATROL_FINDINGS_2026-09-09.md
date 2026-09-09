@@ -4,7 +4,8 @@ Stand: 9. September 2026. Auftrag von Max: zuerst alle sinnvollen Einsatzstellen
 einschliesslich KI untersuchen; nichts persoenliches ueberschreiben und keine
 redundanten Datenbestaende aufbauen. 1000 API-Requests pro Monat mitzaehlen,
 kein eigenes Freigabe-/Budgetgate und kein Frontend-Ticker. Der Hintergrundzaehler
-wird bereits gebaut; die folgende Produktueberarbeitung ist eine Findings-Liste.
+ist gebaut und mit einem echten Quota-Abruf geprueft; die folgende
+Produktueberarbeitung ist eine Findings-Liste.
 
 Codebasis der Inventur: integrierter Reparaturzweig nach `f086ef5`, zusaetzlich
 die fertige Entdecken-/Radar-Trennung. Die untersuchten fachlichen KI-, Katalog-
@@ -24,7 +25,7 @@ Fuenf-Quellen-Feeds. Die offenen Betriebsreparaturen bleiben im gemeinsamen
 | Direkte Streamingverfuegbarkeit | `streamings` dokumentiert Titel, Anbieter, Land, Angebotslink, Zeitspanne und Sprachfelder. [Streamings](https://flixpatrol.com/api2/endpoint-streamings/) | Der Endpunkt ist ausdruecklich deprecated; Oesterreich fehlt in der dokumentierten Laenderliste. Daher kein Ersatz fuer den bestehenden AT-Verfuegbarkeitspfad. |
 | Personen und Reihen | `persons` liefert Personenidentitaet/Bio/externe IDs; `franchises` Reihenstammdaten. [Persons](https://flixpatrol.com/api2/endpoint-persons/), [Franchises](https://flixpatrol.com/api2/endpoint-franchises/) | Vollstaendige Filmografie, Besetzungsrollen und Reihenmitgliedschaft sind durch diese Endpunkte nicht belegt. Keine Beziehungen aus Namensnaehe erfinden. |
 | Trailer | `trailers` liefert werkbezogene Trailer-/Teasermetadaten und Aufrufwerte. [Trailers](https://flixpatrol.com/api2/endpoint-trailers/) | Kein zugesicherter Abspiel-URL-/Bildvertrag; kein Anlass fuer Download oder Ersetzen bestehender Medien. Fuer die jetzige Reparatur niedrige Prioritaet. |
-| Verbrauch | `quota`: `used`, `available`, `limit`, `limitExtra`, `resetAt`. [Quota](https://flixpatrol.com/api2/page-quota/) | Kontoverbrauch und eigene Requestereignisse sind verschiedene Messwerte und werden nicht addiert. Ob Quota-GETs beim Anbieter selbst zaehlen, muss die erste Probe zeigen. |
+| Verbrauch | `quota`: `used`, `available`, `limit`, `limitExtra`, `resetAt`. [Quota](https://flixpatrol.com/api2/page-quota/) | Kontoverbrauch und eigene Requestereignisse sind verschiedene Messwerte und werden nicht addiert. Die erste Probe meldet used=0 nach einem eigenen Quota-GET; daraus wird keine allgemeine Zusage zur Abrechnung abgeleitet. |
 
 Die Zahlencodes fuer `type` unterscheiden sich zwischen Endpunkten: zum Beispiel
 Top10s 2/3 fuer Film/Serie und Premieres 1/2. Eine gemeinsame ungepruefte
@@ -123,7 +124,26 @@ nur fuer unbekannte/veraltete benoetigte Fakten, nicht fuer alle Titel bei jedem
 Appstart oder KI-Lauf. Nicht zugesichert werden ein taeglicher Vollimport des
 Streamingkatalogs oder eine neue Datenbank aller Filme innerhalb dieser 1000.
 
-Der Zaehlerstatus und die erste echte Quota-Probe werden nach Implementierung
-unten festgehalten. Der bisherige Zugriff in diesem Task bestand ausschliesslich
-aus oeffentlicher Dokumentation und Supabase-Secret-Metadaten; bis zum Start des
-Tickers wurden keine authentifizierten FlixPatrol-Requests ausgefuehrt.
+## Gepruefter Tickerstand
+
+Am 9. September 2026 um 18:34 UTC wurde genau ein echter Quota-GET erfolgreich
+ausgefuehrt und anschliessend persistent rueckgelesen: eigener Monatszaehler 1,
+seit Einrichtung 1 Versuch / 1 Erfolg / 0 Fehler. FlixPatrol meldete separat
+`used=0`, `available=1000`, `limit=1000`, `limitExtra=0` und
+`resetAt=2026-10-01T00:00:00` ohne Zeitzone. Es wurde kein Filmdaten-Endpunkt
+aufgerufen. Der Ticker verarbeitet aktuell Quota; die spaeteren Datenadapter
+muessen denselben Zaehler benutzen.
+
+Die neue Function ist deployed und ihr Quellcode bytegleich zum Commit
+`058eb08` zurueckgelesen. Vollstaendige lokale Tests samt Build, 56 gezielte
+Tickerchecks und Deno-Typpruefung sind gruen. Die Rechte der zwei neuen
+Tabellen und vier RPCs sind auch remote geprueft. Der zusaetzliche bestehende
+Live-RLS-Gesamttest hat 58 bestandene Checks und 15 Fehler: Konto B wurde als
+inaktiv abgewiesen, mehrere anonyme Lesewege lieferten 401. Cleanup war
+erfolgreich. Deshalb gibt es keine pauschale Aussage, alle Betriebspruefungen
+seien gruen.
+
+Der taegliche Workflow ist vorbereitet, aber durch die automatische
+Freigabepruefung noch nicht zur Aktivierung zugelassen. Umfang und konkrete
+Vorlage stehen in [FLIXPATROL_TICKER.md](FLIXPATROL_TICKER.md). Die alten
+Entdecken- und Monitor-Reparaturen sind noch nicht ausgeliefert.
