@@ -57,4 +57,49 @@ Die Operationstabelle enthält nur UUID, Requestart, Status, HTTP-Status und Zei
 
 ## Hintergrundlauf
 
-Der vorgesehene Workflow `FlixPatrol – Nutzung täglich erfassen` läuft einmal täglich im GitHub-Environment `staging`. Ein natürlicher Lauf sendet genau einen bodylosen POST an die Function; dieser fordert genau einen `/v2/quota`-Request an. Der Lauf besitzt entsprechend der Owner-Entscheidung kein zusätzliches Quota-Gate. Transport- oder Vertragsfehler bleiben rot und lösen keinen Workflow-Retry aus. Der Build dieses Pakets hat keine Function deployed, keine Migration angewendet und keinen Providerrequest ausgelöst.
+Der vorgesehene Workflow `FlixPatrol – Nutzung täglich erfassen` soll einmal täglich im GitHub-Environment `staging` laufen. Ein natürlicher Lauf sendet genau einen bodylosen POST an die Function; dieser fordert genau einen `/v2/quota`-Request an. Der Lauf besitzt entsprechend der Owner-Entscheidung kein zusätzliches Quota-Gate. Transport- oder Vertragsfehler bleiben rot und lösen keinen Workflow-Retry aus.
+
+Die automatische Freigabeprüfung hat das Anlegen des aktiven Workflows abgelehnt und eine ausdrückliche Freigabe für die tägliche Credential-/Quota-Wirkung verlangt. Es gibt deshalb noch keine aktive `.github/workflows/flixpatrol-usage.yml`. Der folgende Entwurf ist reine Dokumentation für die konkrete Freigabe: täglich 05:11 UTC, höchstens 31 natürliche Quota-Requests je Kalendermonat, bestehende Staging-URL und bestehender Server-Schlüssel. Der FlixPatrol-Key bleibt in Supabase.
+
+```yaml
+name: FlixPatrol – Nutzung täglich erfassen
+on:
+  schedule:
+    - cron: "11 5 * * *"
+permissions:
+  contents: read
+concurrency:
+  group: kinodreieck-flixpatrol-usage
+  cancel-in-progress: false
+jobs:
+  quota:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Quota einmal abgleichen und Zähler lesen
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL" && test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          http_status="$(curl --silent --show-error --request POST \
+            --connect-timeout 10 --max-time 60 \
+            --output "$response_file" --write-out '%{http_code}' \
+            "${SUPABASE_URL%/}/functions/v1/flixpatrol-usage" \
+            --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            --header 'x-kd-flixpatrol-usage: scheduled-daily-v1')"
+          if [ "$http_status" != "200" ]; then
+            echo "::error::FlixPatrol-Ticker: HTTP ${http_status}; kein Retry."
+            exit 1
+          fi
+          node tools/flixpatrol-usage.mjs "$response_file" >> "$GITHUB_STEP_SUMMARY"
+```

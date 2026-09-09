@@ -22,8 +22,8 @@ erhalten. Keine Uebernahme fremder Staging-UI-Arbeit.
 | M3 | Verspaetete Zeitplanlaeufe erledigen faellige Arbeit ohne doppelte Tagesversuche | OFFEN | B |
 | M4 | Entdecken und kostenpflichtiges Radar lassen sich unabhaengig betreiben | OFFEN | A+B |
 | M5 | Reparatur ist ausgeliefert, automatische Laeufe und Daten-Readback sind belegt | OFFEN | Meister |
-| M6 | Alle sinnvollen FlixPatrol-Einsatzstellen einschliesslich KI sind mit Datenbedarf und Ueberschreibschutz beschrieben | GEPRUEFT: 15 Produkt-/Betriebsfindings und 11 KI-Findings in `FLIXPATROL_FINDINGS_2026-09-09.md` | Meister+B2 |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund persistent gezaehlt und mit dem 1000er-Kontingent abgeglichen; keine Frontendanzeige, kein neues Gate | IN ARBEIT | A2 |
+| M6 | Alle sinnvollen FlixPatrol-Einsatzstellen einschliesslich KI sind mit Datenbedarf und Ueberschreibschutz beschrieben | GEPRUEFT: 17 Produkt-/Betriebsfindings und 11 KI-Findings in `FLIXPATROL_FINDINGS_2026-09-09.md` | Meister+B2 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund persistent gezaehlt und mit dem 1000er-Kontingent abgeglichen; keine Frontendanzeige, kein neues Gate | LOKAL IN ARBEIT; taeglicher Workflow durch automatische Freigabepruefung blockiert | A2 |
 
 ## Parallelwelle
 
@@ -82,3 +82,13 @@ getestete Zaehler-Migration, die serverseitige Function und ihr Quota-Abgleich.
 Diese Freigabe umfasst keine neuen KI-Kosten oder breite Produktumbauten.
 Keine manuell gestarteten bezahlten Smoke-/Eval-Pfade ausserhalb AGENTS.md.
 Geschuetzte Production-Freigaben bleiben Nutzerhandlungen.
+
+## Plattformblockade beim taeglichen Ticker
+
+Die automatische Freigabepruefung hat das Anlegen des taeglich aktiven
+GitHub-Workflows mit Server-Schluessel und indirektem FlixPatrol-Quota-GET
+abgelehnt. Sie verlangt eine ausdrueckliche Freigabe dieser Credential-Nutzung
+und der taeglichen Ein-Request-Wirkung. Der abgelehnte Workflow wird weder
+identisch wiederholt noch ueber einen anderen Scheduler umgangen. Lokaler
+Zaehlerbau, Tests und der Findingsbericht laufen weiter. Dies ist keine neue
+Budgetbedingung im Produkt.
