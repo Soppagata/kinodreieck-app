@@ -541,7 +541,7 @@ export function createRadarWebsearchHandler({
     const productAdapter = adapter ?? createAnthropicRadarWebsearchAdapter({
       apiKey: Deno.env.get("ANTHROPIC_API_KEY") || "",
       fetchImpl,
-      async loadSetup(request: { kind?: string }) {
+      async loadSetup(request: { kind?: string } = {}) {
         const [radarResult, providerResult, limitsResult, sources] = await Promise.all([
           admin.from("kd_radar_settings")
             .select("radar_aktiv,radar_provider_aktiv,radar_scheduler_aktiv")
