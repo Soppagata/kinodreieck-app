@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createFlixPatrolClient, FlixPatrolClientError, parseFlixPatrolQuota } from "./supabase/functions/_shared/flixpatrolClient.js";
+import { FLIXPATROL_AT_SOURCES } from "./supabase/functions/_shared/flixpatrolData.js";
 
 const quotaPayload = { type: "apiquota", data: { used: 17, available: 983, limit: 1000, limitExtra: 0, resetAt: "2026-10-01T00:00:00Z" } };
 let checks = 0;
@@ -80,6 +81,179 @@ await check("unbelegter Abschluss meldet den bereits gestarteten Request konserv
     finishOperation: async () => { throw new Error("db unavailable"); },
   });
   await assert.rejects(client.fetchQuota(), (error) => error.code === "FLIXPATROL_LEDGER_FINISH_FAILED" && error.providerRequests === 1);
+});
+
+const titleId = "ttl_bHyGTvopBHPVtIKhR2CF68WD";
+const secondTitleId = "ttl_K5H0Bes9dtvkV710raDBpXoK";
+const relation = (type, id) => ({ type, data: { id }, legacy: { id: 1 } });
+const makeTitlePayload = (id = titleId, title = "Indiana Jones and the Last Crusade") => ({
+  type: "titles",
+  data: {
+    id,
+    title,
+    premiere: "1989-05-24",
+    country: relation("countries", "cnt_iMUHNbZvnNHK5YdhgwtOoP4u"),
+    company: relation("companies", "cmp_ucpMo9k8rSnwEmcX71yBFCjT"),
+    genre: relation("genres", "gnr_vkhlVlz6xabS78vHh0DCIc5e"),
+    keyword: relation("keywords", "kwd_NLPueMUHlNqj02pZEBFyWIhu"),
+    description: "A documented provider description.",
+    updatedAt: "2026-09-08T09:25:02",
+    link: "https://flixpatrol.com/title/indiana-jones-and-the-last-crusade/",
+    type: 1,
+    premiereOnline: "2021-04-15",
+    length: 127,
+    imdbId: 97576,
+    tmdbId: 89,
+    imdbLink: "https://www.imdb.com/title/tt0097576/",
+    tmdbLink: "https://www.themoviedb.org/movie/89",
+  },
+});
+
+await check("lädt einen eng gefilterten Tageschart als genau einen gezählten Request", async () => {
+  const events = [];
+  const expected = {
+    companyId: FLIXPATROL_AT_SOURCES.companies.prime.id,
+    countryId: FLIXPATROL_AT_SOURCES.country.id,
+    chartType: "movies",
+    date: "2026-09-09",
+  };
+  const response = [{
+    type: "top10s",
+    data: {
+      id: "debug-only",
+      movie: relation("titles", titleId),
+      company: relation("companies", expected.companyId),
+      country: relation("countries", expected.countryId),
+      language: null,
+      origin: null,
+      type: 2,
+      date: { type: "daterange", data: { type: 1, from: expected.date, to: expected.date } },
+      ranking: 1,
+      rankingLast: null,
+      value: 10,
+      valueLast: null,
+      daysTotal: 1,
+      note: null,
+      key: null,
+      updatedAt: "2026-09-09T10:57:43",
+    },
+  }];
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => "00000000-0000-4000-8000-000000000005",
+    beginOperation: async (input) => { events.push(["begin", input]); return { ok: true, claim: true, replay: false }; },
+    fetchImpl: async (url) => { events.push(["fetch", url]); return { ok: true, status: 200, json: async () => response }; },
+    finishOperation: async (input) => { events.push(["finish", input]); return { ok: true, replay: false, status: input.status, usage: {} }; },
+  });
+  const result = await client.fetchTop10(expected);
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].sourceId, titleId);
+  assert.equal(events[0][1].requestKind, "top10s");
+  assert.deepEqual(events.map(([name]) => name), ["begin", "fetch", "finish"]);
+  const url = new URL(events[1][1]);
+  assert.equal(url.pathname, "/v2/top10s");
+  assert.equal(url.searchParams.get("company[eq]"), expected.companyId);
+  assert.equal(url.searchParams.get("country[eq]"), expected.countryId);
+  assert.equal(url.searchParams.get("type[eq]"), "2");
+  assert.equal(url.searchParams.get("date[type][eq]"), "1");
+  assert.equal(url.searchParams.get("ranking[lte]"), "10");
+  assert.equal(events[2][1].quota, null);
+});
+
+await check("verwirft leere Charts nach einem gezählten Request", async () => {
+  let fetches = 0;
+  const finishes = [];
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => "00000000-0000-4000-8000-000000000006",
+    beginOperation: async () => ({ ok: true, claim: true, replay: false }),
+    fetchImpl: async () => { fetches += 1; return { ok: true, status: 200, json: async () => [] }; },
+    finishOperation: async (value) => { finishes.push(value); return { ok: true, replay: false, status: value.status, usage: {} }; },
+  });
+  await assert.rejects(
+    client.fetchTop10({
+      companyId: FLIXPATROL_AT_SOURCES.companies.disney.id,
+      countryId: FLIXPATROL_AT_SOURCES.country.id,
+      chartType: "tvshows",
+      date: "2026-09-09",
+    }),
+    (error) => error.code === "FLIXPATROL_INVALID_RESPONSE" && error.providerRequests === 1,
+  );
+  assert.equal(fetches, 1);
+  assert.equal(finishes.length, 1);
+  assert.equal(finishes[0].status, "invalid_response");
+});
+
+await check("normalisiert eine gezielte Titelauflösung samt nullable Fremd-IDs", async () => {
+  const begins = [];
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => "00000000-0000-4000-8000-000000000007",
+    beginOperation: async (value) => { begins.push(value); return { ok: true, claim: true, replay: false }; },
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => makeTitlePayload() }),
+    finishOperation: async (value) => ({ ok: true, replay: false, status: value.status, usage: {} }),
+  });
+  const result = await client.fetchTitle({ sourceId: titleId, mediaType: "film" });
+  assert.equal(result.title.imdbId, "tt0097576");
+  assert.equal(result.title.imdbNumericId, "97576");
+  assert.equal(result.title.tmdbId, "89");
+  assert.equal(result.title.releaseYear, 1989);
+  assert.equal(begins[0].requestKind, "titles");
+});
+
+await check("Titelsuche nutzt exakten Titel, Jahr und Typ und blockiert Mehrdeutigkeit", async () => {
+  let requestedUrl = "";
+  const duplicate = makeTitlePayload(secondTitleId);
+  duplicate.data.link = "https://flixpatrol.com/title/indiana-jones-and-the-last-crusade-duplicate/";
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => "00000000-0000-4000-8000-000000000008",
+    beginOperation: async () => ({ ok: true, claim: true, replay: false }),
+    fetchImpl: async (url) => { requestedUrl = url; return { ok: true, status: 200, json: async () => [makeTitlePayload(), duplicate] }; },
+    finishOperation: async (value) => ({ ok: true, replay: false, status: value.status, usage: {} }),
+  });
+  const result = await client.searchTitles({
+    title: "Indiana Jones and the Last Crusade",
+    mediaType: "film",
+    releaseYear: 1989,
+  });
+  assert.equal(result.resolution.status, "ambiguous_blocked");
+  assert.equal(result.resolution.candidateCount, 2);
+  const url = new URL(requestedUrl);
+  assert.equal(url.searchParams.get("title[eq]"), "Indiana Jones and the Last Crusade");
+  assert.equal(url.searchParams.get("type[eq]"), "1");
+  assert.equal(url.searchParams.get("premiere[gte]"), "1989-01-01");
+  assert.equal(url.searchParams.get("premiere[lte]"), "1989-12-31");
+  assert.equal([...url.searchParams].length, 4);
+});
+
+await check("leere gezielte Titelsuche wird als negativer Treffer aufgelöst", async () => {
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => "00000000-0000-4000-8000-000000000009",
+    beginOperation: async () => ({ ok: true, claim: true, replay: false }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ type: "titles", data: [] }) }),
+    finishOperation: async (value) => ({ ok: true, replay: false, status: value.status, usage: {} }),
+  });
+  const result = await client.searchTitles({ title: "Unknown", mediaType: "film", releaseYear: 2026 });
+  assert.deepEqual(result.resolution, { status: "not_found", sourceId: null, candidateCount: 0 });
+});
+
+await check("ungültige Datenanfrage erreicht weder Ledger noch Provider", async () => {
+  let begins = 0;
+  let fetches = 0;
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    beginOperation: async () => { begins += 1; },
+    finishOperation: async () => assert.fail("finish darf nicht laufen"),
+    fetchImpl: async () => { fetches += 1; },
+  });
+  await assert.rejects(
+    client.searchTitles({ title: "Dune", mediaType: "film" }),
+    (error) => error.code === "FLIXPATROL_REQUEST_INVALID" && error.providerRequests === 0,
+  );
+  assert.equal(begins, 0);
+  assert.equal(fetches, 0);
 });
 
 console.log(`${checks} FlixPatrol-Client-Prüfungen bestanden.`);
