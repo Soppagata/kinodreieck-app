@@ -147,6 +147,24 @@ Die getrennten Zustände gebaut / getestet / committed / gepusht / CI-grün /
 deployed / natürliche Ausführung / praktische PWA-Abnahme bleiben sichtbar.
 Keine neue Aktivierung kostenpflichtiger KI durch diesen Datenauftrag.
 
+Erste Welle veröffentlicht: `main` bei `c875ee5`, `staging` bei `a4c7de8`.
+Staging wurde mit dem eigenen Task-Diff auf `ce846a3` aufgebaut; die dortigen
+UI-Änderungen bleiben erhalten. Die drei Integrationsprüfungen liefern
+64 Monitor-, 70 Entdecken- und 108 Keychainchecks. CI läuft in
+[main](https://github.com/Soppagata/kinodreieck-app/actions/runs/34402050493) und
+[staging](https://github.com/Soppagata/kinodreieck-app/actions/runs/34402059147).
+Der Ticker ist jetzt bei GitHub als `active` registriert (Workflow 354372774),
+erster natürlicher Lauf noch ausstehend. Entdecken und Automatic-AI bleiben
+`disabled_manually`; der separate Radar-Workflow hat weiterhin sein hartes
+`false` vor dem wirksamen Job.
+
+Die automatische Freigabeprüfung hat den geplanten Live-RLS-Test mit temporären
+Shared-Testwrites abgelehnt: Eine ausdrückliche Freigabe von Ziel/Umfang sei in
+den Nutzernachrichten nicht belegt. Dieser Test wurde nicht gestartet. Keine
+Umgehung; die lokalen Tests und lesenden Vorbedingungen bleiben gültig. Eine
+konkrete gemeinsame Datenbank-/Backend-Lieferung einschließlich nötiger Tests
+wird erst am fertigen, überprüfbaren Kandidaten zur Freigabe vorgelegt.
+
 ## Aktuell belegter Ausgang
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
