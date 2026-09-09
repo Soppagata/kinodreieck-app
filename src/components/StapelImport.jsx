@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { btnStyle, inputStyle } from "../lib/tokens.js";
 import { aiService } from "../services/ai.js";
 import { flixpatrolFactsService } from "../services/flixpatrolFacts.js";
-import { baueFlixpatrolVorschlaege } from "../lib/flixpatrolFacts.js";
+import { baueFlixpatrolVorschlaege, beschreibeFlixpatrolErgaenzungen } from "../lib/flixpatrolFacts.js";
 import { errorText } from "../services/errors.js";
 import {
   EXTERNER_STAPEL_WORKFLOW_DATEINAME, STAPEL_MAX_ZEILEN, STAPEL_QUELLEN, STAPEL_STANDARD_QUELLEN, STAPEL_TYPEN,
@@ -41,6 +41,7 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   }
   useEffect(() => {
     const stand = laufRef.current;
+    stand.mounted = true;
     setVorschau(null); setBericht(null); setExternText("");
     return () => { if (laufRef.current === stand) stand.mounted = false; stand.generation += 1; };
   }, [datenKontextKey]);
@@ -202,7 +203,7 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
       {vorschau.kandidaten.map((k) => <div className="kd-stapel-kandidat" key={k.id}>
         <label className="kd-stapel-titel kd-touch-checkbox"><input type="checkbox" checked={k.ausgewaehlt} onChange={(e) => aktualisiere(k.id, "ausgewaehlt", e.target.checked)} /><span><strong>{k.titel}</strong>{k.jahr ? ` (${k.jahr})` : ""}<small>{k.typ} · Sicherheit {k.sicherheit}{k.vorbeurteilung !== "offen" ? ` · Voreindruck: ${k.vorbeurteilung === "passt" ? "passt" : "eher nicht"}` : ""}{k.begruendung ? ` · ${k.begruendung}` : ""}</small></span></label>
         <div className="kd-stapel-felder"><select aria-label={`Typ für ${k.titel}`} value={k.typ} onChange={(e) => aktualisiere(k.id, "typ", e.target.value)}>{STAPEL_TYPEN.map((t) => <option key={t}>{t}</option>)}</select><select aria-label={`Quelle für ${k.titel}`} value={k.quelle} onChange={(e) => aktualisiere(k.id, "quelle", e.target.value)}>{STAPEL_QUELLEN.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}</select>{k.typ === "serie" && <input aria-label={`Staffeln für ${k.titel}`} placeholder="Staffeln optional, z. B. 1–3" value={k.staffeln || ""} onChange={(e) => aktualisiere(k.id, "staffeln", e.target.value)} />}</div>
-        {k.flixpatrolVorschlag && <label className="kd-touch-checkbox"><input type="checkbox" checked={k.flixpatrolVorschlag.ausgewaehlt} onChange={(e) => setzeFaktenVorschlag(k.id, e.target.checked)} /><span>Belegte FlixPatrol-Lücken ergänzen: {Object.keys(k.flixpatrolVorschlag.ergaenzungen).join(", ")}<small>Abgleich über {k.flixpatrolVorschlag.matchedBy === "strong-id" ? "starke ID" : "exakten Titel, Jahr und Typ"}; Cache-Stand {k.flixpatrolVorschlag.fresh ? "aktuell" : "älter oder unbekannt"}{k.flixpatrolVorschlag.checkedAt ? `, geprüft ${k.flixpatrolVorschlag.checkedAt}` : ""}. Chartplatz ist keine Bewertung oder Verfügbarkeitsangabe.{k.flixpatrolVorschlag.sourceUrl && <> <a href={k.flixpatrolVorschlag.sourceUrl} target="_blank" rel="noreferrer">FlixPatrol-Beleg</a></>}</small></span></label>}
+        {k.flixpatrolVorschlag && <label className="kd-touch-checkbox"><input type="checkbox" checked={k.flixpatrolVorschlag.ausgewaehlt} onChange={(e) => setzeFaktenVorschlag(k.id, e.target.checked)} /><span>Belegte FlixPatrol-Lücken ergänzen:{beschreibeFlixpatrolErgaenzungen(k.flixpatrolVorschlag.ergaenzungen).map((item) => <small key={item.feld}><strong>{item.label}:</strong> {item.wert}</small>)}<small>Abgleich über {k.flixpatrolVorschlag.matchedBy === "strong-id" ? "starke ID" : "exakten Titel, Jahr und Typ"}; Cache-Stand {k.flixpatrolVorschlag.fresh ? "aktuell" : "älter oder unbekannt"}{k.flixpatrolVorschlag.checkedAt ? `, geprüft ${k.flixpatrolVorschlag.checkedAt}` : ""}. Chartplatz ist keine Bewertung oder Verfügbarkeitsangabe.{k.flixpatrolVorschlag.sourceUrl && <> <a href={k.flixpatrolVorschlag.sourceUrl} target="_blank" rel="noreferrer">FlixPatrol-Beleg</a></>}</small></span></label>}
         {k.vorhandenMediathek && <small className="kd-stapel-dublette">Schon in der Mediathek – wird übersprungen.</small>}
       </div>)}
       <div className="kd-stapel-aktionen"><button style={btnStyle(true)} disabled={uebernahmeLaeuft || !hatImportierbareAuswahl} onClick={uebernehmen}>{uebernahmeLaeuft ? "Übernimmt …" : "Auswahl übernehmen"}</button><button style={btnStyle(false)} disabled={uebernahmeLaeuft} onClick={() => setVorschau(null)}>Verwerfen</button></div>

@@ -16,9 +16,12 @@ maßgeblich; der Charttyp wird nicht als Titeltyp übernommen.
 
 Token und Capability werden vor dem Read sowie nach jedem asynchronen Schritt
 erneut an dieselbe Konto-ID gebunden. Abmeldung, Capability-Widerruf,
-Kontowechsel, Offline- und Antwortfehler liefern leer. Der In-Memory-Cache hält
-höchstens den Stand eines Konto-/Projektpaars und wird weder in Local Storage
-noch in Cache Storage oder persönliche Backups geschrieben.
+Kontowechsel, Projektwechsel, explizites Leeren, Offline- und Antwortfehler
+liefern leer und entwerten auch laufende Reads über eine Generation. Der
+In-Memory-Cache hält höchstens den Stand eines Konto-/Projektpaars, läuft nach
+wenigen Minuten ab und hält erfolgreiche leere Resultate nur kurz. Er wird
+weder in Local Storage noch in Cache Storage oder persönliche Backups
+geschrieben.
 
 ## Sichtbarer Importweg
 
@@ -33,11 +36,15 @@ gemeinsamen Identitätshelper:
 
 Remakes, fehlendes Jahr, fehlender Typ, Widersprüche und Mehrdeutigkeiten
 bleiben ohne Vorschlag. Der externe API-Titel ersetzt nie den vom Nutzer
-geprüften Titel. Unbekannte Einträge bleiben importierbar.
+geprüften Titel. Bereits gelieferte, validierte externe Kennungen und der
+Originaltitel bleiben durch Vorschau und Übernahme erhalten; eine
+widersprechende Kennung sperrt die Zuordnung. Unbekannte Einträge bleiben
+importierbar.
 
-Die Vorschau nennt die angebotenen Zielfelder und lässt ihre Übernahme je
-Eintrag an- oder abwählen. Bestätigt werden nur fehlende IMDb-, TMDB- und
-FlixPatrol-IDs sowie fehlende Beschreibung, Laufzeit und Premiere. Titel,
+Die Vorschau zeigt verständliche Feldnamen und die konkreten Werte, formatiert
+Premierendaten lesbar und lässt die Übernahme je Eintrag an- oder abwählen.
+Bestätigt werden ausschließlich fehlende IMDb-, TMDB- und FlixPatrol-IDs sowie
+fehlende Beschreibung, Laufzeit und Premiere. Titel,
 Originaltitel, eigene IDs, Bewertung, Tags, Notiz, Besitz, Gesehen- und
 Staffelstand bleiben führend. Genre- und Keyword-IDs werden ohne Codebook nicht
 als Genres oder Tags ausgegeben. Chartplätze werden weder als Bewertung noch
@@ -48,7 +55,8 @@ interne KI-Knopf erscheint nur bei aktiver `personalAi`-Capability sowie
 aktiviertem globalen und `stapelimport`-Einzelschalter. Ein Konto- oder
 Datenkontextwechsel verwirft die Vorschau. Bei serieller Übernahme wird nach
 jedem Await erneut geprüft, sodass ein alter Lauf weder nach einem Kontowechsel
-noch nach Unmount weitere Titel speichern kann.
+noch nach Unmount weitere Titel speichern kann. Der Lifecycle bleibt auch beim
+Effect-Replay in React StrictMode aktiv.
 
 ## Katalogprojektion
 

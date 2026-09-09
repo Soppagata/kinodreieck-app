@@ -60,4 +60,79 @@ release();
 assert.deepEqual(await alt, []);
 check("A→B während Await verwirft die verspätete A-Antwort", () => assert.deepEqual(service.peek(), []));
 
+snapshot = { mode: "account", state: "ready", account: { id: "konto-a" }, capabilities: { remoteStorage: true } };
+listeners.forEach((listener) => listener(snapshot));
+holdFirst = new Promise((resolve) => { release = resolve; });
+const wiederkehrend = service.load();
+await Promise.resolve();
+snapshot = { mode: "guest", state: "ready", account: null, capabilities: { remoteStorage: false } };
+listeners.forEach((listener) => listener(snapshot));
+snapshot = { mode: "account", state: "ready", account: { id: "konto-a" }, capabilities: { remoteStorage: true } };
+listeners.forEach((listener) => listener(snapshot));
+release();
+assert.deepEqual(await wiederkehrend, []);
+check("A→Gast→A während Await kann den alten Lauf nicht wieder freigeben", () => assert.deepEqual(service.peek(), []));
+
+let clock = 1_800_000_000_000;
+const ttlRequests = [];
+const ttlService = createFlixpatrolFactsService({ auth, driver, config,
+  now: () => clock, cacheTtlMs: 1000, emptyCacheTtlMs: 100,
+  fetchImpl: async (...args) => { ttlRequests.push(args[0]); return fetchImpl(...args); } });
+await ttlService.load();
+await ttlService.load();
+clock += 1001;
+await ttlService.load();
+check("Fakten werden nur bis zur injizierten TTL wiederverwendet", () => assert.equal(ttlRequests.length, 12));
+
+const emptyRequests = [];
+const emptyFetch = async (url, options) => {
+  emptyRequests.push(url);
+  return new Response(JSON.stringify({ ok: true, chart: {
+    companyId: JSON.parse(options.body).p_company_id, countryId: JSON.parse(options.body).p_country_id,
+    chartType: JSON.parse(options.body).p_chart_type, chartDate: "2026-09-09", fetchedAt: "2026-09-09T11:00:00Z",
+    fresh: true, items: [],
+  } }), { status: 200 });
+};
+const emptyService = createFlixpatrolFactsService({ auth, driver, config, fetchImpl: emptyFetch,
+  now: () => clock, cacheTtlMs: 1000, emptyCacheTtlMs: 100 });
+assert.deepEqual(await emptyService.load(), []);
+assert.deepEqual(await emptyService.load(), []);
+check("Erfolgreiche leere Chartresultate werden kurz ohne Titles-Read gecacht", () => assert.equal(emptyRequests.length, 5));
+clock += 101;
+await emptyService.load();
+check("Auch der leere Cache läuft kontrolliert ab", () => assert.equal(emptyRequests.length, 10));
+
+const isolateAuth = () => {
+  let value = { mode: "account", state: "ready", account: { id: "konto-a" }, capabilities: { remoteStorage: true } };
+  const ownListeners = new Set();
+  return { auth: { getSnapshot: () => value, subscribe(fn) { ownListeners.add(fn); return () => ownListeners.delete(fn); } },
+    set(next) { value = next; ownListeners.forEach((listener) => listener(value)); } };
+};
+const clearAuth = isolateAuth();
+let clearRelease;
+const clearHold = new Promise((resolve) => { clearRelease = resolve; });
+let clearHeld = false;
+const clearService = createFlixpatrolFactsService({ auth: clearAuth.auth, driver, config,
+  fetchImpl: async (...args) => { if (!clearHeld) { clearHeld = true; await clearHold; } return fetchImpl(...args); } });
+const clearedLoad = clearService.load();
+await Promise.resolve();
+clearService.clear();
+clearRelease();
+assert.deepEqual(await clearedLoad, []);
+check("Explizites clear invalidiert auch einen laufenden Load", () => assert.deepEqual(clearService.peek(), []));
+
+const projectAuth = isolateAuth();
+const mutableConfig = { supabaseUrl: "https://project-a.supabase.co", supabasePublishableKey: "public-key" };
+let projectRelease;
+const projectHold = new Promise((resolve) => { projectRelease = resolve; });
+let projectHeld = false;
+const projectService = createFlixpatrolFactsService({ auth: projectAuth.auth, driver, config: mutableConfig,
+  fetchImpl: async (...args) => { if (!projectHeld) { projectHeld = true; await projectHold; } return fetchImpl(...args); } });
+const projectLoad = projectService.load();
+await Promise.resolve();
+mutableConfig.supabaseUrl = "https://project-b.supabase.co";
+projectRelease();
+assert.deepEqual(await projectLoad, []);
+check("Projektwechsel während Await verwirft die alte Projektion", () => assert.deepEqual(projectService.peek(), []));
+
 console.log(`flixpatrol_facts_service_test: ${checks} Checks bestanden.`);

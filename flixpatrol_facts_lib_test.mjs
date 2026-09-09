@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   FLIXPATROL_AT_CHARTS, baueFlixpatrolVorschlaege,
-  normalisiereFlixpatrolFakten, uebernehmeFlixpatrolVorschlag,
+  beschreibeFlixpatrolErgaenzungen, normalisiereFlixpatrolFakten, uebernehmeFlixpatrolVorschlag,
 } from "./src/lib/flixpatrolFacts.js";
 
 let checks = 0;
@@ -57,6 +57,27 @@ check("Abgewählter Vorschlag schreibt keine Fakten", () => {
   const result = uebernehmeFlixpatrolVorschlag({ ...candidate, flixpatrolVorschlag: { ...candidate.flixpatrolVorschlag, ausgewaehlt: false } });
   assert.equal(result.flixpatrol_id, undefined);
   assert.equal(Object.hasOwn(result, "flixpatrolVorschlag"), false);
+});
+check("Vorschaufelder tragen verständliche Bezeichnungen und formatierte Werte", () => {
+  const items = beschreibeFlixpatrolErgaenzungen({ imdb_id: "tt0078748", laufzeit_minuten: 117, premiere: "1979-05-25" });
+  assert.deepEqual(items, [
+    { feld: "imdb_id", label: "IMDb-ID", wert: "tt0078748" },
+    { feld: "laufzeit_minuten", label: "Laufzeit", wert: "117 Minuten" },
+    { feld: "premiere", label: "Premiere", wert: "25.05.1979" },
+  ]);
+});
+check("Übernahme ignoriert nicht freigegebene Vorschauwerte", () => {
+  const result = uebernehmeFlixpatrolVorschlag({ titel: "Alien", flixpatrolVorschlag: { ausgewaehlt: true,
+    ergaenzungen: { imdb_id: "tt0078748", bewertung: 5, tags: ["Sci-Fi"], notiz: "fremd" } } });
+  assert.equal(result.imdb_id, "tt0078748");
+  assert.equal(result.bewertung, undefined);
+  assert.equal(result.tags, undefined);
+  assert.equal(result.notiz, undefined);
+});
+check("Opaque numerische Kennungen bleiben ohne Number-Rundung erhalten", () => {
+  const hugeTitles = { ok: true, items: [{ sourceId: alien, mediaType: "film", status: "resolved", title: "Alien",
+    releaseYear: 1979, tmdbId: "900719925474099312345", fresh: true }] };
+  assert.equal(normalisiereFlixpatrolFakten(charts, hugeTitles)[0].tmdb_id, "900719925474099312345");
 });
 
 console.log(`flixpatrol_facts_lib_test: ${checks} Checks bestanden.`);

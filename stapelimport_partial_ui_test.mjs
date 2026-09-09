@@ -119,8 +119,11 @@ check(/1 Eintrag bleibt offen/.test(teilFixture.container.textContent)
 "das kaputte Item erscheint einzeln als sichere Fehlmenge");
 check(/Belegte FlixPatrol-Lücken ergänzen/.test(teilFixture.container.textContent)
   && /exakten Titel, Jahr und Typ/.test(teilFixture.container.textContent)
-  && /keine Bewertung oder Verfügbarkeitsangabe/.test(teilFixture.container.textContent),
-"der KI-unabhängige Vorschauweg zeigt belegte neutrale Ergänzungen zur Kontrolle");
+  && /keine Bewertung oder Verfügbarkeitsangabe/.test(teilFixture.container.textContent)
+  && /IMDb-ID:\s*tt0078748/.test(teilFixture.container.textContent)
+  && /Laufzeit:\s*117 Minuten/.test(teilFixture.container.textContent)
+  && /Premiere:\s*25\.05\.1979/.test(teilFixture.container.textContent),
+"der KI-unabhängige Vorschauweg zeigt verständliche belegte Werte zur Kontrolle");
 check(imports.length === 0 && teilFixture.container.textContent.includes("noch ist nichts gespeichert"),
   "die Vorschau importiert nichts still");
 check(knopf(teilFixture.container, "Antwort prüfen").disabled,

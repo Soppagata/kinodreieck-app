@@ -56,7 +56,9 @@ const props = (key, kiAktiv = false) => ({
 });
 const app = document.getElementById("app");
 const reactRoot = createRoot(app);
-const render = async (key, kiAktiv = false) => act(async () => { reactRoot.render(createElement(MediathekTab, props(key, kiAktiv))); await tick(); });
+const render = async (key, kiAktiv = false) => act(async () => {
+  reactRoot.render(createElement(React.StrictMode, null, createElement(MediathekTab, props(key, kiAktiv)))); await tick();
+});
 const click = async (element) => act(async () => { element.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); await tick(); });
 const setValue = async (element, value) => act(async () => {
   Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value").set.call(element, value);
@@ -75,6 +77,7 @@ await setValue(textarea, json);
 await click(button("Antwort prüfen"));
 assert.match(app.textContent, /Belegte FlixPatrol-Lücken ergänzen/);
 assert.match(app.textContent, /exakten Titel, Jahr und Typ/);
+assert.match(app.textContent, /IMDb-ID:\s*tt0078748/);
 
 await click(button("Auswahl übernehmen"));
 await render("account:ready:b");
@@ -93,4 +96,4 @@ await tick();
 assert.equal(writes.length, 2, "Unmount stoppt den seriellen Import vor dem nächsten Titel");
 assert.deepEqual(errors.filter(Boolean), []);
 
-console.log("flixpatrol_facts_mediathek_ui_test: 9 Checks bestanden.");
+console.log("flixpatrol_facts_mediathek_ui_test: 10 Checks bestanden.");

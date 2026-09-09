@@ -3,6 +3,7 @@ import {
   baueStapelPayload, baueStapelUebernahme, externerStapelPrompt,
   normalisiereStapelAntwort, vorbereiteTitelliste,
 } from "./src/lib/stapelimport.js";
+import { baueFlixpatrolVorschlaege } from "./src/lib/flixpatrolFacts.js";
 
 let ok = 0;
 function check(name, wert) { if (!wert) throw new Error("Fehlgeschlagen: " + name); ok++; console.log("✓ " + name); }
@@ -67,11 +68,28 @@ const uebernahme = baueStapelUebernahme(v.kandidaten);
 check("Vorhandenes wird nicht nochmals in die Mediathek geschrieben", uebernahme.mediathek.length === 3);
 check("Digitale Käufe bleiben von Streaming-Abos unterscheidbar", uebernahme.mediathek[0].quelle === "amazon");
 check("Importierte Titel bleiben trotz KI-Voreindruck unbewertet", uebernahme.mediathek.every((e) => e.bewertung === null && e.kategorie === null));
+check("Import ohne Kennungen erzeugt keine redundanten ID-Felder",
+  uebernahme.mediathek.every((e) => !Object.hasOwn(e, "imdb_id") && !Object.hasOwn(e, "tmdb_id")
+    && !Object.hasOwn(e, "flixpatrol_id") && !Object.hasOwn(e, "watchmode_id")));
 const faktImport = baueStapelUebernahme([{ titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", ausgewaehlt: true,
   flixpatrolVorschlag: { ausgewaehlt: true, ergaenzungen: { flixpatrol_id: "ttl_bHyGTvopBHPVtIKhR2CF68WD", imdb_id: "tt0078748", beschreibung: "Neutraler Text" } } }]).mediathek[0];
 check("Bestätigte Fakten ergänzen nur schlanke Zielfelder ohne Vorschau- oder Chartkopie",
   faktImport.flixpatrol_id && faktImport.imdb_id === "tt0078748" && faktImport.beschreibung === "Neutraler Text"
   && !Object.hasOwn(faktImport, "flixpatrolVorschlag") && !Object.hasOwn(faktImport, "charts"));
+const mitEigenerKennung = normalisiereStapelAntwort({ data: { kandidaten: [{
+  titel: "Alien", originaltitel: "Alien", typ: "film", jahr: 1979, quelle: "bluray",
+  imdb_id: "tt0090605", tmdbId: "900719925474099312345", watchmode_id: "123", flixpatrol_id: "ttl_existingcase",
+  vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch",
+}], warnungen: [] } }).kandidaten[0];
+const widersprechenderFakt = [{ sourceId: "ttl_bHyGTvopBHPVtIKhR2CF68WD", flixpatrol_id: "ttl_bHyGTvopBHPVtIKhR2CF68WD",
+  titel: "Alien", jahr: 1979, typ: "film", imdb_id: "tt0078748", fresh: true }];
+check("Widersprechende vorhandene ID sperrt den Cacheabgleich",
+  !baueFlixpatrolVorschlaege([mitEigenerKennung], widersprechenderFakt)[0].flixpatrolVorschlag);
+const eigeneUebernahme = baueStapelUebernahme([mitEigenerKennung]).mediathek[0];
+check("Validierte Originaltitel und eigene IDs bleiben bis zum gespeicherten Eintrag erhalten",
+  eigeneUebernahme.originaltitel === "Alien" && eigeneUebernahme.imdb_id === "tt0090605"
+  && eigeneUebernahme.tmdb_id === "900719925474099312345" && eigeneUebernahme.watchmode_id === "123"
+  && eigeneUebernahme.flixpatrol_id === "ttl_existingcase");
 const prompt = externerStapelPrompt("Max");
 check("Externer Workflow ist eine versionierte Markdown-Datei", EXTERNER_STAPEL_WORKFLOW_DATEINAME === `kinodreieck-${EXTERNER_STAPEL_WORKFLOW_VERSION}.md` && prompt.startsWith("# Kinodreieck") && prompt.includes(`\`${EXTERNER_STAPEL_WORKFLOW_VERSION}\``) && prompt.endsWith("\n"));
 check("Externer Workflow sammelt vor dem Abschluss stapelweise", /Foto N: X Titel erkannt/.test(prompt) && /SAMMLUNG ABSCHLIESSEN/.test(prompt) && /noch kein JSON und keine Gesamtliste/.test(prompt));

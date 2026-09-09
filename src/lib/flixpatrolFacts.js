@@ -17,7 +17,7 @@ const year = (value) => Number.isInteger(Number(value)) && Number(value) >= 1870
   ? Number(value) : null;
 const mediaType = (value) => value === "film" ? "film" : value === "series" ? "serie" : null;
 const positiveId = (value) => /^\d+$/.test(String(value ?? "").trim()) && BigInt(String(value).trim()) > 0n
-  ? Number(value) : null;
+  ? String(value).trim().replace(/^0+(?=\d)/, "") : null;
 const imdbId = (value) => /^(?:tt)?[0-9]{5,12}$/i.test(String(value ?? "").trim())
   && /[1-9]/.test(String(value)) ? `tt${String(value).trim().toLowerCase().replace(/^tt/, "")}` : null;
 
@@ -82,6 +82,26 @@ function ergaenzungenFuer(eigen, fakt) {
   return ergaenzungen;
 }
 
+const ERGAENZUNGSFELDER = Object.freeze({
+  flixpatrol_id: "FlixPatrol-ID", imdb_id: "IMDb-ID", tmdb_id: "TMDB-ID",
+  beschreibung: "Beschreibung", laufzeit_minuten: "Laufzeit", premiere: "Premiere",
+});
+
+function formatiereDatum(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : String(value || "");
+}
+
+export function beschreibeFlixpatrolErgaenzungen(ergaenzungen) {
+  return Object.entries(ERGAENZUNGSFELDER).flatMap(([feld, label]) => {
+    const wert = ergaenzungen?.[feld];
+    if (wert == null || wert === "") return [];
+    const anzeige = feld === "laufzeit_minuten" ? `${wert} Minuten`
+      : feld === "premiere" ? formatiereDatum(wert) : String(wert);
+    return [Object.freeze({ feld, label, wert: anzeige })];
+  });
+}
+
 export function baueFlixpatrolVorschlaege(eintraege, fakten) {
   return (Array.isArray(eintraege) ? eintraege : []).map((eintrag) => {
     const zuordnung = ordneExternenTitelZu(eintrag, fakten);
@@ -110,7 +130,8 @@ export function uebernehmeFlixpatrolVorschlag(eintrag) {
   const ergebnis = { ...eintrag };
   delete ergebnis.flixpatrolVorschlag;
   if (!vorschlag || vorschlag.ausgewaehlt !== true || !vorschlag.ergaenzungen) return ergebnis;
-  for (const [feld, wert] of Object.entries(vorschlag.ergaenzungen)) {
+  for (const feld of Object.keys(ERGAENZUNGSFELDER)) {
+    const wert = vorschlag.ergaenzungen[feld];
     if ((ergebnis[feld] == null || ergebnis[feld] === "") && wert != null && wert !== "") ergebnis[feld] = wert;
   }
   return ergebnis;
