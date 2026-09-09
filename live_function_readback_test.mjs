@@ -309,3 +309,11 @@ await test("Pages-Workflow erklaert zwei Deployment-Metadaten, aber keinen Funct
 });
 
 console.log(`\n${tests}/${tests} Live-Function-Readback-Tests bestanden.`);
+
+// Der serverinterne Ticker ergaenzt diesen bestehenden Function-Testeinstieg.
+// Alle Provider sind gemockt; PostgreSQL nutzt ausschliesslich eine temporaere DB.
+await import("./flixpatrol_client_test.mjs");
+await import("./flixpatrol_usage_function_test.mjs");
+await import("./flixpatrol_usage_tool_test.mjs");
+await import("./flixpatrol_usage_contract_test.mjs");
+await import("./flixpatrol_usage_pg17_test.mjs");
