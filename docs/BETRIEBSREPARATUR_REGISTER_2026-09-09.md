@@ -62,8 +62,8 @@ keine zusätzliche Freigaberunde.
 | Paket / zugewiesene IDs | Eigener Task / Branch / Worktree | Exklusive Write-Flächen | Zustand |
 | --- | --- | --- | --- |
 | E1 / M1, M4, M7 | `etappe_01_betrieb`; `codex/flixpatrol-e1-betrieb-20260909`; `/private/tmp/kd-flixpatrol-e1-betrieb-20260909` | Die sechs Betriebsworkflows private-ops-monitor, keepalive, automatic-ai-check, radar-six-day, entdecken-six-day, flixpatrol-usage; tools/private-ops-check.mjs und dessen Tests; tools/rls_test_personal.mjs und dedizierte RLS-Vorbereitungstests; automatic_ai_check_test.mjs, cleanup_b3_test.mjs, entdecken_weekly_trigger_test.mjs, neuer flixpatrol_usage_workflow_test.mjs; docs/BETRIEBSLAEUFE*.md | INTEGRATED als `d7bc9eb` + `66d7ee1`; 114 Paketchecks und 15 Delta-Checks grün; gemeinsamer Abschlusslauf offen |
-| E2 / M2, M6 | `etappe_02_daten`; `codex/flixpatrol-e2-daten-20260909`; `/private/tmp/kd-flixpatrol-e2-daten-20260909` | supabase/functions/_shared/flixpatrol*.js; genau neue Migration 20260909190000_flixpatrol_data_cache.sql; flixpatrol_client_test.mjs, flixpatrol_usage_contract_test.mjs und neue flixpatrol_data_*_test.mjs; docs/FLIXPATROL_DATENVERTRAG.md | RUNNING; Titles-Suchvertrag ausdrücklich zu belegen |
-| E3 / M6 | `etappe_03_identitaet`; `codex/flixpatrol-e3-identitaet-20260909`; `/private/tmp/kd-flixpatrol-e3-identitaet-20260909` | src/lib/katalog.js; neuer src/lib/externalTitleIdentity.js; katalog_test.mjs und neuer external_title_identity_test.mjs; docs/FLIXPATROL_IDENTITAET.md | DELIVERED `bcb4c63` + `e4e11fe`; 12 Helper-Tests und 104 Katalogchecks grün; Integration nach E1/E2 |
+| E2 / M2, M6 | `etappe_02_daten`; `codex/flixpatrol-e2-daten-20260909`; `/private/tmp/kd-flixpatrol-e2-daten-20260909` | supabase/functions/_shared/flixpatrol*.js; genau neue Migration 20260909190000_flixpatrol_data_cache.sql; flixpatrol_client_test.mjs, flixpatrol_usage_contract_test.mjs und neue flixpatrol_data_*_test.mjs; docs/FLIXPATROL_DATENVERTRAG.md | Grundlieferung `c11eddd` als `c99447e` integriert; 58 JS- und 8 PG-Checks grün. Delta offen: Antwort-ID, Fehler-Operations-ID, Chartdatum, parallele Titelwrites und Linux-Testpfad |
+| E3 / M6 | `etappe_03_identitaet`; `codex/flixpatrol-e3-identitaet-20260909`; `/private/tmp/kd-flixpatrol-e3-identitaet-20260909` | src/lib/katalog.js; neuer src/lib/externalTitleIdentity.js; katalog_test.mjs und neuer external_title_identity_test.mjs; docs/FLIXPATROL_IDENTITAET.md | INTEGRATED als `9eacb18` + `f27252b`; 12 Helper-Tests und 104 Katalogchecks grün; gemeinsamer Abschlusslauf offen |
 
 Eingefroren: alle bestehenden SQL-Migrationsbytes; Function-Handler und
 Runtime-Verdrahtung außerhalb der jeweils benannten Fläche; Entdecken- und
@@ -81,6 +81,10 @@ Integrationsreihenfolge: E1 → E2 → E3. Danach genau ein vollständiger lokal
 Abschlusslauf auf dem integrierten Kandidaten; keine parallelen PG-Serverstarts.
 Baumeister führen nur fokussierte Tests aus, PostgreSQL-Tests dieser Welle
 gehören exklusiv E2. Der Master startet währenddessen keine PG-Suite.
+
+Master-Nähte: neue Tests in bestehende Einstiege eingebunden; beim bereits
+vorhandenen Usage-PG-Test den temporären Pfad über `os.tmpdir()` portabel
+gemacht. `package.json`, Lockfiles und feste Live-Provenienzhashes unverändert.
 
 ### Vorbereitete Folgewelle E4/E5
 

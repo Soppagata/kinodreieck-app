@@ -808,3 +808,6 @@ check("F6-Gegenprobe: erst mit Token wird die Live-Zeile überhaupt sichtbar",
 
 abmelden();
 console.log(`\n${ok} Checks bestanden.`);
+
+// Gemeinsame Identitaetsregeln laufen mit den Katalogprojektionen in der Suite.
+await import("./external_title_identity_test.mjs");

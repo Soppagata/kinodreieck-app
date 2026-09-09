@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const configured = spawnSync("pg_config", ["--bindir"], { encoding: "utf8" });
 const candidates = [process.env.KD_TEST_PG_BIN, "/Applications/Postgres.app/Contents/Versions/17/bin", configured.status === 0 ? configured.stdout.trim() : null, "/usr/lib/postgresql/17/bin"].filter(Boolean);
@@ -10,7 +11,7 @@ const required = ["initdb", "pg_ctl", "psql"];
 const PG = [...new Set(candidates)].find((dir) => required.every((name) => existsSync(join(dir, name))));
 assert.ok(PG, `PostgreSQL server binaries are required (${required.join(", ")})`);
 
-const root = mkdtempSync("/private/tmp/kd-flixpatrol-usage-");
+const root = mkdtempSync(join(tmpdir(), "kd-flixpatrol-usage-"));
 const data = join(root, "data");
 const socket = join(root, "socket");
 const port = String(56000 + process.pid % 8000);

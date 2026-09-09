@@ -1,10 +1,10 @@
 # FlixPatrol-Nutzungsticker
 
-Der Ticker erfasst FlixPatrol-Requests serverseitig und hält den letzten gültigen offiziellen Quota-Snapshot getrennt davon. Der Shared Client ist in diesem Paket absichtlich auf den Quota-Endpunkt begrenzt. Film-, Ranking- und weitere Produktadapter bleiben eine offene Naht für die spätere Quellenintegration; eine Oberfläche gibt es nicht.
+Der Ticker erfasst FlixPatrol-Requests serverseitig und hält den letzten gültigen offiziellen Quota-Snapshot getrennt davon. Die tägliche Ticker-Function ruft ausschließlich Quota ab. Der gemeinsame Client im Masterzweig unterstützt zusätzlich Charts und Titel; deren Cache- und Integrationsvertrag steht in [FLIXPATROL_DATENVERTRAG.md](FLIXPATROL_DATENVERTRAG.md). Eine Oberfläche gibt es nicht.
 
 ## Verträge
 
-- `supabase/functions/_shared/flixpatrolClient.js` erlaubt nur `GET https://api.flixpatrol.com/v2/quota`. Der Transport nutzt den Wert aus `FLIXPATROL_API_KEY` als HTTP-Basic-Username mit leerem Passwort, folgt keinen Redirects, wiederholt Requests nicht und bricht nach spätestens 15 Sekunden ab.
+- `fetchQuota()` in `supabase/functions/_shared/flixpatrolClient.js` verwendet ausschließlich `GET https://api.flixpatrol.com/v2/quota`. Auch die additiven Chart-/Titelmethoden nutzen denselben gezählten Transport. Er verwendet `FLIXPATROL_API_KEY` als HTTP-Basic-Username mit leerem Passwort, folgt keinen Redirects, wiederholt Requests nicht und bricht nach spätestens 15 Sekunden ab.
 - Vor jedem gestarteten Fetch claimt `kd_flixpatrol_usage_begin` eine UUID atomar. Ein erneuter oder gleichzeitiger Claim derselben UUID zählt nicht erneut.
 - `kd_flixpatrol_usage_finish` finalisiert eine geclaimte UUID genau einmal. HTTP-, Transport- und Formatfehler zählen als fehlgeschlagener Abschluss. Scheitert die Finalisierung nach dem Provideraufruf, bleibt der bereits persistierte Versuch als `claimed` sichtbar.
 - Nur ein valider offizieller Vertrag `{type:'apiquota',data:{used,available,limit,limitExtra,resetAt}}` ersetzt den letzten Snapshot. Null oder falsche Typen ändern ihn nicht. Zusätzliche Providerfelder werden toleriert und nicht persistiert.
