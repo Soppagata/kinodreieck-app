@@ -138,9 +138,9 @@ check("JWT-Key wird als apikey und Bearer gesendet",
 
 const ansichten = baueStreamingAnsichten({
   entdeckenUmfang: "voll",
-  bekannt: { stand: "x", dienste: ["Netflix"], titel: [{ watchmode_id: 1, titel: "Alien", jahr: 1979, dienste: ["Netflix"] }] },
-  entdecken: { stand: "x", dienste: ["Netflix"], titel: [{ watchmode_id: 2, titel: "Arrival", jahr: 2016, dienste: ["Netflix"] }] },
-}, [{ id: "alien_1979", titel: "Alien", jahr: 1979, bewertung: { wie: 5, was: 5, warum: 5 } }]);
+  bekannt: { stand: "x", dienste: ["Netflix"], titel: [{ watchmode_id: 1, titel: "Alien", jahr: 1979, typ: "movie", dienste: ["Netflix"] }] },
+  entdecken: { stand: "x", dienste: ["Netflix"], titel: [{ watchmode_id: 2, titel: "Arrival", jahr: 2016, typ: "movie", dienste: ["Netflix"] }] },
+}, [{ id: "alien_1979", titel: "Alien", jahr: 1979, typ: "film", bewertung: { wie: 5, was: 5, warum: 5 } }]);
 check("aktiver Master wird lokal zu Mein Programm gematcht", ansichten.bekannt.titel.length === 1 && ansichten.bekannt.titel[0].id === "alien_1979");
 check("Titel-/Jahr-Match behält die stabile Streaming-ID für Pinboard und Dashboard",
   ansichten.bekannt.titel[0].watchmode_id === 1);
@@ -159,13 +159,13 @@ check("Fehlende Umfangsmarke wird fail-closed als begrenzter Stand projiziert",
   unbelegterUmfang.entdecken.katalogMengen.umfang === "begrenzt");
 const doppelt = baueStreamingAnsichten({
   bekannt: { titel: [{
-    watchmode_id: 77, titel: "Doppelter Titel", jahr: 2000,
+    watchmode_id: 77, titel: "Doppelter Titel", jahr: 2000, typ: "movie",
     imdb_id: "tt1234567", tmdb_id: 123, dienste: ["Prime"],
   }] },
   entdecken: { titel: [] },
 }, [
-  { id: "heuristisch", titel: "Doppelter Titel", jahr: 2000 },
-  { id: "exakt", titel: "Doppelter Titel", jahr: 2000, watchmode_id: 77 },
+  { id: "heuristisch", titel: "Doppelter Titel", jahr: 2000, typ: "film" },
+  { id: "exakt", titel: "Doppelter Titel", jahr: 2000, typ: "film", watchmode_id: 77 },
 ]);
 check("exakte Watchmode-ID schlägt bei gleichem Titel die Titel-/Jahr-Heuristik",
   doppelt.bekannt.titel[0]?.id === "exakt"
@@ -173,18 +173,52 @@ check("exakte Watchmode-ID schlägt bei gleichem Titel die Titel-/Jahr-Heuristik
   && doppelt.bekannt.titel[0]?.tmdb_id === 123);
 const serienstand = baueStreamingAnsichten({
   bekannt: { titel: [{
-    watchmode_id: 88, titel: "Serienstand", typ: "tv_series", staffeln_verfuegbar: 4,
+    watchmode_id: 88, titel: "Serienstand", jahr: 2020, typ: "tv_series", staffeln_verfuegbar: 4,
     folgen_verfuegbar: 26, folge_aktuell: 1266, letzte_folge: { episode_number: 1266 },
     naechste_staffel_am: "2026-09-01", staffelstand_geprueft_am: "2026-08-02T10:00:00Z",
   }] },
   entdecken: { titel: [] },
-}, [{ id: "serienstand", titel: "Serienstand", typ: "serie", watchmode_id: 88 }]);
+}, [{ id: "serienstand", titel: "Serienstand", jahr: 2020, typ: "serie", watchmode_id: 88 }]);
 check("Staffel- und Folgenfelder überleben die lokale Mein-Programm-Projektion",
   serienstand.bekannt.titel[0]?.staffeln_verfuegbar === 4
   && serienstand.bekannt.titel[0]?.folgen_verfuegbar === 26
   && serienstand.bekannt.titel[0]?.folge_aktuell === 1266
   && serienstand.bekannt.titel[0]?.letzte_folge?.episode_number === 1266
   && serienstand.bekannt.titel[0]?.naechste_staffel_am === "2026-09-01");
+
+const eigenerMaster = {
+  id: "stabil", titel: "Heat", jahr: 1995, typ: "film",
+  watchmode_id: "700", imdb_id: "tt0113277", tmdb_id: 949,
+};
+const fremderKatalog = {
+  watchmode_id: 700, titel: "Heat", jahr: 1995, typ: "movie",
+  imdb_id: "tt9999999", tmdb_id: 949, dienste: ["MUBI"],
+};
+const masterVorher = JSON.stringify(eigenerMaster);
+const katalogVorher = JSON.stringify(fremderKatalog);
+const konfliktAnsicht = baueStreamingAnsichten({
+  bekannt: { titel: [fremderKatalog] }, entdecken: { titel: [] },
+}, [eigenerMaster]);
+check("widersprechende starke IDs blockieren die automatische Mediathek-Zuordnung",
+  konfliktAnsicht.bekannt.titel.length === 0
+  && konfliktAnsicht.entdecken.titel[0]?.watchmode_id === 700);
+check("Identitätsprüfung und Projektion mutieren weder Master noch Katalogquelle",
+  JSON.stringify(eigenerMaster) === masterVorher && JSON.stringify(fremderKatalog) === katalogVorher);
+const typAusNeutralemKatalog = baueStreamingAnsichten({
+  bekannt: { titel: [{ watchmode_id: 901, titel: "Typbeleg", jahr: 2022 }] },
+  entdecken: { titel: [{ watchmode_id: 901, titel: "Typbeleg", jahr: 2022, typ: "movie",
+    imdb_id: "tt1234567", tmdb_id: 123 }] },
+}, [{ id: "typbeleg", titel: "Typbeleg", jahr: 2022, typ: "film" }]);
+check("historischer Bekannt-Eintrag übernimmt Typ nur aus demselben neutralen Katalogtitel",
+  typAusNeutralemKatalog.bekannt.titel[0]?.id === "typbeleg"
+  && typAusNeutralemKatalog.bekannt.titel[0]?.imdb_id === "tt1234567"
+  && typAusNeutralemKatalog.bekannt.titel[0]?.tmdb_id === 123);
+const ohneTypbeleg = baueStreamingAnsichten({
+  bekannt: { titel: [{ watchmode_id: 902, titel: "Kein Typ", jahr: 2022 }] },
+  entdecken: { titel: [] },
+}, [{ id: "kein-typ", titel: "Kein Typ", jahr: 2022, typ: "film" }]);
+check("fehlender Streamingtyp wird nicht pauschal als Film erfunden",
+  ohneTypbeleg.bekannt.titel.length === 0 && ohneTypbeleg.entdecken.titel.length === 1);
 
 /* ================= Etappe 4: Token-Naht (src/lib/katalog.js) =================
    Bis hierher lief das Modul OHNE Token-Provider — die beiden Header-Checks oben
