@@ -1,6 +1,7 @@
 /* Paket B: ausschließlich lokale Mocks. Kein Provider-, Supabase- oder
    sonstiger Netzwerkzugriff. */
 import assert from "node:assert/strict";
+import { historicalSourceReader } from "./tools/historical-source-fixture.mjs";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { delimiter, dirname, relative, resolve } from "node:path";
@@ -884,8 +885,14 @@ await check("Nicht deployter Entdecken-Mix hält Einmallauf und Providerprobe vo
     && error.code === "RELEASE_CLOSURE_UNTRACKED");
 });
 
-await check("Joyn-freier Functionkandidat ist belegt, der alte Deployzaun bleibt geschlossen", () => {
-  const candidate = requireEntdeckenJoynFreeCandidateProvenance();
+await check("Historischer Functionkandidat ist belegt; der aktuelle Produktstand erweitert seinen Zaun nicht", () => {
+  assert.throws(() => requireEntdeckenJoynFreeCandidateProvenance(),
+    (error) => error instanceof RadarRemoteStartStop
+      && error.code === "ENTDECKEN_JOYN_FREE_CANDIDATE_DRIFT");
+  const candidate = requireEntdeckenJoynFreeCandidateProvenance({
+    readFile: historicalSourceReader(ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
+      ENTDECKEN_JOYN_FREE_CANDIDATE_FILES, REPO_ROOT),
+  });
   assert.equal(candidate.commit, ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT);
   assert.equal(candidate.sourceSha256, ENTDECKEN_JOYN_FREE_CANDIDATE_SOURCE_SHA256);
   assert.deepEqual(candidate.files, ENTDECKEN_JOYN_FREE_CANDIDATE_FILES);
@@ -924,9 +931,11 @@ await check("Joyn-freier Functionkandidat ist belegt, der alte Deployzaun bleibt
 
 await check("Joyn-freier Kandidat stoppt bei einer einzelnen Closure-Byteänderung", () => {
   const changedPath = "supabase/functions/entdecken-daily-task/contract.js";
+  const readHistoricalFile = historicalSourceReader(ENTDECKEN_JOYN_FREE_CANDIDATE_COMMIT,
+    ENTDECKEN_JOYN_FREE_CANDIDATE_FILES, REPO_ROOT);
   assert.throws(() => requireEntdeckenJoynFreeCandidateProvenance({
     readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
+      const bytes = readHistoricalFile(absolutePath);
       const pathname = relative(REPO_ROOT, String(absolutePath)).split("\\").join("/");
       return pathname === changedPath ? Buffer.concat([bytes, Buffer.from("\n")]) : bytes;
     },
@@ -1270,11 +1279,10 @@ const automaticRetryBindingMigration = fs.readFileSync(
   "./supabase/migrations/20260903213000_radar_automatic_retry_binding.sql",
   "utf8",
 );
-const sharedSixDayWorkflow = fs.readFileSync("./.github/workflows/entdecken-six-day.yml", "utf8");
-const radarJobStart = sharedSixDayWorkflow.indexOf("  radar-six-day-trigger:");
-const entdeckenJobStart = sharedSixDayWorkflow.indexOf("  entdecken-six-day-trigger:");
-const dailyWorkflow = radarJobStart >= 0 && entdeckenJobStart > radarJobStart
-  ? sharedSixDayWorkflow.slice(radarJobStart, entdeckenJobStart) : "";
+const radarSixDayWorkflow = fs.readFileSync("./.github/workflows/radar-six-day.yml", "utf8");
+const entdeckenWorkflow = fs.readFileSync("./.github/workflows/entdecken-six-day.yml", "utf8");
+const radarJobStart = radarSixDayWorkflow.indexOf("  radar-six-day-trigger:");
+const dailyWorkflow = radarJobStart >= 0 ? radarSixDayWorkflow.slice(radarJobStart) : "";
 const liveSource = fs.readFileSync("./tools/radar_websearch_live.mjs", "utf8");
 const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf8"));
 
@@ -1570,13 +1578,15 @@ await check("Bindungs-Migration ist additiv, inhaltsfrei gespeichert und nur ser
   assert.match(automaticRetryBindingMigration, /job\.retry_status = 'claimed'/);
 });
 
-await check("Daily-Workflow laeuft nur per Zeitplan, seriell hoechstens zehnmal und loggt keine Antwort", () => {
+await check("Getrennter Radar-Zeitplan bleibt wirkungsgesperrt; sein begrenzter Transportvertrag bleibt erhalten", () => {
   assert.deepEqual(
-    [...sharedSixDayWorkflow.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]),
+    [...radarSixDayWorkflow.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]),
     ["0 2 * * *"],
   );
-  assert.doesNotMatch(sharedSixDayWorkflow, /workflow_dispatch|push:|pull_request:/);
+  assert.doesNotMatch(radarSixDayWorkflow, /workflow_dispatch|push:|pull_request:|entdecken-six-day-trigger/);
+  assert.doesNotMatch(entdeckenWorkflow, /radar-six-day-trigger|SUPABASE_RADAR_SCHEDULER|radar-websearch-task/);
   assert.match(dailyWorkflow, /^  radar-six-day-trigger:/);
+  assert.match(dailyWorkflow, /if: \$\{\{ false && vars\.KD_RADAR_SCHEDULE_ENABLED == 'true' \}\}/);
   assert.equal((dailyWorkflow.match(/^\s*curl\b/gm) || []).length, 1);
   assert.match(dailyWorkflow, /for claim_number in \$\(seq 1 10\)/);
   assert.match(dailyWorkflow, /--request POST/);

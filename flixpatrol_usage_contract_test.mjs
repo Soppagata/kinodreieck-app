@@ -46,6 +46,6 @@ assert.match(dataMigration, /grant execute on function public\.kd_flixpatrol_cha
 assert.doesNotMatch(dataMigration, /FLIXPATROL_API_KEY|authorization|password|email|profile|prompt/i);
 assert.match(docs, /begin read only;/);
 assert.match(docs, /werden nie addiert/);
-assert.match(docs, /offene Naht für die spätere Quellenintegration/);
+assert.match(docs, /FLIXPATROL_DATENVERTRAG\.md/);
 
 console.log("36 FlixPatrol-Vertragsprüfungen bestanden.");
