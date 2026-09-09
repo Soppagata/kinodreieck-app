@@ -115,6 +115,14 @@ Chart-Read-RPCs und ein gebündeltes Titles-Read für höchstens 50 konkrete IDs
 die echte Cache-MediaType ist maßgeblich. E5 benötigt keinen E4-Output.
 Gemeinsame Testeinbindung bleibt beim Master, PostgreSQL exklusiv bei E4.
 
+Bestätigte E5-Naht: `StapelImport` war im Ausgangsstand nirgends in der App
+eingebunden. E5 erhält deshalb zusätzlich ausschließlich die nötige
+Prop-/Schalterverdrahtung in `src/App.jsx`, einen aufklappbaren Einstieg bei der
+Eintragserfassung in `src/tabs/MediathekTab.jsx` und einen dedizierten
+Mediathek-UI-Test. E4 berührt diese Dateien nicht. Konto-/Kontextwechsel und
+Unmount müssen laufende Vorschauen beziehungsweise weitere Importwrites
+abbrechen; bestehende Einzelanlage und Auswahl bleiben erhalten.
+
 E4 plant höchstens fünf Chartabfragen und 25 gezielte Titelabfragen pro
 Tageslauf, nur für benötigte fehlende/veraltete Cacheeinträge. Zusammen mit
 dem Ticker ergibt der reguläre Tagespfad selbst ohne Cachetreffer höchstens
