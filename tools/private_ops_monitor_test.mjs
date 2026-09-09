@@ -267,6 +267,17 @@ const monitorWorkflow = readFileSync(".github/workflows/private-ops-monitor.yml"
 check("Workflow ist auf 5 Minuten begrenzt", /timeout-minutes:\s*5/.test(monitorWorkflow));
 check("Workflow verwendet ausschließlich den Check-Entrypoint", /node tools\/private-ops-check\.mjs/.test(monitorWorkflow));
 check("Workflow bindet die explizite Staging-Sollmatrix", /KD_MONITOR_ENVIRONMENT:\s*staging/.test(monitorWorkflow));
+check("Workflow bindet das GitHub-Environment staging", /read-only-check:[\s\S]*?environment:\s*staging/.test(monitorWorkflow));
+check("Workflow checkt unabhängig vom Schedule-Default den staging-Ref aus",
+  /uses:\s*actions\/checkout@v7[\s\S]*?with:\s*\n\s+ref:\s*staging/.test(monitorWorkflow));
+check("App-Build-Soll stammt aus dem tatsächlich ausgecheckten staging-Commit",
+  /id:\s*staging-checkout[\s\S]*?git rev-parse HEAD[\s\S]*?KD_MONITOR_EXPECTED_BUILD:\s*\$\{\{\s*steps\.staging-checkout\.outputs\.sha\s*\}\}/.test(monitorWorkflow));
+check("Workflow verwendet die kanonischen Environment-Variablen des Deployments",
+  /KD_MONITOR_STAGING_URL:\s*\$\{\{\s*vars\.APP_URL\s*\}\}/.test(monitorWorkflow)
+  && /KD_MONITOR_SUPABASE_URL:\s*\$\{\{\s*vars\.SUPABASE_URL\s*\}\}/.test(monitorWorkflow)
+  && /KD_MONITOR_PUBLISHABLE_KEY:\s*\$\{\{\s*vars\.SUPABASE_PUBLISHABLE_KEY\s*\}\}/.test(monitorWorkflow));
+check("alte driftende App-Sollvariablen und falsche Supabase-Secret-Namen sind entfernt",
+  !/STAGING_APP_URL|STAGING_EXPECTED_BUILD|secrets\.VITE_SUPABASE_(?:URL|PUBLISHABLE_KEY)/.test(monitorWorkflow));
 
 console.log(`\n${ok}/${ok + fehler.length} Private-Ops-Monitor-Checks bestanden.`);
 if (fehler.length) {
