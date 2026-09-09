@@ -155,12 +155,18 @@ Die getrennten Zustände gebaut / getestet / committed / gepusht / CI-grün /
 deployed / natürliche Ausführung / praktische PWA-Abnahme bleiben sichtbar.
 Keine neue Aktivierung kostenpflichtiger KI durch diesen Datenauftrag.
 
-Erste Welle veröffentlicht: `main` bei `c875ee5`, `staging` bei `a4c7de8`.
+Erste Welle veröffentlicht: `main` bei `5dbdf6b`, `staging` bei `2057494`.
 Staging wurde mit dem eigenen Task-Diff auf `ce846a3` aufgebaut; die dortigen
 UI-Änderungen bleiben erhalten. Die drei Integrationsprüfungen liefern
-64 Monitor-, 70 Entdecken- und 108 Keychainchecks. CI läuft in
-[main](https://github.com/Soppagata/kinodreieck-app/actions/runs/34402050493) und
-[staging](https://github.com/Soppagata/kinodreieck-app/actions/runs/34402059147).
+64 Monitor-, 70 Entdecken- und 108 Keychainchecks. Nach einer gezielten
+Linux-Korrektur am temporären PG-Serverstart sind die CI-Tests in
+[main](https://github.com/Soppagata/kinodreieck-app/actions/runs/34402755863) und
+[staging](https://github.com/Soppagata/kinodreieck-app/actions/runs/34402746417)
+grün: vollständige Suiten/Function-Mocks, Chromium und WebKit. Staging-Deploy
+und direkte Domain-Metadaten bestätigen `2057494189a480689f61f3f8032cea79757a3732`.
+Production wartet weiterhin an der bestehenden Umgebungsfreigabe. Die
+Linux-Naht deaktiviert nur den nicht benötigten System-Unix-Socket und lässt
+alle PG-Vertragsprüfungen aktiv; keine Migration oder Produktlogik geändert.
 Der Ticker ist jetzt bei GitHub als `active` registriert (Workflow 354372774),
 erster natürlicher Lauf noch ausstehend. Entdecken und Automatic-AI bleiben
 `disabled_manually`; der separate Radar-Workflow hat weiterhin sein hartes
