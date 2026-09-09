@@ -78,7 +78,7 @@ check("Bestätigte Fakten ergänzen nur schlanke Zielfelder ohne Vorschau- oder 
   && !Object.hasOwn(faktImport, "flixpatrolVorschlag") && !Object.hasOwn(faktImport, "charts"));
 const mitEigenerKennung = normalisiereStapelAntwort({ data: { kandidaten: [{
   titel: "Alien", originaltitel: "Alien", typ: "film", jahr: 1979, quelle: "bluray",
-  imdb_id: "tt0090605", tmdbId: "900719925474099312345", watchmode_id: "123", flixpatrol_id: "ttl_existingcase",
+  imdb_id: "tt0090605", tmdbId: "900719925474099312345", watchmode_id: "123", flixpatrol_id: "ttl_ExistingCase123456789012",
   vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch",
 }], warnungen: [] } }).kandidaten[0];
 const widersprechenderFakt = [{ sourceId: "ttl_bHyGTvopBHPVtIKhR2CF68WD", flixpatrol_id: "ttl_bHyGTvopBHPVtIKhR2CF68WD",
@@ -89,7 +89,7 @@ const eigeneUebernahme = baueStapelUebernahme([mitEigenerKennung]).mediathek[0];
 check("Validierte Originaltitel und eigene IDs bleiben bis zum gespeicherten Eintrag erhalten",
   eigeneUebernahme.originaltitel === "Alien" && eigeneUebernahme.imdb_id === "tt0090605"
   && eigeneUebernahme.tmdb_id === "900719925474099312345" && eigeneUebernahme.watchmode_id === "123"
-  && eigeneUebernahme.flixpatrol_id === "ttl_existingcase");
+  && eigeneUebernahme.flixpatrol_id === "ttl_ExistingCase123456789012");
 const prompt = externerStapelPrompt("Max");
 check("Externer Workflow ist eine versionierte Markdown-Datei", EXTERNER_STAPEL_WORKFLOW_DATEINAME === `kinodreieck-${EXTERNER_STAPEL_WORKFLOW_VERSION}.md` && prompt.startsWith("# Kinodreieck") && prompt.includes(`\`${EXTERNER_STAPEL_WORKFLOW_VERSION}\``) && prompt.endsWith("\n"));
 check("Externer Workflow sammelt vor dem Abschluss stapelweise", /Foto N: X Titel erkannt/.test(prompt) && /SAMMLUNG ABSCHLIESSEN/.test(prompt) && /noch kein JSON und keine Gesamtliste/.test(prompt));
