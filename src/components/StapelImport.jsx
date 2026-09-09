@@ -1,6 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { btnStyle, inputStyle } from "../lib/tokens.js";
 import { aiService } from "../services/ai.js";
+import { flixpatrolFactsService } from "../services/flixpatrolFacts.js";
+import { baueFlixpatrolVorschlaege } from "../lib/flixpatrolFacts.js";
 import { errorText } from "../services/errors.js";
 import {
   EXTERNER_STAPEL_WORKFLOW_DATEINAME, STAPEL_MAX_ZEILEN, STAPEL_QUELLEN, STAPEL_STANDARD_QUELLEN, STAPEL_TYPEN,
@@ -19,7 +21,7 @@ function parseExterneAntwort(text) {
 
 const LEER = { wie: "", was: "", warum: "" };
 
-export function StapelImport({ master = [], addFilm, addFilme, autorName = "", kiAktiv = false, setErr = () => {}, ai = aiService }) {
+export function StapelImport({ master = [], addFilm, addFilme, autorName = "", kiAktiv = false, setErr = () => {}, ai = aiService, flixpatrolFacts = flixpatrolFactsService, datenKontextKey = "gast" }) {
   const [liste, setListe] = useState("");
   const [standardQuelle, setStandardQuelle] = useState("unklar");
   const [modus, setModus] = useState("nur");
@@ -33,6 +35,17 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   const [bericht, setBericht] = useState(null);
   const jsonRef = useRef(null);
   const promptRef = useRef(null);
+  const laufRef = useRef({ key: datenKontextKey, generation: 0, mounted: true });
+  if (laufRef.current.key !== datenKontextKey) {
+    laufRef.current = { key: datenKontextKey, generation: laufRef.current.generation + 1, mounted: true };
+  }
+  useEffect(() => {
+    const stand = laufRef.current;
+    setVorschau(null); setBericht(null); setExternText("");
+    return () => { if (laufRef.current === stand) stand.mounted = false; stand.generation += 1; };
+  }, [datenKontextKey]);
+  const istGenerationAktuell = (generation) => laufRef.current.mounted
+    && laufRef.current.generation === generation;
   const externerWorkflow = useMemo(() => externerStapelPrompt(autorName), [autorName]);
 
   const listenStand = useMemo(() => {
@@ -44,22 +57,35 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   const kompletteBewertungen = beispiele.map((titel) => ({ titel, ...(bewertungen[titel] || LEER) }))
     .filter((b) => [b.wie, b.was, b.warum].every((v) => v !== ""));
 
+  const mitVorhandenenFakten = async (naechsteVorschau, generation = laufRef.current.generation) => {
+    if (!istGenerationAktuell(generation)) return;
+    setVorschau(naechsteVorschau);
+    const fakten = await flixpatrolFacts?.load?.();
+    if (!istGenerationAktuell(generation)) return;
+    if (!Array.isArray(fakten) || !fakten.length) return;
+    setVorschau((aktuell) => aktuell === naechsteVorschau
+      ? { ...aktuell, kandidaten: baueFlixpatrolVorschlaege(aktuell.kandidaten, fakten) }
+      : aktuell);
+  };
+
   const internAuswerten = async () => {
     if (!kiAktiv || laeuft) return;
     setLaeuft(true); setErr(""); setBericht(null);
+    const generation = laufRef.current.generation;
     try {
       const payload = baueStapelPayload(liste, standardQuelle, modus === "vorbeurteilung", kompletteBewertungen);
       const antwort = await ai.runTask("media-batch-extract", payload, { promptVersion: "media-list-v2" });
       const indexMap = payload.liste.map((_, index) => index);
-      setVorschau({ ...normalisiereStapelAntwort(antwort, master, { indexMap }), kostenUsdCent: antwort?.verbrauch?.kostenUsdCent ?? null });
-    } catch (e) { setErr("Stapelimport: " + (e?.code ? errorText(e) : e.message)); }
-    finally { setLaeuft(false); }
+      await mitVorhandenenFakten({ ...normalisiereStapelAntwort(antwort, master, { indexMap }), kostenUsdCent: antwort?.verbrauch?.kostenUsdCent ?? null }, generation);
+    } catch (e) { if (istGenerationAktuell(generation)) setErr("Stapelimport: " + (e?.code ? errorText(e) : e.message)); }
+    finally { if (istGenerationAktuell(generation)) setLaeuft(false); }
   };
 
-  const ladeExtern = (text) => {
+  const ladeExtern = async (text) => {
     if (vorschau) return;
-    try { setVorschau(normalisiereStapelAntwort(parseExterneAntwort(text), master)); setExternText(""); setErr(""); }
-    catch (e) { setErr("Stapelimport: " + e.message); }
+    const generation = laufRef.current.generation;
+    try { await mitVorhandenenFakten(normalisiereStapelAntwort(parseExterneAntwort(text), master), generation); if (istGenerationAktuell(generation)) { setExternText(""); setErr(""); } }
+    catch (e) { if (istGenerationAktuell(generation)) setErr("Stapelimport: " + e.message); }
   };
 
   const kopierePrompt = async () => {
@@ -84,21 +110,29 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   const setzeBewertung = (titel, achse, wert) => setBewertungen((alt) => ({
     ...alt, [titel]: { ...(alt[titel] || LEER), [achse]: wert },
   }));
-  const aktualisiere = (id, feld, wert) => setVorschau((alt) => ({ ...alt, kandidaten: alt.kandidaten.map((k) => k.id === id ? { ...k, [feld]: wert } : k) }));
+  const aktualisiere = (id, feld, wert) => setVorschau((alt) => ({ ...alt, kandidaten: alt.kandidaten.map((k) => {
+    if (k.id !== id) return k;
+    const naechster = { ...k, [feld]: wert };
+    if (feld === "typ") delete naechster.flixpatrolVorschlag;
+    return naechster;
+  }) }));
+  const setzeFaktenVorschlag = (id, wert) => setVorschau((alt) => ({ ...alt, kandidaten: alt.kandidaten.map((k) => k.id === id && k.flixpatrolVorschlag
+    ? { ...k, flixpatrolVorschlag: { ...k.flixpatrolVorschlag, ausgewaehlt: wert } } : k) }));
   const uebernehmen = async () => {
     if (!vorschau || uebernahmeRef.current) return;
     if (!vorschau.kandidaten.some((kandidat) =>
       kandidat.zustand === "ok" && kandidat.ausgewaehlt && !kandidat.vorhandenMediathek
     )) return;
     uebernahmeRef.current = true; setUebernahmeLaeuft(true);
+    const generation = laufRef.current.generation;
     try {
       const gespeichert = await persistiereStapelAuswahl(
         vorschau.kandidaten,
-        { addFilme, addFilm },
+        { addFilme, addFilm, istAktuell: () => istGenerationAktuell(generation) },
       );
-      if (gespeichert == null) return;
+      if (gespeichert == null || gespeichert.abgebrochen || !istGenerationAktuell(generation)) return;
       setBericht({ eintraege: gespeichert.eintraege }); setVorschau(null);
-    } finally { uebernahmeRef.current = false; setUebernahmeLaeuft(false); }
+    } finally { uebernahmeRef.current = false; if (istGenerationAktuell(generation)) setUebernahmeLaeuft(false); }
   };
 
   const hatImportierbareAuswahl = !!vorschau?.kandidaten?.some((kandidat) =>
@@ -168,6 +202,7 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
       {vorschau.kandidaten.map((k) => <div className="kd-stapel-kandidat" key={k.id}>
         <label className="kd-stapel-titel kd-touch-checkbox"><input type="checkbox" checked={k.ausgewaehlt} onChange={(e) => aktualisiere(k.id, "ausgewaehlt", e.target.checked)} /><span><strong>{k.titel}</strong>{k.jahr ? ` (${k.jahr})` : ""}<small>{k.typ} · Sicherheit {k.sicherheit}{k.vorbeurteilung !== "offen" ? ` · Voreindruck: ${k.vorbeurteilung === "passt" ? "passt" : "eher nicht"}` : ""}{k.begruendung ? ` · ${k.begruendung}` : ""}</small></span></label>
         <div className="kd-stapel-felder"><select aria-label={`Typ für ${k.titel}`} value={k.typ} onChange={(e) => aktualisiere(k.id, "typ", e.target.value)}>{STAPEL_TYPEN.map((t) => <option key={t}>{t}</option>)}</select><select aria-label={`Quelle für ${k.titel}`} value={k.quelle} onChange={(e) => aktualisiere(k.id, "quelle", e.target.value)}>{STAPEL_QUELLEN.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}</select>{k.typ === "serie" && <input aria-label={`Staffeln für ${k.titel}`} placeholder="Staffeln optional, z. B. 1–3" value={k.staffeln || ""} onChange={(e) => aktualisiere(k.id, "staffeln", e.target.value)} />}</div>
+        {k.flixpatrolVorschlag && <label className="kd-touch-checkbox"><input type="checkbox" checked={k.flixpatrolVorschlag.ausgewaehlt} onChange={(e) => setzeFaktenVorschlag(k.id, e.target.checked)} /><span>Belegte FlixPatrol-Lücken ergänzen: {Object.keys(k.flixpatrolVorschlag.ergaenzungen).join(", ")}<small>Abgleich über {k.flixpatrolVorschlag.matchedBy === "strong-id" ? "starke ID" : "exakten Titel, Jahr und Typ"}; Cache-Stand {k.flixpatrolVorschlag.fresh ? "aktuell" : "älter oder unbekannt"}{k.flixpatrolVorschlag.checkedAt ? `, geprüft ${k.flixpatrolVorschlag.checkedAt}` : ""}. Chartplatz ist keine Bewertung oder Verfügbarkeitsangabe.{k.flixpatrolVorschlag.sourceUrl && <> <a href={k.flixpatrolVorschlag.sourceUrl} target="_blank" rel="noreferrer">FlixPatrol-Beleg</a></>}</small></span></label>}
         {k.vorhandenMediathek && <small className="kd-stapel-dublette">Schon in der Mediathek – wird übersprungen.</small>}
       </div>)}
       <div className="kd-stapel-aktionen"><button style={btnStyle(true)} disabled={uebernahmeLaeuft || !hatImportierbareAuswahl} onClick={uebernehmen}>{uebernahmeLaeuft ? "Übernimmt …" : "Auswahl übernehmen"}</button><button style={btnStyle(false)} disabled={uebernahmeLaeuft} onClick={() => setVorschau(null)}>Verwerfen</button></div>

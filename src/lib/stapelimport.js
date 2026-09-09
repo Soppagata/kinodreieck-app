@@ -1,4 +1,5 @@
 import { norm } from "./match.js";
+import { uebernehmeFlixpatrolVorschlag } from "./flixpatrolFacts.js";
 
 export const STAPEL_MAX_ZEILEN = 60;
 export const STAPEL_MAX_ZEICHEN = 12_000;
@@ -233,13 +234,15 @@ export function baueStapelUebernahme(kandidaten) {
   for (const k of kandidaten || []) {
     if (!k.ausgewaehlt || k.vorhandenMediathek || (k.zustand && k.zustand !== "ok") || !STAPEL_TYPEN.includes(k.typ)) continue;
     const quelle = STAPEL_QUELLEN_KEYS.has(k.quelle) ? k.quelle : "unklar";
-    mediathek.push({
+    const basis = {
       titel: k.titel, originaltitel: k.titel, jahr: k.jahr, jahr_bis: null,
       typ: k.typ,
       quelle, quelle_unklar: quelle === "unklar", kategorie: null, bewertung: null,
       genre: [], tags: [], begruendung: "", beschreibung: "", notiz: notizFuer(k),
       status: "gesetzt", bewertet_von: null,
-    });
+    };
+    const angereichert = uebernehmeFlixpatrolVorschlag({ ...basis, flixpatrolVorschlag: k.flixpatrolVorschlag });
+    mediathek.push(angereichert);
   }
   return { mediathek, mustwatch: [] };
 }
@@ -250,19 +253,22 @@ export function baueStapelUebernahme(kandidaten) {
    Ein Teilausfall fuehrt nie zu einem automatischen Vollretry. */
 export async function persistiereStapelAuswahl(
   kandidaten,
-  { addFilme, addFilm } = {},
+  { addFilme, addFilm, istAktuell = () => true } = {},
 ) {
   const { mediathek } = baueStapelUebernahme(kandidaten);
-  if (!mediathek.length) return { eintraege: 0 };
+  if (!mediathek.length || !istAktuell()) return { eintraege: 0, abgebrochen: !istAktuell() };
   if (typeof addFilme === "function") {
     const ids = await addFilme(mediathek);
+    if (!istAktuell()) return { eintraege: 0, abgebrochen: true };
     if (ids == null) return null;
     if (!Array.isArray(ids)) throw new Error("Stapelimport: Speicherantwort ist nicht lesbar.");
     return { eintraege: ids.length };
   }
   let eintraege = 0;
   for (const film of mediathek) {
+    if (!istAktuell()) return { eintraege, abgebrochen: true };
     if (await addFilm?.(film)) eintraege += 1;
+    if (!istAktuell()) return { eintraege, abgebrochen: true };
   }
   return { eintraege };
 }

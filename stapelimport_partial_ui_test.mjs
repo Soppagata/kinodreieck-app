@@ -96,6 +96,12 @@ const fehler = [];
 const teilFixture = await mounte({
   master: [],
   kiAktiv: false,
+  flixpatrolFacts: { async load() { return [{
+    sourceId: "ttl_bHyGTvopBHPVtIKhR2CF68WD", flixpatrol_id: "ttl_bHyGTvopBHPVtIKhR2CF68WD",
+    titel: "Alien", jahr: 1979, typ: "film", imdb_id: "tt0078748", tmdb_id: 348,
+    beschreibung: "Neutraler Cachetext", laufzeit_minuten: 117, premiere: "1979-05-25",
+    fresh: true, checkedAt: "2026-09-09T11:00:00Z", charts: [],
+  }]; } },
   setErr: (wert) => fehler.push(wert),
   addFilme: async (medien) => {
     imports.push(medien);
@@ -111,15 +117,22 @@ check(teilFixture.container.querySelectorAll(".kd-stapel-kandidat").length === 2
 check(/1 Eintrag bleibt offen/.test(teilFixture.container.textContent)
   && /Zeile 2: Der Titel fehlt/.test(teilFixture.container.textContent),
 "das kaputte Item erscheint einzeln als sichere Fehlmenge");
+check(/Belegte FlixPatrol-Lücken ergänzen/.test(teilFixture.container.textContent)
+  && /exakten Titel, Jahr und Typ/.test(teilFixture.container.textContent)
+  && /keine Bewertung oder Verfügbarkeitsangabe/.test(teilFixture.container.textContent),
+"der KI-unabhängige Vorschauweg zeigt belegte neutrale Ergänzungen zur Kontrolle");
 check(imports.length === 0 && teilFixture.container.textContent.includes("noch ist nichts gespeichert"),
   "die Vorschau importiert nichts still");
 check(knopf(teilFixture.container, "Antwort prüfen").disabled,
   "eine offene Vorschau kann auch extern nicht blind überschrieben werden");
-const auswahl = teilFixture.container.querySelectorAll('.kd-stapel-kandidat input[type="checkbox"]');
+const auswahl = teilFixture.container.querySelectorAll('.kd-stapel-titel input[type="checkbox"]');
 await act(async () => { auswahl[1].click(); await tick(); });
 await act(async () => { knopf(teilFixture.container, "Auswahl übernehmen").click(); await tick(); });
 check(imports.length === 1 && imports[0].length === 1 && imports[0][0].titel === "Alien",
   "Bestätigung importiert nur das ausgewählte sichere Item");
+check(imports[0][0].imdb_id === "tt0078748" && imports[0][0].beschreibung === "Neutraler Cachetext"
+  && !Object.hasOwn(imports[0][0], "flixpatrolVorschlag") && !Object.hasOwn(imports[0][0], "charts"),
+  "bestätigte Fakten werden schlank übernommen, ohne Vorschau- oder Chartkopie");
 check(fehler.every((wert) => !wert) && /Übernommen: 1/.test(teilFixture.container.textContent),
   "bestätigter Import meldet genau einen neuen Eintrag");
 await teilFixture.cleanup();

@@ -16,7 +16,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 
 import { T, btnStyle, setzeTheme } from "./lib/tokens.js";
 import { initSetup, setupUeberspringen } from "./lib/tutorial.js";
-import { ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
+import { kiAn, ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
 import { KatalogZugang } from "./components/KatalogZugang.jsx";
 import {
   store, K, PROGRAMM_TTL_MS, storageService, storageOwnerKennung,
@@ -1737,6 +1737,9 @@ export default function App() {
             mustwatch={mustwatch} addMustwatch={addMustwatch}
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
             mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef} datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
+            stapelimportKiAktiv={session.mode === "account" && session.state === "ready"
+              && session.capabilities?.personalAi === true && kiAn("stapelimport")}
+            setErr={setErr}
           />
         )}
 

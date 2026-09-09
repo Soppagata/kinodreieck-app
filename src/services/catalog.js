@@ -19,6 +19,7 @@ import {
 import { authDriver, authService } from "./auth.js";
 import { runtimeConfig } from "../config/runtime.js";
 import { BoundaryError, ERROR_CODES, normalizeBoundaryError } from "./errors.js";
+import { createFlixpatrolFactsService, flixpatrolFactsService } from "./flixpatrolFacts.js";
 
 /* Projekt-URLs vergleichen: Groß-/Kleinschreibung und ein Schrägstrich am Ende
    dürfen den Vergleich nicht entscheiden. */
@@ -155,7 +156,9 @@ function gespeicherteVariante(auth = authService) {
   catch { return "demo"; }
 }
 
-export function createCatalogService({ auth = authService, driver = authDriver } = {}) {
+export function createCatalogService({ auth = authService, driver = authDriver, factsService = null } = {}) {
+  const facts = factsService || (auth === authService && driver === authDriver
+    ? flixpatrolFactsService : createFlixpatrolFactsService({ auth, driver }));
   const aktuelleFreigabe = () => remoteKonto(auth);
   const fordereGebundeneFreigabe = (accountId, operation) => {
     const aktuell = aktuelleFreigabe();
@@ -227,7 +230,7 @@ export function createCatalogService({ auth = authService, driver = authDriver }
       throw normalizeBoundaryError(error, { source: "catalog", operation: "connection.test" });
     }
   },
-  buildStreamingViews: baueStreamingAnsichten,
+  buildStreamingViews: (streaming, master) => baueStreamingAnsichten(streaming, master, facts.peek()),
   /* Bereich laden ("programm" | "streamingBekannt" |
      "streamingEntdecken"; "streaming" bleibt Übergangskompatibilität).
      Berechtigte Konten behalten unverändert die bisherigen Live-Zeilen. */
@@ -240,6 +243,10 @@ export function createCatalogService({ auth = authService, driver = authDriver }
       const erwarteteKontoId = fordereGebundeneFreigabe(auswahl.accountId, "area.load.before");
       const r = await ladeKatalogAsset(name, { ...options, erwarteteKontoId });
       fordereGebundeneFreigabe(auswahl.accountId, "area.load.after");
+      if (bereich === "streaming" || bereich === "streamingBekannt" || bereich === "streamingEntdecken") {
+        try { await facts.load(); } catch { facts.clear?.(); }
+      }
+      fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-after");
       /* Sprang der Cache ein, ist der Direkt-Read trotzdem gescheitert. Sein
          Grund reist als stabiler `code` mit — sonst hörte ein Tester mit
          abgelehntem Schlüssel nur „Datenbank nicht erreichbar". */

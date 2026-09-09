@@ -19,6 +19,7 @@ import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
 import { MustWatchListe } from "../components/MustWatchListe.jsx";
 import { FilmBatchLoeschDialog } from "../components/FilmBatchLoeschDialog.jsx";
+import { StapelImport } from "../components/StapelImport.jsx";
 
 const STALE_LOESCH_HINWEIS = "Der Datenstand hat sich geändert. Bitte Datenstand, Konto oder Sitzung neu prüfen und die Einträge erneut auswählen.";
 
@@ -38,7 +39,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   onPrognoseErstellen, onPrognoseStatus,
   filmwissenAktiv = false, filmwissenRechercheAktiv = false,
   filmwissenProFilm = {}, filmwissenRechercheLaufId = null,
-  onFilmwissenLaden, onFilmwissenRecherchieren, datenKontextKey = "gast" }) {
+  onFilmwissenLaden, onFilmwissenRecherchieren, datenKontextKey = "gast",
+  stapelimportKiAktiv = false, stapelimportFacts, setErr = () => {} }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
   const [typTab, setTypTab] = useState("filme");
   const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
@@ -747,6 +749,17 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
             </div>
           );
         })}
+
+      {ansicht === "bestand" && dreieckTab && !auswahlmodus && (
+        <details className="kd-stapelimport-einstieg" style={{ marginBottom: 16 }}>
+          <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.04em" }}>
+            Mehrere Titel erfassen
+          </summary>
+          <StapelImport key={datenKontextKey} master={master || []} addFilm={addFilm}
+            kiAktiv={stapelimportKiAktiv} setErr={setErr} flixpatrolFacts={stapelimportFacts}
+            datenKontextKey={datenKontextKey} />
+        </details>
+      )}
 
       <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, marginBottom: 10 }}>
         {mediathek.length} {mediathek.length === 1 ? "Eintrag" : "Einträge"} · {auswahlmodus ? "Karte antippen zum Auswählen" : "Karte antippen für Details & Bearbeiten"}
