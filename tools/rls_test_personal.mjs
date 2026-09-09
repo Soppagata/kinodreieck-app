@@ -36,7 +36,7 @@ const A_PASS = process.env.KD_TESTA_PASS || "";
 const B_USER = (process.env.KD_TESTB_USER || "testb").trim();
 const B_PASS = process.env.KD_TESTB_PASS || "";
 const MAIL_DOMAIN = (process.env.KD_MAIL_DOMAIN || "login.kinodreieck.at").trim();
-const ACCESS_MODE = (process.env.KD_RLS_ACCESS_MODE || "active").trim().toLowerCase();
+const ACCESS_MODE = (process.env.KD_RLS_ACCESS_MODE || "").trim().toLowerCase();
 
 if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(URL) || !ANON || !A_PASS || !B_PASS
   || !["active", "inactive", "missing"].includes(ACCESS_MODE)) {
@@ -98,6 +98,26 @@ function abgewiesen(antwort) {
     || antwort.status === 404
     || /42501|PGRST202|account_inactive/.test(text)
   );
+}
+
+/* Der Modus ist eine vom Admin vorbereitete Vorbedingung, keine Annahme des
+   Tests. Bei einer Abweichung stoppt der Lauf vor dem ersten Schreibversuch,
+   damit ein inaktives Konto nicht als Kaskade vermeintlicher RLS-Defekte
+   erscheint und die aktive Suite nicht mit falschen Voraussetzungen läuft. */
+function evaluateRlsAccessPreflight(mode, accessA, helperA, accessB, helperB) {
+  const rowsA = Array.isArray(accessA.data) ? accessA.data : [];
+  const rowA = rowsA[0];
+  const rowsB = Array.isArray(accessB.data) ? accessB.data : [];
+  const rowB = rowsB[0];
+  const aReady = accessA.status === 200 && rowsA.length === 1
+    && rowA?.active === true && helperA.status === 200 && helperA.data === true;
+  const observedB = rowsB.length === 0 ? "missing"
+    : rowB?.active === false ? "inactive"
+      : rowB?.active === true ? "active" : "invalid";
+  const bReady = accessB.status === 200 && helperB.status === 200
+    && observedB === mode
+    && (mode === "active" ? helperB.data === true : helperB.data === false);
+  return { ok: aReady && bReady, observedA: aReady ? "active" : "invalid", observedB };
 }
 
 function headers(token, { body = false, prefer = null } = {}) {
@@ -203,6 +223,15 @@ if (ACCESS_MODE === "active") {
     "HTTP access=" + accessB.status + " helper=" + helperB.status);
 }
 
+const rollenPreflight = evaluateRlsAccessPreflight(ACCESS_MODE, accessA, helperA, accessB, helperB);
+if (!rollenPreflight.ok) {
+  console.error(
+    `RLS_PRECONDITION_MISMATCH expectedB=${ACCESS_MODE} observedA=${rollenPreflight.observedA}`
+    + ` observedB=${rollenPreflight.observedB}. Kein Schreibtest gestartet.`,
+  );
+  process.exit(2);
+}
+
 const accessWrite = ACCESS_MODE === "missing"
   ? await rest("POST", "/kd_account_access", {
     token: B.token,
@@ -259,7 +288,7 @@ if (ACCESS_MODE !== "active") {
     rest("POST", "/rpc/kd_claim_shared_article", {
       token: B.token, body: { p_share_token: probe },
     }),
-    rest("POST", "/rpc/kd_list_shared_articles", { body: {} }),
+    rest("POST", "/rpc/kd_list_shared_articles", { token: B.token, body: {} }),
   ]);
 
   pruefe(`R1 ${ACCESS_MODE}: kd_personal ist leer und Schreiben scheitert`,
@@ -275,9 +304,8 @@ if (ACCESS_MODE !== "active") {
   const liveKatalogNamen = [
     "programm", "streaming", "streaming_bekannt", "streaming_entdecken",
   ];
-  pruefe(`R3 ${ACCESS_MODE}: Katalog zeigt nur öffentliche Demo-Zeilen`,
-    catalogRead.status === 200
-    && katalogNamen.includes("manifest")
+  pruefe(`R3 ${ACCESS_MODE}: Katalog bleibt für das gesperrte Konto vollständig leer`,
+    leereMenge(catalogRead)
     && liveKatalogNamen.every((name) => !katalogNamen.includes(name)),
     "HTTP " + catalogRead.status + " sichtbar=[" + katalogNamen.join(",") + "]");
   pruefe(`R4 ${ACCESS_MODE}: Quellen und eigenes KI-Log bleiben leer`,
@@ -289,8 +317,8 @@ if (ACCESS_MODE !== "active") {
   pruefe(`R6 ${ACCESS_MODE}: Shared-Tabelle/Publish/Claim sind gesperrt`,
     leereMenge(sharedRead) && abgewiesen(sharedWrite) && abgewiesen(sharedClaim),
     "read=" + sharedRead.status + " write=" + sharedWrite.status + " claim=" + sharedClaim.status);
-  pruefe(`R7 ${ACCESS_MODE}: öffentliche Shared-Liste bleibt bewusst lesbar`,
-    publicShared.status === 200 && Array.isArray(publicShared.data),
+  pruefe(`R7 ${ACCESS_MODE}: Shared-Liste bleibt für das gesperrte Konto unlesbar`,
+    abgewiesen(publicShared),
     "HTTP " + publicShared.status);
 
   beende(`Rollen-v1-Modus ${ACCESS_MODE} ist fail-closed belegt.`);
@@ -490,35 +518,35 @@ pruefe("T10d anon sieht das Profil nicht",
     || (t10d.status === 200 && Array.isArray(t10d.data) && t10d.data.length === 0)),
   "HTTP " + t10d.status);
 
-/* --- T11: Regressionswächter — Bestandspfade unversehrt ------------------ */
+/* --- T11: Regressionswächter — Privatrelease-Grenze bleibt geschlossen ---
+   Seit 20260901193000 sind kd_store und der anonyme Katalog vollständig
+   gesperrt. Öffentliche Demozeilen im Backend sind kein gültiger Vertrag mehr;
+   der lokale Gastbetrieb braucht dafür keinen anonymen Datenbankzugriff. */
 const t11a = await rest("GET", "/kd_store?scope=eq.demo&select=key&limit=1");
-pruefe("T11a anon liest weiterhin kd_store scope=demo (Demo-Start intakt)", t11a.status === 200, "HTTP " + t11a.status);
+pruefe("T11a anon darf kd_store scope=demo im Privatrelease nicht lesen",
+  t11a.status === 401 || t11a.status === 403, "HTTP " + t11a.status);
 const t11b = await rest("GET", "/kd_store?scope=eq.shared&select=key&limit=1");
-pruefe("T11b Legacy-Shared ist öffentlich leer (aktive Beiträge liegen nicht mehr in kd_store)",
-  t11b.status === 200 && Array.isArray(t11b.data) && t11b.data.length === 0,
+pruefe("T11b anon darf auch den Legacy-Shared-Pfad nicht lesen",
+  t11b.status === 401 || t11b.status === 403,
   "HTTP " + t11b.status + " rows=" + (Array.isArray(t11b.data) ? t11b.data.length : "?"));
-/* --- T11c-T11i: getrennter Katalogzugriff (Etappe 4, 25.07.2026) ---------
-   ACHTUNG, zentral für alle Prüfungen hier unten: PostgREST antwortet bei
-   RLS-Filterung mit HTTP 200 und LEEREM Array, nicht mit 403. Ein Statuscode
-   beweist deshalb gar nichts über die Sichtbarkeit — geprüft wird der
-   Zeileninhalt. (Die Vorgängerfassung von T11c prüfte status === 200 auf
-   /kd_catalog und meldete „Programmkatalog intakt"; das blieb nach der
-   Trennung falsch-grün, weil die manifest-Zeile den 200er allein trägt.) */
+/* --- T11c-T11i: geschlossener anonymer Katalogzugriff ---------------------
+   Die Privatrelease-Migration hat das Tabellenrecht von anon widerrufen.
+   Erwartet wird deshalb ein Rechtefehler und keine einzige zurückgegebene
+   Zeile; ein beliebiger anderer Fehler darf diese Grenze nicht grün machen. */
 function namen(antwort) {
   return Array.isArray(antwort.data) ? antwort.data.map((z) => z?.name) : [];
 }
 
 const t11cat = await rest("GET", "/kd_catalog?select=name&order=name");
 const anonNamen = namen(t11cat);
-pruefe("T11c anon sieht die kd_catalog-Zeile manifest (Verbindungsnachweis)",
-  t11cat.status === 200 && anonNamen.includes("manifest"),
+pruefe("T11c anon erhält auf kd_catalog einen Rechtefehler und keine Zeile",
+  (t11cat.status === 401 || t11cat.status === 403) && anonNamen.length === 0,
   "HTTP " + t11cat.status + " sichtbar=[" + anonNamen.join(",") + "]");
 pruefe("T11d anon sieht die kd_catalog-Zeile programm NICHT",
-  t11cat.status === 200 && !anonNamen.includes("programm"),
+  !anonNamen.includes("programm"),
   anonNamen.includes("programm") ? "LECK: Live-Programmdaten sind öffentlich lesbar!" : "HTTP " + t11cat.status);
 pruefe("T11e anon sieht die kd_catalog-Zeile streaming NICHT",
-  t11cat.status === 200
-  && !anonNamen.includes("streaming")
+  !anonNamen.includes("streaming")
   && !anonNamen.includes("streaming_bekannt")
   && !anonNamen.includes("streaming_entdecken"),
   anonNamen.some((name) => ["streaming", "streaming_bekannt", "streaming_entdecken"].includes(name))
@@ -533,10 +561,9 @@ pruefe("T11f angemeldete Sitzung sieht Programm sowie beide getrennten Streaming
   && kontoNamen.includes("streaming_entdecken"),
   "HTTP " + t11f.status + " sichtbar=[" + kontoNamen.join(",") + "]"
   + " (fehlt eine Zeile ganz, ist nicht die Policy schuld, sondern die Pipeline)");
-pruefe("T11f2 anon sieht beide getrennten Demo-Streamingteile",
-  t11cat.status === 200
-  && anonNamen.includes("streaming_bekannt_demo")
-  && anonNamen.includes("streaming_entdecken_demo"),
+pruefe("T11f2 anon sieht auch die früheren Demo-Streamingteile nicht",
+  !anonNamen.includes("streaming_bekannt_demo")
+  && !anonNamen.includes("streaming_entdecken_demo"),
   "HTTP " + t11cat.status + " sichtbar=[" + anonNamen.join(",") + "]");
 
 const t11seed = await rest(
@@ -545,25 +572,18 @@ const t11seed = await rest(
 );
 const demoSeedZeilen = Array.isArray(t11seed.data) ? t11seed.data : [];
 const demoSeed = demoSeedZeilen[0];
-pruefe("T11j anon sieht genau einen validierten demo_seed im Katalog",
-  t11seed.status === 200
-  && demoSeedZeilen.length === 1
-  && demoSeed?.name === "demo_seed"
-  && demoSeed?.payload?.format === 1
-  && Array.isArray(demoSeed?.payload?.master?.filme)
-  && demoSeed.payload.master.filme.length > 0,
+pruefe("T11j anon darf demo_seed im Privatrelease nicht lesen",
+  (t11seed.status === 401 || t11seed.status === 403) && demoSeedZeilen.length === 0,
   "HTTP " + t11seed.status + " rows=" + demoSeedZeilen.length);
-pruefe("T11k demo_seed trägt Herkunft und Stand, aber bewusst kein künstliches Ablaufdatum",
-  demoSeed?.quelle === "kinodreieck_demo" && !!demoSeed?.stand && demoSeed?.gueltig_bis === null,
-  demoSeed ? "quelle=" + demoSeed.quelle + " stand=" + !!demoSeed.stand
-    + " gueltig_bis=" + String(demoSeed.gueltig_bis) : "keine Zeile");
+pruefe("T11k anon erhält weder demo_seed-Metadaten noch Payload",
+  demoSeed === undefined, demoSeed ? "LECK: demo_seed-Zeile vorhanden" : "keine Zeile");
 
 const t11seedKonto = await rest(
   "GET",
   "/kd_catalog?name=eq.demo_seed&select=name",
   { token: A.token },
 );
-pruefe("T11l angemeldete Sitzung sieht denselben öffentlichen demo_seed",
+pruefe("T11l aktives Konto sieht den internen demo_seed",
   t11seedKonto.status === 200
   && Array.isArray(t11seedKonto.data)
   && t11seedKonto.data.length === 1
@@ -751,11 +771,10 @@ pruefe("T14r Konto darf Quellenregister-RPC NICHT ausführen",
   "HTTP " + t14r.status + (t14r.ok || /quelle_ungueltig/.test(t14rText)
     ? " — LECK: service_role-RPC wurde als Konto ausgeführt!" : ""));
 
-/* --- T15: accountgebundene öffentliche Blog-Projektionen -----------------
-   Tabellenzugriff bleibt privat; Öffentlichkeit sieht ausschließlich die
-   schmale RPC ohne account_id. Schreiben und Löschen sind an auth.uid()
-   gebunden. Die Probe wird im Cleanup nur anhand ihrer zufälligen Artikel-ID
-   und öffentlichen ID wieder entfernt. */
+/* --- T15: accountgebundene Blog-Projektionen ------------------------------
+   Tabellenzugriff bleibt privat; aktive Konten sehen ausschließlich die
+   schmale RPC ohne account_id. Anon ist seit der Privatrelease-Grenze auch
+   dort ausgeschlossen. Schreiben und Löschen sind an auth.uid() gebunden. */
 const sharedArticleId = "rls-probe-" + crypto.randomUUID();
 const sharedPayload = {
   id: sharedArticleId,
@@ -796,14 +815,14 @@ pruefe("T15c B sieht As Projektion in der Tabelle NICHT",
   sharedAngelegt && t15c.status === 200 && Array.isArray(t15c.data) && t15c.data.length === 0,
   "HTTP " + t15c.status + " rows=" + (Array.isArray(t15c.data) ? t15c.data.length : "?"));
 
-const t15d = await rest("POST", "/rpc/kd_list_shared_articles", { body: {} });
+const t15d = await rest("POST", "/rpc/kd_list_shared_articles", { token: A.token, body: {} });
 const publicShared = Array.isArray(t15d.data)
   ? t15d.data.find((row) => row?.publication_id === sharedRow?.publication_id)
   : null;
-pruefe("T15d anon liest die Projektion über die schmale öffentliche RPC",
+pruefe("T15d aktives Konto liest die Projektion über die schmale RPC",
   sharedAngelegt && t15d.status === 200 && publicShared?.payload?.id === sharedArticleId,
   "HTTP " + t15d.status);
-pruefe("T15e die öffentliche RPC gibt keine Account-ID zurück",
+pruefe("T15e die schmale RPC gibt keine Account-ID zurück",
   !!publicShared
   && publicShared.share_token === sharedRow?.share_token
   && !Object.prototype.hasOwnProperty.call(publicShared, "account_id"),
