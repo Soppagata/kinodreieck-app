@@ -100,22 +100,35 @@ function abgewiesen(antwort) {
   );
 }
 
+function postgresRechtVerweigert(antwort) {
+  return (antwort.status === 401 || antwort.status === 403)
+    && antwort.data?.code === "42501";
+}
+
 /* Der Modus ist eine vom Admin vorbereitete Vorbedingung, keine Annahme des
    Tests. Bei einer Abweichung stoppt der Lauf vor dem ersten Schreibversuch,
    damit ein inaktives Konto nicht als Kaskade vermeintlicher RLS-Defekte
    erscheint und die aktive Suite nicht mit falschen Voraussetzungen läuft. */
-function evaluateRlsAccessPreflight(mode, accessA, helperA, accessB, helperB) {
+function evaluateRlsAccessPreflight(mode, accountAId, accessA, helperA, accountBId, accessB, helperB) {
   const rowsA = Array.isArray(accessA.data) ? accessA.data : [];
   const rowA = rowsA[0];
   const rowsB = Array.isArray(accessB.data) ? accessB.data : [];
   const rowB = rowsB[0];
+  const validRow = (row, accountId) => row?.account_id === accountId
+    && ["member", "owner"].includes(row?.role)
+    && typeof row?.active === "boolean"
+    && typeof row?.personal_ai === "boolean"
+    && (!row.personal_ai || row.active);
   const aReady = accessA.status === 200 && rowsA.length === 1
-    && rowA?.active === true && helperA.status === 200 && helperA.data === true;
-  const observedB = rowsB.length === 0 ? "missing"
-    : rowB?.active === false ? "inactive"
-      : rowB?.active === true ? "active" : "invalid";
+    && validRow(rowA, accountAId) && rowA.active === true
+    && helperA.status === 200 && helperA.data === true;
+  const observedB = accessB.status !== 200 || rowsB.length > 1 ? "invalid"
+    : rowsB.length === 0 ? "missing"
+      : !validRow(rowB, accountBId) ? "invalid"
+        : rowB.active === false ? "inactive" : "active";
   const bReady = accessB.status === 200 && helperB.status === 200
     && observedB === mode
+    && (mode === "missing" ? rowsB.length === 0 : rowsB.length === 1)
     && (mode === "active" ? helperB.data === true : helperB.data === false);
   return { ok: aReady && bReady, observedA: aReady ? "active" : "invalid", observedB };
 }
@@ -223,7 +236,9 @@ if (ACCESS_MODE === "active") {
     "HTTP access=" + accessB.status + " helper=" + helperB.status);
 }
 
-const rollenPreflight = evaluateRlsAccessPreflight(ACCESS_MODE, accessA, helperA, accessB, helperB);
+const rollenPreflight = evaluateRlsAccessPreflight(
+  ACCESS_MODE, A.id, accessA, helperA, B.id, accessB, helperB,
+);
 if (!rollenPreflight.ok) {
   console.error(
     `RLS_PRECONDITION_MISMATCH expectedB=${ACCESS_MODE} observedA=${rollenPreflight.observedA}`
@@ -524,11 +539,13 @@ pruefe("T10d anon sieht das Profil nicht",
    der lokale Gastbetrieb braucht dafür keinen anonymen Datenbankzugriff. */
 const t11a = await rest("GET", "/kd_store?scope=eq.demo&select=key&limit=1");
 pruefe("T11a anon darf kd_store scope=demo im Privatrelease nicht lesen",
-  t11a.status === 401 || t11a.status === 403, "HTTP " + t11a.status);
+  postgresRechtVerweigert(t11a),
+  "HTTP " + t11a.status + " code=" + (t11a.data?.code || "?"));
 const t11b = await rest("GET", "/kd_store?scope=eq.shared&select=key&limit=1");
 pruefe("T11b anon darf auch den Legacy-Shared-Pfad nicht lesen",
-  t11b.status === 401 || t11b.status === 403,
-  "HTTP " + t11b.status + " rows=" + (Array.isArray(t11b.data) ? t11b.data.length : "?"));
+  postgresRechtVerweigert(t11b),
+  "HTTP " + t11b.status + " code=" + (t11b.data?.code || "?")
+  + " rows=" + (Array.isArray(t11b.data) ? t11b.data.length : "?"));
 /* --- T11c-T11i: geschlossener anonymer Katalogzugriff ---------------------
    Die Privatrelease-Migration hat das Tabellenrecht von anon widerrufen.
    Erwartet wird deshalb ein Rechtefehler und keine einzige zurückgegebene
@@ -540,13 +557,15 @@ function namen(antwort) {
 const t11cat = await rest("GET", "/kd_catalog?select=name&order=name");
 const anonNamen = namen(t11cat);
 pruefe("T11c anon erhält auf kd_catalog einen Rechtefehler und keine Zeile",
-  (t11cat.status === 401 || t11cat.status === 403) && anonNamen.length === 0,
-  "HTTP " + t11cat.status + " sichtbar=[" + anonNamen.join(",") + "]");
+  postgresRechtVerweigert(t11cat) && anonNamen.length === 0,
+  "HTTP " + t11cat.status + " code=" + (t11cat.data?.code || "?")
+  + " sichtbar=[" + anonNamen.join(",") + "]");
 pruefe("T11d anon sieht die kd_catalog-Zeile programm NICHT",
-  !anonNamen.includes("programm"),
+  postgresRechtVerweigert(t11cat) && !anonNamen.includes("programm"),
   anonNamen.includes("programm") ? "LECK: Live-Programmdaten sind öffentlich lesbar!" : "HTTP " + t11cat.status);
 pruefe("T11e anon sieht die kd_catalog-Zeile streaming NICHT",
-  !anonNamen.includes("streaming")
+  postgresRechtVerweigert(t11cat)
+  && !anonNamen.includes("streaming")
   && !anonNamen.includes("streaming_bekannt")
   && !anonNamen.includes("streaming_entdecken"),
   anonNamen.some((name) => ["streaming", "streaming_bekannt", "streaming_entdecken"].includes(name))
@@ -562,7 +581,8 @@ pruefe("T11f angemeldete Sitzung sieht Programm sowie beide getrennten Streaming
   "HTTP " + t11f.status + " sichtbar=[" + kontoNamen.join(",") + "]"
   + " (fehlt eine Zeile ganz, ist nicht die Policy schuld, sondern die Pipeline)");
 pruefe("T11f2 anon sieht auch die früheren Demo-Streamingteile nicht",
-  !anonNamen.includes("streaming_bekannt_demo")
+  postgresRechtVerweigert(t11cat)
+  && !anonNamen.includes("streaming_bekannt_demo")
   && !anonNamen.includes("streaming_entdecken_demo"),
   "HTTP " + t11cat.status + " sichtbar=[" + anonNamen.join(",") + "]");
 
@@ -573,10 +593,12 @@ const t11seed = await rest(
 const demoSeedZeilen = Array.isArray(t11seed.data) ? t11seed.data : [];
 const demoSeed = demoSeedZeilen[0];
 pruefe("T11j anon darf demo_seed im Privatrelease nicht lesen",
-  (t11seed.status === 401 || t11seed.status === 403) && demoSeedZeilen.length === 0,
-  "HTTP " + t11seed.status + " rows=" + demoSeedZeilen.length);
+  postgresRechtVerweigert(t11seed) && demoSeedZeilen.length === 0,
+  "HTTP " + t11seed.status + " code=" + (t11seed.data?.code || "?")
+  + " rows=" + demoSeedZeilen.length);
 pruefe("T11k anon erhält weder demo_seed-Metadaten noch Payload",
-  demoSeed === undefined, demoSeed ? "LECK: demo_seed-Zeile vorhanden" : "keine Zeile");
+  postgresRechtVerweigert(t11seed) && demoSeed === undefined,
+  demoSeed ? "LECK: demo_seed-Zeile vorhanden" : "keine Zeile");
 
 const t11seedKonto = await rest(
   "GET",

@@ -97,7 +97,10 @@ kein Beleg für 15 aktuelle Produktdefekte:
   Privatrelease-Migration `20260901193000_private_release_access_boundary.sql`:
   anonyme Rechte auf `kd_store`, `kd_catalog` und
   `kd_list_shared_articles()` wurden bewusst entzogen. Der verwendete
-  Publishable-Key war laut Readback aktuell; die alten anonymen
+  Publishable-Key war laut Readback aktuell. Der zusätzliche anonyme
+  Katalog-Readback lieferte mit und ohne gleichlautenden Bearer-Header jeweils
+  den PostgreSQL-Rechtecode `42501`; damit ist ein Key- oder Headerformatfehler
+  als Ursache dieser 401 ausgeschlossen. Die alten anonymen
   Positiverwartungen im Test waren überholt und sind an die Privatrelease-
   Grenze angepasst.
 

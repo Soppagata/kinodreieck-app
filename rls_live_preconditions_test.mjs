@@ -11,12 +11,21 @@ const functionSource = source.match(
 const evaluateRlsAccessPreflight = Function(
   `"use strict"; ${functionSource}; return evaluateRlsAccessPreflight;`,
 )();
+const permissionFunctionSource = source.match(
+  /function postgresRechtVerweigert\([\s\S]*?\n\}/u,
+)?.[0] || "";
+const postgresRechtVerweigert = Function(
+  `"use strict"; ${permissionFunctionSource}; return postgresRechtVerweigert;`,
+)();
 
-const access = (active) => ({
+const access = (active, accountId = "account-b") => ({
   status: 200,
-  data: active === null ? [] : [{ role: "member", active, personal_ai: false }],
+  data: active === null ? [] : [{ account_id: accountId, role: "member", active, personal_ai: false }],
 });
 const helper = (value) => ({ status: 200, data: value });
+const preflight = (mode, accessB, helperB, accessA = access(true, "account-a"), helperA = helper(true)) => (
+  evaluateRlsAccessPreflight(mode, "account-a", accessA, helperA, "account-b", accessB, helperB)
+);
 
 test("Live-RLS-Modus ist zwingend explizit und besitzt keinen active-Default", () => {
   assert.match(source, /const ACCESS_MODE = \(process\.env\.KD_RLS_ACCESS_MODE \|\| ""\)/u);
@@ -26,32 +35,46 @@ test("Live-RLS-Modus ist zwingend explizit und besitzt keinen active-Default", (
 
 test("Rollen-Vorbedingung erkennt active, inactive und missing exakt", () => {
   assert.deepEqual(
-    evaluateRlsAccessPreflight("active", access(true), helper(true), access(true), helper(true)),
+    preflight("active", access(true), helper(true)),
     { ok: true, observedA: "active", observedB: "active" },
   );
   assert.deepEqual(
-    evaluateRlsAccessPreflight("inactive", access(true), helper(true), access(false), helper(false)),
+    preflight("inactive", access(false), helper(false)),
     { ok: true, observedA: "active", observedB: "inactive" },
   );
   assert.deepEqual(
-    evaluateRlsAccessPreflight("missing", access(true), helper(true), access(null), helper(false)),
+    preflight("missing", access(null), helper(false)),
     { ok: true, observedA: "active", observedB: "missing" },
   );
 });
 
 test("Falscher Kontostand und widersprüchlicher Helper stoppen fail-closed", () => {
   assert.equal(
-    evaluateRlsAccessPreflight("active", access(true), helper(true), access(false), helper(false)).ok,
+    preflight("active", access(false), helper(false)).ok,
     false,
   );
   assert.equal(
-    evaluateRlsAccessPreflight("inactive", access(true), helper(true), access(false), helper(true)).ok,
+    preflight("inactive", access(false), helper(true)).ok,
     false,
   );
   assert.equal(
-    evaluateRlsAccessPreflight("missing", access(false), helper(false), access(null), helper(false)).ok,
+    preflight("missing", access(null), helper(false), access(false, "account-a"), helper(false)).ok,
     false,
   );
+});
+
+test("Active und inactive brauchen genau eine gültige B-Zeile, missing genau null", () => {
+  const duplicate = access(true);
+  duplicate.data.push({ ...duplicate.data[0] });
+  assert.equal(preflight("active", duplicate, helper(true)).ok, false);
+  assert.equal(preflight("inactive", { status: 200, data: [] }, helper(false)).ok, false);
+  assert.equal(preflight("missing", access(false), helper(false)).ok, false);
+  assert.equal(preflight("active", access(true, "wrong-account"), helper(true)).ok, false);
+  assert.equal(preflight("active", {
+    status: 200,
+    data: [{ account_id: "account-b", role: "admin", active: true, personal_ai: false }],
+  }, helper(true)).ok, false);
+  assert.equal(preflight("missing", { status: 503, data: [] }, helper(false)).ok, false);
 });
 
 test("Vorbedingungsstopp liegt vor jedem mutierenden Testpfad", () => {
@@ -69,4 +92,17 @@ test("Live-Suite erwartet die wirksame Privatrelease-Grenze statt alte anonyme D
   assert.match(source, /T15d aktives Konto liest die Projektion über die schmale RPC/u);
   assert.match(source, /const t15d = await rest\("POST", "\/rpc\/kd_list_shared_articles", \{ token: A\.token/u);
   assert.doesNotMatch(source, /anon liest weiterhin kd_store|anon sieht genau einen validierten demo_seed/u);
+});
+
+test("T11 akzeptiert nur den belegten PostgreSQL-Rechtefehler", () => {
+  assert.equal(postgresRechtVerweigert({ status: 401, data: { code: "42501" } }), true);
+  assert.equal(postgresRechtVerweigert({ status: 403, data: { code: "42501" } }), true);
+  assert.equal(postgresRechtVerweigert({ status: 401, data: { code: "PGRST301" } }), false);
+  assert.equal(postgresRechtVerweigert({ status: 401, data: null }), false);
+  assert.equal(postgresRechtVerweigert({ status: 400, data: { code: "42501" } }), false);
+  for (const name of ["t11a", "t11b", "t11cat", "t11seed"]) {
+    assert.match(source, new RegExp(`postgresRechtVerweigert\\(${name}\\)`));
+  }
+  assert.equal((source.match(/postgresRechtVerweigert\(t11cat\)/gu) || []).length, 4);
+  assert.equal((source.match(/postgresRechtVerweigert\(t11seed\)/gu) || []).length, 2);
 });
