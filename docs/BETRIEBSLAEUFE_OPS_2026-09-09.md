@@ -10,7 +10,7 @@ erteilt keine Kostenfreigabe.
 | --- | --- | --- | --- |
 | `Private Ops Monitor` | täglich 05:23 UTC, zusätzlich manuell startbar | Liest Staging-Build, Function-Build, Monitorrolle, Betriebsschalter, Budgetzaeune, trockene Aufbewahrungsfaelligkeit und Entdecken-Feedzustand. | Rein lesend. Der Workflow bindet das GitHub-Environment `staging`, checkt den Branch `staging` aus und nimmt dessen Commit als Build-Soll. |
 | `Supabase Keep-alive` | alle drei Tage 06:17 UTC, zusätzlich manuell startbar | Prüft genau den öffentlichen Supabase-Auth-Health-Vertrag. | Ein GET, keine Tabellen- oder Nutzdatenmutation. Variablen kommen aus dem Environment `staging`. |
-| `Entdecken – Quellen täglich aktualisieren` | täglich 02:00 UTC | Prüft und aktualisiert den öffentlichen Entdecken-Feed unabhängig von Radar. | Gehört zum separaten Entdecken-Paket. Fachliche Fehler bleiben rot; erwartete Faelligkeits-No-ops sind kein Fehler. |
+| `Entdecken – täglicher Quellenabgleich` | täglich 02:00 UTC | Prüft und aktualisiert den öffentlichen Entdecken-Feed unabhängig von Radar. | Konfiguration aus `staging`. Fachliche Fehler bleiben rot; nur ein bereits erfolgreich aktualisierter vollständiger Tagesstand ist ein grüner Faelligkeits-No-op. Remote noch deaktiviert. |
 | `Radar – fällige Ziele prüfen` | täglich 02:00 UTC | Prüft im bestehenden 144-Stunden-Vertrag höchstens zehn faellige Radar-Ziele seriell. | Im vorliegenden Kandidaten hart mit `if: false` gesperrt. Selbst nach einer späteren Codefreigabe ist zusätzlich `KD_RADAR_SCHEDULE_ENABLED == 'true'` erforderlich. |
 | `Automatic AI six-hour checker` | stündlich zur Minute 37 | Bearbeitet höchstens drei faellige KI-Nachpruefungen seriell. | Der Job läuft nur bei `KD_AUTOMATIC_AI_SCHEDULE_ENABLED == 'true'`. Der Workflow ist remote weiterhin `disabled_manually`; dieser Kandidat aktiviert ihn nicht. |
 
@@ -18,8 +18,8 @@ Entdecken und Radar stehen als getrennte Workflows nebeneinander. Ein
 providerfreier Entdecken-Lauf kann damit keine Radar- oder KI-Arbeit
 mitaktivieren. Der Radar-Job wurde aus dem bisherigen kombinierten Workflow
 mit unverändertem Request-, Timeout-, Antwort- und Kein-Retry-Vertrag
-übernommen. Die Entfernung des alten Radar-Jobs aus dem Entdecken-Workflow
-erfolgt an der Integrationsnaht des separaten Entdecken-Pakets.
+übernommen. Der alte Radar-Job ist im integrierten Kandidaten aus dem
+Entdecken-Workflow entfernt.
 
 ## Was ein Run bedeutet
 

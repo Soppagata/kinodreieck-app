@@ -47,6 +47,7 @@ check("Eigener Trigger laeuft taeglich um 02:00 UTC ohne manuellen Einstieg", ()
   assert.doesNotMatch(keepalive, /entdecken|SUPABASE_SERVICE_ROLE_KEY/u);
   assert.match(workflow, /^name: Entdecken – täglicher Quellenabgleich$/m);
   assert.match(workflow, /^jobs:\n  entdecken-six-day-trigger:/m);
+  assert.match(workflow, /^    environment: staging$/m);
   assert.doesNotMatch(workflow, /radar-six-day-trigger|radar-websearch-task|SUPABASE_RADAR_SCHEDULER/u);
   assert.match(workflow, /^  entdecken-six-day-trigger:/m);
   assert.doesNotMatch(workflow, /needs:\s*(?:\[?radar-six-day-trigger|\[?entdecken-six-day-trigger)/u);

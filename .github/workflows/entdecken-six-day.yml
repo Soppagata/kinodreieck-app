@@ -10,6 +10,7 @@ permissions:
 jobs:
   entdecken-six-day-trigger:
     runs-on: ubuntu-latest
+    environment: staging
     timeout-minutes: 3
     concurrency:
       group: kinodreieck-entdecken-daily
