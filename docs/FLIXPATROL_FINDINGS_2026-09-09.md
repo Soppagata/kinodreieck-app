@@ -143,7 +143,7 @@ inaktiv abgewiesen, mehrere anonyme Lesewege lieferten 401. Cleanup war
 erfolgreich. Deshalb gibt es keine pauschale Aussage, alle Betriebspruefungen
 seien gruen.
 
-Der taegliche Workflow ist vorbereitet, aber durch die automatische
-Freigabepruefung noch nicht zur Aktivierung zugelassen. Umfang und konkrete
-Vorlage stehen in [FLIXPATROL_TICKER.md](FLIXPATROL_TICKER.md). Die alten
-Entdecken- und Monitor-Reparaturen sind noch nicht ausgeliefert.
+Max hat die taegliche Automatik anschliessend ausdruecklich freigegeben.
+Der Workflow ist im Masterzweig gebaut; Push und natuerlicher Lauf sind noch
+offen. Der aktuelle Umsetzungs- und Lieferstand steht ausschliesslich im
+[Masterregister](BETRIEBSREPARATUR_REGISTER_2026-09-09.md).

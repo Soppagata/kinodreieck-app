@@ -110,6 +110,13 @@ Deno-Check und 56 Tickerchecks grün. Der alte Live-RLS-Gesamttest meldete
 Providerrequest für die Planerstellung. Hauptcheckout mit Nutzeränderungen
 bleibt unberührt.
 
+Öffentliche Quellenprobe des Masters um 19:36 UTC: Der bestehende Adapter
+liest mit genau zwei unangemeldeten GETs 15 ÖFI- und 10 Netflix-Titel.
+ÖFI liefert den Chartstand 30. August, der maschinenlesbare Netflix-Datensatz
+bereits 6. September (die sichtbare Netflix-Webseite zeigte noch 30. August).
+E4 muss Quellenstand und Abrufzeit getrennt erhalten. Keine Writes und kein
+FlixPatrol-Request. Beleg: `/private/tmp/kd-ops-audit-20260909/master-public-source-spike.json`.
+
 ## Herkunft der integrierten Vorarbeiten
 
 - Betriebs-/Entdecken-Vorreparatur: `codex/ops-monitor-definition-20260909`

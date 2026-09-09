@@ -23,7 +23,7 @@ Die API-Grundlage ist in der offiziellen [FlixPatrol API v2](https://flixpatrol.
 - Offizieller Snapshot: `used=0`, `available=1000`, `limit=1000`, `limitExtra=0`, `resetAt=2026-10-01T00:00:00`. Der rohe Resetwert enthält keine Zeitzone. Ein eigener Request und die offizielle Null sind zwei getrennte Messwerte; aus dieser einzelnen Antwort wird keine dauerhafte Kostenfreiheit aller Quota-GETs behauptet.
 - Vollständiges `npm test` einschließlich Build: grün. 56 Tickerchecks einschließlich echter lokaler PostgreSQL-Tests: grün. Deno-Typcheck: grün. Bestehende KI-Function-Mocks: 334/334 grün, ohne Anbieteraufruf.
 - Der vorgeschriebene bestehende Live-RLS-Gesamttest lief zusätzlich: 58 Checks bestanden, 15 Fehler bei inaktivem Testkonto B und anonymen 401-Antworten; Testdaten-Cleanup erfolgreich. Die neuen Tickerrechte wurden gesondert remote geprüft und stimmen. Testkonten wurden nicht aktiviert oder sonst geändert.
-- Implementierung und Belege sind lokal committet; noch kein Push. Die tägliche Automatik ist weiterhin nicht aktiviert. Der unten dokumentierte Workflow ist die konkrete noch offene Freigabehandlung.
+- Implementierung und Belege sind lokal committet; noch kein Push. Max hat die tägliche Automatik inzwischen ausdrücklich freigegeben. Der aktive Workflow ist im Masterzweig gebaut; Veröffentlichung und erster natürlicher Lauf stehen noch aus.
 
 Vor der erfolgreichen Probe wurden zwei Zugriffsprobleme ohne FlixPatrol-Wirkung behoben: Der verfügbare moderne Supabase-Server-Key authentifiziert erfolgreich, während der geprüfte Legacy-Key abgewiesen wurde. Außerdem reicht der Edge-Proxy einen leeren POST als Stream weiter; der Handler prüft jetzt dessen tatsächliche Bytes. Inhaltsbytes und defekte Streams bleiben abgewiesen. Die vorangegangenen Providerzähler waren jeweils nachweislich null.
 
@@ -69,49 +69,17 @@ Die Operationstabelle enthält nur UUID, Requestart, Status, HTTP-Status und Zei
 
 ## Hintergrundlauf
 
-Der vorgesehene Workflow `FlixPatrol – Nutzung täglich erfassen` soll einmal täglich im GitHub-Environment `staging` laufen. Ein natürlicher Lauf sendet genau einen bodylosen POST an die Function; dieser fordert genau einen `/v2/quota`-Request an. Der Lauf besitzt entsprechend der Owner-Entscheidung kein zusätzliches Quota-Gate. Transport- oder Vertragsfehler bleiben rot und lösen keinen Workflow-Retry aus.
+Der gebaute [Workflow](../.github/workflows/flixpatrol-usage.yml) läuft nach
+Veröffentlichung auf dem Default-Branch täglich um 05:11 UTC im
+GitHub-Environment `staging`. Ein natürlicher Lauf sendet genau einen bodylosen
+POST an die Function; diese fordert genau einen `/v2/quota`-Request an.
+Der Umfang ist höchstens 31 natürliche Quota-Requests je Kalendermonat.
+Transport- und Vertragsfehler bleiben sichtbar und lösen keinen Retry aus.
+Der FlixPatrol-Key bleibt in Supabase; GitHub verwendet die bestehende
+Staging-URL und den serverseitigen Supabase-Schlüssel.
 
-Die automatische Freigabeprüfung hat das Anlegen des aktiven Workflows abgelehnt und eine ausdrückliche Freigabe für die tägliche Credential-/Quota-Wirkung verlangt. Es gibt deshalb noch keine aktive `.github/workflows/flixpatrol-usage.yml`. Der folgende Entwurf ist reine Dokumentation für die konkrete Freigabe: täglich 05:11 UTC, höchstens 31 natürliche Quota-Requests je Kalendermonat, bestehende Staging-URL und bestehender Server-Schlüssel. Der FlixPatrol-Key bleibt in Supabase.
-
-```yaml
-name: FlixPatrol – Nutzung täglich erfassen
-on:
-  schedule:
-    - cron: "11 5 * * *"
-permissions:
-  contents: read
-concurrency:
-  group: kinodreieck-flixpatrol-usage
-  cancel-in-progress: false
-jobs:
-  quota:
-    runs-on: ubuntu-latest
-    environment: staging
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-      - name: Quota einmal abgleichen und Zähler lesen
-        env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "$SUPABASE_URL" && test -n "$SUPABASE_SERVICE_ROLE_KEY"
-          response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
-          http_status="$(curl --silent --show-error --request POST \
-            --connect-timeout 10 --max-time 60 \
-            --output "$response_file" --write-out '%{http_code}' \
-            "${SUPABASE_URL%/}/functions/v1/flixpatrol-usage" \
-            --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-            --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            --header 'x-kd-flixpatrol-usage: scheduled-daily-v1')"
-          if [ "$http_status" != "200" ]; then
-            echo "::error::FlixPatrol-Ticker: HTTP ${http_status}; kein Retry."
-            exit 1
-          fi
-          node tools/flixpatrol-usage.mjs "$response_file" >> "$GITHUB_STEP_SUMMARY"
-```
+Die frühere automatische Freigabeablehnung ist durch Max' ausdrückliche
+Zustimmung beantwortet. Es ist keine weitere Freigaberunde für diesen
+beschriebenen täglichen Lauf offen. Der aktuelle Integrations-, Push- und
+Ausführungsstand wird im [Masterregister](BETRIEBSREPARATUR_REGISTER_2026-09-09.md)
+gepflegt.
