@@ -90,10 +90,25 @@ function authorized(request, serviceKeys) {
   return serviceKeys.some((key) => constantTimeEqual(apiKey, key) && constantTimeEqual(bearer, key));
 }
 
-function hasBody(request) {
+async function hasBody(request) {
   const contentLength = request.headers.get("content-length");
-  return (contentLength !== null && contentLength !== "0")
-    || request.headers.has("transfer-encoding") || request.body !== null;
+  if (contentLength !== null && contentLength !== "0") return true;
+  if (request.body === null) return false;
+  // Supabase can forward an empty POST as a stream. Test its bytes, not
+  // the presence of the stream, just as the existing server jobs do.
+  const reader = request.body.getReader();
+  try {
+    for (let emptyChunks = 0; emptyChunks < 8; emptyChunks += 1) {
+      const chunk = await reader.read();
+      if (chunk.done) return false;
+      if (!(chunk.value instanceof Uint8Array) || chunk.value.byteLength > 0) return true;
+    }
+    return true;
+  } catch {
+    return true;
+  } finally {
+    try { await reader.cancel(); } catch { /* invalid stream remains rejected */ }
+  }
 }
 
 function response(body, status) {
@@ -122,7 +137,7 @@ export function createFlixPatrolUsageHandler({ serviceKeys = [], readUsage, refr
     if (request.headers.get("origin") !== null || !authorized(request, serviceKeys)) {
       return response({ ok: false, status: "forbidden", providerRequests: 0 }, 403);
     }
-    if (hasBody(request)) {
+    if (await hasBody(request)) {
       return response({ ok: false, status: "invalid-request", providerRequests: 0 }, 400);
     }
 

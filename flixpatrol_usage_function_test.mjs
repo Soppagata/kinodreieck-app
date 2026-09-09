@@ -58,6 +58,25 @@ await check("Browser, Body, falscher Header und ungleiche Keys bleiben wirkungsl
   assert.equal(effects, 0);
 });
 
+await check("leerer Proxy-Stream wird akzeptiert, Inhaltsbytes und defekte Streams werden abgewiesen", async () => {
+  let refreshes = 0;
+  const handler = createFlixPatrolUsageHandler({
+    serviceKeys: [modern],
+    refreshUsage: async () => { refreshes += 1; return { usage, providerRequests: 1 }; },
+  });
+  const request = (body) => new Request("https://example.test", {
+    method: "POST", duplex: "half", body,
+    headers: { ...headers(), "content-length": "0", "x-kd-flixpatrol-usage": "scheduled-daily-v1" },
+  });
+  const empty = new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array()); controller.close(); } });
+  assert.equal((await handler(request(empty))).status, 200);
+  assert.equal(refreshes, 1);
+  assert.equal((await handler(request("{}"))).status, 400);
+  const broken = new ReadableStream({ start(controller) { controller.error(new Error("broken")); } });
+  assert.equal((await handler(request(broken))).status, 400);
+  assert.equal(refreshes, 1);
+});
+
 await check("Fehlerantwort nennt nur Code und konservative Requestzahl", async () => {
   const handler = createFlixPatrolUsageHandler({
     serviceKeys: [modern], readUsage: async () => usage,
