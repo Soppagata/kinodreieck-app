@@ -29,7 +29,7 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
 | M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | OFFEN; Master nach den Wellen |
 | M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Inventur GEPRÜFT; Umsetzung E2, E3, E5, E6 |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | Server gebaut/live geprüft; tägliche Aktivierung jetzt freigegeben; E1 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | Server gebaut/live geprüft; täglicher Workflow active; erster natürlicher Lauf offen; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
 
@@ -101,7 +101,8 @@ Belege: `/private/tmp/kd-flixpatrol-wave1-test.log` und
 ### Parallelwelle 2 – E4/E5
 
 Gemeinsame geprüfte Basis: `f981d91688414b2e71bf591a146c8f6e8990a750`.
-Die vollständige erste Welle ist lokal grün; ihre Paketlieferungen sind integriert.
+Die vollständige erste Welle ist lokal und in beiden GitHub-CI-Läufen grün;
+ihre Paketlieferungen sind integriert und auf Staging zurückgelesen.
 
 | Paket | Task / Branch / Worktree | Exklusive Write-Flächen |
 | --- | --- | --- |
@@ -136,6 +137,14 @@ Datentöpfe und sämtliche bezahlten Livekommandos/Provenienzhashes. Keine
 Baumeister-Außenwirkung, keine weiteren Agenten. Fachlicher Scope-Drift geht
 vor einem Edit zum Master; nur die betroffene Fläche wartet. Integration E4 → E5,
 danach ein gemeinsamer lokaler Abschlusslauf. E6 startet auf dessen Ergebnis.
+
+E5 ist DELIVERED und nach statischer Abnahme angenommen: `0eedc126` plus
+`2e65d55`, 308 fokussierte Checks grün. Die Nachbesserung erhält vorhandene
+IDs/Originaltitel, zeigt Ergänzungswerte verständlich und begrenzt den
+kontogebundenen Cache zeitlich. Konto-/Projektwechsel, explizites Verwerfen
+und React-StrictMode sind geprüft. Noch nicht in den Master integriert.
+Vor E4/E5 wird das gelieferte E3-Delta `e83188d15b80112df2810834041f9c485030aee5`
+übernommen: opaque FlixPatrol-IDs bleiben bytegetreu und case-sensitiv.
 
 ## Lieferung und Verbrauch
 
