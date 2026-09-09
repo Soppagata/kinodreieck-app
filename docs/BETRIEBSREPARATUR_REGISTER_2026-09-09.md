@@ -82,9 +82,11 @@ Abschlusslauf auf dem integrierten Kandidaten; keine parallelen PG-Serverstarts.
 Baumeister führen nur fokussierte Tests aus, PostgreSQL-Tests dieser Welle
 gehören exklusiv E2. Der Master startet währenddessen keine PG-Suite.
 
-Master-Nähte: neue Tests in bestehende Einstiege eingebunden; beim bereits
-vorhandenen Usage-PG-Test den temporären Pfad über `os.tmpdir()` portabel
-gemacht. `package.json`, Lockfiles und feste Live-Provenienzhashes unverändert.
+Master-Nähte: neue Tests in bestehende Einstiege eingebunden. Der vorhandene
+Usage-PG-Test behält seinen kurzen Socketpfad; die CI legt `/private/tmp`
+bereits an. E2s neuer Test verwendet einen portablen temporären Pfad und
+Loopback statt langer macOS-Socketpfade. `package.json`, Lockfiles und feste
+Live-Provenienzhashes unverändert.
 
 ### Vorbereitete Folgewelle E4/E5
 
