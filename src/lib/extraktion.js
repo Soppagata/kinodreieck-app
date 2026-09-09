@@ -140,6 +140,38 @@ function quelleGueltig(q) {
   return typeof q === "string" && EXTRAKT_QUELLEN.includes(q);
 }
 
+function flixpatrolHinweise(roh, filmAnzahl) {
+  if (!Array.isArray(roh) || roh.length > filmAnzahl) return [];
+  const gesehen = new Set();
+  return roh.flatMap((hinweis) => {
+    const filmIndex = hinweis?.filmIndex;
+    if (!Number.isInteger(filmIndex) || filmIndex < 0 || filmIndex >= filmAnzahl
+        || gesehen.has(filmIndex) || !Array.isArray(hinweis?.candidates)
+        || hinweis.candidates.length < 1 || hinweis.candidates.length > 3) return [];
+    const candidates = hinweis.candidates.flatMap((kandidat) => {
+      const id = typeof kandidat?.flixpatrolId === "string" && /^ttl_[A-Za-z0-9]{20,40}$/.test(kandidat.flixpatrolId)
+        ? kandidat.flixpatrolId : null;
+      const title = typeof kandidat?.title === "string" ? kandidat.title.trim() : "";
+      const sourceUrl = kandidat?.sourceUrl === null || kandidat?.sourceUrl === undefined ? null
+        : typeof kandidat.sourceUrl === "string" && /^https:\/\/flixpatrol\.com\/title\/[^?#\s]+\/$/.test(kandidat.sourceUrl)
+          ? kandidat.sourceUrl : null;
+      const checkedAt = kandidat?.checkedAt === null || kandidat?.checkedAt === undefined ? null
+        : typeof kandidat.checkedAt === "string" && Number.isFinite(Date.parse(kandidat.checkedAt))
+          ? kandidat.checkedAt : null;
+      if (!id || !title || title.length > 240 || !Number.isInteger(kandidat?.year)
+          || kandidat.year < 1870 || kandidat.year > 2999
+          || !["film", "serie"].includes(kandidat?.mediaType)) return [];
+      return [{
+        flixpatrolId: id, title, year: kandidat.year, mediaType: kandidat.mediaType,
+        checkedAt, sourceUrl,
+      }];
+    });
+    if (!candidates.length) return [];
+    gesehen.add(filmIndex);
+    return [{ filmIndex, candidates }];
+  });
+}
+
 /* Aus der geprüften Serverantwort ein Bündel, das `profil.js` annimmt.
 
    Rückgabe:
@@ -243,6 +275,7 @@ export function ausExtraktion(antwort, darstellung = null) {
   return {
     signale,
     rahmen: Object.keys(rahmen).length ? rahmen : null,
+    flixpatrolHinweise: flixpatrolHinweise(a.flixpatrol_hinweise, filme.length),
     verworfen,
     ohneBeleg: Number.isInteger(a.verworfen_ohne_beleg) ? a.verworfen_ohne_beleg : 0,
     ...liesDarstellung(darstellung),

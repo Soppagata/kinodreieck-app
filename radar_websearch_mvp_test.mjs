@@ -651,7 +651,8 @@ await check("Function prüft JWT selbst und der Runner übergibt nur den validie
   assert.match(functionIndex, /ANTHROPIC_API_KEY/);
   assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
   assert.match(functionIndex, /result\.feed\s*\?\s*\{\s*feed:\s*result\.feed\s*\}/);
-  assert.equal((runnerSource.match(/adapter\.search\(request\)/g) || []).length, 1);
+  assert.equal((runnerSource.match(/adapter\.search\(providerRequest\)/g) || []).length, 1);
+  assert.equal((runnerSource.match(/adapter\.search\(/g) || []).length, 1);
   assert.doesNotMatch(runnerSource, /setTimeout|while\s*\(/i);
 });
 

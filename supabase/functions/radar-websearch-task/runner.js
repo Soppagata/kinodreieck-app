@@ -71,9 +71,20 @@ export async function runRadarWebsearchCheck({
     return frozenResult({ status: "forbidden", writes: 0, feed: null });
   }
 
+  let providerRequest = request;
+  if (!request.kind && typeof repository.loadFactsContext === "function") {
+    try {
+      const facts = await repository.loadFactsContext(request);
+      if (facts) providerRequest = Object.freeze({ ...request, flixpatrolFakten: facts });
+    } catch {
+      /* Der Fakten-Cache ist ein optionaler Zusatz. Sein Ausfall startet
+         weder einen Ersatzabruf noch verhindert er die bisherige Suche. */
+    }
+  }
+
   let envelope;
   try {
-    envelope = await adapter.search(request);
+    envelope = await adapter.search(providerRequest);
   } catch {
     return frozenResult({ status: "provider_error", writes: 0, feed: null });
   }

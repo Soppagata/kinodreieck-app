@@ -72,9 +72,10 @@ export function DreiFragen({
     /* Der Server bestätigt nur, dass der Titel in der Antwort vorkommt.
        Der Klick des Nutzers in DIESER Vorschau ist der Übergang zu
        `sicher:true`; erst dann darf der Film später in eine Prompt-Fassung. */
-    const filme = (ergebnis.rahmen?.filme || [])
-      .filter((_, i) => !filmeAus.has(i))
-      .map((f) => ({ ...f, sicher: true }));
+    const filmAuswahl = (ergebnis.rahmen?.filme || [])
+      .map((film, originalIndex) => ({ film, originalIndex }))
+      .filter(({ originalIndex }) => !filmeAus.has(originalIndex));
+    const filme = filmAuswahl.map(({ film }) => ({ ...film, sicher: true }));
     if (filme.length) rahmen.filme = filme;
     const achsen = Object.fromEntries(Object.entries(ergebnis.rahmen?.achsen || {})
       .filter(([k]) => !achsenAus.has(k)));
@@ -82,7 +83,15 @@ export function DreiFragen({
     const nichtDeutbar = (ergebnis.rahmen?.nichtDeutbar || [])
       .filter((_, i) => !nichtDeutbarAus.has(i));
     if (nichtDeutbar.length) rahmen.nichtDeutbar = nichtDeutbar;
-    return { signale, rahmen: Object.keys(rahmen).length ? rahmen : null };
+    const flixpatrolHinweise = filmAuswahl.flatMap(({ originalIndex }, filmIndex) => {
+      const hinweis = ergebnis.flixpatrolHinweise?.find((item) => item.filmIndex === originalIndex);
+      return hinweis ? [{ ...hinweis, filmIndex }] : [];
+    });
+    return {
+      signale,
+      rahmen: Object.keys(rahmen).length ? rahmen : null,
+      flixpatrolHinweise,
+    };
   }, [ergebnis, abgewaehlt, filmeAus, achsenAus, nichtDeutbarAus]);
 
   const nichtsUebrig = auswahl && auswahl.signale.length === 0 && !auswahl.rahmen;
@@ -185,17 +194,31 @@ export function DreiFragen({
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
               {ergebnis.rahmen.filme.map((f, index) => {
                 const weg = filmeAus.has(index);
+                const hinweis = ergebnis.flixpatrolHinweise?.find((item) => item.filmIndex === index);
                 return (
-                  <button key={"film-" + index} aria-pressed={!weg}
-                    data-vorschlag-art="film"
-                    style={{ ...btnStyle(false), padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
-                    onClick={() => setFilmeAus((v) => {
-                      const n = new Set(v);
-                      if (n.has(index)) n.delete(index); else n.add(index);
-                      return n;
-                    })}>
-                    {f.titel}{f.jahr ? " (" + f.jahr + ")" : ""}{weg ? " ✕" : ""}
-                  </button>
+                  <div key={"film-" + index} style={{ maxWidth: 320 }}>
+                    <button aria-pressed={!weg}
+                      data-vorschlag-art="film"
+                      style={{ ...btnStyle(false), padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
+                      onClick={() => setFilmeAus((v) => {
+                        const n = new Set(v);
+                        if (n.has(index)) n.delete(index); else n.add(index);
+                        return n;
+                      })}>
+                      {f.titel}{f.jahr ? " (" + f.jahr + ")" : ""}{weg ? " ✕" : ""}
+                    </button>
+                    {hinweis?.candidates?.length > 0 && (
+                      <p data-film-fakten-hinweis={index} style={{ ...klein, margin: "5px 0 0" }}>
+                        Mögliche Werke im Faktenbestand, noch nicht bestätigt: {hinweis.candidates.map((kandidat) => (
+                          <span key={kandidat.flixpatrolId}>
+                            {kandidat.title} ({kandidat.year}, {kandidat.mediaType === "serie" ? "Serie" : "Film"})
+                            {kandidat.checkedAt ? " · Stand " + kandidat.checkedAt.slice(0, 10) : ""}
+                            {kandidat.sourceUrl ? <> · <a href={kandidat.sourceUrl} target="_blank" rel="noreferrer">Quelle</a></> : ""}
+                          </span>
+                        )).reduce((teile, eintrag, i) => i ? [...teile, "; ", eintrag] : [eintrag], [])}
+                      </p>
+                    )}
+                  </div>
                 );
               })}
             </div>

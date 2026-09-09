@@ -325,3 +325,5 @@ await import("./entdecken_flixpatrol_mix_test.mjs");
 await import("./entdecken_flixpatrol_frontend_test.mjs");
 await import("./entdecken_flixpatrol_function_test.mjs");
 await import("./entdecken_flixpatrol_pg17_test.mjs");
+await import("./flixpatrol_ai_context_test.mjs");
+await import("./flixpatrol_ai_radar_test.mjs");

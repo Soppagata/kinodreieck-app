@@ -2,6 +2,7 @@ import {
   RICHTUNGEN, SIGNAL_ARTEN, SICHERHEITEN, hatEinwilligung, pruefeProfil,
 } from "./profil.js";
 import { filmwissenRechercheKennung } from "./filmwissen.js";
+import { externeTitelKennungen } from "./externalTitleIdentity.js";
 
 export const PROGNOSE_TYPEN = Object.freeze(["film", "serie"]);
 export const MAX_PROGNOSE_SIGNALE = 20;
@@ -91,6 +92,7 @@ export function bauePrognoseAuftrag(film, profil) {
     was: Number.isInteger(profil.achsen?.was) ? profil.achsen.was : null,
     warum: Number.isInteger(profil.achsen?.warum) ? profil.achsen.warum : null,
   };
+  const externeIds = externeTitelKennungen(film);
   return {
     ok: true,
     profilVersion: profil.version,
@@ -103,6 +105,7 @@ export function bauePrognoseAuftrag(film, profil) {
         typ: film.typ || "film",
         genres,
         tags,
+        ...(Object.keys(externeIds).length ? { externeIds } : {}),
       },
       profil: { signale, achsen },
       /* Nur die Kennung reist mit. Gemeinsame Texte und Quellen liest die

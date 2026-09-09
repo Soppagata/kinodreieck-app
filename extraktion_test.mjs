@@ -688,6 +688,28 @@ check("C", "…richtung nur, wenn sie im Modell steht  [gemessen: "
   + JSON.stringify(r.rahmen.filme.map((f) => f.richtung ?? null)) + "]",
   () => r.rahmen.filme[0].richtung === "zieht_an" && r.rahmen.filme[1].richtung === undefined);
 
+const rMitFaktenhinweis = EX.ausExtraktion({
+  ...DATEN(),
+  flixpatrol_hinweise: [{
+    filmIndex: 1,
+    candidates: [{
+      flixpatrolId: "ttl_bHyGTvopBHPVtIKhR2CF68WX",
+      title: "Stalker",
+      year: 1979,
+      mediaType: "film",
+      checkedAt: "2026-09-09T11:00:00.000Z",
+      sourceUrl: "https://flixpatrol.com/title/stalker/",
+    }],
+  }],
+});
+check("C", "FlixPatrol-Treffer bleiben getrennte flüchtige Hinweise",
+  () => rMitFaktenhinweis.flixpatrolHinweise.length === 1
+    && rMitFaktenhinweis.flixpatrolHinweise[0].filmIndex === 1);
+check("C", "…und erweitern den persönlichen Filmvertrag nicht",
+  () => !JSON.stringify(rMitFaktenhinweis.rahmen.filme).includes("flixpatrol")
+    && !JSON.stringify(rMitFaktenhinweis.rahmen.filme).includes("sourceUrl")
+    && rMitFaktenhinweis.rahmen.filme[1].jahr === null);
+
 const rFilm = EX.ausExtraktion({ filme: [
   { titel: "  Alien  ", jahr: "1979", richtung: "mag" },
   { titel: "", jahr: 1979 },
@@ -929,7 +951,20 @@ await fragenAbraeumen();
 abschnitt("G", async () => {
 console.log("\n--- G: Die Vorschau lügt nicht ---");
 
-const ergebnis = EX.ausExtraktion(DATEN());
+const ergebnis = EX.ausExtraktion({
+  ...DATEN(),
+  flixpatrol_hinweise: [{
+    filmIndex: 1,
+    candidates: [{
+      flixpatrolId: "ttl_bHyGTvopBHPVtIKhR2CF68WX",
+      title: "Stalker",
+      year: 1979,
+      mediaType: "film",
+      checkedAt: "2026-09-09T11:00:00.000Z",
+      sourceUrl: "https://flixpatrol.com/title/stalker/",
+    }],
+  }],
+});
 let letzteAuswahl = null;
 let abbrueche = 0;
 const zeige = async () => {
@@ -949,6 +984,11 @@ check("G", "die Vorschau sagt ausdrücklich, dass noch nichts gespeichert ist",
   () => /Nichts davon ist schon gespeichert/.test(text()));
 check("G", "drei Signalzeilen, eine je Vorschlag  [gemessen: " + zeilen().length + "]",
   () => zeilen().length === 3);
+check("G", "ein Faktenfund wird als mögliches, noch unbestätigtes Werk gezeigt",
+  () => /Mögliche Werke im Faktenbestand, noch nicht bestätigt: Stalker \(1979, Film\)/.test(text()));
+check("G", "…mit geprüftem Stand und verlinkter Quelle",
+  () => /Stand 2026-09-09/.test(text())
+    && alles("[data-film-fakten-hinweis] a").some((a) => a.href === "https://flixpatrol.com/title/stalker/"));
 
 /* DER BELEG. Er ist die einzige Handhabe gegen einen freundlich klingenden,
    aber falschen Vorschlag. */
@@ -1017,6 +1057,13 @@ check("G", "…und der abgewählte Beleg ist NICHT dabei  [gemessen: "
   () => !letzteAuswahl.signale.some((s) => s.beleg === belegWeg));
 check("G", "…die übergebenen Signale sind vollständige Signale, keine Textreste",
   () => letzteAuswahl.signale.every((s) => P.pruefeSignal(s).length === 0));
+check("G", "…der persönliche Film bleibt frei von Cache-IDs und Fakten",
+  () => !JSON.stringify(letzteAuswahl.rahmen.filme).includes("flixpatrol")
+    && !JSON.stringify(letzteAuswahl.rahmen.filme).includes("sourceUrl"));
+check("G", "…der flüchtige Hinweis reist getrennt und unverändert unbestätigt",
+  () => letzteAuswahl.flixpatrolHinweise.length === 1
+    && letzteAuswahl.flixpatrolHinweise[0].filmIndex === 1
+    && letzteAuswahl.rahmen.filme[1].jahr === null);
 
 /* Wiederanwahl. */
 await klick(zeilen().find((z) => z.weg).knopf, "doch übernehmen");
@@ -1212,7 +1259,20 @@ check("I", "…und ProfilAnsicht.jsx ruft nirgends eine Speicherfunktion",
 /* Und jetzt an der Sache. */
 const s = neuerSpeicher(null);
 const ki = neueKi();
-ki.antwort = () => HUELLE(DATEN());
+ki.antwort = () => HUELLE({
+  ...DATEN(),
+  flixpatrol_hinweise: [{
+    filmIndex: 1,
+    candidates: [{
+      flixpatrolId: "ttl_bHyGTvopBHPVtIKhR2CF68WX",
+      title: "Stalker",
+      year: 1979,
+      mediaType: "film",
+      checkedAt: "2026-09-09T11:00:00.000Z",
+      sourceUrl: "https://flixpatrol.com/title/stalker/",
+    }],
+  }],
+});
 await bisVorschau(ki, s);
 const vorschauBelege = zeilen().map((z) => z.beleg);
 const vorschauFilme = filmKnoepfe().map((b) => b.textContent.trim().replace(/\s*\(\d+\)$/, ""));
@@ -1260,6 +1320,14 @@ check("I", "…und die Vorschau ist danach zu  [gemessen: " + zeilen().length + 
 check("I", "…die Profil-Ansicht zeigt das Ergebnis  [gemessen: "
   + JSON.stringify(text().slice(0, 70)) + "]",
   () => /Fassung p1/.test(text()) && /3 bestätigte Angaben/.test(text()));
+check("I", "…Cachehinweise wurden nicht in den persönlichen Speicher geschrieben",
+  () => !JSON.stringify(p).includes("flixpatrol")
+    && !JSON.stringify(p).includes("sourceUrl"));
+await klick(knopf("Ändern"), "Ändern");
+await klick(knopfTeil("Aktuelle Infos"), "Aktuelle Infos");
+check("I", "…die flüchtige Zuordnung bleibt in der Profilübersicht ausdrücklich unbestätigt",
+  () => /Mögliche Werke im Faktenbestand, nicht als Profilfakt bestätigt: Stalker/.test(text()));
+await klick(alles('button[aria-label="Schließen"]')[0], "Ändern schließen");
 
 /* GEGENPROBE: Ein abgewählter Vorschlag landet NICHT im Profil. */
 const s2 = neuerSpeicher(null);

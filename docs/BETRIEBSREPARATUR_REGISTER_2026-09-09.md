@@ -183,6 +183,16 @@ unveränderlichen Git-Bytes geprüft; der neue Produktstand bleibt dort gesperrt
   Außenwirkung/PG-Starts oder weiteren Agenten. Master besitzt die
   Testeinbindung und gemeinsame Lieferung; größere Deltas gehen an E6 zurück.
 
+E6 ist als `9480c34` aus `b2a33134c683ae18fed83154cd745167bc612769`
+integriert. Der Baumeister belegt die fokussierten Kontext-/Radar-/UI-Tests
+und genau einen Function-Mocklauf mit 338/338. Zwei konkrete Identitätsnähte
+gehen vor der Abnahme als Delta an E6 zurück: Widerspruch zwischen
+`film.externeIds` und `filmkennung` darf keine ID verdecken; strukturierte
+Radar-IDs wie `imdb:tt0137523` müssen mit führender Null erhalten bleiben.
+Das neue Forecast-Requestfeld verlangt die neue Function. Deshalb erfolgt
+die E6-Frontend-Lieferung erst nach der passenden Backend-Lieferung; Staging
+bleibt bis dahin auf der vollständig kompatiblen zweiten Welle.
+
 ## Lieferung und Verbrauch
 
 Der Master übernimmt nach DELIVERED die Commits sequenziell, löst nur kleine
@@ -217,6 +227,22 @@ Der Ticker ist jetzt bei GitHub als `active` registriert (Workflow 354372774),
 erster natürlicher Lauf noch ausstehend. Entdecken und Automatic-AI bleiben
 `disabled_manually`; der separate Radar-Workflow hat weiterhin sein hartes
 `false` vor dem wirksamen Job.
+
+Zweite Welle veröffentlicht: `main` bei
+`f375d95d75c57b9091f97886776445c0773bfb0a`, `staging` bei
+`ee4eb7e65127484d2af3468045ad116945b665c5`. Die gezielte Staging-Integration
+erhält dessen zusätzliche App-/Mediathek-/Entdecken-Änderungen. 10 Import-UI-,
+18 FlixPatrol-Frontend-, 70 Entdecken- und 120 Mediathek-Auswahlchecks grün.
+Die vollständigen CI-Suiten einschließlich Chromium und WebKit sind in
+[main](https://github.com/Soppagata/kinodreieck-app/actions/runs/34410312170) und
+[staging](https://github.com/Soppagata/kinodreieck-app/actions/runs/34410334172)
+grün. Staging-Deploy und direkter Domain-Readback am 9. September um 22:11 UTC
+bestätigen `ee4eb7e`; Beleg
+`/private/tmp/kd-ops-audit-20260909/master-wave2-staging-build.json`.
+Production bleibt an der vorhandenen Umgebungsfreigabe. Die sichtbare
+Frontend-Lieferung belegt noch keine neuen Cachetabellen oder Feedbefüllung.
+Der konkrete gemeinsame Backend-Umfang steht in
+[FLIXPATROL_BACKEND_LIEFERUNG.md](FLIXPATROL_BACKEND_LIEFERUNG.md).
 
 Die automatische Freigabeprüfung hat den geplanten Live-RLS-Test mit temporären
 Shared-Testwrites abgelehnt: Eine ausdrückliche Freigabe von Ziel/Umfang sei in

@@ -19,6 +19,7 @@ import {
   providerDiagnosticAccess,
   providerDiagnosticField,
 } from "../_shared/providerDiagnostic.js";
+import { createFlixpatrolFactsContextReader } from "../_shared/flixpatrolFactsContext.js";
 
 const ALLOWED_ORIGINS = new Set([
   "https://kinodreieck.at",
@@ -485,6 +486,23 @@ export function createRadarWebsearchHandler({
       },
       async resolveSources() {
         return await loadSources();
+      },
+      async loadFactsContext(request: Record<string, unknown>) {
+        if (request.kind || typeof request.canonicalTitle !== "string"
+            || !["film", "series"].includes(String(request.mediaType || ""))) return null;
+        const identity: Record<string, unknown> = {
+          titel: request.canonicalTitle,
+          jahr: request.releaseYear,
+          typ: request.mediaType === "series" ? "serie" : "film",
+        };
+        const strongId = String(request.targetId || "");
+        if (/^imdb:tt[1-9][0-9]{6,10}$/.test(strongId)) identity.imdb_id = strongId.slice(5);
+        else if (/^tmdb:(?:movie|tv):[1-9][0-9]{0,11}$/.test(strongId)) identity.tmdb_id = strongId.split(":")[2];
+        else if (/^watchmode:[1-9][0-9]{0,17}$/.test(strongId)) identity.watchmode_id = strongId.slice(10);
+        else if (/^flixpatrol:ttl_[A-Za-z0-9]{20,40}$/.test(strongId)) identity.flixpatrol_id = strongId.slice(11);
+        return await createFlixpatrolFactsContextReader({
+          rpc: (name: string, args: Record<string, unknown>) => admin.rpc(name, args),
+        }).context(identity);
       },
       async upsertConfirmedEvent({
         accountId: actor, operationId, event, personContext = null, titleGroupContext = null, textContext = null,

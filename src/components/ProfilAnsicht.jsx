@@ -62,8 +62,23 @@ function InfoGruppe({ titel, offen = false, children, leer }) {
   );
 }
 
+function FilmFaktenHinweis({ hinweis }) {
+  if (!hinweis?.candidates?.length) return null;
+  return (
+    <small data-film-fakten-hinweis={hinweis.filmTitel} style={{ display: "block", color: T.rauch, marginTop: 3 }}>
+      Mögliche Werke im Faktenbestand, nicht als Profilfakt bestätigt: {hinweis.candidates.map((kandidat, index) => (
+        <span key={kandidat.flixpatrolId}>
+          {index > 0 ? "; " : ""}{kandidat.title} ({kandidat.year}, {kandidat.mediaType === "serie" ? "Serie" : "Film"})
+          {kandidat.checkedAt ? " · Stand " + kandidat.checkedAt.slice(0, 10) : ""}
+          {kandidat.sourceUrl ? <> · <a href={kandidat.sourceUrl} target="_blank" rel="noreferrer">Quelle</a></> : ""}
+        </span>
+      ))}
+    </small>
+  );
+}
+
 function AendernPopup({
-  signale, filme, nichtDeutbar, achsText, offen, kiWegOffen,
+  signale, filme, filmFaktenHinweise, nichtDeutbar, achsText, offen, kiWegOffen,
   onClose, onNeuErheben, onKiErheben, onRichtungAendern, onEntfernen, onNichtDeutbarEntfernen,
 }) {
   const ref = useRef(null);
@@ -108,7 +123,12 @@ function AendernPopup({
               ))}</div>}
             </InfoGruppe>
             <InfoGruppe titel={`Filme (${filme.length})`} leer={!filme.length}>
-              <ul>{filme.map((f, i) => <li key={(f.masterId || f.titel) + i}>{f.richtung === "stoesst_ab" ? "− " : f.richtung === "zieht_an" ? "+ " : ""}{f.titel}</li>)}</ul>
+              <ul>{filme.map((f, i) => <li key={(f.masterId || f.titel) + i}>
+                {f.richtung === "stoesst_ab" ? "− " : f.richtung === "zieht_an" ? "+ " : ""}{f.titel}
+                <FilmFaktenHinweis hinweis={filmFaktenHinweise.find((item) => (
+                  item.filmTitel === f.titel && item.filmJahr === (f.jahr ?? null)
+                ))} />
+              </li>)}</ul>
             </InfoGruppe>
           </div>
         )}
@@ -118,7 +138,7 @@ function AendernPopup({
 }
 
 export function ProfilAnsicht({
-  profil, kiGeraeteweiseAus = false, onRichtungAendern, onEntfernen,
+  profil, filmFaktenHinweise = [], kiGeraeteweiseAus = false, onRichtungAendern, onEntfernen,
   onNichtDeutbarEntfernen, onWiderrufen, onNeuErheben, kiWegOffen = false, onKiErheben,
 }) {
   const [widerrufOffen, setWiderrufOffen] = useState(false);
@@ -166,6 +186,7 @@ export function ProfilAnsicht({
         </div>
       </div>}
       <AendernPopup offen={aendernOffen} onClose={() => setAendernOffen(false)} signale={signale} filme={filme} nichtDeutbar={nichtDeutbar} achsText={achsText}
+        filmFaktenHinweise={Array.isArray(filmFaktenHinweise) ? filmFaktenHinweise : []}
         kiWegOffen={kiWegOffen} onNeuErheben={onNeuErheben} onKiErheben={onKiErheben}
         onRichtungAendern={onRichtungAendern} onEntfernen={onEntfernen} onNichtDeutbarEntfernen={onNichtDeutbarEntfernen} />
     </div>

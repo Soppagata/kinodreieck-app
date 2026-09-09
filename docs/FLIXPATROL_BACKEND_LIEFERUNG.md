@@ -1,0 +1,81 @@
+# Konkretes Backend-Paket für FlixPatrol
+
+Das Paket gehört zum Masterplan
+[BETRIEBSREPARATUR_REGISTER_2026-09-09.md](BETRIEBSREPARATUR_REGISTER_2026-09-09.md).
+Der finale Kandidatencommit und sein Prüfbeleg stehen dort. Dieses Dokument
+beschreibt den Umfang der noch ausstehenden gemeinsamen Backend-Lieferung.
+
+## Ziel und Datenumfang
+
+Ziel ist ausschließlich Supabase-Projekt `bscjgwcntapobyxsiyce`. Staging und
+Production verwenden dieses Projekt gemeinsam; die folgenden Änderungen
+gelten daher für beide. Persönliche Medienlisten, Bewertungen, Notizen,
+Sehstände, Profile und Kontoaktivierungen sind nicht Gegenstand des Pakets.
+
+Die drei neuen Migrationen werden nach Abgleich der tatsächlichen
+Migrationshistorie gemeinsam in einer Transaktion angewendet:
+
+| Migration | Wirkung |
+| --- | --- |
+| `20260909120000_entdecken_delayed_daily_claim.sql` | Verspätete natürliche Tagesläufe dürfen den noch nicht verbrauchten Wiener Tag beanspruchen. |
+| `20260909190000_flixpatrol_data_cache.sql` | Vier gemeinsame Tabellen für Vokabular, Titel, Charts und technische Fehler; begrenzte Lese-RPCs, service-role-exklusive Schreib-RPCs; Erweiterung des bestehenden Requestzählers. |
+| `20260909210000_entdecken_flixpatrol_feed.sql` | Validierung, Speicherung und Readback des vollständigen 50-Titel-Feeds; bestehender gespeicherter Feed bleibt bis zum erfolgreichen neuen Lauf erhalten. |
+
+Die neuen Tabellen erzwingen RLS. Der Browser erhält keine Tabellen-Schreibrechte
+und keinen Anbieter-Key. Das Vokabular wird aus den dokumentierten festen IDs
+gesät; Titel und Charts entstehen erst durch einen gezählten Datenlauf.
+
+## Functions und Nachweis
+
+Gezielt ausgeliefert werden nur `flixpatrol-usage`, `entdecken-daily-task`,
+`ai-task` und `radar-websearch-task` aus dem integrierten Kandidaten. Die
+bestehenden JWT-Einstellungen bleiben erhalten. Download und Bytevergleich
+der vollständigen lokalen Quellabhängigkeiten belegen den Code; ACTIVE und
+Versionsnummer allein reichen nicht.
+
+Nach erfolgreichem Codevergleich werden `KD_FUNCTION_BUILD_VERSION` im
+gemeinsamen Backend und `STAGING_EXPECTED_FUNCTION_BUILD` im bestehenden
+GitHub-Staging-Environment auf den bestätigten Kandidaten gesetzt. Ein
+authentifizierter Health-Readback prüft den Marker ohne KI-Anbieteraufruf.
+
+Die reale Berechtigungsprüfung verwendet ausschließlich die vorhandenen
+Testkonten A/B und markierte temporäre Testdatensätze mit anschließendem
+Cleanup. B bleibt inaktiv. Der Umfang ist der vorhandene
+`KD_RLS_ACCESS_MODE=inactive npm run test:rls`-Pfad; keine Kontoaktivierung und
+kein Zugriff auf beliebige persönliche Daten.
+
+## Erster Datenlauf und natürlicher Betrieb
+
+Nach der Backend-Lieferung kann genau ein ausdrücklich freigegebener
+Initiallauf den sichtbaren Feed befüllen: höchstens fünf FlixPatrol-Charts und
+25 FlixPatrol-Titel, zwei öffentliche Quellen-GETs, null kostenpflichtige
+KI-Anfragen. Jeder FlixPatrol-Versuch zählt im vorhandenen Monatszähler. Kein
+Retry und kein Folgeversuch bei unklarem Ergebnis. Dieser Initiallauf wäre
+eine ausdrückliche Ausnahme vom bisherigen Verzicht auf manuelle Nachholruns.
+
+Danach wird der vorbereitete Entdecken-Workflow für seinen natürlichen
+02:00-UTC-Tageslauf aktiviert. Ohne Freigabe des Initiallaufs beginnt die
+Befüllung erst mit dem nächsten natürlichen Termin. Der FlixPatrol-Ticker
+läuft um 05:11 UTC, der Private Ops Monitor um 05:23 UTC. Automatic-AI und
+bezahltes Radar werden durch dieses Paket nicht aktiviert.
+
+Der reguläre Datenlauf samt Ticker benötigt höchstens 961 FlixPatrol-Requests
+in 31 Tagen; frische Titel- und Chartcaches senken den tatsächlichen Verbrauch.
+Einmalproben zählen zusätzlich. Das 1000er-Kontingent erhält kein neues Gate
+und keine Frontendanzeige.
+
+## Abbruch und ausstehende Zustimmung
+
+Vor jeder Wirkung werden Kandidat, Ziel und der letzte bekannte Ausgang
+geprüft. Bei unklarem Ausgang folgt ausschließlich Readback, kein blinder
+Retry. Eine fehlgeschlagene SQL-Transaktion übernimmt keine Teilmigration.
+Bei einem späteren Function- oder Datenfehler bleiben die bereits belegten
+Zustände getrennt dokumentiert; der letzte gültige Feed wird nicht als neu
+aktualisiert ausgegeben.
+
+Der geplante reale RLS-Test wurde vor Ausführung von der automatischen
+Freigabeprüfung abgelehnt, weil die ausdrückliche Zustimmung zur Mutation
+der gemeinsam genutzten Testdaten nicht belegt war. Die hier beschriebenen
+Shared-Wirkungen sowie ein gegebenenfalls gewünschter Initiallauf warten auf
+die konkrete Zustimmung zu Ziel und Umfang; die lokale Umsetzung und die
+Frontend-Lieferung laufen davon unabhängig zu Ende.
