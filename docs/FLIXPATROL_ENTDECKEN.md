@@ -32,9 +32,10 @@ Der reguläre Lauf hat feste Obergrenzen:
 | Summe Quellenrequests | 32 |
 | KI-Providerrequests | 0 |
 
-Zusammen mit dem täglichen Usage-Ticker sind damit selbst ohne Cachetreffer
-höchstens `31 × 30 + 31 = 961` FlixPatrol-Requests in einem 31-Tage-Monat
-möglich. Es gibt keine Suche, Pagination, Retryschleife oder zusätzliche
+Zusammen mit dem täglichen Usage-Ticker benötigt der reguläre Tagespfad selbst
+ohne Cachetreffer höchstens `31 × 30 + 31 = 961` FlixPatrol-Requests in einem
+31-Tage-Monat. Gesondert freigegebene Einmalproben zählen zusätzlich im selben
+Monatszähler. Es gibt keine Suche, Pagination, Retryschleife oder zusätzliche
 Quota-Abfrage im Entdecken-Lauf.
 
 Die fünf Charts sind Prime Filme, Prime Serien, Disney Filme, Disney Serien
@@ -50,11 +51,14 @@ Request wird vor dem Netzaufruf über `kd_flixpatrol_usage_begin` geclaimt und
 danach über `kd_flixpatrol_usage_finish` abgeschlossen. Erfolgreiche Charts und
 Titel sowie negative Titelresultate werden sofort über die E2-RPCs gespeichert.
 
-Nach der Chartauswahl liest der Adapter alle höchstens 25 IDs gebündelt über
-`kd_flixpatrol_titles_read`. Nur dieser Readback bestimmt den Medientyp und die
+Vor der Auswahl liest der Adapter die höchstens 50 Chart-IDs gebündelt über
+`kd_flixpatrol_titles_read`. Damit kann er bereits bekannte Dubletten gegen die
+öffentlichen Titel und vorher ausgewählte Charts durch vorhandene Rangfolger
+ersetzen. Nur dieser Readback bestimmt den tatsächlichen Medientyp und die
 Cachefrische. Frische positive und negative Einträge werden wiederverwendet;
 nur fehlende oder abgelaufene Titel lösen einen gezielten `/v2/titles/{id}`-
-Request aus. Nach den Einzel-Checkpoints folgt ein zweiter gebündelter Readback.
+Request aus. Nach den Einzel-Checkpoints folgt ein zweiter gebündelter Readback
+der höchstens 25 ausgewählten IDs.
 
 Die FlixPatrol-ID ist die stabile Quellenidentität und wird als
 `externalIds.flixpatrol` weitergereicht. Rang, Titeltext und Abrufdatum erzeugen
