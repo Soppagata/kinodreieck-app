@@ -64,7 +64,9 @@ for (const scenario of [
       fetchImpl: async (...args) => { fetches += 1; return scenario.fetch(...args); },
       finishOperation: async (value) => { finishes.push(value); return { ok: true, replay: false, status: scenario.status, usage: {} }; },
     });
-    await assert.rejects(client.fetchQuota(), (error) => error.code === scenario.code && error.providerRequests === 1 && error.httpStatus === scenario.http);
+    await assert.rejects(client.fetchQuota(), (error) => error.code === scenario.code
+      && error.providerRequests === 1 && error.httpStatus === scenario.http
+      && error.operationId === "00000000-0000-4000-8000-000000000003");
     assert.equal(fetches, 1);
     assert.equal(finishes.length, 1);
     assert.deepEqual(finishes[0].quota, null);
@@ -80,7 +82,9 @@ await check("unbelegter Abschluss meldet den bereits gestarteten Request konserv
     fetchImpl: async () => ({ ok: true, status: 200, json: async () => quotaPayload }),
     finishOperation: async () => { throw new Error("db unavailable"); },
   });
-  await assert.rejects(client.fetchQuota(), (error) => error.code === "FLIXPATROL_LEDGER_FINISH_FAILED" && error.providerRequests === 1);
+  await assert.rejects(client.fetchQuota(), (error) => error.code === "FLIXPATROL_LEDGER_FINISH_FAILED"
+    && error.providerRequests === 1
+    && error.operationId === "00000000-0000-4000-8000-000000000004");
 });
 
 const titleId = "ttl_bHyGTvopBHPVtIKhR2CF68WD";
@@ -199,6 +203,30 @@ await check("normalisiert eine gezielte Titelauflösung samt nullable Fremd-IDs"
   assert.equal(result.title.tmdbId, "89");
   assert.equal(result.title.releaseYear, 1989);
   assert.equal(begins[0].requestKind, "titles");
+});
+
+await check("verwirft eine andere Titel-ID nach genau einem gezählten Abschluss", async () => {
+  const operationId = "00000000-0000-4000-8000-000000000010";
+  const finishes = [];
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => operationId,
+    beginOperation: async () => ({ ok: true, claim: true, replay: false }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => makeTitlePayload(secondTitleId) }),
+    finishOperation: async (value) => {
+      finishes.push(value);
+      return { ok: true, replay: false, status: value.status, usage: {} };
+    },
+  });
+  await assert.rejects(
+    client.fetchTitle({ sourceId: titleId, mediaType: "film" }),
+    (error) => error.code === "FLIXPATROL_INVALID_RESPONSE"
+      && error.providerRequests === 1
+      && error.operationId === operationId,
+  );
+  assert.equal(finishes.length, 1);
+  assert.equal(finishes[0].status, "invalid_response");
+  assert.equal(finishes[0].operationId, operationId);
 });
 
 await check("Titelsuche nutzt exakten Titel, Jahr und Typ und blockiert Mehrdeutigkeit", async () => {

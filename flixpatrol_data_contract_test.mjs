@@ -135,6 +135,8 @@ check("Migration und Doku begrenzen Suche, Rechte und Cache-Inhalte", () => {
   assert.match(migration, /force row level security/g);
   assert.match(migration, /not public\.kd_account_active\(\)/);
   assert.match(migration, /v_count not between 1 and 50/);
+  assert.match(migration, /pg_advisory_xact_lock\(hashtextextended\(/);
+  assert.match(migration, /excluded\.chart_date >= kd_flixpatrol_chart_cache\.chart_date/);
   assert.doesNotMatch(migration, /email|profile|prompt|api_key|authorization/i);
   assert.match(docs, /title\[eq\]/);
   assert.match(docs, /premiere\[gte\]/);

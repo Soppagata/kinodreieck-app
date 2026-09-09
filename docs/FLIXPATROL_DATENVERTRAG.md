@@ -107,6 +107,9 @@ Jede Methode claimt ihre Operation vor fetch, finalisiert sie genau einmal,
 folgt keinen Redirects, hat höchstens 15 Sekunden Laufzeit und startet keinen
 Retry. Die additiven Ledgertypen sind top10s und titles; quota und
 das Usage-DTO bleiben unverändert.
+Jeder Fehler nach einem erfolgreichen Claim trägt dieselbe operationId wie
+beginOperation/finishOperation, damit der Serveradapter den Fehler
+payloadfrei über kd_flixpatrol_data_record_failure zuordnen kann.
 
 supabase/functions/_shared/flixpatrolData.js exportiert:
 
@@ -128,7 +131,8 @@ entzogen. service_role schreibt nur durch:
 
 - kd_flixpatrol_data_save_chart(p_chart jsonb) für einen vollständig validierten
   1–10er-Chart. Leer, teilweise, älter oder ungültig ersetzt den letzten guten
-  Stand nicht.
+  Stand nicht. Ein Update muss sowohl ein mindestens gleiches Chartdatum als
+  auch einen mindestens gleichen Abrufzeitpunkt besitzen.
 - kd_flixpatrol_data_save_title(p_title jsonb, p_fetched_at timestamptz,
   p_fresh_until timestamptz) für
   normalisierte positive Titelfakten. Nullfelder erhalten bestehende Werte;
@@ -165,6 +169,10 @@ Profil, Notiz oder beliebiges Schreib-JSON entgegen. Fehler-, Leer- und
 Nullantworten werden nicht an die Save-RPCs weitergereicht; der Fehler-RPC hält
 nur Operation, Ressourcentyp, öffentliche Quellen-ID, Medientyp, Fehlerklasse
 und Zeitpunkt.
+Positive und negative Titelwrites verwenden denselben transaktionalen
+Advisory-Lock je FlixPatrol-ID. Dadurch gelten Positivvorrang und
+ID-Konfliktschutz auch dann, wenn für die ID vor zwei parallelen Aufrufen noch
+keine Cachezeile existiert.
 
 ## Integrationsnaht für E4
 

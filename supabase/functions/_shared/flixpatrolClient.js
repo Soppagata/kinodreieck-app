@@ -12,12 +12,13 @@ const QUOTA_URL = `${API_ORIGIN}/v2/quota`;
 export const FLIXPATROL_TIMEOUT_MS = 15_000;
 
 export class FlixPatrolClientError extends Error {
-  constructor(code, { providerRequests = 0, httpStatus = null } = {}) {
+  constructor(code, { providerRequests = 0, httpStatus = null, operationId = null } = {}) {
     super(code);
     this.name = "FlixPatrolClientError";
     this.code = code;
     this.providerRequests = providerRequests;
     this.httpStatus = httpStatus;
+    this.operationId = operationId;
   }
 }
 
@@ -89,7 +90,7 @@ export function createFlixPatrolClient({
 
     let finished = false;
     const finish = async (status, httpStatus, quota) => {
-      if (finished) throw new FlixPatrolClientError("FLIXPATROL_DOUBLE_FINISH", { providerRequests: 1 });
+      if (finished) throw new FlixPatrolClientError("FLIXPATROL_DOUBLE_FINISH", { providerRequests: 1, operationId });
       finished = true;
       let result;
       try {
@@ -98,12 +99,14 @@ export function createFlixPatrolClient({
         throw new FlixPatrolClientError("FLIXPATROL_LEDGER_FINISH_FAILED", {
           providerRequests: 1,
           httpStatus,
+          operationId,
         });
       }
       if (result?.ok !== true || result?.replay !== false || result?.status !== status) {
         throw new FlixPatrolClientError("FLIXPATROL_LEDGER_FINISH_REJECTED", {
           providerRequests: 1,
           httpStatus,
+          operationId,
         });
       }
       return result;
@@ -122,7 +125,7 @@ export function createFlixPatrolClient({
       });
     } catch {
       await finish("transport_error", null, null);
-      throw new FlixPatrolClientError("FLIXPATROL_TRANSPORT_ERROR", { providerRequests: 1 });
+      throw new FlixPatrolClientError("FLIXPATROL_TRANSPORT_ERROR", { providerRequests: 1, operationId });
     }
 
     if (!response || !response.ok) {
@@ -131,6 +134,7 @@ export function createFlixPatrolClient({
       throw new FlixPatrolClientError("FLIXPATROL_HTTP_ERROR", {
         providerRequests: 1,
         httpStatus: status,
+        operationId,
       });
     }
 
@@ -142,6 +146,7 @@ export function createFlixPatrolClient({
       throw new FlixPatrolClientError("FLIXPATROL_INVALID_RESPONSE", {
         providerRequests: 1,
         httpStatus: response.status,
+        operationId,
       });
     }
 
@@ -190,7 +195,8 @@ export function createFlixPatrolClient({
       requestKind: "titles",
       parse: (body) => {
         const title = normalizeFlixPatrolTitle(body);
-        return title && (mediaType === undefined || title.mediaType === mediaType) ? title : null;
+        return title && title.sourceId === sourceId
+          && (mediaType === undefined || title.mediaType === mediaType) ? title : null;
       },
     });
     return Object.freeze({ title: result.data, usage: result.usage, providerRequests: 1, operationId: result.operationId });

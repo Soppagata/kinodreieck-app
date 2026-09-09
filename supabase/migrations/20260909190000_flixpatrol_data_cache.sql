@@ -247,7 +247,11 @@ begin
   v_imdb_numeric := nullif(p_title->>'imdbNumericId','')::bigint;
   v_imdb_id := nullif(p_title->>'imdbId','');
   v_tmdb_id := nullif(p_title->>'tmdbId','')::integer;
+  if v_source_id !~ '^ttl_[A-Za-z0-9]{20,40}$' or v_media_type not in ('film','series') then
+    return jsonb_build_object('ok',false,'code','invalid-response');
+  end if;
 
+  perform pg_advisory_xact_lock(hashtextextended(v_source_id, 8317561));
   select * into v_existing from public.kd_flixpatrol_title_cache where source_id = v_source_id for update;
   if found and v_existing.media_type is distinct from v_media_type then
     return jsonb_build_object('ok',false,'code','media-type-conflict');
@@ -321,10 +325,12 @@ begin
   if auth.role() is distinct from 'service_role' then
     return jsonb_build_object('ok',false,'code','forbidden');
   end if;
-  if p_status not in ('not_found','incomplete_blocked') or p_checked_at is null or p_fresh_until is null
+  if p_source_id !~ '^ttl_[A-Za-z0-9]{20,40}$' or p_media_type not in ('film','series')
+     or p_status not in ('not_found','incomplete_blocked') or p_checked_at is null or p_fresh_until is null
      or p_fresh_until < p_checked_at or p_fresh_until > p_checked_at + interval '90 days' then
     return jsonb_build_object('ok',false,'code','invalid-response');
   end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_source_id, 8317561));
   select * into v_existing from public.kd_flixpatrol_title_cache where source_id = p_source_id for update;
   if found and v_existing.media_type is distinct from p_media_type then
     return jsonb_build_object('ok',false,'code','media-type-conflict');
@@ -439,7 +445,8 @@ begin
     set chart_date = excluded.chart_date, entries = excluded.entries,
         fetched_at = excluded.fetched_at, fresh_until = excluded.fresh_until,
         updated_at = clock_timestamp()
-    where excluded.fetched_at >= kd_flixpatrol_chart_cache.fetched_at;
+    where excluded.fetched_at >= kd_flixpatrol_chart_cache.fetched_at
+      and excluded.chart_date >= kd_flixpatrol_chart_cache.chart_date;
   return jsonb_build_object('ok',true,'saved',found,'itemCount',jsonb_array_length(p_chart->'items'));
 exception when check_violation or not_null_violation or invalid_text_representation or numeric_value_out_of_range or datetime_field_overflow then
   return jsonb_build_object('ok',false,'code','invalid-response');

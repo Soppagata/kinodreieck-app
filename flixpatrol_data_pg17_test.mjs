@@ -1,21 +1,36 @@
 /* Disposable PostgreSQL test: synthetic data only, no Supabase/provider access. */
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const PG = "/Applications/Postgres.app/Contents/Versions/17/bin";
-assert.ok(["initdb", "pg_ctl", "psql"].every((name) => existsSync(join(PG, name))), "PostgreSQL 17 is required");
-const root = mkdtempSync("/private/tmp/kd-flixpatrol-data-");
+const configured = spawnSync("pg_config", ["--bindir"], { encoding: "utf8" });
+const required = ["initdb", "pg_ctl", "postgres", "psql"];
+const candidates = [
+  process.env.KD_TEST_PG_BIN,
+  configured.status === 0 ? configured.stdout.trim() : null,
+  "/Applications/Postgres.app/Contents/Versions/17/bin",
+  "/usr/lib/postgresql/17/bin",
+  "/usr/lib/postgresql/16/bin",
+].filter(Boolean);
+const selected = [...new Set(candidates)].map((dir) => {
+  if (!required.every((name) => existsSync(join(dir, name)))) return false;
+  const version = spawnSync(join(dir, "postgres"), ["--version"], { encoding: "utf8" });
+  const match = version.status === 0 ? version.stdout.match(/\b(16|17)\.\d+\b/) : null;
+  return match ? { dir, version: match[0] } : null;
+}).find(Boolean);
+assert.ok(selected, "PostgreSQL 16 or 17 server binaries are required");
+const PG = selected.dir;
+const PG_VERSION = selected.version;
+const root = mkdtempSync(join(tmpdir(), "kd-flixpatrol-data-"));
 const data = join(root, "data");
-const socket = join(root, "socket");
 const port = String(57000 + process.pid % 7000);
 const env = { PATH: `${PG}:/usr/bin:/bin`, LANG: "C", LC_ALL: "C" };
 const usageMigration = readFileSync("supabase/migrations/20260909153000_flixpatrol_usage_ticker.sql", "utf8");
 const dataMigration = readFileSync("supabase/migrations/20260909190000_flixpatrol_data_cache.sql", "utf8");
 let running = false;
 let checks = 0;
-mkdirSync(socket);
 
 function run(binary, binaryArgs, input) {
   const result = spawnSync(join(PG, binary), binaryArgs, {
@@ -31,7 +46,24 @@ function runFailure(binaryArgs, input) {
   assert.notEqual(result.status, 0);
   return result.stderr;
 }
-const args = ["-h", socket, "-p", port, "-U", "postgres", "-d", "postgres", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-f", "-"];
+function runAsync(binary, binaryArgs, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(join(PG, binary), binaryArgs, { env, stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => child.kill("SIGKILL"), 60_000);
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("close", (status) => {
+      clearTimeout(timer);
+      if (status === 0) resolve(stdout.trim());
+      else reject(new Error(stderr));
+    });
+    child.on("error", reject);
+    child.stdin.end(input);
+  });
+}
+const args = ["-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", "postgres", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-f", "-"];
 const sql = (query) => run("psql", args, query);
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const jsonb = (value) => `${quote(JSON.stringify(value))}::jsonb`;
@@ -39,6 +71,9 @@ const sessionSql = (query, role = "service_role", active = true) =>
   `begin; set local role ${role}; select set_config('request.jwt.claim.role',${quote(role)},true); select set_config('test.account.active',${quote(active ? "true" : "false")},true); ${query}; commit;`;
 const session = (query, role, active) => sql(sessionSql(query, role, active))
   .split("\n").map((line) => line.trim()).filter(Boolean).at(-1);
+const sessionAsync = (query, role = "service_role", active = true) =>
+  runAsync("psql", args, sessionSql(query, role, active))
+    .then((output) => output.split("\n").map((line) => line.trim()).filter(Boolean).at(-1));
 const failure = (query, role, active) => runFailure(args, sessionSql(query, role, active));
 const uuid = (tail) => `00000000-0000-4000-8000-${String(tail).padStart(12, "0")}`;
 function check(name, fn) {
@@ -74,7 +109,7 @@ const chart = (overrides = {}) => ({
 try {
   run("initdb", ["--no-locale", "--encoding=UTF8", "--auth=trust", "--username=postgres", "--set", "shared_memory_type=mmap", "--pgdata", data]);
   run("pg_ctl", ["--pgdata", data, "--log", join(root, "postgres.log"), "--options",
-    `-c listen_addresses= -c unix_socket_directories=${socket} -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix`,
+    `-c listen_addresses=127.0.0.1 -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix`,
     "--wait", "start"]);
   running = true;
   sql(`
@@ -163,6 +198,42 @@ try {
     assert.equal(sql(`select status from public.kd_flixpatrol_title_cache where source_id='${titleId2}'`), "not_found");
   });
 
+  const positiveRaceId = "ttl_ParallelPositive123456789";
+  const positiveRaceTitle = { ...title, sourceId: positiveRaceId };
+  const positiveMissRace = await Promise.all([
+    sessionAsync(
+      `select public.kd_flixpatrol_data_save_title(${jsonb(positiveRaceTitle)},'2026-09-09T14:00:00Z','2026-10-09T14:00:00Z')`,
+    ),
+    sessionAsync(
+      `select public.kd_flixpatrol_data_save_title_miss('${positiveRaceId}','film','not_found','2026-09-09T14:00:00Z','2026-09-16T14:00:00Z')`,
+    ),
+  ]);
+  check("Paralleler positiver und negativer Claim endet immer positiv", () => {
+    const outcomes = positiveMissRace.map((value) => JSON.parse(value));
+    assert.ok(outcomes.some((outcome) => outcome.status === "resolved"));
+    assert.equal(sql(`select status from public.kd_flixpatrol_title_cache where source_id='${positiveRaceId}'`), "resolved");
+  });
+
+  const conflictRaceId = "ttl_ParallelConflict123456789";
+  const conflictA = { ...title, sourceId: conflictRaceId, imdbNumericId: "211915", imdbId: "tt0211915", tmdbId: "194" };
+  const conflictB = { ...title, sourceId: conflictRaceId, imdbNumericId: "1234567", imdbId: "tt1234567", tmdbId: "999" };
+  const positiveConflictRace = await Promise.all([
+    sessionAsync(
+      `select public.kd_flixpatrol_data_save_title(${jsonb(conflictA)},'2026-09-09T14:05:00Z','2026-10-09T14:05:00Z')`,
+    ),
+    sessionAsync(
+      `select public.kd_flixpatrol_data_save_title(${jsonb(conflictB)},'2026-09-09T14:05:00Z','2026-10-09T14:05:00Z')`,
+    ),
+  ]);
+  check("Parallele widersprechende starke IDs überschreiben einander nicht", () => {
+    const outcomes = positiveConflictRace.map((value) => JSON.parse(value));
+    assert.equal(outcomes.filter((outcome) => outcome.saved === true).length, 1);
+    assert.equal(outcomes.filter((outcome) => outcome.code === "id-conflict").length, 1);
+    assert.ok(["tt0211915", "tt1234567"].includes(
+      sql(`select imdb_id from public.kd_flixpatrol_title_cache where source_id='${conflictRaceId}'`),
+    ));
+  });
+
   check("Leere, partielle, nichtganzzahlige und ältere Charts verdrängen keinen guten Stand", () => {
     for (const invalid of [
       chart({ items: [] }),
@@ -172,7 +243,7 @@ try {
       assert.equal(JSON.parse(session(`select public.kd_flixpatrol_data_save_chart(${jsonb(invalid)})`)).code, "invalid-response");
     }
     const older = chart({ chartDate: "2026-09-08", items: [chartItem(titleId, 1)],
-      fetchedAt: "2026-09-08T11:00:00Z", freshUntil: "2026-09-09T11:00:00Z" });
+      fetchedAt: "2026-09-10T11:00:00Z", freshUntil: "2026-09-11T11:00:00Z" });
     assert.equal(JSON.parse(session(`select public.kd_flixpatrol_data_save_chart(${jsonb(older)})`)).saved, false);
     assert.equal(sql(`select chart_date || '|' || jsonb_array_length(entries) from public.kd_flixpatrol_chart_cache where company_id='${companyId}'`),
       "2026-09-09|2");
@@ -216,4 +287,4 @@ try {
   rmSync(root, { recursive: true, force: true });
 }
 
-console.log(`${checks} FlixPatrol-PostgreSQL-17-Datenprüfungen bestanden.`);
+console.log(`${checks} FlixPatrol-Datenprüfungen mit PostgreSQL ${PG_VERSION} bestanden.`);
