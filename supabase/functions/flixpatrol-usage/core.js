@@ -110,6 +110,13 @@ function safeError(error) {
   return { code, providerRequests };
 }
 
+/**
+ * @param {{
+ *   serviceKeys?: string[],
+ *   readUsage?: () => Promise<unknown>,
+ *   refreshUsage?: () => Promise<{usage: unknown, providerRequests: number}>
+ * }} dependencies
+ */
 export function createFlixPatrolUsageHandler({ serviceKeys = [], readUsage, refreshUsage } = {}) {
   return async function handler(request) {
     if (request.headers.get("origin") !== null || !authorized(request, serviceKeys)) {

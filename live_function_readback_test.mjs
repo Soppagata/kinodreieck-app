@@ -228,7 +228,7 @@ await test("jede deploybare Function besitzt genau einen expliziten JWT-Konfigve
     .sort();
   assert.deepEqual(deployable, [
     "account-self-service", "ai-task", "automatic-ai-check",
-    "entdecken-daily-task", "private-mail-request", "radar-websearch-task",
+    "entdecken-daily-task", "flixpatrol-usage", "private-mail-request", "radar-websearch-task",
   ]);
   for (const name of deployable) {
     const marker = `[functions.${name}]`;

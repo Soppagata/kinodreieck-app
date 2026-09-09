@@ -31,6 +31,16 @@ export function parseFlixPatrolQuota(value) {
   return Object.freeze({ used, available, limit, limitExtra, resetAt });
 }
 
+/**
+ * @param {{
+ *   apiKey?: string,
+ *   beginOperation?: (input: {operationId: string, requestKind: string}) => Promise<{ok?: boolean, claim?: boolean, replay?: boolean}>,
+ *   finishOperation?: (input: {operationId: string, status: string, httpStatus: number | null, quota: ReturnType<typeof parseFlixPatrolQuota>}) => Promise<{ok?: boolean, replay?: boolean, status?: string, usage?: unknown}>,
+ *   fetchImpl?: typeof fetch,
+ *   randomUUID?: () => string,
+ *   timeoutMs?: number
+ * }} options
+ */
 export function createFlixPatrolClient({
   apiKey,
   beginOperation,
