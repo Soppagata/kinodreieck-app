@@ -1,6 +1,7 @@
 import {
   externeTitelKennungen,
   externesReferenzjahr,
+  normalisiereExterneTitelkennung,
   normalisiereExternenTitel,
   normalisiereExterneWerkart,
   ordneExternenTitelZu,
@@ -37,6 +38,81 @@ function normalizeRpcResult(result) {
     return result.data;
   }
   return result;
+}
+
+function targetKennung(targetId) {
+  if (typeof targetId !== "string") return null;
+  if (targetId.startsWith("imdb:")) return { namespace: "imdb", value: targetId.slice(5) };
+  const tmdb = /^tmdb:(movie|tv):(.+)$/.exec(targetId);
+  if (tmdb) return {
+    namespace: "tmdb",
+    value: tmdb[2],
+    mediaType: tmdb[1] === "movie" ? "film" : "serie",
+  };
+  if (targetId.startsWith("watchmode:")) return { namespace: "watchmode", value: targetId.slice(10) };
+  if (targetId.startsWith("flixpatrol:")) return { namespace: "flixpatrol", value: targetId.slice(11) };
+  return null;
+}
+
+/* Ein einziger reiner Identitaetsbauer fuer Forecast und Radar. Jede Kennung
+   wird mit dem E3-Vertrag normalisiert. Zwei Werte desselben Namensraums
+   duerfen sich danach entweder gleichen oder ergeben einen sichtbaren
+   Konflikt; kein spaeteres Objekt-Spread kann ihn ueberschreiben. */
+export function baueFlixpatrolKontextIdentitaet({
+  titel,
+  originaltitel = null,
+  jahr,
+  typ,
+  externeIds = {},
+  filmkennung = null,
+  targetId = null,
+} = {}) {
+  const ids = {};
+  const add = (namespace, raw) => {
+    if (raw === null || raw === undefined || raw === "") return null;
+    const normalized = normalisiereExterneTitelkennung(namespace, raw);
+    if (!normalized) return { reason: "external-id-invalid", namespace };
+    if (ids[namespace] && ids[namespace] !== normalized) {
+      return { reason: "external-id-conflict", namespace };
+    }
+    ids[namespace] = normalized;
+    return null;
+  };
+  for (const namespace of ["flixpatrol", "imdb", "tmdb", "watchmode"]) {
+    const conflict = add(namespace, externeIds?.[namespace]);
+    if (conflict) return freezeDeep({ ok: false, identity: null, ...conflict });
+  }
+  if (filmkennung && ["imdb", "tmdb"].includes(filmkennung.namespace)) {
+    const conflict = add(filmkennung.namespace, filmkennung.kennung);
+    if (conflict) return freezeDeep({ ok: false, identity: null, ...conflict });
+  }
+  const target = targetKennung(targetId);
+  if (target) {
+    const ownType = normalisiereExterneWerkart({ typ });
+    if (target.mediaType && ownType !== target.mediaType) {
+      return freezeDeep({
+        ok: false,
+        identity: null,
+        reason: "target-media-type-conflict",
+        namespace: target.namespace,
+      });
+    }
+    const conflict = add(target.namespace, target.value);
+    if (conflict) return freezeDeep({ ok: false, identity: null, ...conflict });
+  }
+  return freezeDeep({
+    ok: true,
+    identity: {
+      titel,
+      originaltitel,
+      jahr,
+      typ,
+      ...(ids.imdb ? { imdb_id: ids.imdb } : {}),
+      ...(ids.tmdb ? { tmdb_id: ids.tmdb } : {}),
+      ...(ids.watchmode ? { watchmode_id: ids.watchmode } : {}),
+      ...(ids.flixpatrol ? { flixpatrol_id: ids.flixpatrol } : {}),
+    },
+  });
 }
 
 export function normalisiereFlixpatrolKontextTitel(rows) {

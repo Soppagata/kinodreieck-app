@@ -86,7 +86,10 @@ import {
   sanitizeProviderDisplayText,
 } from "../_shared/providerText.js";
 import { createProviderReceipt } from "../_shared/providerReceipt.js";
-import { createFlixpatrolFactsContextReader } from "../_shared/flixpatrolFactsContext.js";
+import {
+  baueFlixpatrolKontextIdentitaet,
+  createFlixpatrolFactsContextReader,
+} from "../_shared/flixpatrolFactsContext.js";
 import { normalisiereExterneTitelkennung } from "../_shared/externalTitleIdentity.js";
 
 export {
@@ -4451,6 +4454,23 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         vorgangId,
       });
     }
+    const flixpatrolIdentitaet = baueFlixpatrolKontextIdentitaet({
+      titel: browserEingabe.film.titel,
+      originaltitel: browserEingabe.film.originaltitel,
+      jahr: browserEingabe.film.jahr,
+      typ: browserEingabe.film.typ,
+      externeIds: browserEingabe.film.externeIds,
+      filmkennung: browserEingabe.filmkennung,
+    });
+    if (!flixpatrolIdentitaet.ok) {
+      return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+        grund: flixpatrolIdentitaet.reason === "external-id-conflict"
+          ? "forecast-externe-id-konflikt"
+          : "forecast-externe-id-ungueltig",
+        status: 400,
+        vorgangId,
+      });
+    }
     let gemeinsamesWissen: ForecastEingabe["filmwissen"] = null;
     let flixpatrolFakten: Record<string, unknown> | null = null;
     const leser = nutzerClient(req);
@@ -4500,24 +4520,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       }
     }
     if (leser) {
-      const externeIds = browserEingabe.film.externeIds ?? {};
-      const identitaet = {
-        titel: browserEingabe.film.titel,
-        originaltitel: browserEingabe.film.originaltitel,
-        jahr: browserEingabe.film.jahr,
-        typ: browserEingabe.film.typ,
-        ...(externeIds.imdb ? { imdb_id: externeIds.imdb } : {}),
-        ...(externeIds.tmdb ? { tmdb_id: externeIds.tmdb } : {}),
-        ...(externeIds.watchmode ? { watchmode_id: externeIds.watchmode } : {}),
-        ...(externeIds.flixpatrol ? { flixpatrol_id: externeIds.flixpatrol } : {}),
-        ...(browserEingabe.filmkennung?.namespace === "imdb"
-          ? { imdb_id: browserEingabe.filmkennung.kennung } : {}),
-        ...(browserEingabe.filmkennung?.namespace === "tmdb"
-          ? { tmdb_id: browserEingabe.filmkennung.kennung } : {}),
-      };
       flixpatrolFakten = await createFlixpatrolFactsContextReader({
         rpc: (name: string, args: Record<string, unknown>) => leser.rpc(name, args),
-      }).context(identitaet);
+      }).context(flixpatrolIdentitaet.identity);
     }
     aufgabenPayload = {
       film: payload.film,
