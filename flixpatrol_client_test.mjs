@@ -5,9 +5,12 @@ const quotaPayload = { type: "apiquota", data: { used: 17, available: 983, limit
 let checks = 0;
 async function check(name, fn) { await fn(); checks += 1; console.log(`✓ ${name}`); }
 
-await check("akzeptiert nur den exakten offiziellen Quota-Vertrag", () => {
+await check("normalisiert Pflichtfelder und toleriert zusätzliche Providerfelder", () => {
   assert.deepEqual(parseFlixPatrolQuota(quotaPayload), quotaPayload.data);
-  assert.equal(parseFlixPatrolQuota({ ...quotaPayload, extra: true }), null);
+  assert.deepEqual(
+    parseFlixPatrolQuota({ ...quotaPayload, providerMeta: "neu", data: { ...quotaPayload.data, futureField: true } }),
+    quotaPayload.data,
+  );
   assert.equal(parseFlixPatrolQuota({ type: "apiquota", data: { ...quotaPayload.data, used: "17" } }), null);
   assert.equal(parseFlixPatrolQuota({ type: "apiquota", data: { ...quotaPayload.data, resetAt: "morgen" } }), null);
 });

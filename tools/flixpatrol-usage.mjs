@@ -20,28 +20,37 @@ export function pruefeFlixPatrolUsageAntwort(value) {
       || value.ok !== true || value.status !== "refreshed" || value.providerRequests !== 1) return null;
   const usage = value.usage;
   if (!exactKeys(usage, [
-    "attemptedRequests", "completedRequests", "failedRequests", "lastAttemptAt",
-    "lastStatus", "lastSuccessAt", "planLimit", "quota", "successfulRequests",
-  ]) || ![
-    usage.attemptedRequests, usage.completedRequests,
-    usage.successfulRequests, usage.failedRequests,
+    "currentUtcMonth", "lastAttemptAt", "lastStatus", "lastSuccessAt",
+    "planLimit", "quota", "sinceSetup",
+  ]) || !exactKeys(usage.sinceSetup, ["attemptedRequests", "completedRequests", "failedRequests", "successfulRequests"])
+      || ![
+    usage.sinceSetup.attemptedRequests, usage.sinceSetup.completedRequests,
+    usage.sinceSetup.successfulRequests, usage.sinceSetup.failedRequests,
   ].every(nonnegative)
-      || usage.completedRequests !== usage.successfulRequests + usage.failedRequests
-      || usage.attemptedRequests < usage.completedRequests
+      || usage.sinceSetup.completedRequests !== usage.sinceSetup.successfulRequests + usage.sinceSetup.failedRequests
+      || usage.sinceSetup.attemptedRequests < usage.sinceSetup.completedRequests
+      || !exactKeys(usage.currentUtcMonth, ["attemptedRequests", "month"])
+      || typeof usage.currentUtcMonth.month !== "string"
+      || !/^\d{4}-(?:0[1-9]|1[0-2])$/.test(usage.currentUtcMonth.month)
+      || !nonnegative(usage.currentUtcMonth.attemptedRequests)
+      || usage.currentUtcMonth.attemptedRequests > usage.sinceSetup.attemptedRequests
       || usage.planLimit !== 1000
       || usage.lastStatus !== "succeeded"
       || !instant(usage.lastAttemptAt, false)
       || !instant(usage.lastSuccessAt, false)) return null;
   const quota = usage.quota;
-  if (!exactKeys(quota, ["available", "limit", "limitExtra", "observedAt", "resetAt", "used"])
+  if (!exactKeys(quota, ["available", "limit", "limitExtra", "observedAt", "requestStartedAt", "resetAt", "used"])
       || ![quota.used, quota.available, quota.limit, quota.limitExtra].every(nonnegative)
       || quota.limit < 1 || typeof quota.resetAt !== "string"
-      || !instant(quota.observedAt, false)) return null;
+      || !instant(quota.observedAt, false) || !instant(quota.requestStartedAt, false)
+      || Date.parse(quota.requestStartedAt) > Date.parse(quota.observedAt)) return null;
   return Object.freeze({
-    attemptedRequests: usage.attemptedRequests,
-    completedRequests: usage.completedRequests,
-    successfulRequests: usage.successfulRequests,
-    failedRequests: usage.failedRequests,
+    attemptedRequestsSinceSetup: usage.sinceSetup.attemptedRequests,
+    completedRequestsSinceSetup: usage.sinceSetup.completedRequests,
+    successfulRequestsSinceSetup: usage.sinceSetup.successfulRequests,
+    failedRequestsSinceSetup: usage.sinceSetup.failedRequests,
+    currentUtcMonth: usage.currentUtcMonth.month,
+    currentMonthAttemptedRequests: usage.currentUtcMonth.attemptedRequests,
     providerUsed: quota.used,
     providerAvailable: quota.available,
     providerLimit: quota.limit,
@@ -57,7 +66,8 @@ export function formatiereFlixPatrolUsageSummary(result) {
     "",
     "Der tägliche Quota-Abruf startete genau einen Providerrequest und wurde persistent abgeschlossen.",
     "",
-    `- eigene Requests: ${result.attemptedRequests} begonnen, ${result.completedRequests} abgeschlossen (${result.successfulRequests} erfolgreich, ${result.failedRequests} fehlgeschlagen)`,
+    `- aktueller UTC-Monat ${result.currentUtcMonth}: ${result.currentMonthAttemptedRequests} eigene Requests begonnen`,
+    `- seit Einrichtung: ${result.attemptedRequestsSinceSetup} begonnen, ${result.completedRequestsSinceSetup} abgeschlossen (${result.successfulRequestsSinceSetup} erfolgreich, ${result.failedRequestsSinceSetup} fehlgeschlagen)`,
     `- offizieller Snapshot: ${result.providerUsed} verwendet, ${result.providerAvailable} verfügbar, Limit ${result.providerLimit} + ${result.providerLimitExtra} extra`,
     `- Provider-Reset: ${result.providerResetAt}`,
     `- Snapshot gespeichert: ${result.providerObservedAt}`,

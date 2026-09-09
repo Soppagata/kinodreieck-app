@@ -4,10 +4,11 @@ import { createFlixPatrolUsageHandler, normalizeFlixPatrolUsage, parseFlixPatrol
 const modern = "sb_secret_test-only";
 const legacy = "legacy.service.role.test-only";
 const usage = {
-  attemptedRequests: 4, completedRequests: 4, successfulRequests: 3, failedRequests: 1,
+  sinceSetup: { attemptedRequests: 4, completedRequests: 4, successfulRequests: 3, failedRequests: 1 },
+  currentUtcMonth: { month: "2026-09", attemptedRequests: 2 },
   lastStatus: "succeeded", lastAttemptAt: "2026-09-09T15:30:00Z",
   lastSuccessAt: "2026-09-09T15:30:01Z", planLimit: 1000,
-  quota: { used: 21, available: 979, limit: 1000, limitExtra: 0, resetAt: "2026-10-01T00:00:00Z", observedAt: "2026-09-09T15:30:01Z" },
+  quota: { used: 21, available: 979, limit: 1000, limitExtra: 0, resetAt: "2026-10-01T00:00:00Z", requestStartedAt: "2026-09-09T15:30:00Z", observedAt: "2026-09-09T15:30:01Z" },
 };
 const headers = (key = modern) => ({ apikey: key, authorization: `Bearer ${key}` });
 let checks = 0;
@@ -70,9 +71,11 @@ await check("Fehlerantwort nennt nur Code und konservative Requestzahl", async (
 });
 
 await check("inkonsistente Tickerwerte werden abgelehnt", () => {
-  assert.equal(normalizeFlixPatrolUsage({ ...usage, completedRequests: 3 }), null);
+  assert.equal(normalizeFlixPatrolUsage({ ...usage, sinceSetup: { ...usage.sinceSetup, completedRequests: 3 } }), null);
   assert.equal(normalizeFlixPatrolUsage({ ...usage, planLimit: 999 }), null);
   assert.equal(normalizeFlixPatrolUsage({ ...usage, quota: { ...usage.quota, used: "21" } }), null);
+  assert.equal(normalizeFlixPatrolUsage({ ...usage, quota: { ...usage.quota, requestStartedAt: "2026-09-09T15:31:00Z" } }), null);
+  assert.equal(normalizeFlixPatrolUsage({ ...usage, currentUtcMonth: { month: "2026-13", attemptedRequests: 2 } }), null);
 });
 
 console.log(`${checks} FlixPatrol-Function-Prüfungen bestanden.`);

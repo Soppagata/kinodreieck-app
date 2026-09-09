@@ -24,11 +24,17 @@ assert.match(config, /\[functions\.flixpatrol-usage\][\s\S]*?verify_jwt = false/
 assert.match(migration, /^begin;/);
 assert.match(migration, /on conflict \(operation_id\) do nothing/);
 assert.match(migration, /for update/);
+assert.match(migration, /'sinceSetup'/);
+assert.match(migration, /'currentUtcMonth'/);
+assert.match(migration, /operation\.claimed_at >= m\.starts_at and operation\.claimed_at < m\.ends_at/);
+assert.match(migration, /quota_request_started_at/);
+assert.match(migration, /v_operation\.claimed_at >= quota_request_started_at/);
 assert.match(migration, /force row level security/);
 assert.match(migration, /revoke all on table[\s\S]*anon, authenticated, service_role/);
 assert.match(migration, /grant select[\s\S]*to service_role/);
 assert.doesNotMatch(migration, /title|film|payload\s+(json|jsonb|text)|email|prompt/i);
 assert.match(docs, /begin read only;/);
 assert.match(docs, /werden nie addiert/);
+assert.match(docs, /offene Naht für die spätere Quellenintegration/);
 
-console.log("20 FlixPatrol-Vertragsprüfungen bestanden.");
+console.log("26 FlixPatrol-Vertragsprüfungen bestanden.");

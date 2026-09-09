@@ -12,21 +12,14 @@ export class FlixPatrolClientError extends Error {
   }
 }
 
-function exactKeys(value, expected) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const actual = Object.keys(value).sort();
-  const wanted = [...expected].sort();
-  return actual.length === wanted.length
-    && actual.every((key, index) => key === wanted[index]);
-}
-
 function safeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
 export function parseFlixPatrolQuota(value) {
-  if (!exactKeys(value, ["type", "data"]) || value.type !== "apiquota"
-      || !exactKeys(value.data, ["used", "available", "limit", "limitExtra", "resetAt"])) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.type !== "apiquota" || !value.data
+      || typeof value.data !== "object" || Array.isArray(value.data)) {
     return null;
   }
   const { used, available, limit, limitExtra, resetAt } = value.data;

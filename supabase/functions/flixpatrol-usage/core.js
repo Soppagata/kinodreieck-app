@@ -21,24 +21,33 @@ function nonnegativeInteger(value) {
 
 export function normalizeFlixPatrolUsage(value) {
   const keys = [
-    "attemptedRequests", "completedRequests", "failedRequests", "lastAttemptAt",
-    "lastStatus", "lastSuccessAt", "planLimit", "quota", "successfulRequests",
+    "currentUtcMonth", "lastAttemptAt", "lastStatus", "lastSuccessAt",
+    "planLimit", "quota", "sinceSetup",
   ];
   if (!exactKeys(value, keys)
-      || ![value.attemptedRequests, value.completedRequests, value.successfulRequests, value.failedRequests].every(nonnegativeInteger)
-      || value.completedRequests !== value.successfulRequests + value.failedRequests
-      || value.attemptedRequests < value.completedRequests
+      || !exactKeys(value.sinceSetup, ["attemptedRequests", "completedRequests", "failedRequests", "successfulRequests"])
+      || ![value.sinceSetup.attemptedRequests, value.sinceSetup.completedRequests,
+        value.sinceSetup.successfulRequests, value.sinceSetup.failedRequests].every(nonnegativeInteger)
+      || value.sinceSetup.completedRequests !== value.sinceSetup.successfulRequests + value.sinceSetup.failedRequests
+      || value.sinceSetup.attemptedRequests < value.sinceSetup.completedRequests
+      || !exactKeys(value.currentUtcMonth, ["attemptedRequests", "month"])
+      || typeof value.currentUtcMonth.month !== "string"
+      || !/^\d{4}-(?:0[1-9]|1[0-2])$/.test(value.currentUtcMonth.month)
+      || !nonnegativeInteger(value.currentUtcMonth.attemptedRequests)
+      || value.currentUtcMonth.attemptedRequests > value.sinceSetup.attemptedRequests
       || value.planLimit !== 1000
       || !["empty", "claimed", "succeeded", "http_error", "invalid_response", "transport_error"].includes(value.lastStatus)
       || instant(value.lastAttemptAt) === undefined
       || instant(value.lastSuccessAt) === undefined) return null;
   let quota = null;
   if (value.quota !== null) {
-    if (!exactKeys(value.quota, ["available", "limit", "limitExtra", "observedAt", "resetAt", "used"])
+    if (!exactKeys(value.quota, ["available", "limit", "limitExtra", "observedAt", "requestStartedAt", "resetAt", "used"])
         || ![value.quota.used, value.quota.available, value.quota.limit, value.quota.limitExtra].every(nonnegativeInteger)
         || value.quota.limit < 1
         || typeof value.quota.resetAt !== "string"
-        || instant(value.quota.observedAt) === undefined) return null;
+        || instant(value.quota.observedAt) === undefined
+        || instant(value.quota.requestStartedAt) === undefined
+        || Date.parse(value.quota.requestStartedAt) > Date.parse(value.quota.observedAt)) return null;
     quota = Object.freeze({ ...value.quota });
   }
   return Object.freeze({ ...value, quota });

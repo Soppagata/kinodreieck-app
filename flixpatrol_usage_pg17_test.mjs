@@ -25,6 +25,11 @@ function run(binary, args, input) {
   if (result.status !== 0) throw new Error(`${binary}: ${result.stderr || result.error}`);
   return result.stdout.trim();
 }
+function runFailure(binary, binaryArgs, input) {
+  const result = spawnSync(join(PG, binary), binaryArgs, { input, encoding: "utf8", timeout: 60_000, maxBuffer: 4_000_000, env });
+  assert.notEqual(result.status, 0);
+  return result.stderr;
+}
 function runAsync(binary, args, stdinText) {
   return new Promise((resolve, reject) => {
     const child = spawn(join(PG, binary), args, { env, stdio: ["pipe", "pipe", "pipe"] });
@@ -61,7 +66,8 @@ try {
   check("Direkter Tabellenzugriff bleibt anon/authenticated entzogen", () => {
     const privileges = sql("select count(*) from information_schema.role_table_grants where table_name like 'kd_flixpatrol_usage_%' and grantee in ('anon','authenticated')");
     assert.equal(privileges, "0");
-    assert.deepEqual(JSON.parse(session("select public.kd_flixpatrol_usage_status()", "anon")), { ok: false, code: "forbidden" });
+    const denied = runFailure("psql", args, sessionSql("select public.kd_flixpatrol_usage_status()", "anon"));
+    assert.match(denied, /permission denied for function kd_flixpatrol_usage_status/);
   });
 
   const first = id(1);
@@ -69,28 +75,30 @@ try {
     assert.deepEqual(begin(first), { ok: true, claim: true, replay: false, status: "claimed" });
     assert.deepEqual(begin(first), { ok: true, claim: false, replay: true, status: "claimed" });
     const state = JSON.parse(session("select public.kd_flixpatrol_usage_status()"));
-    assert.equal(state.attemptedRequests, 1);
-    assert.equal(state.completedRequests, 0);
+    assert.equal(state.sinceSetup.attemptedRequests, 1);
+    assert.equal(state.sinceSetup.completedRequests, 0);
+    assert.equal(state.currentUtcMonth.month, new Date().toISOString().slice(0, 7));
+    assert.equal(state.currentUtcMonth.attemptedRequests, 1);
   });
 
   const quota = { used: 23, available: 977, limit: 1000, limitExtra: 0, resetAt: "2026-10-01T00:00:00Z" };
   check("Erfolg finalisiert einmal und speichert den offiziellen Snapshot getrennt", () => {
     const done = finish(first, "succeeded", 200, quota);
     assert.equal(done.replay, false);
-    assert.equal(done.usage.attemptedRequests, 1);
-    assert.equal(done.usage.successfulRequests, 1);
+    assert.equal(done.usage.sinceSetup.attemptedRequests, 1);
+    assert.equal(done.usage.sinceSetup.successfulRequests, 1);
     assert.equal(done.usage.quota.used, 23);
     const replay = finish(first, "succeeded", 200, quota);
     assert.equal(replay.replay, true);
-    assert.equal(replay.usage.completedRequests, 1);
+    assert.equal(replay.usage.sinceSetup.completedRequests, 1);
   });
 
   check("Fehler bleibt terminal und überschreibt den letzten guten Snapshot nicht", () => {
     const second = id(2);
     begin(second);
     const done = finish(second, "http_error", 429);
-    assert.equal(done.usage.attemptedRequests, 2);
-    assert.equal(done.usage.failedRequests, 1);
+    assert.equal(done.usage.sinceSetup.attemptedRequests, 2);
+    assert.equal(done.usage.sinceSetup.failedRequests, 1);
     assert.deepEqual({ used: done.usage.quota.used, available: done.usage.quota.available }, { used: 23, available: 977 });
   });
 
@@ -101,15 +109,26 @@ try {
   ]);
   check("Gleichzeitige Begins claimen und zählen dieselbe Operation nur einmal", () => {
     assert.deepEqual(claims.map((value) => JSON.parse(value).claim).sort(), [false, true]);
-    assert.equal(JSON.parse(session("select public.kd_flixpatrol_usage_status()")).attemptedRequests, 3);
+    assert.equal(JSON.parse(session("select public.kd_flixpatrol_usage_status()")).sinceSetup.attemptedRequests, 3);
   });
 
   check("Kaputtes Quota-Payload kann den Snapshot nicht ersetzen", () => {
     const invalid = finish(concurrent, "succeeded", 200, { ...quota, used: null });
     assert.deepEqual(invalid, { ok: false, code: "invalid-quota" });
     const state = JSON.parse(session("select public.kd_flixpatrol_usage_status()"));
-    assert.equal(state.completedRequests, 2);
+    assert.equal(state.sinceSetup.completedRequests, 2);
     assert.equal(state.quota.used, 23);
+  });
+
+  check("Später gestarteter Request besitzt den Snapshot auch bei früherem Abschluss", () => {
+    const older = id(4);
+    const newer = id(5);
+    begin(older);
+    begin(newer);
+    finish(newer, "succeeded", 200, { ...quota, used: 40, available: 960 });
+    const olderDone = finish(older, "succeeded", 200, { ...quota, used: 39, available: 961 });
+    assert.equal(olderDone.usage.quota.used, 40);
+    assert.equal(olderDone.usage.currentUtcMonth.attemptedRequests, 5);
   });
 } finally {
   if (running) run("pg_ctl", ["--pgdata", data, "--wait", "stop", "--mode", "immediate"]);

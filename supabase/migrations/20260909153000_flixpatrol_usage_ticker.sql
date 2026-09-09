@@ -16,6 +16,7 @@ create table public.kd_flixpatrol_usage_state (
   quota_limit          integer,
   quota_limit_extra    integer,
   quota_reset_at       text,
+  quota_request_started_at timestamptz,
   quota_observed_at    timestamptz,
   updated_at           timestamptz not null default now(),
   constraint kd_flixpatrol_usage_counts_check check (
@@ -23,10 +24,13 @@ create table public.kd_flixpatrol_usage_state (
     and attempted_requests >= completed_requests
   ),
   constraint kd_flixpatrol_usage_quota_check check (
-    (quota_observed_at is null and quota_used is null and quota_available is null
+    (quota_observed_at is null and quota_request_started_at is null
+      and quota_used is null and quota_available is null
       and quota_limit is null and quota_limit_extra is null and quota_reset_at is null)
     or
-    (quota_observed_at is not null and quota_used >= 0 and quota_available >= 0
+    (quota_observed_at is not null and quota_request_started_at is not null
+      and quota_request_started_at <= quota_observed_at
+      and quota_used >= 0 and quota_available >= 0
       and quota_limit > 0 and quota_limit_extra >= 0
       and quota_reset_at ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([.]\d{1,6})?(Z|[+-]\d{2}:?\d{2})?$')
   )
@@ -77,11 +81,27 @@ stable
 security definer
 set search_path = pg_catalog, public
 as $$
+  with utc_month as (
+    select
+      date_trunc('month', current_timestamp at time zone 'UTC') at time zone 'UTC' as starts_at,
+      (date_trunc('month', current_timestamp at time zone 'UTC') + interval '1 month') at time zone 'UTC' as ends_at,
+      to_char(current_timestamp at time zone 'UTC','YYYY-MM') as label
+  )
   select jsonb_build_object(
-    'attemptedRequests', s.attempted_requests,
-    'completedRequests', s.completed_requests,
-    'successfulRequests', s.successful_requests,
-    'failedRequests', s.failed_requests,
+    'sinceSetup', jsonb_build_object(
+      'attemptedRequests', s.attempted_requests,
+      'completedRequests', s.completed_requests,
+      'successfulRequests', s.successful_requests,
+      'failedRequests', s.failed_requests
+    ),
+    'currentUtcMonth', jsonb_build_object(
+      'month', m.label,
+      'attemptedRequests', (
+        select count(*)
+          from public.kd_flixpatrol_usage_operations operation
+         where operation.claimed_at >= m.starts_at and operation.claimed_at < m.ends_at
+      )
+    ),
     'lastStatus', s.last_status,
     'lastAttemptAt', s.last_attempt_at,
     'lastSuccessAt', s.last_success_at,
@@ -92,10 +112,11 @@ as $$
       'limit', s.quota_limit,
       'limitExtra', s.quota_limit_extra,
       'resetAt', s.quota_reset_at,
+      'requestStartedAt', s.quota_request_started_at,
       'observedAt', s.quota_observed_at
     ) end
   )
-  from public.kd_flixpatrol_usage_state s
+  from public.kd_flixpatrol_usage_state s cross join utc_month m
   where s.singleton
 $$;
 
@@ -241,12 +262,27 @@ begin
          failed_requests = failed_requests + case when p_status = 'succeeded' then 0 else 1 end,
          last_status = p_status,
          last_success_at = case when p_status = 'succeeded' then v_now else last_success_at end,
-         quota_used = case when p_status = 'succeeded' then (p_quota->>'used')::integer else quota_used end,
-         quota_available = case when p_status = 'succeeded' then (p_quota->>'available')::integer else quota_available end,
-         quota_limit = case when p_status = 'succeeded' then (p_quota->>'limit')::integer else quota_limit end,
-         quota_limit_extra = case when p_status = 'succeeded' then (p_quota->>'limitExtra')::integer else quota_limit_extra end,
-         quota_reset_at = case when p_status = 'succeeded' then p_quota->>'resetAt' else quota_reset_at end,
-         quota_observed_at = case when p_status = 'succeeded' then v_now else quota_observed_at end,
+         quota_used = case when p_status = 'succeeded'
+           and (quota_request_started_at is null or v_operation.claimed_at >= quota_request_started_at)
+           then (p_quota->>'used')::integer else quota_used end,
+         quota_available = case when p_status = 'succeeded'
+           and (quota_request_started_at is null or v_operation.claimed_at >= quota_request_started_at)
+           then (p_quota->>'available')::integer else quota_available end,
+         quota_limit = case when p_status = 'succeeded'
+           and (quota_request_started_at is null or v_operation.claimed_at >= quota_request_started_at)
+           then (p_quota->>'limit')::integer else quota_limit end,
+         quota_limit_extra = case when p_status = 'succeeded'
+           and (quota_request_started_at is null or v_operation.claimed_at >= quota_request_started_at)
+           then (p_quota->>'limitExtra')::integer else quota_limit_extra end,
+         quota_reset_at = case when p_status = 'succeeded'
+           and (quota_request_started_at is null or v_operation.claimed_at >= quota_request_started_at)
+           then p_quota->>'resetAt' else quota_reset_at end,
+         quota_request_started_at = case when p_status = 'succeeded'
+           and (quota_request_started_at is null or v_operation.claimed_at >= quota_request_started_at)
+           then v_operation.claimed_at else quota_request_started_at end,
+         quota_observed_at = case when p_status = 'succeeded'
+           and (quota_request_started_at is null or v_operation.claimed_at >= quota_request_started_at)
+           then v_now else quota_observed_at end,
          updated_at = v_now
    where singleton;
 

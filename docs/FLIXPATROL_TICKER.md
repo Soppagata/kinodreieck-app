@@ -1,14 +1,15 @@
 # FlixPatrol-Nutzungsticker
 
-Der Ticker erfasst FlixPatrol-Requests serverseitig und hält den letzten gültigen offiziellen Quota-Snapshot getrennt davon. Er enthält keinen Film-, Ranking- oder KI-Adapter und stellt keine Oberfläche bereit.
+Der Ticker erfasst FlixPatrol-Requests serverseitig und hält den letzten gültigen offiziellen Quota-Snapshot getrennt davon. Der Shared Client ist in diesem Paket absichtlich auf den Quota-Endpunkt begrenzt. Film-, Ranking- und weitere Produktadapter bleiben eine offene Naht für die spätere Quellenintegration; eine Oberfläche gibt es nicht.
 
 ## Verträge
 
 - `supabase/functions/_shared/flixpatrolClient.js` erlaubt nur `GET https://api.flixpatrol.com/v2/quota`. Der Transport nutzt den Wert aus `FLIXPATROL_API_KEY` als HTTP-Basic-Username mit leerem Passwort, folgt keinen Redirects, wiederholt Requests nicht und bricht nach spätestens 15 Sekunden ab.
 - Vor jedem gestarteten Fetch claimt `kd_flixpatrol_usage_begin` eine UUID atomar. Ein erneuter oder gleichzeitiger Claim derselben UUID zählt nicht erneut.
 - `kd_flixpatrol_usage_finish` finalisiert eine geclaimte UUID genau einmal. HTTP-, Transport- und Formatfehler zählen als fehlgeschlagener Abschluss. Scheitert die Finalisierung nach dem Provideraufruf, bleibt der bereits persistierte Versuch als `claimed` sichtbar.
-- Nur ein valider offizieller Vertrag `{type:'apiquota',data:{used,available,limit,limitExtra,resetAt}}` ersetzt den letzten Snapshot. Null, zusätzliche Felder oder falsche Typen ändern ihn nicht.
-- `attemptedRequests` ist die Zahl der von diesem Transport begonnenen Requests. `quota.used` ist die zuletzt beobachtete Providerzahl und kann andere Clients enthalten. Beide Werte werden nie addiert. `planLimit = 1000` ist ein Anzeige- und Planwert, kein Gate.
+- Nur ein valider offizieller Vertrag `{type:'apiquota',data:{used,available,limit,limitExtra,resetAt}}` ersetzt den letzten Snapshot. Null oder falsche Typen ändern ihn nicht. Zusätzliche Providerfelder werden toleriert und nicht persistiert.
+- Ein später gestarteter erfolgreicher Request besitzt Vorrang vor einem älteren Request, der erst danach abschließt. Dafür speichert der Snapshot sowohl Requeststart als auch Beobachtungszeit; ein älterer Abschluss kann den neueren Stand nicht zurückdrehen.
+- `sinceSetup` benennt die lebenslangen eigenen Zähler ausdrücklich als Werte seit Einrichtung. `currentUtcMonth` zählt aus den Operations-Zeitstempeln die im laufenden UTC-Monat begonnenen Requests. `quota.used` ist die zuletzt beobachtete Providerzahl und kann andere Clients enthalten. Eigene Zähler und Providerwert werden nie addiert. `planLimit = 1000` ist ein Anzeige- und Planwert, kein Gate.
 
 Die Function akzeptiert `SUPABASE_SECRET_KEYS` und den Legacy-Fallback `SUPABASE_SERVICE_ROLE_KEY`. Moderne `sb_secret_`-Keys sind keine JWTs, deshalb ist `verify_jwt = false`; der Handler verlangt trotzdem denselben bekannten Admin-Key exakt in `apikey` und `Authorization: Bearer …`, lehnt Browser-Origin und Requestbody ab und gibt keine Secrets oder Provider-Payloads aus. `GET` liest nur den gespeicherten Stand. `POST` mit `x-kd-flixpatrol-usage: scheduled-daily-v1` führt genau einen Quota-GET aus.
 
@@ -39,6 +40,7 @@ select
   quota_limit,
   quota_limit_extra,
   quota_reset_at,
+  quota_request_started_at,
   quota_observed_at
 from public.kd_flixpatrol_usage_state
 where singleton;
