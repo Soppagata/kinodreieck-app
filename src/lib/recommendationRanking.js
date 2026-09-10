@@ -135,6 +135,7 @@ function eligible(candidate, excludedTargetIds) {
 
 function compareRows(a, b) {
   const pairs = [
+    [Number(a.analysis.reasons.length > 0), Number(b.analysis.reasons.length > 0), -1],
     [a.analysis.negativeCount, b.analysis.negativeCount, 1],
     [a.analysis.positiveStrength, b.analysis.positiveStrength, -1],
     [a.analysis.positiveCount, b.analysis.positiveCount, -1],

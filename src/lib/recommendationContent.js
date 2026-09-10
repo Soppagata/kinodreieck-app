@@ -27,10 +27,9 @@ const THEMEN = Object.freeze([
   ["investigative-journalism", "Investigativer Journalismus", ["investigativer journalismus", "investigative journalism", "investigative reporter"]],
   ["cosmic-horror", "Kosmischer Horror", ["kosmischer horror", "cosmic horror", "eldritch horror"]],
   ["coming-of-age", "Erwachsenwerden", ["erwachsenwerden", "coming of age", "coming-of-age"]],
-  ["1970s", "1970er Jahre", ["1970er", "70er", "70er jahre", "1970s", "seventies"]],
-  ["1980s", "1980er Jahre", ["1980er", "80er", "80er jahre", "1980s", "eighties"]],
-  ["1990s", "1990er Jahre", ["1990er", "90er", "90er jahre", "1990s", "nineties"]],
 ].map(([id, label, aliases]) => Object.freeze({ id, label, aliases: Object.freeze(aliases) })));
+
+const INHALTS_SIGNALARTEN = new Set(["genre", "thema"]);
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function normalize(value) {
@@ -53,7 +52,8 @@ export function inhaltsthemen(value) {
 }
 
 export function bereiteInhaltsEvidenz({ positiveSignals = [], negativeSignals = [], positiveLibrary = [] } = {}) {
-  const signalTopics = (signals) => signals.map((signal) => ({
+  const signalTopics = (signals) => signals.filter((signal) =>
+    INHALTS_SIGNALARTEN.has(normalize(signal?.art ?? signal?.kind))).map((signal) => ({
     signal,
     topics: new Set(inhaltsthemen(signal?.wert ?? signal?.value)),
   })).filter((entry) => entry.topics.size > 0);

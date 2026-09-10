@@ -21,7 +21,7 @@ const context = {
   excludedTargetIds: [],
   profile: {
     signale: [
-      { art: "epoche", wert: "80er", richtung: "zieht_an", staerke: 4 },
+      { art: "genre", wert: "Science-Fiction", richtung: "zieht_an", staerke: 4 },
       { art: "genre", wert: "Horror", richtung: "zieht_an", staerke: 3 },
       { art: "thema", wert: "Rache", richtung: "stoesst_ab", staerke: 3 },
       { art: "thema", wert: "Serienmörder", richtung: "stoesst_ab", staerke: 5, blocking: true },
@@ -37,7 +37,7 @@ const context = {
 };
 
 const rows = rankRecommendations([
-  candidate("candidate:eighties", { description: "In the 1980s, a detective follows a trail through Vienna." }),
+  candidate("candidate:science-fiction", { description: "A science fiction film about a distant research station." }),
   candidate("candidate:haunted", { description: "A family spends one night in a haunted house." }),
   candidate("candidate:generic", { description: "A young woman begins a new life and faces difficult choices in the world." }),
   candidate("candidate:revenge", { description: "A detective returns home seeking revenge." }),
@@ -47,8 +47,8 @@ const rows = rankRecommendations([
 ], context);
 
 check("Englische Kandidatenbeschreibung belegt einen deutschen bestätigten Profilzug", () => {
-  const row = rows.find((entry) => entry.targetId === "candidate:eighties");
-  assert.ok(row?.reasons.includes("Inhalt: 1980er Jahre aus deinem bestätigten Profil"));
+  const row = rows.find((entry) => entry.targetId === "candidate:science-fiction");
+  assert.ok(row?.reasons.includes("Inhalt: Science-Fiction aus deinem bestätigten Profil"));
 });
 check("Positive Mediatheksbeschreibung liefert einen konkreten zweisprachigen Grund", () => {
   const row = rows.find((entry) => entry.targetId === "candidate:haunted");
@@ -71,14 +71,24 @@ check("Blockierendes Negativsignal bleibt auch über eine konkrete Beschreibung 
 });
 check("Belegte Inhaltsgründe stehen vor neutralen Explorationszeilen", () => {
   const ids = rows.map((entry) => entry.targetId);
-  assert.ok(ids.indexOf("candidate:eighties") < ids.indexOf("candidate:generic"));
+  assert.ok(ids.indexOf("candidate:science-fiction") < ids.indexOf("candidate:generic"));
   assert.ok(ids.indexOf("candidate:haunted") < ids.indexOf("candidate:generic"));
 });
 check("Standardaufrufer ohne includeNeutral behalten das bisherige Ranking", () => {
   const standard = rankRecommendations([
-    candidate("candidate:eighties", { description: "In the 1980s, a detective follows a trail." }),
+    candidate("candidate:science-fiction", { description: "A science fiction film about a research station." }),
   ], { ...context, includeNeutral: false });
   assert.deepEqual(standard, []);
+});
+check("Epochen- und fremde Signalarten werden nicht aus Handlungsbeschreibungen abgeleitet", () => {
+  const scoped = rankRecommendations([
+    candidate("candidate:period-setting", { year: 2026, description: "A detective works in the 1980s." }),
+    candidate("candidate:director-word", { description: "A horror story unfolds in a remote village." }),
+  ], { includeNeutral: true, excludedTargetIds: [], profile: { signale: [
+    { art: "epoche", wert: "80er", richtung: "zieht_an", staerke: 5 },
+    { art: "regie", wert: "Horror", richtung: "zieht_an", staerke: 5 },
+  ] }, library: [] });
+  assert.deepEqual(scoped.map((row) => row.reasons), [[], []]);
 });
 check("Inhaltsvergleich mutiert keine Eingabe und erweitert die Ergebnisform nicht", () => {
   const candidates = [candidate("candidate:immutable", { description: "A horror movie set in the 1980s." })];

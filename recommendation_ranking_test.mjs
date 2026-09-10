@@ -88,6 +88,17 @@ check("Neutraler Fallback bleibt grundlos und nimmt keine rein negative Passung 
   assert.deepEqual(rows[0].reasons, []);
 });
 
+check("Belegter Treffer mit weichem Gegenargument steht vor sechs neutralen Vorschlägen", () => {
+  const rows = rankRecommendations([
+    ...Array.from({ length: 6 }, (_, index) => candidate(`fixture:neutral-${index}`)),
+    candidate("fixture:belegt", { genres: ["noir", "komödie"] }),
+    candidate("fixture:blockiert", { genres: ["noir", "gore"] }),
+  ], { ...context, includeNeutral: true, excludedTargetIds: [] });
+  assert.equal(rows[0].targetId, "fixture:belegt");
+  assert.ok(rows[0].reasons.length > 0);
+  assert.equal(rows.some((row) => row.targetId === "fixture:blockiert"), false);
+});
+
 check("Mediatheksprojektion kann vollständig deaktiviert werden", () => {
   const rows = rankRecommendations([
     candidate("library:owned", { genres: ["noir"] }),
