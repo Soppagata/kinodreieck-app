@@ -27,7 +27,7 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193, CI 34509618429 und Domain/Worker/Assets grün. OFFEN E11/E12: neuer Streaming-Vorfall mit 29 „Mein Programm“, 9.768 „Alles“, historischen Einstellungszahlen und leerem „Neu“; exakt reproduziert, Bau geplant, noch nicht gestartet. Natürlicher Entdecken-Erstlauf bleibt separat M3; Production 3b82a73; Master |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193, CI 34509618429 und Domain/Worker/Assets grün. E11 und E13 DISPATCHED: Streaming-Datenreparatur sowie Datenschutz/Hilfe; E12 folgt wegen Datenvertrag und gemeinsamer Settingsdateien. Anschließend beauftragter Gesamtabgleich E1–E13. Natürlicher Entdecken-Erstlauf bleibt separat M3; Production 3b82a73; Master |
 | M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für FlixPatrol E2/E3/E5/E6 und Entdecken E9/E10 auf Staging 5724193. OFFEN E11/E12: Watchmode-Known-Export verliert den belegten Werktyp; jüngste strenge Zuordnung blendet dadurch echte Mediathektreffer aus. Neu-Verfügbarkeit und sichtbare Zähler sollen aus demselben gemeinsamen Katalog entstehen; Bauplan unten |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
@@ -993,8 +993,10 @@ der geprüfte Staging-Liefercommit bleibt `5724193`.
 Max meldet 29 Titel unter „Mein Programm“, bestätigt auf Nachfrage 9.768
 unter „Alles“, abweichende Einstellungszahlen und ein leeres „Neu“. Auftrag:
 Ursachen lokalisieren und einen einfachen, stabilen Bau durch Baumeister
-planen. Diese Phase ist DIAGNOSE/PLAN; keine Produktänderung, kein gestarteter
-Baumeister, kein neuer Providerlauf, Publisher oder Schedulerstart.
+planen. Max hat den Bau anschließend ausdrücklich beauftragt: „Ja bau das“.
+E11 ist DISPATCHED in seinem isolierten Pipelineworktree. Neue Providerläufe,
+Publisher und die geladene Schedulerinstanz werden nicht während des
+Paketbaus gestartet.
 
 ### Präzisierung durch Max und Budgetprüfung
 
@@ -1106,16 +1108,74 @@ Laufbeleg: `/private/tmp/kinodreieck_streaming.log`.
 
 ### Baufolge und Ownership
 
-Zwei aufeinanderfolgende SOLO-Etappen. E12 benötigt den von E11 gelieferten
-kleinen Datenvertrag; eine parallele Änderung beider Seiten würde hier mehr
-Abstimmung als Nutzen schaffen. Je Etappe genau ein Baumeister, höchstens ein
+E11 und das neu beauftragte E13 sind unabhängige SOLO-Etappen in zwei
+verschiedenen Repositories und können gleichzeitig entstehen. E12 folgt
+nach E11s eingefrorenem Datenvertrag und E13s App-Integration: E12 und E13
+benötigen beide `DatenTab.jsx` und `App.jsx`, daher schreiben sie dort
+absichtlich nacheinander. Je Etappe genau ein Baumeister, höchstens ein
 wirklich entlastender Bauchat mit disjunkter Schreibfläche. Keine Audit- oder
 Kontrollagenten. Der Master bleibt in Produktdateien read-only.
 
 | Etappe / IDs | Geplanter Branch und Basis | Exklusive Schreibfläche | Ergebnis und Abnahme |
 | --- | --- | --- | --- |
 | E11 – Daten vollständig und Takt verlässlich / M1, M6 | `codex/streaming-daten-e11-20260910` im eigenen Worktree, Pipelinebasis `f1be7f9d1d0c6a64f0041c1c68d113d15a511f6a` | Unter `KinoFilm/Programmdateien/System`: `build_streaming_ansicht.js`, `fetch_streaming_katalog.js`, die erforderliche Taktnaht in `streaming_auto.mjs`, `streaming_config.json` nur für die fünf schnellen Quellen und den Takt, die vorhandene Vorlage `com.kinodreieck.streaming.plist`, kleine reine Helper und fokussierte Tests. Falls ein Bauchat entlastet: ausschließlich der reine Fälligkeitshelper mit eigenen Tests; der Baumeister besitzt Einbindung, Konfiguration, Export und Neu-Diff. | Belegter Werktyp bleibt erhalten; echte Angebotsdifferenzen werden einmal berechnet; die fünf Dienste erhalten den geprüften 48h-Takt bei unveränderten Requestgrenzen. Der neue Launcher bleibt im Bau eine prüfbare Vorlage, die geladene macOS-Instanz wird nicht nebenbei umgestellt. Eine aus vorhandenen Dateien erzeugte Vorschau bleibt vollständig providerfrei. Der Baumeister liefert den kleinsten additiven Payloadvertrag und dessen Fixtures vor E12. |
-| E12 – Einheitliche Streamingansichten / M5, M6 | `codex/streaming-ansichten-e12-20260910`, Appbasis `68be97ab9a1daa91107878d37a1c95cbfad2b04d`, nach eingefrorenem E11-Vertrag | `src/tabs/StreamingTab.jsx`, `src/components/KatalogAuditStatus.jsx`, `src/tabs/DatenTab.jsx`, erforderliche Prop-/Controller-Naht in `src/App.jsx`, `src/controllers/useStreamingNeuController.js`, `src/lib/streamingNeu.js`, `src/lib/katalog.js` ausschließlich für verlustfreie Weitergabe der neuen Verfügbarkeitsmetadaten, fokussierte Streaming-/Settings-/Vertragstests. Ein optionaler Bauchat besitzt nur dynamische Kataloganzeige und deren Tests; die App-Propnaht bleibt beim Baumeister. | „Alles“ ist die vorhandene Gesamtmenge für die ausgewählten Dienste, hier 9.797; „Mein Programm“ hier 123. „Neu“ liest dieselben Titel mit belegten Dienstemarkierungen. Settings erklären Rohbestand, ausgewählte Dienste, Teilmengen und tatsächlichen Stand mit Livewerten. Gerätespezifischer ID-Snapshot und dessen Ablauf-/Schreiblogik werden als aktiver Pfad entfernt. |
+| E12 – Einheitliche Streamingansichten / M5, M6 | `codex/streaming-ansichten-e12-20260910`, exakte Appbasis beim Dispatch nach E13-Integration binden; außerdem eingefrorener E11-Vertrag | `src/tabs/StreamingTab.jsx`, `src/components/KatalogAuditStatus.jsx`, `src/tabs/DatenTab.jsx`, erforderliche Prop-/Controller-Naht in `src/App.jsx`, `src/controllers/useStreamingNeuController.js`, `src/lib/streamingNeu.js`, `src/lib/katalog.js` ausschließlich für verlustfreie Weitergabe der neuen Verfügbarkeitsmetadaten, fokussierte Streaming-/Settings-/Vertragstests. Ein optionaler Bauchat besitzt nur dynamische Kataloganzeige und deren Tests; die App-Propnaht bleibt beim Baumeister. | „Alles“ ist die vorhandene Gesamtmenge für die ausgewählten Dienste, hier 9.797; „Mein Programm“ hier 123. „Neu“ liest dieselben Titel mit belegten Dienstemarkierungen. Settings erklären Rohbestand, ausgewählte Dienste, Teilmengen und tatsächlichen Stand mit Livewerten. Gerätespezifischer ID-Snapshot und dessen Ablauf-/Schreiblogik werden als aktiver Pfad entfernt. |
+
+### E13 – Datenschutz und eine eindeutige Hilfe
+
+Max erweitert den Auftrag um die Anpassung der Datenschutztexte an den neuen
+Dienst, das Entfernen entbehrlicher Texte, eine einzige Bereichs-/Funktions-
+anleitung und das Entfernen von „? Anleitung & Hilfe“ auf Start. Dieser
+Text-/Navigationsbau gehört zu M5/M6 und ist ausdrücklich beauftragt.
+
+- Eigener App-Worktree `/private/tmp/kd-datenschutz-hilfe-e13-20260910`, Branch
+  `codex/datenschutz-hilfe-e13-20260910`, Basis
+  `25a4dd75a1b7d551ae795a27a00b9c6c18dcb88a`, DISPATCHED an
+  `etappe_13_datenschutz_hilfe` (Sol/high wegen Datenschutzgrenze). SOLO unabhängig
+  vom anderen Repository E11; E12 folgt auf die integrierte E13-Lieferung.
+- E13 besitzt `src/lib/privatePilotOps.js` ausschließlich deklarative
+  Datenschutzinhalte, `src/components/PrivatePilotOps.jsx`,
+  `src/components/EinstiegsGate.jsx`, `src/components/Erklaerstuecke.jsx`,
+  `src/lib/hilfeInhalte.js`, notwendige Textverweise in `src/lib/appHilfe.js`,
+  `src/tabs/StartTab.jsx` nur Entfernung des Hilfe-Einstiegs sowie
+  `src/tabs/DatenTab.jsx` und `src/App.jsx` nur die Hilfenavigation/-darstellung.
+  Zugehörige Hilfe-/Rechtstests dürfen angepasst werden. Keine Fachlogik,
+  Kontorechte, Runtimeflags, Exportfreigaben oder globalen Styles verändern.
+- Hilfe wohnt einmal unter Settings → „Hilfe & Anleitung“, mit den bisherigen
+  sinnvollen Bereichs-/Funktionsdetails aus `hilfeInhalte.js` als gemeinsamer
+  Quelle auch für die deterministische Suchhilfe. „Datenschutz & Rechtliches“
+  enthält Datenwege, Empfänger, Rechte und notwendige Quellenhinweise, keine
+  zweite Bedienungsanleitung. Öffnen/Schließen, Login-Link und Easter Eggs
+  bleiben erreichbar. Überholte Start-Hilfe-Verweise und deren toter
+  Fokus-/Auftragszustand dürfen entfernt werden.
+- FlixPatrol wird anhand der tatsächlich gebauten Server- und Cachepfade
+  erklärt: gemeinsame Chart-/Titelfakten, zentrale Abrufe mit Betreiberkey,
+  keine Übermittlung persönlicher Bewertungen/Notizen/Abos an FlixPatrol,
+  optionaler neutraler Kontext bei den tatsächlich unterstützten KI-Aufgaben.
+  Cachegültigkeit wird nicht als belegte Löschfrist verkauft. Keine erfundenen
+  Anbieterregionen, Aufbewahrungszusagen oder Rechtsfreigaben. Die öffentlich
+  lesbaren FlixPatrol-Privacy-/Terms-Seiten liefern am 10.09. keine belastbaren
+  Detailangaben zur API-Aufbewahrung; technische Fakten stammen aus dem Code.
+  Offizielle Referenzen: `https://flixpatrol.com/api2/`,
+  `https://flixpatrol.com/about/privacy-policy/` und
+  `https://flixpatrol.com/about/terms-and-conditions/`.
+- Fokussierte bestehende Hilfe-/Legal-/Loginchecks und ein gezielter DOM-Pfad
+  belegen den Text-/Navigationsumbau. Der gemeinsame App-Abschlusslauf folgt
+  einmal nach E12; E13 startet keine zusätzliche volle Suite.
+
+### Beauftragter Gesamtabgleich nach dem Bau
+
+Der Master gleicht E1–E13 und M1–M7 gegen die endgültigen Commits, Tests und
+realen Lieferbelege ab. Die ursprünglichen F-/K-Findings bleiben eine Inventur:
+nur tatsächlich in den Etappen beauftragte Verbraucher müssen implementiert
+sein. Abweichungen werden konkret benannt und beim zuständigen Baumeister
+geschlossen. Ein einmaliger gemeinsamer App-Abschluss deckt vollständige
+Mocks, Function-Mocks, Build und relevante Chromium-/WebKit-Nutzerwege ab.
+Pipeline-Abschluss, Backendbytes/-migrationen, Zähler, natürliche Runs,
+Staging-Readback und physische iPhone-Abnahme bleiben getrennte Belege.
+Veraltete widersprechende aktuelle Texte werden berichtigt oder entfernt;
+historische Commit-/Lieferbelege werden nicht als vermeintlicher Ballast
+gelöscht. Keine neue bezahlte KI-Probe oder neue Informationsquelle.
 
 Eingefroren: Supabase-Schema, FlixPatrol/Entdecken-Backend, persönliche Daten,
 strenge Identitätsprüfung, Providerpreise/-zähler/-Requestgrenzen, Lock und
