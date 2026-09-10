@@ -296,11 +296,12 @@ const streamingIndex = einstellTexte.findIndex((s) => /^Streaming-Quellen/.test(
 const katalogIndex = einstellTexte.findIndex((s) => /^Streaming-Katalogbestand/.test(s));
 const statusIndex = einstellTexte.findIndex((s) => /^Katalog-Status/.test(s));
 const erweitertIndex = einstellTexte.findIndex((s) => /^Erweitert — manuelle Aktualisierung & Wartung/.test(s));
-const rechtIndex = einstellTexte.findIndex((s) => /^Über Kinodreieck, Anleitung & Rechtliches/.test(s));
+const hilfeIndex = einstellTexte.findIndex((s) => /^Hilfe & Anleitung/.test(s));
+const rechtIndex = einstellTexte.findIndex((s) => /^Datenschutz & Rechtliches/.test(s));
 check("Privatrelease: feste Reihenfolge der sichtbaren Kernflächen",
   darstellungIndex >= 0 && darstellungIndex < streamingIndex && streamingIndex < katalogIndex
     && katalogIndex < personalisierungIndex && personalisierungIndex < kontoDatenSicherungIndex
-    && kontoDatenSicherungIndex < rechtIndex);
+    && kontoDatenSicherungIndex < hilfeIndex && hilfeIndex < rechtIndex);
 check("Privatrelease: Katalogaudit ist im lokalen Test sichtbar",
   katalogIndex >= 0);
 check("Gast: Rohimport, Stapelimport, Datenmodus und Owner-Technik fehlen vollständig",
@@ -309,8 +310,8 @@ check("Gast: Rohimport, Stapelimport, Datenmodus und Owner-Technik fehlen vollst
     && !einstellTexte.some((s) => /^(Technik & Support|Kinoprogramm-Status)/.test(s))
     && !knopf(/^Demo-Daten entfernen$/) && !knopf(/^Supportdaten kopieren$/)
     && !knopf(/^Programm-Cache leeren$/));
-check("Gast: Datenschutz liegt unter Über & Rechtliches",
-  rechtIndex >= 0 && /Datenschutz & Datenübersicht/.test(text()));
+check("Gast: Hilfe und Datenschutz sind getrennte Settings-Hauptbereiche",
+  hilfeIndex >= 0 && rechtIndex > hilfeIndex && /Datenrechte manuell anfragen/.test(text()));
 check("Teilen & Tauschen aus Einstellungen entfernt", !einstellTexte.some((s) => /Teilen & Tauschen/.test(s)));
 check("Phase 2: Restore nicht mehr als eigene Hauptklappe", !einstellTexte.some((s) => s === "Backup wiederherstellen"));
 // Backup-Knopf crasht nicht

@@ -499,7 +499,7 @@ test.describe("Cage und Space-Pause", () => {
     await still();
     await page.getByRole("button", { name: "Menü öffnen", exact: true }).click();
     await page.getByRole("dialog", { name: "Menü", exact: true }).getByRole("button", { name: "Settings", exact: true }).click();
-    await page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ }).click();
+    await page.locator("summary", { hasText: /^Datenschutz & Rechtliches$/ }).click();
     await page.getByRole("button", { name: "Max", exact: true }).click();
     const mode = page.getByRole("button", { name: "Schon kuhl", exact: true });
     await mode.click();
@@ -605,7 +605,7 @@ for (const input of ["tap", "keyboard", "click"]) {
           }
           await expect(page.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
         };
-        const legal = page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ });
+        const legal = page.locator("summary", { hasText: /^Datenschutz & Rechtliches$/ });
         const max = page.getByRole("button", { name: "Max", exact: true });
         const label = theme === "hell" ? "Classix" : "Schon kuhl";
         const modus = theme === "hell" ? "showa" : "neon-noir";
@@ -761,7 +761,7 @@ test.describe("Egg-Oberflächen in der echten App", () => {
         const extern = await oeffneAppMitMockkonto(page, { filme: [EGG_FILM] });
         await waehleEggAppTab(page, "Settings");
         await page.getByRole("button", { name: modus === "showa" ? "Foyer (hell)" : "Saal (dunkel)", exact:true }).click();
-        const legal = page.locator("summary", { hasText:/^Über Kinodreieck, Anleitung & Rechtliches$/ });
+        const legal = page.locator("summary", { hasText:/^Datenschutz & Rechtliches$/ });
         await legal.click();
         await page.getByRole("button", { name:"Max", exact:true }).click();
         await page.getByRole("button", { name:modus === "showa" ? "Classix" : "Schon kuhl", exact:true }).click();

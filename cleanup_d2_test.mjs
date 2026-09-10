@@ -81,12 +81,12 @@ check("R-12: Desktop- und Mobilnavigation kennzeichnen die aktive Seite", () => 
   assert.match(navigation, /aria-current=\{aktiv === eintrag\.id \? "page" : undefined\}/);
 });
 
-check("U-13: Start-Hilfe führt in die eingebaute Settings-Anleitung", () => {
+check("U-13: Eine kanonische Hilfe liegt ausschließlich in Settings", () => {
   assert.doesNotMatch(navigation, /kd-mobile-menu-hilfe|onHilfe/);
-  assert.match(app, /navigiere\("daten"\);\s*setAnleitungAuftrag/u);
-  assert.match(source("./src/tabs/StartTab.jsx"), /\? Anleitung &amp; Hilfe/);
-  assert.match(source("./src/tabs/DatenTab.jsx"), /anleitungAuftrag[\s\S]*Über Kinodreieck &amp; Anleitung/);
-  assert.match(hilfe, /Hilfe-Knopf auf Start/u);
+  assert.doesNotMatch(app, /anleitungAuftrag|setAnleitungAuftrag|oeffneHilfe|onHilfe=/u);
+  assert.doesNotMatch(source("./src/tabs/StartTab.jsx"), /\? Anleitung &amp; Hilfe|onHilfe/);
+  assert.match(source("./src/tabs/DatenTab.jsx"), /<Klappe titel="Hilfe & Anleitung">[\s\S]*<UeberKinodreieck \/>/);
+  assert.match(hilfe, /zentrale Anleitung findest du dort unter Hilfe & Anleitung/u);
   for (const path of jsxFiles("./src")) assert.doesNotMatch(source(path), /href=["'{`]\/download\//, path);
   assert.doesNotMatch(source("./src/components/InstallationCard.jsx"), /herunterladen|Download/i);
 });

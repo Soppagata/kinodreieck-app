@@ -156,14 +156,15 @@ await render({
 check("Gesunder Gast sieht weder Datenmodus, Demo-Löschung noch Betriebs-/Supportflächen",
   keineTechnik() && !summary("Verbindung wiederherstellen"));
 check("Gast sieht keine Kontolöschung", !summary("Konto löschen"));
-const rechtliches = summary("Über Kinodreieck, Anleitung & Rechtliches");
-const datenschutz = summary("Datenschutz & Datenübersicht");
+const hilfe = summary("Hilfe & Anleitung");
+const rechtliches = summary("Datenschutz & Rechtliches");
 const hauptklappen = [...rootElement.querySelectorAll("section > details.kd-klappe")];
-check("Datenschutz bleibt niedrig und verschachtelt unter dem Rechtliches-Block erreichbar",
-  !!rechtliches && !!datenschutz
-    && datenschutz.closest("details.kd-klappe") === rechtliches.parentElement
+check("Hilfe und Datenschutz bleiben als getrennte letzte Hauptbereiche erreichbar",
+  !!hilfe && !!rechtliches
+    && hauptklappen.at(-2) === hilfe.parentElement
     && hauptklappen.at(-1) === rechtliches.parentElement);
-check("Datenschutz besitzt ein sicheres 44-Pixel-Touchziel", datenschutz.style.minHeight === "44px");
+check("Datenschutz nutzt als Hauptklappe den gemeinsamen Touchvertrag",
+  rechtliches.classList.contains("kd-klappe-kopf"));
 
 await render({
   kontoModus: true, kontoAktiv: true,

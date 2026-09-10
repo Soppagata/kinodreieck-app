@@ -19,11 +19,29 @@ check("Datenübersicht deckt die tatsächlichen Speicher- und Transportgrenzen a
     "Daten im Browser und auf diesem Gerät",
     "Service Worker",
     "Anmeldung, Konto und Synchronisation",
+    "Katalogquellen und FlixPatrol",
     "revisionsbasiert",
     "KI- und Suchanbieter",
     "Diagnose, Support und Feedback",
     "Download, Rechte und Löschung",
   ]) assert.match(source, new RegExp(text));
+});
+
+check("FlixPatrol-Transparenz bildet den zentralen Cache und seine belegten Grenzen ab", () => {
+  assert.match(source, /ausschließlich serverseitig mit dem Betreiber-API-Key/);
+  assert.match(source, /Browser liest begrenzte, gemeinsam gecachte Fakten aus dem eigenen Supabase-Projekt/);
+  assert.match(source, /Profile, Bewertungen, Notizen, ausgewählte Streaming-Abos[\s\S]*nicht an FlixPatrol gesendet/);
+  assert.match(source, /Chartplatz ist kein Geschmacks- oder Qualitätsurteil und belegt keine Verfügbarkeit/);
+  assert.match(source, /keine verlässliche API-Aufbewahrungsfrist, Transferregion oder DPA-Aussage/);
+  assert.match(source, /Frischezeitraum[\s\S]*keine Aussage über die Löschung beim Anbieter/);
+});
+
+check("KI-Hinweise begrenzen FlixPatrol auf Forecast, strukturiertes Radar und nachgelagerten Profilabgleich", () => {
+  assert.match(source, /Filmprognose[\s\S]*FlixPatrol-Cachetreffer/);
+  assert.match(source, /autorisierten strukturierten Film- oder Serienziel[\s\S]*nicht Personen-, Titelgruppen- oder Freitextzielen/);
+  assert.match(source, /Profil-Extraktion erhält Anthropic keine FlixPatrol-Daten/);
+  assert.match(source, /Andere KI-Funktionen erhalten keinen FlixPatrol-Kontext/);
+  assert.match(source, /FlixPatrol-Nachprüfung bei Import und Kataloganreicherung[\s\S]*keine zusätzlichen FlixPatrol- oder KI-Anfragen/);
 });
 
 check("Resend- und Kontaktinformation ist eng und ausdrücklich", () => {

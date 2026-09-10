@@ -91,13 +91,14 @@ const BEREICHE = [
   {
     id: "streaming",
     titel: "Streaming",
-    kurztext: "Verfügbare Titel auf deinen gewählten Diensten ansehen und neue Titel entdecken.",
+    kurztext: "Angebote deiner gewählten Dienste ansehen und neue Zugänge der letzten 14 vollen Tage finden.",
     details: [
-      "Mein Programm zeigt passende bekannte Titel für deine gewählten Streamingdienste. Ein Schnellfilter grenzt die sichtbare Liste auf einen Dienst ein.",
-      "Unter Alles findest du weitere Katalogtitel, kannst sie als gesehen markieren oder für später merken.",
+      "Alles zeigt die Gesamtmenge der bekannten Angebote deiner gewählten Streamingdienste. Mein Programm ist daraus die Teilmenge, die zu deiner Mediathek und deinen Listen passt.",
+      "Neu zeigt echte Angebotszugänge bei deinen gewählten Diensten für 14 volle Kalendertage. Dort kannst du Titel als gesehen markieren oder für später merken.",
+      "Watchmode liefert die Streaming-Verfügbarkeiten. Für fünf aktuell schnell geführte Dienste ist ein Abruf im 48-Stunden-Takt vorgesehen; der Gesamtkatalog wird turnusmäßig über 12 bis 14 Tage erneuert. Der angezeigte Quellenstand bleibt maßgeblich, eine allgemeine 48-Stunden-Garantie für alle Dienste gibt es nicht.",
       "Welche Streamingdienste berücksichtigt werden, stellst du in Settings unter Streaming-Quellen ein.",
     ],
-    suchwoerter: ["streaming", "streamingdienst", "mein programm", "streaming entdecken", "gesehen", "merkliste"],
+    suchwoerter: ["streaming", "streamingdienst", "mein programm", "alles", "neu", "streaming entdecken", "gesehen", "merkliste", "watchmode"],
     ziel: "streaming",
   },
   {
@@ -118,6 +119,8 @@ const BEREICHE = [
     kurztext: "Empfehlungen, Radar-Einträge und den eigenen Blog getrennt verwalten.",
     details: [
       "Entdecken trennt Empfehlungen, Radar und Blog in eigene Ansichten.",
+      "Die gemeinsame Österreich-Auswahl verbindet Kinocharts des Österreichischen Filminstituts, Netflix-Daten aus dessen eigener Quelle sowie Prime-Video-, Disney+- und Apple-TV-Charts von FlixPatrol. Quellenstand und Abrufzeit bleiben getrennt sichtbar.",
+      "FlixPatrol-Chartplätze sind neutrale Beliebtheitssignale. Sie sind weder persönliche Empfehlung noch Qualitätsurteil oder Beleg, dass ein Titel in deinem Abo verfügbar ist.",
       "Im Blog schreibst und verwaltest du eigene Artikel. Verweise können mit Einträgen aus Mediathek oder Must-Watch verbunden sein.",
       "Wird eine solche Verbindung gelöst, bleibt der Artikel bestehen und der offene Verweis kann später erneut zugeordnet werden.",
     ],
@@ -131,7 +134,7 @@ const BEREICHE = [
     details: [
       "In Settings verwaltest du Darstellung und Verhalten, optionale KI-Funktionen, dein Geschmacksprofil, Konto und Geräte-Sync, Datenrechte, die Sicherheitskopie dieses Geräts, Streaming-Quellen und Suchvokabular.",
       "Bei einem echten Katalogfehler erscheint dort ausschließlich der begrenzte Bereich Verbindung wiederherstellen.",
-      "Die rechtlichen Hinweise bleiben ausschließlich im bestehenden Abschnitt Über & Rechtliches außerhalb dieser Anleitung.",
+      "Diese Anleitung liegt zentral unter Hilfe & Anleitung. Datenschutz- und Quelleninformationen stehen getrennt unter Datenschutz & Rechtliches.",
     ],
     suchwoerter: ["settings", "einstellungen", "darstellung", "konto", "sicherung", "backup", "quellen"],
     ziel: "daten",
@@ -179,7 +182,7 @@ const AKTIONEN = [
   {
     id: "datenrechte-anfragen",
     titel: "Datenrechte anfragen",
-    text: "Öffne Settings → Über & Rechtliches → Datenschutz & Datenübersicht. Der Kontoexport ist in diesem Release kein Self-Service. Für Auskunft, Berichtigung, Übertragbarkeit oder Kontolöschung nutzt du den privaten Kontaktweg, über den du deinen Zugang von Max erhalten hast; die App veröffentlicht keine private Adresse und versendet nichts automatisch.",
+    text: "Öffne Settings → Datenschutz & Rechtliches. Der Kontoexport ist in diesem Release kein Self-Service. Für Auskunft, Berichtigung, Übertragbarkeit oder Kontolöschung nutzt du den privaten Kontaktweg, über den du deinen Zugang von Max erhalten hast; die App veröffentlicht keine private Adresse und versendet nichts automatisch.",
     suchwoerter: ["datenrechte", "betroffenenrechte", "kontoexport", "auskunft anfragen", "daten übertragen", "kontodaten löschen", "kontoloeschung anfragen"],
     direkteSuchwoerter: ["datenrechte", "betroffenenrechte", "kontoexport"],
     bereichId: "daten",
@@ -271,7 +274,7 @@ const AKTIONEN = [
 const FALLBACK = {
   id: "allgemeine-hilfe",
   titel: "Kinodreieck kurz erklärt",
-  text: "Kinodreieck bündelt Kinoprogramm, deine Mediathek und Streaming in einer App. Entdecken zeigt Empfehlungen und Radar-Neuigkeiten; die Suche findet Filme und beantwortet Fragen zur App. Einstellungen, Konto, Quellen und optionale KI-Funktionen verwaltest du in Settings. Die Anleitung erreichst du über den Hilfe-Knopf auf Start und in Settings unter Über Kinodreieck & Anleitung.",
+  text: "Kinodreieck bündelt Kinoprogramm, deine Mediathek und Streaming in einer App. Entdecken zeigt Empfehlungen und Radar-Neuigkeiten; die Suche findet Filme und beantwortet Fragen zur App. Einstellungen, Konto, Quellen und optionale KI-Funktionen verwaltest du in Settings. Die zentrale Anleitung findest du dort unter Hilfe & Anleitung.",
   bereichId: "daten",
   ziel: "daten",
 };

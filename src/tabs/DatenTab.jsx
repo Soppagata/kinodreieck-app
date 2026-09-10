@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { IconDelete, IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
 import { FeldHinweis } from "../components/FeldHinweis.jsx";
@@ -35,7 +35,6 @@ const normalisiereTagDedupe = (wert) => {
    Katalog und manuelle Wartung bleiben bewusst getrennte Bereiche. */
 export function DatenTab({
   master,
-  anleitungAuftrag = 0,
   programm,
   demoAktiv = false,
   katalogVerbunden = false, onKatalogVerbinden, onKatalogRefresh,
@@ -96,23 +95,6 @@ export function DatenTab({
   const showKatalogbestand = runtimeConfig.appEnvironment !== "production";
   const [eggOffen, setEggOffen] = useState(false);
   const eggBereichId = useId();
-  const [ueberOffen, setUeberOffen] = useState(false);
-  const anleitungKnopfRef = useRef(null);
-  useEffect(() => {
-    if (!anleitungAuftrag) return undefined;
-    setUeberOffen(true);
-    let zweiterFrame = 0;
-    const ersterFrame = requestAnimationFrame(() => {
-      zweiterFrame = requestAnimationFrame(() => {
-        const knopf = anleitungKnopfRef.current;
-        const klappe = knopf?.closest("details");
-        if (klappe) klappe.open = true;
-        knopf?.focus?.({ preventScroll: true });
-        knopf?.scrollIntoView?.({ block: "center", behavior: "auto" });
-      });
-    });
-    return () => { cancelAnimationFrame(ersterFrame); cancelAnimationFrame(zweiterFrame); };
-  }, [anleitungAuftrag]);
 
   /* Dieselbe Wertelisten-Logik wie die intelligente Suche. `bekannteWerte`
      bewahrt die echte Anzeigeschreibweise und entdoppelt robust; eine zweite
@@ -358,11 +340,17 @@ export function DatenTab({
         </div>
       </Klappe>
 
-      {/* 5 — Rechtliches und eingebaute Anleitung. */}
-      <Klappe titel="Über Kinodreieck, Anleitung & Rechtliches">
+      {/* 5 — Eine kanonische Hilfe, getrennt von Datenschutz und Rechtlichem. */}
+      <Klappe titel="Hilfe & Anleitung">
+        <div style={kasten}>
+          <UeberKinodreieck />
+        </div>
+      </Klappe>
+
+      <Klappe titel="Datenschutz & Rechtliches">
         <div style={kasten}>
           <p style={{ fontSize: 12, color: T.rauch, lineHeight: 1.7, margin: 0 }}>
-            Kinodreieck — privates, nicht-kommerzielles Projekt. Persönliche Daten liegen lokal und bei aktiviertem Kontospeicher zusätzlich im eigenen Konto; die App verwendet keine allgemeine Telemetrie. Programmdaten: film.at &amp; nonstopkino.at · Streaming-Kataloge: Watchmode. Alle Angaben ohne Gewähr — verbindlich sind die Kino- bzw. Anbieterseiten. Bewertungen und Texte sind persönliche Meinungen ihrer Autoren.
+            Kinodreieck — privates, nicht-kommerzielles Projekt. Persönliche Daten liegen lokal und bei aktiviertem Kontospeicher zusätzlich im eigenen Konto; die App verwendet keine allgemeine Telemetrie. Spielzeiten stammen von film.at und nonstopkino.at, Streaming-Verfügbarkeiten von Watchmode. Entdecken nutzt eigene Quellen des Österreichischen Filminstituts und von Netflix sowie FlixPatrol für neutrale Österreich-Charts und Titelfakten. Ein Chartplatz ist weder Geschmacksurteil noch Abo-Verfügbarkeit. Alle Angaben ohne Gewähr — verbindlich sind die Kino- bzw. Anbieterseiten. Bewertungen und Texte sind persönliche Meinungen ihrer Autoren.
             <br />© {new Date().getFullYear()} <button type="button"
               aria-expanded={eggOffen} aria-controls={eggBereichId}
               onClick={() => setEggOffen((offen) => !offen)}
@@ -374,17 +362,9 @@ export function DatenTab({
             {eggOffen && waehleModus && <button type="button" onClick={eggToggle}
               aria-pressed={eggAktiv} style={btnStyle(eggAktiv)}>{eggLabel}</button>}
           </div>
-          <div style={{ marginTop: 14 }}>
-            <button ref={anleitungKnopfRef} style={btnStyle(false)}
-              aria-expanded={ueberOffen} onClick={() => setUeberOffen((v) => !v)}>Über Kinodreieck &amp; Anleitung</button>
-            {ueberOffen && <UeberKinodreieck />}
+          <div style={{ marginTop: 18 }}>
+            <DatenschutzUebersicht accountActive={kontoAktiv} exportAccountData={kontoExportVollstaendig} />
           </div>
-          <details style={{ marginTop: 18 }}>
-            <summary style={{ minHeight: 44, display: "flex", alignItems: "center", cursor: "pointer", color: T.rauch, fontSize: 13 }}>Datenschutz & Datenübersicht</summary>
-            <div style={{ marginTop: 10 }}>
-              <DatenschutzUebersicht accountActive={kontoAktiv} exportAccountData={kontoExportVollstaendig} />
-            </div>
-          </details>
         </div>
       </Klappe>
     </section>

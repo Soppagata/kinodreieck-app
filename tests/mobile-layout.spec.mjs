@@ -134,11 +134,12 @@ async function pruefeE14TypografieProfil({ browser, schrift, viewport }) {
     await menueEintragStart.click();
     await expect(menue).toBeHidden();
 
-    const hilfeAusloeser = page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
-    await hilfeAusloeser.click();
-    const settingsHilfe = page.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
-    await expect(settingsHilfe).toBeFocused();
-    await expect(settingsHilfe).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true })).toHaveCount(0);
+    await menueButton.click();
+    await expect(menue).toBeVisible();
+    await menueEintragSettings.click();
+    const settingsHilfe = page.locator("summary", { hasText: /^Hilfe & Anleitung$/ });
+    await settingsHilfe.click();
     const hilfeText = page.getByText(/Deine Filme, dein Kino, dein Urteil/);
     await expect(hilfeText).toBeVisible();
     fontGroessen.hilfeText = await leseFontSize(hilfeText);
@@ -428,12 +429,10 @@ for (const viewport of VIEWPORTS) {
       await expect(page.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^Konto, Daten & Sicherung$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^Personalisierung & KI$/ })).toBeVisible();
-      const rechtliches = page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ });
+      const rechtliches = page.locator("summary", { hasText: /^Datenschutz & Rechtliches$/ });
       await expect(rechtliches).toBeVisible();
+      expect((await rechtliches.boundingBox())?.height || 0).toBeGreaterThanOrEqual(44);
       await rechtliches.click();
-      const datenschutz = page.locator("summary", { hasText: /^Datenschutz & Datenübersicht$/ });
-      await expect(datenschutz).toBeVisible();
-      expect((await datenschutz.boundingBox())?.height || 0).toBeGreaterThanOrEqual(44);
       await expect(page.getByRole("button", { name: "Supportdaten kopieren" })).toHaveCount(0);
 
       await globaleSuche.getByRole("textbox", { name: "Sucheingabe" }).fill("Wo finde ich die Schriftgröße?");
@@ -452,12 +451,12 @@ for (const viewport of VIEWPORTS) {
       const dashboardBox = await dashboard.boundingBox();
       expect(dashboardBox.x).toBeGreaterThanOrEqual(18);
       expect(dashboardBox.x + dashboardBox.width).toBeLessThanOrEqual(viewport.width - 18);
-      const hilfeAusloeser = page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
-      await hilfeAusloeser.click();
+      await expect(page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: "Menü öffnen" }).click();
+      await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Settings", exact: true }).click();
       await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
-      const anleitung = page.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
-      await expect(anleitung).toBeFocused();
-      await expect(anleitung).toHaveAttribute("aria-expanded", "true");
+      const anleitung = page.locator("summary", { hasText: /^Hilfe & Anleitung$/ });
+      await anleitung.click();
       await expect(page.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
       await expect(page.getByRole("dialog", { name: "Anleitung & Hilfe" })).toHaveCount(0);
       await expect(page.locator(".kd-help-layer")).toHaveCount(0);
@@ -503,9 +502,10 @@ test("E14 Typografie stabil, inkl. BROKEN-Fallback, Settings-Hilfe und Settings-
     await blockiereFremdnetz(overflowPage);
     await seedAppMitDarstellung(overflowPage, { schrift: "gross" });
     await overflowPage.goto("/");
-    const hilfeAusloeser = overflowPage.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
-    await hilfeAusloeser.click();
-    await expect(overflowPage.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true })).toBeFocused();
+    await expect(overflowPage.getByRole("button", { name: "? Anleitung & Hilfe", exact: true })).toHaveCount(0);
+    await overflowPage.getByRole("button", { name: "Menü öffnen" }).click();
+    await overflowPage.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Settings", exact: true }).click();
+    await overflowPage.locator("summary", { hasText: /^Hilfe & Anleitung$/ }).click();
     await expect(overflowPage.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
     await keineDokumentUeberbreite(overflowPage);
   } finally {
@@ -1163,7 +1163,7 @@ test("Der vierte Film zeigt genau vier Sekunden nur den unsichtbaren Achievement
 
   await waehleMobileTab(page, "Settings");
   await page.getByRole("button", { name: /Saal \(Dunkel\)/i }).click();
-  await page.locator("summary", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ }).click();
+  await page.locator("summary", { hasText: /^Datenschutz & Rechtliches$/ }).click();
   await page.getByRole("button", { name: "Max", exact: true }).click();
   await page.getByRole("button", { name: /Schon kuhl/i }).click();
   await expect(page.locator('.kd-wrap.kd-deep-space-horror[data-kd-effect="deep-space-horror"]')).toHaveCount(1);
@@ -2592,16 +2592,12 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await settings.click();
   await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
 
-  const ueberSummary = page.locator("summary:visible", { hasText: /^Über Kinodreieck, Anleitung & Rechtliches$/ });
+  const ueberSummary = page.locator("summary:visible", { hasText: /^Hilfe & Anleitung$/ });
   const ueber = ueberSummary.locator("..");
   await expect(ueberSummary).toBeVisible();
   await ueberSummary.focus();
   await page.keyboard.press("Enter");
   await expect(ueber).toHaveAttribute("open", "");
-  const ueberKinodreieckButton = ueber.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
-  await expect(ueberKinodreieckButton).toBeVisible();
-  await expect(ueberKinodreieckButton).toHaveAttribute("aria-expanded", "false");
-  await ueberKinodreieckButton.click();
   const mobileDoku = page.locator(".kd-doku-hilfe");
   await expect(mobileDoku).toBeVisible();
   await expect(mobileDoku.locator('[role="dialog"]')).toHaveCount(0);
@@ -2612,10 +2608,7 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await mobileDokuSummary.focus();
   await page.keyboard.press("Enter");
   await expect(mobileDokuDetails.first()).toHaveAttribute("open");
-  const ueberZu = mobileDoku.locator("xpath=..").getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
-  await expect(ueberZu).toBeVisible();
-  await expect(ueberZu).toHaveCount(1);
-  await ueberZu.click();
+  await ueberSummary.click();
   await expect(mobileDoku).toBeHidden();
 
   const backup = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Gesamt-Backup/ }) });

@@ -1,14 +1,13 @@
-import { useState } from "react";
-import { T, btnStyle } from "../lib/tokens.js";
+import { T } from "../lib/tokens.js";
 import { Logo } from "./ui.jsx";
 import { DreieckRegler } from "./DreieckRegler.jsx";
 import { HILFE_BEREICHE } from "../lib/hilfeInhalte.js";
 
 /* ================= Erklärstücke =================
    Hero („LOKALE FILM-PLATTFORM"), Dreieck-Erklärung (eine Karte pro Ecke)
-   und die eingebaute Anleitung (DokuAnsicht). Sie liegen hinter dem
-   „Über"-Einstieg in den Einstellungen, weil das Start-Dashboard die
-   Erklärinhalte nicht selbst trägt.
+   und die eingebaute Anleitung (DokuAnsicht). Sie bilden gemeinsam die
+   zentrale Hilfe in den Einstellungen; das Start-Dashboard trägt keinen
+   zweiten Hilfe-Einstieg.
    Styles werden pro Render berechnet (T ist theme-reaktiv). */
 
 const h2Of = () => ({ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" });
@@ -47,8 +46,8 @@ export function ErklaerHero() {
       <div style={{ width: 120, height: 2, margin: "16px auto 0", background: "linear-gradient(90deg, transparent, " + T.wolfram + ", transparent)" }} />
       <p style={{ fontSize: 15, color: T.leinwandTief, maxWidth: 520, margin: "18px auto 0", lineHeight: 1.65 }}>
         Deine Filme, dein Kino, dein Urteil — eine persönliche Plattform für Programm,
-        Mediathek, Streaming und Entdecken. Deine Daten bleiben im Browser und können optional
-        zwischen Geräten synchronisiert werden. Keine Telemetrie, kein Verkaufsalgorithmus.
+        Mediathek, Streaming und Entdecken. Deine persönlichen Einträge bleiben im Browser und können optional
+        über dein Konto zwischen Geräten synchronisiert werden. Keine Telemetrie, kein Verkaufsalgorithmus.
       </p>
     </div>
   );
@@ -89,20 +88,14 @@ export function DreieckErklaerung() {
   );
 }
 
-/* ---- „Über"-Einstieg für die Einstellungen: Hero, Dreieck, Anleitung. ---- */
+/* ---- Zentrale Hilfe für die Einstellungen: Hero, Dreieck, Anleitung. ---- */
 export function UeberKinodreieck() {
-  const [dokuOffen, setDokuOffen] = useState(false);
   const h2 = h2Of(); const mono = monoOf();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22, marginTop: 16 }}>
       <ErklaerHero />
       <DreieckErklaerung />
-      <div>
-        <button style={btnStyle(false)} onClick={() => setDokuOffen(!dokuOffen)}>
-          {dokuOffen ? "Anleitung zuklappen" : "Anleitung & Hilfe öffnen"}
-        </button>
-        {dokuOffen && <DokuAnsicht h2={h2} mono={mono} />}
-      </div>
+      <DokuAnsicht h2={h2} mono={mono} />
     </div>
   );
 }

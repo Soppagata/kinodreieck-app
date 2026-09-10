@@ -164,7 +164,7 @@ const button = (label) => [...rootElement.querySelectorAll("button")]
 for (const label of [
   "Darstellung & Verhalten", "Streaming-Quellen", "Streaming-Katalogbestand",
   "Personalisierung & KI", "Konto, Daten & Sicherung",
-  "Über Kinodreieck, Anleitung & Rechtliches",
+  "Hilfe & Anleitung", "Datenschutz & Rechtliches",
 ]) {
   check(`Release-Kernfläche bleibt sichtbar: ${label}`, hatSummary(label));
 }
@@ -190,8 +190,10 @@ check("Deterministisches Geschmacksprofil bleibt ohne KI erreichbar",
   !!button("Profil anlegen") && !text().includes("Eigene Blogartikel für dein Profil auswerten"));
 check("Manueller Datenrechteweg bleibt erreichbar",
   text().includes("Datenrechte manuell anfragen"));
-check("Legal-Datenübersicht bleibt im Rechtliches-Block erreichbar",
-  hatSummary("Datenschutz & Datenübersicht"));
+check("Datenschutz bleibt als eigener Settings-Bereich erreichbar",
+  hatSummary("Datenschutz & Rechtliches")
+    && text().includes("Datenrechte manuell anfragen")
+    && !hatSummary("Datenschutz & Datenübersicht"));
 check("Bestätigter Owner behält bei echtem Katalogfehler den begrenzten Recoveryweg",
   hatSummary("Verbindung wiederherstellen")
     && !!button("Datenbankzugang prüfen")

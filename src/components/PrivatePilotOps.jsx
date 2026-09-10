@@ -50,13 +50,16 @@ export function DatenschutzUebersicht({
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <p style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
-        {PRIVATE_DATA_INVENTORY.length} feste Datenklassen sind im Register. Persönliche Inhalte liegen lokal{accountActive ? " und bei aktiviertem Kontospeicher zusätzlich im eigenen Supabase-Konto" : " im Browser"}. Externe Anbieter bleiben ohne abgeschlossene Rechts- und Aufbewahrungsprüfung serverseitig gesperrt.
+        {PRIVATE_DATA_INVENTORY.length} feste Datenklassen sind im Register. Persönliche Inhalte liegen lokal{accountActive ? " und bei aktiviertem Kontospeicher zusätzlich im eigenen Supabase-Konto" : " im Browser"}. Gemeinsame Katalogquellen werden serverseitig gepflegt; Anthropic erhält nur den begrenzten Inhalt einer bewusst gestarteten und freigeschalteten KI-Aufgabe.
+      </p>
+      <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.6 }}>
+        FlixPatrol wird zentral mit dem Betreiber-API-Key abgerufen. Der Browser liest nur begrenzte Fakten aus dem eigenen Supabase-Cache. Persönliche Profile, Bewertungen, Notizen und die Auswahl deiner Streamingdienste werden nicht an FlixPatrol gesendet. Beim Forecast und bei strukturierten Radar-Zielen kann ein passender Cachetreffer den bestehenden Anthropic-Auftrag ergänzen. Bei der Profil-Extraktion erfolgt der Cacheabgleich erst nach der Anbieterantwort; die FlixPatrol-Nachprüfung bei Import und Kataloganreicherung liest nur diesen Cache und löst selbst keine zusätzlichen FlixPatrol- oder KI-Anfragen aus.
       </p>
       <dl className="kd-statusliste">
         <div><dt>Persönliche Töpfe</dt><dd>{PRIVATE_DATA_INVENTORY.filter((entry) => entry.retention === RETENTION_CLASSES.PURPOSE_BOUND.id).length}</dd></div>
         <div><dt>Kurzzeit-Rückholpunkte</dt><dd>{RETENTION_CLASSES.TRANSIENT_7.label}</dd></div>
         <div><dt>Betriebsnachweise</dt><dd>höchstens {RETENTION_CLASSES.AUDIT_90.label}</dd></div>
-        <div><dt>Externe Empfänger/Quellen</dt><dd>{PRIVATE_PROVIDER_REGISTRY.length} registriert · standardmäßig geschlossen</dd></div>
+        <div><dt>Empfänger und Quellen</dt><dd>{PRIVATE_PROVIDER_REGISTRY.length} registriert · Katalogquellen und optionale KI getrennt</dd></div>
       </dl>
       <details>
         <summary style={{ cursor: "pointer", color: T.rauch, fontSize: 13 }}>Datenklassen und Aufbewahrung anzeigen</summary>
@@ -73,7 +76,7 @@ export function DatenschutzUebersicht({
         <ul style={{ margin: "10px 0 0", paddingLeft: 20, display: "grid", gap: 8, color: T.rauch, fontSize: 12, lineHeight: 1.5 }}>
           {PRIVATE_PROVIDER_REGISTRY.map((entry) => (
             <li key={entry.id}>
-              <strong>{entry.name}</strong>: {entry.purpose}; übertragene Klasse: {entry.data}. Region: {entry.region}. Status: {entry.legalStatus}. <a href={entry.officialSource} target="_blank" rel="noreferrer">Offizielle Quelle (Abruf {formatPresentationDate(entry.retrievedAt, { fallback: entry.retrievedAt })})</a>
+              <strong>{entry.name}</strong>: {entry.purpose}. Nutzung: {entry.usage}. Verarbeitete Klasse: {entry.data}. Region: {entry.region}.{entry.retentionNote ? ` ${entry.retentionNote}` : ""} <a href={entry.officialSource} target="_blank" rel="noreferrer">{entry.officialSourceLabel} (Abruf {formatPresentationDate(entry.retrievedAt, { fallback: entry.retrievedAt })})</a>{entry.technicalSource && <> · <a href={entry.technicalSource} target="_blank" rel="noreferrer">Technische Quelle</a></>}{entry.termsSource && <> · <a href={entry.termsSource} target="_blank" rel="noreferrer">Bedingungen</a></>}
             </li>
           ))}
         </ul>

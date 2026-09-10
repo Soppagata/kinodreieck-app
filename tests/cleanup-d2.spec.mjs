@@ -132,13 +132,13 @@ test("D2 mobil: Hilfe, ehrliche Entdecken-Navigation, Blog-ARIA und Checkbox-Hit
   expect(weekdayGridFits, "Wochenplan-Checkboxen bleiben bei 393px im Editor").toBe(true);
   await week.getByRole("button", { name: "Abbrechen", exact: true }).click();
 
-  const helpEntry = page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
-  await helpEntry.scrollIntoViewIfNeeded();
-  const helpBox = await expectTouchBox(helpEntry, "Start-Hilfe-Einstieg");
-  await helpEntry.click();
-  const settingsHelp = page.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
-  await expect(settingsHelp).toBeFocused();
-  await expect(settingsHelp).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true })).toHaveCount(0);
+  const settingsMenu = await openMobileMenu(page);
+  await expect(settingsMenu.getByRole("button", { name: "Anleitung & Hilfe", exact: true })).toHaveCount(0);
+  await settingsMenu.getByRole("button", { name: "Settings", exact: true }).click();
+  const settingsHelp = page.locator("summary", { hasText: /^Hilfe & Anleitung$/ });
+  const helpBox = await expectTouchBox(settingsHelp, "Settings-Hilfe-Einstieg");
+  await settingsHelp.click();
   await expect(page.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
   const menu = await openMobileMenu(page);
   await expect(menu.getByRole("button", { name: "Anleitung & Hilfe", exact: true })).toHaveCount(0);

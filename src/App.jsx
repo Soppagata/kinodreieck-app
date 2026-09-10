@@ -137,7 +137,6 @@ export default function App() {
   const tabRef = useRef(tab);
   tabRef.current = tab;
   const [mehrOffen, setMehrOffen] = useState(false);
-  const [anleitungAuftrag, setAnleitungAuftrag] = useState(0);
   const toggleMehr = useCallback(() => setMehrOffen((offen) => !offen), []);
   const scrollProBereichRef = useRef(new Map());
   const scrollWiederherstellungRef = useRef(0);
@@ -214,10 +213,6 @@ export default function App() {
     }
     stelleScrolltiefeHer(tab);
   }, [stelleScrolltiefeHer, tab]);
-  const oeffneHilfe = useCallback(() => {
-    navigiere("daten");
-    setAnleitungAuftrag((auftrag) => auftrag + 1);
-  }, [navigiere]);
   useEffect(() => {
     if (!remoteKontoAktiv && tab !== "mediathek") setTab("mediathek");
   }, [remoteKontoAktiv, tab]);
@@ -1696,7 +1691,7 @@ export default function App() {
         ) : null}
 
         {remoteKontoAktiv && tab === "start" && bootDone && (
-          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={oeffneHilfe}
+          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} onNavigiere={navigiere} zeigeEintrag={springeZuFilm}
             entdeckenPins={entdeckenPins} webDiscoveryFeed={webDiscoveryState.feed} onEntdeckenPinsBereinigen={bereinigeEntdeckenPins} onSpringeZuEntdecken={() => navigiere("blog")}
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
             entdeckenStatus={entdeckenStatus}
@@ -1874,7 +1869,6 @@ export default function App() {
         {remoteKontoAktiv && tab === "daten" && (
           <DatenTab
             master={master}
-            anleitungAuftrag={anleitungAuftrag}
             programm={programm}
             setErr={setErr}
             kiStand={kiStand} onKiGlobal={setzeKiGlobal} onKiFunktion={setzeKiFunktion}

@@ -25,14 +25,16 @@ const streaming = datenTab.indexOf("<StreamingEinstellungen");
 const katalog = datenTab.indexOf('titel="Streaming-Katalogbestand"');
 const personalisierung = datenTab.indexOf('titel="Personalisierung & KI"');
 const kontoDatenSicherung = datenTab.indexOf('titel="Konto, Daten & Sicherung"');
-const rechtliches = datenTab.indexOf('titel="Über Kinodreieck, Anleitung & Rechtliches"');
+const hilfe = datenTab.indexOf('titel="Hilfe & Anleitung"');
+const rechtliches = datenTab.indexOf('titel="Datenschutz & Rechtliches"');
 check("Release-Settings-Abschnitte stehen in der geforderten Reihenfolge",
   darstellung >= 0
     && streaming > darstellung
     && katalog > streaming
     && personalisierung > katalog
     && kontoDatenSicherung > personalisierung
-    && rechtliches > kontoDatenSicherung);
+    && hilfe > kontoDatenSicherung
+    && rechtliches > hilfe);
 check("Personalisierung und Konto sind jeweils genau eine Hauptklappe",
   !datenTab.includes('<Klappe titel="Streaming-Quellen">')
     && /<StreamingEinstellungen[\s\S]*?teil="quellen"/.test(datenTab)

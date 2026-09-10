@@ -653,6 +653,20 @@ expect(
       && /^\d{4}-\d{2}-\d{2}$/.test(provider.retrievedAt)),
 );
 
+const flixpatrolProvider = PRIVATE_PROVIDER_REGISTRY.find((provider) => provider.id === "flixpatrol");
+expect(
+  "FlixPatrol ist als serverseitige Katalogquelle ohne erfundene Aufbewahrungs- oder Regionsangabe erfasst",
+  !!flixpatrolProvider
+    && /aktive gemeinsame Katalogquelle/.test(flixpatrolProvider.usage)
+    && /Betreiber-API-Key bleibt serverseitig/.test(flixpatrolProvider.usage)
+    && /keine Kontokennung, Profile, Bewertungen, Notizen oder Abo-Auswahl/.test(flixpatrolProvider.data)
+    && /nicht belegt/.test(flixpatrolProvider.region)
+    && /nicht belastbar belegt/.test(flixpatrolProvider.retentionNote)
+    && /Cachefrische ist keine Löschfrist/.test(flixpatrolProvider.retentionNote)
+    && flixpatrolProvider.technicalSource === "https://flixpatrol.com/api2/"
+    && flixpatrolProvider.termsSource === "https://flixpatrol.com/about/terms-and-conditions/",
+);
+
 expect(
   "Provider-Fail-Closed greift bei allen bekannten Negativpfaden",
   providerActivationDecision({ featureEnabled: false }).ok === false

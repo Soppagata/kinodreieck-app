@@ -114,7 +114,7 @@ function StartDashboard({
   entdeckenPins = [], webDiscoveryFeed = null, onEntdeckenPinsBereinigen, onSpringeZuEntdecken,
   kinoMatches = { matched: [] }, mustwatch = [], mwKandidaten = null, auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
-  programmInfo = null, streamingInfo = null, onHilfe,
+  programmInfo = null, streamingInfo = null,
   wochenplan, onWochenplanAendern, entdeckenStatus = {},
   master = [], onSpringeZuStreaming, onSpringeZuKino, onFilmAnlegen, toggleKinoPin,
   onStreamingKatalogLaden,
@@ -361,9 +361,6 @@ function StartDashboard({
           ) : <p className="kd-dash-leer">Die nächsten neu angelegten Mediathek-Einträge erscheinen hier.</p>}
         </Modul>
       </div>
-      <footer className="kd-start-service">
-        <button onClick={(event) => { event.currentTarget.focus(); onHilfe(); }}>? Anleitung &amp; Hilfe</button>
-      </footer>
     </section>
   );
 }

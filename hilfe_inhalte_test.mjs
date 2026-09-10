@@ -518,6 +518,30 @@ check(
 );
 
 check(
+  "Streaming-Hilfe trennt Alles, Mein Programm und 14-Tage-Neuzugänge ohne pauschale 48h-Garantie",
+  (() => {
+    const details = (BEREICHE_BY_ID.get("streaming")?.details || []).join(" ").toLowerCase();
+    return containsAllWords(details, ["alles", "gesamtmenge", "mein programm", "teilmenge"])
+      && containsAllWords(details, ["neu", "angebotszugänge", "14 volle"])
+      && containsAllWords(details, ["fünf", "48-stunden", "gesamtkatalog", "12 bis 14 tage"])
+      && /(?:keine allgemeine 48-stunden-garantie|allgemeine 48-stunden-garantie[^.]*gibt es nicht)/.test(details);
+  })(),
+);
+check(
+  "Entdecken-Hilfe nennt Quellenrollen und macht Chartplätze nicht zu Geschmack oder Verfügbarkeit",
+  (() => {
+    const details = (BEREICHE_BY_ID.get("blog")?.details || []).join(" ").toLowerCase();
+    return containsAllWords(details, ["österreichischen filminstituts", "netflix", "flixpatrol"])
+      && containsAllWords(details, ["chartplätze", "weder persönliche empfehlung", "qualitätsurteil", "abo verfügbar"]);
+  })(),
+);
+check(
+  "Allgemeine Hilfe verweist ausschließlich auf die kanonische Settings-Anleitung",
+  /settings.*hilfe & anleitung/iu.test(HILFE_FALLBACK.text)
+    && !/hilfe-knopf auf start|über kinodreieck & anleitung/iu.test(HILFE_FALLBACK.text),
+);
+
+check(
   "Keine Operatorlecks in Hilfedaten",
   !HILFE_TEXT.some((text) => /kino_auto|streaming_auto|liefere_an_supabase|auto_log|fetch-job|fetch job|credits|credits-|quota|quota-|\.mjs|script\b/u.test(String(text))),
 );

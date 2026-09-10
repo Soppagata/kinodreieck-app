@@ -343,18 +343,18 @@ const katalogStatus = [...doc.querySelectorAll("summary")]
   .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));
 const datenmodus = [...doc.querySelectorAll("summary")]
   .find((summary) => /^Datenmodus & Verbindung$/.test((summary.textContent || "").trim()));
-const datenschutzSummary = [...doc.querySelectorAll("summary")]
-  .find((summary) => /^Datenschutz & Datenübersicht$/.test((summary.textContent || "").trim()));
+const hilfeSummary = [...doc.querySelectorAll("summary")]
+  .find((summary) => /^Hilfe & Anleitung$/.test((summary.textContent || "").trim()));
 const rechtlichesSummary = [...doc.querySelectorAll("summary")]
-  .find((summary) => /^Über Kinodreieck, Anleitung & Rechtliches$/.test((summary.textContent || "").trim()));
+  .find((summary) => /^Datenschutz & Rechtliches$/.test((summary.textContent || "").trim()));
 check("Gast-Settings behalten die Streaming-Auswahl, aber keine Betriebs-/Supportflächen",
   !katalogStatus && !datenmodus
   && ![...doc.querySelectorAll("summary")].some((summary) => /^(Technik & Support|Kinoprogramm-Status|Erweitert —)/.test((summary.textContent || "").trim()))
   && /Streaming-Quellen/.test(text())
   && !!doc.querySelector('input[placeholder^="Quelle suchen"]'));
-check("Datenschutz liegt erreichbar unter dem letzten Rechtliches-Block",
-  !!datenschutzSummary && !!rechtlichesSummary
-  && datenschutzSummary.closest("details.kd-klappe") === rechtlichesSummary.parentElement);
+check("Hilfe und Datenschutz liegen als getrennte Settings-Bereiche vor",
+  !!hilfeSummary && !!rechtlichesSummary
+  && hilfeSummary.parentElement !== rechtlichesSummary.parentElement);
 /* Der versteckte Modusknopf erscheint erst nach Betätigung von Max. */
 const maxLink = knopf(/^Max$/);
 check("Max ist ein geschlossener nativer Einstieg",
@@ -372,29 +372,20 @@ if (sicherheitskopieKnopf) {
     && !/Sicherung offen/.test(sicherheitskopieSummary.textContent || "")
     && datenTab?.getAttribute("aria-description") !== "Sicherung offen");
 }
-check("Rechtliches vorhanden", /Über Kinodreieck, Anleitung & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
+check("Rechtliches vorhanden", /Datenschutz & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
 
-/* ---- „Über"-Einstieg (Etappe 4): Erklärstücke + Anleitung leben jetzt hier ---- */
-const ueberKnopf = knopf(/^Über Kinodreieck & Anleitung$/i);
-check("Über-Einstieg unter dem Rechtliches-Block vorhanden", !!ueberKnopf);
-if (ueberKnopf) {
-  ueberKnopf.click(); await warte(400);
-  check("Über: Hero + Dreieck-Erklärstück erscheinen", /LOKALE FILM-PLATTFORM/.test(text()) && /Deine Filme, dein Kino, dein Urteil/.test(text())
+/* ---- Zentrale Hilfe: Erklärstücke + Anleitung leben direkt in einer Klappe. ---- */
+check("Hilfe ist anfangs geschlossen und braucht keinen zweiten Öffnungsknopf", !hilfeSummary?.parentElement?.open
+  && !knopf(/Anleitung & Hilfe öffnen/i));
+if (hilfeSummary) {
+  hilfeSummary.click(); await warte(400);
+  check("Hilfe zeigt Hero + Dreieck-Erklärstück", /LOKALE FILM-PLATTFORM/.test(text()) && /Deine Filme, dein Kino, dein Urteil/.test(text())
     && /Wie ist es gemacht\?/.test(text()) && /Was erzählt es\?/.test(text()) && /Warum sollte man ihn gesehen haben\?/.test(text()));
-  const dokuKnopf = knopf(/Anleitung & Hilfe öffnen/i);
-  check("Über: Doku-Knopf vorhanden", !!dokuKnopf);
-  if (dokuKnopf) {
-    dokuKnopf.click(); await warte(300);
-    check("Über: Doku zeigt kanonische Hilfe-Namen", /Start/.test(text())
-      && /Mediathek/.test(text()) && /Streaming/.test(text()) && /Suche/.test(text())
-      && /Entdecken/.test(text()) && /Einstellungen|Settings/.test(text()));
-    check("Über: Doku bleibt inline ohne nested dialog/portal", !doc.querySelector('[role="dialog"]')
-      && !doc.querySelector(".kd-help-layer") && /Die Mediathek verwaltet/.test(text()));
-    const zu = knopf(/Anleitung zuklappen/i);
-    if (zu) { zu.click(); await warte(200); }
-  }
-  const ueberZu = knopf(/^Über Kinodreieck zuklappen$/i);
-  if (ueberZu) { ueberZu.click(); await warte(200); }
+  check("Hilfe zeigt die kanonischen Bereichsnamen direkt", /Start/.test(text())
+    && /Mediathek/.test(text()) && /Streaming/.test(text()) && /Suche/.test(text())
+    && /Entdecken/.test(text()) && /Einstellungen|Settings/.test(text()));
+  check("Hilfe bleibt inline ohne nested dialog/portal", !doc.querySelector('[role="dialog"]')
+    && !doc.querySelector(".kd-help-layer") && /Die Mediathek verwaltet/.test(text()));
 }
 
 /* ---- Manuelle Migration ist als Betriebsfunktion ownergeschützt. ---- */
@@ -578,7 +569,7 @@ const katalogStatusDatei = [...dateiDoc.querySelectorAll("summary")]
 const datenmodusDatei = [...dateiDoc.querySelectorAll("summary")]
   .find((summary) => /^Datenmodus & Verbindung$/.test((summary.textContent || "").trim()));
 const datenschutzDatei = [...dateiDoc.querySelectorAll("summary")]
-  .find((summary) => /^Datenschutz & Datenübersicht$/.test((summary.textContent || "").trim()));
+  .find((summary) => /^Datenschutz & Rechtliches$/.test((summary.textContent || "").trim()));
 check("No-Config-file:// bleibt ohne Betriebsflächen und mit erreichbarem Datenschutz ehrlich",
   !katalogStatusDatei && !datenmodusDatei && !!datenschutzDatei
   && !/Supportdaten kopieren|Demo-Daten entfernen/.test(dateiText()));

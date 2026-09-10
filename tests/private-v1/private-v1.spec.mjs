@@ -168,13 +168,11 @@ test("Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag", asy
   await expect(article.locator("button button")).toHaveCount(0);
 
   await navigateMobile(page, "Start");
-  const helpEntry = page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true });
-  await helpEntry.scrollIntoViewIfNeeded();
-  const helpBox = await expectTouchTarget(helpEntry, "Start-Hilfe-Einstieg");
-  await helpEntry.click();
-  const settingsHelp = page.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
-  await expect(settingsHelp).toBeFocused();
-  await expect(settingsHelp).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "? Anleitung & Hilfe", exact: true })).toHaveCount(0);
+  await navigateMobile(page, "Settings");
+  const settingsHelp = page.locator("summary", { hasText: /^Hilfe & Anleitung$/ });
+  const helpBox = await expectTouchTarget(settingsHelp, "Settings-Hilfe-Einstieg");
+  await settingsHelp.click();
   await expect(page.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Menü öffnen" }).click();
   await expect(page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Anleitung & Hilfe", exact: true })).toHaveCount(0);

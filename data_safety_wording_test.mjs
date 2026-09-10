@@ -70,7 +70,7 @@ check("Geräte-Download bleibt sichtbar vom Kontoexport getrennt und verspricht 
 
 check("Manueller Rechteweg ist verständlich auffindbar und erfindet weder Adresse noch Versand",
   sichtbar.hilfe.includes('id: "datenrechte-anfragen"')
-  && sichtbar.hilfe.includes("Datenschutz & Datenübersicht")
+  && sichtbar.hilfe.includes("Datenschutz & Rechtliches")
   && rechteWeg.includes('data-manual-data-rights="private-contact"')
   && rechteWeg.includes("Auskunft")
   && rechteWeg.includes("Berichtigung")
