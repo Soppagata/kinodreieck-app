@@ -114,6 +114,8 @@ check("Nur die Datenschutzübersicht erhält den tatsächlichen Exportstatus fü
   && (selfService.match(/Der Kontoexport ist in diesem Release nicht als Self-Service freigeschaltet/g) || []).length === 1
   && selfService.includes("<ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />")
   && selfService.includes('data-account-rights-location="privacy-overview"')
+  && selfService.includes("Settings → Datenschutz &amp; Rechtliches")
+  && !selfService.includes("Über &amp; Rechtliches → Datenschutz &amp; Datenübersicht")
   && sichtbar.datenTab.includes("<DatenschutzUebersicht accountActive={kontoAktiv} exportAccountData={kontoExportVollstaendig} />"));
 
 check("Belegter Exportvertrag reaktiviert keinen alten Konto-Self-Delete",

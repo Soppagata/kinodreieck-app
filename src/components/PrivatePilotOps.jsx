@@ -215,7 +215,7 @@ export function KontoDatenrechte({
       {!accountExportEnabled && (
         <p data-account-rights-location="privacy-overview" style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
           Den tatsächlichen Exportstatus und den manuellen Rechteweg findest du unter
-          Über &amp; Rechtliches → Datenschutz &amp; Datenübersicht.
+          Settings → Datenschutz &amp; Rechtliches.
         </p>
       )}
       {accountExportEnabled && (
