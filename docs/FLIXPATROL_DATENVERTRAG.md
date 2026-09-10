@@ -40,6 +40,12 @@ Vertragsstand: 10. September 2026. Quellen sind die offizielle
   kanonische tt…-Schreibweise mit mindestens sieben Ziffern.
   Nullwerte löschen keine früher belegten Fakten. Widersprechende starke IDs
   werden als Konflikt abgewiesen.
+- Der am 10.09.2026 durch den begrenzten serverseitigen Titelabruf belegte
+  Body verwendet `length: 0` als fehlende Laufzeit. Der Titelnormalisierer
+  bildet genau diesen Wert auf `runtimeMinutes: null` ab. Positive Ganzzahlen
+  bis 2000 bleiben erhalten; negative Werte, Bruchzahlen und Werte außerhalb
+  des Bereichs bleiben ungültig. Die payloadfreie Diagnose weist den
+  Providerwert weiterhin nur als feste Klasse `zero` aus.
 - Beziehungen sind verschachtelte Objekte mit eigenem type und data.id.
   Der Normalisierer akzeptiert eine Relation nur mit dem passenden Namespace,
   etwa titles/ttl_…, companies/cmp_… oder countries/cnt_….

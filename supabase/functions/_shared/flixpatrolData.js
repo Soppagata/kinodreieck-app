@@ -438,7 +438,9 @@ export function normalizeFlixPatrolTitle(value) {
   const mediaType = normalizeTitleType(data.type);
   const premiere = nullableDate(data.premiere);
   const premiereOnline = nullableDate(data.premiereOnline);
-  const runtimeMinutes = nullableInteger(data.length, { min: 1, max: 2_000 });
+  const runtimeMinutes = data.length === 0
+    ? null
+    : nullableInteger(data.length, { min: 1, max: 2_000 });
   const imdbNumericId = nullableInteger(data.imdbId, { min: 1, max: 9_999_999_999 });
   const tmdbNumericId = nullableInteger(data.tmdbId, { min: 1, max: 999_999_999 });
   const providerUpdatedAt = cleanText(data.updatedAt, 40);

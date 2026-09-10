@@ -77,6 +77,15 @@ check("Nullable Fremd-IDs bleiben null und erfundene IDs entstehen nicht", () =>
   assert.equal(normalized.tmdbId, null);
 });
 
+check("Belegte Laufzeit 0 wird null, andere ungültige Laufzeiten bleiben verworfen", () => {
+  assert.equal(normalizeFlixPatrolTitle(titlePayload({ length: 0 })).runtimeMinutes, null);
+  assert.equal(normalizeFlixPatrolTitle(titlePayload({ length: null })).runtimeMinutes, null);
+  assert.equal(normalizeFlixPatrolTitle(titlePayload({ length: 122 })).runtimeMinutes, 122);
+  for (const length of [-1, 1.5, 2_001]) {
+    assert.equal(normalizeFlixPatrolTitle(titlePayload({ length })), null);
+  }
+});
+
 check("Ungültige Kalenderdaten und falsch typisierte starke IDs verwerfen die Antwort", () => {
   assert.equal(normalizeFlixPatrolTitle(titlePayload({ premiere: "2001-02-31" })), null);
   assert.equal(normalizeFlixPatrolTitle(titlePayload({ imdbId: "tt0211915" })), null);
