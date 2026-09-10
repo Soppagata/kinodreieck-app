@@ -190,20 +190,44 @@ await check("verwirft leere Charts nach einem gezählten Request", async () => {
 
 await check("diagnostiziert ungültige Charts payloadfrei und finalisiert trotz Loggerfehler", async () => {
   const operationId = "00000000-0000-4000-8000-000000000011";
+  const expected = {
+    companyId: FLIXPATROL_AT_SOURCES.companies.prime.id,
+    countryId: FLIXPATROL_AT_SOURCES.country.id,
+    chartType: "movies",
+    date: "2026-09-09",
+  };
   const sensitive = [
     "Secret chart title", "Secret chart description", titleId,
-    FLIXPATROL_AT_SOURCES.companies.prime.id, "Basic private-api-key",
+    FLIXPATROL_AT_SOURCES.companies.prime.id, "Basic private-api-key", "n/a",
   ];
+  const validRow = (id, ranking, overrides = {}) => ({ type: "top10s", data: {
+    movie: relation("titles", id),
+    company: relation("companies", expected.companyId),
+    country: relation("countries", expected.countryId),
+    type: 2,
+    date: { type: "daterange", data: { type: 1, from: expected.date, to: expected.date } },
+    ranking,
+    rankingLast: null,
+    value: 10,
+    valueLast: null,
+    daysTotal: 1,
+    updatedAt: "2026-09-09T10:57:43",
+    ...overrides,
+  } });
   const malicious = {
-    type: "unknown-provider-wrapper",
+    type: "top10s",
     Authorization: sensitive[4],
-    data: [{ type: "unknown-item-wrapper", data: {
-      movie: { type: "unknown-relation", data: { id: sensitive[2], title: sensitive[0] } },
-      company: { type: "companies", data: { id: sensitive[3] } },
-      country: null, type: 99, date: [], ranking: "1", rankingLast: null,
-      value: 10, valueLast: null, daysTotal: 1, updatedAt: "invalid",
-      description: sensitive[1],
-    } }],
+    data: [
+      validRow(titleId, 1),
+      validRow(secondTitleId, 2, {
+        date: { type: 1, from: expected.date, to: expected.date },
+        rankingLast: null,
+        valueLast: 4,
+        daysTotal: sensitive[5],
+        title: sensitive[0],
+        description: sensitive[1],
+      }),
+    ],
   };
   const diagnostics = [];
   const finishes = [];
@@ -219,12 +243,7 @@ await check("diagnostiziert ungültige Charts payloadfrei und finalisiert trotz 
     },
   });
   await assert.rejects(
-    client.fetchTop10({
-      companyId: FLIXPATROL_AT_SOURCES.companies.prime.id,
-      countryId: FLIXPATROL_AT_SOURCES.country.id,
-      chartType: "movies",
-      date: "2026-09-09",
-    }),
+    client.fetchTop10(expected),
     (error) => error.code === "FLIXPATROL_INVALID_RESPONSE"
       && error.providerRequests === 1
       && error.operationId === operationId
@@ -234,11 +253,17 @@ await check("diagnostiziert ungültige Charts payloadfrei und finalisiert trotz 
   assert.equal(finishes[0].status, "invalid_response");
   assert.equal(diagnostics.length, 1);
   assert.equal(diagnostics[0].contractGroup, "top10-list");
-  assert.equal(diagnostics[0].dataArrayLength, 1);
+  assert.equal(diagnostics[0].dataArrayLength, 2);
   assert.equal(diagnostics[0].listLengthClass, "one-to-ten");
-  assert.equal(diagnostics[0].rankingClass, "string:other");
-  assert.equal(diagnostics[0].dateShape.kind, "array");
-  assert.equal(diagnostics[0].relations.movie.typeClass, "string:other");
+  assert.equal(diagnostics[0].listProblemClass, "row-invalid");
+  assert.equal(diagnostics[0].samplePosition, 2);
+  assert.equal(diagnostics[0].rankingClass, "integer:one-to-ten");
+  assert.deepEqual(diagnostics[0].nullableIntegerClasses, {
+    rankingLast: "null", valueLast: "integer:valid", daysTotal: "invalid",
+  });
+  assert.equal(diagnostics[0].dateShape.formClass, "direct-date");
+  assert.equal(diagnostics[0].dateShape.rangeTypeClass, "known:1");
+  assert.equal(diagnostics[0].relations.movie.typeClass, "known:titles");
   const serialized = JSON.stringify(diagnostics[0]);
   for (const secret of sensitive) assert.equal(serialized.includes(secret), false);
 

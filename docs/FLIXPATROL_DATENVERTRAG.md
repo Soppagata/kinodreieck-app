@@ -119,7 +119,7 @@ festen Vertragsgruppen `quota`, `top10-list`, `title` und `title-list` sowie
 die Fehlerklassen `json-error` und `contract-mismatch`. Erfasst werden
 ausschließlich:
 
-- Klassen der Wurzel-, Daten- und ersten Listeneintragsform;
+- Klassen der Wurzel-, Daten- und ausgewählten Listeneintragsform;
 - tatsächliche Arraylängen samt der festen Klasse leer, 1–10 oder über 10;
 - bekannte oder unbekannte Klassen der dokumentierten Enumfelder;
 - Datentypen eines festen Whitelist-Feldsets und der erwarteten Relationen.
@@ -129,6 +129,19 @@ Relationen, Datumswrapper und Rangklasse getrennt ausgewiesen. So bleibt etwa
 eine leere Liste von einer unbekannten Wrapperform oder einem falsch typisierten
 Rang unterscheidbar, ohne einen Providerwert zu übernehmen.
 
+Für eine Liste mit höchstens zehn Zeilen prüft die Diagnose jede Zeile einzeln
+mit demselben unveränderten Normalisierer und dem erwarteten Company-, Country-,
+Charttyp- und Datumsvertrag. Sie beschreibt die erste verworfene Zeile und nur
+deren Position von 1 bis 10. Sind alle Einzelzeilen gültig, unterscheidet sie
+Duplikate bei Quellen-ID und Rang als eigene Listenklassen. Leere, zu lange und
+äußerlich falsch geformte Listen bleiben ebenfalls getrennt. Es gibt keinen
+zusätzlichen Providerrequest und keine Lockerung des Parsers.
+
+Die Datumsform unterscheidet den akzeptierten `daterange`-Wrapper von dem
+ebenfalls akzeptierten direkten Datumsknoten. `rankingLast`, `valueLast` und
+`daysTotal` werden je nur als `null`, zulässige Ganzzahl oder ungültig
+klassifiziert. Die Werte selbst werden nicht übernommen.
+
 Die Diagnose übernimmt keine Titel, Beschreibungen, IDs, Schlüssel oder
 Authorization und enumeriert keine unbekannten Feldnamen. Sie enthält weder
 die URL noch Header oder die vollständige Antwort. Der Client hängt dieselbe
@@ -137,6 +150,30 @@ sie einmal in das Serverlog. Der Diagnose-Logger läuft fehlertolerant; ein
 synchroner Fehler oder ein abgelehntes Logger-Promise ändert weder den
 gezählten Request noch dessen terminalen `invalid_response`-Abschluss. Es gibt
 weiterhin keinen Retry.
+
+### Manueller TOP-10-Vertragsabruf
+
+Die rein serverseitige `flixpatrol-usage`-Function besitzt für die gezielte
+Fehleranalyse den eindeutigen Headerwert
+`x-kd-flixpatrol-usage: manual-top10-contract-v1`. Dieser Weg ist kein
+Schedulerziel und wird vom natürlichen Usage-Ticker nicht verwendet. Er nutzt
+dieselbe doppelte Service-Key-Prüfung, weist jeden Origin zurück und akzeptiert
+nur einen bodylosen POST.
+
+Der Providerrequest ist vollständig im Servercode gebunden: Amazon Prime,
+Austria, Movies und der vorige UTC-Kalendertag. Requestparameter, Datum, URL
+oder API-Key können nicht über den Aufruf übergeben werden. Der Weg ruft genau
+einmal `client.fetchTop10()` auf und damit dieselben Ledger-Begin-/Finish-
+Verträge, Timeout- und No-Retry-Grenzen wie der natürliche Client. Er liest
+weder die Quota noch öffentliche Quellen, startet keine Titelauflösung und
+schreibt keinen Chart oder Entdecken-Feed.
+
+Bei einem gültigen Vertrag enthält die Antwort nur `ok`, den Status
+`valid-contract`, `providerRequests: 1` und die Zahl der normalisierten
+Chartzeilen. Bei einem Fehler bleiben Status, sichere Fehlerklasse und
+konservative Requestzahl erhalten; nur bei `FLIXPATROL_INVALID_RESPONSE` darf
+zusätzlich die erneut validierte Strukturdiagnose erscheinen. Providerdaten,
+Usage-Stand und interne Detailfehler werden nicht ausgegeben.
 
 supabase/functions/_shared/flixpatrolData.js exportiert:
 

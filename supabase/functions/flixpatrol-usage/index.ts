@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createFlixPatrolClient } from "../_shared/flixpatrolClient.js";
+import { FLIXPATROL_AT_SOURCES } from "../_shared/flixpatrolData.js";
 import {
   createFlixPatrolUsageHandler,
   parseFlixPatrolServiceKeys,
@@ -57,6 +58,12 @@ function runtimeDependencies() {
     serviceKeys,
     readUsage: () => rpc("kd_flixpatrol_usage_status"),
     refreshUsage: () => client.fetchQuota(),
+    diagnoseTop10: () => client.fetchTop10({
+      companyId: FLIXPATROL_AT_SOURCES.companies.prime.id,
+      countryId: FLIXPATROL_AT_SOURCES.country.id,
+      chartType: "movies",
+      date: new Date(Date.now() - 86_400_000).toISOString().slice(0, 10),
+    }),
   };
 }
 
