@@ -739,6 +739,60 @@ kein Anbieterrequest und keine Datenänderung. Staging liefert weiterhin
 `8d2ba10`, Production `3b82a73`. Beleg:
 `/private/tmp/kd-ops-audit-20260909/startseite-e8-live-latency.json`.
 
+Die ergänzende Einzelmessung des vollständigen Katalogs um 15:31 UTC ergibt
+24.690 Titel, 6.958.424 dekodierte Bytes bei gzip-Übertragung, 575 ms bis zu den
+Antwortheadern, 792 ms einschließlich Download und 19 ms JSON-Verarbeitung.
+Das trennt im späteren Browserbefund Übertragung und lokale Berechnung;
+dieselben Labor-/Gerätegrenzen gelten. Beleg:
+`/private/tmp/kd-ops-audit-20260909/startseite-e8-full-catalog-latency.json`.
+
+Erste Baumeisterlieferung `bc73cd9` umfasst vier Produktdateien und zwei
+fokussierte Testdateien: einmaliger Must-Watch-Kandidatenindex, bedarfsgerechte
+Dashboard-Projektionen und entkoppelte optionale Fakten. Das Vergleichslabor
+meldet für die Rückkehr Mediathek → Start Median 194 → 55 ms bei 393 px und
+192 → 56 ms bei 430 px (WebKit, Showa, 400 Master-/80 Must-Watch-Einträge,
+24.690 Katalogtitel, keine CPU-Drosselung). Die Startmessung 2.121 → 1.074 ms
+verwendet ein gezieltes Netzprofil mit 250 ms Katalog- und 1.200 ms
+Faktenverzögerung; das Vorher ist dort simuliert und wird gesondert belegt.
+
+Die statische Integrationsprüfung hält zwei konkrete Nähte zurück: Das
+Entfernen der normalisierten Streaming-`id` bricht Verfügbarkeit und Picker
+in der vollständigen Must-Watch-Liste; außerdem darf der neue Hintergrund-
+Promise bei einem Kontowechsel nicht vor dem späteren App-Catch unbehandelt
+verwerfen. Der Delta-Restauftrag an denselben Baumeister ist als `53be785`
+geliefert: bisherige Kandidaten-IDs vollständig erhalten, möglicher Fakten-
+Fehler sofort behandelt und weiterhin für den späteren Consumer ablehnbar.
+Der Kontozaun bleibt wirksam. Beide Commits wurden konfliktfrei als `332836d`
+und `9f80eb1` in den Master übernommen. Backend, Workflows, CSS und Paket-/
+Buildkonfiguration sind unverändert.
+
+Endgültiger fokussierter Beleg: Must-Watch 68/68, Katalog 112/112, externe
+Identität 13/13 sowie der echte WebKit-Picker 1/1. Dieser speichert für rohe
+Streamingkandidaten und bereits mit Master-ID gematchte Kandidaten jeweils
+die richtige Watchmode-ID. Ein Konto-A→B-Wechsel bei verspäteten Fakten
+liefert weiterhin `FORBIDDEN`, keine fremden Fakten und kein unbehandeltes
+Promise-Fehlerereignis. Der vorherige fokussierte Showa-Dauerbedienungsfall
+war ebenfalls grün.
+
+Die Messung wurde nach dem Delta wiederholt: Mediathek → Start, neun Werte
+je Breite, Median **194 → 56 ms (393 px)** und **192 → 59 ms (430 px)**.
+Gemessen wird der lokale Klick bis zum DOM-Wechsel und ersten folgenden
+Animationsframe. Das sind WebKit-Laborwerte in der Entwicklungsansicht,
+keine INP-/Feldmessung und keine physische iPhone-Abnahme. Daten-/Darstellungs-
+bedingungen bleiben wie oben; Service Worker und Fremdnetz sind im Labor
+blockiert. Der gesonderte Cold-Vergleich liefert diesmal 2.643 → 1.122 ms,
+je einen Lauf mit bzw. ohne simulierte blockierende Await-Kante im selben
+aktuellen App-Code. Er isoliert diese Ladeabhängigkeit und ist ausdrücklich
+kein allgemeiner Vorher/Nachher-Benchmark eines ausgecheckten Altcommits.
+
+Belege: `/private/tmp/kd-e8-measurement-summary.md`,
+`/private/tmp/kd-e8-measure.mjs`,
+`/private/tmp/kd-e8-measure-before-recorded.jsonl`,
+`/private/tmp/kd-e8-measure-delta-raw.log` und
+`/private/tmp/kd-e8-focused-delta-tests.log`.
+Der Master führt jetzt das einmalige lokale Gesamtgate für den integrierten
+Kandidaten aus; E8 ist noch nicht auf Staging ausgeliefert.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
