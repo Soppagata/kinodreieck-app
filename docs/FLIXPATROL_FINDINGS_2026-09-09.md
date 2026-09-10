@@ -7,12 +7,16 @@ kein eigenes Freigabe-/Budgetgate und kein Frontend-Ticker. Der Hintergrundzaehl
 ist gebaut und mit einem echten Quota-Abruf geprueft; die folgende
 Produktueberarbeitung ist eine Findings-Liste.
 
-Codebasis der Inventur: integrierter Reparaturzweig nach `f086ef5`, zusaetzlich
-die fertige Entdecken-/Radar-Trennung. Die untersuchten fachlichen KI-, Katalog-
-und Suchpfade sind gegen main/staging abgeglichen. Die aktuelle Lieferung
-enthaelt den Ticker; dies ist noch kein Nachweis eines laufenden
-Fuenf-Quellen-Feeds. Die offenen Betriebsreparaturen bleiben im gemeinsamen
-`BETRIEBSREPARATUR_REGISTER_2026-09-09.md` sichtbar.
+Codebasis dieser historischen Inventur: integrierter Reparaturzweig nach
+`f086ef5`, zusaetzlich die fertige Entdecken-/Radar-Trennung. Die folgenden
+Befunde und offenen API-Proben beschreiben den damaligen Stand. Der spaetere
+Bau E1–E13, der laufende Fuenf-Quellen-Feed und die Liefernachweise stehen im
+[Masterregister](BETRIEBSREPARATUR_REGISTER_2026-09-09.md); der verifizierte
+API-Vertrag steht in [FLIXPATROL_DATENVERTRAG.md](FLIXPATROL_DATENVERTRAG.md).
+Die Inventur ist keine zweite aktuelle Aufgabenliste. Insbesondere hat Max
+den bei F08 zunaechst unveraenderten Streaming-Neu-Pfad spaeter ausdruecklich
+als E11/E12 beauftragt: echte Watchmode-Angebotsdifferenzen bleiben die Quelle,
+FlixPatrol-Chartplaetze werden weiterhin nicht als neue Verfuegbarkeit gewertet.
 
 ## Was die API belegt und was noch offen ist
 

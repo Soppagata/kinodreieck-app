@@ -23,12 +23,12 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
-| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE für den gelieferten Ops-Monitor: 34480116970 grün; E1. OFFEN E11: der lokale Watchmode-Takt übersprang die fällige Mittwochsgelegenheit wegen einer minutengenauen 48h-Sperre; Diagnose und Bauplan unten |
+| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE für den gelieferten Ops-Monitor: 34480116970 grün; E1. E11 gebaut und im tatsächlichen Pipelinecheckout integriert: 55b8392; Umstellung der geladenen Zeitplanung und erster regulärer Lauf noch offen. |
 | M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193, CI 34509618429 und Domain/Worker/Assets grün. E11 im tatsächlichen Pipelinecheckout INTEGRATED (6c2822e), E13 im Appmaster INTEGRATED (29a67ef). E12 DISPATCHED auf dieser gemeinsamen Appbasis; gemeinsame Prüfung und Lieferung noch offen. Anschließend beauftragter Gesamtabgleich E1–E13. Natürlicher Entdecken-Erstlauf bleibt separat M3; Production 3b82a73; Master |
-| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für FlixPatrol E2/E3/E5/E6 und Entdecken E9/E10 auf Staging 5724193. OFFEN E11/E12: Watchmode-Known-Export verliert den belegten Werktyp; jüngste strenge Zuordnung blendet dadurch echte Mediathektreffer aus. Neu-Verfügbarkeit und sichtbare Zähler sollen aus demselben gemeinsamen Katalog entstehen; Bauplan unten |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193. E11 im tatsächlichen Pipelinecheckout INTEGRATED (55b8392), E12/E13 im Appmaster INTEGRATED (Produktstand 6848eff, Persistenzfixture 6bd48cd). Gesamtabgleich und gemeinsames Abschlussgate laufen; anschließende Staging-/Datenlieferung offen. Natürlicher Entdecken-Erstlauf bleibt separat M3; Production 3b82a73. |
+| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für FlixPatrol E2/E3/E5/E6 und Entdecken E9/E10 auf Staging 5724193. E11/E12 integriert: echte Typen, eine ausgewählte Titelmenge und producerbelegte Neu-Zugänge. Reale providerfreie Probe bestätigt 9.797 ausgewählte Titel / 123 Mein Programm statt 29, persönliche Daten vor/nach bytegleich; Lieferung noch offen. |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -1288,6 +1288,97 @@ persönlicher Bewertungen und keine neue Vollkopie des Katalogs pro Gerät.
    Watchmode-Lauf und physische PWA-Abnahme werden getrennt belegt. Der bereits
    laufende FlixPatrol-Heartbeat darf nur seinen eigenen M3-Abschluss ändern;
    er schließt diesen neuen Streaming-Vorfall nicht.
+
+## Gesamtabgleich E1–E13 nach der Integration
+
+Der Abgleich bezieht sich auf die ausdrücklich beauftragten Etappen und die
+späteren Korrekturen dieses Tasks. Die 28 F-/K-Findings bleiben eine Inventur;
+Personen-/Reihenquellen, Moviepilot, eine neue Filmwissen-Quelle und die
+reservierte Masterlisten-Massenanreicherung sind kein unerledigter Bauauftrag.
+
+| Etappen | Abgleich mit dem geplanten Ergebnis |
+| --- | --- |
+| E1 | Ticker, Monitor und getrennte Workflows sind ausgeliefert. Der Ticker lief natürlich erfolgreich; der reparierte Private-Ops-Monitor ist mit Lauf 34480116970 erfolgreich belegt. Automatic-AI bleibt deaktiviert, der Radar-Job hart ausgeschaltet. Kein Datenrefresh aus dem Monitor. |
+| E2/E3 | Ein gemeinsamer gezählter FlixPatrol-Transport und Faktenbestand, positive/negative Cacheverträge und strenge ID-/Jahr-/Werktyp-Zuordnung sind eingebunden. Sechs FlixPatrol-Tabellen besitzen erzwungene RLS. Persönliche Identitäten werden nicht durch Suchähnlichkeit ersetzt. |
+| E4 | Format-8-Feed mit 50 Titeln, 15 ÖFI / 10 Netflix / 10 Prime / 10 Disney / 5 Apple, am 10.09. bereit; kein Quellenfehler. Quellen- und Abrufdatum bleiben getrennt. Der erste natürliche Entdecken-Lauf bleibt ausdrücklich M3 und ist kein durch Mocks bewiesener Erfolg. |
+| E5/E6 | Import, gemeinsame Metadaten und die vorgesehenen KI-Verbraucher verwenden passende neutrale Cachefakten. Forecast/Radar erhalten serverseitigen Kontext; Profil-Filmerwähnungen werden nach der Antwort abgeglichen. Kein API-Loop pro Nutzer/Suche, keine Popularität als Geschmacksevidenz und kein neuer bezahlter KI-Test. |
+| E7/E8 | Der Katalogindex und der leichte Startpfad bleiben erhalten. Streaming-Vollkatalog und optionale Fakten blockieren den ersten Dashboardaufbau nicht. Die frühere Freeze-Korrektur ist von Max angenommen; neue Browserregressionen prüfen Navigation und Showa weiter. Eine erneute physische iPhone-Messung wird nicht aus Browserwerten abgeleitet. |
+| E9/E10 | Beide Entdecken-Listen berücksichtigen ausgewählte Dienste, Kino füllt die persönliche Mischung bis 50. Inhaltsbezug ergänzt das Ranking; die neutralen Ergänzungen behaupten keine persönliche Passung. Der bereits reale 30-Streaming-/20-Kino-Beleg und die sechs Empfehlungen bleiben gültige Lieferbelege. |
+| E11 | Producer auf 55b8392 im tatsächlichen Pipelinecheckout integriert und auf dem verifizierten privaten Pipeline-Branch zurückgelesen. Echte Known-Werktypen, Quelleneinzelstände und kleine Dienstedifferenzen werden geliefert. Fünf Quellen sind nach 48 Stunden fällig, ein Vollstand nach 12 Tagen ersetzt den Fünferlauf. Bestehende 500-/2.000-Requestgrenzen bleiben unverändert. |
+| E12 | Alles, Mein Programm, Neu und Settings verwenden denselben ausgewählten Bestand. Explizit leere und noch ladende Auswahl sind getrennt. Neu rekonstruiert echte Zugänge zur gewählten Angebotsunion und hält sie 14 volle Tage; der persönliche Vollkatalog-Snapshot ist kein aktiver Speicherpfad mehr. Konto- und Katalogstandwechsel sind geschützt. |
+| E13 | Eine zentrale Hilfe unter Settings, davon getrennte Datenschutz-/Quelleninformationen und kein Hilfe-Button auf Start. FlixPatrol-Datenwege und die tatsächliche KI-Nutzung sind erklärt; unbelegte Aufbewahrungs- oder Regionszusagen werden nicht erfunden. Login-Rechtstexte und Easter-Egg-Zugang bleiben erreichbar. |
+
+Die Paketabnahme schloss drei konkrete Integrationslücken: Known-Titel in
+Alles/Neu verwenden ihre bereits belegte persönliche Zuordnung und bieten
+keine zweite Anlage an; fehlende externe Genres verdrängen keine vorhandenen
+persönlichen Genres; der verbleibende Rechteverweis zeigt auf den aktuellen
+Settings-Bereich. E12 liegt als `18da882`, `d893a24`, `6848eff` im Master,
+E13 als `29a67ef` und `3efe3e5`. Ein veralteter Persistenztest mit leerer
+Dienstefixture wurde als `6bd48cd` an den gewollten Auswahlvertrag angepasst;
+seine 68 Persistenzassertionen bleiben erhalten.
+
+Die reale Leseprobe vom 10.09., 21:40 UTC, bestätigt mit 400 eigenen Werken
+und derselben Dienstauswahl 9.797 Titel in Alles und nach der Typkorrektur
+123 in Mein Programm statt 29. Rohbestand: 24.916; 226 fehlende Known-Typen
+ergänzt, keine Werkmenge verändert. Vor-/Nachhash der persönlichen Daten ist
+gleich. Die Probe nutzte 15 begrenzte eigene Datenbank-/Cachelesezugriffe,
+null Providerrequests und null persönliche Writes. Ohne den ersten neuen
+Quellenvergleich bezeichnet Neu den Stand ehrlich als Baseline. Beleg:
+`/private/tmp/kd-ops-audit-20260909/streaming-final-prepared-20260910214041905.json`.
+
+Der Backendabgleich vom 10.09., 21:43 UTC, bestätigt alle 74 Migrationsversionen
+und die weiterhin unveränderten, zuvor heruntergeladenen Functionbytes:
+Ticker v11, Entdecken v69, AI v88 und Radar v66. Der erneute Function-Mocklauf
+besteht 340/340. Der gemeinsame FlixPatrol-Zähler steht bei 38 abgeschlossenen
+Versuchen (33 Erfolge, 5 historische Fehler); der offizielle Quota-Snapshot
+bleibt als eigene Beobachtung vom Morgen getrennt. Belege:
+`task-backend-audit-20260910T214349.json`,
+`flixpatrol-heartbeat-20260910T214347248711Z.json` und
+`final-e1-e13-functions.log` im lokalen Nachweisordner.
+
+Die aktuelle Betreiberanleitung der Pipeline entfernt den alten M/W/F-Plan
+und den nicht mehr vorhandenen Phase-0-Einrichtungsbefehl. Die Ticker- und
+Findingsdokumente unterscheiden historische Inventur und aktuellen Lieferstand;
+historische Belege wurden nicht als vermeintlich ungenutzte Anleitung gelöscht.
+
+### Gemeinsamer lokaler Abschluss
+
+Produktbaum `ee2c4196a0de37658b9c087b860639353f67f2ca`, Appkandidat vor diesem
+reinen Registerabschluss `6acfc16fde8e9b92d7dd8f28a4ed620dbfe595fd`:
+
+- Das vollständige Standard-Appgate ist in seinen vorhandenen Schritten
+  abgearbeitet: erster Teil einschließlich PostgreSQL-Verträgen, die gezielt
+  korrigierte Persistenzfixture 68/68, alle verbleibenden Tests, Einzeldateibau
+  und Pages-Buildprüfung 72/72. Nach dem Fixturefehler wurden bereits grüne
+  Teile nicht erneut gestartet. Belege: `final-e1-e13-app-verified.log`,
+  `final-e1-e13-app-remaining.log`, `final-e1-e13-remaining-commands.json` und
+  `final-e1-e13-online-build.log`. Der separat fortgesetzte letzte Vite-Schritt
+  lief über `npm run build`, damit dessen regulärer npm-Binärpfad gilt.
+- Die zwei vorausgegangenen PostgreSQL-Startfehler waren lokal: zunächst
+  gesperrtes Shared Memory, anschließend erschöpfte macOS-IPC-Plätze. Acht
+  eigene unverbundene 56-Byte-Marker mit nicht mehr existierendem Erzeuger
+  wurden nach Prüfung entfernt; kein Prozess beendet und kein Kernel-Limit
+  verändert. Danach liefen die echten temporären PostgreSQL-Tests erfolgreich.
+  Beleg: `final-local-ipc-cleanup.json`. Diese Fehlläufe sind keine grünen Tests.
+- Function-Mocks 340/340; keine zahlenden KI-Aufrufe.
+- Gemeinsame mobile Suite: 90 Fälle bestanden sofort. Die beiden alten
+  Showa/Cage-Fixtures ohne gewählten Dienst wurden als `6acfc16` korrigiert
+  und bestanden gezielt in beiden Browsern, bei unveränderten Last-/Zeit- und
+  Navigationsassertionen. Damit sind alle 92 Fälle belegt, ohne Test-Retries.
+  Belege: `final-e1-e13-mobile.log` und `final-e1-e13-mobile-fixture-delta.log`.
+  Die vier Dauerbedienungsfälle je Browser umfassen 256 Navigationen; maximale
+  browserseitige Tabreaktion 213 ms, keine erneute Vollkatalogblockade.
+- Ergänzende bestehende Konto-/Start-/Scroll-/Must-Watch-Wege: 8/8 in Chromium
+  und WebKit, alle externen Requests gemockt, keine unbekannte Route.
+  Beleg: `final-e1-e13-private-v1.log`. Die neue E11/E12-Consumerfixture und die
+  übrigen betroffenen Streaming-/Settings-/Hilfefälle wurden bereits im
+  Baumeisterpaket in beiden Browsern geprüft.
+
+Das nächste Lieferfenster umfasst ausschließlich den geprüften Stagingkandidaten,
+die vorbereitete Streaming-/Manifestkorrektur und die bestehende lokale
+Watchmode-Automatik. Production-Frontend und geschützte Production-Freigabe
+sind kein Teil dieses Fensters. Die normale gemeinsame Datenlieferung bleibt
+auch für Production sichtbar; das ist keine isolierte Sandbox.
 
 ## Historischer Ausgang am 9. September
 

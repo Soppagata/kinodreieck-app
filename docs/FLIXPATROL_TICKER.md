@@ -1,6 +1,6 @@
 # FlixPatrol-Nutzungsticker
 
-Der Ticker erfasst FlixPatrol-Requests serverseitig und hält den letzten gültigen offiziellen Quota-Snapshot getrennt davon. Die tägliche Ticker-Function ruft ausschließlich Quota ab. Der gemeinsame Client im Masterzweig unterstützt zusätzlich Charts und Titel; deren Cache- und Integrationsvertrag steht in [FLIXPATROL_DATENVERTRAG.md](FLIXPATROL_DATENVERTRAG.md). Eine Oberfläche gibt es nicht.
+Der Ticker erfasst FlixPatrol-Requests serverseitig und hält den letzten gültigen offiziellen Quota-Snapshot getrennt davon. Die aktive tägliche Ticker-Function ruft ausschließlich Quota ab. Der gemeinsame Client unterstützt zusätzlich Charts und Titel; deren Cache- und Integrationsvertrag steht in [FLIXPATROL_DATENVERTRAG.md](FLIXPATROL_DATENVERTRAG.md). Eine Oberfläche gibt es nicht. Aktuelle Versionen, Zähler und natürliche Läufe werden ausschließlich im [Masterregister](BETRIEBSREPARATUR_REGISTER_2026-09-09.md) belegt.
 
 ## Verträge
 
@@ -15,7 +15,7 @@ Die Function akzeptiert `SUPABASE_SECRET_KEYS` und den Legacy-Fallback `SUPABASE
 
 Die API-Grundlage ist in der offiziellen [FlixPatrol API v2](https://flixpatrol.com/api2/) und der [Quota-Dokumentation](https://flixpatrol.com/api2/page-quota/) beschrieben.
 
-## Lieferstand am 9. September 2026
+## Historischer Lieferstand am 9. September 2026
 
 - Migration `20260909153000` ist gezielt atomar im bestehenden gemeinsamen Projekt `bscjgwcntapobyxsiyce` angewandt; insgesamt 71 Migrationsversionen, keine weitere lokale Migration offen. Zwei neue Tabellen mit erzwungener RLS; Browserrollen besitzen weder Tabellen- noch RPC-Rechte. Der interne Statushelper ist auch für `service_role` gesperrt, die drei äußeren RPCs sind dort ausführbar.
 - Function `flixpatrol-usage`, Version 2, ist `ACTIVE` und ihre drei eigenen Quelldateien sind bytegleich zum geprüften Commit `058eb08` zurückgelesen. Die sechs bestehenden Function-Versionen blieben unverändert.
@@ -23,7 +23,6 @@ Die API-Grundlage ist in der offiziellen [FlixPatrol API v2](https://flixpatrol.
 - Offizieller Snapshot: `used=0`, `available=1000`, `limit=1000`, `limitExtra=0`, `resetAt=2026-10-01T00:00:00`. Der rohe Resetwert enthält keine Zeitzone. Ein eigener Request und die offizielle Null sind zwei getrennte Messwerte; aus dieser einzelnen Antwort wird keine dauerhafte Kostenfreiheit aller Quota-GETs behauptet.
 - Vollständiges `npm test` einschließlich Build: grün. 56 Tickerchecks einschließlich echter lokaler PostgreSQL-Tests: grün. Deno-Typcheck: grün. Bestehende KI-Function-Mocks: 334/334 grün, ohne Anbieteraufruf.
 - Der vorgeschriebene bestehende Live-RLS-Gesamttest lief zusätzlich: 58 Checks bestanden, 15 Fehler bei inaktivem Testkonto B und anonymen 401-Antworten; Testdaten-Cleanup erfolgreich. Die neuen Tickerrechte wurden gesondert remote geprüft und stimmen. Testkonten wurden nicht aktiviert oder sonst geändert.
-- Implementierung und Belege sind lokal committet; noch kein Push. Max hat die tägliche Automatik inzwischen ausdrücklich freigegeben. Der aktive Workflow ist im Masterzweig gebaut; Veröffentlichung und erster natürlicher Lauf stehen noch aus.
 
 Vor der erfolgreichen Probe wurden zwei Zugriffsprobleme ohne FlixPatrol-Wirkung behoben: Der verfügbare moderne Supabase-Server-Key authentifiziert erfolgreich, während der geprüfte Legacy-Key abgewiesen wurde. Außerdem reicht der Edge-Proxy einen leeren POST als Stream weiter; der Handler prüft jetzt dessen tatsächliche Bytes. Inhaltsbytes und defekte Streams bleiben abgewiesen. Die vorangegangenen Providerzähler waren jeweils nachweislich null.
 
@@ -69,8 +68,8 @@ Die Operationstabelle enthält nur UUID, Requestart, Status, HTTP-Status und Zei
 
 ## Hintergrundlauf
 
-Der gebaute [Workflow](../.github/workflows/flixpatrol-usage.yml) läuft nach
-Veröffentlichung auf dem Default-Branch täglich um 05:11 UTC im
+Der aktive [Workflow](../.github/workflows/flixpatrol-usage.yml) läuft auf dem
+Default-Branch täglich um 05:11 UTC im
 GitHub-Environment `staging`. Ein natürlicher Lauf sendet genau einen bodylosen
 POST an die Function; diese fordert genau einen `/v2/quota`-Request an.
 Der Umfang ist höchstens 31 natürliche Quota-Requests je Kalendermonat.
