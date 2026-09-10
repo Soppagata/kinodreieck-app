@@ -23,12 +23,12 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
-| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: vollständiger Private Ops Monitor 34480116970 nach erfolgreichem Datenlauf und Staging-Deploy grün; E1 |
+| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE für den gelieferten Ops-Monitor: 34480116970 grün; E1. OFFEN E11: der lokale Watchmode-Takt übersprang die fällige Mittwochsgelegenheit wegen einer minutengenauen 48h-Sperre; Diagnose und Bauplan unten |
 | M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193, Gesamtgate und CI 34509618429 grün, Domain/Worker/Assets am 10.09. um 17:51 UTC bestätigt. Schnellere Startdarstellung im Labor und Entdecken am echten Datenbestand belegt; physische iPhone-Abnahme dieser Ergänzungen offen. Natürlicher Entdecken-Erstlauf separat unter M3 offen; Production weiterhin 3b82a73; Master |
-| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: gemeinsamer Faktenpfad mit fünf Charts, 50 Referenzen und 25 benötigten Titeldetails, Backend 97ade56; KI-Vertragsprüfungen grün. E9/E10 auf Staging 5724193 verwenden vorhandene Beschreibungen flüchtig im Ranking; reale Probe sechs Empfehlungen, fünf begründet und eine neutral. Keine zusätzlichen FlixPatrol-/KI-Requests oder persönlichen Writes; E2, E3, E5, E6, E9, E10 |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193, CI 34509618429 und Domain/Worker/Assets grün. OFFEN E11/E12: neuer Streaming-Vorfall mit 29 „Mein Programm“, 9.768 „Alles“, historischen Einstellungszahlen und leerem „Neu“; exakt reproduziert, Bau geplant, noch nicht gestartet. Natürlicher Entdecken-Erstlauf bleibt separat M3; Production 3b82a73; Master |
+| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für FlixPatrol E2/E3/E5/E6 und Entdecken E9/E10 auf Staging 5724193. OFFEN E11/E12: Watchmode-Known-Export verliert den belegten Werktyp; jüngste strenge Zuordnung blendet dadurch echte Mediathektreffer aus. Neu-Verfügbarkeit und sichtbare Zähler sollen aus demselben gemeinsamen Katalog entstehen; Bauplan unten |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -987,6 +987,115 @@ Entdecken-Lauf unter M3 bleiben getrennt offen. Belege:
 `/private/tmp/kd-ops-audit-20260909/entdecken-e9-e10-delivery.json`.
 Dieser dokumentarische Abschluss wird nur im Masterzweig festgehalten;
 der geprüfte Staging-Liefercommit bleibt `5724193`.
+
+## E11/E12 – Streaming-Diagnose und Bauplan vom 10. September
+
+Max meldet 29 Titel unter „Mein Programm“, bestätigt auf Nachfrage 9.768
+unter „Alles“, abweichende Einstellungszahlen und ein leeres „Neu“. Auftrag:
+Ursachen lokalisieren und einen einfachen, stabilen Bau durch Baumeister
+planen. Diese Phase ist DIAGNOSE/PLAN; keine Produktänderung, kein gestarteter
+Baumeister, kein neuer Providerlauf, Publisher oder Schedulerstart.
+
+### Gemessene Ausgangslage und Ursachen
+
+Öffentlich um 19:37 UTC bestätigt: Staging `5724193`, Production `3b82a73`.
+App-Masterbasis `68be97ab9a1daa91107878d37a1c95cbfad2b04d`, sauber.
+Der tatsächliche Watchmode-Produzent ist das zweite Repository
+`/Users/max/Documents/GitHub/Kinodreieck`, Branch
+`codex/watchmode-stable-cadence-20260906`, Commit
+`f1be7f9d1d0c6a64f0041c1c68d113d15a511f6a`. Dort sind nur drei vorhandene
+generierte Streamingdateien verändert; sie wurden nicht angefasst. Der
+LaunchAgent `com.kinodreieck.streaming` startet lokal auf diesem Mac um 13 Uhr
+an Mo/Mi/Fr sowie am Monatsersten. Dieser Datenpfad ist kein GitHub-Workflow.
+
+Die normale lesende Ownerprobe verwendet dieselben echten Eingaben für
+Production, Staging und zwei flüchtige Reparaturvarianten. Gespeichert wurden
+nur Mengen, Dienste, Datumswerte und Hashes; keine privaten Titel oder
+Bewertungen. Zwölf Konto-/Katalog-/Cache-Reads, null Anbieterrequests oder
+persönliche Writes. Beleg:
+`/private/tmp/kd-ops-audit-20260909/streaming-diagnose-20260910.json`.
+
+| Befund | Beleg und genaue Ursache | Kleinste tragfähige Korrektur |
+| --- | --- | --- |
+| GEPRÜFT: „Mein Programm“ verliert Zuordnungen | 226 von 226 ausgelieferten Known-Einträgen haben keinen `typ`. `build_streaming_ansicht.js:215` kopiert persönliche Felder, lässt aber den vorhandenen Watchmode-Werktyp weg. Seit E3 verlangt `baueStreamingAnsichten` vollständige Werkidentität. 225 Known-Einträge werden deshalb als fehlende Identität abgewiesen. Voll geladen entstehen exakt 29 ausgewählte Treffer; der leichte Bootkatalog ergibt sogar null. | Im Export nur den belegten `typ` aus dem über dieselbe eindeutige Watchmode-ID vorhandenen Rohkatalog mitliefern. Keine pauschale Annahme „Film“ und kein Lockern des Matchers. Die lokale Typ-Ergänzung liefert 123 ausgewählte Treffer, identisch zur Production-Zahl auf denselben Inputs. |
+| GEPRÜFT: „Alles“ und Einstellungen zählen unterschiedliche Dinge | Rohkatalog 24.916, davon 9.797 bei den ausgewählten Diensten. Staging zerlegt diese in 29 bekannt + 9.768 Rest; die Summe bleibt gegenüber Production unverändert. „Alles“ zeigt tatsächlich nur den Rest nach Mediathek-Abzug. `KatalogAuditStatus` liest zusätzlich eine feste Konstante mit 12.540/100 vom 22.07. und 11.049/103 vom 04.09. statt aktuelle Daten. | Streaming-„Alles“ aus der bereits vorhandenen deduplizierten Gesamtmenge bilden; „Mein Programm“ und „Neu“ sind Teilmengen. Einstellungszahlen aus genau derselben geladenen Projektion und dem echten Quellenstand lesen. Unvollständig geladenen Bestand nicht als vollständige Endzahl ausgeben. |
+| GEPRÜFT: „Neu“ vergleicht die falsche Einheit | `streamingNeu.js` speichert einen gerätelokalen ID-Verlauf. Initialisierung und Quellenwechsel beginnen absichtlich leer. Ein synthetisch belegter Wechsel desselben Films von nur Amazon zu zusätzlich Netflix bei gleicher Quellenabdeckung ergibt trotzdem null Neu-Treffer. Neue Verfügbarkeit eines bestehenden Titels wird nicht erkannt. | Neue Verfügbarkeit je Watchmode-ID und Dienst einmal beim abgeschlossenen Quellenvergleich markieren, 14 Tage erhalten und zusammen mit dem vorhandenen Katalog liefern. Die PWA filtert diese Markierungen nach Diensten und Datum; kein zweiter gerätelokaler ID-Verlauf. |
+| GEPRÜFT: die Mittwochsgelegenheit wurde ausgelassen | Vollständiger Lauf am 07.09.: Fetch, Build und Lieferung grün, Katalogstand `2026-09-07T11:05:38.395Z`. Am 09.09. um `11:01:13.936Z` meldet fetch `skipped/takt`: erst 47,9265 Stunden vergangen. Der M/W/F-Scheduler und die rollierende 48h-Sperre arbeiten gegeneinander. | Eine gemeinsame, explizite Kalendertagsregel für die bestehenden Laufgelegenheiten in Europe/Vienna. Keine zusätzlichen Startzeiten oder Wiederholungen; vollständiger Lauf alle 12–14 Tage und Kern-3 an M/W/F bleiben der Zweck. |
+| GEPRÜFT: Vollstand-Metadatum hängt einen Lauf zurück | Veröffentlichter `katalog_stand` ist korrekt 07.09., `letzter_voll_lauf` zeigt noch 12.08. Der Builder liest den letzten abgeschlossenen Lauf, bevor der gerade veröffentlichte Lauf finalisiert wird. | Den belegten gerade aufgebauten vollständigen Quellenstand in dessen Payload korrekt bezeichnen; einen reinen Neuaufbau weiterhin nicht als neuen Watchmode-Abruf ausgeben. |
+
+Die Identitätsprobe zeigt bei reiner Typ-Ergänzung 282 bekannte Werke,
+davon 123 für die ausgewählten Dienste, und 24.634 übrige Werke. Der alte
+Production-Matcher liefert 284/123; die zwei weiteren ungesicherten Werke
+werden nicht durch gelockerte Regeln erzwungen. Eine breitere Umstellung
+sämtlicher Known-Titel-/Jahres-/ID-Felder ergäbe 272/121 und ist ausdrücklich
+nicht die vorgeschlagene Sofortkorrektur. Persönliche Felder bleiben führend.
+
+Die konkrete iPhone-Vergleichshistorie wurde nicht gelesen; ihr individueller
+Reset ist NICHT BELEGT. Belegt sind die leere Initialisierung, der globale
+Quellen-Rebase, die fehlende Dienstedifferenz und der ausgefallene Mittwochs-
+Abruf. „Kein neuer Titel in 14 Tagen“ ist bei fehlendem Vergleichsbeleg keine
+zulässige Schlussfolgerung. Zweite providerfreie Probe:
+`/private/tmp/kd-ops-audit-20260909/streaming-neu-takt-spike-20260910.json`.
+Laufbeleg: `/private/tmp/kinodreieck_streaming.log`.
+
+### Baufolge und Ownership
+
+Zwei aufeinanderfolgende SOLO-Etappen. E12 benötigt den von E11 gelieferten
+kleinen Datenvertrag; eine parallele Änderung beider Seiten würde hier mehr
+Abstimmung als Nutzen schaffen. Je Etappe genau ein Baumeister, höchstens ein
+wirklich entlastender Bauchat mit disjunkter Schreibfläche. Keine Audit- oder
+Kontrollagenten. Der Master bleibt in Produktdateien read-only.
+
+| Etappe / IDs | Geplanter Branch und Basis | Exklusive Schreibfläche | Ergebnis und Abnahme |
+| --- | --- | --- | --- |
+| E11 – Daten vollständig und Takt verlässlich / M1, M6 | `codex/streaming-daten-e11-20260910` im eigenen Worktree, Pipelinebasis `f1be7f9d1d0c6a64f0041c1c68d113d15a511f6a` | Unter `KinoFilm/Programmdateien/System`: `build_streaming_ansicht.js`, `fetch_streaming_katalog.js`, die erforderliche Taktnaht in `streaming_auto.mjs`, kleine reine Helper und fokussierte Tests. Falls ein Bauchat entlastet: ausschließlich der neue reine Kalenderhelper mit eigenen Tests; der Baumeister besitzt Einbindung, Export und Neu-Diff. | Belegter Werktyp bleibt erhalten; echte neue Verfügbarkeit je Dienst wird einmal berechnet; bestehende M/W/F-Gelegenheiten scheitern nicht an wenigen Minuten. Eine aus vorhandenen Dateien erzeugte Vorschau bleibt vollständig providerfrei. Der Baumeister liefert den kleinsten additiven Payloadvertrag und dessen Fixtures vor E12. |
+| E12 – Einheitliche Streamingansichten / M5, M6 | `codex/streaming-ansichten-e12-20260910`, Appbasis `68be97ab9a1daa91107878d37a1c95cbfad2b04d`, nach eingefrorenem E11-Vertrag | `src/tabs/StreamingTab.jsx`, `src/components/KatalogAuditStatus.jsx`, `src/tabs/DatenTab.jsx`, erforderliche Prop-/Controller-Naht in `src/App.jsx`, `src/controllers/useStreamingNeuController.js`, `src/lib/streamingNeu.js`, `src/lib/katalog.js` ausschließlich für verlustfreie Weitergabe der neuen Verfügbarkeitsmetadaten, fokussierte Streaming-/Settings-/Vertragstests. Ein optionaler Bauchat besitzt nur dynamische Kataloganzeige und deren Tests; die App-Propnaht bleibt beim Baumeister. | „Alles“ ist die vorhandene Gesamtmenge für die ausgewählten Dienste, hier 9.797; „Mein Programm“ hier 123. „Neu“ liest dieselben Titel mit belegten Dienstemarkierungen. Settings erklären Rohbestand, ausgewählte Dienste, Teilmengen und tatsächlichen Stand mit Livewerten. Gerätespezifischer ID-Snapshot und dessen Ablauf-/Schreiblogik werden als aktiver Pfad entfernt. |
+
+Eingefroren: Supabase-Schema, FlixPatrol/Entdecken-Backend, persönliche Daten,
+strenge Identitätsprüfung, Providerpreise/-zähler/-Requestgrenzen, Lock und
+Checkpoint-Wiederaufnahme, vorhandene Dienste, globale Styles, LaunchAgent-
+Startzeiten, Production und fremde Änderungen. Kein API-Aufruf pro Nutzer,
+kein zusätzlicher Timer/Poller und kein neues Backend oder Verlaufstableau.
+Ein vorhandener vollständiger Katalog wird nicht neu beim Provider angefordert,
+nur um den fehlenden Typ zu ergänzen.
+
+E11 bewahrt bei Teilaktualisierungen die nicht abgefragten Dienste. Eine neue
+Dienstemarkierung ist an einen vollständigen erfolgreichen Vergleich genau
+dieses Dienstes gebunden; sie bezeichnet das erste belegte Auftauchen im
+erfassten Angebot, keine behauptete Premiere. Derselbe Lauf, ein reiner
+Rebuild, ein Gerätewechsel oder eine neue Quellenabdeckung erzeugen keine
+erfundenen Neu-Treffer. Fehlende Vergleichsbasis wird als solche kenntlich,
+statt leise „nichts neu“ zu behaupten. Bestehende ID-/Dienstmarkierungen werden
+wiederverwendet, alte oder entfallene Angebote entfernt; keine zweite Kopie
+persönlicher Bewertungen und keine neue Vollkopie des Katalogs pro Gerät.
+
+### Prüf- und Lieferplan
+
+1. E11 prüft Export mit/ohne Werktyp, aktuelle echte Aggregatmengen,
+   Mo/Mi/Fr mit mehrminütiger Verspätung und Sommerzeitwechsel, Voll-/Teillauf,
+   neuen Titel, neuen Dienst für bekannten Titel, unveränderten Lauf,
+   Quellenwechsel, Entfall und 14-Tage-Ablauf. Fehler oder Checkpoint-Rest
+   dürfen keinen Teilstand veröffentlichen. Pakettests ausschließlich lokal
+   mit Fixtures; keine neuen Providerrequests.
+2. E12 prüft dieselben Vertragsfixtures in beiden Browsern: Dienstewechsel,
+   Gesamtmenge und Teilmengen, Pins/Gesehen/Must-Watch, leichten Bootpfad,
+   vollständiges Nachladen, Konto-/Gerätewechsel, fehlende Vergleichsbasis und
+   14-Tage-Anzeige. Die gelieferten Entdecken-Regeln und die behobene
+   Showa-/Startseitenbedienung bleiben erhalten. Settings dürfen keinen
+   zusätzlichen Vollkatalogabruf oder eine feste historische Zahl vortäuschen.
+3. Nach DELIVERED integriert der Master die zugeordneten Commits. Je finalem
+   Produktkandidaten ein passender vollständiger Abschlusslauf; keine
+   Wiederholung erfolgreicher Paketprüfungen ohne konkrete Integrationsänderung.
+   Die spätere Datenlieferung wird auf Streaming und dessen bestehendes
+   Manifest begrenzt, mit Quell-/Zielhash und Readback. Der normale Builder
+   verlangt aktuell einen passenden Pending-Lauf auch mit `--ohne-deeplinks`;
+   diese Sperre wird nicht durch erfundene Claims umgangen. E11 muss die
+   providerfreie Vorschau als reine Projektion liefern.
+4. Staging-Push, CI und Domain-/Worker-Readback folgen erst im beauftragten
+   Ausführungsschritt. Datenreparatur, Frontendlieferung, nächster natürlicher
+   Watchmode-Lauf und physische PWA-Abnahme werden getrennt belegt. Der bereits
+   laufende FlixPatrol-Heartbeat darf nur seinen eigenen M3-Abschluss ändern;
+   er schließt diesen neuen Streaming-Vorfall nicht.
 
 ## Historischer Ausgang am 9. September
 
