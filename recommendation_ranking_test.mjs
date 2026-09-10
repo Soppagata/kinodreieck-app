@@ -80,6 +80,14 @@ check("Kandidaten ohne belastbaren Grund bleiben in der unpersonalisierten Quell
   assert.deepEqual(rankRecommendations([candidate("fixture:plain")], { profile: {}, library: [] }), []);
 });
 
+check("Neutraler Fallback bleibt grundlos und nimmt keine rein negative Passung mit", () => {
+  const rows = rankRecommendations([
+    candidate("fixture:neutral"), candidate("fixture:negative", { genres: ["komödie"] }),
+  ], { ...context, includeNeutral: true, excludedTargetIds: [] });
+  assert.deepEqual(rows.map((row) => row.targetId), ["fixture:neutral"]);
+  assert.deepEqual(rows[0].reasons, []);
+});
+
 check("Mediatheksprojektion kann vollständig deaktiviert werden", () => {
   const rows = rankRecommendations([
     candidate("library:owned", { genres: ["noir"] }),
@@ -116,7 +124,8 @@ check("Ranking mutiert weder Kandidaten noch Profil oder Mediathek", () => {
 });
 
 check("Rankingmodul besitzt keine Speicher-, Netzwerk- oder KI-Naht", () => {
-  const source = fs.readFileSync(new URL("./src/lib/recommendationRanking.js", import.meta.url), "utf8");
+  const source = ["recommendationRanking.js", "recommendationContent.js"]
+    .map((file) => fs.readFileSync(new URL(`./src/lib/${file}`, import.meta.url), "utf8")).join("\n");
   assert.doesNotMatch(source, /localStorage|sessionStorage|fetch\s*\(|aiService|speichereProfil|store\.set/);
 });
 

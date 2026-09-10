@@ -1,6 +1,8 @@
 /* Deterministisches Empfehlungsranking. Keine KI, kein Netzwerk, kein Profil-
    oder Telemetrie-Write. Das Ergebnis ist eine flüchtige Projektion. */
 
+import { analysiereInhaltsPassung, bereiteInhaltsEvidenz } from "./recommendationContent.js";
+
 function text(value) { return String(value == null ? "" : value).trim(); }
 function normalized(value) { return text(value).toLocaleLowerCase("de-AT"); }
 function list(value) { return Array.isArray(value) ? value : []; }
@@ -67,23 +69,46 @@ function timestamp(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function analyze(candidate, context) {
+function prepareAnalysisContext(context) {
   const profile = context.profile || {};
   const library = context.useLibrary === false ? [] : list(context.library);
-  const positives = confirmedSignals(profile, "positive").filter((signal) => signalMatches(signal, candidate));
-  const negatives = confirmedSignals(profile, "negative").filter((signal) => signalMatches(signal, candidate));
+  const positiveSignals = confirmedSignals(profile, "positive");
+  const negativeSignals = confirmedSignals(profile, "negative");
+  return {
+    library,
+    positiveSignals,
+    negativeSignals,
+    contentEvidence: context.includeNeutral === true ? bereiteInhaltsEvidenz({
+      positiveSignals, negativeSignals,
+      positiveLibrary: library.filter(isPositiveLibraryEvidence),
+    }) : null,
+  };
+}
+
+function analyze(candidate, prepared) {
+  const structuredPositives = prepared.positiveSignals.filter((signal) => signalMatches(signal, candidate));
+  const structuredNegatives = prepared.negativeSignals.filter((signal) => signalMatches(signal, candidate));
+  const content = prepared.contentEvidence
+    ? analysiereInhaltsPassung(candidate, prepared.contentEvidence)
+    : { positiveSignals: [], negativeSignals: [], libraryMatches: 0, reasons: [] };
+  const positives = [...new Set([...structuredPositives, ...content.positiveSignals])];
+  const negatives = [...new Set([...structuredNegatives, ...content.negativeSignals])];
   const blockingNegative = negatives.some((signal) => signal.blocking === true);
-  const ratedMatches = libraryMatchCount(candidate, library);
-  const density = franchiseDensity(candidate, library);
+  const ratedMatches = libraryMatchCount(candidate, prepared.library);
+  const density = franchiseDensity(candidate, prepared.library);
   const positiveStrength = positives.reduce((sum, signal) => (
     sum + Math.max(0, Number(signal.staerke ?? signal.strength) || 0)
   ), 0);
 
   const reasons = [];
-  for (const signal of positives.slice(0, 1)) {
+  for (const signal of structuredPositives.slice(0, 1)) {
     reasons.push(`Profil: ${text(signal.label || signal.wert || signal.value)}`);
   }
-  if (ratedMatches > 0) reasons.push(`${ratedMatches} positiv bewertete Mediathek-${ratedMatches === 1 ? "Passung" : "Passungen"}`);
+  if (content.profileReason && content.positiveSignals.some((signal) => !structuredPositives.includes(signal))) {
+    reasons.push(content.profileReason);
+  }
+  if (content.libraryReason) reasons.push(content.libraryReason);
+  if (ratedMatches > 0 && content.libraryMatches === 0) reasons.push(`${ratedMatches} positiv bewertete Mediathek-${ratedMatches === 1 ? "Passung" : "Passungen"}`);
   if (density >= 3) reasons.push("Mehrere Titel dieser Reihe in deiner Mediathek");
 
   return {
@@ -92,6 +117,7 @@ function analyze(candidate, context) {
     positiveStrength,
     positiveCount: positives.length,
     ratedMatches,
+    contentLibraryMatches: content.libraryMatches,
     density,
     freshness: timestamp(candidate.freshnessAt || candidate.availableFrom),
     reasons: reasons.slice(0, 3),
@@ -113,6 +139,7 @@ function compareRows(a, b) {
     [a.analysis.positiveStrength, b.analysis.positiveStrength, -1],
     [a.analysis.positiveCount, b.analysis.positiveCount, -1],
     [a.analysis.ratedMatches, b.analysis.ratedMatches, -1],
+    [a.analysis.contentLibraryMatches, b.analysis.contentLibraryMatches, -1],
     [a.analysis.density, b.analysis.density, -1],
     [a.analysis.freshness, b.analysis.freshness, -1],
   ];
@@ -134,14 +161,17 @@ export function rankRecommendations(candidates, context = {}) {
     ? list(context.excludedTargetIds)
     : library.map((item) => item?.targetId))
     .map(text).filter(Boolean));
+  const prepared = prepareAnalysisContext(context);
   return list(candidates)
     .filter((candidate) => eligible(candidate, excludedTargetIds))
-    .map((candidate) => ({ candidate, analysis: analyze(candidate, context) }))
+    .map((candidate) => ({ candidate, analysis: analyze(candidate, prepared) }))
     .filter((row) => !row.analysis.blockingNegative)
     /* Ohne belegten Profil-/Mediatheksgrund bleibt der Kandidat in seiner
        unpersonalisierten Quellenliste und wird nicht zur Empfehlung. Nur ein
        ausdruecklicher technischer Aufrufer darf neutrale Zeilen mitnehmen. */
-    .filter((row) => context.includeNeutral === true || row.analysis.reasons.length > 0)
+    .filter((row) => context.includeNeutral === true
+      ? row.analysis.reasons.length > 0 || row.analysis.negativeCount === 0
+      : row.analysis.reasons.length > 0)
     .sort(compareRows)
     .map((row) => Object.freeze({
       targetId: row.candidate.targetId,
