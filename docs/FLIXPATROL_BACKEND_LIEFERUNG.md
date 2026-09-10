@@ -3,7 +3,11 @@
 Das Paket gehört zum Masterplan
 [BETRIEBSREPARATUR_REGISTER_2026-09-09.md](BETRIEBSREPARATUR_REGISTER_2026-09-09.md).
 Der finale Kandidatencommit und sein Prüfbeleg stehen dort. Dieses Dokument
-beschreibt den Umfang der noch ausstehenden gemeinsamen Backend-Lieferung.
+beschreibt den ausdrücklich freigegebenen Umfang der gemeinsamen
+Backend-Lieferung. Migrationen, Functions, Buildmarker und Berechtigungsprüfung
+sind am 10. September geliefert und bestätigt. Der einzelne Initiallauf
+scheiterte am ersten FlixPatrol-Antwortparser; Tagesaktivierung und erfolgreicher
+neuer Feed stehen noch aus. Die konkreten Belege stehen im Register.
 
 ## Ziel und Datenumfang
 
@@ -72,7 +76,7 @@ in 31 Tagen; frische Titel- und Chartcaches senken den tatsächlichen Verbrauch.
 Einmalproben zählen zusätzlich. Das 1000er-Kontingent erhält kein neues Gate
 und keine Frontendanzeige.
 
-## Abbruch und ausstehende Zustimmung
+## Abbruch und bestätigter Lieferstand
 
 Vor jeder Wirkung werden Kandidat, Ziel und der letzte bekannte Ausgang
 geprüft. Bei unklarem Ausgang folgt ausschließlich Readback, kein blinder
@@ -81,10 +85,15 @@ Bei einem späteren Function- oder Datenfehler bleiben die bereits belegten
 Zustände getrennt dokumentiert; der letzte gültige Feed wird nicht als neu
 aktualisiert ausgegeben.
 
-Der geplante reale RLS-Test wurde vor Ausführung von der automatischen
-Freigabeprüfung abgelehnt, weil die ausdrückliche Zustimmung zur Mutation
-der gemeinsam genutzten Testdaten nicht belegt war. Die hier beschriebenen
-Shared-Wirkungen sowie ein gegebenenfalls gewünschter Initiallauf warten auf
-die konkrete Zustimmung zu Ziel und Umfang. Lokale Umsetzung, Integration
-und CI-Prüfung werden vorher abgeschlossen; die letzte Staging-Lieferung
-folgt wegen der benötigten Backend-Kompatibilität danach.
+Die frühere automatische Ablehnung des realen RLS-Tests ist durch Max'
+ausdrückliche Paketfreigabe beantwortet. Der reale Inaktivkonto-Test hat
+14/14 Prüfungen bestanden; Staging wurde nach bestätigter Backend-Kompatibilität
+erfolgreich veröffentlicht.
+
+Der Initiallauf verbrauchte genau einen FlixPatrol-Chartrequest und zwei
+öffentliche GETs. HTTP 200 mit anschließendem `invalid_response` belegt eine
+abgelehnte Anbieterantwort, noch keine bestimmte Fehlerursache. Null Chart-,
+Titel- und Feedwrites sind zurückgelesen. Der bestehende Feed bleibt erhalten;
+der Tagesclaim und der terminale Laufbeleg werden nicht für einen blinden
+Nachholversuch zurückgesetzt. Der vorbereitete Tagesworkflow bleibt bis zur
+Klärung deaktiviert. Automatic-AI und kostenpflichtiges Radar bleiben aus.

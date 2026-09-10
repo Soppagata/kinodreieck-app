@@ -23,13 +23,13 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
-| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | GEBAUT; lokal und in CI geprüft; natürlicher Monitorlauf offen; E1 |
-| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | Lokal gebaut und vollständig geprüft; Backend-/Datenlieferung offen; E2 → E4 |
-| M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT; isolierte PG-Verträge grün; Migration und natürlicher Lauf offen; E4 |
+| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE für Monitorlogik: natürlicher Lauf 34463011534 nennt nur den tatsächlichen Feed-Quellenfehler; Entdecken-Reparatur bleibt M2; E1 |
+| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | Backend live; Initiallauf am 10. September scheitert am ersten FlixPatrol-Parser, kein neuer Feed; E2 → E4 |
+| M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
 | M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | OFFEN; Master nach den Wellen |
-| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | GEBAUT; E2, E3, E5, E6 integriert und gemeinsam lokal grün; Backend-Lieferung offen |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | Server gebaut/live geprüft; täglicher Workflow active; erster natürlicher Lauf offen; E1 |
+| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Backend und Staging geliefert; noch keine echten Chart-/Titeldaten wegen M2; E2, E3, E5, E6 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE; erster natürlicher Tickerlauf 34462038347 erfolgreich; drei Versuche insgesamt sauber verbucht; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
 
@@ -199,9 +199,9 @@ negativen Filmfall. Präzise JSDoc-Optionen und der optionale Setup-Parameter
 beseitigen die tatsächlichen Deno-Typfehler; keine fachliche Freigabe erweitert.
 Der Deno-Check des Radar-Handlers ist grün.
 
-Das neue Forecast-Requestfeld verlangt die neue Function. Deshalb erfolgt
-die E6-Frontend-Lieferung erst nach der passenden Backend-Lieferung; Staging
-bleibt bis dahin auf der vollständig kompatiblen zweiten Welle.
+Das neue Forecast-Requestfeld verlangt die neue Function. Die E6-Frontend-
+Lieferung wurde deshalb bis zur passenden Backend-Lieferung zurückgehalten
+und am 10. September anschließend veröffentlicht; Belege stehen unten.
 
 ### Gemeinsamer lokaler Abschluss
 
@@ -213,14 +213,16 @@ Belege: `/private/tmp/kd-flixpatrol-final-test.log` und
 Der abschließende Dokumentationscommit verändert keine Produktbytes und
 wird als vollständiger Kandidat zusätzlich durch GitHub-CI geprüft.
 
-Die E6-Staging-Integration ist lokal bis `c634d7a` vorbereitet, noch nicht
-gepusht. Sie erhält die eigenständigen Staging-Änderungen einschließlich
+Die E6-Staging-Integration wurde lokal bis `c634d7a` vorbereitet und mit dem
+abschließenden Dokumentationsstand `019b4ab` am 10. September veröffentlicht.
+Sie erhält die eigenständigen Staging-Änderungen einschließlich
 der vorhandenen Button-Typografie. 407 Extraktions- und 278 Geschmack-UI-
 Checks sind grün. Alle 33 lokalen Quelldateien der vier auszuliefernden
 Functions sind zwischen Master und vorbereitetem Staging bytegleich.
 `package.json`, sämtliche Lockfiles und bezahlte Live-Provenienzhashes bleiben
 unverändert. Die sechs bestehenden Änderungen im Hauptcheckout sind erhalten.
-Neue echte FlixPatrol- oder KI-Anbieterrequests: null.
+Bis zum lokalen Abschluss entstanden keine neuen echten FlixPatrol- oder
+KI-Anbieterrequests. Die spätere Lieferwirkung ist unten getrennt belegt.
 
 ## Lieferung und Verbrauch
 
@@ -280,7 +282,68 @@ Umgehung; die lokalen Tests und lesenden Vorbedingungen bleiben gültig. Eine
 konkrete gemeinsame Datenbank-/Backend-Lieferung einschließlich nötiger Tests
 wird erst am fertigen, überprüfbaren Kandidaten zur Freigabe vorgelegt.
 
-## Aktuell belegter Ausgang
+## Freigegebene Backend-Lieferung am 10. September
+
+Max hat das konkrete [Backend-Paket](FLIXPATROL_BACKEND_LIEFERUNG.md)
+ausdrücklich freigegeben. Die frühere Ablehnung des realen RLS-Tests ist damit
+beantwortet. Ziel bleibt ausschließlich das gemeinsam verwendete Projekt
+`bscjgwcntapobyxsiyce`; der spätere private Staging-Control-/Sandbox-Umbau
+gehört nicht zu diesem Abschluss. Die Reihenfolge aus dem Task
+„Staging/Prod-Stand prüfen“ ist: echte FlixPatrol-Läufe stabilisieren und
+aktivieren, danach den akzeptierten Staging-Produktstand mergen, anschließend
+die persönliche Control-/Sandbox-Plattform gestalten.
+
+- Die drei Paketmigrationen `20260909120000`, `20260909190000` und
+  `20260909210000` sind in einer Transaktion angewendet und zurückgelesen.
+  Alle sechs FlixPatrol-Tabellen erzwingen RLS; 74 Migrationen sind verbucht.
+- Die vier Functions sind vollständig auf den freigegebenen Kandidaten
+  `9bb2133c3361a52ad1f85f5be5dfe6f1eb734947` zurückverglichen: Usage v4,
+  Entdecken v65, AI v84 und Radar v62. Die Quellabhängigkeiten wurden nach dem
+  Setzen des gemeinsamen Buildmarkers erneut heruntergeladen und verglichen;
+  das Setzen des Secrets erhöht auch ohne weitere Codeänderung die
+  Function-Versionen. JWT-Einstellungen bleiben erhalten.
+- Backend- und GitHub-Staging-Buildmarker zeigen diesen Kandidaten. Der
+  authentifizierte Health-Readback ist grün. Der reale bestehende
+  Inaktivkonto-RLS-Pfad besteht 14/14 Prüfungen; keine Testkonten aktiviert,
+  keine kostenpflichtige KI aufgerufen.
+- Staging ist bei `019b4ab25e08e9fa12481894b3522829e1d4aba4` ausgeliefert.
+  [CI 34465525047](https://github.com/Soppagata/kinodreieck-app/actions/runs/34465525047)
+  besteht Suite, Chromium, WebKit, Deploy sowie atomaren und Domain-Smoke.
+  Ein direkter `build-meta.json`-Readback bestätigt dieselbe Kennung.
+
+Der einzelne freigegebene Initiallauf um 10:12 UTC hat zwei öffentliche
+Quellen-GETs und genau einen FlixPatrol-Chartrequest ausgeführt. Der erste
+Prime-AT-Movies-Chart für den 9. September erhielt HTTP 200, wurde aber vom
+Client als `invalid_response` abgelehnt. Es entstanden null Chart-, Titel-
+oder Feedwrites. Die Antwortdaten wurden nicht gespeichert; welches
+Strukturmerkmal der Parser abgelehnt hat, ist noch nicht belegt. Deshalb
+folgt eine gezielte payloadfreie Fehlerdiagnose, keine Lockerung auf Verdacht.
+Der terminale Initiallauf wird nicht automatisch wiederholt und sein
+Tagesclaim nicht zurückgesetzt. Entdecken bleibt bis zur Klärung
+`disabled_manually`; Production-Abnahme und -Merge sind offen.
+
+Der natürliche
+[Tickerlauf 34462038347](https://github.com/Soppagata/kinodreieck-app/actions/runs/34462038347)
+war um 09:41 UTC erfolgreich. Der lokale Monatszähler weist danach mitsamt
+Initiallauf drei Versuche aus: zwei Erfolge, ein `invalid_response`.
+Der offizielle Kontostand von 09:41 UTC meldete separat 0 verbraucht / 1000
+verfügbar und liegt zeitlich vor dem Chartrequest; beide Zahlen werden nicht
+addiert oder als gleichzeitige Messung ausgegeben.
+Der natürliche
+[Monitorlauf 34463011534](https://github.com/Soppagata/kinodreieck-app/actions/runs/34463011534)
+bestätigt sieben Betriebsprüfungen und meldet ausschließlich
+`FEED_ERROR_SOURCE_ERROR`. Diese Meldung beschreibt weiterhin einen echten
+Fehler. Der erhaltene alte Feed hat Format 6, `refreshedOn=2026-09-06` und
+`lastAttemptOn=2026-09-10`; der Abrufversuch macht die Quellen nicht frischer.
+
+Belege liegen unter `/private/tmp/kd-ops-audit-20260909` in
+`flixpatrol-final-integration-receipt.json`, den vier
+`flixpatrol-package-source-*.json`, `flixpatrol-approved-health.json`,
+`flixpatrol-approved-initial.json`, `flixpatrol-initial-failure-readback.json`
+und `flixpatrol-approved-staging-build.json`. RLS-Log:
+`/private/tmp/kd-flixpatrol-approved-rls-confirmed-20260910.log`.
+
+## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
 ein echter Quota-GET / ein Erfolg / null Fehler. Anbieter separat 0 verbraucht,
