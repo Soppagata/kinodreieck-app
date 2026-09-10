@@ -868,6 +868,13 @@ test.describe("Showa-PWA-Dauerbedienung", () => {
         }
       } else await expect(overlay).toHaveCount(0);
 
+      const tabZiele = {
+        Start: ".kd-dash",
+        Kino: ".kd-kino-tab",
+        Mediathek: ".kd-mediathek-tab",
+        Streaming: ".kd-streaming-tab",
+        Entdecken: '[data-testid="entdecken-tab"]',
+      };
       const openMobileTab = async name => {
         const started = Date.now();
         await page.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
@@ -880,6 +887,7 @@ test.describe("Showa-PWA-Dauerbedienung", () => {
           position: document.body.style.position,
           locked: document.body.classList.contains("kd-scroll-gesperrt"),
         }))).toEqual({ position: "", locked: false });
+        await expect(page.locator(tabZiele[name])).toBeVisible();
         expect(Date.now() - started, `${name} reagiert`).toBeLessThan(3000);
       };
 
@@ -891,7 +899,20 @@ test.describe("Showa-PWA-Dauerbedienung", () => {
         await page.screenshot({ animations: "allow" });
       }
 
-      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      if (scenario.modus) {
+        const setVisibility = hidden => page.evaluate(hidden => {
+          Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true, get: () => hidden ? "hidden" : "visible",
+          });
+          document.dispatchEvent(new Event("visibilitychange"));
+          return { hidden: document.hidden, visibilityState: document.visibilityState };
+        }, hidden);
+        expect(await setVisibility(true)).toEqual({ hidden: true, visibilityState: "hidden" });
+        await expect(overlay).toHaveAttribute("data-paused", "true");
+        expect(await setVisibility(false)).toEqual({ hidden: false, visibilityState: "visible" });
+        await expect(overlay).toHaveAttribute("data-paused", "false");
+      }
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.locator('.kd-app[data-session-mode="account"]')).toBeVisible();
       if (scenario.modus) await expect(overlay).toBeVisible();
@@ -918,12 +939,26 @@ test.describe("Showa-PWA-Dauerbedienung", () => {
           await expect(menu).toBeVisible();
           await menu.getByRole("button", { name, exact: true }).tap();
           await expect(menu).toHaveCount(0);
+          await expect(restarted.locator(tabZiele[name])).toBeVisible();
         }
         expect(await restarted.evaluate(() => ({
           modus: JSON.parse(localStorage.getItem("kd:einstellungen") || "null")?.modus,
           position: document.body.style.position,
           locked: document.body.classList.contains("kd-scroll-gesperrt"),
         }))).toEqual({ modus: "showa", position: "", locked: false });
+        await restarted.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
+        const settingsMenu = restarted.getByRole("dialog", { name: "Menü", exact: true });
+        await expect(settingsMenu).toBeVisible();
+        await settingsMenu.getByRole("button", { name: "Settings", exact: true }).tap();
+        await expect(settingsMenu).toHaveCount(0);
+        await expect(restarted.locator(".kd-daten-tab")).toBeVisible();
+        await expect(restarted.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
+        await restarted.getByRole("button", { name: "Foyer (hell)", exact: true }).tap();
+        await expect(restarted.locator('.kd-fx-showa[aria-hidden="true"]')).toHaveCount(0);
+        await expect.poll(() => restarted.evaluate(() => {
+          const settings = JSON.parse(localStorage.getItem("kd:einstellungen") || "null");
+          return { modus: settings?.modus, theme: settings?.theme };
+        })).toEqual({ modus: "", theme: "hell" });
         expect(restartErrors).toEqual([]);
         expect(restartExtern).toEqual([]);
       }
