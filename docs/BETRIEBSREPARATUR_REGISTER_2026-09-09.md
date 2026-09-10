@@ -919,6 +919,43 @@ Dienstehinweis und die ehrliche Chart-/Programmkennzeichnung; fokussiert grün.
 Keine Produkt-/Backendänderung durch diese Testkorrektur. Anschließend folgt
 der vollständige Lauf auf dem nun finalen Kandidaten.
 
+Der vollständige lokale Abschlusslauf für `1cadbd38200ba271a1c8a0f0cdeb4390e561fd9a`
+ist grün (npm test, Exit0, Einzeldatei-/Online-Build; Log
+`/private/tmp/kd-entdecken-e9-e10-final-test-v2.log`). Produktbytes entsprechen
+dem oben real geprüften `7fc1e5a`; danach wurde nur Testtext/Dokumentation
+korrigiert. Force-freier Push auf Staging und Master mit exaktem Ref-Readback
+ist erfolgt. CI `34507081071` bestätigt Testsuite und Chromium erfolgreich,
+hält die Auslieferung aber an zwei WebKit-Showa-Zeitassertionen zurück.
+44/46 WebKitfälle grün; 393/430px überschreiten beim Mediathekwechsel die
+3s-Grenze mit 3.156–3.452ms. Die Assertion umfasst Menüöffnung, mehrere
+Playwright-Roundtrips und Sichtbarkeits-/Unlockprüfungen. Noch keine belegte
+Appursache, kein blindes Wiederholen oder Hochsetzen des Grenzwerts.
+Staging-Deployment wurde übersprungen; live bleibt zunächst E8.
+
+Der bestehende Baumeister erhält dafür einen engen Korrekturauftrag auf
+Basis `1cadbd3`, Branch `codex/entdecken-webkit-gate-20260910`, Worktree
+`/private/tmp/kd-entdecken-webkit-gate-20260910`: Tests/neon-noir und ein
+erforderlicher Testhelper; Vergleich E8/Kandidat, getrennte Messung echter
+Browserreaktion und Automation. Produktänderung nur bei belegter Ursache
+und zugeordnetem Delta. Backend, Workflows, Grenzen und Behauptung einer
+PWA-Auslieferung bleiben unverändert. E9/E10-Lieferung noch OFFEN.
+
+Die WebKit-Korrektur ist als `7a35658` geliefert und als `34d45b2`
+integriert; ausschließlich `tests/neon-noir.spec.mjs` wurde geändert.
+Der sequenzielle lokale Vergleich E8/Kandidat auf demselben Rechner zeigt
+für Mediathek bei 393/430px Klick-bis-sichtbar-und-entsperrt-Mediane von
+183/183ms vorher und 176/179ms nachher. Damit ist lokal keine Appregression
+gemessen; eine exakte Aufteilung der früheren CI-Zeiten ist nicht belegt.
+Die 3s-Grenze misst nun im Browser ab dem tatsächlichen Menüpunkt-Klick
+bis zum ersten sichtbaren, entsperrten Frame. Menüöffnung und Automationszeit
+werden separat protokolliert. Alle sechs Navigationsrunden, fünf Tabs,
+Sichtbarkeitspause, Reload, Screenshots und Fehler-/Netzwerkprüfungen bleiben
+erhalten; keine höheren Grenzen oder Retries. Vier gezielte WebKitfälle grün,
+Browsermaxima 176–202ms. Belege: `/private/tmp/kd-webkit-navigation-comparison.json`
+und `/private/tmp/kd-webkit-navigation-final.log`. Die Produktbytes bleiben
+gegenüber dem real geprüften `7fc1e5a` unverändert. Neues gemeinsames CI-Gate
+und öffentlicher Staging-Readback stehen noch aus.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
