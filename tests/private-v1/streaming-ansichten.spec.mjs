@@ -8,6 +8,9 @@ const GUELTIG_BIS = "2099-01-01T00:00:00.000Z";
 const BESTEHENDER_MASTER_TITEL = {
   watchmode_id: 81001, titel: "Obsession - Du sollst mich lieben", originaltitel: "Obsession",
   jahr: 2024, typ: "movie", genres: ["Drama"], dienste: ["Netflix"],
+  dienst_diffs: [{
+    dienst: "Netflix", vorher: false, nachher: true, erkannt_am: "2026-09-15T12:00:00.000Z",
+  }],
 };
 
 const payload = (titel, katalogStand) => ({
@@ -47,6 +50,13 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
   });
   await page.clock.setFixedTime(new Date("2026-09-16T11:00:00.000Z"));
   await page.evaluate((selected) => {
+    const master = JSON.parse(localStorage.getItem("kd:master") || "{}");
+    const ohneExterneIds = (master.filme || []).map((film) => {
+      if (film.id !== "obsession-2024") return film;
+      const { watchmode_id: _watchmodeId, imdb_id: _imdbId, tmdb_id: _tmdbId, ...rest } = film;
+      return rest;
+    });
+    localStorage.setItem("kd:master", JSON.stringify({ ...master, filme: ohneExterneIds }));
     localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: selected, heuristik: true }));
   }, fixture.auswahl);
   await page.reload();
@@ -60,12 +70,26 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
   await expect(page.locator(".kd-entdecken-karte")).toHaveCount(4);
   await expect(page.getByText("Bestehender Auswahlzugang", { exact: false })).toBeVisible();
   await expect(page.getByText("Unveränderter Altbestand", { exact: false })).toBeVisible();
+  const bekanntOhneIds = page.locator(".kd-entdecken-karte").filter({ hasText: "Obsession - Du sollst mich lieben" });
+  await expect(bekanntOhneIds).toContainText("in deiner Mediathek");
+  await bekanntOhneIds.click();
+  await expect(bekanntOhneIds.getByRole("button", { name: /Eintrag erstellen|In Mediathek übernehmen/u })).toHaveCount(0);
+  await bekanntOhneIds.getByRole("button", { name: "Als gesehen markieren" }).click();
+  await expect(bekanntOhneIds).toContainText("gesehen · in deiner Mediathek");
+  await expect(page.getByText("Auch als unbewerteten Eintrag in die Mediathek übernehmen?", { exact: true })).toHaveCount(0);
 
   await views.filter({ hasText: /^Neu/u }).click();
-  await expect(views.filter({ hasText: /^Neu/u })).toContainText("(2)");
+  await expect(views.filter({ hasText: /^Neu/u })).toContainText("(3)");
+  await expect(page.locator(".kd-entdecken-karte").filter({ hasText: "Obsession - Du sollst mich lieben" }))
+    .toContainText("in deiner Mediathek");
   await expect(page.getByText("Bestehender Auswahlzugang", { exact: false })).toBeVisible();
   await expect(page.getByText("Neuer Auswahlzugang", { exact: false })).toBeVisible();
   await expect(page.getByText("Unveränderter Altbestand", { exact: false })).toHaveCount(0);
+
+  await views.filter({ hasText: /^Alles/u }).click();
+  const echterDiscoverTitel = page.locator(".kd-entdecken-karte").filter({ hasText: "Neuer Auswahlzugang" });
+  await echterDiscoverTitel.click();
+  await expect(echterDiscoverTitel.getByRole("button", { name: "Eintrag erstellen", exact: true })).toBeVisible();
 
   await navigateMobile(page, "Settings");
   await page.getByText("Streaming-Katalogbestand", { exact: true }).click();

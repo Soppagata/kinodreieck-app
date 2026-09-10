@@ -7,6 +7,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
+import { baueStreamingAnsichten } from "./src/lib/katalog.js";
 import { projiziereStreamingNeu, STREAMING_NEU_DAUER_MS } from "./src/lib/streamingNeu.js";
 import {
   projiziereStreamingAnsichten,
@@ -282,5 +283,96 @@ check("Explizit leere Auswahl rendert keine Diensttitel", () => {
   assert.doesNotMatch(ui.container.textContent, /Neuer Auswahlzugang/u);
 });
 await ui.cleanup();
+
+const masterOhneExterneIds = [{
+  id: "master-ohne-externe-ids", titel: "Streng zugeordnete Serie", originaltitel: "Streng zugeordnete Serie",
+  jahr: 2025, typ: "serie", bewertung: { wie: 3, was: 3, warum: 3 },
+}];
+const strictViews = baueStreamingAnsichten({
+  entdeckenUmfang: "voll",
+  bekannt: {
+    stand: fixture.stand, katalog_stand: fixture.stand,
+    stand_pro_quelle: fixture.stand_pro_quelle,
+    vergleich_stand_pro_quelle: fixture.vergleich_stand_pro_quelle,
+    titel: [{
+      watchmode_id: 104, titel: "Streng zugeordnete Serie", jahr: 2025, typ: "tv_series",
+      dienste: ["Netflix"],
+      dienst_diffs: [{ dienst: "Netflix", vorher: false, nachher: true, erkannt_am: fixture.stand }],
+    }],
+  },
+  entdecken: {
+    stand: fixture.stand, katalog_stand: fixture.stand,
+    stand_pro_quelle: fixture.stand_pro_quelle,
+    vergleich_stand_pro_quelle: fixture.vergleich_stand_pro_quelle,
+    titel: [{
+      watchmode_id: 105, titel: "Echte Discover-Serie", jahr: 2025, typ: "series",
+      dienste: ["Netflix"],
+    }],
+  },
+}, masterOhneExterneIds);
+const strictNeu = projiziereStreamingNeu({
+  bekannt: strictViews.bekannt, entdecken: strictViews.entdecken,
+  auswahl: ["Netflix"], now: NOW,
+});
+let strictStatus = {};
+let addAufruf = null;
+const strictProps = {
+  bekannt: strictViews.bekannt, entdecken: strictViews.entdecken,
+  auswahl: ["Netflix"], auswahlGeladen: true, merkliste: [], toggleMerk() {},
+  addFilm: async (film) => { addAufruf = film; return "discover-neu"; }, master: masterOhneExterneIds,
+  mustwatchIds: new Set(), entdeckenStatus: strictStatus,
+  schreibeEntdeckenStatus: async (update) => { strictStatus = update(strictStatus); return true; },
+  onAllesKatalogLaden() {}, recommendationPins: [], onRecommendationPinToggle() {}, streamingNeu: strictNeu,
+};
+const strictUi = await mount(StreamingTab, strictProps);
+const strictTab = (name) => [...strictUi.container.querySelectorAll("button")]
+  .find((button) => button.textContent.trim().startsWith(name));
+await act(async () => { strictTab("Alles").click(); await tick(); });
+let knownOhneIdsKarte = [...strictUi.container.querySelectorAll(".kd-entdecken-karte")]
+  .find((karte) => /Streng zugeordnete Serie/u.test(karte.textContent));
+await act(async () => { knownOhneIdsKarte.click(); await tick(); });
+check("streng zugeordnetes Known ohne ursprüngliche externe Master-ID ist in Alles sofort Mediathek", () => {
+  assert.match(knownOhneIdsKarte.textContent, /in deiner Mediathek/u);
+  assert.equal([...knownOhneIdsKarte.querySelectorAll("button")]
+    .filter((button) => /Eintrag erstellen|In Mediathek übernehmen/u.test(button.textContent)).length, 0);
+});
+await act(async () => {
+  knownOhneIdsKarte.querySelector('[aria-label="Als gesehen markieren"]').click();
+  await tick();
+});
+await strictUi.render({ ...strictProps, entdeckenStatus: strictStatus });
+knownOhneIdsKarte = [...strictUi.container.querySelectorAll(".kd-entdecken-karte")]
+  .find((karte) => /Streng zugeordnete Serie/u.test(karte.textContent));
+check("Known-Zuordnung markiert direkt gesehen ohne doppeltes Anlegen", () => {
+  assert.match(knownOhneIdsKarte.textContent, /gesehen · in deiner Mediathek/u);
+  assert.equal(addAufruf, null);
+  assert.doesNotMatch(strictUi.container.textContent, /Auch als unbewerteten Eintrag/u);
+});
+await act(async () => { strictTab("Neu").click(); await tick(); });
+check("derselbe Known-Titel bleibt auch in Neu als vorhandener Mediathektitel erkennbar", () => {
+  const karte = [...strictUi.container.querySelectorAll(".kd-entdecken-karte")]
+    .find((eintrag) => /Streng zugeordnete Serie/u.test(eintrag.textContent));
+  assert.ok(karte);
+  assert.match(karte.textContent, /in deiner Mediathek/u);
+});
+await act(async () => { strictTab("Alles").click(); await tick(); });
+const discoverKarte = [...strictUi.container.querySelectorAll(".kd-entdecken-karte")]
+  .find((karte) => /Echte Discover-Serie/u.test(karte.textContent));
+await act(async () => { discoverKarte.click(); await tick(); });
+check("echter Discover-Titel bleibt anlegbar", () => {
+  assert.ok([...discoverKarte.querySelectorAll("button")]
+    .some((button) => button.textContent.trim() === "Eintrag erstellen"));
+});
+await act(async () => {
+  discoverKarte.querySelector('[aria-label="Als gesehen markieren"]').click();
+  await tick();
+  [...discoverKarte.querySelectorAll("button")]
+    .find((button) => button.textContent.trim() === "Ja, in die Mediathek").click();
+  await tick();
+});
+check("Gesehen-Übernahme nutzt für alle vorhandenen Serientypen denselben Helper", () => {
+  assert.equal(addAufruf?.typ, "serie");
+});
+await strictUi.cleanup();
 
 console.log(`\nStreaming-Ansichten: ${checks}/${checks} Checks bestanden.`);

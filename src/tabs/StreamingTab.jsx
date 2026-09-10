@@ -191,6 +191,20 @@ export function StreamingTab({
      ueber recommendationPins und den bestehenden Entdecken-Pinboardvertrag. */
   const entdeckenStatusRef = useRef(entdeckenStatus);
   entdeckenStatusRef.current = entdeckenStatus;
+  /* `bekannt.titel` enthält ausschließlich bereits streng einem Masterwerk
+     zugeordnete Titel. Diese Zuordnung ist stärker als der spätere reine
+     External-ID-Abgleich und steht deshalb auch ohne ursprüngliche externe
+     Kennung des Masterwerks sofort für Alles und Neu bereit. */
+  const bekannteMediathekIds = useMemo(() => new Map((bekannt?.titel || [])
+    .filter((titel) => titel?.watchmode_id != null && (typeof titel?.id === "string" || typeof titel?.id === "number"))
+    .map((titel) => [String(titel.watchmode_id), titel.id])), [bekannt]);
+  const bekannteMediathekIdFuer = useCallback(
+    (titel) => titel?.watchmode_id == null ? null : bekannteMediathekIds.get(String(titel.watchmode_id)) ?? null,
+    [bekannteMediathekIds],
+  );
+  const mediathekIdFuer = useCallback((titel) => (
+    mediathekIdVon(entdeckenStatus[titel?.watchmode_id]) ?? bekannteMediathekIdFuer(titel)
+  ), [entdeckenStatus, bekannteMediathekIdFuer]);
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
   const [gesehenFrage, setGesehenFrage] = useState(null);
@@ -269,8 +283,16 @@ export function StreamingTab({
   };
   const toggleGesehen = async (t) => {
     const roh = entdeckenStatusRef.current[t.watchmode_id];
-    if (statusVon(roh) === "gesehen" || mediathekIdVon(roh)) {
-      return await schreibeEntdeckenStatus((prev) => toggleGesehenInStatus(prev, t));
+    const bekannteId = bekannteMediathekIdFuer(t);
+    if (statusVon(roh) === "gesehen" || mediathekIdVon(roh) || bekannteId) {
+      return await schreibeEntdeckenStatus((prev) => {
+        const aktuell = prev?.[t.watchmode_id];
+        const mediathekId = mediathekIdVon(aktuell) ?? bekannteId;
+        const mitSichererZuordnung = mediathekIdVon(aktuell) != null || mediathekId == null
+          ? prev
+          : { ...(prev || {}), [t.watchmode_id]: mitMediathekEintrag(aktuell, t, mediathekId) };
+        return toggleGesehenInStatus(mitSichererZuordnung, t);
+      });
     }
     setExpandedId("e" + t.watchmode_id);
     setGesehenFrage(t.watchmode_id);
@@ -283,7 +305,7 @@ export function StreamingTab({
     try {
       const id = await mitBestaetigterStringId(() => addFilm?.({
         titel: t.titel, originaltitel: t.titel, jahr: t.jahr ?? null, jahr_bis: null,
-        typ: t.typ === "tv_series" ? "serie" : "film", quelle: "must_watch",
+        typ: istStreamingSerie(t) ? "serie" : "film", quelle: "must_watch",
         kategorie: null, bewertet_von: null, bewertung: null, genre: t.genres || [], tags: [],
         begruendung: "", notiz: "", status: "gesetzt", watchmode_id: t.watchmode_id,
         ...(t.imdb_id ? { imdb_id: t.imdb_id } : {}),
@@ -721,10 +743,10 @@ export function StreamingTab({
                   <div className="kd-entdecken-inhalt">
                     <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2 }}>
                       {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
-                      {entdeckenStatus[t.watchmode_id] && (
+                      {(entdeckenStatus[t.watchmode_id] || bekannteMediathekIdFuer(t)) && (
                         <span style={{ ...mono, color: T.kartenTextWeich, marginLeft: 8 }}>
                           {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
-                          {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
+                          {mediathekIdFuer(t) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
                         </span>
                       )}
                     </div>
@@ -760,7 +782,7 @@ export function StreamingTab({
                 {expandedId === "e" + t.watchmode_id && (
                   <div style={{ marginTop: 6, fontSize: 12, color: T.kartenTextWeich }} onClick={(e) => e.stopPropagation()}>
                     {(t.genres || []).length > 0 && <span>{t.genres.join(", ")}</span>}
-                    {addFilm && formFuer !== t.watchmode_id && !mediathekIdVon(entdeckenStatus[t.watchmode_id]) && (
+                    {addFilm && formFuer !== t.watchmode_id && !mediathekIdFuer(t) && (
                       <button style={{ ...btnStyle(true), padding: "6px 11px", marginTop: 8 }}
                         onClick={() => setFormFuer(t.watchmode_id)}>
                         {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "In Mediathek übernehmen" : "Eintrag erstellen"}
