@@ -996,6 +996,72 @@ Ursachen lokalisieren und einen einfachen, stabilen Bau durch Baumeister
 planen. Diese Phase ist DIAGNOSE/PLAN; keine Produktänderung, kein gestarteter
 Baumeister, kein neuer Providerlauf, Publisher oder Schedulerstart.
 
+### Präzisierung durch Max und Budgetprüfung
+
+Max legt anschließend fest: „Alles“ enthält den vollständigen Bestand der
+ausgewählten Streamingdienste. Das schließt Titel aus „Mein Programm“ ein;
+die drei Ansichten sind keine sich gegenseitig ausschließenden Restmengen.
+Bei seiner aktuellen Auswahl ergibt das 9.797 eindeutige Titel. Eine
+ausdrücklich leere Auswahl darf nicht wieder alle Dienste einschalten;
+eine noch nicht geladene Auswahl bleibt ein Ladezustand.
+
+Die ursprüngliche SN14-Regel für „Neu“ bleibt maßgeblich: Zugänge gegenüber
+dem vorherigen erfolgreichen Kataloglauf im Angebot der ausgewählten
+Plattformen sammeln, ab dem ersten belegten Auftauchen 14 volle Tage zeigen,
+danach nur aus „Neu“ entfernen. Der erste Bestand ist eine Vergleichsbasis,
+keine Liste neuer Filme. Erscheinungsjahr, Empfehlungen, App-Öffnung und ein
+reiner Neuaufbau sind keine Neu-Kriterien. Ein Titel bleibt gleichzeitig in
+„Alles“ und gegebenenfalls „Mein Programm“. Ohne belastbaren Vorhervergleich
+werden keine historischen Zugänge erfunden. Diese Regel ist durch den
+damaligen Auftrag und den vorhandenen v2-Code belegt; die aktuelle iPhone-
+Historie bleibt ungelesen.
+
+Max bevorzugt statt fester Wochentage einen 48-Stunden-Takt, sofern die
+Requestgrenzen reichen. Die bisherige 48h-Sperre ist unsere lokale Regel in
+`tickerErlaubtModus`, keine aus dem Provider abgeleitete Frist. Am 09.09.
+lagen zwischen Quellenerfolg und Start erst 47h 55m 35,541s: 4m 24,459s
+fehlten. Zusammen mit M/W/F verhinderte das den ganzen Mittwochsabruf.
+Der frühere Plan einer reinen M/W/F-Kalenderkorrektur ist deshalb ersetzt.
+
+Reine Rechnung aus dem vollständigen lokalen Watchmode-Stand vom 07.09.,
+ohne neue Anbieterabfrage; die letzte gespeicherte Verbrauchsmessung ist
+951 am 07.09. und kein heutiger Live-Quotastand. Watchmode hat laut belegtem
+Setup 2.500 Requests je Abrechnungszyklus; unsere vorhandenen Grenzen sind
+2.000 je Zyklus und 500 je logischem Lauf. FlixPatrols 1.000er-Limit und
+dessen Zähler sind davon unabhängig.
+
+| Umfang | Gemessene Listenrequests je Abruf | Bedarf bei 48h |
+| --- | ---: | ---: |
+| Bisherige schnelle drei: Netflix, Disney+, Prime Video | 39 | 585–624 für 15–16 Abrufe, ohne weitere Quellen/Links |
+| Max' aktuelle fünf: zusätzlich Crunchyroll Premium und Paramount+, jeweils Via Amazon Prime | 44 | 660–704 für 15–16 Abrufe, ohne weitere Quellen/Links |
+| Alle 39 Quellen einschließlich Kauf-/Leihkatalogen | 316 | 4.740–5.056 schon für Listen; passt nicht |
+
+Geplant sind die fünf ausgewählten Dienste alle 48h und weiterhin alle 39
+Quellen alle 12–14 Tage. Ein Gesamtlauf ersetzt den in diesem Takt fälligen
+Fünferlauf, er kommt nicht zusätzlich dazu. Bei 15–16 Abrufen und zwei bis
+drei Gesamtläufen entstehen 1.204–1.520 Listenrequests je Zyklus. Die
+vorhandenen 226 Detail-/Linkeinträge werden 30 Tage gecacht: einmalige
+Erneuerung aller heutigen Einträge ergibt insgesamt 1.430–1.746, selbst
+eine konservativ doppelte Erneuerung in einem 31-Tage-Fenster höchstens
+1.972 Requests. Eine ergänzende Simulation mit den wirklichen Cachealtern,
+48h-Abständen und 12-Tage-Gesamtläufen ergibt in 23 vollständigen Zyklen
+1.386–1.843 Requests und höchstens 437 pro Lauf. Das ist eine Prognose bei
+gleichbleibendem Bestand, kein Live-Laufbeleg. Neue Seiten, neue Linkziele
+und andere Verbraucher brauchen ebenfalls Budget; Zähler, 2.000-/500-
+Grenzen und der Stopp bei unbekanntem Stand bleiben unverändert. Kein
+zusätzliches Gate und kein bezahlter Machbarkeitstest. Rechenbeleg:
+`/private/tmp/kd-ops-audit-20260909/streaming-48h-budget-20260910.json`.
+
+Der Takt erhält eine einzige gemeinsame Fälligkeitsentscheidung für Auto-
+Start und Fetch. Der bestehende LaunchAgent wird passend dazu angepasst:
+knapp zu früh bedeutet eine spätere lokale Startgelegenheit nach Fälligkeit,
+nicht Ausfall bis zum nächsten Wochentag. Diese lokalen Prüfgelegenheiten
+dürfen keine Providerrequests vor Fälligkeit und keine schnellen
+Wiederholungen fehlgeschlagener Läufe auslösen. Checkpoint, Lauf-ID und
+Requestgrenze bleiben bei einer zulässigen Wiederaufnahme erhalten. Ein
+ausgeschalteter oder schlafender Mac kann erst nach seiner Verfügbarkeit
+nachholen; keine Zusage einer sekundengenauen 48h-Lieferung bei Offlinezeit.
+
 ### Gemessene Ausgangslage und Ursachen
 
 Öffentlich um 19:37 UTC bestätigt: Staging `5724193`, Production `3b82a73`.
@@ -1019,8 +1085,8 @@ persönliche Writes. Beleg:
 | --- | --- | --- |
 | GEPRÜFT: „Mein Programm“ verliert Zuordnungen | 226 von 226 ausgelieferten Known-Einträgen haben keinen `typ`. `build_streaming_ansicht.js:215` kopiert persönliche Felder, lässt aber den vorhandenen Watchmode-Werktyp weg. Seit E3 verlangt `baueStreamingAnsichten` vollständige Werkidentität. 225 Known-Einträge werden deshalb als fehlende Identität abgewiesen. Voll geladen entstehen exakt 29 ausgewählte Treffer; der leichte Bootkatalog ergibt sogar null. | Im Export nur den belegten `typ` aus dem über dieselbe eindeutige Watchmode-ID vorhandenen Rohkatalog mitliefern. Keine pauschale Annahme „Film“ und kein Lockern des Matchers. Die lokale Typ-Ergänzung liefert 123 ausgewählte Treffer, identisch zur Production-Zahl auf denselben Inputs. |
 | GEPRÜFT: „Alles“ und Einstellungen zählen unterschiedliche Dinge | Rohkatalog 24.916, davon 9.797 bei den ausgewählten Diensten. Staging zerlegt diese in 29 bekannt + 9.768 Rest; die Summe bleibt gegenüber Production unverändert. „Alles“ zeigt tatsächlich nur den Rest nach Mediathek-Abzug. `KatalogAuditStatus` liest zusätzlich eine feste Konstante mit 12.540/100 vom 22.07. und 11.049/103 vom 04.09. statt aktuelle Daten. | Streaming-„Alles“ aus der bereits vorhandenen deduplizierten Gesamtmenge bilden; „Mein Programm“ und „Neu“ sind Teilmengen. Einstellungszahlen aus genau derselben geladenen Projektion und dem echten Quellenstand lesen. Unvollständig geladenen Bestand nicht als vollständige Endzahl ausgeben. |
-| GEPRÜFT: „Neu“ vergleicht die falsche Einheit | `streamingNeu.js` speichert einen gerätelokalen ID-Verlauf. Initialisierung und Quellenwechsel beginnen absichtlich leer. Ein synthetisch belegter Wechsel desselben Films von nur Amazon zu zusätzlich Netflix bei gleicher Quellenabdeckung ergibt trotzdem null Neu-Treffer. Neue Verfügbarkeit eines bestehenden Titels wird nicht erkannt. | Neue Verfügbarkeit je Watchmode-ID und Dienst einmal beim abgeschlossenen Quellenvergleich markieren, 14 Tage erhalten und zusammen mit dem vorhandenen Katalog liefern. Die PWA filtert diese Markierungen nach Diensten und Datum; kein zweiter gerätelokaler ID-Verlauf. |
-| GEPRÜFT: die Mittwochsgelegenheit wurde ausgelassen | Vollständiger Lauf am 07.09.: Fetch, Build und Lieferung grün, Katalogstand `2026-09-07T11:05:38.395Z`. Am 09.09. um `11:01:13.936Z` meldet fetch `skipped/takt`: erst 47,9265 Stunden vergangen. Der M/W/F-Scheduler und die rollierende 48h-Sperre arbeiten gegeneinander. | Eine gemeinsame, explizite Kalendertagsregel für die bestehenden Laufgelegenheiten in Europe/Vienna. Keine zusätzlichen Startzeiten oder Wiederholungen; vollständiger Lauf alle 12–14 Tage und Kern-3 an M/W/F bleiben der Zweck. |
+| GEPRÜFT: „Neu“ verliert die ausgewählte Angebotsdifferenz | `streamingNeu.js` speichert einen gerätelokalen globalen ID-Verlauf. Initialisierung und Quellenwechsel beginnen absichtlich leer. Ein synthetisch belegter Wechsel desselben Films von nur Amazon zu zusätzlich Netflix bei gleicher Quellenabdeckung ergibt trotzdem null Neu-Treffer. Neue Verfügbarkeit bei einem ausgewählten Dienst wird nicht erkannt, wenn die ID anderswo schon vorhanden war. | Den belegten Vorher-/Nachherwechsel der Verfügbarkeit einmal beim Quellenvergleich erfassen und die nötigen kleinen Differenzmetadaten 14 Tage mit dem bestehenden Katalog liefern. Die PWA bildet daraus die ursprüngliche Neu-Menge für ihre Auswahl; kein zweiter gerätelokaler Vollbestand. |
+| GEPRÜFT: die Mittwochsgelegenheit wurde ausgelassen | Vollständiger Lauf am 07.09.: Fetch, Build und Lieferung grün, Katalogstand `2026-09-07T11:05:38.395Z`. Am 09.09. um `11:01:13.936Z` meldet fetch `skipped/takt`: erst 47,9265 Stunden vergangen. Der M/W/F-Scheduler und die rollierende 48h-Sperre arbeiten gegeneinander. | Gemeinsamer 48h-Fälligkeitspfad für die aktuellen fünf ausgewählten Dienste mit passenden Gelegenheiten im bestehenden LaunchAgent; alle 39 Quellen weiterhin alle 12–14 Tage. Budget und Offline-/Fehlerregeln siehe Präzisierung oben. |
 | GEPRÜFT: Vollstand-Metadatum hängt einen Lauf zurück | Veröffentlichter `katalog_stand` ist korrekt 07.09., `letzter_voll_lauf` zeigt noch 12.08. Der Builder liest den letzten abgeschlossenen Lauf, bevor der gerade veröffentlichte Lauf finalisiert wird. | Den belegten gerade aufgebauten vollständigen Quellenstand in dessen Payload korrekt bezeichnen; einen reinen Neuaufbau weiterhin nicht als neuen Watchmode-Abruf ausgeben. |
 
 Die Identitätsprobe zeigt bei reiner Typ-Ergänzung 282 bekannte Werke,
@@ -1048,21 +1114,28 @@ Kontrollagenten. Der Master bleibt in Produktdateien read-only.
 
 | Etappe / IDs | Geplanter Branch und Basis | Exklusive Schreibfläche | Ergebnis und Abnahme |
 | --- | --- | --- | --- |
-| E11 – Daten vollständig und Takt verlässlich / M1, M6 | `codex/streaming-daten-e11-20260910` im eigenen Worktree, Pipelinebasis `f1be7f9d1d0c6a64f0041c1c68d113d15a511f6a` | Unter `KinoFilm/Programmdateien/System`: `build_streaming_ansicht.js`, `fetch_streaming_katalog.js`, die erforderliche Taktnaht in `streaming_auto.mjs`, kleine reine Helper und fokussierte Tests. Falls ein Bauchat entlastet: ausschließlich der neue reine Kalenderhelper mit eigenen Tests; der Baumeister besitzt Einbindung, Export und Neu-Diff. | Belegter Werktyp bleibt erhalten; echte neue Verfügbarkeit je Dienst wird einmal berechnet; bestehende M/W/F-Gelegenheiten scheitern nicht an wenigen Minuten. Eine aus vorhandenen Dateien erzeugte Vorschau bleibt vollständig providerfrei. Der Baumeister liefert den kleinsten additiven Payloadvertrag und dessen Fixtures vor E12. |
+| E11 – Daten vollständig und Takt verlässlich / M1, M6 | `codex/streaming-daten-e11-20260910` im eigenen Worktree, Pipelinebasis `f1be7f9d1d0c6a64f0041c1c68d113d15a511f6a` | Unter `KinoFilm/Programmdateien/System`: `build_streaming_ansicht.js`, `fetch_streaming_katalog.js`, die erforderliche Taktnaht in `streaming_auto.mjs`, `streaming_config.json` nur für die fünf schnellen Quellen und den Takt, die vorhandene Vorlage `com.kinodreieck.streaming.plist`, kleine reine Helper und fokussierte Tests. Falls ein Bauchat entlastet: ausschließlich der reine Fälligkeitshelper mit eigenen Tests; der Baumeister besitzt Einbindung, Konfiguration, Export und Neu-Diff. | Belegter Werktyp bleibt erhalten; echte Angebotsdifferenzen werden einmal berechnet; die fünf Dienste erhalten den geprüften 48h-Takt bei unveränderten Requestgrenzen. Der neue Launcher bleibt im Bau eine prüfbare Vorlage, die geladene macOS-Instanz wird nicht nebenbei umgestellt. Eine aus vorhandenen Dateien erzeugte Vorschau bleibt vollständig providerfrei. Der Baumeister liefert den kleinsten additiven Payloadvertrag und dessen Fixtures vor E12. |
 | E12 – Einheitliche Streamingansichten / M5, M6 | `codex/streaming-ansichten-e12-20260910`, Appbasis `68be97ab9a1daa91107878d37a1c95cbfad2b04d`, nach eingefrorenem E11-Vertrag | `src/tabs/StreamingTab.jsx`, `src/components/KatalogAuditStatus.jsx`, `src/tabs/DatenTab.jsx`, erforderliche Prop-/Controller-Naht in `src/App.jsx`, `src/controllers/useStreamingNeuController.js`, `src/lib/streamingNeu.js`, `src/lib/katalog.js` ausschließlich für verlustfreie Weitergabe der neuen Verfügbarkeitsmetadaten, fokussierte Streaming-/Settings-/Vertragstests. Ein optionaler Bauchat besitzt nur dynamische Kataloganzeige und deren Tests; die App-Propnaht bleibt beim Baumeister. | „Alles“ ist die vorhandene Gesamtmenge für die ausgewählten Dienste, hier 9.797; „Mein Programm“ hier 123. „Neu“ liest dieselben Titel mit belegten Dienstemarkierungen. Settings erklären Rohbestand, ausgewählte Dienste, Teilmengen und tatsächlichen Stand mit Livewerten. Gerätespezifischer ID-Snapshot und dessen Ablauf-/Schreiblogik werden als aktiver Pfad entfernt. |
 
 Eingefroren: Supabase-Schema, FlixPatrol/Entdecken-Backend, persönliche Daten,
 strenge Identitätsprüfung, Providerpreise/-zähler/-Requestgrenzen, Lock und
-Checkpoint-Wiederaufnahme, vorhandene Dienste, globale Styles, LaunchAgent-
-Startzeiten, Production und fremde Änderungen. Kein API-Aufruf pro Nutzer,
-kein zusätzlicher Timer/Poller und kein neues Backend oder Verlaufstableau.
+Checkpoint-Schutz, Umfang der 39 bestehenden Dienste, globale Styles,
+Production und fremde Änderungen. Verändert werden nur die ausdrücklich
+geplante schnelle Fünferauswahl und der zugehörige Fälligkeits-/Launcherpfad.
+Kein API-Aufruf pro Nutzer, kein weiterer Scheduler oder API-Poller und kein
+neues Backend oder Verlaufstableau.
 Ein vorhandener vollständiger Katalog wird nicht neu beim Provider angefordert,
 nur um den fehlenden Typ zu ergänzen.
 
 E11 bewahrt bei Teilaktualisierungen die nicht abgefragten Dienste. Eine neue
-Dienstemarkierung ist an einen vollständigen erfolgreichen Vergleich genau
+Dienstedifferenz ist an einen vollständigen erfolgreichen Vergleich genau
 dieses Dienstes gebunden; sie bezeichnet das erste belegte Auftauchen im
-erfassten Angebot, keine behauptete Premiere. Derselbe Lauf, ein reiner
+erfassten Angebot, keine behauptete Premiere. Die Metadaten müssen den
+Unterschied zwischen „vorher nur bei einem nicht ausgewählten Dienst“ und
+„vorher bereits bei einem anderen ausgewählten Dienst“ erhalten: Nur der
+erste Fall ist ein Zugang zur ausgewählten Gesamtmenge. Ein bloß zusätzlicher
+Anbieter darf den alten Titel nicht erneut für 14 Tage als neu markieren.
+Derselbe Lauf, ein reiner
 Rebuild, ein Gerätewechsel oder eine neue Quellenabdeckung erzeugen keine
 erfundenen Neu-Treffer. Fehlende Vergleichsbasis wird als solche kenntlich,
 statt leise „nichts neu“ zu behaupten. Bestehende ID-/Dienstmarkierungen werden
@@ -1072,12 +1145,19 @@ persönlicher Bewertungen und keine neue Vollkopie des Katalogs pro Gerät.
 ### Prüf- und Lieferplan
 
 1. E11 prüft Export mit/ohne Werktyp, aktuelle echte Aggregatmengen,
-   Mo/Mi/Fr mit mehrminütiger Verspätung und Sommerzeitwechsel, Voll-/Teillauf,
-   neuen Titel, neuen Dienst für bekannten Titel, unveränderten Lauf,
-   Quellenwechsel, Entfall und 14-Tage-Ablauf. Fehler oder Checkpoint-Rest
+   48h-Fälligkeit einschließlich des belegten 4m24s-Falls, späterer lokaler
+   Startgelegenheit, Offline-Nachholung, Sommerzeitwechsel und fehlender
+   schneller Fehlerwiederholung. Gesamtläufe ersetzen Fünferläufe; die
+   Seiten-/Linkrechnung und 500-/2.000-Grenzen bleiben bindend. Zusätzlich
+   prüft E11 Voll-/Teillauf, neuen Titel, neuen Dienst für bekannten Titel,
+   unveränderten Lauf,
+   neue Dienstabdeckung ohne Altbestandsflut, erhaltene Vergleichsbasis
+   anderer Dienste, Entfall und 14-Tage-Ablauf. Fehler oder Checkpoint-Rest
    dürfen keinen Teilstand veröffentlichen. Pakettests ausschließlich lokal
    mit Fixtures; keine neuen Providerrequests.
 2. E12 prüft dieselben Vertragsfixtures in beiden Browsern: Dienstewechsel,
+   ausdrücklich leere Auswahl, neuer ausgewählter gegenüber zusätzlichem
+   bereits ausgewähltem Anbieter,
    Gesamtmenge und Teilmengen, Pins/Gesehen/Must-Watch, leichten Bootpfad,
    vollständiges Nachladen, Konto-/Gerätewechsel, fehlende Vergleichsbasis und
    14-Tage-Anzeige. Die gelieferten Entdecken-Regeln und die behobene
