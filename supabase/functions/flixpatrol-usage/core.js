@@ -5,7 +5,8 @@ const RESPONSE_VALUE_CLASSES = new Set(["missing", "null", "array", "object", "s
 const RESPONSE_ENUM_CLASSES = new Set([
   ...[...RESPONSE_VALUE_CLASSES].map((value) => `${value}:other`),
   "known:apiquota", "known:top10s", "known:titles", "known:1", "known:2", "known:3",
-  "known:daterange", "known:countries", "known:companies",
+  "known:daterange", "known:countries", "known:companies", "known:collection",
+  "known:list", "known:array", "known:resultset",
 ]);
 const TOP10_FIELDS = Object.freeze([
   "movie", "company", "country", "type", "date", "ranking", "rankingLast",
@@ -15,7 +16,14 @@ const TOP10_LIST_PROBLEM_CLASSES = new Set([
   "outer-shape", "empty", "over-ten", "row-invalid",
   "duplicate-source-id", "duplicate-ranking", "none",
 ]);
+const RANKING_LAST_CLASSES = new Set([
+  "null", "integer:zero", "integer:negative", "integer:positive", "invalid",
+]);
 const NULLABLE_INTEGER_CLASSES = new Set(["null", "integer:valid", "invalid"]);
+const TOP10_CONTRACT_CHECKS = Object.freeze([
+  "companyMatchesExpected", "countryMatchesExpected", "chartTypeMatchesExpected",
+  "dateRangeMatchesExpected", "titleIdValid", "providerUpdatedAtValid",
+]);
 
 function exactKeys(value, expected) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -153,6 +161,10 @@ function safeEnumClass(value) {
   return typeof value === "string" && RESPONSE_ENUM_CLASSES.has(value);
 }
 
+function safeBooleanCheck(value) {
+  return value === null || typeof value === "boolean";
+}
+
 function normalizeRelationShape(value) {
   if (!exactKeys(value, ["kind", "typeClass", "dataKind", "idKind"])
       || !safeResponseClass(value.kind) || !safeEnumClass(value.typeClass)
@@ -168,7 +180,7 @@ function normalizeTop10Diagnostic(value) {
     "rootTypeClass", "dataKind", "dataArrayLength", "itemCount", "listLengthClass",
     "listProblemClass", "samplePosition", "sampleItemKind", "sampleItemTypeClass",
     "sampleDataKind", "whitelistFieldTypes", "enumClasses", "relations", "rankingClass",
-    "nullableIntegerClasses", "dateShape",
+    "nullableIntegerClasses", "dateShape", "contractChecks",
   ];
   if (!exactKeys(value, keys) || value.schemaVersion !== "flixpatrol-response-shape-v1"
       || value.contractGroup !== "top10-list"
@@ -190,9 +202,11 @@ function normalizeTop10Diagnostic(value) {
         "object:other", "array:other", "other:other", "integer:one-to-ten",
         "integer:out-of-range", "number:non-integer"].includes(value.rankingClass)
       || !exactKeys(value.nullableIntegerClasses, ["rankingLast", "valueLast", "daysTotal"])
-      || !["rankingLast", "valueLast", "daysTotal"].every(
-        (field) => NULLABLE_INTEGER_CLASSES.has(value.nullableIntegerClasses[field]),
-      )
+      || !RANKING_LAST_CLASSES.has(value.nullableIntegerClasses.rankingLast)
+      || !NULLABLE_INTEGER_CLASSES.has(value.nullableIntegerClasses.valueLast)
+      || !NULLABLE_INTEGER_CLASSES.has(value.nullableIntegerClasses.daysTotal)
+      || !exactKeys(value.contractChecks, TOP10_CONTRACT_CHECKS)
+      || TOP10_CONTRACT_CHECKS.some((field) => !safeBooleanCheck(value.contractChecks[field]))
       || !exactKeys(value.dateShape, ["kind", "formClass", "nodeKind", "fieldTypes", "rangeTypeClass"])
       || !safeResponseClass(value.dateShape.kind)
       || !["wrapped-daterange", "direct-date", "invalid"].includes(value.dateShape.formClass)
@@ -233,6 +247,9 @@ function normalizeTop10Diagnostic(value) {
       valueLast: value.nullableIntegerClasses.valueLast,
       daysTotal: value.nullableIntegerClasses.daysTotal,
     }),
+    contractChecks: Object.freeze(Object.fromEntries(
+      TOP10_CONTRACT_CHECKS.map((field) => [field, value.contractChecks[field]]),
+    )),
     dateShape: Object.freeze({
       kind: value.dateShape.kind,
       formClass: value.dateShape.formClass,

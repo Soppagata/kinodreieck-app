@@ -215,7 +215,7 @@ await check("diagnostiziert ungültige Charts payloadfrei und finalisiert trotz 
     ...overrides,
   } });
   const malicious = {
-    type: "top10s",
+    type: "collection",
     Authorization: sensitive[4],
     data: [
       validRow(titleId, 1),
@@ -255,7 +255,8 @@ await check("diagnostiziert ungültige Charts payloadfrei und finalisiert trotz 
   assert.equal(diagnostics[0].contractGroup, "top10-list");
   assert.equal(diagnostics[0].dataArrayLength, 2);
   assert.equal(diagnostics[0].listLengthClass, "one-to-ten");
-  assert.equal(diagnostics[0].listProblemClass, "row-invalid");
+  assert.equal(diagnostics[0].rootTypeClass, "known:collection");
+  assert.equal(diagnostics[0].listProblemClass, "outer-shape");
   assert.equal(diagnostics[0].samplePosition, 2);
   assert.equal(diagnostics[0].rankingClass, "integer:one-to-ten");
   assert.deepEqual(diagnostics[0].nullableIntegerClasses, {
@@ -264,6 +265,14 @@ await check("diagnostiziert ungültige Charts payloadfrei und finalisiert trotz 
   assert.equal(diagnostics[0].dateShape.formClass, "direct-date");
   assert.equal(diagnostics[0].dateShape.rangeTypeClass, "known:1");
   assert.equal(diagnostics[0].relations.movie.typeClass, "known:titles");
+  assert.deepEqual(diagnostics[0].contractChecks, {
+    companyMatchesExpected: true,
+    countryMatchesExpected: true,
+    chartTypeMatchesExpected: true,
+    dateRangeMatchesExpected: true,
+    titleIdValid: true,
+    providerUpdatedAtValid: true,
+  });
   const serialized = JSON.stringify(diagnostics[0]);
   for (const secret of sensitive) assert.equal(serialized.includes(secret), false);
 

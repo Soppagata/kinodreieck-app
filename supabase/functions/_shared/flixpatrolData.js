@@ -95,6 +95,13 @@ function responseNullableIntegerClass(value, min) {
   return Number.isSafeInteger(value) && value >= min ? "integer:valid" : "invalid";
 }
 
+function responseRankingLastClass(value) {
+  if (value === null) return "null";
+  if (!Number.isSafeInteger(value)) return "invalid";
+  if (value === 0) return "integer:zero";
+  return value < 0 ? "integer:negative" : "integer:positive";
+}
+
 function responseDateShape(value) {
   const wrapper = record(value);
   const wrapped = wrapper?.type === "daterange";
@@ -117,18 +124,45 @@ function firstDuplicatePosition(values) {
   return null;
 }
 
+function top10Sample(items, expected, detectDuplicates) {
+  const normalized = [];
+  const inspected = items.slice(0, 10);
+  for (let index = 0; index < inspected.length; index += 1) {
+    const one = normalizeFlixPatrolTop10List([inspected[index]], expected);
+    if (!one) return { sample: inspected[index], samplePosition: index + 1, normalized };
+    normalized.push(one[0]);
+  }
+  if (detectDuplicates) {
+    const sourceDuplicate = firstDuplicatePosition(normalized.map((item) => item.sourceId));
+    if (sourceDuplicate !== null) {
+      return { sample: inspected[sourceDuplicate - 1], samplePosition: sourceDuplicate, normalized };
+    }
+    const rankingDuplicate = firstDuplicatePosition(normalized.map((item) => item.ranking));
+    if (rankingDuplicate !== null) {
+      return { sample: inspected[rankingDuplicate - 1], samplePosition: rankingDuplicate, normalized };
+    }
+  }
+  return { sample: inspected[0], samplePosition: inspected.length > 0 ? 1 : null, normalized };
+}
+
 function top10DiagnosticState(value, expected) {
   const items = listItems(value, "top10s");
-  if (!items) return { items: null, sample: undefined, samplePosition: null, listProblemClass: "outer-shape" };
+  if (!items) {
+    const structuralItems = Array.isArray(record(value)?.data) ? record(value).data : null;
+    const selected = structuralItems ? top10Sample(structuralItems, expected, false) : null;
+    return {
+      items: structuralItems,
+      sample: selected?.sample,
+      samplePosition: selected?.samplePosition ?? null,
+      listProblemClass: "outer-shape",
+    };
+  }
   if (items.length === 0) return { items, sample: undefined, samplePosition: null, listProblemClass: "empty" };
   if (items.length > 10) return { items, sample: undefined, samplePosition: null, listProblemClass: "over-ten" };
-  const normalized = [];
-  for (let index = 0; index < items.length; index += 1) {
-    const one = normalizeFlixPatrolTop10List([items[index]], expected);
-    if (!one) {
-      return { items, sample: items[index], samplePosition: index + 1, listProblemClass: "row-invalid" };
-    }
-    normalized.push(one[0]);
+  const selected = top10Sample(items, expected, true);
+  const { normalized } = selected;
+  if (normalized.length !== items.length) {
+    return { items, sample: selected.sample, samplePosition: selected.samplePosition, listProblemClass: "row-invalid" };
   }
   const sourceDuplicate = firstDuplicatePosition(normalized.map((item) => item.sourceId));
   if (sourceDuplicate !== null) {
@@ -145,6 +179,34 @@ function top10DiagnosticState(value, expected) {
     };
   }
   return { items, sample: items[0], samplePosition: 1, listProblemClass: "none" };
+}
+
+function relationMatchesExpected(value, type, pattern, expectedId) {
+  if (value === undefined || value === null || typeof expectedId !== "string" || !pattern.test(expectedId)) return null;
+  const relation = relationData(value, type, pattern);
+  return Boolean(relation && relation.id === expectedId);
+}
+
+function chartTypeMatchesExpected(value, expectedType) {
+  if (value === undefined || value === null || !Object.hasOwn(FLIXPATROL_TOP10_TYPES, expectedType ?? "")) return null;
+  return normalizeChartType(value) === expectedType;
+}
+
+function dateRangeMatchesExpected(value, expectedDate) {
+  if (value === undefined || value === null || typeof expectedDate !== "string" || !DATE_PATTERN.test(expectedDate)) return null;
+  const wrapper = record(value);
+  const date = wrapper?.type === "daterange" ? record(wrapper.data) : wrapper;
+  return Boolean(date && date.type === 1 && date.from === expectedDate && date.to === expectedDate);
+}
+
+function validTitleIdCheck(value) {
+  if (value === undefined || value === null) return null;
+  return ID_PATTERNS.title.test(record(record(value)?.data)?.id ?? "");
+}
+
+function validProviderUpdatedAtCheck(value) {
+  if (value === undefined || value === null) return null;
+  return typeof value === "string" && PROVIDER_DATETIME_PATTERN.test(value);
 }
 
 /* Rein strukturelle Diagnose fuer verworfene Providerantworten. Feldnamen und
@@ -166,12 +228,14 @@ export function describeFlixPatrolResponseShape(value, {
     ? value : top10State ? top10State.sample : list?.[0];
   const sampleWrapper = record(sample);
   const sampleData = record(sampleWrapper?.data);
-  const fieldsTarget = contractGroup === "quota" || contractGroup === "title" ? rootData : sampleWrapper?.data;
+  const top10FieldsTarget = sampleData ?? sampleWrapper;
+  const fieldsTarget = contractGroup === "quota" || contractGroup === "title"
+    ? rootData : contractGroup === "top10-list" ? top10FieldsTarget : sampleWrapper?.data;
   const relations = contractGroup === "top10-list"
     ? {
-      movie: responseRelationShape(sampleData?.movie, ["titles"]),
-      company: responseRelationShape(sampleData?.company, ["companies"]),
-      country: responseRelationShape(sampleData?.country, ["countries"]),
+      movie: responseRelationShape(top10FieldsTarget?.movie, ["titles"]),
+      company: responseRelationShape(top10FieldsTarget?.company, ["companies"]),
+      country: responseRelationShape(top10FieldsTarget?.country, ["countries"]),
     }
     : ["title", "title-list"].includes(contractGroup) ? {
       country: responseRelationShape(record(fieldsTarget)?.country, ["countries"]),
@@ -192,7 +256,9 @@ export function describeFlixPatrolResponseShape(value, {
     failureClass,
     rootKind: responseValueClass(value),
     rootArrayLength: Array.isArray(value) ? value.length : null,
-    rootTypeClass: responseEnumClass(root?.type, ["apiquota", "top10s", "titles"]),
+    rootTypeClass: responseEnumClass(root?.type, [
+      "apiquota", "top10s", "titles", "collection", "list", "array", "resultset",
+    ]),
     dataKind: responseValueClass(rootData),
     dataArrayLength: Array.isArray(rootData) ? rootData.length : null,
     itemCount: list?.length ?? (sample === undefined ? 0 : 1),
@@ -206,13 +272,25 @@ export function describeFlixPatrolResponseShape(value, {
     enumClasses: Object.freeze(enumClasses),
     relations: Object.freeze(relations),
     rankingClass: contractGroup === "top10-list"
-      ? responseRankingClass(sampleData?.ranking) : "not-applicable",
+      ? responseRankingClass(top10FieldsTarget?.ranking) : "not-applicable",
     nullableIntegerClasses: contractGroup === "top10-list" ? Object.freeze({
-      rankingLast: responseNullableIntegerClass(sampleData?.rankingLast, 1),
-      valueLast: responseNullableIntegerClass(sampleData?.valueLast, 0),
-      daysTotal: responseNullableIntegerClass(sampleData?.daysTotal, 0),
+      rankingLast: responseRankingLastClass(top10FieldsTarget?.rankingLast),
+      valueLast: responseNullableIntegerClass(top10FieldsTarget?.valueLast, 0),
+      daysTotal: responseNullableIntegerClass(top10FieldsTarget?.daysTotal, 0),
     }) : null,
-    dateShape: contractGroup === "top10-list" ? responseDateShape(sampleData?.date) : null,
+    dateShape: contractGroup === "top10-list" ? responseDateShape(top10FieldsTarget?.date) : null,
+    contractChecks: contractGroup === "top10-list" ? Object.freeze({
+      companyMatchesExpected: relationMatchesExpected(
+        top10FieldsTarget?.company, "companies", ID_PATTERNS.company, expected?.companyId,
+      ),
+      countryMatchesExpected: relationMatchesExpected(
+        top10FieldsTarget?.country, "countries", ID_PATTERNS.country, expected?.countryId,
+      ),
+      chartTypeMatchesExpected: chartTypeMatchesExpected(top10FieldsTarget?.type, expected?.chartType),
+      dateRangeMatchesExpected: dateRangeMatchesExpected(top10FieldsTarget?.date, expected?.date),
+      titleIdValid: validTitleIdCheck(top10FieldsTarget?.movie),
+      providerUpdatedAtValid: validProviderUpdatedAtCheck(top10FieldsTarget?.updatedAt),
+    }) : null,
   });
 }
 

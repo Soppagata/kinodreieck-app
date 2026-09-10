@@ -129,6 +129,15 @@ Relationen, Datumswrapper und Rangklasse getrennt ausgewiesen. So bleibt etwa
 eine leere Liste von einer unbekannten Wrapperform oder einem falsch typisierten
 Rang unterscheidbar, ohne einen Providerwert zu übernehmen.
 
+Die festen äußeren Typwörter `collection`, `list`, `array` und `resultset`
+werden als bekannte Diagnoseklassen ausgewiesen. Sie werden dadurch nicht als
+akzeptierte TOP-10-Listenform behandelt. Wenn bei einer solchen weiterhin als
+`outer-shape` verworfenen Antwort `root.data` ein Array ist, untersucht die
+Diagnose höchstens die ersten zehn Zeilen und zeigt die Position der ersten vom
+bestehenden Normalisierer verworfenen Zeile; sind alle untersuchten Zeilen
+einzeln gültig, zeigt sie die erste. Das ändert `listItems()` und den
+akzeptierenden Parser nicht.
+
 Für eine Liste mit höchstens zehn Zeilen prüft die Diagnose jede Zeile einzeln
 mit demselben unveränderten Normalisierer und dem erwarteten Company-, Country-,
 Charttyp- und Datumsvertrag. Sie beschreibt die erste verworfene Zeile und nur
@@ -139,8 +148,13 @@ zusätzlichen Providerrequest und keine Lockerung des Parsers.
 
 Die Datumsform unterscheidet den akzeptierten `daterange`-Wrapper von dem
 ebenfalls akzeptierten direkten Datumsknoten. `rankingLast`, `valueLast` und
-`daysTotal` werden je nur als `null`, zulässige Ganzzahl oder ungültig
-klassifiziert. Die Werte selbst werden nicht übernommen.
+`daysTotal` werden ohne Zahlenwert klassifiziert. Für `rankingLast` sind das
+`null`, Ganzzahl 0, negative Ganzzahl, positive Ganzzahl oder ungültig; die
+anderen beiden Felder unterscheiden `null`, zulässige Ganzzahl und ungültig.
+Sechs feste boolesche oder `null`-Prüffelder zeigen zusätzlich, ob Company,
+Country, Charttyp und Datumsbereich dem angeforderten Vertrag entsprechen und
+ob Titel-ID sowie `providerUpdatedAt` syntaktisch gültig sind. Fremdwerte werden
+auch dort nie übernommen.
 
 Die Diagnose übernimmt keine Titel, Beschreibungen, IDs, Schlüssel oder
 Authorization und enumeriert keine unbekannten Feldnamen. Sie enthält weder

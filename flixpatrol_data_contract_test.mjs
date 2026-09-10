@@ -194,6 +194,14 @@ check("Antwortdiagnose wählt den ersten später verworfenen Eintrag ohne Fremdw
   assert.deepEqual(shape.nullableIntegerClasses, {
     rankingLast: "null", valueLast: "integer:valid", daysTotal: "invalid",
   });
+  assert.deepEqual(shape.contractChecks, {
+    companyMatchesExpected: true,
+    countryMatchesExpected: true,
+    chartTypeMatchesExpected: true,
+    dateRangeMatchesExpected: true,
+    titleIdValid: true,
+    providerUpdatedAtValid: true,
+  });
   assert.equal(shape.dateShape.kind, "object");
   assert.equal(shape.dateShape.formClass, "direct-date");
   assert.equal(shape.dateShape.nodeKind, "object");
@@ -212,7 +220,70 @@ check("Antwortdiagnose wählt den ersten später verworfenen Eintrag ohne Fremdw
     contractGroup: "top10-list", expected,
   });
   assert.equal(outer.listProblemClass, "outer-shape");
-  assert.equal(outer.samplePosition, null);
+  assert.equal(outer.samplePosition, 1);
+  assert.equal(outer.whitelistFieldTypes.movie, "object");
+  assert.equal(outer.contractChecks.companyMatchesExpected, true);
+
+  const diagnosticTitleId = (index) => `ttl_${String(index).padStart(24, "A")}`;
+  for (const rootType of ["collection", "list", "array", "resultset"]) {
+    const classified = describeFlixPatrolResponseShape({ type: rootType, data: [row(titleId, 1)] }, {
+      contractGroup: "top10-list", expected,
+    });
+    assert.equal(classified.rootTypeClass, `known:${rootType}`);
+  }
+  const directRow = describeFlixPatrolResponseShape({ type: "list", data: [row(titleId, 1).data] }, {
+    contractGroup: "top10-list", expected,
+  });
+  assert.equal(directRow.listProblemClass, "outer-shape");
+  assert.equal(directRow.sampleItemTypeClass, "number:other");
+  assert.equal(directRow.sampleDataKind, "missing");
+  assert.equal(directRow.whitelistFieldTypes.ranking, "number");
+  assert.equal(directRow.contractChecks.dateRangeMatchesExpected, true);
+  const outerRows = Array.from({ length: 10 }, (_, index) => row(diagnosticTitleId(index), index + 1));
+  outerRows[6] = row(diagnosticTitleId(6), 7, {
+    date: { type: 1, from: expected.date, to: expected.date },
+    rankingLast: 0,
+  });
+  const collection = describeFlixPatrolResponseShape({ type: "collection", data: outerRows }, {
+    contractGroup: "top10-list", expected,
+  });
+  assert.equal(collection.rootTypeClass, "known:collection");
+  assert.equal(collection.dataArrayLength, 10);
+  assert.equal(collection.itemCount, 10);
+  assert.equal(collection.listLengthClass, "one-to-ten");
+  assert.equal(collection.listProblemClass, "outer-shape");
+  assert.equal(collection.samplePosition, 7);
+  assert.equal(collection.nullableIntegerClasses.rankingLast, "integer:zero");
+  assert.equal(collection.dateShape.formClass, "direct-date");
+  assert.deepEqual(collection.contractChecks, {
+    companyMatchesExpected: true,
+    countryMatchesExpected: true,
+    chartTypeMatchesExpected: true,
+    dateRangeMatchesExpected: true,
+    titleIdValid: true,
+    providerUpdatedAtValid: true,
+  });
+  assert.equal(JSON.stringify(collection).includes(diagnosticTitleId(6)), false);
+  const boundedRows = Array.from({ length: 11 }, (_, index) => row(diagnosticTitleId(index), index + 1));
+  Object.defineProperty(boundedRows, 10, {
+    get() { throw new Error("elfte Zeile darf nicht gelesen werden"); },
+  });
+  const bounded = describeFlixPatrolResponseShape({ type: "array", data: boundedRows }, {
+    contractGroup: "top10-list", expected,
+  });
+  assert.equal(bounded.listProblemClass, "outer-shape");
+  assert.equal(bounded.listLengthClass, "over-ten");
+  assert.equal(bounded.samplePosition, 1);
+  for (const [rankingLast, expectedClass] of [
+    [null, "null"], [0, "integer:zero"], [-1, "integer:negative"],
+    [2, "integer:positive"], ["0", "invalid"],
+  ]) {
+    const classified = describeFlixPatrolResponseShape({
+      type: "resultset", data: [row(titleId, 1, { rankingLast })],
+    }, { contractGroup: "top10-list", expected });
+    assert.equal(classified.rootTypeClass, "known:resultset");
+    assert.equal(classified.nullableIntegerClasses.rankingLast, expectedClass);
+  }
   const duplicateSource = describeFlixPatrolResponseShape({
     type: "top10s", data: [row(titleId, 1), row(titleId, 2)],
   }, { contractGroup: "top10-list", expected });

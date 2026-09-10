@@ -178,7 +178,7 @@ await check("Diagnosefehler meldet nur wahre Klasse und geprüfte Struktur", asy
       row("ttl_bHyGTvopBHPVtIKhR2CF68WD", 1),
       row("ttl_K5H0Bes9dtvkV710raDBpXoK", 2, {
         date: { type: 1, from: expected.date, to: expected.date },
-        rankingLast: null,
+        rankingLast: 0,
         valueLast: 4,
         daysTotal: secretValues[4],
         title: secretValues[0],
@@ -212,26 +212,41 @@ await check("Diagnosefehler meldet nur wahre Klasse und geprüfte Struktur", asy
   assert.equal(body.code, "FLIXPATROL_INVALID_RESPONSE");
   assert.equal(body.providerRequests, 1);
   assert.deepEqual(body.diagnostic, diagnostic);
+  assert.equal(body.diagnostic.contractChecks.dateRangeMatchesExpected, true);
+  assert.equal(body.diagnostic.nullableIntegerClasses.rankingLast, "integer:zero");
   assert.equal(calls, 1);
   const serialized = JSON.stringify(body);
   for (const secret of [...secretValues, "SECRET_ERROR_DETAIL"]) {
     assert.equal(serialized.includes(secret), false);
   }
 
-  const rejectingHandler = createFlixPatrolUsageHandler({
-    serviceKeys: [modern],
-    diagnoseTop10: async () => {
-      throw Object.assign(new Error("hidden"), {
-        code: "FLIXPATROL_INVALID_RESPONSE", providerRequests: 1,
-        diagnostic: { ...diagnostic, providerPayload: "SECRET_PAYLOAD" },
-      });
+  const invalidDiagnostics = [
+    { ...diagnostic, providerPayload: "SECRET_PAYLOAD" },
+    {
+      ...diagnostic,
+      contractChecks: { ...diagnostic.contractChecks, companyMatchesExpected: "SECRET_BOOLEAN" },
     },
-  });
-  const rejected = await rejectingHandler(request());
-  const rejectedBody = await rejected.json();
-  assert.equal(rejectedBody.status, "failed");
-  assert.equal("diagnostic" in rejectedBody, false);
-  assert.equal(JSON.stringify(rejectedBody).includes("SECRET_PAYLOAD"), false);
+    {
+      ...diagnostic,
+      nullableIntegerClasses: { ...diagnostic.nullableIntegerClasses, valueLast: "integer:negative" },
+    },
+  ];
+  for (const invalidDiagnostic of invalidDiagnostics) {
+    const rejectingHandler = createFlixPatrolUsageHandler({
+      serviceKeys: [modern],
+      diagnoseTop10: async () => {
+        throw Object.assign(new Error("hidden"), {
+          code: "FLIXPATROL_INVALID_RESPONSE", providerRequests: 1,
+          diagnostic: invalidDiagnostic,
+        });
+      },
+    });
+    const rejected = await rejectingHandler(request());
+    const rejectedBody = await rejected.json();
+    assert.equal(rejectedBody.status, "failed");
+    assert.equal("diagnostic" in rejectedBody, false);
+    assert.equal(/SECRET_PAYLOAD|SECRET_BOOLEAN/.test(JSON.stringify(rejectedBody)), false);
+  }
 });
 
 await check("Fehlerantwort nennt nur Code und konservative Requestzahl", async () => {
