@@ -616,6 +616,21 @@ PWA-/Workerzustand ist damit noch nicht geprüft. Beleg:
 Die bestehende lesende FlixPatrol-Nachprüfung bewahrt E7/M5 ausdrücklich offen,
 auch wenn der nächste natürliche Datenlauf erfolgreich ist.
 
+E7 liefert `2b7a995`, integriert als `a020125`: Showa bleibt auf schmalen
+Touch-Displays sichtbar, seine vier dauerhaften Animationen (Korn, Lichtkegel,
+Rauch, Kaiju) werden dort statisch. Desktop-Showa bleibt bewegt. Dies ist eine
+gezielte Entlastung, keine bereits bewiesene Reparatur der gemeldeten Ursache:
+Der harte Freeze war im lokalen Desktop-WebKit nicht reproduzierbar. Im
+unveränderten Vergleich brauchte die geprüfte Showa-Navigationsfolge 13,6 Sekunden,
+mit reduzierter Bewegung 4,7 Sekunden; diese Einzelmessung ist keine allgemeine
+Leistungsgarantie. Die fokussierten Fälle mit gespeicherten Owner-Anzeigeoptionen,
+realistischer lokaler Datengröße, wiederholten Wechseln, Reload und neuem
+Browserfenster im selben Speicherkontext bestanden nach der Entlastung.
+Das ist keine physische PWA-/iPhone-Abnahme. Ein Test-Delta ergänzt vor der
+Staging-Lieferung noch die ausdrückliche Kontrolle jedes tatsächlich gewählten
+Bereichs sowie den versteckt/sichtbar-Zustandswechsel. Der vollständige lokale
+Abschlusslauf und Staging-Readback folgen auf dem integrierten Kandidaten.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
