@@ -320,7 +320,12 @@ test.describe("Cage und Space-Pause", () => {
     const extern = await oeffneAppMitMockkonto(page, {
       filme: master, katalog: { bekannt: [], entdecken },
     });
-    await expect(page.locator('.kd-fx-showa[aria-hidden="true"]')).toBeVisible();
+    const showa = page.locator('.kd-fx-showa[aria-hidden="true"]');
+    await expect(showa).toBeVisible();
+    for (const selector of [".korn", ".kd-beam", ".kd-city-smoke", ".kd-kaiju-shape"]) {
+      await expect(showa.locator(selector)).not.toHaveCSS("animation-name", "none");
+      await expect(showa.locator(selector)).toHaveCSS("animation-play-state", "running");
+    }
     await expect.poll(() => page.evaluate(() => window.cageCatalog.calls.streamingEntdecken || 0)).toBe(1);
     await page.evaluate(() => {
       window.cageCatalogDelay = null;
@@ -343,6 +348,9 @@ test.describe("Cage und Space-Pause", () => {
     await page.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
     await page.getByRole("dialog", { name: "Menü", exact: true }).getByRole("button", { name: "Start", exact: true }).tap();
     await expect(page.locator(".kd-dash")).toBeVisible();
+    for (const selector of [".korn", ".kd-beam", ".kd-city-smoke", ".kd-kaiju-shape"]) {
+      await expect(showa.locator(selector)).toHaveCSS("animation-play-state", "running");
+    }
     expect(extern).toEqual([]);
   });
 
@@ -922,7 +930,12 @@ test.describe("Showa-PWA-Dauerbedienung", () => {
       if (scenario.modus) {
         await expect(overlay).toBeVisible();
         for (const selector of [".korn", ".kd-beam", ".kd-city-smoke", ".kd-kaiju-shape"]) {
-          await expect(overlay.locator(selector)).toHaveCSS("animation-name", "none");
+          if (scenario.reducedMotion === "reduce") {
+            await expect(overlay.locator(selector)).toHaveCSS("animation-name", "none");
+          } else {
+            await expect(overlay.locator(selector)).not.toHaveCSS("animation-name", "none");
+            await expect(overlay.locator(selector)).toHaveCSS("animation-play-state", "running");
+          }
         }
       } else await expect(overlay).toHaveCount(0);
 
