@@ -24,11 +24,11 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: vollständiger Private Ops Monitor 34480116970 nach erfolgreichem Datenlauf und Staging-Deploy grün; E1 |
-| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | DONE: realer vollständiger Lauf und gespeicherter Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56, zusammengeführtes Main/Staging bf74f25; E2 → E4 |
+| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8 auf Staging GELIEFERT: 8f084d3, Gesamtgate und CI 34499018803 grün, Domain/Worker/Assets am 10.09. um 16:05 UTC bestätigt. Schnellere Startdarstellung im Labor belegt; konkrete iPhone-Ladezeit noch nicht abgenommen. Natürlicher Entdecken-Erstlauf separat unter M3 offen; Production weiterhin 3b82a73; Master |
-| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für den gelieferten Faktenpfad: fünf Charts, 50 Referenzen und 25 tatsächlich benötigte Titeldetails im gemeinsamen Cache; Backend 97ade56 / Main und Staging bf74f25, KI-Vertragsprüfungen grün, kein neuer bezahlter KI-Livetest; E2, E3, E5, E6 |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193, Gesamtgate und CI 34509618429 grün, Domain/Worker/Assets am 10.09. um 17:51 UTC bestätigt. Schnellere Startdarstellung im Labor und Entdecken am echten Datenbestand belegt; physische iPhone-Abnahme dieser Ergänzungen offen. Natürlicher Entdecken-Erstlauf separat unter M3 offen; Production weiterhin 3b82a73; Master |
+| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: gemeinsamer Faktenpfad mit fünf Charts, 50 Referenzen und 25 benötigten Titeldetails, Backend 97ade56; KI-Vertragsprüfungen grün. E9/E10 auf Staging 5724193 verwenden vorhandene Beschreibungen flüchtig im Ranking; reale Probe sechs Empfehlungen, fünf begründet und eine neutral. Keine zusätzlichen FlixPatrol-/KI-Requests oder persönlichen Writes; E2, E3, E5, E6, E9, E10 |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -822,7 +822,9 @@ sichtbar. Die globale Pflege aller fünf Quellen bleibt bestehen.
 
 M2 und M6 werden um diese persönliche Projektion erweitert; ihre bisherigen
 Backend-Lieferstände bleiben gültig. M5 umfasst die gemeinsame Staging-
-Lieferung. Diese Ergänzungen sind OFFEN. Max erlaubt ausdrücklich einige
+Lieferung. Diese Ergänzungen sind auf Staging `5724193` GELIEFERT und durch
+CI `34509618429` sowie öffentlichen Readback belegt; physische iPhone-Abnahme
+noch offen. Max erlaubt ausdrücklich einige
 erkundende Vorschläge, wenn belastbare Geschmackstreffer fehlen. Sie werden
 als solche erkennbar, ohne erfundene Profilbegründung. Gesehen-Ausschlüsse,
 harte Ablehnungen und strenge Filmidentität bleiben bestehen.
@@ -840,8 +842,8 @@ Paket benötigt einen Import oder ein Arbeitsergebnis des anderen.
 
 | Paket / IDs | Task / Branch / Worktree | Exklusive Write-Flächen | Stand |
 | --- | --- | --- | --- |
-| E9 / M2, M6 | `etappe_08_startzeit` übernimmt E9; `codex/entdecken-abos-20260910`; `/private/tmp/kd-entdecken-abos-e9-20260910` | `src/lib/entdeckenUi.js`, `src/tabs/EntdeckenTab.jsx`, `src/App.jsx`, erforderlicher neuer reiner Entdecken-Projektionshelper und fokussierte Entdecken-/UI-Tests; `src/lib/entdeckenPins.js` nur für tatsächliche Kartenidentität falls nötig | INTEGRATED: `d31ea54` + `535b019`; fokussierte Tests grün |
-| E10 / M6 | `etappe_05_import` übernimmt E10; `codex/entdecken-inhalte-20260910`; `/private/tmp/kd-entdecken-inhalte-e10-20260910` | `src/lib/recommendationRanking.js`, erforderlicher neuer reiner Inhaltshelper, `recommendation_ranking_test.mjs` und eigene neue Inhaltsrankingtests | INTEGRATED: `6dea557` + `aec9f8d`; 180 fokussierte Checks grün |
+| E9 / M2, M6 | `etappe_08_startzeit` übernimmt E9; `codex/entdecken-abos-20260910`; `/private/tmp/kd-entdecken-abos-e9-20260910` | `src/lib/entdeckenUi.js`, `src/tabs/EntdeckenTab.jsx`, `src/App.jsx`, erforderlicher neuer reiner Entdecken-Projektionshelper und fokussierte Entdecken-/UI-Tests; `src/lib/entdeckenPins.js` nur für tatsächliche Kartenidentität falls nötig | GELIEFERT auf Staging 5724193; integriert als `d31ea54` + `535b019`; fokussierte Tests, Gesamtgate, CI und Readback grün |
+| E10 / M6 | `etappe_05_import` übernimmt E10; `codex/entdecken-inhalte-20260910`; `/private/tmp/kd-entdecken-inhalte-e10-20260910` | `src/lib/recommendationRanking.js`, erforderlicher neuer reiner Inhaltshelper, `recommendation_ranking_test.mjs` und eigene neue Inhaltsrankingtests | GELIEFERT auf Staging 5724193; integriert als `6dea557` + `aec9f8d`; 180 fokussierte Checks, Gesamtgate, CI und Readback grün |
 
 Die native Agenten-Taskgrenze verhindert neue Agentennamen. Zwei bereits
 abgeschlossene Baumeister übernehmen deshalb jeweils genau einen neuen Scope
@@ -938,7 +940,8 @@ Basis `1cadbd3`, Branch `codex/entdecken-webkit-gate-20260910`, Worktree
 erforderlicher Testhelper; Vergleich E8/Kandidat, getrennte Messung echter
 Browserreaktion und Automation. Produktänderung nur bei belegter Ursache
 und zugeordnetem Delta. Backend, Workflows, Grenzen und Behauptung einer
-PWA-Auslieferung bleiben unverändert. E9/E10-Lieferung noch OFFEN.
+PWA-Auslieferung bleiben unverändert. Zu diesem Zwischenstand war die
+E9/E10-Lieferung noch offen; der Abschluss ist unten belegt.
 
 Die WebKit-Korrektur ist als `7a35658` geliefert und als `34d45b2`
 integriert; ausschließlich `tests/neon-noir.spec.mjs` wurde geändert.
@@ -955,6 +958,35 @@ Browsermaxima 176–202ms. Belege: `/private/tmp/kd-webkit-navigation-comparison
 und `/private/tmp/kd-webkit-navigation-final.log`. Die Produktbytes bleiben
 gegenüber dem real geprüften `7fc1e5a` unverändert. Neues gemeinsames CI-Gate
 und öffentlicher Staging-Readback stehen noch aus.
+
+Der korrigierte Kandidat `57241935f1a829af1154d778aa58176e7354cfaa` ist
+force-frei auf Staging und Master gepusht, beide Ziel-Refs exakt zurückgelesen;
+Main bleibt `bf74f25`. CI `34509618429` bestätigt Testsuite einschließlich
+Functionchecks, Chromium und alle 46 WebKitfälle ohne Wiederholung grün.
+Die neue CI-Messung trennt tatsächlich 1.333/1.336ms maximale Browserreaktion
+im Showa-Modus von 3.443/4.132ms gesamtem Automationsablauf. Die 3s-Appgrenze
+bleibt unverändert erfüllt. Beleg: `/private/tmp/kd-ops-audit-20260909/github-job-102980217012.log`.
+Der allgemeine Dienstefilter gilt für jede Auswahl und beide Listen; Apple TV+
+ist nur das Beispiel aus der Echtprobe, keine Sonderregel. Ohne Dienstauswahl
+bleiben Kinoeinträge. Staging-Deployment und öffentlicher Readback folgen.
+
+E9/E10 abgeschlossen auf Staging: Deployment `34509618429` erfolgreich;
+öffentlicher Readback am 10. September um 17:51:54 UTC bestätigt Commit
+`57241935f1a829af1154d778aa58176e7354cfaa`, Umgebung staging, identischen
+Service-Worker-Stand und die korrekten JS-/CSS-Dateien im Precache, alle HTTP200.
+Production liefert weiterhin `3b82a7305c16d5a74ba7a24786e5db068e61db95`.
+Die Produktdateien des Liefercommits sind bytegleich zum real geprüften
+`7fc1e5a`: 50 Titel aus 30 passenden Streaming- und 20 Kinoeinträgen, sechs
+Vorschläge mit fünf belegten Gründen und einer erkennbar neutralen Erkundung.
+Der reale Bestand liefert dabei keinen zusätzlichen Beschreibungsgrund;
+der Inhaltsabgleich ist durch seine fokussierten Regressionen belegt.
+Keine neuen FlixPatrol-/KI-Requests, persönlichen Writes, Backend- oder
+Scheduleränderungen. Physische iPhone-Abnahme und der erste natürliche
+Entdecken-Lauf unter M3 bleiben getrennt offen. Belege:
+`/private/tmp/kd-ops-audit-20260909/entdecken-e9-e10-public-readback.json` und
+`/private/tmp/kd-ops-audit-20260909/entdecken-e9-e10-delivery.json`.
+Dieser dokumentarische Abschluss wird nur im Masterzweig festgehalten;
+der geprüfte Staging-Liefercommit bleibt `5724193`.
 
 ## Historischer Ausgang am 9. September
 
