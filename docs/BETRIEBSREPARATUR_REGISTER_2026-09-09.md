@@ -29,7 +29,7 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
 | M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | Lokales Gesamtgate, Backend-Readback und erforderliche Main-CI grün; natürlicher Feed-/Monitorabschluss offen; Master |
 | M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Backend und Staging geliefert; fünf echte Charts und 50 Titelreferenzen gespeichert, Titeldetails noch offen wegen M2; E2, E3, E5, E6 |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE; natürlicher Ticker grün; mitsamt heutigem Owner-Test zwölf Versuche terminal verbucht; E1 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE; natürlicher Ticker grün; mitsamt Owner-Test und gezielter Titeldiagnose 13 Versuche terminal verbucht; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
 
@@ -468,6 +468,21 @@ Belege: `flixpatrol-owner-now-once.json`,
 `flixpatrol-owner-now-title-diagnostic-logs.json` im bestehenden Auditordner.
 Die letzte Datei enthält ausschließlich bereits vorhandene Strukturdiagnosen
 aus Function-Logs, keine zusätzliche Anbieterabfrage und keine Rohpayloads.
+
+Das Diagnose-Delta `c46a87e` ist als `0e1ef47` integriert und in der
+Usage-Function v9 bytegleich ausgeliefert. Der genau einmal ausgeführte
+servicegeschützte Titelabruf um 12:45 UTC belegt `length=0` als einzige
+abweichende Vertragsklasse. Alle übrigen Datums-, Zahlen-, Text-, Relations-,
+URL- und Zeitstempelprüfungen sind gültig; Quell-ID und Medientyp stimmen mit
+der angefragten Referenz überein. E4 korrigiert deshalb gezielt die Laufzeit
+von Provider-Nullwert `0` zu internem `null`; andere Verträge bleiben streng.
+Der Monatszähler steht danach bei 13 abgeschlossenen Versuchen (acht Erfolge,
+fünf Fehler). Feed und Cache blieben bei der Diagnose unverändert.
+Beleg: `flixpatrol-title-contract-once.json` im bestehenden Auditordner.
+
+Die vorhandene Nachprüfungsautomation wurde an Max' aktuelle Abnahme angepasst:
+Der vollständige manuelle Test heute mit anschließendem grünem Monitor zählt;
+die natürliche Ausführung morgen bleibt eine zusätzliche Betriebsbeobachtung.
 
 ## Historischer Ausgang am 9. September
 
