@@ -111,11 +111,39 @@ Jeder Fehler nach einem erfolgreichen Claim trägt dieselbe operationId wie
 beginOperation/finishOperation, damit der Serveradapter den Fehler
 payloadfrei über kd_flixpatrol_data_record_failure zuordnen kann.
 
+### Payloadfreie Antwortdiagnose
+
+Eine verworfene JSON-Antwort erzeugt zusätzlich genau eine begrenzte Diagnose
+mit schemaVersion `flixpatrol-response-shape-v1`. Sie unterscheidet nur die
+festen Vertragsgruppen `quota`, `top10-list`, `title` und `title-list` sowie
+die Fehlerklassen `json-error` und `contract-mismatch`. Erfasst werden
+ausschließlich:
+
+- Klassen der Wurzel-, Daten- und ersten Listeneintragsform;
+- tatsächliche Arraylängen samt der festen Klasse leer, 1–10 oder über 10;
+- bekannte oder unbekannte Klassen der dokumentierten Enumfelder;
+- Datentypen eines festen Whitelist-Feldsets und der erwarteten Relationen.
+
+Beim TOP-10-Vertrag werden äußerer Wrapper, Film-, Company- und Country-
+Relationen, Datumswrapper und Rangklasse getrennt ausgewiesen. So bleibt etwa
+eine leere Liste von einer unbekannten Wrapperform oder einem falsch typisierten
+Rang unterscheidbar, ohne einen Providerwert zu übernehmen.
+
+Die Diagnose übernimmt keine Titel, Beschreibungen, IDs, Schlüssel oder
+Authorization und enumeriert keine unbekannten Feldnamen. Sie enthält weder
+die URL noch Header oder die vollständige Antwort. Der Client hängt dieselbe
+kleine, eingefrorene Projektion an `FLIXPATROL_INVALID_RESPONSE` und schreibt
+sie einmal in das Serverlog. Der Diagnose-Logger läuft fehlertolerant; ein
+synchroner Fehler oder ein abgelehntes Logger-Promise ändert weder den
+gezählten Request noch dessen terminalen `invalid_response`-Abschluss. Es gibt
+weiterhin keinen Retry.
+
 supabase/functions/_shared/flixpatrolData.js exportiert:
 
 - FLIXPATROL_TITLE_TYPES, FLIXPATROL_TOP10_TYPES und FLIXPATROL_AT_SOURCES;
 - normalizeFlixPatrolTitle, normalizeFlixPatrolTitleList und
   normalizeFlixPatrolTop10List;
+- describeFlixPatrolResponseShape für die feste payloadfreie Strukturdiagnose;
 - normalizeTitleFingerprint, selectStrictFlixPatrolTitleCandidate und
   isFlixPatrolId.
 

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   FLIXPATROL_AT_SOURCES,
+  FLIXPATROL_RESPONSE_SHAPE_VERSION,
   FLIXPATROL_TITLE_TYPES,
   FLIXPATROL_TOP10_TYPES,
+  describeFlixPatrolResponseShape,
   normalizeFlixPatrolTitle,
   normalizeFlixPatrolTitleList,
   normalizeFlixPatrolTop10List,
@@ -129,6 +131,54 @@ check("Chartnormalisierung prüft Relationen und liefert Ränge stabil sortiert"
   assert.equal(normalizeFlixPatrolTop10List([partial], expected), null);
 });
 
+check("Antwortdiagnose beschreibt nur feste Strukturklassen und Feldtypen", () => {
+  const secrets = [
+    "A Highly Sensitive Title", "provider description secret", titleId,
+    companyId, "Basic private-api-key", "attacker-controlled-field-name",
+  ];
+  const malicious = {
+    type: "attacker-controlled-enum",
+    Authorization: secrets[4],
+    "attacker-controlled-field-name": "must stay absent",
+    data: [{
+      type: "attacker-controlled-item-enum",
+      data: {
+        movie: { type: "attacker-controlled-relation", data: { id: titleId } },
+        company: { type: "companies", data: { id: companyId } },
+        country: null,
+        type: 99,
+        date: { type: "daterange", data: { type: 9, from: "secret-date", to: "secret-date" } },
+        ranking: "1", rankingLast: null, value: 10, valueLast: null,
+        daysTotal: 1, updatedAt: "invalid", title: secrets[0], description: secrets[1],
+      },
+    }],
+  };
+  const shape = describeFlixPatrolResponseShape(malicious, {
+    contractGroup: "top10-list", failureClass: "contract-mismatch",
+  });
+  assert.equal(shape.schemaVersion, FLIXPATROL_RESPONSE_SHAPE_VERSION);
+  assert.equal(shape.contractGroup, "top10-list");
+  assert.equal(shape.rootKind, "object");
+  assert.equal(shape.rootTypeClass, "string:other");
+  assert.equal(shape.dataKind, "array");
+  assert.equal(shape.dataArrayLength, 1);
+  assert.equal(shape.listLengthClass, "one-to-ten");
+  assert.equal(shape.whitelistFieldTypes.movie, "object");
+  assert.equal(shape.whitelistFieldTypes.ranking, "string");
+  assert.equal(shape.enumClasses.chartType, "number:other");
+  assert.equal(shape.rankingClass, "string:other");
+  assert.equal(shape.dateShape.kind, "object");
+  assert.equal(shape.dateShape.typeClass, "known:daterange");
+  assert.equal(shape.dateShape.fieldTypes.from, "string");
+  assert.equal(shape.dateShape.rangeTypeClass, "number:other");
+  assert.equal(shape.relations.movie.typeClass, "string:other");
+  const serialized = JSON.stringify(shape);
+  for (const secret of secrets) assert.equal(serialized.includes(secret), false);
+  assert.equal(describeFlixPatrolResponseShape({}, {
+    contractGroup: "attacker-controlled-field-name", failureClass: "contract-mismatch",
+  }), null);
+});
+
 check("Migration und Doku begrenzen Suche, Rechte und Cache-Inhalte", () => {
   const migration = readFileSync("supabase/migrations/20260909190000_flixpatrol_data_cache.sql", "utf8");
   const docs = readFileSync("docs/FLIXPATROL_DATENVERTRAG.md", "utf8");
@@ -143,6 +193,8 @@ check("Migration und Doku begrenzen Suche, Rechte und Cache-Inhalte", () => {
   assert.match(docs, /mehrere IDs bleiben ambiguous_blocked/);
   assert.match(docs, /Unbekannte Importtitel dürfen offen bleiben/);
   assert.match(docs, /keine Pagination-Parameter/);
+  assert.match(docs, /flixpatrol-response-shape-v1/);
+  assert.match(docs, /keine Titel, Beschreibungen, IDs, Schlüssel oder\s+Authorization/);
 });
 
 console.log(`${checks} FlixPatrol-Datenvertragsprüfungen bestanden.`);
