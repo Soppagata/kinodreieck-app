@@ -192,6 +192,14 @@ async function installNetworkFence(page, traffic) {
       traffic.contracts.push("radar-feed");
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(radarFeed) });
     }
+    if ([
+      "/rest/v1/rpc/kd_flixpatrol_chart_read",
+      "/rest/v1/rpc/kd_flixpatrol_titles_read",
+    ].includes(url.pathname)) {
+      record("mocked", `facts:${url.pathname.split("/").at(-1)}`);
+      traffic.contracts.push(`facts:${url.pathname.split("/").at(-1)}`);
+      return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+    }
 
     record("aborted", "unknown-fixture-path");
     traffic.unknownFixturePaths.push(`${request.method()} ${url.pathname}`);

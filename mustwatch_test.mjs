@@ -107,7 +107,13 @@ check("Suche: Nichttreffer bleibt Nichttreffer", M.passtZuMustwatchSuche(suchEin
 const kandidaten = {
   master: [{ id: "solaris_1972", titel: "Solaris", jahr: 1972 }],
   programm: [{ id: 4711, titel: "Stalker", jahr: 1979 }],
-  streaming: [{ id: 88123, titel: "The Substance", jahr: 2024 }],
+  streaming: [
+    { id: 88123, watchmode_id: 88123, titel: "The Substance", jahr: 2024 },
+    /* Ein lokal mit dem Master gematchter Streamingtitel trägt in der Ansicht
+       zusätzlich dessen ID. Der Picker-/Verfügbarkeitsvertrag bleibt trotzdem
+       auf der normalisierten Watchmode-ID. */
+    { id: 77002, watchmode_id: 77002, master_id: "alien_1979", titel: "Alien", jahr: 1979 },
+  ],
 };
 const imKino = { id: "mw_a", titel: "Stalker", verknuepfung: { ziel: "programm", id: "4711" }, erstellt_am: "2026-08-01T10:00:00Z" };
 const imStream = { id: "mw_b", titel: "The Substance", verknuepfung: { ziel: "streaming", id: 88123 }, erstellt_am: "2026-07-29T10:00:00Z" };
@@ -118,6 +124,13 @@ const toteRef = { id: "mw_e", titel: "Verschwunden", verknuepfung: { ziel: "stre
 check("Verfügbarkeit: Zahl-/String-ID wird bei stabilen IDs tolerant verglichen",
   M.mustwatchVerfuegbarkeit(imKino, kandidaten)?.label === "IM KINO"
   && M.mustwatchVerfuegbarkeit(imStream, kandidaten)?.label === "STREAMING");
+check("Verfügbarkeit: normalisierte Watchmode-ID bleibt auch neben einer Master-ID bindend",
+  M.mustwatchVerfuegbarkeit({
+    titel: "Alien", verknuepfung: { ziel: "streaming", id: 77002 },
+  }, kandidaten)?.label === "STREAMING"
+  && M.mustwatchVerfuegbarkeit({
+    titel: "Alien", verknuepfung: { ziel: "streaming", id: "alien_1979" },
+  }, kandidaten) === null);
 check("Verfügbarkeit: Kino und Streaming gelten als jetzt verfügbar",
   M.mustwatchVerfuegbarkeit(imKino, kandidaten).aktuell === true
   && M.mustwatchVerfuegbarkeit(imStream, kandidaten).aktuell === true);

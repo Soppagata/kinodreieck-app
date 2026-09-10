@@ -251,7 +251,14 @@ export function createCatalogService({ auth = authService, driver = authDriver, 
           fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-after");
           return geladeneFakten;
         };
-        if (options.deferOptionalFacts === true) factsReady = ladeOptionaleFakten();
+        if (options.deferOptionalFacts === true) {
+          factsReady = ladeOptionaleFakten();
+          /* Der Aufrufer kann den Katalog schon weiterverarbeiten und den
+             Faktenlauf deshalb erst deutlich später abwarten. Markiere eine
+             mögliche Ablehnung sofort als behandelt; das ursprüngliche
+             Promise bleibt für den späteren Aufrufer unverändert ablehnbar. */
+          factsReady.catch(() => {});
+        }
         else await ladeOptionaleFakten();
       } else fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-after");
       /* Sprang der Cache ein, ist der Direkt-Read trotzdem gescheitert. Sein

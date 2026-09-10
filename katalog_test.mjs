@@ -554,6 +554,53 @@ check("Optionale Fakten halten den explizit entkoppelten Streaming-Read nicht au
 faktenFreigeben();
 check("Der entkoppelte Faktenlauf bleibt abwartbar und liefert denselben Inhalt",
   (await verzogerterRead.factsReady)?.[0]?.titel === "Optional");
+
+/* Der Faktenlauf darf bei einem A→B-Wechsel ablehnen, bevor App.jsx nach dem
+   großen Entdecken-Read seinen späteren Catch anhängt. Der Service hängt
+   deshalb sofort einen Handler an, ohne die ablehnende Account-Fence selbst
+   abzufangen oder in einen Erfolg umzudeuten. */
+anmelden();
+let wechselFaktenFreigeben;
+let wechselFaktenGestartet = 0;
+let geloeschteFakten = 0;
+const wechselFaktenWarten = new Promise((resolve) => { wechselFaktenFreigeben = resolve; });
+const wechselFaktenService = createCatalogService({
+  auth: katalogAuth,
+  driver: authDriver,
+  factsService: {
+    peek: () => [],
+    clear: () => { geloeschteFakten += 1; },
+    async load() {
+      wechselFaktenGestartet += 1;
+      await wechselFaktenWarten;
+      return [{ titel: "Fakten von Konto A" }];
+    },
+  },
+});
+const unbehandelteAblehnungen = [];
+const merkeUnbehandelt = (grund) => unbehandelteAblehnungen.push(grund);
+process.on("unhandledRejection", merkeUnbehandelt);
+const wechselRead = await Promise.race([
+  wechselFaktenService.loadArea("streamingBekannt", { deferOptionalFacts: true }),
+  new Promise((resolve) => setTimeout(() => resolve(null), 100)),
+]);
+check("Katalog von Konto A ist trotz verspäteter Fakten sofort nutzbar",
+  wechselRead?.payload?.titel?.[0]?.titel === "Bekannt live"
+  && wechselFaktenGestartet === 1);
+katalogSession = aktiveKatalogSession("konto-b");
+wechselFaktenFreigeben();
+/* Absichtlich erst nach zwei Ereignisschleifen konsumieren: ohne den sofort im
+   Service registrierten Handler würde Node bis hier unhandledRejection melden. */
+await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => setTimeout(resolve, 0));
+let wechselFaktenFehler = null;
+try { await wechselRead.factsReady; } catch (error) { wechselFaktenFehler = error; }
+process.off("unhandledRejection", merkeUnbehandelt);
+check("A→B während verspäteter Fakten bleibt durch die Account-Fence verworfen",
+  wechselFaktenFehler?.code === ERROR_CODES.FORBIDDEN);
+check("Verspätete Fakten von Konto A werden weder erfolgreich geliefert noch unbehandelt verworfen",
+  unbehandelteAblehnungen.length === 0 && geloeschteFakten === 0);
+anmelden();
 const streamingRoh = { bekannt: bekanntBereich.payload, entdecken: entdeckenBereich.payload };
 const vergleichsMaster = [{ watchmode_id: 10, titel: "Bereits bekannt" }];
 check("Streaming-Normalisierung bleibt struktur- und reihenfolgeidentisch",

@@ -992,10 +992,7 @@ export default function App() {
      Kinoprogramm (stabile ID oder rein lokaler Projektionsschlüssel) sowie
      beide aktuellen Streaming-Snapshots. */
   const mwKandidaten = useMemo(() => ({
-    /* Master und Streaming tragen die benötigten Felder bereits. Ihre Objekte
-       für jede Startprojektion noch einmal zu kopieren kostete beim
-       25.000er-Katalog spürbar Hauptthreadzeit, ohne Daten zu verändern. */
-    master: master || [],
+    master: (master || []).map((f) => ({ ...f, id: f.id, titel: f.titel, jahr: f.jahr })),
     programm: (programmInfo?.abgelaufen ? [] : ((programm && programm.filme) || [])).map((pf) => ({
       ...pf,
       id: pf.film_at_id ?? pf.id ?? null,
@@ -1005,7 +1002,7 @@ export default function App() {
     streaming: streamingInfo?.abgelaufen ? [] : [
       ...((streamingBekannt && streamingBekannt.titel) || []),
       ...((streamingEntdecken && streamingEntdecken.titel) || []),
-    ],
+    ].map((t) => ({ ...t, id: t.watchmode_id, titel: t.titel, jahr: t.jahr })),
   }), [master, programm, programmInfo?.abgelaufen, streamingBekannt, streamingEntdecken, streamingInfo?.abgelaufen]);
 
   /* ---- Navigation zwischen Blog und Mediathek ---- */

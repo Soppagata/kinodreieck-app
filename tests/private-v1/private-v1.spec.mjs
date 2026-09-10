@@ -199,3 +199,30 @@ test("Start zeigt fünf passende Must-Watch-Titel und keine verworfene Beobachte
   expect(traffic.contracts).not.toContain("series-watch");
   expect(fullCatalogRequests(traffic)).toHaveLength(0);
 });
+
+test("Must-Watch-Picker speichert für rohe und Master-gematchte Streams die Watchmode-ID", async ({ privateApp }) => {
+  const { page } = privateApp;
+  await navigateMobile(page, "Mediathek");
+  await page.getByRole("button", { name: /^Must-Watch/u }).click();
+
+  const verknuepfe = async (titel, suchTitel, erwarteteId) => {
+    await page.getByRole("button", { name: "+ Für später merken", exact: true }).click();
+    const bereich = page.locator(".kd-mustwatch-form");
+    const speichern = bereich.getByRole("button", { name: "Für später merken", exact: true });
+    await bereich.getByPlaceholder("Titel *").fill(titel);
+    await bereich.getByRole("button", { name: "… wählen (optional)", exact: true }).click();
+    await bereich.getByPlaceholder(/Titel suchen/u).fill(suchTitel);
+    const streamingGruppe = bereich.getByText("Streaming", { exact: true }).locator("..");
+    await streamingGruppe.getByRole("button", { name: new RegExp(`^${suchTitel}`) }).click();
+    await speichern.click();
+    await expect.poll(async () => page.evaluate((name) => {
+      const eintraege = JSON.parse(localStorage.getItem("kd:mustwatch") || "{}").eintraege || [];
+      return eintraege.find((eintrag) => eintrag.titel === name)?.verknuepfung || null;
+    }, titel)).toEqual({ ziel: "streaming", id: erwarteteId });
+  };
+
+  await verknuepfe("Watchmode-only Link", "Heute", 81006);
+  /* Obsession ist im Fixture bereits mit der Master-ID `obsession-2024`
+     gematcht. Auch hier muss der Picker 81001 speichern. */
+  await verknuepfe("Master-match Link", "Obsession - Du sollst mich lieben", 81001);
+});
