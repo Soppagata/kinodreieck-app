@@ -24,12 +24,12 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE für Monitorlogik: natürlicher Lauf 34463011534 nennt nur den tatsächlichen Feed-Quellenfehler; Entdecken-Reparatur bleibt M2; E1 |
-| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | API-Parser real repariert, Backend live und Tagesautomatik aktiv; erster natürlicher vollständiger Feed noch offen; E2 → E4 |
+| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | Top10-Parser real repariert; fünf Charts live gespeichert. Heutiger Owner-Test findet weitere Title-Parserabweichung; Feedabschluss offen, Tagesautomatik aktiv; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
 | M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | Lokales Gesamtgate, Backend-Readback und erforderliche Main-CI grün; natürlicher Feed-/Monitorabschluss offen; Master |
-| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Backend und Staging geliefert; noch keine echten Chart-/Titeldaten wegen M2; E2, E3, E5, E6 |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE; erster natürlicher Tickerlauf 34462038347 erfolgreich; nach Reparatur sechs Versuche insgesamt sauber verbucht; E1 |
+| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Backend und Staging geliefert; fünf echte Charts und 50 Titelreferenzen gespeichert, Titeldetails noch offen wegen M2; E2, E3, E5, E6 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE; natürlicher Ticker grün; mitsamt heutigem Owner-Test zwölf Versuche terminal verbucht; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
 
@@ -437,6 +437,37 @@ Zusätzliche Belege im bestehenden Auditordner:
 Der Staging-Readback liegt in `flixpatrol-repaired-staging-build.json`.
 Historische Function-Nachweise bleiben in `backend-delivery-9bb2133`,
 `diagnostic-delivery-04bbda1` und `diagnostic-delivery-8787455` erhalten.
+
+## Heutiger vollständiger Test auf Max' ausdrücklichen Wunsch
+
+Max lässt am 10. September den morgigen Zeitplan bestehen und beauftragt
+ausdrücklich den vollständigen Datenlauf jetzt. Die unmittelbare Abnahme
+erfolgt deshalb anhand dieses manuellen Datenlaufs mit gespeichertem Feed
+und anschließendem Betriebsmonitor. Die natürliche Ausführung morgen bleibt
+als ergänzende Betriebsbeobachtung bestehen; keine zusätzliche KI-Liveprüfung
+wird nachträglich zur Merge-Bedingung.
+
+Der vorhandene authentifizierte Owner-Pfad wird genutzt. Seine temporäre
+Freigabe wurde nur für den Aufruf gesetzt und danach nachweislich wieder
+geschlossen. Kein Kalenderclaim wurde gelöscht, kein Scheduler verändert.
+Der Lauf von 12:16 UTC lieferte fünf erfolgreiche Charts, scheiterte aber
+am ersten Titel-Detailparser: fünf Chart- und ein Titelrequest, null Feedwrites,
+null kostenpflichtige KI. Der gemeinsame Monatszähler steht auf zwölf
+terminalen Versuchen (acht Erfolge, vier Fehler). Fünf Charts mit je zehn
+Referenzen sind dauerhaft gespeichert; 49 Titel sind `unresolved`, genau
+der fehlgeschlagene Titel `incomplete_blocked`.
+
+E4 erhält das eng begrenzte Diagnose-/Korrekturdelta für den Titelvertrag.
+Die fehlgeschlagene Referenz ist durch den bestehenden technischen Fehlerbeleg
+gebunden. Erfolgreiche Chart-Checkpoints werden beim Fortsetzen wiederverwendet.
+Erst nach belegter Parserkorrektur darf die einzelne dadurch überholte negative
+Titelmarkierung zur Neuvalidierung ablaufen; kein globales Cacheleeren.
+
+Belege: `flixpatrol-owner-now-once.json`,
+`flixpatrol-owner-now-partial-cache.json` und
+`flixpatrol-owner-now-title-diagnostic-logs.json` im bestehenden Auditordner.
+Die letzte Datei enthält ausschließlich bereits vorhandene Strukturdiagnosen
+aus Function-Logs, keine zusätzliche Anbieterabfrage und keine Rohpayloads.
 
 ## Historischer Ausgang am 9. September
 
