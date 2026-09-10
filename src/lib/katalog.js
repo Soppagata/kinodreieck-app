@@ -57,6 +57,8 @@ import { SB_DEFAULT_URL, SB_DEFAULT_ANON } from "./supabaseDefaults.js";
 import { istSupabaseProjektUrl } from "./supabasePublic.js";
 import {
   ergaenzeFehlendeExterneKennungen,
+  externeTitelKennungen,
+  normalisiereExternenTitel,
   ordneExternenTitelZu,
 } from "./externalTitleIdentity.js";
 import { baueFlixpatrolVorschlaege, uebernehmeFlixpatrolVorschlag } from "./flixpatrolFacts.js";
@@ -424,6 +426,37 @@ export async function testeKatalogZugang({
 export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten = []) {
   const masterMitFakten = baueFlixpatrolVorschlaege(master, flixpatrolFakten)
     .map(uebernehmeFlixpatrolVorschlag);
+  /* Ein Vollkatalog enthaelt derzeit rund 25.000 Titel. Jeden davon gegen
+     jeden Mediathek-Eintrag zu pruefen blockiert den Browser auf Mobilgeraeten
+     fuer viele Sekunden. Die eigentliche strenge Identitaetspruefung bleibt
+     unveraendert; dieser Index schraenkt nur auf Eintraege ein, die ueberhaupt
+     einen gemeinsamen normalisierten Titel oder eine gleiche starke ID haben.
+     Genau diese beiden Bedingungen oeffnen in `pruefeExterneTitelIdentitaet`
+     erst einen moeglichen Match oder Konflikt. */
+  const titelIndex = new Map(), idIndex = new Map();
+  const fuegeEin = (index, key, eintrag) => {
+    if (!key) return;
+    if (!index.has(key)) index.set(key, new Set());
+    index.get(key).add(eintrag);
+  };
+  for (const eintrag of masterMitFakten) {
+    for (const titel of [eintrag?.titel, eintrag?.title, eintrag?.originaltitel, eintrag?.originalTitle]) {
+      fuegeEin(titelIndex, normalisiereExternenTitel(titel), eintrag);
+    }
+    for (const [namespace, wert] of Object.entries(externeTitelKennungen(eintrag))) {
+      fuegeEin(idIndex, `${namespace}:${wert}`, eintrag);
+    }
+  }
+  const kandidatenFuer = (extern) => {
+    const kandidaten = new Set();
+    for (const titel of [extern?.titel, extern?.title, extern?.originaltitel, extern?.originalTitle]) {
+      for (const eintrag of titelIndex.get(normalisiereExternenTitel(titel)) || []) kandidaten.add(eintrag);
+    }
+    for (const [namespace, wert] of Object.entries(externeTitelKennungen(extern))) {
+      for (const eintrag of idIndex.get(`${namespace}:${wert}`) || []) kandidaten.add(eintrag);
+    }
+    return [...kandidaten];
+  };
   const bekanntAlt = (streaming && streaming.bekannt) || {};
   const entdeckenAlt = (streaming && streaming.entdecken) || {};
   const map = new Map();
@@ -460,7 +493,7 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
 
   const meine = [], entdecken = [];
   for (const t of map.values()) {
-    const zuordnung = ordneExternenTitelZu(t, masterMitFakten);
+    const zuordnung = ordneExternenTitelZu(t, kandidatenFuer(t));
     if (zuordnung.status === "matched") {
       const film = ergaenzeFehlendeExterneKennungen(zuordnung.match, t);
       meine.push({

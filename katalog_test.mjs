@@ -241,6 +241,34 @@ check("Katalogprojektion lässt eigene Beschreibung, Bewertung, Tags, Notiz und 
   && flixpatrolProjektion.bekannt.titel[0]?.notiz === "eigene Notiz"
   && flixpatrolProjektion.bekannt.titel[0]?.gesehen === true);
 
+/* Der private Vollkatalog liegt inzwischen bei rund 25.000 Titeln. Die
+   Identitaetspruefung darf deshalb nur plausible Titel-/ID-Kandidaten an den
+   unveraenderten strikten Matcher geben, statt 25.000 × 500 Paare zu bilden. */
+const grosserMaster = Array.from({ length: 500 }, (_, index) => ({
+  id: `gross-master-${index}`, titel: `Eigener Titel ${index}`, jahr: 1950 + (index % 70),
+  typ: "film", watchmode_id: 100000 + index,
+}));
+const grosserEntdeckenKatalog = Array.from({ length: 24690 }, (_, index) => ({
+  watchmode_id: 1000000 + index, titel: `Katalogtitel ${index}`, jahr: 1900 + (index % 126),
+  typ: index % 3 ? "movie" : "tv_series", dienste: ["Netflix"],
+}));
+for (let index = 0; index < 200; index++) {
+  grosserEntdeckenKatalog[index] = {
+    ...grosserEntdeckenKatalog[index], watchmode_id: grosserMaster[index].watchmode_id,
+    titel: grosserMaster[index].titel, jahr: grosserMaster[index].jahr, typ: "movie",
+  };
+}
+const grosseProjektionStart = performance.now();
+const grosseProjektion = baueStreamingAnsichten({
+  bekannt: { titel: [] }, entdecken: { titel: grosserEntdeckenKatalog }, entdeckenUmfang: "voll",
+}, grosserMaster);
+const grosseProjektionDauer = performance.now() - grosseProjektionStart;
+check("Vollkatalogprojektion ordnet 24.690 Titel gegen 500 Mediathek-Eintraege ohne UI-Blockade zu",
+  grosseProjektionDauer < 1500
+  && grosseProjektion.bekannt.titel.length === 200
+  && grosseProjektion.entdecken.titel.length === 24490
+  && grosseProjektion.entdecken.katalogMengen.rohkatalog === 24690);
+
 /* ================= Etappe 4: Token-Naht (src/lib/katalog.js) =================
    Bis hierher lief das Modul OHNE Token-Provider — die beiden Header-Checks oben
    belegen damit zugleich, dass das Altverhalten unangetastet bleibt. */

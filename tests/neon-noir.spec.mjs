@@ -288,6 +288,64 @@ test.describe("Cage und Space-Pause", () => {
     Math.random = () => 0.99;
   }, stand);
 
+  test("Showa-PWA bleibt beim automatischen 24.690er Cage-Vollkatalog bedienbar", async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 393, height: 852 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await seedCage(page);
+    await page.addInitScript(() => localStorage.setItem("kd:einstellungen", JSON.stringify({
+      theme: "dunkel", basisTheme: "hell", startTab: "start", schrift: "klein", modus: "showa",
+    })));
+    const cageMaster = [
+      ["Valley Girl", 1983], ["Racing with the Moon", 1984], ["Birdy", 1984],
+      ["The Boy in Blue", 1986], ["Peggy Sue Got Married", 1986],
+    ].map(([titel, jahr], index) => ({
+      id: `cage-voll-${index}`, titel, originaltitel: titel, jahr, typ: "film", quelle: "dvd",
+      watchmode_id: 700000 + index,
+    }));
+    const master = [...cageMaster, ...Array.from({ length: 495 }, (_, index) => ({
+      id: `owner-voll-${index}`, titel: `Owner Vollfilm ${index}`, jahr: 1950 + (index % 70),
+      typ: "film", quelle: index % 2 ? "bluray" : "dvd", watchmode_id: 710000 + index,
+    }))];
+    const entdecken = Array.from({ length: 24690 }, (_, index) => ({
+      watchmode_id: 800000 + index, titel: `Streaming Volltitel ${String(index).padStart(5, "0")}`,
+      jahr: 1900 + (index % 126), typ: index % 3 ? "movie" : "tv_series", dienste: ["Netflix"],
+    }));
+    for (let index = 0; index < cageMaster.length; index++) {
+      entdecken[index] = {
+        ...entdecken[index], watchmode_id: cageMaster[index].watchmode_id,
+        titel: cageMaster[index].titel, jahr: cageMaster[index].jahr, typ: "movie",
+      };
+    }
+    const extern = await oeffneAppMitMockkonto(page, {
+      filme: master, katalog: { bekannt: [], entdecken },
+    });
+    await expect(page.locator('.kd-fx-showa[aria-hidden="true"]')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.cageCatalog.calls.streamingEntdecken || 0)).toBe(1);
+    await page.evaluate(() => {
+      window.cageCatalogDelay = null;
+      const start = performance.now();
+      setTimeout(() => { window.cageCatalogDelay = performance.now() - start; }, 0);
+      window.cageCatalog.release();
+    });
+    await expect.poll(() => page.evaluate(() => window.cageCatalogDelay)).not.toBeNull();
+    expect(await page.evaluate(() => window.cageCatalogDelay)).toBeLessThan(1500);
+
+    for (const [name, ziel] of [["Kino", ".kd-kino-tab"], ["Mediathek", ".kd-mediathek-tab"], ["Streaming", ".kd-streaming-tab"]]) {
+      await page.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
+      const menu = page.getByRole("dialog", { name: "Menü", exact: true });
+      await menu.getByRole("button", { name, exact: true }).tap();
+      await expect(page.locator(ziel)).toBeVisible();
+    }
+    await page.getByRole("button", { name: /^Alles/ }).tap();
+    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(200);
+    await expect(page.getByText("200 von 24685", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
+    await page.getByRole("dialog", { name: "Menü", exact: true }).getByRole("button", { name: "Start", exact: true }).tap();
+    await expect(page.locator(".kd-dash")).toBeVisible();
+    expect(extern).toEqual([]);
+  });
+
   test("Cage prüft lokale Tagesgrenzen und PWA-Rückkehr bis zum fünften Nutzungstag", async ({ page }) => {
     await page.setViewportSize({ width: 393, height: 852 });
     await page.clock.install({ time: new Date("2026-09-08T21:59:00Z") });
