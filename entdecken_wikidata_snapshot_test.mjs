@@ -368,7 +368,7 @@ await check("Ambiguous Fakten blockieren den Popular-Pool nicht", () => {
   const result = createEntdeckenRecommendations({
     streamingEntdecken: { region: "AT", titel: [] },
     streamingKnown: { region: "AT", titel: [] },
-    selectedServices: [],
+    selectedServices: ["Netflix", "Prime Video", "Disney+", "Apple TV+"],
     master: [],
     profile: {},
     webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,

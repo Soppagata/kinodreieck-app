@@ -578,8 +578,18 @@ try {
         && /Quelle ansehen/.test(card.textContent);
     }));
   });
-  await catalogUi.cleanup();
   localStorage.removeItem("kd:geschmacksprofil");
+  await catalogUi.render({
+    ...baseProps, datenKontextKey: "account:ready:konto-b", radarState: createEmptyLocalRadar(),
+    streamingDiscover: catalogTruthInput, selectedServices: ["Testdienst"],
+    webDiscoveryFeed, calendarDay: "2026-08-20",
+  });
+  await act(async () => { await tick(); await tick(); });
+  check("Kontowechsel verwirft das vorherige Profil vor der neuen Projektion", () => {
+    const personal = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-empfehlungen"]');
+    assert.doesNotMatch(personal?.textContent || "", /Persönliche Passung|Profil: drama/u);
+  });
+  await catalogUi.cleanup();
 
   const versionedCheck = validateWebDiscoveryFeed(ENTDECKEN_MARKET_POOL_50);
   check("Versionierter Staging-Pool hält exakt 50 deduplizierte Titel und den 15/10/10/10/5-Quellenmix", () => {
@@ -623,24 +633,25 @@ try {
       watchmode_id: 9901, titel: "Reacher", typ: "tv_series", jahr: 2022,
       dienste: ["Prime Video"], genres: ["drama"],
     }] },
-    selectedServices: ["Netflix"],
+    selectedServices: ["Netflix", "Prime Video", "Disney+", "Apple TV+"],
     master: [],
     profile: { signale: [{ art: "genre", wert: "drama", richtung: "zieht_an", staerke: 4 }] },
     webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
     selectionDay: "2026-08-29",
   });
-  check("Für mich prüft alle 50, nutzt belegte Snapshot-Fakten und verändert den vollständigen Popularitätspool nicht", () => {
+  check("Für mich prüft alle ausgewählten Quellen, nutzt belegte Snapshot-Fakten und behält neutrale Kandidaten ehrlich", () => {
     assert.deepEqual(versionedRecommendations.diagnostics, {
-      candidates: 50, metadata: 39, afterExclusions: 39,
-      profileMatches: 5, visible: 5, duplicatesRemoved: 0,
+      candidates: 50, metadata: 39, afterExclusions: 50,
+      profileMatches: 5, visible: 6, duplicatesRemoved: 0,
     });
-    assert.deepEqual(versionedRecommendations.personal.map((item) => item.title), [
+    assert.deepEqual(versionedRecommendations.personal.slice(0, 5).map((item) => item.title), [
       "Reacher", "Blood Sacrifice", "The Shards", "Sterling Point", "Facing El Chapo",
     ]);
     assert.equal(versionedRecommendations.personal[0].watchmodeId, 9901);
-    assert.ok(versionedRecommendations.personal.every((item) => (
+    assert.ok(versionedRecommendations.personal.slice(0, 5).every((item) => (
       item.reasons.includes("Profil: drama")
     )));
+    assert.deepEqual(versionedRecommendations.personal[5].reasons, []);
     assert.equal(versionedRecommendations.popular.length, 6);
     assert.equal(versionedRecommendations.popularPool.length, 50);
   });
@@ -654,7 +665,13 @@ try {
   const versionedUi = await mount(EntdeckenTab, versionedProps);
   await act(async () => { await tick(); await tick(); });
   const versionedSection = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
-  const expandVersioned = button(versionedSection, "Weitere 44 Titel anzeigen");
+  const expandVersioned = button(versionedSection, "Weitere 9 Titel anzeigen");
+  check("Neutrale aktuelle Vorschläge heißen Zum Entdecken und behaupten keine Passung", () => {
+    const personal = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-empfehlungen"]');
+    assert.match(personal.textContent, /Zum Entdecken/u);
+    assert.match(personal.textContent, /Noch ohne persönliche Passung/u);
+    assert.doesNotMatch(personal.textContent, /Persönliche Passung|Profil:/u);
+  });
   check("Format 7 benennt den datierten Fünf-Quellen-Snapshot ohne Aktualitätsversprechen", () => {
     assert.equal(versionedSection.querySelectorAll(".kd-entdecken-neutral").length, 6);
     assert.equal(versionedSection.querySelector("ol"), null);
@@ -730,10 +747,10 @@ try {
   });
   await startUi.cleanup();
   await act(async () => { expandVersioned.click(); await tick(); });
-  check("Ausgeklappt sind alle 50 Karten mit HTTPS-Quelllink sichtbar", () => {
+  check("Ohne Streamingauswahl sind ausgeklappt nur die 15 Kinokarten mit HTTPS-Quelllink sichtbar", () => {
     const cards = [...versionedSection.querySelectorAll(".kd-entdecken-neutral")];
-    assert.equal(cards.length, 50);
-    assert.equal(cards.filter((card) => card.querySelector('h3 > a[href^="https://"]')).length, 50);
+    assert.equal(cards.length, 15);
+    assert.equal(cards.filter((card) => card.querySelector('h3 > a[href^="https://"]')).length, 15);
     assert.equal(expandVersioned.textContent.trim(), "Weniger Titel anzeigen");
   });
   await versionedUi.cleanup();

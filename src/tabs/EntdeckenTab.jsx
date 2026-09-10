@@ -203,14 +203,15 @@ function RadarRejectedChanges({ radarState, onDismiss }) {
 function RecommendationsView({
   streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
   entdeckenStatus, webDiscoveryFeed, webDiscoveryStatus, dailyVariety, selectionDay,
-  recommendationPins, onRecommendationPinToggle,
+  recommendationPins, onRecommendationPinToggle, programm, programmInfo, flixpatrolFacts,
 }) {
   const [showAllPopular, setShowAllPopular] = useState(false);
   const selection = useMemo(() => createEntdeckenRecommendations({
     streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
     entdeckenStatus, webDiscoveryFeed, dailyVariety, selectionDay,
+    program: programm, programInfo: programmInfo, flixpatrolFacts,
   }), [dailyVariety, entdeckenStatus, master, profile, selectedServices, selectionDay,
-    streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed]);
+    streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed, programm, programmInfo, flixpatrolFacts]);
   const { personal, popular } = selection;
   const popularPool = selection.popularPool || popular;
   const visiblePopular = showAllPopular ? popularPool : popular;
@@ -267,9 +268,10 @@ function RecommendationsView({
     {personal.length ? <div className="kd-entdecken-karten kd-entdecken-auswahlkarten">{personal.map((entry) => (
       <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-auswahlkarte">
         {pinButton(entry)}
-        <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Aus dem Wochenfeed"}</span>
+        <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Zum Entdecken"}</span>
         {titleHeading(entry)}
-        {entry.reasons[0] ? <p className="kd-entdecken-grund">{entry.reasons[0]}</p> : null}
+        <p className="kd-entdecken-grund">{entry.reasons[0] || "Noch ohne persönliche Passung."}</p>
+        {entry.description ? <p>{entry.description}</p> : null}
         <small>{meta(entry)} · Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
           rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
@@ -291,8 +293,10 @@ function RecommendationsView({
         <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
           <div className="kd-entdecken-listeninhalt">
             <span className="kd-entdecken-kicker">{entry.availability?.market === "cinema"
-              ? "Im Kino beliebt" : mediaLabel(entry) === "Serie" ? "Beliebte Serie" : "Beliebter Streamingfilm"}</span>
+              ? entry.popularity ? "Im Kino beliebt" : "Jetzt im Kino"
+              : mediaLabel(entry) === "Serie" ? "Beliebte Serie" : "Beliebter Streamingfilm"}</span>
             {titleHeading(entry)}
+            {entry.description ? <p>{entry.description}</p> : null}
             <p>{meta(entry)}</p>
             <small>Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
             {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
@@ -459,18 +463,23 @@ export function EntdeckenTab({
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
   onRadarChange, onRadarPreview,
   recommendationPins = [], onRecommendationPinToggle,
+  programm = null, programmInfo = null, flixpatrolFacts = [],
 }) {
   const [ansicht, setAnsicht] = useState(fokusId ? "meinungen" : "empfehlungen");
   const [manageOffen, setManageOffen] = useState(false);
   const [useLibrary, setUseLibrary] = useState(true);
-  const [profile, setProfile] = useState(null);
+  const [profileState, setProfileState] = useState(() => ({ key: null, value: null }));
+  const profile = profileState.key === datenKontextKey ? profileState.value : null;
   const [selectionDay] = useState(() => calendarDay || localCalendarDay());
   const manageButtonRef = useRef(null);
   useEffect(() => {
     let aktiv = true;
-    ladeProfil().then((value) => { if (aktiv) setProfile(value); });
+    setProfileState({ key: datenKontextKey, value: null });
+    ladeProfil().then((value) => {
+      if (aktiv) setProfileState({ key: datenKontextKey, value });
+    });
     return () => { aktiv = false; };
-  }, []);
+  }, [datenKontextKey]);
   useEffect(() => { if (fokusId) setAnsicht("meinungen"); }, [fokusId]);
   useEffect(() => {
     if (!radarAvailable && ansicht === "radar") setAnsicht("empfehlungen");
@@ -497,7 +506,8 @@ export function EntdeckenTab({
       master={master} profile={profile} useLibrary={useLibrary} selectedServices={selectedServices}
       entdeckenStatus={entdeckenStatus} webDiscoveryFeed={webDiscoveryFeed} webDiscoveryStatus={webDiscoveryStatus}
       dailyVariety={dailyVariety} selectionDay={selectionDay} recommendationPins={recommendationPins}
-      onRecommendationPinToggle={onRecommendationPinToggle} /> : null}
+      onRecommendationPinToggle={onRecommendationPinToggle} programm={programm} programmInfo={programmInfo}
+      flixpatrolFacts={flixpatrolFacts} /> : null}
     {radarAvailable && ansicht === "radar" ? <RadarView key={datenKontextKey} radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}

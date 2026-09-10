@@ -22,6 +22,7 @@ import {
   store, K, PROGRAMM_TTL_MS, storageService, storageOwnerKennung,
 } from "./services/storage.js";
 import { catalogService } from "./services/catalog.js";
+import { flixpatrolFactsService } from "./services/flixpatrolFacts.js";
 import { sessionCoordinator } from "./services/sessionCoordinator.js";
 import { sharedArticlesService } from "./services/sharedArticles.js";
 import { errorText, ERROR_CODES } from "./services/errors.js";
@@ -61,6 +62,7 @@ import {
 import { useEggController } from "./controllers/useEggController.js";
 import { deepSpaceOwnerKey, useDeepSpaceHorror } from "./controllers/useDeepSpaceHorror.js";
 import { ensureIds, slugId } from "./lib/match.js";
+import { projectTransientDescriptions } from "./lib/entdeckenProjection.js";
 import {
   markNewPersonalMasterEntries,
   mergePersonalMasterEntry,
@@ -243,6 +245,16 @@ export default function App() {
   const [streamingInfo, setStreamingInfo] = useState(null);
   const [streamingBekannt, setStreamingBekannt] = useState(null);
   const [streamingEntdecken, setStreamingEntdecken] = useState(null);
+  const flixpatrolFakten = useMemo(() => flixpatrolFactsService.peek(), [
+    streamingBekannt, streamingEntdecken, session.mode, session.state, session.account?.id,
+  ]);
+  const mediathekMaster = useMemo(() => projectTransientDescriptions(master || [], {
+    /* `streamingBekannt` enthaelt nur die bereits streng zur Mediathek
+       gematchte kleine Teilmenge. So bleibt die fluechtige Beschreibung ohne
+       neuen 25.000-x-Master-Vergleich verfuegbar. */
+    catalogEntries: streamingBekannt?.titel || [],
+    facts: flixpatrolFakten,
+  }), [master, streamingBekannt, flixpatrolFakten]);
   const { streamingNeu, uebernehmeVollkatalog } = useStreamingNeuController();
   /* Dieser Zustand wird bereits vom Boot und von der gezielten
      Demo-Bereinigung gebraucht; seine Grenze muss deshalb vor diesen
@@ -1747,7 +1759,7 @@ export default function App() {
 
         {tab === "mediathek" && bootDone && (
           <MediathekTab
-            master={master ?? LEERER_MEDIATHEK_MASTER} nachtragFlach={master ? nachtragSichtbar : []}
+            master={master ? mediathekMaster : LEERER_MEDIATHEK_MASTER} nachtragFlach={master ? nachtragSichtbar : []}
             expandedId={expandedId} setExpandedId={setExpandedId}
             updateFilm={updateFilm} deleteFilm={deleteFilm} addFilm={addFilm} badgeFuer={badgeFuer}
             onFilmBatchVorschau={planeFilmBatchLoeschung} onFilmBatchLoeschen={fuehreFilmBatchLoeschungAus}
@@ -1785,6 +1797,7 @@ export default function App() {
           <EntdeckenTab datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
             fokusId={blogFokus} radarState={sichtbarerRadarState} entdeckenStatus={entdeckenStatus}
             master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryState.feed} webDiscoveryStatus={webDiscoveryState}
+            programm={programm} programmInfo={programmInfo} flixpatrolFacts={flixpatrolFakten}
             dailyVariety={einstellungen.entdeckenTaeglich === true}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarAvailable={radarRuntimeAvailable}

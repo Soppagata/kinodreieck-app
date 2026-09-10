@@ -568,14 +568,17 @@ await check("Ein belegtes ungesehenes Poolitem erreicht Für mich ohne Rankerän
     master: [],
     profile: { signale: [{ art: "genre", wert: "action", richtung: "zieht_an", staerke: 4 }] },
     webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
+    selectedServices: ["Netflix", "Prime Video", "Disney+", "Apple TV+"],
     factsSnapshot: snapshot,
     selectionDay: "2026-08-29",
   });
-  assert.equal(result.personal.length, 1);
+  assert.equal(result.personal.length, 6);
   assert.equal(result.personal[0].title, inputs[0].title);
   assert.match(result.personal[0].reasons[0], /^Profil:/);
   assert.equal(result.diagnostics.candidates, 50);
   assert.equal(result.diagnostics.metadata, 1);
+  assert.equal(result.diagnostics.profileMatches, 1);
+  assert.ok(result.personal.slice(1).every((entry) => entry.reasons.length === 0));
 });
 
 await check("AGENTS-konformer Wrapper akzeptiert exakt Owner-Zusatz zuerst und startet nur Fakten", async () => {

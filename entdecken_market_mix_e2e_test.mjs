@@ -364,7 +364,7 @@ check("Für mich nutzt den breiten Pool, das echte Profil und liefert anonymisie
   assert.ok(result.personal.every((entry) => entry.reasons.some((reason) => reason.startsWith("Profil:"))));
   assert.ok(result.personal.every((entry) => !/rang|platz|beliebt/i.test(entry.reasons.join(" "))));
   assert.deepEqual(result.diagnostics, {
-    candidates: 25, metadata: 10, afterExclusions: 9, profileMatches: 9, visible: 6,
+    candidates: 25, metadata: 10, afterExclusions: 24, profileMatches: 9, visible: 6,
     duplicatesRemoved: 0,
   });
   assert.ok(!result.personal.some((entry) => entry.sourceItemId === seen.sourceItemId));

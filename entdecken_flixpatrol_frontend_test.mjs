@@ -77,7 +77,7 @@ assert.equal(feed.refreshedOn, "2026-09-09");
 
 const recommendations = createEntdeckenRecommendations({
   webDiscoveryFeed: feed, profile: {}, master: [], streamingEntdecken: { region: "AT", titel: [] },
-  selectionDay: day,
+  selectedServices: ["Netflix", "Prime Video", "Disney+", "Apple TV"], selectionDay: day,
 });
 assert.equal(recommendations.popular.length, 6);
 assert.equal(recommendations.popularPool.length, 50);

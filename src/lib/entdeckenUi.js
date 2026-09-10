@@ -16,6 +16,12 @@ import {
 } from "./localEventRadar.js";
 import { rankRecommendations } from "./recommendationRanking.js";
 import { profileCompatibleGenres } from "./profileGenreVocabulary.js";
+import {
+  currentCinemaDiscoveryCandidates,
+  fillPopularWithCinema,
+  projectTransientDescriptions,
+  serviceAllowedDiscoveryEntry,
+} from "./entdeckenProjection.js";
 import entdeckenFactsSnapshot from "../data/entdeckenFactsSnapshot.json" with { type: "json" };
 import {
   projectEntdeckenFacts,
@@ -203,6 +209,7 @@ export function localRecommendationCandidates(streamingEntdecken, {
         year: Number.isInteger(entry.jahr) ? entry.jahr : null,
         type: entry.typ || null,
         originalTitle: text(entry.originaltitel || entry.original_title) || null,
+        description: text(entry.beschreibung ?? entry.description) || null,
         externalIds: discoveryExternalIdsFromCatalog(entry),
         seenStatus: entdeckenStatus?.[watchmodeId] ?? null,
       });
@@ -431,6 +438,7 @@ function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wiki
 export function publicDiscoveryCandidates({
   webDiscoveryFeed, master = [], catalogCandidates = [], selectedServices = [],
   includeSeen = false, requireMetadata = true, factsSnapshot = entdeckenFactsSnapshot,
+  flixpatrolFacts = [],
 } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok || ![
@@ -494,6 +502,7 @@ export function publicDiscoveryCandidates({
       }) }),
       year: facts?.releaseYear ?? local?.year ?? null,
       type: item.mediaType,
+      description: text(local?.description ?? local?.beschreibung) || null,
       externalIds: Object.freeze({ ...(facts?.externalIds || {}) }),
       externalDiscovery: true,
       externalEvidence: Object.freeze([
@@ -511,9 +520,15 @@ export function publicDiscoveryCandidates({
       metadataReady: genres.length > 0 || tags.length > 0 || !!franchiseId,
       seen,
     });
-  }).filter((candidate) => (includeSeen || !candidate.seen)
-    && (!requireMetadata || candidate.metadataReady));
-  return Object.freeze([...new Map(projected.map((candidate) => [candidate.targetId, candidate])).values()]);
+  });
+  const withDescriptions = projectTransientDescriptions(projected, {
+    facts: flixpatrolFacts,
+  });
+  return Object.freeze([...new Map(withDescriptions
+    .filter((candidate) => serviceAllowedDiscoveryEntry(candidate, selectedServices))
+    .filter((candidate) => (includeSeen || !candidate.seen)
+      && (!requireMetadata || candidate.metadataReady))
+    .map((candidate) => [candidate.targetId, candidate])).values()]);
 }
 
 function discoveryEvidence(record) {
@@ -569,6 +584,7 @@ export function webDiscoveryFeedCards({
         title: item.title,
         year: facts?.releaseYear ?? local?.year ?? null,
         type: item.mediaType,
+        description: text(local?.description ?? local?.beschreibung) || null,
         services: Object.freeze(availability.service ? [availability.service] : []),
         sourceId: item.sourceId || checked.value.sourceId,
         sourceLabel: item.sourceLabel || "Joyn Österreich",
@@ -716,6 +732,7 @@ export function createEntdeckenRecommendations({
   streamingEntdecken, streamingKnown = null, profile, master, useLibrary = true,
   selectedServices = [], entdeckenStatus = {}, webDiscoveryFeed = null,
   dailyVariety = false, selectionDay = null, factsSnapshot = entdeckenFactsSnapshot,
+  flixpatrolFacts = [], program = null, programInfo = null, now = new Date(),
 } = {}) {
   const excludedTargetIds = seenTargetIds(master, entdeckenStatus);
   const excluded = new Set(excludedTargetIds);
@@ -732,8 +749,9 @@ export function createEntdeckenRecommendations({
     FLIXPATROL_DISCOVERY_FEED_FORMAT,
   ]
     .includes(checkedFeed.value.format)) {
-    /* Fuer den marktuebergreifenden Feed ist die lokale Streaming-Dienstewahl
-       kein Quellenfilter. Sie beschreibt Verfuegbarkeit, nicht Geschmack. */
+    /* Das Matching darf den breiten lokalen Katalog als reine Identitaetshilfe
+       sehen. Erst die explizite Entdecken-Projektion filtert den sichtbaren
+       Feed auf Kino plus die ausgewaehlten Streamingdienste. */
     const broadCatalog = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
       .includes(checkedFeed.value.format)
       ? localRecommendationCandidates(streamingEntdecken, {
@@ -741,25 +759,47 @@ export function createEntdeckenRecommendations({
       }) : catalogCandidates;
     const allDirect = publicDiscoveryCandidates({
       webDiscoveryFeed: checkedFeed.value, master, catalogCandidates: broadCatalog, selectedServices,
-      includeSeen: true, requireMetadata: false, factsSnapshot,
+      includeSeen: true, requireMetadata: false, factsSnapshot, flixpatrolFacts,
     });
-    const withMetadata = allDirect.filter((candidate) => candidate.metadataReady);
-    const direct = withMetadata.filter((candidate) => !candidate.seen);
-    const ranked = profile?.beschaedigt === true ? [] : rankRecommendations(direct, {
-      profile: profile && profile.beschaedigt !== true ? profile : {},
-      library: localLibraryProjection(master), useLibrary, excludedTargetIds: [],
-    });
+    const direct = allDirect.filter((candidate) => !candidate.seen);
     const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
       .includes(checkedFeed.value.format);
+    const rankedRaw = profile?.beschaedigt === true ? [] : rankRecommendations(direct, {
+      profile: profile && profile.beschaedigt !== true ? profile : {},
+      library: localLibraryProjection(master), useLibrary, excludedTargetIds: [], includeNeutral: mixed,
+    });
+    const directById = new Map(direct.map((candidate) => [candidate.targetId, candidate]));
+    const ranked = Object.freeze(rankedRaw.map((entry) => Object.freeze({
+      ...entry,
+      description: directById.get(entry.targetId)?.description || null,
+    })));
+    const rankedIds = new Set(ranked.map((entry) => entry.targetId));
+    const directByRecord = new Map(allDirect.map((candidate) => [candidate.sourceItemId, candidate]));
     const personal = selectDailyRecommendations(ranked, {
       /* Persoenliche Auswahl bleibt im neuen Pfad immer bestes, stabiles
          Profilranking. Tagesmischung gehoert allein zur Popularitaetslane. */
       dailyVariety: mixed ? false : dailyVariety,
       selectionDay,
     });
-    const popularPool = webDiscoveryFeedCards({
+    const servicePopularCards = projectTransientDescriptions(webDiscoveryFeedCards({
       webDiscoveryFeed: checkedFeed.value, catalogCandidates: broadCatalog, factsSnapshot,
+    }), { facts: flixpatrolFacts })
+      .filter((candidate) => serviceAllowedDiscoveryEntry(candidate, selectedServices));
+    const feedPopular = servicePopularCards.filter((candidate) => {
+      const directCandidate = directByRecord.get(candidate.sourceItemId);
+      return directCandidate && !directCandidate.seen
+        && (profile?.beschaedigt === true || rankedIds.has(directCandidate.targetId));
     });
+    const cinemaCandidates = currentCinemaDiscoveryCandidates({ program, programInfo, now })
+      .filter((candidate) => !sourceItemSeen(candidate, master, catalogCandidates));
+    const cinemaAllowedIds = profile?.beschaedigt === true
+      ? new Set(cinemaCandidates.map((candidate) => candidate.targetId))
+      : new Set(rankRecommendations(cinemaCandidates, {
+        profile: profile || {}, library: localLibraryProjection(master), useLibrary,
+        excludedTargetIds: [], includeNeutral: true,
+      }).map((candidate) => candidate.targetId));
+    const cinemaBackfill = cinemaCandidates.filter((candidate) => cinemaAllowedIds.has(candidate.targetId));
+    const popularPool = fillPopularWithCinema(feedPopular, cinemaBackfill, 50);
     const orderedPopularPool = mixed
       ? selectStablePopularCards(popularPool, {
         webDiscoveryFeed: checkedFeed.value, selectionDay, limit: popularPool.length,
@@ -771,11 +811,11 @@ export function createEntdeckenRecommendations({
       : Object.freeze([]);
     const diagnostics = Object.freeze({
       candidates: allDirect.length,
-      metadata: withMetadata.length,
+      metadata: allDirect.filter((candidate) => candidate.metadataReady).length,
       afterExclusions: direct.length,
-      profileMatches: ranked.length,
+      profileMatches: ranked.filter((candidate) => candidate.reasons.length > 0).length,
       visible: personal.length,
-      duplicatesRemoved: checkedFeed.value.items.length - allDirect.length,
+      duplicatesRemoved: Math.max(0, servicePopularCards.length - allDirect.length),
     });
     return Object.freeze({
       personal,
