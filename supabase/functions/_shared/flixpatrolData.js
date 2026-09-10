@@ -209,6 +209,54 @@ function validProviderUpdatedAtCheck(value) {
   return typeof value === "string" && PROVIDER_DATETIME_PATTERN.test(value);
 }
 
+function responseDateValueClass(value) {
+  if (value === undefined) return null;
+  if (value === null) return "null";
+  if (value === "") return "empty";
+  if (value === 0 || value === "0" || value === "0000-00-00") return "zero";
+  return nullableDate(value) === value ? "valid" : "invalid";
+}
+
+function responseNumberValueClass(value, { min, max }) {
+  if (value === undefined) return "missing";
+  if (value === null) return "null";
+  if (typeof value !== "number") return null;
+  if (value === 0) return "zero";
+  if (value < 0) return "negative";
+  if (!Number.isFinite(value) || (!Number.isSafeInteger(value) && Number.isInteger(value))) return "out-of-range";
+  if (!Number.isInteger(value)) return "fraction";
+  return value >= min && value <= max ? "valid" : "out-of-range";
+}
+
+function responseTextValueClass(value, maxLength) {
+  if (value === undefined) return "missing";
+  if (value === null || typeof value !== "string") return null;
+  if (value.length === 0) return "empty";
+  if (value.trim() !== value) return "leading-or-trailing-whitespace";
+  return value.length <= maxLength ? "valid" : "too-long";
+}
+
+function responsePatternCheck(value, pattern) {
+  if (value === undefined || value === null || typeof value !== "string") return null;
+  return pattern.test(value);
+}
+
+function responseRelationIdPatternCheck(value, pattern) {
+  if (value === undefined || value === null) return null;
+  return responsePatternCheck(record(record(value)?.data)?.id, pattern);
+}
+
+function expectedTitleIdMatches(value, expectedSourceId) {
+  if (typeof value !== "string" || typeof expectedSourceId !== "string"
+      || !ID_PATTERNS.title.test(expectedSourceId)) return null;
+  return value === expectedSourceId;
+}
+
+function expectedMediaTypeMatches(value, expectedMediaType) {
+  if (value === undefined || value === null || !["film", "series"].includes(expectedMediaType)) return null;
+  return normalizeTitleType(value) === expectedMediaType;
+}
+
 /* Rein strukturelle Diagnose fuer verworfene Providerantworten. Feldnamen und
    Enumwerte stammen ausschliesslich aus festen Whitelists; Fremdwerte werden
    nie kopiert. Bei TOP-10 wird hoechstens bis zum ersten vom vorhandenen
@@ -250,6 +298,7 @@ export function describeFlixPatrolResponseShape(value, {
     : ["title", "title-list"].includes(contractGroup) ? {
       titleType: responseEnumClass(record(fieldsTarget)?.type, [1, 2]),
     } : {};
+  const titleData = contractGroup === "title" ? rootData : null;
   return Object.freeze({
     schemaVersion: FLIXPATROL_RESPONSE_SHAPE_VERSION,
     contractGroup,
@@ -290,6 +339,37 @@ export function describeFlixPatrolResponseShape(value, {
       dateRangeMatchesExpected: dateRangeMatchesExpected(top10FieldsTarget?.date, expected?.date),
       titleIdValid: validTitleIdCheck(top10FieldsTarget?.movie),
       providerUpdatedAtValid: validProviderUpdatedAtCheck(top10FieldsTarget?.updatedAt),
+    }) : null,
+    titleValidity: contractGroup === "title" ? Object.freeze({
+      dateClasses: Object.freeze({
+        premiere: responseDateValueClass(titleData?.premiere),
+        premiereOnline: responseDateValueClass(titleData?.premiereOnline),
+      }),
+      numberClasses: Object.freeze({
+        length: responseNumberValueClass(titleData?.length, { min: 1, max: 2_000 }),
+        imdbId: responseNumberValueClass(titleData?.imdbId, { min: 1, max: 9_999_999_999 }),
+        tmdbId: responseNumberValueClass(titleData?.tmdbId, { min: 1, max: 999_999_999 }),
+      }),
+      textClasses: Object.freeze({
+        id: responseTextValueClass(titleData?.id, 48),
+        title: responseTextValueClass(titleData?.title, 240),
+        description: responseTextValueClass(titleData?.description, 4_000),
+        updatedAt: responseTextValueClass(titleData?.updatedAt, 40),
+        link: responseTextValueClass(titleData?.link, 500),
+      }),
+      patternChecks: Object.freeze({
+        sourceId: responsePatternCheck(titleData?.id, ID_PATTERNS.title),
+        countryId: responseRelationIdPatternCheck(titleData?.country, ID_PATTERNS.country),
+        companyId: responseRelationIdPatternCheck(titleData?.company, ID_PATTERNS.company),
+        genreId: responseRelationIdPatternCheck(titleData?.genre, ID_PATTERNS.genre),
+        keywordId: responseRelationIdPatternCheck(titleData?.keyword, ID_PATTERNS.keyword),
+        providerUpdatedAt: responsePatternCheck(titleData?.updatedAt, PROVIDER_DATETIME_PATTERN),
+        sourceUrl: responsePatternCheck(titleData?.link, /^https:\/\/flixpatrol\.com\/title\/[^?#\s]+\/$/),
+      }),
+      expectedChecks: Object.freeze({
+        expectedTitleIdMatches: expectedTitleIdMatches(titleData?.id, expected?.sourceId),
+        expectedMediaTypeMatches: expectedMediaTypeMatches(titleData?.type, expected?.mediaType),
+      }),
     }) : null,
   });
 }

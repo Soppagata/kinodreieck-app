@@ -327,6 +327,69 @@ check("Antwortdiagnose wählt den ersten später verworfenen Eintrag ohne Fremdw
   }), null);
 });
 
+check("Titeldiagnose klassifiziert Parsergrenzen ohne Providerwerte", () => {
+  const expected = { sourceId: titleId, mediaType: "film" };
+  const diagnose = (overrides = {}) => describeFlixPatrolResponseShape(titlePayload(overrides), {
+    contractGroup: "title", failureClass: "contract-mismatch", expected,
+  });
+  const sensitive = [" SECRET_TITLE", "https://evil.example/SECRET_URL", "cmp_SECRET_ID"];
+  const shape = diagnose({
+    title: sensitive[0],
+    premiere: "0000-00-00",
+    premiereOnline: "",
+    description: "x".repeat(4_001),
+    link: sensitive[1],
+    length: 0,
+    imdbId: -7,
+    tmdbId: 1.5,
+    company: relation("companies", sensitive[2]),
+  });
+  assert.deepEqual(shape.titleValidity.dateClasses, { premiere: "zero", premiereOnline: "empty" });
+  assert.deepEqual(shape.titleValidity.numberClasses, {
+    length: "zero", imdbId: "negative", tmdbId: "fraction",
+  });
+  assert.deepEqual(shape.titleValidity.textClasses, {
+    id: "valid",
+    title: "leading-or-trailing-whitespace",
+    description: "too-long",
+    updatedAt: "valid",
+    link: "valid",
+  });
+  assert.deepEqual(shape.titleValidity.patternChecks, {
+    sourceId: true,
+    countryId: true,
+    companyId: false,
+    genreId: true,
+    keywordId: true,
+    providerUpdatedAt: true,
+    sourceUrl: false,
+  });
+  assert.deepEqual(shape.titleValidity.expectedChecks, {
+    expectedTitleIdMatches: true,
+    expectedMediaTypeMatches: true,
+  });
+  assert.deepEqual(diagnose({ id: secondTitleId, type: 2 }).titleValidity.expectedChecks, {
+    expectedTitleIdMatches: false,
+    expectedMediaTypeMatches: false,
+  });
+  for (const [value, expectedClass] of [
+    ["2001-04-25", "valid"], ["", "empty"], ["0000-00-00", "zero"],
+    ["2001-02-31", "invalid"], [null, "null"], [undefined, null],
+  ]) assert.equal(diagnose({ premiere: value }).titleValidity.dateClasses.premiere, expectedClass);
+  for (const [value, expectedClass] of [
+    [122, "valid"], [0, "zero"], [-1, "negative"], [1.5, "fraction"],
+    [2_001, "out-of-range"], [Number.MAX_SAFE_INTEGER + 1, "out-of-range"],
+    [null, "null"], [undefined, "missing"], ["122", null],
+  ]) assert.equal(diagnose({ length: value }).titleValidity.numberClasses.length, expectedClass);
+  for (const [value, expectedClass] of [
+    ["Film", "valid"], ["", "empty"], [" Film", "leading-or-trailing-whitespace"],
+    ["x".repeat(241), "too-long"], [undefined, "missing"], [null, null],
+  ]) assert.equal(diagnose({ title: value }).titleValidity.textClasses.title, expectedClass);
+  const serialized = JSON.stringify(shape);
+  for (const secret of sensitive) assert.equal(serialized.includes(secret), false);
+  assert.equal(serialized.includes("x".repeat(100)), false);
+});
+
 check("Migration und Doku begrenzen Suche, Rechte und Cache-Inhalte", () => {
   const migration = readFileSync("supabase/migrations/20260909190000_flixpatrol_data_cache.sql", "utf8");
   const docs = readFileSync("docs/FLIXPATROL_DATENVERTRAG.md", "utf8");

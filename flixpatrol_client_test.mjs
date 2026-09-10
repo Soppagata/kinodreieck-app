@@ -321,11 +321,16 @@ await check("normalisiert eine gezielte Titelauflösung samt nullable Fremd-IDs"
 await check("verwirft eine andere Titel-ID nach genau einem gezählten Abschluss", async () => {
   const operationId = "00000000-0000-4000-8000-000000000010";
   const finishes = [];
+  const diagnostics = [];
+  const invalidTitle = makeTitlePayload(secondTitleId, "SECRET_PROVIDER_TITLE");
+  invalidTitle.data.premiereOnline = "0000-00-00";
+  invalidTitle.data.link = "https://evil.example/SECRET_PROVIDER_URL";
   const client = createFlixPatrolClient({
     apiKey: "secret",
     randomUUID: () => operationId,
     beginOperation: async () => ({ ok: true, claim: true, replay: false }),
-    fetchImpl: async () => ({ ok: true, status: 200, json: async () => makeTitlePayload(secondTitleId) }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => invalidTitle }),
+    diagnosticLogger: (value) => diagnostics.push(value),
     finishOperation: async (value) => {
       finishes.push(value);
       return { ok: true, replay: false, status: value.status, usage: {} };
@@ -340,6 +345,14 @@ await check("verwirft eine andere Titel-ID nach genau einem gezählten Abschluss
   assert.equal(finishes.length, 1);
   assert.equal(finishes[0].status, "invalid_response");
   assert.equal(finishes[0].operationId, operationId);
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].titleValidity.dateClasses.premiereOnline, "zero");
+  assert.equal(diagnostics[0].titleValidity.patternChecks.sourceUrl, false);
+  assert.deepEqual(diagnostics[0].titleValidity.expectedChecks, {
+    expectedTitleIdMatches: false,
+    expectedMediaTypeMatches: true,
+  });
+  assert.equal(/SECRET_PROVIDER_TITLE|SECRET_PROVIDER_URL/.test(JSON.stringify(diagnostics[0])), false);
 });
 
 await check("Titelsuche nutzt exakten Titel, Jahr und Typ und blockiert Mehrdeutigkeit", async () => {

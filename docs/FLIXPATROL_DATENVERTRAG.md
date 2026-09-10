@@ -166,6 +166,16 @@ Country, Charttyp und Datumsbereich dem angeforderten Vertrag entsprechen und
 ob Titel-ID sowie `providerUpdatedAt` syntaktisch gültig sind. Fremdwerte werden
 auch dort nie übernommen.
 
+Für verworfene einzelne Titelantworten ergänzt die Diagnose ausschließlich
+feste Klassen der bereits bestehenden Parsergrenzen. Datumsfelder unterscheiden
+gültig, leer, Nullsentinel, ungültig und `null`; Zahlenfelder unterscheiden
+gültig, 0, negativ, Bruchzahl, außerhalb des Bereichs, `null` und fehlend.
+Textfelder unterscheiden gültig, leer, äußere Leerzeichen, zu lang und fehlend.
+Für Quellen- und Relations-IDs, Providerzeitstempel und FlixPatrol-Titel-URL
+erscheint nur ein boolescher oder `null`-Mustercheck. Zwei weitere boolesche oder
+`null`-Felder zeigen, ob Titel-ID und Medientyp der intern angeforderten
+Auflösung entsprechen. Kein geprüfter Wert wird ausgegeben.
+
 Die Diagnose übernimmt keine Titel, Beschreibungen, IDs, Schlüssel oder
 Authorization und enumeriert keine unbekannten Feldnamen. Sie enthält weder
 die URL noch Header oder die vollständige Antwort. Der Client hängt dieselbe
@@ -198,6 +208,16 @@ Chartzeilen. Bei einem Fehler bleiben Status, sichere Fehlerklasse und
 konservative Requestzahl erhalten; nur bei `FLIXPATROL_INVALID_RESPONSE` darf
 zusätzlich die erneut validierte Strukturdiagnose erscheinen. Providerdaten,
 Usage-Stand und interne Detailfehler werden nicht ausgegeben.
+
+Für die einmalige Analyse des belegten ersten Titelfehlers existiert parallel
+der exakte Headerwert `manual-title-contract-v1`. Auch dieser Weg ist ein
+bodyloser, originfreier und doppelt Service-Key-geschützter POST. Er ruft genau
+einmal `client.fetchTitle()` mit der fest im Servercode gebundenen Titel-ID und
+dem Medientyp Film auf. Er liest weder Quota noch Charts, startet keine Suche
+und schreibt weder Cache noch Feed. Erfolg meldet nur den gültigen Vertrag und
+`providerRequests: 1`; bei `FLIXPATROL_INVALID_RESPONSE` darf ausschließlich
+die strikt neu projizierte Titeldiagnose erscheinen. Der natürliche Ticker ruft
+diesen manuellen Weg nicht auf.
 
 supabase/functions/_shared/flixpatrolData.js exportiert:
 
