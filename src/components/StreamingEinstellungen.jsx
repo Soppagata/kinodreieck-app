@@ -15,7 +15,7 @@ function kurzQuelle(n) {
   return n;
 }
 
-export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null, auswahl = [], toggleQuelle, teil = "alle", datenGesperrt = false }) {
+export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null, auswahl = [], auswahlGeladen = true, toggleQuelle, teil = "alle", datenGesperrt = false }) {
   const datenDa = !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
   const stand = datenDa ? new Date(bekannt.stand) : null;
@@ -71,7 +71,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
     <div className="kd-streaming-einstellungen" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Etappe 2: Kästen als Accordions (Klappe). Streaming-Quellen startet
           offen, Status/Refresh zu. data-tour wandert an die Klappe (Tour-Anker). */}
-      {(teil === "alle" || teil === "quellen") && <Klappe titel={`Streaming-Quellen (${auswahl.length} gewählt)`} offen tour="streaming-quellen">
+      {(teil === "alle" || teil === "quellen") && <Klappe titel={auswahlGeladen ? `Streaming-Quellen (${auswahl.length} gewählt)` : "Streaming-Quellen (wird geladen)"} offen tour="streaming-quellen">
       <div style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
           Wähle die Dienste, die du tatsächlich nutzt. Die Auswahl filtert den gemeinsamen
@@ -79,7 +79,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
           gemeinsamen Katalog; es wird kein neuer Anbieterimport gestartet.
         </p>
         {/* Suchfeld: einzige Tür zu den nicht angehakten Quellen (~40 Namen). */}
-        <input value={quellenSuche} onChange={(e) => setQuellenSuche(e.target.value)}
+        <input value={quellenSuche} onChange={(e) => setQuellenSuche(e.target.value)} disabled={!auswahlGeladen}
           placeholder="Quelle suchen (z. B. Hayu, MUBI, Joyn) …"
           style={{ width: "100%", boxSizing: "border-box", background: T.saal, color: T.leinwand, border: "1px solid " + T.rauch, borderRadius: "var(--kd-radius-control)", padding: "10px 12px", fontSize: "max(16px, calc(16px * var(--kd-schriftfaktor, 1)))", fontFamily: "'Space Grotesk', sans-serif", marginBottom: 8 }} />
         {quellenSuche.trim() !== "" && (
@@ -107,8 +107,11 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
         {/* Angehakte Quellen als ruhige dunkle Liste (Max 2026-07-19): kein goldener
             Block mehr — goldenes ✓ zeigt auf einen Blick „gewählt", × wählt ab. */}
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 4 }}>
-          {auswahl.length === 0 && (
-            <span style={{ fontSize: 12, color: T.rauch, padding: "2px 0" }}>Keine Quelle gewählt — der Streaming-Tab zeigt dann alle Dienste.</span>
+          {!auswahlGeladen && (
+            <span style={{ fontSize: 12, color: T.rauch, padding: "2px 0" }}>Deine Streaming-Auswahl wird geladen …</span>
+          )}
+          {auswahlGeladen && auswahl.length === 0 && (
+            <span style={{ fontSize: 12, color: T.rauch, padding: "2px 0" }}>Keine Quelle gewählt — der Streaming-Tab zeigt keine Dienste.</span>
           )}
           {[...auswahl].sort((a, b) => a.localeCompare(b)).map((q) => (
             <button key={q} onClick={() => toggleQuelle(q)} title={"„" + q + "“ abwählen"}

@@ -459,6 +459,30 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
   };
   const bekanntAlt = (streaming && streaming.bekannt) || {};
   const entdeckenAlt = (streaming && streaming.entdecken) || {};
+  const objekt = (wert) => wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {};
+  const gleicherKatalogStand = !!bekanntAlt.katalog_stand
+    && bekanntAlt.katalog_stand === entdeckenAlt.katalog_stand;
+  const vereinigeMetadaten = (feld) => {
+    if (bekanntAlt.katalog_stand && entdeckenAlt.katalog_stand && !gleicherKatalogStand) {
+      /* Zwei Publikationsstände dürfen keinen künstlich vollständigen
+         Quellenbeleg ergeben. Im ohnehin angeforderten Vollweg ist Discover
+         der aktuelle Stand; fehlende Felder werden nicht aus Known ergänzt. */
+      return { ...objekt(entdeckenAlt?.[feld]) };
+    }
+    return { ...objekt(bekanntAlt?.[feld]), ...objekt(entdeckenAlt?.[feld]) };
+  };
+  const vereinigeListen = (links, rechts) => [...new Set([
+    ...(Array.isArray(links) ? links : []),
+    ...(Array.isArray(rechts) ? rechts : []),
+  ])];
+  const vereinigeDienstDiffs = (links, rechts) => {
+    const map = new Map();
+    for (const diff of [...(Array.isArray(links) ? links : []), ...(Array.isArray(rechts) ? rechts : [])]) {
+      const key = JSON.stringify([diff?.dienst, diff?.vorher, diff?.nachher, diff?.erkannt_am]);
+      map.set(key, diff);
+    }
+    return map.size ? [...map.values()] : undefined;
+  };
   const map = new Map();
   for (const t of entdeckenAlt.titel || []) map.set(String(t.watchmode_id), { ...t });
   for (const t of bekanntAlt.titel || []) {
@@ -471,11 +495,13 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
       /* Der neutrale Entdecken-Datensatz traegt den Werktyp explizit. Ein
          historischer Bekannt-Datensatz ohne Typ darf ihn daraus uebernehmen,
          wird aber nie pauschal zum Film erklaert. */
-      typ: t.typ ?? entdeckenTitel.typ ?? null, genres: t.genres || t.genre || null,
+      typ: t.typ ?? entdeckenTitel.typ ?? null,
+      genres: vereinigeListen(entdeckenTitel.genres ?? entdeckenTitel.genre, t.genres ?? t.genre),
       user_score: t.user_score ?? entdeckenTitel.user_score ?? null,
       tmdb_id: t.tmdb_id ?? entdeckenTitel.tmdb_id ?? null,
       imdb_id: t.imdb_id ?? entdeckenTitel.imdb_id ?? null,
-      dienste: t.dienste || [], web_urls: t.web_urls || null,
+      dienste: vereinigeListen(entdeckenTitel.dienste, t.dienste),
+      web_urls: { ...objekt(entdeckenTitel.web_urls), ...objekt(t.web_urls) },
       relevanz: t.relevanz ?? 0, relevanz_signale: t.relevanz_signale || [],
       staffeln_verfuegbar: t.staffeln_verfuegbar ?? null,
       folgen_verfuegbar: t.folgen_verfuegbar ?? null,
@@ -487,6 +513,10 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
       naechste_staffel_am: t.naechste_staffel_am ?? null,
       staffel_dienste: t.staffel_dienste || [],
       staffelstand_geprueft_am: t.staffelstand_geprueft_am ?? null,
+      /* E11 liefert kleine quellenbezogene Angebotsbelege. Sie bleiben am
+         Titel erhalten; die Consumerprojektion entscheidet erst später anhand
+         der aktuellen Auswahl, ob daraus ein sichtbarer Zugang folgt. */
+      dienst_diffs: vereinigeDienstDiffs(entdeckenTitel.dienst_diffs, t.dienst_diffs),
     };
     map.set(key, { ...entdeckenTitel, ...neutral });
   }
@@ -511,10 +541,21 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
         naechste_staffel_am: t.naechste_staffel_am ?? film.naechste_staffel_am ?? null,
         staffel_dienste: t.staffel_dienste || film.staffel_dienste || [],
         staffelstand_geprueft_am: t.staffelstand_geprueft_am ?? film.staffelstand_geprueft_am ?? null,
+        dienst_diffs: Array.isArray(t.dienst_diffs) ? t.dienst_diffs : undefined,
       });
     } else entdecken.push(t);
   }
-  const meta = { ...entdeckenAlt, ...bekanntAlt, titel: undefined };
+  const meta = {
+    ...entdeckenAlt,
+    ...bekanntAlt,
+    titel: undefined,
+    stand_pro_quelle: vereinigeMetadaten("stand_pro_quelle"),
+    vergleich_stand_pro_quelle: vereinigeMetadaten("vergleich_stand_pro_quelle"),
+    katalog_stand_bekannt: bekanntAlt.katalog_stand ?? null,
+    katalog_stand_entdecken: entdeckenAlt.katalog_stand ?? null,
+    katalog_stand_konsistent: !!bekanntAlt.katalog_stand
+      && bekanntAlt.katalog_stand === entdeckenAlt.katalog_stand,
+  };
   /* Der geladene Rohkatalog, der erkannte Mediathekbestand und die daraus
      gebildete Entdecken-Ansicht sind verschiedene Mengen. `entdeckenUmfang`
      stammt ausschließlich aus dem lokalen Ladepfad in App.jsx; fehlt die

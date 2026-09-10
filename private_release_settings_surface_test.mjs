@@ -180,9 +180,10 @@ check("Streaming-Bereiche kommen direkt nach Darstellung in der Sichtreihenfolge
     && einstellLabels.indexOf("Darstellung & Verhalten") < streamingSummaryIndex
     && streamingSummaryIndex < einstellLabels.indexOf("Streaming-Katalogbestand")
     && einstellLabels.indexOf("Streaming-Katalogbestand") < einstellLabels.indexOf("Personalisierung & KI"));
-check("Datierter Katalogbestand zeigt lokal und auf Staging beide gespeicherten Snapshotstände knapp",
-  text().includes("Gespeicherte Katalogstände vom 22.07.2026 und 04.09.2026")
-    && text().includes("Streaming-Titel im gespeicherten Bestand")
+check("Katalogbestand zeigt den tatsächlich geladenen Teilstand knapp",
+  text().includes("Teilstand aus dem schnellen App-Start")
+    && text().includes("Gesamtbestand")
+    && text().includes("Mein Programm")
     && !text().includes("Snapshotdifferenz")
     && !text().includes("Pipelinephasen")
     && !hatSummary("Warum fehlt"));

@@ -19,7 +19,7 @@ import { initSetup, setupUeberspringen } from "./lib/tutorial.js";
 import { kiAn, ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
 import { KatalogZugang } from "./components/KatalogZugang.jsx";
 import {
-  store, K, PROGRAMM_TTL_MS, storageService, storageOwnerKennung,
+  store, K, PROGRAMM_TTL_MS, storageService, storageOwnerKennung, captureStorageContext,
 } from "./services/storage.js";
 import { catalogService } from "./services/catalog.js";
 import { flixpatrolFactsService } from "./services/flixpatrolFacts.js";
@@ -242,27 +242,49 @@ export default function App() {
   const flixpatrolFakten = useMemo(() => flixpatrolFactsService.peek(), [
     streamingBekannt, streamingEntdecken, session.mode, session.state, session.account?.id,
   ]);
-  const { streamingNeu, uebernehmeVollkatalog } = useStreamingNeuController();
   /* Dieser Zustand wird bereits vom Boot und von der gezielten
      Demo-Bereinigung gebraucht; seine Grenze muss deshalb vor diesen
      Callbacks liegen. */
   const ALTE_SLUGS = { netflix: "Netflix", disney_plus: "Disney+", prime_video: "Prime Video" };
+  const streamingKontextKey = `${session.mode}:${session.state}:${session.account?.id || ""}`;
   const [auswahl, setAuswahlRoh] = useState([]);
+  const [auswahlGeladen, setAuswahlGeladen] = useState(false);
+  const [auswahlKontextKey, setAuswahlKontextKey] = useState(null);
   const [heuristikAn, setHeuristikAn] = useState(true);
   const streamingCfgJson = (quellen, heuristik) => JSON.stringify({ quellen, heuristik });
   useEffect(() => {
-    store.get(K.streamingDienste).then((r) => {
+    let aktiv = true;
+    const kontext = captureStorageContext();
+    setAuswahlKontextKey(streamingKontextKey);
+    setAuswahlRoh([]);
+    setAuswahlGeladen(false);
+    kontext.get(K.streamingDienste).then((r) => {
+      if (!aktiv || !kontext.isCurrent()) return;
       if (r && r.value) {
         try {
           const v = JSON.parse(r.value);
           if (Array.isArray(v.quellen)) setAuswahlRoh(v.quellen);
           else if (Array.isArray(v.dienste)) setAuswahlRoh(v.dienste.map((d) => ALTE_SLUGS[d] || d));
           if (typeof v.heuristik === "boolean") setHeuristikAn(v.heuristik);
-        } catch { /* Default */ }
+        } catch { /* Explizit leerer Default */ }
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      if (aktiv && kontext.isCurrent()) setAuswahlGeladen(true);
+    });
+    return () => { aktiv = false; };
+    // `session` bindet die Auswahl an den aktuellen Konto-/Gastkontext.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session.mode, session.state, session.account?.id, streamingKontextKey]);
+  /* Der Kontextschlüssel wechselt bereits im Render. Dadurch bleibt die alte
+     Auswahl selbst bis zum nachfolgenden Effect niemals als Auswahl des neuen
+     Kontos sichtbar. */
+  const sichtbareAuswahl = auswahlKontextKey === streamingKontextKey ? auswahl : [];
+  const sichtbareAuswahlGeladen = auswahlKontextKey === streamingKontextKey && auswahlGeladen;
+  const { streamingNeu, uebernehmeVollkatalog } = useStreamingNeuController({
+    kontextKey: streamingKontextKey,
+    auswahl: sichtbareAuswahl,
+    auswahlGeladen: sichtbareAuswahlGeladen,
+  });
   const [loading, setLoading] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
@@ -1341,11 +1363,7 @@ export default function App() {
           const a = catalogService.buildStreamingViews(dateiRoh, master || []);
           setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
           if (dateiRoh.entdeckenUmfang === "voll") {
-            await uebernehmeVollkatalog({
-              runId: dateiEntdecken?.katalog_stand,
-              dienste: dateiEntdecken?.dienste,
-              titel: [...(dateiRoh.bekannt?.titel || []), ...(dateiEntdecken?.titel || [])],
-            });
+            uebernehmeVollkatalog({ bekannt: a.bekannt, entdecken: a.entdecken });
           }
           setStreamingInfo({ art: "snapshot", variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
           resolveError(ERROR_SCOPE.STREAMING_KNOWN);
@@ -1363,15 +1381,28 @@ export default function App() {
         optionaleFakten = r?.factsReady || optionaleFakten;
         if (veraltet() || !snapshotFreigabeRef.current) return;
         const vollerEntdeckenStand = streamingPayloadMitMetadaten(r);
-        roh = { ...roh, entdecken: vollerEntdeckenStand, entdeckenUmfang: "voll" };
+        let passenderBekanntStand = roh.bekannt;
+        const bekannterKatalogStand = String(roh.bekannt?.katalog_stand || "").trim();
+        const entdeckenKatalogStand = String(vollerEntdeckenStand?.katalog_stand || "").trim();
+        if (bekannterKatalogStand && entdeckenKatalogStand && bekannterKatalogStand !== entdeckenKatalogStand) {
+          /* Zwischen leichtem Boot-Read und Vollabruf kann ein neuer Katalog
+             veröffentlicht worden sein. Beim ohnehin angeforderten Vollweg
+             wird dann genau einmal der kleine Known-Teil nachgezogen. */
+          try {
+            const bekanntNeu = await holeEinmal(streamingBekanntLaufRef, "streamingBekannt", 15000);
+            optionaleFakten = bekanntNeu?.factsReady || optionaleFakten;
+            if (veraltet() || !snapshotFreigabeRef.current) return;
+            passenderBekanntStand = streamingPayloadMitMetadaten(bekanntNeu);
+            uebernehmeInfo(bekanntNeu, ERROR_SCOPE.STREAMING_KNOWN);
+          } catch (e) {
+            if (veraltet()) return;
+            meldeFehler(e, ERROR_SCOPE.STREAMING_KNOWN);
+          }
+        }
+        roh = { ...roh, bekannt: passenderBekanntStand, entdecken: vollerEntdeckenStand, entdeckenUmfang: "voll" };
         streamingRohRef.current = roh;
         entdeckenGeladen.current = true;
         uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);
-        await uebernehmeVollkatalog({
-          runId: vollerEntdeckenStand?.katalog_stand,
-          dienste: vollerEntdeckenStand?.dienste,
-          titel: [...(roh.bekannt?.titel || []), ...(vollerEntdeckenStand?.titel || [])],
-        });
         if (veraltet() || !snapshotFreigabeRef.current) return;
       } catch (e) {
         if (veraltet()) return;
@@ -1391,6 +1422,9 @@ export default function App() {
     const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
     setStreamingBekannt(a.bekannt);
     setStreamingEntdecken(a.entdecken);
+    if (anzeigeRoh.entdeckenUmfang === "voll") {
+      uebernehmeVollkatalog({ bekannt: a.bekannt, entdecken: a.entdecken });
+    }
     if (optionaleFakten) {
       void Promise.resolve(optionaleFakten).then((fakten) => {
         if (!Array.isArray(fakten) || !fakten.length || veraltet() || !snapshotFreigabeRef.current) return;
@@ -1421,12 +1455,15 @@ export default function App() {
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
   const toggleQuelle = useCallback((name) => {
-    const next = auswahl.includes(name) ? auswahl.filter((d) => d !== name) : [...auswahl, name];
+    if (!sichtbareAuswahlGeladen) return;
+    const next = sichtbareAuswahl.includes(name)
+      ? sichtbareAuswahl.filter((d) => d !== name)
+      : [...sichtbareAuswahl, name];
     setAuswahlRoh(next);
     store.set(K.streamingDienste, streamingCfgJson(next, heuristikAn)).catch(() => {
       setErr("Die Streaming-Dienste konnten nicht gespeichert werden. Die sichtbare Auswahl gilt nur bis zum Neuladen.");
     });
-  }, [auswahl, heuristikAn, setErr]);
+  }, [sichtbareAuswahl, sichtbareAuswahlGeladen, heuristikAn, setErr]);
 
   /* ---- Streaming-Badges für Mediathek & Kino (aus streaming_bekannt) ---- */
   const streamingMap = useMemo(() => {
@@ -1437,11 +1474,12 @@ export default function App() {
     return m;
   }, [streamingBekannt]);
   const badgeFuer = useCallback((film) => {
+    if (!sichtbareAuswahlGeladen || sichtbareAuswahl.length === 0) return null;
     const t = film && streamingMap.get(film.id);
     if (!t) return null; // keine Daten oder nicht verfügbar -> kein Badge (Besitz-Feld quelle bleibt unberührt)
-    /* Joyn-Fix: nur Dienste der Abo-Auswahl taggen (leere Auswahl = alle);
-       bleibt nichts übrig -> gar kein Badge. */
-    const dienste = gruppiereDienstBadges(sichtbareDienste(t.dienste, auswahl), { kompakt: true });
+    /* Nur Dienste der geladenen Abo-Auswahl taggen; bleibt nichts übrig,
+       erscheint auch außerhalb des Streaming-Tabs kein Anbieterbadge. */
+    const dienste = gruppiereDienstBadges(sichtbareDienste(t.dienste, sichtbareAuswahl), { kompakt: true });
     if (!dienste.length) return null;
     return (
       <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
@@ -1453,7 +1491,7 @@ export default function App() {
         {dienste.length > 3 && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>+{dienste.length - 3}</span>}
       </span>
     );
-  }, [streamingMap, auswahl]);
+  }, [streamingMap, sichtbareAuswahl, sichtbareAuswahlGeladen]);
   /* Badges/Mein-Programm/Katalog-Zähler brauchen die LEICHTE bekannt-Datei auch
      außerhalb des Streaming-Tabs -> am Boot nachladen (KD-031: ohne Voll-Katalog). */
   useEffect(() => { if (bootDone && snapshotFreigabe) ladeStreamingDateien(); }, [bootDone, snapshotFreigabe, ladeStreamingDateien]);
@@ -1562,7 +1600,7 @@ export default function App() {
     ladeCageKatalog,
     katalogFreigegeben: remoteKontoAktiv && snapshotFreigabe,
     katalogKontext: `${session.mode}:${session.state}:${session.account?.id || ""}:${snapshotFreigabe}:${betriebsartGen.current}`,
-    auswahl,
+    auswahl: sichtbareAuswahl,
     bootDone,
     setupWarnung,
     startModalOffen: katalogZugangOffen || mehrOffen,
@@ -1707,7 +1745,7 @@ export default function App() {
             /* Dashboard-Datenquellen (Etappe 4) — alles vorhandener App-State,
                keine neuen Fetches: Matches, Must-Watch, Abo-Auswahl, Kataloge,
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */
-            kinoMatches={kinoMatches} mustwatch={mustwatch} mwKandidaten={mwKandidaten} auswahl={auswahl}
+            kinoMatches={kinoMatches} mustwatch={mustwatch} mwKandidaten={mwKandidaten} auswahl={sichtbareAuswahl}
             streamingEntdecken={streamingEntdecken} streamingBekannt={streamingBekannt}
             progStand={progStand} programmInfo={programmInfo} streamingInfo={streamingInfo} />
         )}
@@ -1783,7 +1821,7 @@ export default function App() {
         {remoteKontoAktiv && tab === "blog" && (
           <EntdeckenTab datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
             fokusId={blogFokus} radarState={sichtbarerRadarState} entdeckenStatus={entdeckenStatus}
-            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryState.feed} webDiscoveryStatus={webDiscoveryState}
+            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={sichtbareAuswahl} webDiscoveryFeed={webDiscoveryState.feed} webDiscoveryStatus={webDiscoveryState}
             programm={programm} programmInfo={programmInfo} flixpatrolFacts={flixpatrolFakten}
             dailyVariety={einstellungen.entdeckenTaeglich === true}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
@@ -1825,14 +1863,14 @@ export default function App() {
             onFilmwissenRecherchieren={recherchiereFilmwissen}
             mustwatchIds={mustwatchMasterIds}
             onAllesKatalogLaden={() => ladeStreamingDateien(true)}
-            auswahl={auswahl} toggleQuelle={toggleQuelle}
+            auswahl={sichtbareAuswahl} auswahlGeladen={sichtbareAuswahlGeladen} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
             recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             streamingNeu={streamingNeu}
             entdeckenStatus={entdeckenStatus} schreibeEntdeckenStatus={schreibeEntdeckenStatus}
             heuristikAn={heuristikAn} setHeuristikAn={(v) => {
               setHeuristikAn(v);
-              store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {
+              store.set(K.streamingDienste, streamingCfgJson(sichtbareAuswahl, v)).catch(() => {
                 setErr("Die Streaming-Heuristik konnte nicht gespeichert werden und gilt nur bis zum Neuladen.");
               });
             }}
@@ -1849,7 +1887,7 @@ export default function App() {
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             streamingInfo={streamingInfo}
             mustwatchIds={mustwatchMasterIds}
-            auswahl={auswahl}
+            auswahl={sichtbareAuswahl}
             onSpringeZuFilm={springeZuFilm} addFilm={addFilm}
             addFilmMitPrognose={addFilmMitPrognose}
             vorbewertungAktiv={vorbewertungAktiv}
@@ -1884,7 +1922,7 @@ export default function App() {
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             streamingInfo={streamingInfo}
-            auswahl={auswahl} toggleQuelle={toggleQuelle}
+            auswahl={sichtbareAuswahl} auswahlGeladen={sichtbareAuswahlGeladen} streamingNeu={streamingNeu} toggleQuelle={toggleQuelle}
             datenGesperrt={!snapshotFreigabe}
             sicherheitskopieGeraet={sicherheitskopieGeraet} kontoExportVollstaendig={kontoExportVollstaendig}
             vokabular={vokabular} saveVokabular={saveVokabular}

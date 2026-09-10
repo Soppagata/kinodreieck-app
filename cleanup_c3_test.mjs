@@ -130,11 +130,14 @@ test("D-06/U-07/U-14 bewahren generische Logik und eine knappe Bestandsanzeige",
   const tab = read("src/tabs/DatenTab.jsx");
   const radarUi = read("src/tabs/EntdeckenTab.jsx");
   assert.match(tab, /titel="Streaming-Katalogbestand"/u);
-  assert.match(component, /Streaming-Titel im gespeicherten Bestand/u);
+  assert.match(component, /Gesamtbestand/u);
+  assert.match(component, /Ausgewählte Dienste/u);
   assert.doesNotMatch(component, /Snapshotdifferenz|Pipelinephasen|Warum fehlt|titleTrace/u);
-  assert.match(radarUi, /\{target \? <span className="kd-radar-suchstatus">Ziel: \{localRadarTargetLabel/u);
+  assert.match(radarUi, /<span className="kd-radar-neuigkeit-herkunft">Gefunden für: \{target[\s\S]*localRadarTargetLabel\(target, \{ master, streamingKnown, streamingDiscover \}\)/u);
   assert.doesNotMatch(radarUi, /nicht eindeutig zugeordnet/u);
-  assert.match(radarUi, /filter\(\(\{ target \}\) => target !== null\)/u);
+  assert.match(radarUi, /target: radarSubscriptionForEvent\(entry, subscriptions\)/u);
+  assert.match(radarUi, /filter\(\(\{ entry, target \}\) => target !== null \|\| \(/u);
+  assert.match(radarUi, /: "Zuordnung nicht verfügbar"/u);
 });
 
 test("Trace-Builder erfindet ohne Belege weder Identität noch Ausschluss", () => {

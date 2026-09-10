@@ -213,6 +213,63 @@ check("historischer Bekannt-Eintrag übernimmt Typ nur aus demselben neutralen K
   typAusNeutralemKatalog.bekannt.titel[0]?.id === "typbeleg"
   && typAusNeutralemKatalog.bekannt.titel[0]?.imdb_id === "tt1234567"
   && typAusNeutralemKatalog.bekannt.titel[0]?.tmdb_id === 123);
+const diffBeleg = [{ dienst: "Netflix", vorher: false, nachher: true, erkannt_am: "2026-09-10T12:00:00Z" }];
+const mitDiffBeleg = baueStreamingAnsichten({
+  entdeckenUmfang: "voll",
+  bekannt: {
+    katalog_stand: "2026-09-10T12:00:00Z",
+    stand_pro_quelle: { Netflix: "2026-09-10T12:00:00Z" },
+    vergleich_stand_pro_quelle: { Netflix: "2026-09-10T12:00:00Z" },
+    titel: [{ watchmode_id: 905, titel: "Diffbeleg", jahr: 2022, typ: "movie", dienste: ["Netflix"], dienst_diffs: diffBeleg }],
+  },
+  entdecken: {
+    katalog_stand: "2026-09-10T12:00:00Z",
+    stand_pro_quelle: { Disney: "2026-09-10T12:00:00Z" },
+    vergleich_stand_pro_quelle: { Disney: "2026-09-10T12:00:00Z" },
+    titel: [],
+  },
+}, [{ id: "diffbeleg", watchmode_id: 905, titel: "Diffbeleg", jahr: 2022, typ: "film" }]);
+check("Dienst-Diffs und getrennte Quellenstände erreichen die Consumerprojektion verlustfrei",
+  JSON.stringify(mitDiffBeleg.bekannt.titel[0]?.dienst_diffs) === JSON.stringify(diffBeleg)
+  && mitDiffBeleg.bekannt.stand_pro_quelle.Netflix === "2026-09-10T12:00:00Z"
+  && mitDiffBeleg.bekannt.stand_pro_quelle.Disney === "2026-09-10T12:00:00Z"
+  && mitDiffBeleg.bekannt.vergleich_stand_pro_quelle.Netflix === "2026-09-10T12:00:00Z"
+  && mitDiffBeleg.bekannt.katalog_stand_konsistent === true);
+const ueberlappenderTitel = baueStreamingAnsichten({
+  entdeckenUmfang: "voll",
+  bekannt: {
+    katalog_stand: "2026-09-10T12:00:00Z",
+    titel: [{ watchmode_id: 906, titel: "Lane-Union", jahr: 2022, typ: "movie", dienste: ["Netflix"],
+      web_urls: { Netflix: "https://example.test/netflix" }, dienst_diffs: diffBeleg }],
+  },
+  entdecken: {
+    katalog_stand: "2026-09-10T12:00:00Z",
+    titel: [{ watchmode_id: 906, titel: "Lane-Union", jahr: 2022, typ: "movie", dienste: ["Disney+"],
+      web_urls: { "Disney+": "https://example.test/disney" }, dienst_diffs: diffBeleg }],
+  },
+}, [{ id: "lane-union", watchmode_id: 906, titel: "Lane-Union", jahr: 2022, typ: "film" }]);
+check("überlappende Lanes vereinen Dienste, Links und identische Diffbelege ohne Dublette",
+  JSON.stringify(ueberlappenderTitel.bekannt.titel[0]?.dienste) === JSON.stringify(["Disney+", "Netflix"])
+  && Object.keys(ueberlappenderTitel.bekannt.titel[0]?.web_urls || {}).length === 2
+  && ueberlappenderTitel.bekannt.titel[0]?.dienst_diffs?.length === 1);
+const wechselnderStand = baueStreamingAnsichten({
+  entdeckenUmfang: "voll",
+  bekannt: {
+    katalog_stand: "2026-09-09T12:00:00Z",
+    stand_pro_quelle: { Netflix: "2026-09-09T12:00:00Z" },
+    vergleich_stand_pro_quelle: { Netflix: "2026-09-09T12:00:00Z" },
+    titel: [],
+  },
+  entdecken: {
+    katalog_stand: "2026-09-10T12:00:00Z",
+    stand_pro_quelle: { Netflix: "2026-09-10T12:00:00Z" },
+    titel: [],
+  },
+});
+check("verschiedene Katalogstände mischen keinen alten Vorhervergleich in den neuen Stand",
+  wechselnderStand.bekannt.katalog_stand_konsistent === false
+  && wechselnderStand.bekannt.stand_pro_quelle.Netflix === "2026-09-10T12:00:00Z"
+  && wechselnderStand.bekannt.vergleich_stand_pro_quelle.Netflix == null);
 const ohneTypbeleg = baueStreamingAnsichten({
   bekannt: { titel: [{ watchmode_id: 902, titel: "Kein Typ", jahr: 2022 }] },
   entdecken: { titel: [] },

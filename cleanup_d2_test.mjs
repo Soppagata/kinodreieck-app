@@ -44,7 +44,7 @@ check("D-07/U-08: bekannte sichtbare Datumsflächen nutzen die Foundation", () =
     ["./src/components/StreamingEinstellungen.jsx", /formatPresentationDate\(stand, \{ includeTime: true \}\)/],
     ["./src/components/KontoBereich.jsx", /formatPresentationDate\(status\.lastPull/],
     ["./src/components/PrivatePilotOps.jsx", /formatPresentationDate\(entry\.retrievedAt/],
-    ["./src/components/KatalogAuditStatus.jsx", /formatPresentationDate\(snapshot\.date\)/],
+    ["./src/components/KatalogAuditStatus.jsx", /formatPresentationDate\(new Date\(value\), \{ includeTime: true \}\)/],
     ["./src/lib/radarNews.js", /formatPresentationDate\(entry\.checkedAt/],
   ];
   for (const [path, pattern] of contracts) assert.match(source(path), pattern, path);
@@ -93,23 +93,18 @@ check("U-13: Eine kanonische Hilfe liegt ausschließlich in Settings", () => {
 
 check("U-06-Naht: Katalogbestand bleibt knapp und ohne titelspezifischen Sonderfall", () => {
   const status = source("./src/components/KatalogAuditStatus.jsx");
-  assert.match(status, /Streaming-Titel im gespeicherten Bestand/);
+  assert.match(status, /Gesamtbestand/);
+  assert.match(status, /Ausgewählte Dienste/);
+  assert.match(status, /Mein Programm/);
+  assert.match(status, /Neu/);
   assert.doesNotMatch(status, /Snapshotdifferenz|Pipelinephasen|Warum fehlt|titleTrace/);
 });
 
 check("D-09: jedes native Checkbox-Inventar hängt am gemeinsamen 44px-Labelvertrag", () => {
-  const locations = [
-    "./src/tabs/KinoTab.jsx", "./src/tabs/DatenTab.jsx", "./src/components/Wochenplan.jsx",
-    "./src/tabs/BlogTab.jsx", "./src/tabs/EntdeckenTab.jsx", "./src/components/EintragForm.jsx",
-    "./src/components/TeilenBlock.jsx", "./src/components/SelectionControl.jsx",
-    "./src/components/KontoUebernahme.jsx", "./src/components/PrivatePilotOps.jsx",
-    "./src/components/StapelImport.jsx", "./src/components/BlogProfilAnalyse.jsx",
-    "./src/components/PrivateMailRequests.jsx",
-  ];
-  const checkboxCount = jsxFiles("./src/tabs").concat(jsxFiles("./src/components"))
-    .reduce((sum, path) => sum + (source(path).match(/type="checkbox"/g) || []).length, 0);
-  assert.equal(checkboxCount, 14);
-  for (const path of locations) assert.match(source(path), /kd-touch-checkbox/, path);
+  const checkboxOwners = jsxFiles("./src/tabs").concat(jsxFiles("./src/components"))
+    .filter((path) => /type="checkbox"/.test(source(path)));
+  assert.ok(checkboxOwners.length > 0, "Checkbox-Inventar darf nicht unbemerkt verschwinden");
+  for (const path of checkboxOwners) assert.match(source(path), /kd-touch-checkbox/, path);
   assert.match(css, /label\.kd-touch-checkbox \{[^}]*min-width:44px;[^}]*min-height:44px;/);
   assert.match(source("./src/components/FilmCard.jsx"), /const kartenRolle = auswahlmodus \? "checkbox"/);
   assert.match(source("./src/components/FilmCard.jsx"), /role=\{kartenRolle\}/);

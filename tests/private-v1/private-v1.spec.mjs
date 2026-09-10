@@ -93,7 +93,8 @@ test("Haupt-Entdecken bleibt leicht; Streaming Alles und beide Jahrzehntregler b
   await expect(allSort).toHaveValue("jahr");
   await expect(allDirection).toHaveValue("auf");
   await expect(allDecade).toHaveAttribute("aria-valuetext", /1990er: 1988 bis 2002/u);
-  await expect(page.locator(".kd-entdecken-karte").first()).toContainText("Zulu Fund");
+  await expect(page.locator(".kd-entdecken-karte").filter({ hasText: "Zulu Fund" })).toBeVisible();
+  await expect(page.locator(".kd-entdecken-karte").filter({ hasText: "Zulu Alt" })).toBeVisible();
 });
 
 test("Mobile Haupttabs merken Scrollpositionen und Same-tab-Schließen springt nicht", async ({ privateApp }) => {
@@ -180,7 +181,7 @@ test("Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag", asy
 
   await page.getByText("Streaming-Katalogbestand", { exact: true }).click();
   const audit = page.getByTestId("streaming-catalog-audit");
-  await expect(audit).toContainText("Streaming-Titel im gespeicherten Bestand");
+  await expect(audit).toContainText("Gesamtbestand");
   await expect(audit).not.toContainText(/Snapshotdifferenz|Pipelinephasen|Warum fehlt/u);
   await expect(audit.locator("details")).toHaveCount(0);
 

@@ -194,7 +194,7 @@ test("D2 mobil: Hilfe, ehrliche Entdecken-Navigation, Blog-ARIA und Checkbox-Hit
   await page.getByText("Streaming-Katalogbestand", { exact: true }).click();
   const audit = page.getByTestId("streaming-catalog-audit");
   await expect(audit).toBeVisible();
-  await expect(audit).toContainText("Streaming-Titel im gespeicherten Bestand");
+  await expect(audit).toContainText("Gesamtbestand");
   await expect(audit).not.toContainText(/Snapshotdifferenz|Pipelinephasen|Warum fehlt/);
   await expect(audit.locator("details")).toHaveCount(0);
 

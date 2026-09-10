@@ -1,0 +1,46 @@
+{
+  "vertrag": "streaming-dienst-diffs-v1",
+  "stand": "2026-09-15T12:00:00.000Z",
+  "stand_pro_quelle": {
+    "Netflix": "2026-09-15T12:00:00.000Z",
+    "Disney+": "2026-09-15T12:00:00.000Z",
+    "MUBI": "2026-09-01T12:00:00.000Z"
+  },
+  "vergleich_stand_pro_quelle": {
+    "Netflix": "2026-09-15T12:00:00.000Z",
+    "Disney+": "2026-09-15T12:00:00.000Z"
+  },
+  "auswahl": ["Netflix", "Disney+"],
+  "titel": [
+    {
+      "watchmode_id": 101,
+      "titel": "Bestehender Auswahlzugang",
+      "typ": "movie",
+      "dienste": ["Disney+", "Netflix"],
+      "dienst_diffs": [
+        {"dienst": "Netflix", "vorher": false, "nachher": true, "erkannt_am": "2026-09-02T12:00:00.000Z"},
+        {"dienst": "Disney+", "vorher": false, "nachher": true, "erkannt_am": "2026-09-15T12:00:00.000Z"}
+      ]
+    },
+    {
+      "watchmode_id": 102,
+      "titel": "Neuer Auswahlzugang",
+      "typ": "tv_series",
+      "dienste": ["MUBI", "Netflix"],
+      "dienst_diffs": [
+        {"dienst": "Netflix", "vorher": false, "nachher": true, "erkannt_am": "2026-09-15T12:00:00.000Z"}
+      ]
+    },
+    {
+      "watchmode_id": 103,
+      "titel": "Unveränderter Altbestand",
+      "typ": "movie",
+      "dienste": ["Netflix"]
+    }
+  ],
+  "erwartet_neu_seit": {
+    "101": "2026-09-02T12:00:00.000Z",
+    "102": "2026-09-15T12:00:00.000Z",
+    "103": null
+  }
+}

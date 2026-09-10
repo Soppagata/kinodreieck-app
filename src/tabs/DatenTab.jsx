@@ -54,7 +54,8 @@ export function DatenTab({
   vokabular = [], saveVokabular,
   speicher = null,
   ai = aiService,
-  streamingBekannt, streamingEntdecken, streamingInfo = null, auswahl, toggleQuelle,
+  streamingBekannt, streamingEntdecken, streamingInfo = null, auswahl, auswahlGeladen = true,
+  streamingNeu, toggleQuelle,
   datenGesperrt = false,
   artikelListe = [], setErr = () => {},
   onKontoDatenGeaendert,
@@ -208,10 +209,12 @@ export function DatenTab({
 
       {/* 2 — Streaming-Anbieter */}
       {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
-        katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
+        katalogInfo={streamingInfo} auswahl={auswahl} auswahlGeladen={auswahlGeladen}
+        toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
       {showKatalogbestand && <Klappe titel="Streaming-Katalogbestand">
         <div style={kasten}>
-          <KatalogAuditStatus />
+          <KatalogAuditStatus bekannt={streamingBekannt} entdecken={streamingEntdecken}
+            auswahl={auswahl} auswahlGeladen={auswahlGeladen} streamingNeu={streamingNeu} />
         </div>
       </Klappe>}
 

@@ -37,8 +37,11 @@ export const DISCOVER_TITLES = Object.freeze([
 
 const payload = (titel) => ({
   stand: NOW,
+  katalog_stand: NOW,
   region: "AT",
   dienste: ["Netflix"],
+  stand_pro_quelle: { Netflix: NOW },
+  vergleich_stand_pro_quelle: { Netflix: NOW },
   titel,
 });
 const row = (value) => [{

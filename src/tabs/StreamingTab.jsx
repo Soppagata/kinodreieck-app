@@ -19,6 +19,7 @@ import {
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
+import { projiziereStreamingAnsichten } from "../lib/streamingProjection.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -40,8 +41,8 @@ const istStreamingSerie = (titel) => ["tv_series", "serie", "series"]
   .includes(String(titel?.typ || titel?.type || "").toLowerCase());
 
 function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className }) {
-  /* Joyn-Fix: Badges UND web_urls-Links nur für Dienste der Abo-Auswahl
-     (leere Auswahl = alle) — der Link hängt am Dienst, fliegt also mit. */
+  /* Badges UND web_urls-Links folgen der bereits geprüften Abo-Auswahl der
+     sichtbaren Karte; der Link hängt am Dienst und fliegt mit ihm. */
   return (
     <span className={className} style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
       {gruppiereDienstBadges(sichtbareDienste(dienste, auswahl), { kompakt }).map(({ label, rohnamen }) => {
@@ -153,7 +154,7 @@ function JahrzehntFilter({ wert, optionen, onChange, name }) {
 }
 
 export function StreamingTab({
-  bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm,
+  bekannt, entdecken, auswahl, auswahlGeladen = true, merkliste = [], toggleMerk, addFilm, master, updateFilm,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
   onPrognoseErstellen, onPrognoseStatus,
@@ -313,14 +314,19 @@ export function StreamingTab({
 
   const datenDa = !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
-  const entdeckenVollstaendig = entdecken?.katalogMengen?.umfang === "voll";
+  const projektion = useMemo(() => projiziereStreamingAnsichten({
+    bekannt, entdecken, auswahl, auswahlGeladen,
+  }), [bekannt, entdecken, auswahl, auswahlGeladen]);
+  const entdeckenVollstaendig = projektion.vollstaendig;
   /* Die fachliche Katalogfrische stammt vom letzten echten Providerlauf. Ein
      Skip darf durch einen neuen Publikations-`stand` nicht frisch aussehen. */
   const stand = datenDa ? new Date(bekannt.katalog_stand || bekannt.stand) : null;
   const alterTage = stand ? (Date.now() - stand.getTime()) / 86400000 : null;
 
-  /* Anzeige-Filter: leere Auswahl = alles zeigen */
-  const dienstOk = useCallback((t) => !auswahl.length || (t.dienste || []).some((d) => auswahl.includes(d)), [auswahl]);
+  /* Eine leere, bereits geladene Auswahl bedeutet ausdrücklich: keine
+     Dienste. Während des Ladens wird ebenfalls kein alter Kontostand gezeigt. */
+  const dienstOk = useCallback((t) => auswahlGeladen && auswahl.length > 0
+    && (t.dienste || []).some((d) => auswahl.includes(d)), [auswahl, auswahlGeladen]);
   /* Plattform-Optionen = ALLE angehakten Dienste — auch ohne Katalog-Titel (Max, 19.07.):
      die Abo-Auswahl soll im Filter sichtbar sein, ein leerer Treffer ist ok. Früher auf
      bekannt.dienste gegatet; das ist aber unzuverlässig (führt z. B. Joyn NICHT, obwohl Titel
@@ -343,10 +349,8 @@ export function StreamingTab({
   const plattformOkE = useCallback((t) => !plattformE || (t.dienste || []).includes(plattformE), [plattformE]);
 
   const programm = useMemo(() => {
-    if (!datenDa) return [];
-    let l = bekannt.titel.filter((t) => (
-      fokusOverride?.art === "programm" && String(t.id) === fokusOverride.ref
-    ) || (dienstOk(t) && plattformOkP(t)));
+    if (!datenDa || !auswahlGeladen) return [];
+    let l = projektion.meinProgramm.filter((t) => plattformOkP(t));
     /* Must-Watch-Filter liest die LISTE (Verknüpfung auf Master-ID) — nicht mehr
        das eingebackene must_watch-Flag aus dem Katalog-Job (kann veraltet sein). */
     if (nurWunsch) l = l.filter((f) => mustwatchIds && mustwatchIds.has(f.id));
@@ -355,25 +359,14 @@ export function StreamingTab({
     if (streamingJahrzehntBereich(dekadeP)) l = l.filter((f) => passtInJahrzehntMitKulanz(f.jahr, dekadeP));
     if (suche.trim()) { const nq = norm(suche); l = l.filter((f) => norm(f.titel || "").includes(nq)); }
     return sortiereStreamingTitel(l, sortP, sortRichtungP);
-  }, [bekannt, datenDa, dienstOk, plattformOkP, nurWunsch, nurBewertet, buchstabeP, dekadeP, mustwatchIds, suche, sortP, sortRichtungP, fokusOverride]);
+  }, [datenDa, auswahlGeladen, projektion.meinProgramm, plattformOkP, nurWunsch, nurBewertet, buchstabeP, dekadeP, mustwatchIds, suche, sortP, sortRichtungP]);
 
-  const vollKatalogTitel = useMemo(() => {
-    const eindeutig = new Map();
-    for (const titel of [...(bekannt?.titel || []), ...(entdecken?.titel || [])]) {
-      if (titel?.watchmode_id == null) continue;
-      eindeutig.set(String(titel.watchmode_id), {
-        ...titel,
-        genres: Array.isArray(titel.genres) ? titel.genres
-          : Array.isArray(titel.genre) ? titel.genre : [],
-      });
-    }
-    return [...eindeutig.values()];
-  }, [bekannt, entdecken]);
+  const vollKatalogTitel = projektion.alleTitel;
   const neuIdSet = useMemo(() => new Set((streamingNeu?.neueIds || []).map(String)), [streamingNeu]);
   const neuTitel = useMemo(() => streamingNeu?.status === "ready"
-    ? vollKatalogTitel.filter((titel) => neuIdSet.has(String(titel.watchmode_id)))
-    : [], [vollKatalogTitel, neuIdSet, streamingNeu?.status]);
-  const filterQuelleE = ansicht === "neu" ? neuTitel : (entdecken?.titel || []);
+    ? projektion.ausgewaehlt.filter((titel) => neuIdSet.has(String(titel.watchmode_id)))
+    : [], [projektion.ausgewaehlt, neuIdSet, streamingNeu?.status]);
+  const filterQuelleE = ansicht === "neu" ? neuTitel : projektion.ausgewaehlt;
 
   const genresE = useMemo(() => {
     const gruppen = new Map();
@@ -475,12 +468,13 @@ export function StreamingTab({
     + Number(!!buchstabeP) + Number(!!streamingJahrzehntBereich(dekadeP));
   const aktiveFilterE = Number(!!plattformE) + Number(!!statusFilterE) + Number(!!typE)
     + Number(genreFilterSichtbarE && !!genreE) + Number(!!streamingJahrzehntBereich(dekadeE)) + Number(!!buchstabeE);
+  /* Die bestehende zugängliche Filterkennung bleibt für gespeicherte
+     Bedienhilfen stabil; der sichtbare Ansichtsname lautet weiterhin Alles. */
   const katalogAnsicht = ansicht === "neu" ? "Neu" : "Entdecken";
-  const katalogAnsichtBereit = ansicht === "neu" ? streamingNeu?.status === "ready" : entdeckenDa;
-  const entdeckenAnzahlFuerAuswahl = useMemo(
-    () => (entdecken?.titel || []).filter(dienstOk).length,
-    [entdecken, dienstOk],
-  );
+  const katalogAnsichtBereit = ansicht === "neu"
+    ? streamingNeu?.status === "ready"
+    : entdeckenDa && entdeckenVollstaendig && auswahlGeladen;
+  const allesAnzahlFuerAuswahl = projektion.ausgewaehlt.length;
   const neuAnzahlFuerAuswahl = useMemo(
     () => neuTitel.filter(dienstOk).length,
     [neuTitel, dienstOk],
@@ -502,8 +496,8 @@ export function StreamingTab({
       {/* dataTour="streaming-views" bleibt am SegmentedControl-Container — Tour-Anker. */}
       <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={aendereAnsicht}
         options={[
-          { id: "programm", label: "Mein Programm", badge: datenDa ? programm.length : undefined },
-          { id: "entdecken", label: "Alles", badge: entdeckenVollstaendig ? (ansicht === "entdecken" ? katalogListe.length : entdeckenAnzahlFuerAuswahl) : undefined },
+          { id: "programm", label: "Mein Programm", badge: datenDa && auswahlGeladen ? programm.length : undefined },
+          { id: "entdecken", label: "Alles", badge: entdeckenVollstaendig && auswahlGeladen ? (ansicht === "entdecken" ? katalogListe.length : allesAnzahlFuerAuswahl) : undefined },
           { id: "neu", label: "Neu", badge: streamingNeu?.status === "ready" ? (ansicht === "neu" ? katalogListe.length : neuAnzahlFuerAuswahl) : undefined },
         ]} />
 
@@ -644,16 +638,18 @@ export function StreamingTab({
         <>
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.rauch }}>
             {ansicht === "neu"
-              ? "Neue Titel aus deinen ausgewählten Diensten bleiben ab ihrem Kataloglauf 14 Tage sichtbar."
-              : "Ungeprüfte Katalogtitel — kein Dreieck und keine Bewertung. Sortiert wird nur nach den sichtbaren Metadaten."}
+              ? "Tatsächliche Angebotszugänge bei deinen ausgewählten Diensten bleiben ab dem belegten Vergleich 14 volle Tage sichtbar."
+              : "Alle Werke im aktuellen Angebot deiner ausgewählten Dienste, einschließlich deiner Titel aus Mein Programm."}
           </div>
           {!katalogAnsichtBereit ? (
             <p style={{ color: T.rauch, fontSize: 14 }} role="status">
-              {streamingNeu?.status === "unavailable"
-                ? "Für diesen vollständigen Katalog fehlt eine verlässliche Standkennung; ein Diff wird vorsichtshalber nicht gebildet."
-                : streamingNeu?.status === "error"
-                  ? "Der lokale Vergleichsstand konnte nicht sicher gespeichert werden."
-                  : "Der vollständige Katalog wird geladen …"}
+              {!auswahlGeladen
+                ? "Deine Streaming-Auswahl wird geladen …"
+                : ansicht === "neu" && streamingNeu?.status === "baseline"
+                  ? "Für mindestens einen ausgewählten Dienst liegt noch kein erfolgreicher Vorhervergleich vor. Dieser Stand ist die Baseline; daraus werden keine alten Titel als neu behauptet."
+                  : ansicht === "neu" && streamingNeu?.status === "unavailable"
+                    ? "Die gelieferten Vergleichsbelege sind nicht verlässlich genug für eine Neu-Anzeige."
+                    : "Der vollständige Katalog wird geladen …"}
             </p>
           ) : <>
           <div className="kd-kompakt kd-streaming-werkzeuge" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -709,7 +705,10 @@ export function StreamingTab({
             <JahrzehntFilter name={katalogAnsicht} wert={dekadeE} optionen={dekadenE}
               onChange={aendereDekadeE} />
           </div>
-          {ansicht === "neu" && katalogListe.length === 0 && (
+          {auswahlGeladen && auswahl.length === 0 && (
+            <p style={{ color: T.rauch, fontSize: 14 }}>Keine Streaming-Dienste ausgewählt.</p>
+          )}
+          {ansicht === "neu" && auswahl.length > 0 && katalogListe.length === 0 && streamingNeu?.vergleich === "verifiziert-leer" && (
             <p style={{ color: T.rauch, fontSize: 14 }}>In den letzten 14 Tagen sind keine neuen Titel für diese Auswahl hinzugekommen.</p>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -790,7 +789,8 @@ export function StreamingTab({
                   </div>
                 )}
                 <div className="kd-entdecken-meta">
-                  <DienstBadges className="kd-entdecken-dienste" dienste={t.dienste} auswahl={auswahl} kompakt={expandedId !== "e" + t.watchmode_id} />
+                  <DienstBadges className="kd-entdecken-dienste" dienste={t.dienste} webUrls={t.web_urls}
+                    auswahl={auswahl} kompakt={expandedId !== "e" + t.watchmode_id} />
                 </div>
               </div>
             ))}

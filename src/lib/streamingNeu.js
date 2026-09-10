@@ -1,280 +1,144 @@
-/* Lokaler Verlauf fuer vollstaendige Streaming-Kataloglaeufe.
-   Ein Lauf wird ausschliesslich durch `katalog_stand` identifiziert. Der bei
-   einer blossen Neuveroeffentlichung gesetzte Payload-/DB-`stand` darf diese
-   Historie weder leeren noch neu starten. */
+import { streamingTitelKennung, vereinigeStreamingTitel } from "./streamingProjection.js";
 
-export const STREAMING_NEU_FORMAT = 2;
-export const STREAMING_NEU_KEY_PREFIX = "kd:streaming-neu:v2:";
-export const STREAMING_NEU_LEGACY_KEY_PREFIX = "kd:streaming-neu:v1:";
 export const STREAMING_NEU_DAUER_MS = 14 * 24 * 60 * 60 * 1000;
 
-function text(value) { return String(value == null ? "" : value).trim(); }
-
-function watchmodeId(entry) {
-  const value = entry?.watchmode_id ?? entry?.watchmodeId;
-  const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? number : null;
-}
-
-function zeitpunkt(value) {
+const text = (value) => String(value == null ? "" : value).trim();
+const zeitpunkt = (value) => {
   const parsed = typeof value === "number" ? value : Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+function metadaten(bekannt, entdecken, feld) {
+  const links = bekannt?.[feld];
+  const rechts = entdecken?.[feld];
+  return {
+    ...(links && typeof links === "object" && !Array.isArray(links) ? links : {}),
+    ...(rechts && typeof rechts === "object" && !Array.isArray(rechts) ? rechts : {}),
+  };
 }
 
-function rawValue(raw) {
-  if (typeof raw !== "string") return raw;
-  try { return JSON.parse(raw); } catch { return null; }
+function gueltigerQuellenstand(value, now) {
+  const zeit = zeitpunkt(value);
+  return zeit != null && zeit <= now ? zeit : null;
 }
 
-function key(prefix, owner) {
-  const clean = text(owner);
-  return clean ? prefix + encodeURIComponent(clean) : null;
-}
-
-export function streamingNeuStorageKey(owner) {
-  return key(STREAMING_NEU_KEY_PREFIX, owner);
-}
-
-export function streamingNeuLegacyStorageKey(owner) {
-  return key(STREAMING_NEU_LEGACY_KEY_PREFIX, owner);
-}
-
-export function streamingKatalogIds(titel) {
-  const ids = new Set();
-  for (const entry of Array.isArray(titel) ? titel : []) {
-    const id = watchmodeId(entry);
-    if (id != null) ids.add(id);
+function gruppiereDiffs(titel, now) {
+  if (!Array.isArray(titel?.dienst_diffs)) return [];
+  const gruppen = new Map();
+  for (const diff of titel.dienst_diffs) {
+    const dienst = text(diff?.dienst);
+    const erkanntAm = zeitpunkt(diff?.erkannt_am);
+    if (!dienst || typeof diff?.vorher !== "boolean" || typeof diff?.nachher !== "boolean"
+        || erkanntAm == null || erkanntAm > now) return null;
+    const key = new Date(erkanntAm).toISOString();
+    if (!gruppen.has(key)) gruppen.set(key, { erkanntAm, diffs: [] });
+    gruppen.get(key).diffs.push({ dienst, vorher: diff.vorher, nachher: diff.nachher });
   }
-  return Object.freeze([...ids].sort((a, b) => a - b));
+  return [...gruppen.values()].sort((a, b) => b.erkanntAm - a.erkanntAm);
 }
 
-export function streamingCoverageSignatur(dienste) {
-  if (!Array.isArray(dienste)) return null;
-  const namen = dienste.map(text);
-  if (!namen.length || namen.some((name) => !name)) return null;
-  return JSON.stringify([...new Set(namen)].sort());
-}
+/* Rekonstruiert die ausgewählte Angebotsunion vom aktuellen Titelzustand aus
+   rückwärts. Nur ein echter false→true-Wechsel der Union beginnt ein
+   14-Tage-Fenster; zusätzliche oder gleichzeitig wechselnde gewählte Dienste
+   verlängern es nicht. Inkonsistente Producerbelege bleiben fail-closed. */
+function neuerZugangSeit(titel, auswahl, staende, vergleichsstaende, now) {
+  const gruppen = gruppiereDiffs(titel, now);
+  if (!gruppen) return null;
+  const gewaehlt = new Set(auswahl);
+  const aktuell = new Set((titel?.dienste || []).map(text).filter(Boolean));
+  const union = () => [...gewaehlt].some((dienst) => aktuell.has(dienst));
+  if (!union()) return null;
 
-function parseCoverage(value) {
-  if (value == null) return null;
-  if (typeof value !== "string") return undefined;
-  try {
-    const dienste = JSON.parse(value);
-    const signatur = streamingCoverageSignatur(dienste);
-    return signatur === value ? signatur : undefined;
-  } catch { return undefined; }
-}
-
-function parseIds(value) {
-  if (!Array.isArray(value)) return null;
-  const ids = streamingKatalogIds(value.map((id) => ({ watchmode_id: id })));
-  return ids.length === value.length ? ids : null;
-}
-
-function parseV1(value, owner) {
-  if (value?.format !== 1 || text(value.owner) !== text(owner)
-      || zeitpunkt(value.runId) == null) return null;
-  const ids = parseIds(value.ids);
-  if (!ids || !(value.neueIds === null || Array.isArray(value.neueIds))) return null;
-  /* Der alte Erststand zeigte absichtlich den ganzen Bestand. Diese Bedeutung
-     darf nicht in v2 uebernommen werden: v1 wird nur als bekannte Baseline
-     migriert, niemals als Liste vermeintlich neuer Titel. */
-  return Object.freeze({
-    format: STREAMING_NEU_FORMAT,
-    owner: text(owner),
-    runId: text(value.runId),
-    coverage: null,
-    ids,
-    neu: Object.freeze([]),
-  });
-}
-
-export function parseStreamingNeuSnapshot(raw, owner) {
-  const value = rawValue(raw);
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  if (value.format === 1) return parseV1(value, owner);
-  const runAt = zeitpunkt(value.runId);
-  if (value.format !== STREAMING_NEU_FORMAT
-      || text(value.owner) !== text(owner)
-      || !text(value.runId)
-      || runAt == null) return null;
-  const ids = parseIds(value.ids);
-  const coverage = parseCoverage(value.coverage);
-  if (!ids || coverage === undefined || !Array.isArray(value.neu)) return null;
-  const idSet = new Set(ids);
-  const seen = new Set();
-  const neu = [];
-  for (const entry of value.neu) {
-    const id = Number(entry?.id);
-    const firstSeenAt = zeitpunkt(entry?.firstSeenAt);
-    if (!Number.isInteger(id) || id <= 0 || firstSeenAt == null || firstSeenAt > runAt
-        || !idSet.has(id) || seen.has(id)) return null;
-    seen.add(id);
-    neu.push(Object.freeze({ id, firstSeenAt }));
+  let juengsterZugang = null;
+  for (const gruppe of gruppen) {
+    const diensteDerGruppe = new Set();
+    for (const diff of gruppe.diffs) {
+      if (diensteDerGruppe.has(diff.dienst)) return null;
+      diensteDerGruppe.add(diff.dienst);
+      if (aktuell.has(diff.dienst) !== diff.nachher) return null;
+    }
+    const nachher = union();
+    for (const diff of gruppe.diffs) {
+      if (diff.vorher) aktuell.add(diff.dienst);
+      else aktuell.delete(diff.dienst);
+    }
+    const vorher = union();
+    if (!vorher && nachher) {
+      const belegteAenderung = gruppe.diffs.some((diff) => (
+        gewaehlt.has(diff.dienst)
+        && diff.vorher === false
+        && diff.nachher === true
+        && gueltigerQuellenstand(staende[diff.dienst], now) >= gruppe.erkanntAm
+        && gueltigerQuellenstand(vergleichsstaende[diff.dienst], now) >= gruppe.erkanntAm
+      ));
+      if (belegteAenderung && juengsterZugang == null) juengsterZugang = gruppe.erkanntAm;
+    }
   }
-  neu.sort((a, b) => a.firstSeenAt - b.firstSeenAt || a.id - b.id);
-  return Object.freeze({
-    format: STREAMING_NEU_FORMAT,
-    owner: text(owner),
-    runId: text(value.runId),
-    coverage,
-    ids,
-    neu: Object.freeze(neu),
-  });
+  return juengsterZugang;
 }
 
-function aktiveNeueEintraege(snapshot, now, ids = snapshot?.ids || []) {
-  const currentIds = new Set(ids);
-  return Object.freeze((snapshot?.neu || []).filter((entry) => (
-    currentIds.has(entry.id)
-    && now < entry.firstSeenAt + STREAMING_NEU_DAUER_MS
-  )));
-}
-
-function gleicherSnapshot(snapshot, ids, neu) {
-  return snapshot.ids.length === ids.length
-    && snapshot.ids.every((id, index) => id === ids[index])
-    && snapshot.neu.length === neu.length
-    && snapshot.neu.every((entry, index) => (
-      entry.id === neu[index].id && entry.firstSeenAt === neu[index].firstSeenAt
-    ));
-}
-
-function snapshotMit(snapshot, ids, neu) {
-  return Object.freeze({
-    format: STREAMING_NEU_FORMAT,
-    owner: snapshot.owner,
-    runId: snapshot.runId,
-    coverage: snapshot.coverage,
-    ids,
-    neu,
-  });
-}
-
-export function bereinigeStreamingNeuSnapshot(snapshot, now = Date.now()) {
-  const aktuell = parseStreamingNeuSnapshot(snapshot, snapshot?.owner);
-  const zeit = zeitpunkt(now);
-  if (!aktuell || zeit == null) return null;
-  const neu = aktiveNeueEintraege(aktuell, zeit);
-  const next = gleicherSnapshot(aktuell, aktuell.ids, neu)
-    ? aktuell
-    : snapshotMit(aktuell, aktuell.ids, neu);
-  return Object.freeze({ snapshot: next, geaendert: next !== aktuell });
-}
-
-/* Der erste Vollstand ist nur die Baseline. Jeder spaetere echte Kataloglauf
-   fuegt die Differenz zum unmittelbar vorherigen Bestand hinzu. Schon aktive
-   Eintraege behalten ihren ersten Erkennungszeitpunkt ueber weitere Laeufe. */
-export function aktualisiereStreamingNeuSnapshot(vorher, {
-  owner, runId, titel, dienste, now = Date.now(),
+export function projiziereStreamingNeu({
+  bekannt,
+  entdecken,
+  auswahl = [],
+  auswahlGeladen = true,
+  vollstaendig = entdecken?.katalogMengen?.umfang === "voll",
+  now = Date.now(),
 } = {}) {
-  const cleanOwner = text(owner);
-  const cleanRunId = text(runId);
-  const runAt = zeitpunkt(cleanRunId);
   const zeit = zeitpunkt(now);
-  const coverage = streamingCoverageSignatur(dienste);
-  if (!cleanOwner || runAt == null || zeit == null || !Array.isArray(titel) || coverage == null) return null;
-
-  const raw = rawValue(vorher);
-  const warLegacy = raw?.format === 1;
-  const alt = parseStreamingNeuSnapshot(raw, cleanOwner);
-  const ids = streamingKatalogIds(titel);
-
-  /* v1 verwendete den Publikations-`stand`, v2 den echten `katalog_stand`.
-     Die beiden Zeitachsen sind nicht vergleichbar. Deshalb wird bei jeder
-     v1-Migration ausnahmslos der JETZT geladene Vollkatalog zur leeren
-     Baseline; weder alte IDs noch der alte runId duerfen weiterleben. */
-  if (warLegacy || !alt) {
-    const snapshot = Object.freeze({
-      format: STREAMING_NEU_FORMAT,
-      owner: cleanOwner,
-      runId: cleanRunId,
-      coverage,
-      ids,
-      neu: Object.freeze([]),
-    });
-    return Object.freeze({
-      snapshot, geaendert: true, initialisiert: true,
-      migriert: warLegacy,
-      coverageRebase: false,
-    });
-  }
-
-  const altRunAt = zeitpunkt(alt.runId);
-  const coverageGeaendert = alt.coverage !== coverage;
-  /* Ein älterer Payload darf auch mit anderer Coverage niemals die neuere
-     Baseline zurückdrehen. Altes v2 ohne Signatur darf beim identischen Stand
-     einmalig still auf die aktuelle Coverage migrieren. */
-  if (runAt < altRunAt || (runAt === altRunAt && coverageGeaendert && alt.coverage != null)) {
-    const neu = aktiveNeueEintraege(alt, zeit);
-    const snapshot = gleicherSnapshot(alt, alt.ids, neu)
-      ? alt
-      : snapshotMit(alt, alt.ids, neu);
-    return Object.freeze({ snapshot, geaendert: snapshot !== alt, initialisiert: false });
-  }
-  if (coverageGeaendert) {
-    const snapshot = Object.freeze({
-      format: STREAMING_NEU_FORMAT,
-      owner: cleanOwner,
-      runId: cleanRunId,
-      coverage,
-      ids,
-      neu: Object.freeze([]),
-    });
-    return Object.freeze({
-      snapshot, geaendert: true, initialisiert: true,
-      migriert: alt.coverage == null,
-      coverageRebase: true,
-    });
-  }
-  /* Derselbe oder ein aelterer Cache-Stand darf die Baseline nicht mit einer
-     moeglicherweise gefilterten bzw. rueckwaerts gelaufenen Menge ersetzen.
-     Ablauf wird trotzdem anhand der Uhr bereinigt. */
-  if (cleanRunId === alt.runId || (altRunAt != null && runAt <= altRunAt)) {
-    const neu = aktiveNeueEintraege(alt, zeit);
-    const snapshot = gleicherSnapshot(alt, alt.ids, neu)
-      ? alt
-      : snapshotMit(alt, alt.ids, neu);
-    return Object.freeze({
-      snapshot,
-      geaendert: snapshot !== alt,
-      initialisiert: false,
-    });
-  }
-
-  const alteIds = new Set(alt.ids);
-  const neu = [...aktiveNeueEintraege(alt, zeit, ids)];
-  const schonNeu = new Set(neu.map((entry) => entry.id));
-  for (const id of ids) {
-    if (alteIds.has(id) || schonNeu.has(id)) continue;
-    if (zeit >= runAt + STREAMING_NEU_DAUER_MS) continue;
-    neu.push(Object.freeze({ id, firstSeenAt: runAt }));
-  }
-  neu.sort((a, b) => a.firstSeenAt - b.firstSeenAt || a.id - b.id);
-  const snapshot = Object.freeze({
-    format: STREAMING_NEU_FORMAT,
-    owner: cleanOwner,
-    runId: cleanRunId,
-    coverage,
-    ids,
-    neu: Object.freeze(neu),
+  const leereAntwort = (status, extra = {}) => Object.freeze({
+    status,
+    neueIds: Object.freeze([]),
+    neuSeit: Object.freeze({}),
+    naechsterAblauf: null,
+    ...extra,
   });
-  return Object.freeze({ snapshot, geaendert: true, initialisiert: false });
-}
+  if (zeit == null) return leereAntwort("unavailable");
+  if (!auswahlGeladen) return leereAntwort("idle");
+  if (!vollstaendig) return leereAntwort("loading");
+  const gewaehlt = [...new Set((Array.isArray(auswahl) ? auswahl : []).map(text).filter(Boolean))];
+  if (!gewaehlt.length) return leereAntwort("ready", { vergleich: "leer-ausgewaehlt" });
 
-export function streamingNeuIds(snapshot, now = Date.now()) {
-  const zeit = zeitpunkt(now);
-  if (!snapshot || zeit == null) return Object.freeze([]);
-  return Object.freeze(aktiveNeueEintraege(snapshot, zeit).map((entry) => entry.id));
-}
-
-export function naechsterStreamingNeuAblauf(snapshot, now = Date.now()) {
-  const zeit = zeitpunkt(now);
-  if (!snapshot || zeit == null) return null;
-  let next = null;
-  for (const entry of aktiveNeueEintraege(snapshot, zeit)) {
-    const ablauf = entry.firstSeenAt + STREAMING_NEU_DAUER_MS;
-    if (next == null || ablauf < next) next = ablauf;
+  const staende = metadaten(bekannt, entdecken, "stand_pro_quelle");
+  const vergleichsstaende = metadaten(bekannt, entdecken, "vergleich_stand_pro_quelle");
+  const baselineQuellen = gewaehlt.filter((dienst) => (
+    gueltigerQuellenstand(staende[dienst], zeit) == null
+    || gueltigerQuellenstand(vergleichsstaende[dienst], zeit) == null
+  ));
+  if (baselineQuellen.length) {
+    return leereAntwort("baseline", { baselineQuellen: Object.freeze(baselineQuellen) });
   }
-  return next;
+
+  const neuSeit = {};
+  let naechsterAblauf = null;
+  for (const titel of vereinigeStreamingTitel(bekannt, entdecken)) {
+    const id = streamingTitelKennung(titel);
+    if (!id) continue;
+    const seit = neuerZugangSeit(titel, gewaehlt, staende, vergleichsstaende, zeit);
+    if (seit == null || zeit >= seit + STREAMING_NEU_DAUER_MS) continue;
+    neuSeit[id] = new Date(seit).toISOString();
+    const ablauf = seit + STREAMING_NEU_DAUER_MS;
+    if (naechsterAblauf == null || ablauf < naechsterAblauf) naechsterAblauf = ablauf;
+  }
+  return Object.freeze({
+    status: "ready",
+    neueIds: Object.freeze(Object.keys(neuSeit)),
+    neuSeit: Object.freeze(neuSeit),
+    naechsterAblauf,
+    vergleich: Object.keys(neuSeit).length ? "zugaenge" : "verifiziert-leer",
+  });
+}
+
+export function streamingQuellenstaende({ bekannt, entdecken, auswahl = [], auswahlGeladen = true, now = Date.now() } = {}) {
+  if (!auswahlGeladen) return Object.freeze([]);
+  const staende = metadaten(bekannt, entdecken, "stand_pro_quelle");
+  const vergleiche = metadaten(bekannt, entdecken, "vergleich_stand_pro_quelle");
+  const zeit = zeitpunkt(now) ?? Date.now();
+  return Object.freeze([...new Set((Array.isArray(auswahl) ? auswahl : []).map(text).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "de"))
+    .map((dienst) => Object.freeze({
+      dienst,
+      stand: gueltigerQuellenstand(staende[dienst], zeit) == null ? null : staende[dienst],
+      vergleichStand: gueltigerQuellenstand(vergleiche[dienst], zeit) == null ? null : vergleiche[dienst],
+    })));
 }
