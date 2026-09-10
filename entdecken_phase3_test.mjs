@@ -1436,3 +1436,6 @@ try {
 
 console.log(`\n${checks}/${checks} Checks bestanden.`);
 console.log("ENTDECKEN-PHASE3-TEST BESTANDEN");
+
+// Die bestehende Gesamtsuite prueft auch den dienstgefilterten 50er-Pool.
+await import("./entdecken_abos_test.mjs");

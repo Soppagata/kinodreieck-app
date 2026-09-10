@@ -142,3 +142,6 @@ check("Rankingmodul besitzt keine Speicher-, Netzwerk- oder KI-Naht", () => {
 
 console.log(`\n${checks}/${checks} Checks bestanden.`);
 console.log("RECOMMENDATION-RANKING-TEST BESTANDEN");
+
+// Der bestehende npm-Einstieg deckt auch die neue reine Inhaltsprojektion ab.
+await import("./recommendation_content_ranking_test.mjs");

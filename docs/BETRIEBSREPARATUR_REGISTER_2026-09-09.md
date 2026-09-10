@@ -840,8 +840,8 @@ Paket benötigt einen Import oder ein Arbeitsergebnis des anderen.
 
 | Paket / IDs | Task / Branch / Worktree | Exklusive Write-Flächen | Stand |
 | --- | --- | --- | --- |
-| E9 / M2, M6 | `etappe_08_startzeit` übernimmt E9; `codex/entdecken-abos-20260910`; `/private/tmp/kd-entdecken-abos-e9-20260910` | `src/lib/entdeckenUi.js`, `src/tabs/EntdeckenTab.jsx`, `src/App.jsx`, erforderlicher neuer reiner Entdecken-Projektionshelper und fokussierte Entdecken-/UI-Tests; `src/lib/entdeckenPins.js` nur für tatsächliche Kartenidentität falls nötig | DISPATCH |
-| E10 / M6 | `etappe_05_import` übernimmt E10; `codex/entdecken-inhalte-20260910`; `/private/tmp/kd-entdecken-inhalte-e10-20260910` | `src/lib/recommendationRanking.js`, erforderlicher neuer reiner Inhaltshelper, `recommendation_ranking_test.mjs` und eigene neue Inhaltsrankingtests | DISPATCH |
+| E9 / M2, M6 | `etappe_08_startzeit` übernimmt E9; `codex/entdecken-abos-20260910`; `/private/tmp/kd-entdecken-abos-e9-20260910` | `src/lib/entdeckenUi.js`, `src/tabs/EntdeckenTab.jsx`, `src/App.jsx`, erforderlicher neuer reiner Entdecken-Projektionshelper und fokussierte Entdecken-/UI-Tests; `src/lib/entdeckenPins.js` nur für tatsächliche Kartenidentität falls nötig | INTEGRATED: `d31ea54` + `535b019`; fokussierte Tests grün |
+| E10 / M6 | `etappe_05_import` übernimmt E10; `codex/entdecken-inhalte-20260910`; `/private/tmp/kd-entdecken-inhalte-e10-20260910` | `src/lib/recommendationRanking.js`, erforderlicher neuer reiner Inhaltshelper, `recommendation_ranking_test.mjs` und eigene neue Inhaltsrankingtests | INTEGRATED: `6dea557` + `aec9f8d`; 180 fokussierte Checks grün |
 
 Die native Agenten-Taskgrenze verhindert neue Agentennamen. Zwei bereits
 abgeschlossene Baumeister übernehmen deshalb jeweils genau einen neuen Scope
@@ -872,6 +872,31 @@ lesende Abfragen, null Anbieterrequests und persönliche Writes.
 `/private/tmp/kd-ops-audit-20260909/entdecken-e9-e10-baseline.json`.
 Die spätere Vergleichsprobe normalisiert das Kinoprogramm wie die App und
 wendet Vorher/Nachher auf dieselben frisch gelesenen Inputs an.
+
+E10 ist als `0a835c8` und Delta `91797d2` geliefert. Die statische Nahtprüfung
+hat bestätigt: belegte Treffer stehen vor neutralen Vorschlägen, auch mit
+einem weichen Gegenargument; harte Ablehnungen bleiben ausgeschlossen.
+Beschreibungsabgleich verwendet ausschließlich bestätigte Genre-/Themensignale.
+Handlungsjahrzehnte werden nicht als Herstellungs-/Filmepoche ausgegeben.
+180 fokussierte Checks grün. Keine neue Ergebnisschnittstelle, kein Provider,
+keine persönlichen Writes. Integration erfolgt nach E9.
+
+E9 wurde als `64da287` geliefert; die statische Integration hielt die
+fehlende Verbindung der Kinofüller mit dem persönlichen Ranking sowie eine
+unbestellte Mediathek-Weitergabe ergänzter Texte zurück. Delta `ae6b106`
+behebt beides: nur die reine Entdecken-Rankingprojektion erhält Ergänzungen,
+die bearbeitbare Mediathek wieder unverändert den Rohmaster. Apple TV und
+Apple TV+ sind kompatible Dienstbezeichnungen; gesehene Kinoeinträge werden
+auch bei korrigiertem Titel über film.at-ID ausgeschlossen. Der Abschnitt
+bezeichnet ausgewählte Streamingdienste und aktuelle Kinoprogrammtitel ehrlich.
+
+Integration konfliktfrei: E9 `d31ea54`, E10 `6dea557` + `aec9f8d`, E9-Delta
+`535b019`. Die beiden neuen Testdateien sind ohne Package-/Buildänderung an
+die bestehenden npm-Testeinstiege angeschlossen. E9 fokussiert zuletzt
+14 Abo-/Poolchecks, 17 Market-Mix, 72 Phase3/UI einschließlich Kontozaun,
+18 Facts, 18 FlixPatrol-Frontend und 12 Wikidata grün; der WebKit-Nutzerweg
+der ersten Lieferung war ebenfalls erfolgreich. Vor Staging folgen der
+finale gemeinsame Echtbeleg und ein vollständiges lokales Gesamtgate.
 
 ## Historischer Ausgang am 9. September
 
