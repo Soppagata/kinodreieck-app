@@ -634,6 +634,26 @@ Auswahl belegt. Beide betroffenen Chromium-/WebKit-Fälle bestehen. Der
 vollständige lokale Abschlusslauf und Staging-Readback folgen auf dem integrierten
 Kandidaten. M5 bleibt bis Max' Rückmeldung zur betroffenen PWA offen.
 
+Kandidat `392e057` bestand am 10. September den einmaligen vollständigen lokalen
+`npm test`-Lauf einschließlich Builds (Exit 0,
+`/private/tmp/kd-staging-pwa-e7-final-test.log`). Vor dem Push meldet Max jedoch
+zusätzlich „0 Katalogeinträge“ trotz „ACTIVE“-Kennzeichnung und vermutet einen
+Lade-/Runstate-Fehler. Die Showa-Entlastung bleibt deshalb **lokal und wird noch
+nicht ausgeliefert**. Staging bleibt `bf74f25`. E7 untersucht jetzt den
+Frontend-Katalog-/Session-Ladepfad mit realistischem vollständigem Katalog;
+der Master besitzt die lesende Live-Diagnose.
+
+Live-Readback um 14:14 UTC über normale authentifizierte Owner-REST-GETs:
+`role=owner`, `active=true`; Stage und Production enthalten dasselbe bestätigte
+Supabase-Projekt und den konfigurierten öffentlichen Schlüssel. Alle vier
+Katalogabfragen liefern HTTP 200 und je eine Zeile: Manifest, 228 Kinofilme,
+226 bekannte Streamingtitel und **24.690 weitere Streamingtitel** (knapp 7 MB).
+Serverdaten und normale Kontofreigabe sind damit vorhanden. Ein vollständig
+geladener großer Streamingkatalog fehlte bisher im PWA-Test (`katalog: {}`);
+diese Lücke muss die nächste Reproduktion schließen. Der lokale PWA-/Tokenzustand
+auf Max' Gerät ist weiterhin nicht geprüft. Keine Anbieterabrufe oder Writes.
+Beleg: `/private/tmp/kd-ops-audit-20260909/staging-pwa-catalog-readback.json`.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
