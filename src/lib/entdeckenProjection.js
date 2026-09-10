@@ -16,7 +16,8 @@ function canonicalService(value) {
     .replace(/\+/gu, " plus ")
     .replace(/[^a-z0-9]+/gu, "")
     .replace(/^amazonprimevideo$/u, "primevideo")
-    .replace(/^amazonprime$/u, "primevideo");
+    .replace(/^amazonprime$/u, "primevideo")
+    .replace(/^appletvplus$/u, "appletv");
   return raw;
 }
 

@@ -402,6 +402,7 @@ function strongIds(entry) {
     imdb: text(external.imdb ?? entry?.imdb_id ?? entry?.imdbId).toLowerCase() || null,
     tmdb: text(external.tmdb ?? entry?.tmdb_id ?? entry?.tmdbId) || null,
     flixpatrol: text(external.flixpatrol ?? entry?.flixpatrol_id ?? entry?.flixpatrolId) || null,
+    filmAt: text(entry?.film_at_id ?? entry?.filmAtId ?? external.film_at) || null,
   });
 }
 function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wikidata) {
@@ -416,7 +417,7 @@ function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wiki
   ];
   return seenEntries.some((entry) => {
     const entryIds = strongIds(entry);
-    const comparable = ["joyn", "qid", "imdb", "tmdb", "flixpatrol"].filter((namespace) => (
+    const comparable = ["joyn", "qid", "imdb", "tmdb", "flixpatrol", "filmAt"].filter((namespace) => (
       itemIds[namespace] && entryIds[namespace]
     ));
     if (comparable.length) {
@@ -764,42 +765,46 @@ export function createEntdeckenRecommendations({
     const direct = allDirect.filter((candidate) => !candidate.seen);
     const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
       .includes(checkedFeed.value.format);
-    const rankedRaw = profile?.beschaedigt === true ? [] : rankRecommendations(direct, {
-      profile: profile && profile.beschaedigt !== true ? profile : {},
-      library: localLibraryProjection(master), useLibrary, excludedTargetIds: [], includeNeutral: mixed,
+    const rankingMaster = projectTransientDescriptions(master, {
+      catalogEntries: streamingKnown?.titel || [], facts: flixpatrolFacts,
     });
-    const directById = new Map(direct.map((candidate) => [candidate.targetId, candidate]));
+    const rankingLibrary = localLibraryProjection(rankingMaster);
+    const eligibleDirect = profile?.beschaedigt === true ? direct : rankRecommendations(direct, {
+      profile: profile && profile.beschaedigt !== true ? profile : {},
+      library: rankingLibrary, useLibrary, excludedTargetIds: [], includeNeutral: mixed,
+    });
+    const eligibleDirectIds = new Set(eligibleDirect.map((candidate) => candidate.targetId));
+    const feedPopular = direct.filter((candidate) => eligibleDirectIds.has(candidate.targetId));
+    const cinemaCandidates = currentCinemaDiscoveryCandidates({ program, programInfo, now })
+      .filter((candidate) => !sourceItemSeen(candidate, master, catalogCandidates));
+    const cinemaAllowedIds = profile?.beschaedigt === true
+      ? new Set(cinemaCandidates.map((candidate) => candidate.targetId))
+      : new Set(rankRecommendations(cinemaCandidates, {
+        profile: profile || {}, library: rankingLibrary, useLibrary,
+        excludedTargetIds: [], includeNeutral: true,
+      }).map((candidate) => candidate.targetId));
+    const cinemaBackfill = cinemaCandidates.filter((candidate) => cinemaAllowedIds.has(candidate.targetId));
+    /* Ranking und Popularitaetslane teilen exakt denselben finalen, deduplizierten
+       Dienst-/Kinopool. So koennen reale Programmfueller persoenlich passen,
+       ohne ausserhalb der sichtbaren 50 Kandidaten einzuschleichen. */
+    const popularPool = mixed ? fillPopularWithCinema(feedPopular, cinemaBackfill, 50) : feedPopular;
+    const rankedRaw = profile?.beschaedigt === true ? [] : rankRecommendations(popularPool, {
+      profile: profile && profile.beschaedigt !== true ? profile : {},
+      library: rankingLibrary, useLibrary, excludedTargetIds: [], includeNeutral: mixed,
+    });
+    const poolById = new Map(popularPool.map((candidate) => [candidate.targetId, candidate]));
     const ranked = Object.freeze(rankedRaw.map((entry) => Object.freeze({
       ...entry,
-      description: directById.get(entry.targetId)?.description || null,
+      description: poolById.get(entry.targetId)?.description || null,
+      program: poolById.get(entry.targetId)?.program,
+      filmAtId: poolById.get(entry.targetId)?.filmAtId,
     })));
-    const rankedIds = new Set(ranked.map((entry) => entry.targetId));
-    const directByRecord = new Map(allDirect.map((candidate) => [candidate.sourceItemId, candidate]));
     const personal = selectDailyRecommendations(ranked, {
       /* Persoenliche Auswahl bleibt im neuen Pfad immer bestes, stabiles
          Profilranking. Tagesmischung gehoert allein zur Popularitaetslane. */
       dailyVariety: mixed ? false : dailyVariety,
       selectionDay,
     });
-    const servicePopularCards = projectTransientDescriptions(webDiscoveryFeedCards({
-      webDiscoveryFeed: checkedFeed.value, catalogCandidates: broadCatalog, factsSnapshot,
-    }), { facts: flixpatrolFacts })
-      .filter((candidate) => serviceAllowedDiscoveryEntry(candidate, selectedServices));
-    const feedPopular = servicePopularCards.filter((candidate) => {
-      const directCandidate = directByRecord.get(candidate.sourceItemId);
-      return directCandidate && !directCandidate.seen
-        && (profile?.beschaedigt === true || rankedIds.has(directCandidate.targetId));
-    });
-    const cinemaCandidates = currentCinemaDiscoveryCandidates({ program, programInfo, now })
-      .filter((candidate) => !sourceItemSeen(candidate, master, catalogCandidates));
-    const cinemaAllowedIds = profile?.beschaedigt === true
-      ? new Set(cinemaCandidates.map((candidate) => candidate.targetId))
-      : new Set(rankRecommendations(cinemaCandidates, {
-        profile: profile || {}, library: localLibraryProjection(master), useLibrary,
-        excludedTargetIds: [], includeNeutral: true,
-      }).map((candidate) => candidate.targetId));
-    const cinemaBackfill = cinemaCandidates.filter((candidate) => cinemaAllowedIds.has(candidate.targetId));
-    const popularPool = fillPopularWithCinema(feedPopular, cinemaBackfill, 50);
     const orderedPopularPool = mixed
       ? selectStablePopularCards(popularPool, {
         webDiscoveryFeed: checkedFeed.value, selectionDay, limit: popularPool.length,
@@ -815,7 +820,7 @@ export function createEntdeckenRecommendations({
       afterExclusions: direct.length,
       profileMatches: ranked.filter((candidate) => candidate.reasons.length > 0).length,
       visible: personal.length,
-      duplicatesRemoved: Math.max(0, servicePopularCards.length - allDirect.length),
+      duplicatesRemoved: 0,
     });
     return Object.freeze({
       personal,

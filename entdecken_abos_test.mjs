@@ -33,6 +33,8 @@ check("ausgewählte Dienste gelten in Für mich und Beliebte Titel; Apple TV ble
 
 check("Dienste-Aliasse normalisieren Plus-, Premium- und Amazon-Channel-Schreibweisen", () => {
   assert.equal(serviceAllowedDiscoveryEntry({ services: ["Apple TV+"] }, ["AppleTV+"]), true);
+  assert.equal(serviceAllowedDiscoveryEntry({ services: ["Apple TV"] }, ["Apple TV+"]), true);
+  assert.equal(serviceAllowedDiscoveryEntry({ services: ["Apple TV"] }, ["Netflix"]), false);
   assert.equal(serviceAllowedDiscoveryEntry({ services: ["Crunchyroll"] }, ["Crunchyroll Premium (Via Prime)"]), true);
   assert.equal(serviceAllowedDiscoveryEntry({ services: ["Paramount+"] }, ["Paramount Plus (Via Amazon Prime)"]), true);
   assert.equal(serviceAllowedDiscoveryEntry({ services: ["Prime Video"] }, ["prime_video"]), true);
@@ -75,6 +77,22 @@ check("weggefilterte Streamingplätze werden bis 50 mit echten künftigen Kinoti
   const extra = filled.popularPool.find((entry) => entry.targetId === "film-at:91002");
   assert.equal(extra.popularity, undefined);
   assert.equal(createEntdeckenPin(extra, 1)?.pinId, "film_at:91002");
+});
+
+const cinemaPersonal = createEntdeckenRecommendations({
+  streamingEntdecken: { region: "AT", titel: [] }, streamingKnown: { region: "AT", titel: [] },
+  master: [],
+  profile: { signale: [{ art: "genre", wert: "Drama", richtung: "zieht_an", staerke: 4 }] },
+  selectedServices: ["Netflix"], webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
+  factsSnapshot: {}, program: { status: { archiviert: false }, filme: [{
+    film_at_id: "92001", t: "Passender Programmfueller", j: 2026,
+    z: ["Do 10.9. 23:30 · Testkino"], g: ["Drama"], b: "Ein sicherer Programmtext.",
+  }] }, programInfo: { abgelaufen: false }, selectionDay: "2026-09-10", now: NOW,
+});
+check("derselbe finale Pool speist Für mich; ein positiver Programmfüller kann vor neutralen Feedtiteln ranken", () => {
+  assert.equal(cinemaPersonal.personal[0]?.targetId, "film-at:92001");
+  assert.ok(cinemaPersonal.personal[0]?.reasons.includes("Profil: Drama"));
+  assert.ok(cinemaPersonal.popularPool.some((entry) => entry.targetId === "film-at:92001"));
 });
 
 check("Kino-Engpass bleibt ehrlich kleiner; abgelaufene und archivierte Programme liefern keine Füller", () => {
@@ -128,6 +146,17 @@ check("gesehen und hart abgelehnt bleiben ausgeschlossen; neutrale Vorschläge b
     guarded.personal.filter((entry) => entry.reasons.length > 0).length);
 });
 
+check("film.at-ID sperrt einen gesehenen Programmfüller auch bei lokal korrigiertem Titel", () => {
+  const seenCinema = createEntdeckenRecommendations({
+    streamingEntdecken: { region: "AT", titel: [] },
+    master: [{ film_at_id: "91002", titel: "Mein korrigierter Titel", jahr: 2026, typ: "film", gesehen: true }],
+    profile: {}, selectedServices: [], webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
+    program, programInfo: { abgelaufen: false }, selectionDay: "2026-09-10", now: NOW,
+  });
+  assert.ok(!seenCinema.personal.some((entry) => entry.targetId === "film-at:91002"));
+  assert.ok(!seenCinema.popularPool.some((entry) => entry.targetId === "film-at:91002"));
+});
+
 const originals = [
   { id: "own", titel: "Dune", jahr: 2021, typ: "film", imdb_id: "tt1160419", beschreibung: "Mein Text" },
   { id: "empty", titel: "Arrival", jahr: 2016, typ: "film", imdb_id: "tt2543164" },
@@ -170,6 +199,27 @@ check("Entdecken-Kandidaten erhalten flüchtige Beschreibungen aus Katalog und g
     "Text aus dem gemeinsamen Fakten-Cache");
 });
 
+const rawRankingMaster = [{
+  id: "rated", titel: "Bibliotheksfilm", jahr: 2020, typ: "film", genre: ["Drama"],
+  bewertung: { wie: 4, was: 4, warum: 4 }, watchmode_id: 77881,
+}];
+const rawRankingSnapshot = JSON.stringify(rawRankingMaster);
+const libraryEvidence = createEntdeckenRecommendations({
+  streamingEntdecken: { region: "AT", titel: [] },
+  streamingKnown: { region: "AT", titel: [
+    { watchmode_id: 77881, titel: "Bibliotheksfilm", jahr: 2020, typ: "movie", dienste: ["Netflix"], beschreibung: "Nur flüchtig ergänzt." },
+    { watchmode_id: 77882, titel: netflixItems[0].title, jahr: netflixItems[0].releaseYear, typ: netflixItems[0].mediaType, dienste: ["Netflix"], genres: ["Drama"] },
+  ] },
+  master: rawRankingMaster,
+  profile: { signale: [] }, selectedServices: ["Netflix"], webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
+  selectionDay: "2026-09-10", now: NOW,
+});
+check("flüchtig beschriebene positiv bewertete Mediathek speist nur das Entdecken-Ranking und lässt Rohdaten unverändert", () => {
+  assert.ok(libraryEvidence.personal.some((entry) => entry.reasons.length > 0));
+  assert.equal(JSON.stringify(rawRankingMaster), rawRankingSnapshot);
+  assert.equal(rawRankingMaster[0].beschreibung, undefined);
+});
+
 check("beschädigtes Profil wird nicht durch neutrale Vorschläge als gesund behandelt", () => {
   const damaged = createEntdeckenRecommendations({
     streamingEntdecken: { region: "AT", titel: [] }, master: [], profile: { beschaedigt: true },
@@ -181,10 +231,13 @@ check("beschädigtes Profil wird nicht durch neutrale Vorschläge als gesund beh
 
 const uiSource = await readFile(new URL("./src/tabs/EntdeckenTab.jsx", import.meta.url), "utf8");
 const appSource = await readFile(new URL("./src/App.jsx", import.meta.url), "utf8");
-check("UI kennzeichnet neutrale Vorschläge und App reicht die flüchtige Mediathek-Projektion durch", () => {
+check("UI kennzeichnet neutrale Vorschläge, beschreibt den gefilterten Pool ehrlich und Mediathek erhält Rohmaster", () => {
   assert.match(uiSource, /Zum Entdecken/);
   assert.match(uiSource, /Noch ohne persönliche Passung/);
-  assert.match(appSource, /master=\{master \? mediathekMaster : LEERER_MEDIATHEK_MASTER\}/);
+  assert.match(uiSource, /Titel deiner ausgewählten Streamingdienste/);
+  assert.match(uiSource, /Nur Titel aus den Charts tragen eine Popularitätsaussage/);
+  assert.match(appSource, /master=\{master \?\? LEERER_MEDIATHEK_MASTER\}/);
+  assert.doesNotMatch(appSource, /mediathekMaster|projectTransientDescriptions/);
 });
 
 console.log(`\n${passed}/${passed} E9-Checks bestanden.`);

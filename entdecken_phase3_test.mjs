@@ -678,7 +678,8 @@ try {
     assert.equal(expandVersioned?.getAttribute("aria-expanded"), "false");
     assert.match(versionedSection.textContent, /Österreichische Quellenliste/u);
     assert.match(versionedSection.textContent, /Beliebte Titel/u);
-    assert.match(versionedSection.textContent, /Datierter Österreich-Snapshot aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney\+ und Apple TV\+/u);
+    assert.match(versionedSection.textContent, /Kinocharts des Österreichischen Filminstituts und aktuelles Kinoprogramm/u);
+    assert.match(versionedSection.textContent, /Nur Titel aus den Charts tragen eine Popularitätsaussage/u);
     assert.match(versionedSection.textContent, /Popularität ist kein persönlicher Passungsgrund/u);
     assert.match(versionedSection.textContent, /Ersatzstand gepflegt 29\.08\.2026/u);
     assert.doesNotMatch(versionedSection.textContent, /Aktuelle österreichische Liste|Diese Woche beliebt|Aktuelle Kino-/u);
@@ -772,7 +773,7 @@ try {
       && link.getAttribute("rel") === "noopener noreferrer"
       && /Referenz bei/.test(link.getAttribute("aria-label") || "")));
     assert.equal(expandPopular?.getAttribute("aria-expanded"), "false");
-    assert.match(mixedPopularSection.textContent, /Österreichische Kinocharts des Österreichischen Filminstituts sowie Netflix-Filme und -Serien/u);
+    assert.match(mixedPopularSection.textContent, /Titel deiner ausgewählten Streamingdienste \(Netflix\) sowie Kinocharts des Österreichischen Filminstituts und aktuelles Kinoprogramm/u);
     assert.match(mixedPopularSection.textContent, /Popularität ist kein persönlicher Passungsgrund/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /Joyn|Prime Video|Disney\+|Apple TV\+/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /Quelle ansehen|Bei Joyn ansehen/);

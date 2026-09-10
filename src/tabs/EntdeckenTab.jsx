@@ -280,13 +280,10 @@ function RecommendationsView({
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
-        <p>{webDiscoveryFeed?.format === FLIXPATROL_DISCOVERY_FEED_FORMAT
-          ? "Täglich belegte Österreich-Titel aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney+ und Apple TV. Popularität ist kein persönlicher Passungsgrund."
-          : webDiscoveryFeed?.format === 6
-          ? "Österreichische Kinocharts des Österreichischen Filminstituts sowie Netflix-Filme und -Serien. Popularität ist kein persönlicher Passungsgrund."
-          : webDiscoveryFeed?.format === VERSIONED_DISCOVERY_FEED_FORMAT
-            ? "Datierter Österreich-Snapshot aus den Kinocharts des Österreichischen Filminstituts sowie Netflix, Prime Video, Disney+ und Apple TV+. Popularität ist kein persönlicher Passungsgrund."
-            : "Belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
+        <p>{[FLIXPATROL_DISCOVERY_FEED_FORMAT, 6, VERSIONED_DISCOVERY_FEED_FORMAT]
+          .includes(webDiscoveryFeed?.format)
+          ? `${selectedServices.length ? `Titel deiner ausgewählten Streamingdienste (${selectedServices.join(", ")}) sowie ` : ""}Kinocharts des Österreichischen Filminstituts und aktuelles Kinoprogramm. Nur Titel aus den Charts tragen eine Popularitätsaussage; Popularität ist kein persönlicher Passungsgrund.`
+          : "Belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
           {weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
       {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-beliebtliste">{visiblePopular.map((entry) => (
