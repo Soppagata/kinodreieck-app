@@ -225,10 +225,12 @@ export function createFlixPatrolClient({
         || (mediaType !== undefined && !Object.hasOwn(FLIXPATROL_TITLE_TYPES, mediaType))) {
       throw new FlixPatrolClientError("FLIXPATROL_REQUEST_INVALID");
     }
+    const expected = { sourceId, mediaType };
     const result = await countedGet({
       url: `${API_ORIGIN}/v2/titles/${encodeURIComponent(sourceId)}`,
       requestKind: "titles",
       contractGroup: "title",
+      diagnosticExpected: expected,
       parse: (body) => {
         const title = normalizeFlixPatrolTitle(body);
         return title && title.sourceId === sourceId

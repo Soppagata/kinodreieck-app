@@ -64,6 +64,10 @@ function runtimeDependencies() {
       chartType: "movies",
       date: new Date(Date.now() - 86_400_000).toISOString().slice(0, 10),
     }),
+    diagnoseTitle: () => client.fetchTitle({
+      sourceId: "ttl_kVkeFHRGi3CIYLPg7FTEJ9XK",
+      mediaType: "film",
+    }),
   };
 }
 

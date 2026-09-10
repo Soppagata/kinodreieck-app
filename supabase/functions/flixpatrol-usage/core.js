@@ -1,12 +1,13 @@
 const SCHEDULE_HEADER = "x-kd-flixpatrol-usage";
 const SCHEDULE_VALUE = "scheduled-daily-v1";
 const TOP10_DIAGNOSTIC_VALUE = "manual-top10-contract-v1";
+const TITLE_DIAGNOSTIC_VALUE = "manual-title-contract-v1";
 const RESPONSE_VALUE_CLASSES = new Set(["missing", "null", "array", "object", "string", "number", "boolean", "other"]);
 const RESPONSE_ENUM_CLASSES = new Set([
   ...[...RESPONSE_VALUE_CLASSES].map((value) => `${value}:other`),
   "known:apiquota", "known:top10s", "known:titles", "known:1", "known:2", "known:3",
   "known:daterange", "known:countries", "known:companies", "known:collection",
-  "known:list", "known:array", "known:resultset",
+  "known:list", "known:array", "known:resultset", "known:genres", "known:keywords",
 ]);
 const TOP10_FIELDS = Object.freeze([
   "movie", "company", "country", "type", "date", "ranking", "rankingLast",
@@ -23,6 +24,25 @@ const NULLABLE_INTEGER_CLASSES = new Set(["null", "integer:valid", "invalid"]);
 const TOP10_CONTRACT_CHECKS = Object.freeze([
   "companyMatchesExpected", "countryMatchesExpected", "chartTypeMatchesExpected",
   "dateRangeMatchesExpected", "titleIdValid", "providerUpdatedAtValid",
+]);
+const TITLE_FIELDS = Object.freeze([
+  "id", "title", "premiere", "country", "company", "genre", "keyword",
+  "description", "updatedAt", "link", "type", "premiereOnline", "length",
+  "imdbId", "tmdbId",
+]);
+const TITLE_DATE_FIELDS = Object.freeze(["premiere", "premiereOnline"]);
+const TITLE_NUMBER_FIELDS = Object.freeze(["length", "imdbId", "tmdbId"]);
+const TITLE_TEXT_FIELDS = Object.freeze(["id", "title", "description", "updatedAt", "link"]);
+const TITLE_PATTERN_FIELDS = Object.freeze([
+  "sourceId", "countryId", "companyId", "genreId", "keywordId", "providerUpdatedAt", "sourceUrl",
+]);
+const TITLE_EXPECTED_FIELDS = Object.freeze(["expectedTitleIdMatches", "expectedMediaTypeMatches"]);
+const DATE_VALUE_CLASSES = new Set(["valid", "empty", "zero", "invalid", "null"]);
+const NUMBER_VALUE_CLASSES = new Set([
+  "valid", "zero", "negative", "fraction", "out-of-range", "null", "missing",
+]);
+const TEXT_VALUE_CLASSES = new Set([
+  "valid", "empty", "leading-or-trailing-whitespace", "too-long", "missing",
 ]);
 
 function exactKeys(value, expected) {
@@ -180,7 +200,7 @@ function normalizeTop10Diagnostic(value) {
     "rootTypeClass", "dataKind", "dataArrayLength", "itemCount", "listLengthClass",
     "listProblemClass", "samplePosition", "sampleItemKind", "sampleItemTypeClass",
     "sampleDataKind", "whitelistFieldTypes", "enumClasses", "relations", "rankingClass",
-    "nullableIntegerClasses", "dateShape", "contractChecks",
+    "nullableIntegerClasses", "dateShape", "contractChecks", "titleValidity",
   ];
   if (!exactKeys(value, keys) || value.schemaVersion !== "flixpatrol-response-shape-v1"
       || value.contractGroup !== "top10-list"
@@ -207,6 +227,7 @@ function normalizeTop10Diagnostic(value) {
       || !NULLABLE_INTEGER_CLASSES.has(value.nullableIntegerClasses.daysTotal)
       || !exactKeys(value.contractChecks, TOP10_CONTRACT_CHECKS)
       || TOP10_CONTRACT_CHECKS.some((field) => !safeBooleanCheck(value.contractChecks[field]))
+      || value.titleValidity !== null
       || !exactKeys(value.dateShape, ["kind", "formClass", "nodeKind", "fieldTypes", "rangeTypeClass"])
       || !safeResponseClass(value.dateShape.kind)
       || !["wrapped-daterange", "direct-date", "invalid"].includes(value.dateShape.formClass)
@@ -261,6 +282,97 @@ function normalizeTop10Diagnostic(value) {
       }),
       rangeTypeClass: value.dateShape.rangeTypeClass,
     }),
+    titleValidity: null,
+  });
+}
+
+function normalizeTitleDiagnostic(value) {
+  const keys = [
+    "schemaVersion", "contractGroup", "failureClass", "rootKind", "rootArrayLength",
+    "rootTypeClass", "dataKind", "dataArrayLength", "itemCount", "listLengthClass",
+    "listProblemClass", "samplePosition", "sampleItemKind", "sampleItemTypeClass",
+    "sampleDataKind", "whitelistFieldTypes", "enumClasses", "relations", "rankingClass",
+    "nullableIntegerClasses", "dateShape", "contractChecks", "titleValidity",
+  ];
+  const validity = value?.titleValidity;
+  if (!exactKeys(value, keys) || value.schemaVersion !== "flixpatrol-response-shape-v1"
+      || value.contractGroup !== "title"
+      || !["json-error", "contract-mismatch"].includes(value.failureClass)
+      || !safeResponseClass(value.rootKind) || !safeNullableCount(value.rootArrayLength)
+      || !safeEnumClass(value.rootTypeClass) || !safeResponseClass(value.dataKind)
+      || !safeNullableCount(value.dataArrayLength) || !nonnegativeInteger(value.itemCount)
+      || value.listLengthClass !== "not-array" || value.listProblemClass !== "not-applicable"
+      || value.samplePosition !== null
+      || !safeResponseClass(value.sampleItemKind) || !safeEnumClass(value.sampleItemTypeClass)
+      || !safeResponseClass(value.sampleDataKind)
+      || !exactKeys(value.whitelistFieldTypes, TITLE_FIELDS)
+      || TITLE_FIELDS.some((field) => !safeResponseClass(value.whitelistFieldTypes[field]))
+      || !exactKeys(value.enumClasses, ["titleType"]) || !safeEnumClass(value.enumClasses.titleType)
+      || !exactKeys(value.relations, ["country", "company", "genre", "keyword"])
+      || value.rankingClass !== "not-applicable" || value.nullableIntegerClasses !== null
+      || value.dateShape !== null || value.contractChecks !== null
+      || !exactKeys(validity, ["dateClasses", "numberClasses", "textClasses", "patternChecks", "expectedChecks"])
+      || !exactKeys(validity.dateClasses, TITLE_DATE_FIELDS)
+      || TITLE_DATE_FIELDS.some((field) => validity.dateClasses[field] !== null
+        && !DATE_VALUE_CLASSES.has(validity.dateClasses[field]))
+      || !exactKeys(validity.numberClasses, TITLE_NUMBER_FIELDS)
+      || TITLE_NUMBER_FIELDS.some((field) => validity.numberClasses[field] !== null
+        && !NUMBER_VALUE_CLASSES.has(validity.numberClasses[field]))
+      || !exactKeys(validity.textClasses, TITLE_TEXT_FIELDS)
+      || TITLE_TEXT_FIELDS.some((field) => validity.textClasses[field] !== null
+        && !TEXT_VALUE_CLASSES.has(validity.textClasses[field]))
+      || !exactKeys(validity.patternChecks, TITLE_PATTERN_FIELDS)
+      || TITLE_PATTERN_FIELDS.some((field) => !safeBooleanCheck(validity.patternChecks[field]))
+      || !exactKeys(validity.expectedChecks, TITLE_EXPECTED_FIELDS)
+      || TITLE_EXPECTED_FIELDS.some((field) => !safeBooleanCheck(validity.expectedChecks[field]))) return null;
+  const relations = {};
+  for (const name of ["country", "company", "genre", "keyword"]) {
+    const relation = normalizeRelationShape(value.relations[name]);
+    if (!relation) return null;
+    relations[name] = relation;
+  }
+  return Object.freeze({
+    schemaVersion: value.schemaVersion,
+    contractGroup: value.contractGroup,
+    failureClass: value.failureClass,
+    rootKind: value.rootKind,
+    rootArrayLength: value.rootArrayLength,
+    rootTypeClass: value.rootTypeClass,
+    dataKind: value.dataKind,
+    dataArrayLength: value.dataArrayLength,
+    itemCount: value.itemCount,
+    listLengthClass: value.listLengthClass,
+    listProblemClass: value.listProblemClass,
+    samplePosition: value.samplePosition,
+    sampleItemKind: value.sampleItemKind,
+    sampleItemTypeClass: value.sampleItemTypeClass,
+    sampleDataKind: value.sampleDataKind,
+    whitelistFieldTypes: Object.freeze(Object.fromEntries(
+      TITLE_FIELDS.map((field) => [field, value.whitelistFieldTypes[field]]),
+    )),
+    enumClasses: Object.freeze({ titleType: value.enumClasses.titleType }),
+    relations: Object.freeze(relations),
+    rankingClass: value.rankingClass,
+    nullableIntegerClasses: null,
+    dateShape: null,
+    contractChecks: null,
+    titleValidity: Object.freeze({
+      dateClasses: Object.freeze(Object.fromEntries(
+        TITLE_DATE_FIELDS.map((field) => [field, validity.dateClasses[field]]),
+      )),
+      numberClasses: Object.freeze(Object.fromEntries(
+        TITLE_NUMBER_FIELDS.map((field) => [field, validity.numberClasses[field]]),
+      )),
+      textClasses: Object.freeze(Object.fromEntries(
+        TITLE_TEXT_FIELDS.map((field) => [field, validity.textClasses[field]]),
+      )),
+      patternChecks: Object.freeze(Object.fromEntries(
+        TITLE_PATTERN_FIELDS.map((field) => [field, validity.patternChecks[field]]),
+      )),
+      expectedChecks: Object.freeze(Object.fromEntries(
+        TITLE_EXPECTED_FIELDS.map((field) => [field, validity.expectedChecks[field]]),
+      )),
+    }),
   });
 }
 
@@ -269,7 +381,8 @@ function normalizeTop10Diagnostic(value) {
  *   serviceKeys?: string[],
  *   readUsage?: () => Promise<unknown>,
  *   refreshUsage?: () => Promise<{usage: unknown, providerRequests: number}>,
- *   diagnoseTop10?: () => Promise<{items: unknown[], providerRequests: number}>
+ *   diagnoseTop10?: () => Promise<{items: unknown[], providerRequests: number}>,
+ *   diagnoseTitle?: () => Promise<{title: unknown, providerRequests: number}>
  * }} dependencies
  */
 export function createFlixPatrolUsageHandler({
@@ -277,6 +390,7 @@ export function createFlixPatrolUsageHandler({
   readUsage,
   refreshUsage,
   diagnoseTop10,
+  diagnoseTitle,
 } = {}) {
   return async function handler(request) {
     if (request.headers.get("origin") !== null || !authorized(request, serviceKeys)) {
@@ -323,6 +437,29 @@ export function createFlixPatrolUsageHandler({
           }, 502);
         }
       }
+      if (request.method === "POST" && request.headers.get(SCHEDULE_HEADER) === TITLE_DIAGNOSTIC_VALUE) {
+        try {
+          const result = await diagnoseTitle?.();
+          if (!result?.title || typeof result.title !== "object" || Array.isArray(result.title)
+              || result?.providerRequests !== 1) {
+            return response({
+              ok: false, status: "failed", code: "FLIXPATROL_TITLE_UNPROVEN",
+              providerRequests: result?.providerRequests === 1 ? 1 : 0,
+            }, 500);
+          }
+          return response({ ok: true, status: "valid-contract", providerRequests: 1 }, 200);
+        } catch (error) {
+          const safe = safeError(error);
+          const diagnostic = safe.code === "FLIXPATROL_INVALID_RESPONSE"
+            ? normalizeTitleDiagnostic(error?.diagnostic) : null;
+          return response({
+            ok: false,
+            status: diagnostic ? "invalid-response" : "failed",
+            ...safe,
+            ...(diagnostic ? { diagnostic } : {}),
+          }, 502);
+        }
+      }
       return response({ ok: false, status: "invalid-request", providerRequests: 0 }, 405);
     }
 
@@ -344,3 +481,4 @@ export function createFlixPatrolUsageHandler({
 export const FLIXPATROL_USAGE_SCHEDULE_HEADER = SCHEDULE_HEADER;
 export const FLIXPATROL_USAGE_SCHEDULE_VALUE = SCHEDULE_VALUE;
 export const FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE = TOP10_DIAGNOSTIC_VALUE;
+export const FLIXPATROL_USAGE_TITLE_DIAGNOSTIC_VALUE = TITLE_DIAGNOSTIC_VALUE;
