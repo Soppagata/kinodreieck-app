@@ -147,6 +147,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-fx-showa .kd-utility { opacity:.22; }
 }
 
+/* Begrenzt auf iPhone-artigen Touchgeraeten die permanente Kompositing-Arbeit.
+   Die komplette Showa-Kulisse bleibt sichtbar, aber statisch. */
+@media (max-width:760px) and (hover:none) and (pointer:coarse) {
+  .kd-fx-showa :is(.korn,.kd-beam,.kd-city-smoke,.kd-kaiju-shape) { animation:none !important; }
+}
+
 @media (prefers-reduced-motion:reduce) {
   .kd-fx *, .kd-toast { animation:none !important; }
   .kd-menu, .kd-mobile-menu, .kd-menuknopf { transition:none !important; }

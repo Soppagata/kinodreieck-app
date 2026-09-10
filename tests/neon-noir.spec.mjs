@@ -824,3 +824,109 @@ test("Showa bewegt die Miniatur ruhig und stoppt bei Verbergen, Reduced Motion u
   await keineDokumentUeberbreite(page);
   expect(extern).toEqual([]);
 });
+
+test.describe("Showa-PWA-Dauerbedienung", () => {
+  test.use({ hasTouch: true, serviceWorkers: "block" });
+  for (const scenario of [
+    { width: 393, height: 852, modus: "showa", reducedMotion: "no-preference" },
+    { width: 430, height: 932, modus: "showa", reducedMotion: "no-preference" },
+    { width: 393, height: 852, modus: "showa", reducedMotion: "reduce" },
+    { width: 393, height: 852, modus: "", reducedMotion: "no-preference" },
+  ]) {
+    test(`PWA-Dauerbedienung ${scenario.width}px, ${scenario.modus || "ohne Showa"}, ${scenario.reducedMotion}`, async ({ page }) => {
+      test.setTimeout(90_000);
+      await page.setViewportSize({ width: scenario.width, height: scenario.height });
+      await page.emulateMedia({ reducedMotion: scenario.reducedMotion });
+      const filme = Array.from({ length: 500 }, (_, index) => ({
+        ...EGG_FILM,
+        id: `showa-owner-${index}`,
+        titel: `Showa Praxisfilm ${String(index).padStart(3, "0")}`,
+        notiz: `Lokale realistische Testbeilage ${index} `.repeat(4),
+      }));
+      const mustwatch = Array.from({ length: 80 }, (_, index) => ({
+        id: `showa-mw-${index}`,
+        titel: filme[index].titel,
+        jahr: 1954 + (index % 70),
+        typ: "film",
+        verknuepfung: { ziel: "master", id: filme[index].id },
+        notiz: `Must-Watch-Testbeilage ${index} `.repeat(4),
+      }));
+      await page.addInitScript(({ modus, mustwatch }) => {
+        localStorage.setItem("kd:einstellungen", JSON.stringify({
+          theme: "dunkel", startTab: "start", schrift: "klein", modus, ...(modus ? { basisTheme: "hell" } : {}),
+        }));
+        localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: mustwatch, gespeichertAm: Date.now() }));
+      }, { modus: scenario.modus, mustwatch });
+      const errors = [];
+      page.on("pageerror", error => errors.push(String(error)));
+      const extern = await oeffneAppMitMockkonto(page, { filme, katalog: {} });
+      const overlay = page.locator('.kd-fx-showa[aria-hidden="true"]');
+      if (scenario.modus) {
+        await expect(overlay).toBeVisible();
+        for (const selector of [".korn", ".kd-beam", ".kd-city-smoke", ".kd-kaiju-shape"]) {
+          await expect(overlay.locator(selector)).toHaveCSS("animation-name", "none");
+        }
+      } else await expect(overlay).toHaveCount(0);
+
+      const openMobileTab = async name => {
+        const started = Date.now();
+        await page.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
+        const menu = page.getByRole("dialog", { name: "Menü", exact: true });
+        await expect(menu).toBeVisible();
+        await menu.getByRole("button", { name, exact: true }).tap();
+        await expect(menu).toHaveCount(0);
+        await expect(page.locator(".kd-mobile-menu-layer")).toHaveCount(0);
+        expect(await page.evaluate(() => ({
+          position: document.body.style.position,
+          locked: document.body.classList.contains("kd-scroll-gesperrt"),
+        }))).toEqual({ position: "", locked: false });
+        expect(Date.now() - started, `${name} reagiert`).toBeLessThan(3000);
+      };
+
+      for (let round = 0; round < 6; round++) {
+        for (const name of ["Kino", "Mediathek", "Streaming", "Entdecken", "Start"]) {
+          await openMobileTab(name);
+          await expect(page.locator(".kd-app")).toBeVisible();
+        }
+        await page.screenshot({ animations: "allow" });
+      }
+
+      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.locator('.kd-app[data-session-mode="account"]')).toBeVisible();
+      if (scenario.modus) await expect(overlay).toBeVisible();
+      else await expect(overlay).toHaveCount(0);
+      await openMobileTab("Mediathek");
+      await openMobileTab("Start");
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem("kd:einstellungen") || "null")?.modus)).toBe(scenario.modus);
+      expect(errors).toEqual([]);
+      expect(extern).toEqual([]);
+
+      if (scenario.width === 393 && scenario.modus === "showa" && scenario.reducedMotion === "no-preference") {
+        const restarted = await page.context().newPage();
+        await restarted.setViewportSize({ width: scenario.width, height: scenario.height });
+        await restarted.emulateMedia({ reducedMotion: scenario.reducedMotion });
+        const restartErrors = [];
+        restarted.on("pageerror", error => restartErrors.push(String(error)));
+        await page.close();
+        const restartExtern = await oeffneAppMitMockkonto(restarted, { filme, katalog: {} });
+        await expect(restarted.locator('.kd-app[data-session-mode="account"]')).toBeVisible();
+        await expect(restarted.locator('.kd-fx-showa[aria-hidden="true"]')).toBeVisible();
+        for (const name of ["Mediathek", "Start"]) {
+          await restarted.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
+          const menu = restarted.getByRole("dialog", { name: "Menü", exact: true });
+          await expect(menu).toBeVisible();
+          await menu.getByRole("button", { name, exact: true }).tap();
+          await expect(menu).toHaveCount(0);
+        }
+        expect(await restarted.evaluate(() => ({
+          modus: JSON.parse(localStorage.getItem("kd:einstellungen") || "null")?.modus,
+          position: document.body.style.position,
+          locked: document.body.classList.contains("kd-scroll-gesperrt"),
+        }))).toEqual({ modus: "showa", position: "", locked: false });
+        expect(restartErrors).toEqual([]);
+        expect(restartExtern).toEqual([]);
+      }
+    });
+  }
+});
