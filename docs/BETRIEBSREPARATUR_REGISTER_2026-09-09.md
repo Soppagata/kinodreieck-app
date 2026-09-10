@@ -27,7 +27,7 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | DONE: realer vollständiger Lauf und gespeicherter Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56, zusammengeführtes Main/Staging bf74f25; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE für Max' heutige technische Abnahme: bf74f25 auf Main/Staging, Gesamtgate und CI grün, Staging deployed/readback; Backend/Frontend-Readback und echter Feed/Monitor grün; geschützte Production-Freigabe getrennt; Master |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | WIEDER OFFEN für die praktische PWA-Nutzbarkeit: Max meldet auf Staging bf74f25 eine Blockade nach 1–2 Interaktionen; Daten-/Monitorbelege bleiben gültig, UI-Reparatur E7 läuft. Production weiterhin 3b82a73; Master |
 | M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für den gelieferten Faktenpfad: fünf Charts, 50 Referenzen und 25 tatsächlich benötigte Titeldetails im gemeinsamen Cache; Backend 97ade56 / Main und Staging bf74f25, KI-Vertragsprüfungen grün, kein neuer bezahlter KI-Livetest; E2, E3, E5, E6 |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
@@ -577,6 +577,44 @@ Der Abschlussbeleg `flixpatrol-final-integration-receipt.json` bestätigt außer
 Die geschützte
 Production-Auslieferung bleibt eine eigene GitHub-Freigabe. Primärcheckout und
 vorhandene Nutzeränderungen bleiben unangetastet.
+
+### E7: gemeldete Blockade der installierten Staging-PWA
+
+Max meldet am 10. September nach dem Merge: zunächst ein bis zwei Schaltflächen
+bedienbar, danach bleibt das Dashboard hängen; nach erneutem Laden erscheint
+die PWA nur teilweise. Showa ist seit dem Vortag aktiv und bisher eine
+unbestätigte Ursache. Die aktuelle Production-PWA bleibt für Max bedienbar.
+Frischer Domainvergleich um 13:37 UTC: Staging `bf74f25`, Production weiterhin
+`3b82a7305c16d5a74ba7a24786e5db068e61db95`. Die geschützte Production-Auslieferung
+des Merge-Stands wartet noch. Die vorherigen kurzen Mock-/Browserprüfungen sind
+kein Beleg für diesen konkreten dauerhaften iPhone-/PWA-Nutzerweg.
+
+E7 arbeitet als SOLO-Baumeister im isolierten Worktree
+`/private/tmp/kd-staging-freeze-e7-20260910`, Branch
+`codex/staging-pwa-freeze-20260910`, Basis `bf74f25`. Der Scope umfasst Reproduktion,
+eine belegte schmale UI/PWA-Korrektur und Regressionen für wiederholte Navigation,
+gespeicherten Showa-Modus, Reload und PWA-Wiederkehr. Master besitzt Integration,
+Staging-Lieferung und dieses Register. Backend, Anbieter, persönliche Daten,
+Zeitpläne und der gültige Datenlauf werden dadurch nicht verändert.
+
+Es gibt im aktuellen Produkt keinen Startparameter zum alleinigen Abschalten
+von Showa. Die bestehende Medienregel `prefers-reduced-motion: reduce` stoppt
+die Showa-Animationen; Max erhält die entsprechende iPhone-Systemoption als
+vorläufige datenfreie Hilfe. Ihr Erfolg auf dem betroffenen Gerät ist noch
+nicht bestätigt. Kein Cache-/Account-Reset und keine persönliche Einstellung
+wird autonom zurückgesetzt. M5 und die praktische Production-Abnahme bleiben
+bis zur Reparatur und passender Verifikation offen; ein späterer natürlicher
+FlixPatrol-Erfolg darf diesen UI-Befund nicht schließen.
+
+Lesender Auslieferungscheck um 13:46 UTC: HTML, Einstieg-JavaScript, CSS und
+Service Worker beider Domains antworten vollständig mit HTTP 200 und passenden
+Inhaltstypen. Stagings Worker- und Build-Meta-Version stimmen auf `bf74f25`
+überein, Production bleibt konsistent auf `3b82a73`. Ein aktueller fehlender
+Einstiegs-Asset oder gemischter Domain-Build ist damit nicht belegt; Max' lokaler
+PWA-/Workerzustand ist damit noch nicht geprüft. Beleg:
+`/private/tmp/kd-ops-audit-20260909/staging-pwa-shell-readback.json`.
+Die bestehende lesende FlixPatrol-Nachprüfung bewahrt E7/M5 ausdrücklich offen,
+auch wenn der nächste natürliche Datenlauf erfolgreich ist.
 
 ## Historischer Ausgang am 9. September
 
