@@ -654,6 +654,40 @@ diese Lücke muss die nächste Reproduktion schließen. Der lokale PWA-/Tokenzus
 auf Max' Gerät ist weiterhin nicht geprüft. Keine Anbieterabrufe oder Writes.
 Beleg: `/private/tmp/kd-ops-audit-20260909/staging-pwa-catalog-readback.json`.
 
+E7-Kausalbefund und Korrektur: `ee70e4a`, integriert als `8fa1dcc`, ersetzt den
+Vollvergleich jedes Streaming-Titels gegen jeden Mediathek-Eintrag durch einen
+einmalig gebauten Kandidatenindex. Danach entscheidet derselbe unveränderte
+strenge Titel-/Jahr-/Typ-/ID-Matcher einschließlich Konflikten und Mehrdeutigkeit.
+Der neue automatische Cage-Vollkatalogpfad machte den bisherigen quadratischen
+Abgleich bereits auf dem Dashboard wirksam. Im Vorher-Test mit 24.690 Titeln und
+500 Mastereinträgen blockierte die synchrone Projektion 19.552 ms; nachher dauerte
+derselbe Fall 33 ms bei exakt gleichen Mengen. Das erklärt eine UI-Blockade nach
+asynchronem Katalogladen und wird nicht durch einen GitHub-Run-Schalter verursacht.
+Die von Max eingereichten Bilder zeigen den passenden Zustand: Dashboard
+„synchron“, Programmstand 10.09.2026 12:45 und „Katalog: 0 Titel“, während die
+Bedienung und Showa stillstehen. Ein Geräte-Readback nach Lieferung bleibt nötig.
+
+Ein zusätzlicher lesender Test mit den echten Owner-/Katalogdaten bestätigt den
+reinen korrigierten Abgleich: 400 Mastereinträge, 226 bekannte und 24.690 weitere
+Katalogeinträge ergeben 57 eindeutige Mediathek-Zuordnungen und 24.859 übrige
+Einträge; Laufzeit 53,6 ms. Eingaben bleiben bytegleich, persönliche Inhalte
+bleiben nur im Arbeitsspeicher; keine Writes, keine Anbieterabrufe und kein
+zusätzlicher FlixPatrol-Faktenabruf. Beleg:
+`/private/tmp/kd-ops-audit-20260909/staging-pwa-real-projection.json`.
+Das Dashboard-Segment zählt `streamingBekannt.titel`, also die zugeordneten
+Streaming-Titel, nicht den gesamten Rohkatalog. 393 der 400 Owner-Einträge besitzen
+ein vierstelliges Bezugsjahr; alle haben einen Film-/Serientyp, keiner eine
+Watchmode-/IMDb-ID. Der Titelkandidatenpfad bleibt deshalb ausdrücklich erhalten.
+
+Delta `8b482b0` entfernt die vorsorgliche mobile Showa-Drosselung vollständig.
+Zehn fokussierte Chromium-/WebKit-Fälle bestehen mit dem großen Katalog,
+animiertem Showa, 393/430 px, wiederholter Navigation, Neustart und erreichbaren
+Einstellungen; Reduced Motion bleibt gesondert wirksam. Das Produkt-CSS entspricht
+wieder exakt dem bisherigen Staging-Stand. Final geliefert wird die Katalog-
+Korrektur mit ihren Regressionen; der lokale Abschlusslauf für diesen materiell
+geänderten Kandidaten und die Staging-Lieferung folgen. M5 bleibt für die physische
+PWA-Abnahme offen.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
