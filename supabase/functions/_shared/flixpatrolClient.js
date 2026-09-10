@@ -90,7 +90,7 @@ export function createFlixPatrolClient({
     } catch { /* Eine Diagnose darf die terminale Ledger-Buchung nie verhindern. */ }
   };
 
-  async function countedGet({ url, requestKind, contractGroup, parse }) {
+  async function countedGet({ url, requestKind, contractGroup, diagnosticExpected = null, parse }) {
     if (!configured) throw new FlixPatrolClientError("FLIXPATROL_NOT_CONFIGURED");
     const operationId = randomUUID();
     if (typeof operationId !== "string"
@@ -163,7 +163,13 @@ export function createFlixPatrolClient({
     try { parsed = parse(body); } catch { /* fail closed below */ }
     if (parsed == null) {
       let diagnostic = null;
-      try { diagnostic = describeFlixPatrolResponseShape(body, { contractGroup, failureClass }); }
+      try {
+        diagnostic = describeFlixPatrolResponseShape(body, {
+          contractGroup,
+          failureClass,
+          expected: diagnosticExpected,
+        });
+      }
       catch { /* Die Providerform bleibt verworfen; keine Rohdaten als Ersatz loggen. */ }
       emitDiagnostic(diagnostic);
       await finish("invalid_response", response.status, null);
@@ -208,6 +214,7 @@ export function createFlixPatrolClient({
       url: `${API_ORIGIN}/v2/top10s?${query}`,
       requestKind: "top10s",
       contractGroup: "top10-list",
+      diagnosticExpected: expected,
       parse: (body) => normalizeFlixPatrolTop10List(body, expected),
     });
     return Object.freeze({ items: result.data, usage: result.usage, providerRequests: 1, operationId: result.operationId });

@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { createFlixPatrolUsageHandler, normalizeFlixPatrolUsage, parseFlixPatrolServiceKeys } from "./supabase/functions/flixpatrol-usage/core.js";
+import { readFileSync } from "node:fs";
+import {
+  createFlixPatrolUsageHandler,
+  FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
+  normalizeFlixPatrolUsage,
+  parseFlixPatrolServiceKeys,
+} from "./supabase/functions/flixpatrol-usage/core.js";
+import {
+  FLIXPATROL_AT_SOURCES,
+  describeFlixPatrolResponseShape,
+} from "./supabase/functions/_shared/flixpatrolData.js";
 
 const modern = "sb_secret_test-only";
 const legacy = "legacy.service.role.test-only";
@@ -19,9 +29,25 @@ await check("liest moderne und Legacy-Admin-Keys", () => {
   assert.deepEqual(parseFlixPatrolServiceKeys("kaputt", legacy), [legacy]);
 });
 
+await check("Runtime bindet den manuellen Weg fest an Prime AT Movies vom vorigen UTC-Tag", () => {
+  const entry = readFileSync("supabase/functions/flixpatrol-usage/index.ts", "utf8");
+  assert.equal(FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE, "manual-top10-contract-v1");
+  assert.equal((entry.match(/client\.fetchTop10\(/g) || []).length, 1);
+  assert.equal((entry.match(/client\.fetchQuota\(/g) || []).length, 1);
+  assert.match(entry, /companyId: FLIXPATROL_AT_SOURCES\.companies\.prime\.id/);
+  assert.match(entry, /countryId: FLIXPATROL_AT_SOURCES\.country\.id/);
+  assert.match(entry, /chartType: "movies"/);
+  assert.match(entry, /new Date\(Date\.now\(\) - 86_400_000\)\.toISOString\(\)\.slice\(0, 10\)/);
+  assert.doesNotMatch(entry, /request\.(?:url|json|body|headers).*fetchTop10/s);
+});
+
 await check("GET liest ausschließlich den gespeicherten Stand", async () => {
   let refreshes = 0;
-  const handler = createFlixPatrolUsageHandler({ serviceKeys: [modern], readUsage: async () => usage, refreshUsage: async () => { refreshes += 1; } });
+  const handler = createFlixPatrolUsageHandler({
+    serviceKeys: [modern], readUsage: async () => usage,
+    refreshUsage: async () => { refreshes += 1; },
+    diagnoseTop10: async () => assert.fail("GET darf keine Diagnose starten"),
+  });
   const response = await handler(new Request("https://example.test/flixpatrol-usage", { headers: headers() }));
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, status: "read", providerRequests: 0, usage });
@@ -33,6 +59,7 @@ await check("POST mit exaktem Serververtrag startet genau einen Quota-Refresh", 
   const handler = createFlixPatrolUsageHandler({
     serviceKeys: [modern, legacy], readUsage: async () => assert.fail(),
     refreshUsage: async () => { refreshes += 1; return { usage, providerRequests: 1 }; },
+    diagnoseTop10: async () => assert.fail("Ticker darf keine Diagnose starten"),
   });
   const response = await handler(new Request("https://example.test/flixpatrol-usage", {
     method: "POST", headers: { ...headers(legacy), "content-length": "0", "x-kd-flixpatrol-usage": "scheduled-daily-v1" },
@@ -42,17 +69,61 @@ await check("POST mit exaktem Serververtrag startet genau einen Quota-Refresh", 
   assert.equal(refreshes, 1);
 });
 
+await check("manueller Diagnoseheader startet genau einen festen Top10-Vertragsabruf", async () => {
+  let quotaCalls = 0;
+  let top10Calls = 0;
+  const handler = createFlixPatrolUsageHandler({
+    serviceKeys: [modern],
+    readUsage: async () => assert.fail("Diagnose darf keinen GET-Lesepfad starten"),
+    refreshUsage: async () => { quotaCalls += 1; },
+    diagnoseTop10: async () => {
+      top10Calls += 1;
+      return { items: [{ internal: "discard" }, {}, {}, {}, {}], providerRequests: 1 };
+    },
+  });
+  const response = await handler(new Request("https://example.test/flixpatrol-usage", {
+    method: "POST",
+    headers: {
+      ...headers(), "content-length": "0",
+      "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
+    },
+  }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ok: true, status: "valid-contract", providerRequests: 1, itemCount: 5,
+  });
+  assert.equal(top10Calls, 1);
+  assert.equal(quotaCalls, 0);
+});
+
 await check("Browser, Body, falscher Header und ungleiche Keys bleiben wirkungslos", async () => {
   let effects = 0;
   const handler = createFlixPatrolUsageHandler({
     serviceKeys: [modern], readUsage: async () => { effects += 1; return usage; },
     refreshUsage: async () => { effects += 1; return { usage, providerRequests: 1 }; },
+    diagnoseTop10: async () => { effects += 1; return { items: [{}], providerRequests: 1 }; },
   });
   const cases = [
     new Request("https://example.test", { headers: { ...headers(), origin: "https://kinodreieck.at" } }),
     new Request("https://example.test", { method: "POST", headers: { ...headers(), "x-kd-flixpatrol-usage": "scheduled-daily-v1" }, body: "{}" }),
     new Request("https://example.test", { method: "POST", headers: headers() }),
     new Request("https://example.test", { headers: { apikey: modern, authorization: "Bearer anderer-key" } }),
+    new Request("https://example.test", { method: "POST", headers: {
+      ...headers(), origin: "https://kinodreieck.at", "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
+    } }),
+    new Request("https://example.test", { method: "POST", headers: {
+      ...headers(), "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
+    }, body: "{}" }),
+    new Request("https://example.test", { headers: {
+      ...headers(), "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
+    } }),
+    new Request("https://example.test", { method: "PUT", headers: {
+      ...headers(), "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
+    } }),
+    new Request("https://example.test", { method: "POST", headers: {
+      apikey: modern, authorization: "Bearer anderer-key",
+      "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
+    } }),
   ];
   for (const request of cases) assert.notEqual((await handler(request)).status, 200);
   assert.equal(effects, 0);
@@ -75,6 +146,92 @@ await check("leerer Proxy-Stream wird akzeptiert, Inhaltsbytes und defekte Strea
   const broken = new ReadableStream({ start(controller) { controller.error(new Error("broken")); } });
   assert.equal((await handler(request(broken))).status, 400);
   assert.equal(refreshes, 1);
+});
+
+await check("Diagnosefehler meldet nur wahre Klasse und geprüfte Struktur", async () => {
+  const secretValues = ["SECRET_TITLE", "SECRET_DESCRIPTION", "ttl_secret", "Bearer secret", "n/a"];
+  const expected = {
+    companyId: FLIXPATROL_AT_SOURCES.companies.prime.id,
+    countryId: FLIXPATROL_AT_SOURCES.country.id,
+    chartType: "movies",
+    date: "2026-09-09",
+  };
+  const relation = (type, id) => ({ type, data: { id } });
+  const row = (id, ranking, overrides = {}) => ({ type: "top10s", data: {
+    movie: relation("titles", id),
+    company: relation("companies", expected.companyId),
+    country: relation("countries", expected.countryId),
+    type: 2,
+    date: { type: "daterange", data: { type: 1, from: expected.date, to: expected.date } },
+    ranking,
+    rankingLast: null,
+    value: 10,
+    valueLast: null,
+    daysTotal: 1,
+    updatedAt: "2026-09-09T10:57:43",
+    ...overrides,
+  } });
+  const diagnostic = describeFlixPatrolResponseShape({
+    type: "top10s",
+    Authorization: secretValues[3],
+    data: [
+      row("ttl_bHyGTvopBHPVtIKhR2CF68WD", 1),
+      row("ttl_K5H0Bes9dtvkV710raDBpXoK", 2, {
+        date: { type: 1, from: expected.date, to: expected.date },
+        rankingLast: null,
+        valueLast: 4,
+        daysTotal: secretValues[4],
+        title: secretValues[0],
+        description: secretValues[1],
+      }),
+    ],
+  }, { contractGroup: "top10-list", failureClass: "contract-mismatch", expected });
+  assert.equal(diagnostic.listProblemClass, "row-invalid");
+  assert.equal(diagnostic.samplePosition, 2);
+  let calls = 0;
+  const handler = createFlixPatrolUsageHandler({
+    serviceKeys: [modern],
+    refreshUsage: async () => assert.fail("Diagnose darf keine Quota lesen"),
+    diagnoseTop10: async () => {
+      calls += 1;
+      throw Object.assign(new Error("SECRET_ERROR_DETAIL"), {
+        code: "FLIXPATROL_INVALID_RESPONSE", providerRequests: 1, diagnostic,
+      });
+    },
+  });
+  const request = () => new Request("https://example.test/flixpatrol-usage", {
+    method: "POST", headers: {
+      ...headers(), "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
+    },
+  });
+  const response = await handler(request());
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.status, "invalid-response");
+  assert.equal(body.code, "FLIXPATROL_INVALID_RESPONSE");
+  assert.equal(body.providerRequests, 1);
+  assert.deepEqual(body.diagnostic, diagnostic);
+  assert.equal(calls, 1);
+  const serialized = JSON.stringify(body);
+  for (const secret of [...secretValues, "SECRET_ERROR_DETAIL"]) {
+    assert.equal(serialized.includes(secret), false);
+  }
+
+  const rejectingHandler = createFlixPatrolUsageHandler({
+    serviceKeys: [modern],
+    diagnoseTop10: async () => {
+      throw Object.assign(new Error("hidden"), {
+        code: "FLIXPATROL_INVALID_RESPONSE", providerRequests: 1,
+        diagnostic: { ...diagnostic, providerPayload: "SECRET_PAYLOAD" },
+      });
+    },
+  });
+  const rejected = await rejectingHandler(request());
+  const rejectedBody = await rejected.json();
+  assert.equal(rejectedBody.status, "failed");
+  assert.equal("diagnostic" in rejectedBody, false);
+  assert.equal(JSON.stringify(rejectedBody).includes("SECRET_PAYLOAD"), false);
 });
 
 await check("Fehlerantwort nennt nur Code und konservative Requestzahl", async () => {

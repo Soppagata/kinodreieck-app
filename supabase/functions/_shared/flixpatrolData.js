@@ -90,31 +90,80 @@ function responseRankingClass(value) {
   return `${responseValueClass(value)}:other`;
 }
 
+function responseNullableIntegerClass(value, min) {
+  if (value === null) return "null";
+  return Number.isSafeInteger(value) && value >= min ? "integer:valid" : "invalid";
+}
+
 function responseDateShape(value) {
   const wrapper = record(value);
-  const data = record(wrapper?.data);
+  const wrapped = wrapper?.type === "daterange";
+  const data = wrapped ? record(wrapper.data) : wrapper;
   return Object.freeze({
     kind: responseValueClass(value),
-    typeClass: responseEnumClass(wrapper?.type, ["daterange"]),
-    dataKind: responseValueClass(wrapper?.data),
+    formClass: wrapped ? "wrapped-daterange" : wrapper ? "direct-date" : "invalid",
+    nodeKind: responseValueClass(data),
     fieldTypes: responseFieldTypes(data, ["type", "from", "to"]),
     rangeTypeClass: responseEnumClass(data?.type, [1]),
   });
 }
 
+function firstDuplicatePosition(values) {
+  const seen = new Set();
+  for (let index = 0; index < values.length; index += 1) {
+    if (seen.has(values[index])) return index + 1;
+    seen.add(values[index]);
+  }
+  return null;
+}
+
+function top10DiagnosticState(value, expected) {
+  const items = listItems(value, "top10s");
+  if (!items) return { items: null, sample: undefined, samplePosition: null, listProblemClass: "outer-shape" };
+  if (items.length === 0) return { items, sample: undefined, samplePosition: null, listProblemClass: "empty" };
+  if (items.length > 10) return { items, sample: undefined, samplePosition: null, listProblemClass: "over-ten" };
+  const normalized = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const one = normalizeFlixPatrolTop10List([items[index]], expected);
+    if (!one) {
+      return { items, sample: items[index], samplePosition: index + 1, listProblemClass: "row-invalid" };
+    }
+    normalized.push(one[0]);
+  }
+  const sourceDuplicate = firstDuplicatePosition(normalized.map((item) => item.sourceId));
+  if (sourceDuplicate !== null) {
+    return {
+      items, sample: items[sourceDuplicate - 1], samplePosition: sourceDuplicate,
+      listProblemClass: "duplicate-source-id",
+    };
+  }
+  const rankingDuplicate = firstDuplicatePosition(normalized.map((item) => item.ranking));
+  if (rankingDuplicate !== null) {
+    return {
+      items, sample: items[rankingDuplicate - 1], samplePosition: rankingDuplicate,
+      listProblemClass: "duplicate-ranking",
+    };
+  }
+  return { items, sample: items[0], samplePosition: 1, listProblemClass: "none" };
+}
+
 /* Rein strukturelle Diagnose fuer verworfene Providerantworten. Feldnamen und
    Enumwerte stammen ausschliesslich aus festen Whitelists; Fremdwerte werden
-   nie kopiert. Der erste Listeneintrag reicht fuer die Vertragsform, waehrend
-   die tatsaechliche Arraylaenge erhalten bleibt. */
+   nie kopiert. Bei TOP-10 wird hoechstens bis zum ersten vom vorhandenen
+   Normalisierer verworfenen Eintrag (maximal zehn) gegangen. */
 export function describeFlixPatrolResponseShape(value, {
   contractGroup,
   failureClass = "contract-mismatch",
+  expected = null,
 } = {}) {
   if (!RESPONSE_CONTRACT_GROUPS.has(contractGroup) || !RESPONSE_FAILURE_CLASSES.has(failureClass)) return null;
   const root = record(value);
   const rootData = root?.data;
-  const list = Array.isArray(value) ? value : Array.isArray(rootData) ? rootData : null;
-  const sample = contractGroup === "quota" || contractGroup === "title" ? value : list?.[0];
+  const genericList = Array.isArray(value) ? value : Array.isArray(rootData) ? rootData : null;
+  const top10State = contractGroup === "top10-list" ? top10DiagnosticState(value, expected) : null;
+  const list = top10State ? top10State.items : genericList;
+  const sample = contractGroup === "quota" || contractGroup === "title"
+    ? value : top10State ? top10State.sample : list?.[0];
   const sampleWrapper = record(sample);
   const sampleData = record(sampleWrapper?.data);
   const fieldsTarget = contractGroup === "quota" || contractGroup === "title" ? rootData : sampleWrapper?.data;
@@ -148,6 +197,8 @@ export function describeFlixPatrolResponseShape(value, {
     dataArrayLength: Array.isArray(rootData) ? rootData.length : null,
     itemCount: list?.length ?? (sample === undefined ? 0 : 1),
     listLengthClass: responseListLengthClass(list),
+    listProblemClass: top10State?.listProblemClass ?? "not-applicable",
+    samplePosition: top10State?.samplePosition ?? null,
     sampleItemKind: responseValueClass(sample),
     sampleItemTypeClass: responseEnumClass(sampleWrapper?.type, ["apiquota", "top10s", "titles"]),
     sampleDataKind: responseValueClass(sampleWrapper?.data),
@@ -156,6 +207,11 @@ export function describeFlixPatrolResponseShape(value, {
     relations: Object.freeze(relations),
     rankingClass: contractGroup === "top10-list"
       ? responseRankingClass(sampleData?.ranking) : "not-applicable",
+    nullableIntegerClasses: contractGroup === "top10-list" ? Object.freeze({
+      rankingLast: responseNullableIntegerClass(sampleData?.rankingLast, 1),
+      valueLast: responseNullableIntegerClass(sampleData?.valueLast, 0),
+      daysTotal: responseNullableIntegerClass(sampleData?.daysTotal, 0),
+    }) : null,
     dateShape: contractGroup === "top10-list" ? responseDateShape(sampleData?.date) : null,
   });
 }

@@ -131,49 +131,98 @@ check("Chartnormalisierung prüft Relationen und liefert Ränge stabil sortiert"
   assert.equal(normalizeFlixPatrolTop10List([partial], expected), null);
 });
 
-check("Antwortdiagnose beschreibt nur feste Strukturklassen und Feldtypen", () => {
+check("Antwortdiagnose wählt den ersten später verworfenen Eintrag ohne Fremdwerte", () => {
+  const expected = {
+    companyId,
+    countryId: FLIXPATROL_AT_SOURCES.country.id,
+    chartType: "movies",
+    date: "2026-09-09",
+  };
   const secrets = [
     "A Highly Sensitive Title", "provider description secret", titleId,
-    companyId, "Basic private-api-key", "attacker-controlled-field-name",
+    companyId, "Basic private-api-key", "attacker-controlled-field-name", "n/a",
   ];
+  const row = (id, ranking, overrides = {}) => ({
+    type: "top10s",
+    data: {
+      movie: relation("titles", id),
+      company: relation("companies", expected.companyId),
+      country: relation("countries", expected.countryId),
+      type: 2,
+      date: { type: "daterange", data: { type: 1, from: expected.date, to: expected.date } },
+      ranking,
+      rankingLast: null,
+      value: 10,
+      valueLast: null,
+      daysTotal: 1,
+      updatedAt: "2026-09-09T10:57:43",
+      ...overrides,
+    },
+  });
   const malicious = {
-    type: "attacker-controlled-enum",
+    type: "top10s",
     Authorization: secrets[4],
     "attacker-controlled-field-name": "must stay absent",
-    data: [{
-      type: "attacker-controlled-item-enum",
-      data: {
-        movie: { type: "attacker-controlled-relation", data: { id: titleId } },
-        company: { type: "companies", data: { id: companyId } },
-        country: null,
-        type: 99,
-        date: { type: "daterange", data: { type: 9, from: "secret-date", to: "secret-date" } },
-        ranking: "1", rankingLast: null, value: 10, valueLast: null,
-        daysTotal: 1, updatedAt: "invalid", title: secrets[0], description: secrets[1],
-      },
-    }],
+    data: [
+      row(titleId, 1),
+      row(secondTitleId, 2, {
+        date: { type: 1, from: expected.date, to: expected.date },
+        rankingLast: null,
+        valueLast: 4,
+        daysTotal: secrets[6],
+        title: secrets[0],
+        description: secrets[1],
+      }),
+    ],
   };
   const shape = describeFlixPatrolResponseShape(malicious, {
-    contractGroup: "top10-list", failureClass: "contract-mismatch",
+    contractGroup: "top10-list", failureClass: "contract-mismatch", expected,
   });
   assert.equal(shape.schemaVersion, FLIXPATROL_RESPONSE_SHAPE_VERSION);
   assert.equal(shape.contractGroup, "top10-list");
   assert.equal(shape.rootKind, "object");
-  assert.equal(shape.rootTypeClass, "string:other");
+  assert.equal(shape.rootTypeClass, "known:top10s");
   assert.equal(shape.dataKind, "array");
-  assert.equal(shape.dataArrayLength, 1);
+  assert.equal(shape.dataArrayLength, 2);
   assert.equal(shape.listLengthClass, "one-to-ten");
+  assert.equal(shape.listProblemClass, "row-invalid");
+  assert.equal(shape.samplePosition, 2);
   assert.equal(shape.whitelistFieldTypes.movie, "object");
-  assert.equal(shape.whitelistFieldTypes.ranking, "string");
-  assert.equal(shape.enumClasses.chartType, "number:other");
-  assert.equal(shape.rankingClass, "string:other");
+  assert.equal(shape.whitelistFieldTypes.ranking, "number");
+  assert.equal(shape.enumClasses.chartType, "known:2");
+  assert.equal(shape.rankingClass, "integer:one-to-ten");
+  assert.deepEqual(shape.nullableIntegerClasses, {
+    rankingLast: "null", valueLast: "integer:valid", daysTotal: "invalid",
+  });
   assert.equal(shape.dateShape.kind, "object");
-  assert.equal(shape.dateShape.typeClass, "known:daterange");
+  assert.equal(shape.dateShape.formClass, "direct-date");
+  assert.equal(shape.dateShape.nodeKind, "object");
   assert.equal(shape.dateShape.fieldTypes.from, "string");
-  assert.equal(shape.dateShape.rangeTypeClass, "number:other");
-  assert.equal(shape.relations.movie.typeClass, "string:other");
+  assert.equal(shape.dateShape.rangeTypeClass, "known:1");
+  assert.equal(shape.relations.movie.typeClass, "known:titles");
   const serialized = JSON.stringify(shape);
   for (const secret of secrets) assert.equal(serialized.includes(secret), false);
+
+  const empty = describeFlixPatrolResponseShape({ type: "top10s", data: [] }, {
+    contractGroup: "top10-list", expected,
+  });
+  assert.equal(empty.listProblemClass, "empty");
+  assert.equal(empty.samplePosition, null);
+  const outer = describeFlixPatrolResponseShape({ type: "unknown", data: [row(titleId, 1)] }, {
+    contractGroup: "top10-list", expected,
+  });
+  assert.equal(outer.listProblemClass, "outer-shape");
+  assert.equal(outer.samplePosition, null);
+  const duplicateSource = describeFlixPatrolResponseShape({
+    type: "top10s", data: [row(titleId, 1), row(titleId, 2)],
+  }, { contractGroup: "top10-list", expected });
+  assert.equal(duplicateSource.listProblemClass, "duplicate-source-id");
+  assert.equal(duplicateSource.samplePosition, 2);
+  const duplicateRanking = describeFlixPatrolResponseShape({
+    type: "top10s", data: [row(titleId, 1), row(secondTitleId, 1)],
+  }, { contractGroup: "top10-list", expected });
+  assert.equal(duplicateRanking.listProblemClass, "duplicate-ranking");
+  assert.equal(duplicateRanking.samplePosition, 2);
   assert.equal(describeFlixPatrolResponseShape({}, {
     contractGroup: "attacker-controlled-field-name", failureClass: "contract-mismatch",
   }), null);
