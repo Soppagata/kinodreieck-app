@@ -27,7 +27,7 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | DONE: realer vollständiger Lauf und gespeicherter Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56, zusammengeführtes Main/Staging bf74f25; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 GELIEFERT UND VON MAX ABGENOMMEN: „Geht wieder alles“ bestätigt die bedienbare Staging-PWA auf 8d2ba10. Neuer Folgeauftrag E8 verbessert die Ladezeit beim Öffnen und bei Rückkehr zur Startseite; Messung und Umsetzung laufen. Der natürliche Entdecken-Erstlauf bleibt separat unter M3 offen. Production weiterhin 3b82a73; Master |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8 auf Staging GELIEFERT: 8f084d3, Gesamtgate und CI 34499018803 grün, Domain/Worker/Assets am 10.09. um 16:05 UTC bestätigt. Schnellere Startdarstellung im Labor belegt; konkrete iPhone-Ladezeit noch nicht abgenommen. Natürlicher Entdecken-Erstlauf separat unter M3 offen; Production weiterhin 3b82a73; Master |
 | M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für den gelieferten Faktenpfad: fünf Charts, 50 Referenzen und 25 tatsächlich benötigte Titeldetails im gemeinsamen Cache; Backend 97ade56 / Main und Staging bf74f25, KI-Vertragsprüfungen grün, kein neuer bezahlter KI-Livetest; E2, E3, E5, E6 |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
@@ -790,8 +790,26 @@ Belege: `/private/tmp/kd-e8-measurement-summary.md`,
 `/private/tmp/kd-e8-measure-before-recorded.jsonl`,
 `/private/tmp/kd-e8-measure-delta-raw.log` und
 `/private/tmp/kd-e8-focused-delta-tests.log`.
-Der Master führt jetzt das einmalige lokale Gesamtgate für den integrierten
-Kandidaten aus; E8 ist noch nicht auf Staging ausgeliefert.
+Das einmalige lokale Gesamtgate für den integrierten Kandidaten
+`8f084d3e0609da0e14553f617c9dc7b7fc58dd91` ist vollständig grün (`npm test`,
+Exit 0, einschließlich Einzeldatei- und Online-Build;
+`/private/tmp/kd-startseite-e8-final-test.log`). Der force-freie Push auf Staging
+und den bestehenden Masterbranch ist erfolgt; beide Zielrefs sind exakt
+zurückgelesen. GitHub-Lauf `34499018803` bestätigt Testsuiten, Chromium,
+WebKit, Required Check und Staging-Deployment erfolgreich. Production wurde
+in diesem Lauf korrekt übersprungen.
+
+Direkter öffentlicher Readback am 10. September um 16:05 UTC: Staging und
+Service Worker liefern exakt `8f084d3`, Entry-JavaScript
+`/assets/index-C7lDS6Ch.js` und CSS sind erfolgreich abrufbar und gehören zum
+gleichen Worker. Das CSS entspricht bytegenau E7; Production liefert
+weiterhin `3b82a73`. Gebaut, getestet, committed, gepusht, CI-grün und
+Staging-deployed/readback sind damit belegt. Die tatsächliche neue Ladezeit
+auf Max' iPhone bleibt von den Laborwerten getrennt und noch nicht abgenommen.
+Keine Anbieterrequests, persönlichen Datenänderungen, Backend- oder
+Scheduleränderungen durch E8. Belege:
+`/private/tmp/kd-ops-audit-20260909/startseite-e8-delivery.json` und
+`/private/tmp/kd-ops-audit-20260909/startseite-e8-public-readback.json`.
 
 ## Historischer Ausgang am 9. September
 
