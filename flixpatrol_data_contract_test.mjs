@@ -86,6 +86,15 @@ check("Ungültige Kalenderdaten und falsch typisierte starke IDs verwerfen die A
 check("Eine teilweise ungültige Titelliste wird nicht als Teilresultat angenommen", () => {
   const broken = titlePayload({ id: secondTitleId, country: relation("companies", countryId) });
   assert.equal(normalizeFlixPatrolTitleList([titlePayload(), broken]), null);
+  assert.equal(normalizeFlixPatrolTitleList({ type: "list", data: [titlePayload(), broken] }), null);
+  assert.deepEqual(normalizeFlixPatrolTitleList({ type: "list", data: [titlePayload()] }), [
+    normalizeFlixPatrolTitle(titlePayload()),
+  ]);
+  assert.equal(normalizeFlixPatrolTitleList({
+    type: "list", data: [titlePayload(), { ...titlePayload(), type: "top10s" }],
+  }), null);
+  assert.equal(normalizeFlixPatrolTitleList({ type: "collection", data: [titlePayload()] }), null);
+  assert.equal(normalizeFlixPatrolTitleList({ type: "list", data: [] }), null);
   assert.deepEqual(normalizeFlixPatrolTitleList([]), []);
 });
 
@@ -126,6 +135,24 @@ check("Chartnormalisierung prüft Relationen und liefert Ränge stabil sortiert"
   } });
   const normalized = normalizeFlixPatrolTop10List([row(secondTitleId, 2), row(titleId, 1)], expected);
   assert.deepEqual(normalized.map((item) => item.ranking), [1, 2]);
+  const chartTitleId = (index) => `ttl_${String(index).padStart(24, "A")}`;
+  const listRows = Array.from({ length: 10 }, (_, index) => row(chartTitleId(index), index + 1));
+  listRows[6].data.date = { type: 1, from: expected.date, to: expected.date };
+  listRows[6].data.rankingLast = 0;
+  const listWrapped = normalizeFlixPatrolTop10List({ type: "list", data: listRows }, expected);
+  assert.equal(listWrapped.length, 10);
+  assert.equal(listWrapped[6].rankingLast, null);
+  const positivePrevious = row(titleId, 1);
+  positivePrevious.data.rankingLast = 3;
+  assert.equal(normalizeFlixPatrolTop10List({ type: "list", data: [positivePrevious] }, expected)[0].rankingLast, 3);
+  assert.equal(normalizeFlixPatrolTop10List({ type: "collection", data: listRows }, expected), null);
+  assert.equal(normalizeFlixPatrolTop10List({ type: "list", data: listRows.map((item) => item.data) }, expected), null);
+  assert.equal(normalizeFlixPatrolTop10List({
+    type: "list", data: [...listRows.slice(0, 9), { ...listRows[9], type: "titles" }],
+  }, expected), null);
+  const negativePrevious = row(titleId, 1);
+  negativePrevious.data.rankingLast = -1;
+  assert.equal(normalizeFlixPatrolTop10List({ type: "list", data: [negativePrevious] }, expected), null);
   const partial = row(titleId, 1);
   partial.data.company = null;
   assert.equal(normalizeFlixPatrolTop10List([partial], expected), null);
@@ -243,6 +270,7 @@ check("Antwortdiagnose wählt den ersten später verworfenen Eintrag ohne Fremdw
   outerRows[6] = row(diagnosticTitleId(6), 7, {
     date: { type: 1, from: expected.date, to: expected.date },
     rankingLast: 0,
+    updatedAt: "invalid",
   });
   const collection = describeFlixPatrolResponseShape({ type: "collection", data: outerRows }, {
     contractGroup: "top10-list", expected,
@@ -261,7 +289,7 @@ check("Antwortdiagnose wählt den ersten später verworfenen Eintrag ohne Fremdw
     chartTypeMatchesExpected: true,
     dateRangeMatchesExpected: true,
     titleIdValid: true,
-    providerUpdatedAtValid: true,
+    providerUpdatedAtValid: false,
   });
   assert.equal(JSON.stringify(collection).includes(diagnosticTitleId(6)), false);
   const boundedRows = Array.from({ length: 11 }, (_, index) => row(diagnosticTitleId(index), index + 1));

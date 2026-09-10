@@ -7,7 +7,7 @@ serverseitig. Jeder Providerrequest läuft durch denselben Nutzungsticker.
 
 ## Belegter API-v2-Vertrag
 
-Vertragsstand: 9. September 2026. Quellen sind die offizielle
+Vertragsstand: 10. September 2026. Quellen sind die offizielle
 [API-v2-Übersicht](https://flixpatrol.com/api2/),
 [TOP-10-Dokumentation](https://flixpatrol.com/api2/endpoint-top10s/),
 [Titles-Dokumentation](https://flixpatrol.com/api2/endpoint-titles/),
@@ -24,6 +24,16 @@ Vertragsstand: 9. September 2026. Quellen sind die offizielle
 - TOP-10-type=2 bedeutet Movies, type=3 TVShows. Diese Werte sind nicht mit
   dem Titles-/Premieres-Typ gleichzusetzen. Bei Titles und Premieres bedeutet
   type=1 Movie und type=2 TvShow.
+- Der am 10.09.2026 durch den begrenzten serverseitigen Vertragsabruf belegte
+  TOP-10-Body verwendet die Hülle `{ type: "list", data: [...] }`; die zehn
+  enthaltenen Records tragen jeweils `type: "top10s"`. Die gemeinsame
+  Listenroutine akzeptiert diese Hülle nur mit mindestens einem Record und
+  wenn jeder enthaltene Record den für den jeweiligen Parser erwarteten Typ
+  trägt. Fremde Hüllen und gemischte Recordtypen bleiben ungültig.
+- Im selben konkreten TOP-10-Body war `rankingLast: 0` bei einem Neueinstieg
+  vorhanden. Der Chartnormalisierer bildet genau diesen Wert auf `null` ab.
+  Positive Ganzzahlen bleiben erhalten; negative, nicht ganzzahlige, fehlende
+  und anders typisierte Werte bleiben ungültig.
 - GET /v2/titles/:id löst eine bekannte FlixPatrol-Titel-ID auf. IMDb- und
   TMDB-IDs sind nullable. FlixPatrol dokumentiert imdbId und tmdbId numerisch;
   der Client bewahrt den IMDb-Zahlenwert und bildet daraus zusätzlich die
@@ -130,13 +140,13 @@ eine leere Liste von einer unbekannten Wrapperform oder einem falsch typisierten
 Rang unterscheidbar, ohne einen Providerwert zu übernehmen.
 
 Die festen äußeren Typwörter `collection`, `list`, `array` und `resultset`
-werden als bekannte Diagnoseklassen ausgewiesen. Sie werden dadurch nicht als
-akzeptierte TOP-10-Listenform behandelt. Wenn bei einer solchen weiterhin als
-`outer-shape` verworfenen Antwort `root.data` ein Array ist, untersucht die
-Diagnose höchstens die ersten zehn Zeilen und zeigt die Position der ersten vom
-bestehenden Normalisierer verworfenen Zeile; sind alle untersuchten Zeilen
-einzeln gültig, zeigt sie die erste. Das ändert `listItems()` und den
-akzeptierenden Parser nicht.
+werden als bekannte Diagnoseklassen ausgewiesen. Nur die inzwischen konkret
+belegte `list`-Hülle mit durchgehend passend typisierten Records gehört zum
+akzeptierten Listenvertrag. Bei einer weiterhin als `outer-shape` verworfenen
+Antwort mit `root.data`-Array untersucht die Diagnose höchstens die ersten zehn
+Zeilen und zeigt die Position der ersten vom bestehenden Normalisierer
+verworfenen Zeile; sind alle untersuchten Zeilen einzeln gültig, zeigt sie die
+erste.
 
 Für eine Liste mit höchstens zehn Zeilen prüft die Diagnose jede Zeile einzeln
 mit demselben unveränderten Normalisierer und dem erwarteten Company-, Country-,
