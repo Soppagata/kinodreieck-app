@@ -789,12 +789,14 @@ await wochenFixture.cleanup();
    der Statuswrite aussteht, und ebenso nach dessen bestätigtem Fehlschlag. */
 let statusResolver = null;
 let statusWrites = 0;
+const streamingFixtureStand = new Date().toISOString();
 const streamingFixture = await mounte(StreamingTab, {
-  bekannt: { stand: new Date().toISOString(), titel: [] },
-  entdecken: { stand: new Date().toISOString(), titel: [{
-    watchmode_id: "wm_1", titel: "Testfilm", jahr: 2024, typ: "movie", genres: [], dienste: [],
+  bekannt: { stand: streamingFixtureStand, katalog_stand: streamingFixtureStand, titel: [] },
+  entdecken: { stand: streamingFixtureStand, katalog_stand: streamingFixtureStand,
+    katalogMengen: { umfang: "voll" }, titel: [{
+    watchmode_id: "wm_1", titel: "Testfilm", jahr: 2024, typ: "movie", genres: [], dienste: ["Testdienst"],
   }] },
-  auswahl: [], merkliste: [], toggleMerk() {}, addFilm: async () => "master_1", master: null,
+  auswahl: ["Testdienst"], merkliste: [], toggleMerk() {}, addFilm: async () => "master_1", master: null,
   mustwatchIds: new Set(),
   entdeckenStatus: {},
   schreibeEntdeckenStatus: () => {
