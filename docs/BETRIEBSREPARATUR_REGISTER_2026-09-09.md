@@ -626,10 +626,13 @@ mit reduzierter Bewegung 4,7 Sekunden; diese Einzelmessung ist keine allgemeine
 Leistungsgarantie. Die fokussierten Fälle mit gespeicherten Owner-Anzeigeoptionen,
 realistischer lokaler Datengröße, wiederholten Wechseln, Reload und neuem
 Browserfenster im selben Speicherkontext bestanden nach der Entlastung.
-Das ist keine physische PWA-/iPhone-Abnahme. Ein Test-Delta ergänzt vor der
-Staging-Lieferung noch die ausdrückliche Kontrolle jedes tatsächlich gewählten
-Bereichs sowie den versteckt/sichtbar-Zustandswechsel. Der vollständige lokale
-Abschlusslauf und Staging-Readback folgen auf dem integrierten Kandidaten.
+Das ist keine physische PWA-/iPhone-Abnahme. Test-Delta `29b5392` ergänzt die
+ausdrückliche Kontrolle jedes tatsächlich gewählten Bereichs und einen
+simulierten versteckt/sichtbar-Zustandswechsel. Nach dem Neustart werden außerdem
+die erreichbaren Einstellungen und das Verlassen von Showa über die bestehende
+Auswahl belegt. Beide betroffenen Chromium-/WebKit-Fälle bestehen. Der
+vollständige lokale Abschlusslauf und Staging-Readback folgen auf dem integrierten
+Kandidaten. M5 bleibt bis Max' Rückmeldung zur betroffenen PWA offen.
 
 ## Historischer Ausgang am 9. September
 
