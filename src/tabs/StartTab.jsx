@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { T } from "../lib/tokens.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { formatiereTermin } from "../lib/programm.js";
@@ -199,13 +199,34 @@ function StartDashboard({
     .sort((a, b) => pinSortWert({ z: a.zAnzeige }) - pinSortWert({ z: b.zAnzeige }))
     .slice(0, 5), [aktiveKinoPins]);
 
-  const serienKatalog = useMemo(() => [
+  /* Der Vollkatalog kann rund 25.000 Titel enthalten. Für eine leere
+     Startseite daraus bei jedem Rückwechsel zehntausende neue Objekte zu
+     erzeugen, blockierte mobiles WebKit, obwohl weder Pin noch Serien-Reminder
+     einen Katalogabgleich brauchte. Erst bestehende Streaming-Verknüpfungen,
+     ein Titel-Pin oder der geöffnete Serien-Editor machen diese Projektion
+     erforderlich. */
+  const [wochenKatalogAngefordert, setWochenKatalogAngefordert] = useState(false);
+  const wochenplanBrauchtStreaming = useMemo(() => (wochenplan?.eintraege || []).some((eintrag) => (
+    eintrag?.ref?.watchmode_id != null || eintrag?.art === "folge" || eintrag?.art === "staffel"
+  )), [wochenplan]);
+  const ladeWochenKatalog = useCallback((vollKatalog = false) => {
+    if (vollKatalog) setWochenKatalogAngefordert(true);
+    return onStreamingKatalogLaden?.(vollKatalog);
+  }, [onStreamingKatalogLaden]);
+  const brauchtSerienKatalog = entdeckenPins.length > 0
+    || wochenplanBrauchtStreaming || wochenKatalogAngefordert;
+  const serienKatalog = useMemo(() => brauchtSerienKatalog ? [
     ...((((streamingEntdecken || {}).titel) || []).map((titel) => ({ ...titel, wochen_bereich: "entdecken" }))),
     ...((((streamingBekannt || {}).titel) || []).map((titel) => ({ ...titel, wochen_bereich: "programm" }))),
-  ], [streamingBekannt, streamingEntdecken]);
-  const empfehlungsKatalog = useMemo(() => localRecommendationCandidates(streamingEntdecken, {
-    streamingKnown: streamingBekannt, selectedServices: [], entdeckenStatus, includeSeenForMatching: true,
-  }), [entdeckenStatus, streamingBekannt, streamingEntdecken]);
+  ] : [], [brauchtSerienKatalog, streamingBekannt, streamingEntdecken]);
+  /* Ohne sichtbare Entdecken-Pins gibt es auf dem Dashboard nichts gegen den
+     Vollkatalog aufzulösen. Gerade nach einem Streaming-Besuch wären das sonst
+     zehntausende Objektprojektionen bei jeder Rückkehr zur Startseite. */
+  const empfehlungsKatalog = useMemo(() => entdeckenPins.length && webDiscoveryFeed
+    ? localRecommendationCandidates(streamingEntdecken, {
+      streamingKnown: streamingBekannt, selectedServices: [], entdeckenStatus, includeSeenForMatching: true,
+    })
+    : [], [entdeckenPins.length, entdeckenStatus, streamingBekannt, streamingEntdecken, webDiscoveryFeed]);
   const aktuelleEmpfehlungen = useMemo(() => webDiscoveryFeedCards({
     webDiscoveryFeed, catalogCandidates: empfehlungsKatalog,
   }), [empfehlungsKatalog, webDiscoveryFeed]);
@@ -296,7 +317,7 @@ function StartDashboard({
           kinoPins={aktiveKinoPins} kinoVorschlaege={kinoVorschlaege} kinoKatalog={kinoKatalog}
           onKinoPinLoeschen={(pin) => toggleKinoPin?.(pin.t, pin.j, pin.z)}
           katalog={serienKatalog} master={master}
-          onStreamingKatalogLaden={onStreamingKatalogLaden}
+          onStreamingKatalogLaden={ladeWochenKatalog}
           onSpringeZuFilm={zeigeEintrag} onSpringeZuStreaming={onSpringeZuStreaming}
           onKinoVorschlagAnsehen={(eintrag) => {
             if (onSpringeZuKino) onSpringeZuKino(eintrag);

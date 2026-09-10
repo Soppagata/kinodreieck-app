@@ -243,14 +243,25 @@ export function createCatalogService({ auth = authService, driver = authDriver, 
       const erwarteteKontoId = fordereGebundeneFreigabe(auswahl.accountId, "area.load.before");
       const r = await ladeKatalogAsset(name, { ...options, erwarteteKontoId });
       fordereGebundeneFreigabe(auswahl.accountId, "area.load.after");
+      let factsReady = null;
       if (bereich === "streaming" || bereich === "streamingBekannt" || bereich === "streamingEntdecken") {
-        try { await facts.load(); } catch { facts.clear?.(); }
-      }
-      fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-after");
+        const ladeOptionaleFakten = async () => {
+          let geladeneFakten = [];
+          try { geladeneFakten = await facts.load(); } catch { facts.clear?.(); }
+          fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-after");
+          return geladeneFakten;
+        };
+        if (options.deferOptionalFacts === true) factsReady = ladeOptionaleFakten();
+        else await ladeOptionaleFakten();
+      } else fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-after");
       /* Sprang der Cache ein, ist der Direkt-Read trotzdem gescheitert. Sein
          Grund reist als stabiler `code` mit — sonst hörte ein Tester mit
          abgelehntem Schlüssel nur „Datenbank nicht erreichbar". */
-      return { ...r, bereich, variante: auswahl.name, code: r.grund ? katalogFehler({ status: r.status, reason: r.grund }, ctx).code : null };
+      return {
+        ...r, bereich, variante: auswahl.name,
+        code: r.grund ? katalogFehler({ status: r.status, reason: r.grund }, ctx).code : null,
+        ...(factsReady ? { factsReady } : {}),
+      };
     } catch (error) {
       throw katalogFehler(error, ctx);
     }

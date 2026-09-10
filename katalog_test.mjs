@@ -533,6 +533,27 @@ check("Entdecken-Read lädt erst auf eigenen Aufruf die große getrennte Zeile",
   entdeckenBereich.asset === "streaming_entdecken"
   && entdeckenBereich.payload.titel[0]?.titel === "Entdecken live"
   && fetchCalls.length === 2);
+let faktenFreigeben;
+let faktenGestartet = 0;
+const faktenWarten = new Promise((resolve) => { faktenFreigeben = resolve; });
+const verzogerterFaktenService = createCatalogService({
+  auth: katalogAuth,
+  driver: authDriver,
+  factsService: {
+    peek: () => [], clear: () => {},
+    async load() { faktenGestartet += 1; await faktenWarten; return [{ titel: "Optional" }]; },
+  },
+});
+const verzogerterRead = await Promise.race([
+  verzogerterFaktenService.loadArea("streamingBekannt", { deferOptionalFacts: true }),
+  new Promise((resolve) => setTimeout(() => resolve(null), 100)),
+]);
+check("Optionale Fakten halten den explizit entkoppelten Streaming-Read nicht auf",
+  verzogerterRead?.payload?.titel?.[0]?.titel === "Bekannt live"
+  && faktenGestartet === 1 && verzogerterRead.factsReady instanceof Promise);
+faktenFreigeben();
+check("Der entkoppelte Faktenlauf bleibt abwartbar und liefert denselben Inhalt",
+  (await verzogerterRead.factsReady)?.[0]?.titel === "Optional");
 const streamingRoh = { bekannt: bekanntBereich.payload, entdecken: entdeckenBereich.payload };
 const vergleichsMaster = [{ watchmode_id: 10, titel: "Bereits bekannt" }];
 check("Streaming-Normalisierung bleibt struktur- und reihenfolgeidentisch",

@@ -239,6 +239,12 @@ check("Eine tote explizite Verknüpfung fällt nicht still auf Titelmatching zur
     entries: [{ id: "mw_signal", titel: "Signal", jahr: 2024, verknuepfung: { ziel: "streaming", id: 999 } }],
     candidates: ambiguousCandidates, selectedServices: ["MUBI"], day: "2026-09-05",
   }).length === 0);
+check("Explizite Streaming-Verknüpfung bleibt bei zusätzlicher Mediathek-ID an Watchmode gebunden",
+  M.projectDailyMustwatch({
+    entries: [{ id: "mw_stream_ref", titel: "Gebunden", verknuepfung: { ziel: "streaming", id: 77 } }],
+    candidates: { master: [], programm: [], streaming: [{ id: "master-77", watchmode_id: 77, titel: "Gebunden", dienste: ["MUBI"] }] },
+    selectedServices: ["MUBI"], day: "2026-09-05",
+  }).length === 1);
 
 const twelveEntries = Array.from({ length: 12 }, (_, index) => ({ id: `mw_${index}`, titel: `Titel ${index}` }));
 const twelveCandidates = { master: [], programm: [], streaming: twelveEntries.map((entry, index) => ({
@@ -259,6 +265,24 @@ check("Tagesauswahl ist über Eingabereihenfolge und Rerender stabil",
   stableOne.map((item) => item.entry.id).join(",") === stableTwo.map((item) => item.entry.id).join(","));
 check("Doppelte sichtbare Titel erscheinen höchstens einmal",
   M.projectDailyMustwatch({ entries: [{ id: "a", titel: "Doppelt", im_besitz: true }, { id: "b", titel: "Doppelt", im_besitz: true }], day: "2026-09-05" }).length === 1);
+const grosserStreamingKatalog = Array.from({ length: 24690 }, (_, index) => ({
+  watchmode_id: 900000 + index, titel: `Start-Katalog ${index}`, jahr: 1900 + (index % 126),
+  typ: index % 3 ? "movie" : "tv_series", dienste: ["MUBI"],
+}));
+const grosseStartliste = Array.from({ length: 80 }, (_, index) => ({
+  id: `mw_start_${index}`, titel: grosserStreamingKatalog[index].titel,
+  jahr: grosserStreamingKatalog[index].jahr,
+  typ: grosserStreamingKatalog[index].typ === "movie" ? "film" : "serie",
+}));
+const grosseStartprojektionBeginn = performance.now();
+const grosseStartprojektion = M.projectDailyMustwatch({
+  entries: grosseStartliste,
+  candidates: { master: [], programm: [], streaming: grosserStreamingKatalog },
+  selectedServices: ["MUBI"], day: "2026-09-05",
+});
+const grosseStartprojektionDauer = performance.now() - grosseStartprojektionBeginn;
+check("Startprojektion indexiert 24.690 Titel einmal statt pro Must-Watch-Zeile",
+  grosseStartprojektionDauer < 1500 && grosseStartprojektion.length === 5);
 check("Wiener Kalendertag folgt Europe/Vienna statt UTC",
   M.viennaCalendarDay(new Date("2026-09-04T22:30:00Z")) === "2026-09-05");
 

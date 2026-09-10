@@ -144,23 +144,11 @@ const candidateAliases = (entry) => [
   ...(Array.isArray(entry?.alternate_titles) ? entry.alternate_titles : []),
 ].map((value) => norm(String(value ?? ""))).filter(Boolean);
 
-function compatible(entry, candidate) {
-  const wantedYear = mustwatchJahr(entry?.jahr);
-  const actualYear = candidateYear(candidate);
-  if (wantedYear != null && actualYear != null && wantedYear !== actualYear) return false;
-  const wantedType = mustwatchTyp(entry?.typ);
-  const actualType = candidateType(candidate);
-  return !wantedType || !actualType || wantedType === actualType;
-}
-
 function candidateId(target, candidate) {
-  const value = candidate?.id ?? candidate?.watchmode_id ?? candidate?.film_at_id ?? candidate?.projection_id;
+  const value = target === "streaming"
+    ? candidate?.watchmode_id ?? candidate?.id
+    : candidate?.id ?? candidate?.film_at_id ?? candidate?.projection_id;
   return value == null ? null : `${target}:${String(value)}`;
-}
-
-function candidateIdentity(candidate) {
-  const aliases = candidateAliases(candidate);
-  return `${aliases[0] || ""}|${candidateYear(candidate) ?? ""}|${candidateType(candidate) || ""}`;
 }
 
 function allCandidates(candidates) {
@@ -170,29 +158,64 @@ function allCandidates(candidates) {
     .filter(({ ref }) => ref));
 }
 
-function matchedCandidates(entry, candidates) {
-  const all = allCandidates(candidates);
+/* Die Startseite bewertet viele Must-Watch-Zeilen gegen denselben Katalog.
+   Titel, Typ und Referenzen einmal vorzubereiten bewahrt die strengen
+   Identitätsregeln, vermeidet aber den bisherigen Vollkatalogscan pro Zeile. */
+function prepareCandidateMatcher(candidates) {
+  const all = allCandidates(candidates).map((item, index) => {
+    const aliases = candidateAliases(item.candidate);
+    const year = candidateYear(item.candidate);
+    const type = candidateType(item.candidate);
+    return { ...item, index, aliases, year, type,
+      identity: `${aliases[0] || ""}|${year ?? ""}|${type || ""}` };
+  });
+  const byRef = new Map();
+  const byAlias = new Map();
+  for (const item of all) {
+    if (!byRef.has(item.ref)) byRef.set(item.ref, item);
+    for (const alias of new Set(item.aliases)) {
+      if (!byAlias.has(alias)) byAlias.set(alias, []);
+      byAlias.get(alias).push(item);
+    }
+  }
+  return { byRef, byAlias };
+}
+
+function matchedCandidates(entry, candidates, vorbereitet = null) {
+  const { byRef, byAlias } = vorbereitet || prepareCandidateMatcher(candidates);
+  const kompatibel = (item) => {
+    const wantedYear = mustwatchJahr(entry?.jahr);
+    if (wantedYear != null && item.year != null && wantedYear !== item.year) return false;
+    const wantedType = mustwatchTyp(entry?.typ);
+    return !wantedType || !item.type || wantedType === item.type;
+  };
+  const passendeAliase = (aliases) => {
+    const gefunden = new Map();
+    for (const alias of aliases) {
+      for (const item of byAlias.get(alias) || []) gefunden.set(item.index, item);
+    }
+    return [...gefunden.values()].sort((left, right) => left.index - right.index);
+  };
   const explicit = entry?.verknuepfung;
   let anchor = null;
   if (explicit?.ziel && explicit.id != null) {
     const ref = `${explicit.ziel}:${String(explicit.id)}`;
-    anchor = all.find((item) => item.ref === ref) || null;
+    anchor = byRef.get(ref) || null;
     /* Eine gesetzte Verknüpfung ist eine bewusste Identitätsentscheidung. Ist
        ihr Ziel im aktuellen Bestand nicht geladen, wird nicht ersatzweise per
        Titel auf einen anderen Datensatz gesprungen. */
     if (!anchor) return [];
   }
   if (anchor) {
-    const anchorAliases = new Set(candidateAliases(anchor.candidate));
-    return all.filter(({ candidate }) => compatible(entry, candidate)
-      && candidateAliases(candidate).some((alias) => anchorAliases.has(alias)));
+    return passendeAliase(anchor.aliases).filter(kompatibel)
+      .map(({ target, candidate, ref }) => ({ target, candidate, ref }));
   }
   const wantedAliases = new Set(candidateAliases(entry));
   if (!wantedAliases.size) return [];
-  const exact = all.filter(({ candidate }) => compatible(entry, candidate)
-    && candidateAliases(candidate).some((alias) => wantedAliases.has(alias)));
-  const identities = new Set(exact.map(({ candidate }) => candidateIdentity(candidate)));
-  return identities.size === 1 ? exact : [];
+  const exact = passendeAliase(wantedAliases).filter(kompatibel);
+  const identities = new Set(exact.map(({ identity }) => identity));
+  return identities.size === 1
+    ? exact.map(({ target, candidate, ref }) => ({ target, candidate, ref })) : [];
 }
 
 function stableHash(value) {
@@ -231,11 +254,12 @@ export function projectDailyMustwatch({
   if (!day) return [];
   const services = new Set((Array.isArray(selectedServices) ? selectedServices : [])
     .map((value) => norm(String(value || ""))).filter(Boolean));
+  const kandidatensuche = prepareCandidateMatcher(candidates);
   const eligible = [];
   for (const entry of Array.isArray(entries) ? entries : []) {
     const titleKey = norm(String(entry?.titel ?? ""));
     if (!titleKey) continue;
-    const matches = matchedCandidates(entry, candidates);
+    const matches = matchedCandidates(entry, candidates, kandidatensuche);
     const masterMatches = matches.filter(({ target }) => target === "master");
     const programMatches = matches.filter(({ target }) => target === "programm");
     const streamingMatches = matches.filter(({ target }) => target === "streaming");

@@ -992,17 +992,20 @@ export default function App() {
      Kinoprogramm (stabile ID oder rein lokaler Projektionsschlüssel) sowie
      beide aktuellen Streaming-Snapshots. */
   const mwKandidaten = useMemo(() => ({
-    master: (master || []).map((f) => ({ ...f, id: f.id, titel: f.titel, jahr: f.jahr })),
+    /* Master und Streaming tragen die benötigten Felder bereits. Ihre Objekte
+       für jede Startprojektion noch einmal zu kopieren kostete beim
+       25.000er-Katalog spürbar Hauptthreadzeit, ohne Daten zu verändern. */
+    master: master || [],
     programm: (programmInfo?.abgelaufen ? [] : ((programm && programm.filme) || [])).map((pf) => ({
       ...pf,
       id: pf.film_at_id ?? pf.id ?? null,
       projection_id: pf.film_at_id ?? pf.id ?? `auto:${slugId(pf.t, pf.j)}`,
       titel: pf.t, originaltitel: pf.ot, jahr: pf.j,
     })),
-    streaming: (streamingInfo?.abgelaufen ? [] : [
+    streaming: streamingInfo?.abgelaufen ? [] : [
       ...((streamingBekannt && streamingBekannt.titel) || []),
       ...((streamingEntdecken && streamingEntdecken.titel) || []),
-    ]).map((t) => ({ ...t, id: t.watchmode_id, titel: t.titel, jahr: t.jahr })),
+    ],
   }), [master, programm, programmInfo?.abgelaufen, streamingBekannt, streamingEntdecken, streamingInfo?.abgelaufen]);
 
   /* ---- Navigation zwischen Blog und Mediathek ---- */
@@ -1270,9 +1273,14 @@ export default function App() {
        Betriebsart gehört, darf die Anzeige nicht mehr anfassen. */
     const gen = betriebsartGen.current;
     const veraltet = () => betriebsartGen.current !== gen;
+    let optionaleFakten = null;
     const holeEinmal = async (ref, bereich, timeout) => {
       if (ref.current) return ref.current;
-      const lauf = catalogService.loadArea(bereich, { timeout });
+      /* FlixPatrol-Fakten verfeinern einzelne Mediathek-Zuordnungen, sind aber
+         keine Voraussetzung für Programm, Streamingkarten oder Dashboard.
+         Ihr Read läuft mit der unveränderten Service-Freigabe im Hintergrund;
+         die eigentliche Katalogantwort darf sofort sichtbar werden. */
+      const lauf = catalogService.loadArea(bereich, { timeout, deferOptionalFacts: true });
       ref.current = lauf;
       try { return await lauf; }
       finally { if (ref.current === lauf) ref.current = null; }
@@ -1315,6 +1323,7 @@ export default function App() {
     if (!streamingGeladen.current || !roh.bekannt) {
       try {
         const r = await holeEinmal(streamingBekanntLaufRef, "streamingBekannt", 15000);
+        optionaleFakten = r?.factsReady || optionaleFakten;
         if (veraltet() || !snapshotFreigabeRef.current) return;
         roh = { ...roh, bekannt: streamingPayloadMitMetadaten(r) };
         streamingRohRef.current = roh;
@@ -1355,6 +1364,7 @@ export default function App() {
     if (vollKatalog && (!entdeckenGeladen.current || !roh.entdecken)) {
       try {
         const r = await holeEinmal(streamingEntdeckenLaufRef, "streamingEntdecken", 20000);
+        optionaleFakten = r?.factsReady || optionaleFakten;
         if (veraltet() || !snapshotFreigabeRef.current) return;
         const vollerEntdeckenStand = streamingPayloadMitMetadaten(r);
         roh = { ...roh, entdecken: vollerEntdeckenStand, entdeckenUmfang: "voll" };
@@ -1385,6 +1395,21 @@ export default function App() {
     const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
     setStreamingBekannt(a.bekannt);
     setStreamingEntdecken(a.entdecken);
+    if (optionaleFakten) {
+      void Promise.resolve(optionaleFakten).then((fakten) => {
+        if (!Array.isArray(fakten) || !fakten.length || veraltet() || !snapshotFreigabeRef.current) return;
+        const aktuell = streamingRohRef.current;
+        if (!aktuell?.bekannt) return;
+        const mitFakten = catalogService.buildStreamingViews({
+          bekannt: aktuell.bekannt,
+          entdecken: aktuell.entdecken || (EINZELDATEI_BUILD ? streamingEntdeckenSnapshot : { titel: [] }),
+          entdeckenUmfang: aktuell.entdeckenUmfang || "begrenzt",
+        }, masterRef.current || []);
+        if (veraltet() || !snapshotFreigabeRef.current) return;
+        setStreamingBekannt(mitFakten.bekannt);
+        setStreamingEntdecken(mitFakten.entdecken);
+      }).catch(() => { /* Optionale Fakten blockieren den Katalog nie. */ });
+    }
     return a;
   }, [snapshotFreigabe, master, reportError, resolveError, uebernehmeVollkatalog]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
