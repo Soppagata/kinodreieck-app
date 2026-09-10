@@ -336,6 +336,25 @@ bestätigt sieben Betriebsprüfungen und meldet ausschließlich
 Fehler. Der erhaltene alte Feed hat Format 6, `refreshedOn=2026-09-06` und
 `lastAttemptOn=2026-09-10`; der Abrufversuch macht die Quellen nicht frischer.
 
+E4 liefert die payloadfreie Diagnosekorrektur als
+`81bfae9e239ee1359f2b24c4ba5f87cdeb41e01a`; Master integriert sie als `a537af6`,
+Staging als `e1f407e`. Die Diagnose unterscheidet JSON-Fehler,
+Vertragsabweichungen, Listenlängen, Wrapper-, Relations-, Datums- und
+Rangklassen. Fremde Werte, Titel, IDs und Schlüssel werden nicht geloggt.
+15 Client- und neun Datenvertragschecks sowie Deno sind grün. Parserregeln,
+Matching, Zählervertrag und Retry-Verhalten werden nicht gelockert.
+Der zugehörige einzelne serverseitige Top10-Diagnoseabruf ist als E4-Delta
+`a7e5fdcb157003d27725d1907723e716fda87608` geliefert und als `85fea89`
+integriert. 70 fokussierte Checks und der Deno-Check des echten Usage-Handlers
+sind grün. Der bestehende Service-Key-geschützte Usage-Endpunkt akzeptiert
+dafür ausschließlich den zusätzlichen POST-Headerwert
+`manual-top10-contract-v1`. Er ruft genau Prime/AT/Movies für den vorigen
+UTC-Tag auf, verwendet den bestehenden Nutzungszähler und lässt Feed,
+Daten-Caches und Tagesclaim unberührt. Die Diagnose findet auch den ersten
+späteren ungültigen Listeneintrag; der bestehende Parser entscheidet weiter
+unverändert. Der Master rechnet diesen Einzelabruf auf den bereits
+freigegebenen 30-Request-Umfang an; er wiederholt nicht den Initial-Feedlauf.
+
 Belege liegen unter `/private/tmp/kd-ops-audit-20260909` in
 `flixpatrol-final-integration-receipt.json`, den vier
 `flixpatrol-package-source-*.json`, `flixpatrol-approved-health.json`,
