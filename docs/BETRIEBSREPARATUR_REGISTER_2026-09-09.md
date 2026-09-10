@@ -811,6 +811,68 @@ Scheduleränderungen durch E8. Belege:
 `/private/tmp/kd-ops-audit-20260909/startseite-e8-delivery.json` und
 `/private/tmp/kd-ops-audit-20260909/startseite-e8-public-readback.json`.
 
+## E9/E10 – Entdecken nach Abos und nachvollziehbare Empfehlungen
+
+Max erweitert am 10. September den bestehenden Entdecken-Nutzerweg: Beide
+Entdecken-Listen berücksichtigen seine ausgewählten Streamingdienste. Der
+bisherige Kinoanteil bleibt; ausgeschlossene Streamingplätze werden bis zu
+insgesamt 50 eindeutigen Vorschlägen mit tatsächlichem aktuellem Kinoprogramm
+aufgefüllt. Fehlen auch dort gültige Titel, bleibt die echte kleinere Anzahl
+sichtbar. Die globale Pflege aller fünf Quellen bleibt bestehen.
+
+M2 und M6 werden um diese persönliche Projektion erweitert; ihre bisherigen
+Backend-Lieferstände bleiben gültig. M5 umfasst die gemeinsame Staging-
+Lieferung. Diese Ergänzungen sind OFFEN. Max erlaubt ausdrücklich einige
+erkundende Vorschläge, wenn belastbare Geschmackstreffer fehlen. Sie werden
+als solche erkennbar, ohne erfundene Profilbegründung. Gesehen-Ausschlüsse,
+harte Ablehnungen und strenge Filmidentität bleiben bestehen.
+
+Arbeitsmodus PARALLEL_WAVE, gemeinsame Nicht-main-Basis
+`0eed0968538c046c1810fffa9339879d18a90c6f`. Masterworktree und Integrationsbranch
+bleiben wie oben. Die beiden Pakete verwenden den vorhandenen reinen Vertrag
+`rankRecommendations(candidates, context)`: `includeNeutral: true` erlaubt
+bereits neutrale Ergebnisse; leere `reasons` kennzeichnen fehlenden
+persönlichen Beleg. Kandidaten und Mediathek dürfen vorhandene neutrale
+`beschreibung`/`description`-Felder tragen. Dieser optionale Eingabe- und der
+bestehende Ergebnisvertrag bleiben während der Welle fest. E9 ist mit dem
+bestehenden Ranking lauffähig, E10 wird mit eigenen Kandidaten geprüft; kein
+Paket benötigt einen Import oder ein Arbeitsergebnis des anderen.
+
+| Paket / IDs | Task / Branch / Worktree | Exklusive Write-Flächen | Stand |
+| --- | --- | --- | --- |
+| E9 / M2, M6 | `etappe_08_startzeit` übernimmt E9; `codex/entdecken-abos-20260910`; `/private/tmp/kd-entdecken-abos-e9-20260910` | `src/lib/entdeckenUi.js`, `src/tabs/EntdeckenTab.jsx`, `src/App.jsx`, erforderlicher neuer reiner Entdecken-Projektionshelper und fokussierte Entdecken-/UI-Tests; `src/lib/entdeckenPins.js` nur für tatsächliche Kartenidentität falls nötig | DISPATCH |
+| E10 / M6 | `etappe_05_import` übernimmt E10; `codex/entdecken-inhalte-20260910`; `/private/tmp/kd-entdecken-inhalte-e10-20260910` | `src/lib/recommendationRanking.js`, erforderlicher neuer reiner Inhaltshelper, `recommendation_ranking_test.mjs` und eigene neue Inhaltsrankingtests | DISPATCH |
+
+Die native Agenten-Taskgrenze verhindert neue Agentennamen. Zwei bereits
+abgeschlossene Baumeister übernehmen deshalb jeweils genau einen neuen Scope
+in den oben benannten neuen Worktrees; ihre früheren Pakete bleiben geschlossen.
+
+E9×E10 ist PARALLEL_OK: getrennte Produkt-/Testdateien, kein gemeinsamer
+Generator, keine neue Dependency, kein Schema oder geteilter Schreibzustand.
+Eingefroren bleiben Backend, Workflows, Paket-/Buildkonfiguration, globale
+Styles, Faktenservice-/Identitätsverträge und persönliche Speichergrenzen.
+Keine Anbieterrequests, persönlichen Datenänderungen oder Production-
+Lieferung. Beschreibungen kommen ausschließlich aus bereits vorhandenen
+Katalogen und dem gemeinsamen Cache; keine Kopie im persönlichen Speicher.
+
+Der Master besitzt Register, lesende aggregierte Ist-/Kandidatenbelege,
+Integration E9 → E10, nötige reine Testeinbindung, ein finales Gesamtgate und
+Staging-Lieferung. Baumeister testen nur ihren Scope, ohne Nebenagenten oder
+gegenseitige Nachrichten. Neue Fachabhängigkeit meldet `BLOCKER:SCOPE_DRIFT`.
+
+Lesender Echtbeleg am 10. September um 16:32 UTC: Das Ownerkonto hat Apple TV
+nicht ausgewählt. Trotzdem liefert der bisherige Entdecken-Pool fünf
+Apple-Titel. Von 50 Kandidaten passiert keiner den bisherigen Metadatenfilter;
+das persönliche Ranking erhält also gar keine Kandidaten. Alle 25 gecachten
+FlixPatrol-Fakten enthalten dagegen Beschreibungen, ebenso 186 von 228
+Rohfilmen im gültigen Kinoprogramm. Das Profil besitzt 13 bestätigte Signale,
+die Mediathek 104 positiv bewertete Filme. Beleg verarbeitet Inhalte nur im
+Speicher und speichert ausschließlich Aggregate und Hash; 15 authentifizierte
+lesende Abfragen, null Anbieterrequests und persönliche Writes.
+`/private/tmp/kd-ops-audit-20260909/entdecken-e9-e10-baseline.json`.
+Die spätere Vergleichsprobe normalisiert das Kinoprogramm wie die App und
+wendet Vorher/Nachher auf dieselben frisch gelesenen Inputs an.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
