@@ -27,7 +27,7 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | DONE: realer vollständiger Lauf und gespeicherter Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56, zusammengeführtes Main/Staging bf74f25; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | TECHNISCH GELIEFERT, Geräteabnahme offen: Katalog-Blockade in E7 reproduziert und behoben; 8d2ba10 auf Staging, Gesamtgate und CI grün, Domain/Worker/Assets bestätigt. Animiertes Showa erhalten; Max' physische PWA-Nachprüfung steht aus. Production weiterhin 3b82a73; Master |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 GELIEFERT UND VON MAX ABGENOMMEN: „Geht wieder alles“ bestätigt die bedienbare Staging-PWA auf 8d2ba10. Neuer Folgeauftrag E8 verbessert die Ladezeit beim Öffnen und bei Rückkehr zur Startseite; Messung und Umsetzung laufen. Der natürliche Entdecken-Erstlauf bleibt separat unter M3 offen. Production weiterhin 3b82a73; Master |
 | M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für den gelieferten Faktenpfad: fünf Charts, 50 Referenzen und 25 tatsächlich benötigte Titeldetails im gemeinsamen Cache; Backend 97ade56 / Main und Staging bf74f25, KI-Vertragsprüfungen grün, kein neuer bezahlter KI-Livetest; E2, E3, E5, E6 |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
@@ -699,9 +699,45 @@ Staging-Version. Production liefert weiterhin `3b82a73`. Belege:
 `/private/tmp/kd-ops-audit-20260909/staging-pwa-e7-public-readback.json` und
 `/private/tmp/kd-ops-audit-20260909/staging-pwa-e7-delivery.json`.
 Gebaut, getestet, committed, gepusht, CI-grün und Staging-deployed/readback sind
-belegt. Die physische iPhone-PWA muss Max nach vollständigem Schließen und
-erneutem Öffnen noch prüfen; M5 bleibt hierfür offen. Backend, natürliche
+belegt. Max bestätigt anschließend ausdrücklich „Geht wieder alles“; damit
+ist die gemeldete Blockade praktisch abgenommen. Backend, natürliche
 Datenläufe, Anbieterzähler und persönliche Daten wurden nicht verändert.
+
+### E8: Ladezeit der Startseite
+
+Max meldet nach der erfolgreichen E7-Abnahme eine langsamere Startseite und
+beauftragt deren Verbesserung. Auf die Nachfrage nach dem Nutzerweg antwortet
+er „Bei beidem“: beim Öffnen/Neuladen der PWA sowie beim Zurückwechseln aus
+einem anderen Bereich. Beide Wege werden unter gleichen Laborbedingungen
+vorher/nachher gemessen; ein Browserwert ersetzt keine Messung auf seinem iPhone.
+
+Arbeitsmodus SOLO mit genau einem Baumeister `etappe_08_startzeit` auf
+`codex/startseite-ladezeit-20260910` im Worktree
+`/private/tmp/kd-startseite-perf-e8-20260910`, gemeinsame Basis
+`8d2ba108c5c6225585bfb234e29065e6a9bb25e5`. Der Baumeister besitzt die erforderlichen
+`src/**`-Änderungen und dazugehörigen fokussierten Regressionen. Er misst
+einen realistischen Bestand mit 24.690 Katalogtiteln, 400–500 persönlichen
+Einträgen und freigeschaltetem Cage Pool in WebKit bei 393/430 px, einschließlich
+animiertem Showa. Master besitzt Register, lesende Live-Latenzbelege, Integration,
+ein finales Gesamtgate und die anschließende autorisierte Staging-Lieferung.
+
+Eingefroren bleiben Backend, Workflows, Paket-/Buildkonfiguration, persönliche
+Speicher-/Authgrenzen, Anbieterzähler und Quellenverträge. Keine neuen
+persistenten Datenkopien, Quellenkürzungen, Anbieterrequests oder Production-
+Lieferung. Bei erforderlicher Änderung dieser Grenzen meldet der Baumeister
+`BLOCKER:SCOPE_DRIFT`; ansonsten liefert er den gemessenen, fokussiert geprüften
+Kandidaten autonom an den Master zurück.
+
+Lesende Live-Messung des Masters am 10. September um 15:16 UTC: Alle neun
+Datenbankabfragen erfolgreich; Programm 204 ms, bekannter Streamingkatalog
+296 ms. Der bisher serielle Faktenpfad mit fünf Chart-RPCs und anschließendem
+Titel-RPC benötigte insgesamt 1.162 ms für 50 Referenzen und 25 nutzbare Fakten.
+Einzelmessung auf dem Mac ohne künstliche Netzwerk-/CPU-Drosselung, ausdrücklich
+kein Browser- oder iPhone-Ladewert. Beide Fakten-RPCs sind anhand der Migration
+als `stable` und rein lesend bestätigt. Keine persönlichen Inhalte gespeichert,
+kein Anbieterrequest und keine Datenänderung. Staging liefert weiterhin
+`8d2ba10`, Production `3b82a73`. Beleg:
+`/private/tmp/kd-ops-audit-20260909/startseite-e8-live-latency.json`.
 
 ## Historischer Ausgang am 9. September
 
