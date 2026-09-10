@@ -293,9 +293,12 @@ test.describe("Cage und Space-Pause", () => {
     await page.setViewportSize({ width: 393, height: 852 });
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await seedCage(page);
-    await page.addInitScript(() => localStorage.setItem("kd:einstellungen", JSON.stringify({
-      theme: "dunkel", basisTheme: "hell", startTab: "start", schrift: "klein", modus: "showa",
-    })));
+    await page.addInitScript(() => {
+      localStorage.setItem("kd:einstellungen", JSON.stringify({
+        theme: "dunkel", basisTheme: "hell", startTab: "start", schrift: "klein", modus: "showa",
+      }));
+      localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true }));
+    });
     const cageMaster = [
       ["Valley Girl", 1983], ["Racing with the Moon", 1984], ["Birdy", 1984],
       ["The Boy in Blue", 1986], ["Peggy Sue Got Married", 1986],
@@ -344,7 +347,7 @@ test.describe("Cage und Space-Pause", () => {
     }
     await page.getByRole("button", { name: /^Alles/ }).tap();
     await expect(page.locator(".kd-entdecken-karte")).toHaveCount(200);
-    await expect(page.getByText("200 von 24685", { exact: false })).toBeVisible();
+    await expect(page.getByText("200 von 24690", { exact: false })).toBeVisible();
     await page.getByRole("button", { name: "Menü öffnen", exact: true }).tap();
     await page.getByRole("dialog", { name: "Menü", exact: true }).getByRole("button", { name: "Start", exact: true }).tap();
     await expect(page.locator(".kd-dash")).toBeVisible();
