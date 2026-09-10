@@ -27,7 +27,7 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | DONE: realer vollständiger Lauf und gespeicherter Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56, zusammengeführtes Main/Staging bf74f25; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | WIEDER OFFEN für die praktische PWA-Nutzbarkeit: Max meldet auf Staging bf74f25 eine Blockade nach 1–2 Interaktionen; Daten-/Monitorbelege bleiben gültig, UI-Reparatur E7 läuft. Production weiterhin 3b82a73; Master |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | TECHNISCH GELIEFERT, Geräteabnahme offen: Katalog-Blockade in E7 reproduziert und behoben; 8d2ba10 auf Staging, Gesamtgate und CI grün, Domain/Worker/Assets bestätigt. Animiertes Showa erhalten; Max' physische PWA-Nachprüfung steht aus. Production weiterhin 3b82a73; Master |
 | M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für den gelieferten Faktenpfad: fünf Charts, 50 Referenzen und 25 tatsächlich benötigte Titeldetails im gemeinsamen Cache; Backend 97ade56 / Main und Staging bf74f25, KI-Vertragsprüfungen grün, kein neuer bezahlter KI-Livetest; E2, E3, E5, E6 |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
@@ -684,9 +684,24 @@ Zehn fokussierte Chromium-/WebKit-Fälle bestehen mit dem großen Katalog,
 animiertem Showa, 393/430 px, wiederholter Navigation, Neustart und erreichbaren
 Einstellungen; Reduced Motion bleibt gesondert wirksam. Das Produkt-CSS entspricht
 wieder exakt dem bisherigen Staging-Stand. Final geliefert wird die Katalog-
-Korrektur mit ihren Regressionen; der lokale Abschlusslauf für diesen materiell
-geänderten Kandidaten und die Staging-Lieferung folgen. M5 bleibt für die physische
-PWA-Abnahme offen.
+Korrektur mit ihren Regressionen. Der erneute lokale Abschlusslauf für den
+materiell geänderten finalen Kandidaten `8d2ba108c5c6225585bfb234e29065e6a9bb25e5`
+bestand vollständig (`npm test`, Exit 0,
+`/private/tmp/kd-staging-pwa-e7-catalog-final-test.log`). Der force-freie Push auf
+Staging und den Masterbranch ist erfolgt. GitHub-Lauf `34490264429` bestätigt
+Testsuiten, Chromium, WebKit, Required Check und Staging-Deployment erfolgreich.
+Main wurde in dieser UI-Reparatur nicht verändert.
+
+Domain-Readback am 10. September um 14:46 UTC: Staging und sein Service Worker
+liefern exakt `8d2ba10`; HTML, JavaScript und CSS sind erfolgreich abrufbar.
+Das CSS ist auch anhand des ausgelieferten SHA-256 bytegleich zur vorherigen
+Staging-Version. Production liefert weiterhin `3b82a73`. Belege:
+`/private/tmp/kd-ops-audit-20260909/staging-pwa-e7-public-readback.json` und
+`/private/tmp/kd-ops-audit-20260909/staging-pwa-e7-delivery.json`.
+Gebaut, getestet, committed, gepusht, CI-grün und Staging-deployed/readback sind
+belegt. Die physische iPhone-PWA muss Max nach vollständigem Schließen und
+erneutem Öffnen noch prüfen; M5 bleibt hierfür offen. Backend, natürliche
+Datenläufe, Anbieterzähler und persönliche Daten wurden nicht verändert.
 
 ## Historischer Ausgang am 9. September
 
