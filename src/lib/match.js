@@ -3,10 +3,21 @@ import { normalisiereTyp } from "./typen.js";
 
 const ARTIKEL = ["the","der","die","das","ein","eine","le","la","les","el","il","lo","los","a","an"];
 
+/* Akzentvarianten lateinischer Titel sollen robust matchen, Markierungen in
+   anderen Schriften koennen dagegen selbst bedeutungstragend sein (z.B.
+   japanische Dakuten). Deshalb entfernen wir Marks nur direkt nach einem
+   lateinischen Grundzeichen und setzen die uebrigen Zeichen wieder zusammen. */
+function falteTitel(s) {
+  return String(s).toLocaleLowerCase("de").normalize("NFKD")
+    .replace(/ß/g, "ss")
+    .replace(/(\p{Script=Latin})\p{Mark}+/gu, "$1")
+    .normalize("NFC");
+}
+
 export function norm(s) {
   if (!s) return "";
-  let t = s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  t = t.replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  let t = falteTitel(s);
+  t = t.replace(/[^\p{Letter}\p{Number}\p{Mark} ]+/gu, " ").replace(/\s+/g, " ").trim();
   const parts = t.split(" ");
   if (parts.length > 1 && ARTIKEL.includes(parts[0])) t = parts.slice(1).join(" ");
   return t;
@@ -73,9 +84,52 @@ export function matchFilm(progTitel, progJahr, master) {
    Konvention (identisch zum Generator der Masterliste v3.1): slug(titel)_jahr.
    Die ID ist der Schlüssel — nicht der Titel. Einmal vergeben, nie geändert. */
 export function slugId(titel, jahr) {
-  let t = String(titel || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  t = t.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const original = String(titel || "");
+  const entfaltet = falteTitel(original);
+  let t = entfaltet.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  /* Reines ASCII-Slugging liess nicht-lateinische Titel bisher alle auf ""
+     kollabieren. Ein kurzer stabiler FNV-1a-Fingerabdruck bewahrt die bisherige
+     lesbare ID-Konvention, trennt aber Titel, deren Schrift im ASCII-Anteil
+     verloren geht. Bereits gespeicherte IDs werden von ensureIds nie geaendert. */
+  if (/[^\x00-\x7f]/.test(entfaltet)) {
+    let hash = 0x811c9dc5;
+    for (const zeichen of original.normalize("NFC")) {
+      hash ^= zeichen.codePointAt(0);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    t = `${t || "titel"}_${hash.toString(36)}`;
+  }
   return t + (jahr ? "_" + jahr : "");
+}
+
+export const ERSTES_FILMJAHR = 1888;
+export const ERSTES_SERIENJAHR = 1928;
+/* Rückwärtskompatibler Name: bezeichnete historisch die Film-Untergrenze. */
+export const ERSTES_PLAUSIBLES_JAHR = ERSTES_FILMJAHR;
+
+/* Film und Serie haben medienhistorisch sinnvolle Untergrenzen. Bei Musik und
+   Sonstigem (u.a. Buch, Theater, Person) sowie untypisierten Blogreferenzen
+   sind auch fruehere positive Jahre gueltig. Jahr 0/BCE wird vom bestehenden
+   Datenmodell nicht abgebildet. */
+export function plausiblerJahresbereich(typ = null, aktuellesJahr = new Date().getUTCFullYear()) {
+  const kanonischerTyp = typ ? normalisiereTyp(typ) : null;
+  const min = kanonischerTyp === "film"
+    ? ERSTES_FILMJAHR
+    : kanonischerTyp === "serie" ? ERSTES_SERIENJAHR : 1;
+  return { min, max: aktuellesJahr + 10 };
+}
+
+/* Leer ist ein gueltiger unbekannter Wert; alles andere muss eine positive,
+   ganze und fuer den konkreten Medientyp plausible Jahreszahl sein. */
+export function lesePlausiblesJahr(wert, { typ = null, aktuellesJahr = new Date().getUTCFullYear() } = {}) {
+  const roh = String(wert ?? "").trim();
+  if (!roh) return { ok: true, jahr: null };
+  const { min, max } = plausiblerJahresbereich(typ, aktuellesJahr);
+  if (!/^\d{1,4}$/.test(roh)) return { ok: false, jahr: null };
+  const jahr = Number(roh);
+  return Number.isInteger(jahr) && jahr >= min && jahr <= max
+    ? { ok: true, jahr }
+    : { ok: false, jahr: null };
 }
 
 /* Selbstheilung für ältere Exporte/Importe ohne id-Feld:

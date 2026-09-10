@@ -1,0 +1,260 @@
+/* D5 – Nebenansichten. Die Regeln bleiben an ihre lokalen Wurzeln gebunden,
+   damit Streaming, Kino und die gemeinsame Dialoghülle nicht mitgestaltet
+   werden. */
+.kd-entdecken,
+.kd-blog,
+.kd-finder,
+.kd-daten-tab {
+  --kd-secondary-surface: var(--kd-saalHoch);
+  --kd-secondary-border: color-mix(in srgb, var(--kd-linie) 58%, transparent);
+  color: var(--kd-leinwand);
+}
+
+.kd-entdecken :is(button, input, select, textarea),
+.kd-blog :is(button, input, select, textarea),
+.kd-finder :is(button, input, select, textarea),
+.kd-daten-tab :is(button, input, select, textarea),
+[data-private-mail-feedback] :is(button, input, select, textarea),
+[data-private-mail-account-deletion] :is(button, input, select, textarea),
+[data-manual-data-rights] :is(button, input, select, textarea),
+.kd-stapelimport :is(button, input, select, textarea),
+.kd-profil-dialog :is(button, input, select, textarea),
+.kd-blogprofilanalyse :is(button, input, select, textarea) {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.kd-entdecken :is(input, select, textarea),
+.kd-blog :is(input, select, textarea),
+.kd-finder :is(input, select, textarea),
+.kd-daten-tab :is(input, select, textarea),
+[data-private-mail-feedback] :is(input, select, textarea),
+[data-private-mail-account-deletion] :is(input, select, textarea),
+.kd-stapelimport :is(input, select, textarea),
+.kd-blogprofilanalyse :is(input, select, textarea) {
+  min-height: 44px;
+  border-color: var(--kd-secondary-border);
+  border-radius: var(--kd-radius-control);
+  font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1)));
+}
+
+.kd-entdecken :is(button, .kd-entdecken-primaer, .kd-entdecken-sekundaer),
+.kd-blog button,
+.kd-finder button,
+.kd-daten-tab button,
+[data-private-mail-feedback] button,
+[data-private-mail-account-deletion] button,
+.kd-stapelimport button,
+.kd-blogprofilanalyse button,
+.kd-profil-dialog button,
+.kd-prognose button {
+  min-height: 44px;
+  border-radius: var(--kd-radius-control);
+  font-size: calc(14px * var(--kd-schriftfaktor, 1));
+  font-weight: 600;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.kd-entdecken-toolbar { gap: var(--kd-space-3); margin-bottom: var(--kd-space-6); }
+.kd-entdecken-tabs {
+  gap: var(--kd-space-1);
+  padding: var(--kd-space-1);
+  border-color: var(--kd-secondary-border);
+  border-radius: var(--kd-radius-control);
+  background: var(--kd-saalHoch);
+}
+.kd-entdecken-tabs button.aktiv {
+  background: var(--kd-wolfram);
+  border-color: var(--kd-wolfram);
+  color: var(--kd-wolframText);
+}
+.kd-entdecken-verwalten, .kd-entdecken-sekundaer, .kd-entdecken-verwalten-liste button {
+  border-color: var(--kd-secondary-border);
+  color: var(--kd-leinwand);
+}
+.kd-entdecken-primaer { background: var(--kd-wolfram); border-color: var(--kd-wolfram); color: var(--kd-wolframText); }
+.kd-entdecken-einleitung { gap: var(--kd-space-6); margin-bottom: var(--kd-space-6); padding-bottom: var(--kd-space-4); border-color: var(--kd-secondary-border); }
+.kd-entdecken .kd-entdecken-einleitung span, .kd-entdecken .kd-entdecken-kicker,
+.kd-entdecken-layer .kd-entdecken-dialog-kopf span, .kd-entdecken .kd-entdecken-sektionskopf span {
+  color: var(--kd-wolfram);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: calc(12px * var(--kd-schriftfaktor, 1));
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kd-entdecken-einleitung h2, .kd-entdecken-dialog-kopf h2, .kd-entdecken-sektionskopf h2,
+.kd-entdecken-hub-karte h3, .kd-entdecken-panel h3, .kd-entdecken-manage-grid h3 {
+  color: inherit;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: calc(22px * var(--kd-schriftfaktor, 1));
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kd-entdecken-hub-karte, .kd-entdecken-panel, .kd-entdecken-manage-grid > section,
+.kd-entdecken-dialog, .kd-entdecken-proposal, .kd-entdecken-parked {
+  padding: var(--kd-space-4);
+  border-color: var(--kd-secondary-border);
+  border-radius: var(--kd-radius-karte);
+  background: var(--kd-secondary-surface);
+  color: var(--kd-leinwand);
+}
+.kd-entdecken-hub-karte :is(p, small), .kd-entdecken-panel :is(p, small), .kd-entdecken-manage-grid p,
+.kd-entdecken-verwalten-liste small, .kd-entdecken-leer { color: var(--kd-rauch); font-size: calc(12px * var(--kd-schriftfaktor, 1)); }
+.kd-entdecken-auswahlkarte {
+  padding: var(--kd-space-4) calc(var(--kd-space-8) + 20px) var(--kd-space-4) var(--kd-space-4);
+  border: 1px solid color-mix(in srgb, var(--kd-kartenText) 18%, transparent);
+  border-radius: var(--kd-radius-karte);
+  background: var(--kd-kartenFeld);
+  color: var(--kd-kartenText);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .18);
+}
+.kd-entdecken-auswahlkarte :is(h3, p, small, a) { color: var(--kd-kartenText); }
+.kd-entdecken-auswahlkarte .kd-entdecken-grund { color: var(--kd-kartenTextWeich); }
+.kd-entdecken .kd-entdecken-pin, .kd-entdecken-layer .kd-entdecken-pin { width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: var(--kd-radius-control); }
+.kd-entdecken .kd-entdecken-pin.aktiv, .kd-entdecken-layer .kd-entdecken-pin.aktiv { background: var(--kd-wolfram); color: var(--kd-wolframText); }
+.kd-entdecken-weitere { margin-top: var(--kd-space-8); padding-top: var(--kd-space-6); border-color: var(--kd-wolfram); }
+.kd-entdecken-beliebtliste { gap: var(--kd-space-2); }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral { padding: var(--kd-space-3) var(--kd-space-4); border: 1px solid var(--kd-secondary-border); border-radius: var(--kd-radius-karte); background: var(--kd-saalHoch); }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral h3 { color: var(--kd-leinwand); font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); font-weight: 600; }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral p { color: var(--kd-rauch); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); }
+.kd-entdecken-pending, .kd-entdecken-warnung, .kd-entdecken-fehler { border-radius: var(--kd-radius-control); }
+.kd-entdecken-formzeile label, .kd-radar-suchstatus, .kd-radar-neuigkeiten span { color: var(--kd-rauch); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); letter-spacing: 0; text-transform: none; }
+.kd-entdecken-formzeile input { background: var(--kd-saal); color: var(--kd-leinwand); }
+.kd-entdecken-layer { padding: var(--kd-space-6); }
+.kd-entdecken-layer .kd-entdecken-dialog { box-shadow: 0 24px 64px rgba(0, 0, 0, .38); }
+.kd-entdecken-layer .kd-entdecken-schliessen { width: 44px; height: 44px; border-radius: var(--kd-radius-control); }
+.kd-entdecken-layer .kd-entdecken-manage-grid { gap: var(--kd-space-3); }
+.kd-entdecken-layer .kd-entdecken-manage-grid > section { background: var(--kd-saal); }
+.kd-entdecken .kd-radar-folgen, .kd-entdecken .kd-radar-ablehnungen { border-radius: var(--kd-radius-karte); }
+
+.kd-blog, .kd-finder { display: grid; gap: var(--kd-space-4); }
+.kd-blog-karte, .kd-finder [data-finder-card], .kd-finder .kd-apphilfe-antwort {
+  border: 1px solid var(--kd-secondary-border);
+  border-radius: var(--kd-radius-karte);
+  background: var(--kd-secondary-surface);
+  padding: var(--kd-space-4);
+}
+.kd-blog [data-tour="blog"] { margin-bottom: var(--kd-space-4); }
+.kd-blog h2, .kd-blog h3 { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.kd-blog h2 { font-size: calc(22px * var(--kd-schriftfaktor, 1)); }
+.kd-blog h3 { font-size: calc(22px * var(--kd-schriftfaktor, 1)); }
+.kd-blog-expand { border-color: var(--kd-secondary-border); color: var(--kd-leinwand); background: transparent; }
+.kd-blog-aktionen, .kd-blog-form-actions { gap: var(--kd-space-2); }
+.kd-blog-form-actions { padding-top: var(--kd-space-3); border-top: 1px solid var(--kd-secondary-border); }
+
+.kd-finder > :first-child { color: var(--kd-rauch); font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.55; }
+.kd-finder-eingabe { gap: var(--kd-space-2); margin-bottom: var(--kd-space-4); }
+.kd-finder-eingabe input { background: var(--kd-saalHoch); color: var(--kd-leinwand); }
+.kd-finder .kd-apphilfe-antwort { color: var(--kd-leinwand); }
+.kd-finder .kd-apphilfe-antwort p { color: var(--kd-rauch); }
+
+.kd-daten-tab { display: grid; gap: 0; }
+.kd-daten-tab .kd-klappe {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--kd-secondary-border);
+  border-radius: 0;
+  background: transparent;
+}
+.kd-daten-tab .kd-klappe:last-child { border-bottom: 1px solid var(--kd-secondary-border); }
+.kd-daten-tab .kd-klappe-kopf {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: var(--kd-space-2) 2px;
+  list-style: none;
+  font-size: calc(15px * var(--kd-schriftfaktor, 1));
+}
+.kd-daten-tab .kd-klappe-kopf::-webkit-details-marker { display: none; }
+.kd-daten-tab .kd-klappe-kopf::marker { content: ""; }
+.kd-daten-tab .kd-klappe-kopf::after {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: rotate(-45deg);
+  transform-origin: center;
+}
+.kd-daten-tab .kd-klappe[open] > .kd-klappe-kopf::after { transform: rotate(45deg); }
+.kd-daten-tab .kd-klappe-status { margin-left: var(--kd-space-2); }
+.kd-daten-tab .kd-klappe-inhalt {
+  margin: 0 0 var(--kd-space-3);
+  padding: 0 var(--kd-space-2) var(--kd-space-2);
+}
+.kd-daten-tab > *, .kd-daten-tab :is(.kd-klappe, .kd-klappe-inhalt, .kd-einstellzeile, .kd-kompakt, .kd-einstellzeile > *, .kd-kompakt > *) { min-width: 0; }
+.kd-daten-tab .kd-kompakt, .kd-daten-tab .kd-einstellzeile { gap: var(--kd-space-3); }
+.kd-daten-tab .kd-einstellzeile,
+.kd-daten-tab .kd-startbereich-zeile { display: grid; align-items: stretch; }
+.kd-daten-tab .kd-einstellzeile { grid-template-columns: minmax(0, 1fr); }
+.kd-daten-tab .kd-startbereich-zeile { grid-template-columns: minmax(0, 1fr); }
+.kd-daten-tab .kd-startbereich-zeile select { box-sizing: border-box; width: 100%; min-width: 0; height: 44px; }
+.kd-daten-tab .kd-einstelloptionen {
+  --kd-seg-padding: 6px;
+  display: grid;
+  min-width: 0;
+  gap: var(--kd-space-2);
+}
+.kd-daten-tab .kd-einstelloptionen--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kd-daten-tab .kd-einstelloptionen--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kd-daten-tab .kd-einstelloptionen .kd-seg-control {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+}
+.kd-daten-tab .kd-einstelloptionen--3 .kd-seg-control { white-space: nowrap; }
+.kd-daten-tab :is([data-private-mail-feedback], [data-private-mail-account-deletion], [data-manual-data-rights], [data-account-export], .kd-stapelimport, .kd-blogprofilanalyse, .kd-prognose, .kd-profil-eindruck) {
+  padding: var(--kd-space-4);
+  border: 1px solid var(--kd-secondary-border);
+  border-radius: var(--kd-radius-karte);
+  background: var(--kd-saal);
+}
+.kd-daten-tab :is(summary, label) { min-height: 44px; font-size: calc(14px * var(--kd-schriftfaktor, 1)); }
+.kd-daten-tab :is(p, li, dd) { color: var(--kd-rauch); }
+.kd-daten-tab a, [data-private-mail-feedback] a, [data-private-mail-account-deletion] a { color: var(--kd-wolfram); text-underline-offset: 3px; }
+.kd-statusliste > div { border-color: var(--kd-secondary-border); border-radius: var(--kd-radius-control); background: var(--kd-saalHoch); }
+.kd-statusliste dt { color: var(--kd-rauch); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); letter-spacing: 0; text-transform: none; }
+.kd-statusliste dd { color: var(--kd-leinwand); font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); }
+.kd-prognose, .kd-prognose-start { border-radius: var(--kd-radius-karte); }
+.kd-prognose { background: var(--kd-saal); border-color: var(--kd-secondary-border); }
+.kd-profil-eindruck { border-radius: var(--kd-radius-karte); }
+.kd-profil-dialog { border-radius: var(--kd-radius-karte); background: var(--kd-saalHoch); color: var(--kd-leinwand); }
+.kd-profil-dialog header h3, .kd-stapel-importtitel { font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); font-weight: 600; text-transform: none; }
+.kd-stapelimport { border-radius: var(--kd-radius-karte); }
+.kd-stapelimport :is(textarea, select, input) { background: var(--kd-saal); color: var(--kd-leinwand); }
+.kd-stapel-hinweis, .kd-stapel-warnung, .kd-stapel-bericht { border-radius: var(--kd-radius-control); }
+.kd-blogprofilanalyse { border-radius: var(--kd-radius-karte); }
+.kd-blogprofilanalyse :is(input, select, textarea) { background: var(--kd-saal); color: var(--kd-leinwand); }
+
+.kd-streaming-einstellungen :is(input, select) { min-height: 44px; border-radius: var(--kd-radius-control); font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1))); }
+.kd-streaming-einstellungen button { min-height: 44px; border-radius: var(--kd-radius-control); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(14px * var(--kd-schriftfaktor, 1)); }
+.kd-teilen-block, .kd-geschmack-onboarding, .kd-drei-fragen, .kd-geschmack-bereich { border-radius: var(--kd-radius-karte); }
+.kd-teilen-block :is(input, select, textarea), .kd-drei-fragen textarea { min-height: 44px; border-radius: var(--kd-radius-control); font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1))); }
+.kd-teilen-block :is(button, summary), .kd-geschmack-onboarding button, .kd-drei-fragen button, .kd-geschmack-bereich button { min-height: 44px; border-radius: var(--kd-radius-control); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(14px * var(--kd-schriftfaktor, 1)); text-transform: none; }
+.kd-geschmack-onboarding h3, .kd-drei-fragen h3 { font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); font-weight: 600; line-height: 1.2; letter-spacing: 0; text-transform: none; }
+.kd-geschmack-onboarding button[aria-pressed] { border-radius: var(--kd-radius-control); }
+[data-private-mail-feedback], [data-private-mail-account-deletion], [data-manual-data-rights], [data-account-export] { border: 1px solid var(--kd-secondary-border); border-radius: var(--kd-radius-karte); background: var(--kd-saal); padding: var(--kd-space-4); }
+[data-private-mail-feedback] :is(strong, label), [data-private-mail-account-deletion] :is(strong, label), [data-manual-data-rights] strong, [data-account-export] strong { color: var(--kd-leinwand); font-size: calc(14px * var(--kd-schriftfaktor, 1)); }
+[data-private-mail-feedback] :is(p, span), [data-private-mail-account-deletion] p, [data-manual-data-rights] p, [data-account-export] p { color: var(--kd-rauch); font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.55; }
+.kd-profil-infogruppe { border-radius: var(--kd-radius-karte); border-color: var(--kd-secondary-border); }
+.kd-profil-infogruppe > summary { min-height: 44px; padding: var(--kd-space-3); color: var(--kd-wolfram); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(14px * var(--kd-schriftfaktor, 1)); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.kd-profil-dialog-schliessen, .kd-profil-widerrufen { min-width: 44px; min-height: 44px; border-radius: var(--kd-radius-control); }
+.kd-filmwissen { display: grid; gap: var(--kd-space-2); }
+.kd-filmwissen-titel { font-family: 'Barlow Condensed', sans-serif; font-size: calc(22px * var(--kd-schriftfaktor, 1)); font-weight: 600; line-height: 1.2; }
+.kd-filmwissen :is(p, a, summary, span) { font-size: calc(12px * var(--kd-schriftfaktor, 1)); }
+.kd-filmwissen a { color: var(--kd-wolfram); text-underline-offset: 3px; }
+
+@media (max-width: 520px) {
+  .kd-entdecken-layer { padding: 0; }
+  .kd-entdecken-dialog { border-radius: 0; }
+  .kd-entdecken-tabs { overflow-x: auto; }
+  .kd-entdecken-tabs button { flex: 1 0 auto; }
+  .kd-finder-eingabe { flex-wrap: wrap; }
+  .kd-finder-eingabe input { flex-basis: 100%; }
+}

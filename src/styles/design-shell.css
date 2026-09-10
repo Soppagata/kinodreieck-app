@@ -1,0 +1,118 @@
+/* D4–D6: Shell-only layer. It deliberately names only P3-owned surfaces so
+   primary and secondary area packages keep their own visual responsibility. */
+.kd-app > header { position:relative; }
+.kd-app > header::after { content:""; display:block; width:min(120px,30vw); height:2px; margin-top:10px; border-radius:var(--kd-radius-label); background:linear-gradient(90deg,var(--kd-wolfram),transparent); }
+.kd-app > header > div:last-child { display:none; }
+.kd-menu { box-shadow:0 8px 22px color-mix(in srgb,var(--kd-saal) 72%,transparent); }
+.kd-menu button.kd-nav-aktiv { box-shadow:inset 0 -3px var(--kd-wolfram); }
+
+/* Egg-Darstellung bleibt unverändert; diese Rollen verwenden nur gelieferte
+   Schnitte statt impliziter Georgia-/synthetischer Fraunces-Varianten. */
+.kd-necro-glyphen,.kd-necro-fussglyphen,.kd-necro-kapitel,.kd-necro-siegel span { font-family:'Fraunces',Georgia,serif; font-style:normal; font-weight:900; }
+.kd-necro-rechts p { font-family:'Fraunces',Georgia,serif; font-style:italic; font-weight:400; }
+.kd-teppich-kicker { font-family:'Fraunces',Georgia,serif; font-style:italic; font-weight:400; }
+.kd-necro-schliessen { min-width:44px; min-height:44px; }
+
+.kd-syncchip,.kd-app-update,.kd-installkarte,.kd-doku-hilfe,.kd-film-batch-dialog {
+  border:1px solid color-mix(in srgb,var(--kd-linie) 62%,transparent);
+  border-radius:var(--kd-radius-karte);
+  background:var(--kd-saalHoch);
+  color:var(--kd-leinwand);
+  box-shadow:0 14px 34px rgba(0,0,0,.18);
+}
+.kd-syncchip { padding:8px 10px; font-size:calc(12px * var(--kd-schriftfaktor,1)); }
+.kd-app-update { margin:12px 0; padding:12px 14px; border-left:3px solid var(--kd-wolfram); }
+.kd-installkarte { margin-top:24px; padding:16px; }
+.kd-installkarte .kd-kicker { color:var(--kd-wolfram); font-family:'Space Grotesk',sans-serif; font-size:calc(12px * var(--kd-schriftfaktor,1)); font-weight:600; letter-spacing:0; text-transform:none; }
+.kd-installkarte h2 { color:var(--kd-leinwand); font-family:'Space Grotesk',sans-serif; font-size:calc(15px * var(--kd-schriftfaktor,1)); font-weight:600; letter-spacing:0; text-transform:none; }
+.kd-install-status,.kd-install-anleitung { color:var(--kd-rauch); font-size:calc(15px * var(--kd-schriftfaktor,1)); line-height:1.55; }
+.kd-installkarte button,.kd-app-update button,.kd-doku-hilfe button,.kd-film-batch-dialog button { min-height:44px; border-radius:var(--kd-radius-control); }
+
+.kd-doku-hilfe { display:grid; gap:16px; padding:16px; }
+.kd-doku-hilfe :is(h2,h3) { color:var(--kd-leinwand); }
+.kd-doku-verzeichnis,.kd-doku-bereich,.kd-doku-details { border-color:color-mix(in srgb,var(--kd-linie) 52%,transparent); border-radius:var(--kd-radius-control); background:color-mix(in srgb,var(--kd-saal) 56%,transparent); }
+.kd-doku-bereich { padding:12px; }
+.kd-doku-kurztext { color:var(--kd-rauch); font-size:calc(15px * var(--kd-schriftfaktor,1)); }
+.kd-feldhinweis-knopf { width:44px; min-width:44px; min-height:44px; border-radius:50%; }
+
+.kd-entry { min-height:100dvh; padding:max(20px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); background:radial-gradient(circle at 80% 0,color-mix(in srgb,var(--kd-wolfram) 14%,transparent),transparent 32%),var(--kd-saal); }
+.kd-entry-shell { width:min(100%,580px); margin:0 auto; }
+.kd-entry-head { flex-wrap:wrap; margin-bottom:24px; }
+.kd-entry-head h1 { font-family:'Fraunces',Georgia,serif; font-size:clamp(calc(38px * var(--kd-schriftfaktor,1)),7.2vw,calc(46px * var(--kd-schriftfaktor,1))); font-weight:900; line-height:1.08; letter-spacing:-.02em; text-transform:none; }
+.kd-entry-panel { padding:20px; border:1px solid color-mix(in srgb,var(--kd-linie) 62%,transparent); border-radius:var(--kd-radius-karte); background:var(--kd-saalHoch); box-shadow:0 18px 46px rgba(0,0,0,.26); }
+.kd-entry-login { display:grid; gap:12px; }
+.kd-entry :is(input,select,textarea) { min-height:44px; border-radius:var(--kd-radius-control); font-size:max(16px,calc(16px * var(--kd-schriftfaktor,1))); }
+.kd-entry :is(.kd-primary,.kd-secondary,.kd-entry-skip) { min-height:44px; border-radius:var(--kd-radius-control); }
+.kd-entry button { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:calc(14px * var(--kd-schriftfaktor,1)); line-height:1.35; letter-spacing:0; text-transform:none; }
+.kd-entry-error { margin:0; padding:10px 12px; border-left:3px solid var(--kd-gefahr); border-radius:var(--kd-radius-label); background:color-mix(in srgb,var(--kd-gefahr) 13%,transparent); color:var(--kd-gefahr); }
+.kd-entry-legal-link { display:inline-flex; min-height:44px; align-items:center; color:var(--kd-wolfram); }
+
+.kd-konto-bereich,.kd-konto-uebernahme { display:grid; gap:12px; color:var(--kd-leinwand); }
+.kd-konto-bereich :is(button,input),.kd-konto-uebernahme :is(button,input) { min-height:44px; border-radius:var(--kd-radius-control); }
+.kd-konto-uebernahme table { display:block; max-width:100%; overflow-x:auto; border:1px solid color-mix(in srgb,var(--kd-linie) 46%,transparent); border-radius:var(--kd-radius-control); padding:4px 10px; background:color-mix(in srgb,var(--kd-saal) 45%,transparent); }
+.kd-katalogzugang-layer { -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+.kd-katalogzugang-dialog { max-height:calc(100dvh - 40px); overflow:auto; }
+.kd-katalogzugang-dialog :is(input,button) { min-height:44px; border-radius:var(--kd-radius-control); }
+.kd-global-error-queue { display:grid; gap:12px; margin-bottom:16px; }
+.kd-local-data-safety { border-radius:var(--kd-radius-karte); }
+.kd-local-data-safety button { min-height:44px; border-radius:var(--kd-radius-control); }
+.kd-app-error-panel { box-shadow:0 20px 56px rgba(0,0,0,.38); }
+.kd-app-error-panel button { min-height:44px; border-radius:var(--kd-radius-control); padding:10px 14px; border:1px solid #B6AFBE; background:transparent; color:#ECE8DF; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:calc(14px * var(--kd-schriftfaktor,1)); line-height:1.35; }
+.kd-app-error-panel button:first-child { border-color:var(--kd-wolfram); background:var(--kd-wolfram); color:var(--kd-wolframText); }
+
+.kd-film-batch-dialog-layer { padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); }
+.kd-film-batch-dialog { width:min(640px,100%); max-height:calc(100dvh - 32px); overflow:auto; padding:20px; }
+.kd-film-batch-dialog :is(h2,h3) { color:var(--kd-leinwand); }
+.kd-film-batch-ziel-liste,.kd-film-batch-folgen { border-color:color-mix(in srgb,var(--kd-linie) 52%,transparent); border-radius:var(--kd-radius-control); background:color-mix(in srgb,var(--kd-saal) 55%,transparent); }
+.kd-film-batch-aktionen { position:sticky; bottom:-20px; display:flex; flex-wrap:wrap; gap:8px; margin:16px -20px -20px; padding:12px 20px calc(12px + env(safe-area-inset-bottom)); border-top:1px solid color-mix(in srgb,var(--kd-linie) 52%,transparent); background:var(--kd-saalHoch); }
+.kd-film-batch-aktionen button { flex:1 1 148px; }
+
+@media (max-width:760px) {
+  .kd-menu { display:none; }
+  .kd-app > header { --kd-shell-header-padding:16px max(20px,env(safe-area-inset-right)) 10px max(20px,env(safe-area-inset-left)); }
+  .kd-app > header::after { margin-top:8px; }
+  .kd-globalsuche { gap:0; padding:6px; border:1px solid color-mix(in srgb,var(--kd-wolfram) 64%,transparent); border-radius:12px; background:color-mix(in srgb,var(--kd-saalHoch) 94%,transparent); box-shadow:0 12px 34px rgba(0,0,0,.46); }
+  .kd-globalsuche.tastatur-offen { transition:none; }
+  .kd-globalsuche input { border:0; border-radius:8px; background:transparent; color:var(--kd-leinwand); font-family:'Space Grotesk',sans-serif; font-size:max(16px,calc(16px * var(--kd-schriftfaktor,1))); }
+  .kd-globalsuche:focus-within { box-shadow:0 0 0 3px color-mix(in srgb,var(--kd-wolfram) 45%,transparent),0 12px 34px rgba(0,0,0,.46); }
+  .kd-globalsuche input:focus { outline:0; }
+  .kd-globalsuche button { width:44px; min-width:44px; min-height:44px; padding:0; border:0; border-radius:8px; background:transparent; color:var(--kd-leinwand); }
+  .kd-globalsuche .kd-globalsuche-los { background:var(--kd-wolfram); color:var(--kd-wolframText); }
+  .kd-globalsuche .kd-globalsuche-menu { border-left:1px solid color-mix(in srgb,var(--kd-linie) 58%,transparent); }
+  .kd-globalsuche-menu i { width:18px; height:2px; border-radius:var(--kd-radius-label); }
+  .kd-globalsuche-antwort { display:flex; flex-direction:column; max-height:min(var(--kd-suche-ergebnis-maxhoehe,58dvh),440px); padding:0; border-radius:12px; border-color:color-mix(in srgb,var(--kd-wolfram) 48%,transparent); background:var(--kd-saalHoch); }
+  .kd-globalsuche-antwortkopf { position:sticky; top:0; z-index:1; align-items:center; margin:0; padding:12px; border-bottom:1px solid color-mix(in srgb,var(--kd-linie) 46%,transparent); background:var(--kd-saalHoch); }
+  .kd-globalsuche-antwortkopf span { color:var(--kd-wolfram); font-family:'Space Grotesk',sans-serif; font-size:calc(12px * var(--kd-schriftfaktor,1)); font-weight:600; letter-spacing:0; text-transform:none; }
+  .kd-globalsuche-antwortkopf strong { overflow:visible; white-space:normal; color:var(--kd-leinwand); font-family:'Barlow Condensed',sans-serif; font-size:calc(22px * var(--kd-schriftfaktor,1)); line-height:1.2; }
+  .kd-globalsuche .kd-globalsuche-schliessen { margin-left:auto; border:1px solid color-mix(in srgb,var(--kd-linie) 62%,transparent); color:var(--kd-leinwand); }
+  .kd-globalsuche-treffer { padding:8px 12px 12px; }
+  .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel { min-height:54px; padding:10px; border-color:color-mix(in srgb,var(--kd-linie) 54%,transparent); border-radius:8px; background:color-mix(in srgb,var(--kd-saal) 66%,transparent); }
+  .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel span { color:var(--kd-wolfram); font-family:'Space Grotesk',sans-serif; font-size:calc(12px * var(--kd-schriftfaktor,1)); font-weight:500; letter-spacing:0; text-transform:none; }
+  .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel strong { overflow:visible; white-space:normal; color:var(--kd-leinwand); font-family:'Barlow Condensed',sans-serif; font-size:calc(22px * var(--kd-schriftfaktor,1)); line-height:1.2; }
+  .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel small { overflow:visible; white-space:normal; color:var(--kd-rauch); font-family:'Space Grotesk',sans-serif; font-size:calc(12px * var(--kd-schriftfaktor,1)); line-height:1.45; }
+  .kd-globalsuche .kd-globalsuche-alle { width:calc(100% - 24px); margin:0 12px 12px; border:1px solid color-mix(in srgb,var(--kd-wolfram) 72%,transparent); color:var(--kd-wolfram); }
+  .kd-globalsuche .kd-globalsuche-alle,.kd-globalsuche .kd-globalsuche-aktionen button { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:calc(14px * var(--kd-schriftfaktor,1)); line-height:1.35; letter-spacing:0; text-transform:none; }
+  .kd-globalsuche .kd-globalsuche-aktionen button { width:auto; min-width:68px; padding:8px; border:1px solid var(--kd-linie); color:var(--kd-wolfram); }
+  .kd-globalsuche .kd-globalsuche-aktionen button[aria-pressed="true"] { color:var(--kd-rauch); border-color:var(--kd-linie); }
+  .kd-mobile-menu-layer { background:rgba(10,9,12,.66); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); }
+  .kd-mobile-menu { right:max(10px,env(safe-area-inset-right)); bottom:max(10px,env(safe-area-inset-bottom)); width:calc(100vw - 20px); max-width:340px; max-height:calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding:10px; border-radius:14px; border-color:color-mix(in srgb,var(--kd-wolfram) 44%,transparent); background:var(--kd-saalHoch); box-shadow:0 18px 42px rgba(0,0,0,.5); }
+  .kd-mobile-menu-liste { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+  .kd-mobile-menu-liste button { position:relative; display:flex; min-height:64px; align-items:center; gap:9px; padding:10px 9px 10px 12px; overflow:hidden; border:1px solid color-mix(in srgb,var(--kd-linie) 52%,transparent); border-radius:10px; background:color-mix(in srgb,var(--kd-saal) 36%,transparent); color:var(--kd-leinwand); font-family:'Space Grotesk',sans-serif; font-size:calc(14px * var(--kd-schriftfaktor,1)); font-weight:600; letter-spacing:0; line-height:1.25; text-align:left; text-transform:none; }
+  .kd-mobile-menu-liste button:hover,.kd-mobile-menu-liste button:focus-visible { background:color-mix(in srgb,var(--kd-wolfram) 12%,var(--kd-saalHoch)); color:var(--kd-leinwand); }
+  .kd-mobile-menu-liste button.aktiv { border-color:color-mix(in srgb,var(--kd-wolfram) 62%,var(--kd-linie)); background:color-mix(in srgb,var(--kd-wolfram) 11%,var(--kd-saalHoch)); color:var(--kd-leinwand); box-shadow:inset 3px 0 var(--kd-wolfram); }
+  .kd-mobile-menu-liste button.aktiv::before { position:absolute; top:10px; bottom:10px; left:0; width:3px; border-radius:0 3px 3px 0; background:var(--kd-wolfram); content:""; }
+  .kd-mobile-menu-liste button.kd-sicherung-offen::after { position:absolute; top:10px; right:10px; width:7px; height:7px; margin:0; border-radius:50%; background:var(--kd-gefahr); box-shadow:0 0 0 3px color-mix(in srgb,var(--kd-gefahr) 16%,transparent); }
+  .kd-mobile-menu-symbol { display:grid; width:22px; height:22px; flex:0 0 22px; place-items:center; color:var(--kd-wolfram); }
+  .kd-mobile-menu-symbol svg,.kd-mobile-menu-fusszeile svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:1.8; }
+  .kd-mobile-menu-fusszeile { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid color-mix(in srgb,var(--kd-linie) 45%,transparent); }
+  .kd-mobile-menu-fusszeile button { display:flex; min-width:0; min-height:46px; align-items:center; justify-content:center; gap:7px; padding:8px; border:1px solid color-mix(in srgb,var(--kd-linie) 58%,transparent); border-radius:9px; background:transparent; color:var(--kd-rauch); font-family:'Space Grotesk',sans-serif; font-size:calc(14px * var(--kd-schriftfaktor,1)); font-weight:600; line-height:1.25; }
+  .kd-mobile-menu-fusszeile .kd-mobile-menu-nachoben { position:static; left:auto; bottom:auto; width:auto; height:auto; transform:none; box-shadow:none; opacity:1; border-color:color-mix(in srgb,var(--kd-wolfram) 58%,var(--kd-linie)); color:var(--kd-wolfram); }
+  .kd-mobile-menu-fusszeile button:hover,.kd-mobile-menu-fusszeile button:focus-visible { background:color-mix(in srgb,var(--kd-wolfram) 10%,transparent); color:var(--kd-leinwand); }
+  .kd-entry-panel { padding:16px; }
+  .kd-film-batch-dialog { padding:16px; }
+  .kd-film-batch-aktionen { bottom:-16px; margin:16px -16px -16px; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .kd-mobile-menu { animation:none; }
+}

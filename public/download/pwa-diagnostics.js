@@ -2,7 +2,7 @@
   "use strict";
 
   const FORMAT = "kinodreieck-pwa-android-diagnose";
-  const VERSION = 1;
+  const VERSION = 2;
   const OFFLINE_PROBE_HEADER = "x-kd-offline-probe";
   const STATUS = Object.freeze(["pass", "fail", "unavailable", "not-run"]);
   const PROMPT_STATUS = Object.freeze(["available", "missing", "accepted", "dismissed", "installed"]);
@@ -18,6 +18,7 @@
     "KD-PWA-ANDROID-031": Object.freeze({ severity: "error", message: "Service-Worker-Registrierung oder Aktivierung ist fehlgeschlagen.", nextAction: "Worker-URL, Scope, CSP und Aktivierungszustand prüfen." }),
     "KD-PWA-ANDROID-032": Object.freeze({ severity: "error", message: "Seite oder Start-URL liegt außerhalb des Service-Worker-Scopes.", nextAction: "Scope und Startpfad angleichen." }),
     "KD-PWA-ANDROID-033": Object.freeze({ severity: "error", message: "Der aktive Service Worker kontrolliert diese Seite noch nicht.", nextAction: "Kontrollierten Reload, Scope und claim/Activation prüfen." }),
+    "KD-PWA-ANDROID-034": Object.freeze({ severity: "error", message: "Der kontrollierende Service Worker gehört nicht sicher zum ausgelieferten Build.", nextAction: "Seite kontrolliert neu laden und Build-Metadaten sowie Worker-Aktivierung erneut prüfen." }),
     "KD-PWA-ANDROID-040": Object.freeze({ severity: "warning", message: "Alle App-Prüfungen sind grün, aber der Browser stellt keinen Installationsdialog bereit.", nextAction: "Installationszustand, Browsermenü, Berechtigung und Engagement prüfen; dies ist nicht automatisch ein Appfehler." }),
     "KD-PWA-ANDROID-041": Object.freeze({ severity: "warning", message: "Der native Installationsdialog wurde abgelehnt.", nextAction: "Erneut nur auf bewusste Nutzeraktion anbieten." }),
     "KD-PWA-ANDROID-042": Object.freeze({ severity: "warning", message: "Der Dialog wurde akzeptiert, aber Installation oder Standalone-Modus ist noch nicht belegt.", nextAction: "Homescreen und Browserzustand prüfen und den Bericht sichern." }),
@@ -29,7 +30,7 @@
   const PRIORITY = Object.freeze([
     "KD-PWA-ANDROID-010", "KD-PWA-ANDROID-020", "KD-PWA-ANDROID-021",
     "KD-PWA-ANDROID-022", "KD-PWA-ANDROID-030", "KD-PWA-ANDROID-031",
-    "KD-PWA-ANDROID-032", "KD-PWA-ANDROID-033", "KD-PWA-ANDROID-050",
+    "KD-PWA-ANDROID-032", "KD-PWA-ANDROID-033", "KD-PWA-ANDROID-034", "KD-PWA-ANDROID-050",
     "KD-PWA-ANDROID-060", "KD-PWA-ANDROID-090", "KD-PWA-ANDROID-041",
     "KD-PWA-ANDROID-042", "KD-PWA-ANDROID-040", "KD-PWA-ANDROID-000",
   ]);
@@ -106,6 +107,7 @@
       version: VERSION,
       createdAt: safeIso(input.createdAt),
       build: boundedText(input.build, /^(?:[a-f0-9]{7,64}|dev|local|unknown)$/i, 64),
+      workerBuild: boundedText(input.workerBuild, /^(?:[a-f0-9]{7,64}|dev|local|unknown)$/i, 64),
       page,
       browser: Object.freeze({
         family: BROWSER_FAMILIES.includes(browser.family) ? browser.family : "unknown",
@@ -129,6 +131,7 @@
         serviceWorker: safeStatus(checks.serviceWorker),
         scope: safeStatus(checks.scope),
         controller: safeStatus(checks.controller),
+        workerBuild: safeStatus(checks.workerBuild),
         offline: safeStatus(checks.offline),
         storage: safeStatus(checks.storage),
         promptStatus: safePromptStatus(checks.promptStatus),
@@ -185,6 +188,37 @@
     });
   }
 
+  function readWorkerBuild(worker, MessageChannelConstructor, millis = 2500) {
+    if (!worker?.postMessage || typeof MessageChannelConstructor !== "function") {
+      return Promise.resolve("unknown");
+    }
+    return new Promise((resolve) => {
+      let done = false;
+      let channel;
+      let timer;
+      const finish = (value) => {
+        if (done) return;
+        done = true;
+        if (timer) global.clearTimeout(timer);
+        try { channel?.port1?.close?.(); } catch { /* best effort */ }
+        try { channel?.port2?.close?.(); } catch { /* best effort */ }
+        resolve(boundedText(value, /^(?:[a-f0-9]{7,64}|dev|local)$/i, 64));
+      };
+      try {
+        channel = new MessageChannelConstructor();
+        channel.port1.onmessage = (event) => {
+          const message = event?.data;
+          finish(message?.type === "KD_BUILD_VERSION" ? message.buildVersion : "unknown");
+        };
+        channel.port1.onmessageerror = () => finish("unknown");
+        timer = global.setTimeout(() => finish("unknown"), millis);
+        worker.postMessage({ type: "KD_GET_BUILD_VERSION" }, [channel.port2]);
+      } catch {
+        finish("unknown");
+      }
+    });
+  }
+
   function isWithinScope(url, scope) {
     try {
       const target = new URL(url);
@@ -199,6 +233,7 @@
     const locationObject = options.location || global.location || { href: "about:blank", origin: "null", pathname: "/" };
     const cacheStorage = options.caches || global.caches;
     const fetchFunction = options.fetch || global.fetch;
+    const MessageChannelConstructor = options.MessageChannel || global.MessageChannel;
     const pageUrl = String(locationObject.href || "about:blank");
     const pageOrigin = String(locationObject.origin || "null");
     const manifestUrl = new URL(options.manifestUrl || "../manifest.webmanifest", pageUrl).href;
@@ -209,7 +244,7 @@
     const add = (code) => { if (!findings.includes(code)) findings.push(code); };
     const checks = {
       secureContext: "not-run", manifest: "not-run", icons: "not-run", serviceWorker: "not-run",
-      scope: "not-run", controller: "not-run", offline: "not-run", storage: "not-run",
+      scope: "not-run", controller: "not-run", workerBuild: "not-run", offline: "not-run", storage: "not-run",
       promptStatus: promptState.installed ? "installed" : promptState.available ? "available" : "missing",
     };
     const capabilities = {
@@ -223,6 +258,7 @@
       appInstalled: promptState.installed === true,
     };
     let build = "unknown";
+    let workerBuild = "unknown";
     let manifestInfo = null;
 
     const fetchLocal = async (url, init) => {
@@ -285,9 +321,17 @@
         } else checks.scope = "unavailable";
         const controller = await waitForController(navigatorObject.serviceWorker);
         checks.controller = controller ? "pass" : "fail";
-        if (!controller) add("KD-PWA-ANDROID-033");
+        if (!controller) {
+          checks.workerBuild = "unavailable";
+          add("KD-PWA-ANDROID-033");
+        } else {
+          workerBuild = await readWorkerBuild(controller, MessageChannelConstructor);
+          checks.workerBuild = build !== "unknown" && workerBuild === build ? "pass" : "fail";
+          if (checks.workerBuild !== "pass") add("KD-PWA-ANDROID-034");
+        }
       } catch {
         checks.serviceWorker = "fail";
+        checks.workerBuild = "unavailable";
         add("KD-PWA-ANDROID-031");
       }
     }
@@ -328,7 +372,7 @@
       }
     } else checks.offline = "unavailable";
 
-    const appChecksGreen = ["secureContext", "manifest", "icons", "serviceWorker", "scope", "controller", "offline", "storage"]
+    const appChecksGreen = ["secureContext", "manifest", "icons", "serviceWorker", "scope", "controller", "workerBuild", "offline", "storage"]
       .every((name) => checks[name] === "pass");
     if (appChecksGreen) {
       add(capabilities.prompt || capabilities.standalone || capabilities.appInstalled
@@ -336,7 +380,7 @@
     }
 
     return sanitizeReport({
-      createdAt: new Date().toISOString(), build, pageUrl,
+      createdAt: new Date().toISOString(), build, workerBuild, pageUrl,
       browser: browserSummary(navigatorObject.userAgent), capabilities, checks,
       findings: findings.map((code) => ({ code })),
     });
@@ -351,6 +395,9 @@
       : outcome === "accepted" ? "KD-PWA-ANDROID-042"
       : outcome === "dismissed" ? "KD-PWA-ANDROID-041"
       : "KD-PWA-ANDROID-040";
+    const outcomeFindings = code === "KD-PWA-ANDROID-000"
+      && retained.some((item) => item.severity === "error")
+      ? retained : [...retained, { code }];
     return sanitizeReport({
       ...safe,
       pageUrl: `${safe.page.origin}${safe.page.path}`,
@@ -360,7 +407,7 @@
         appInstalled: outcome === "installed" || safe.capabilities.appInstalled,
       },
       checks: { ...safe.checks, promptStatus: outcome === "installed" ? "installed" : outcome },
-      findings: [...retained, { code }],
+      findings: outcomeFindings,
     });
   }
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm } from "../lib/match.js";
 import { Chip } from "./ui.jsx";
@@ -48,6 +48,103 @@ function MetaFelder({ jahr, typ, onJahr, onTyp, farbeAufKarte = false }) {
   );
 }
 
+/* Ein geoeffnetes Textfeld kann laenger leben als sein Server-/Storage-Stand.
+   Der Editor merkt sich deshalb die Basis seines Entwurfs und prueft sie noch
+   einmal innerhalb der serialisierten Must-Watch-Schreibqueue. Ein Sync darf
+   einen unberuehrten Editor aktualisieren; bei einem echten Parallelkonflikt
+   entscheidet dagegen sichtbar der Mensch, welcher Text gelten soll. */
+function KonfliktTextfeld({ eintrag, feld, placeholder, rows, onUpdate }) {
+  const aktuell = String(eintrag?.[feld] ?? "");
+  const [entwurf, setEntwurf] = useState(aktuell);
+  const [basis, setBasis] = useState(aktuell);
+  const [geaendert, setGeaendert] = useState(false);
+  const [konflikt, setKonflikt] = useState(false);
+  const [fehler, setFehler] = useState("");
+  const [speichert, setSpeichert] = useState(false);
+
+  useEffect(() => {
+    if (!geaendert) {
+      setEntwurf(aktuell);
+      setBasis(aktuell);
+      setKonflikt(false);
+      setFehler("");
+    } else if (aktuell !== basis) {
+      setKonflikt(true);
+      setFehler("Inzwischen wurde eine neuere Version geladen. Bitte entscheide, welcher Text bleiben soll.");
+    }
+  }, [aktuell, basis, geaendert]);
+
+  const bestaetigeErfolg = () => {
+    setBasis(entwurf);
+    setGeaendert(false);
+    setKonflikt(false);
+    setFehler("");
+  };
+  const speichere = async ({ ueberschreiben = false } = {}) => {
+    if (!geaendert || speichert) return;
+    if (!ueberschreiben && (konflikt || aktuell !== basis)) {
+      setKonflikt(true);
+      setFehler("Inzwischen wurde eine neuere Version geladen. Bitte entscheide, welcher Text bleiben soll.");
+      return;
+    }
+    setSpeichert(true);
+    let queueKonflikt = false;
+    try {
+      const changes = ueberschreiben
+        ? { [feld]: entwurf }
+        : (stand) => {
+          if (String(stand?.[feld] ?? "") !== basis) {
+            queueKonflikt = true;
+            return null;
+          }
+          return { [feld]: entwurf };
+        };
+      const ok = await onUpdate(eintrag.id, changes);
+      if (queueKonflikt) {
+        setKonflikt(true);
+        setFehler("Inzwischen wurde eine neuere Version gespeichert. Dein Entwurf wurde nicht automatisch darübergeschrieben.");
+      } else if (ok === false) {
+        setFehler("Text konnte nicht bestätigt gespeichert werden. Dein Entwurf bleibt erhalten.");
+      } else {
+        bestaetigeErfolg();
+      }
+    } catch {
+      setFehler("Text konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten.");
+    } finally {
+      setSpeichert(false);
+    }
+  };
+  const ladeNeuereVersion = () => {
+    setEntwurf(aktuell);
+    setBasis(aktuell);
+    setGeaendert(false);
+    setKonflikt(false);
+    setFehler("");
+  };
+
+  return (
+    <div>
+      <textarea value={entwurf} rows={rows} placeholder={placeholder}
+        disabled={speichert}
+        onChange={(ev) => { setEntwurf(ev.target.value); setGeaendert(true); setFehler(""); }}
+        onBlur={() => { void speichere(); }}
+        aria-invalid={konflikt || !!fehler}
+        style={{ ...inputStyle, width: "100%", boxSizing: "border-box", background: T.leinwandTief, color: T.tinte }} />
+      {fehler && <div role="alert" style={{ color: T.gefahr, fontSize: 12, marginTop: 4 }}>{fehler}</div>}
+      {konflikt && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+          <button type="button" style={{ ...btnStyle(false), fontSize: 11, padding: "5px 9px" }}
+            onClick={ladeNeuereVersion}>Neuere Version laden</button>
+          <button type="button" style={{ ...btnStyle(false), fontSize: 11, padding: "5px 9px" }}
+            disabled={speichert} onClick={() => { void speichere({ ueberschreiben: true }); }}>
+            Meinen Entwurf übernehmen
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* Picker: durchsucht die drei Kandidaten-Gruppen per norm-Substring; Auswahl
    ausschließlich per Klick. Max 6 Treffer pro Gruppe. */
 function VerknuepfungsPicker({ kandidaten, onWaehle, onAbbrechen }) {
@@ -68,14 +165,14 @@ function VerknuepfungsPicker({ kandidaten, onWaehle, onAbbrechen }) {
         <input autoFocus value={suche} onChange={(e) => setSuche(e.target.value)}
           placeholder="Titel suchen (Mediathek · Kinoprogramm · Streaming) …"
           style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
-        <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }} onClick={onAbbrechen}>Abbrechen</button>
+        <button style={{ ...btnStyle(false), padding: "5px 10px" }} onClick={onAbbrechen}>Abbrechen</button>
       </div>
       {treffer.map((g) => (
         <div key={g.ziel}>
           <div style={{ ...monoKlein, fontSize: 10, textTransform: "uppercase", margin: "4px 0 2px" }}>{ZIEL_LABEL[g.ziel]}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {g.hits.map((k) => (
-              <button key={g.ziel + k.id} style={{ ...btnStyle(false), fontSize: 13, padding: "5px 10px", textAlign: "left" }}
+              <button key={g.ziel + k.id} style={{ ...btnStyle(false), padding: "5px 10px", textAlign: "left" }}
                 onClick={() => onWaehle({ ziel: g.ziel, id: k.id }, k.titel)}>
                 {k.titel}{k.jahr ? " (" + k.jahr + ")" : ""}
               </button>
@@ -117,7 +214,7 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
     } finally { setSpeichert(false); }
   };
   return (
-    <div className="kd-mustwatch-form" style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-mustwatch-form" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div className="kd-mustwatch-form-hauptfelder" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input placeholder="Titel *" value={titel} onChange={(e) => setTitel(e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 180 }} />
         <MetaFelder jahr={jahr} typ={typ} onJahr={setJahr} onTyp={setTyp} />
@@ -130,7 +227,7 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
         <span style={{ ...monoKlein, color: T.tinteWeich }}>Verknüpfung:</span>
         {verkn
           ? <Chip active onClick={() => { setVerkn(null); setVerknTitel(""); }}>{ZIEL_LABEL[verkn.ziel]}: {verknTitel} ✕</Chip>
-          : <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }} onClick={() => setPickerOffen(!pickerOffen)}>{pickerOffen ? "Picker schließen" : "… wählen (optional)"}</button>}
+          : <button style={{ ...btnStyle(false), padding: "5px 10px" }} onClick={() => setPickerOffen(!pickerOffen)}>{pickerOffen ? "Picker schließen" : "… wählen (optional)"}</button>}
       </div>
       {pickerOffen && !verkn && (
         <VerknuepfungsPicker kandidaten={kandidaten}
@@ -203,10 +300,10 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
           const typ = mustwatchTyp(e.typ);
           const meta = [e.jahr || null, typ ? TYP_LABEL[typ] : null].filter(Boolean).join(" · ");
           return (
-            <div key={e.id} id={"mw-" + e.id} onClick={() => setOffenId(offen ? null : e.id)}
-              style={{ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "12px 14px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)", borderLeft: status?.aktuell ? "4px solid " + T.wolfram : "4px solid transparent" }}>
+            <div key={e.id} id={"mw-" + e.id} className="kd-karte kd-mustwatch-karte" onClick={() => setOffenId(offen ? null : e.id)}
+              style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)", borderLeft: status?.aktuell ? "4px solid " + T.wolfram : "4px solid transparent" }}>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 20, lineHeight: 1.1, textTransform: "uppercase", letterSpacing: "0.02em", flex: 1, minWidth: 160, overflowWrap: "anywhere" }}>
+                <span className="kd-mustwatch-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0, flex: 1, minWidth: 160, overflowWrap: "anywhere" }}>
                   {e.titel}
                 </span>
                 {/* Statusbadge NUR bei belegter aktueller Verknüpfung — ohne
@@ -248,22 +345,15 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
                       onJahr={(wert) => { if (wert !== (e.jahr == null ? "" : String(e.jahr))) onUpdate(e.id, { jahr: wert }); }}
                       onTyp={(wert) => onUpdate(e.id, { typ: wert })} />
                   </div>
-                  {/* Bewusst unkontrolliert + onBlur: jeder onUpdate persistiert
-                      und kann einen Konto-Sync auslösen. Speichern beim Verlassen
-                      des Felds vermeidet unnötige Schreibvorgänge pro Tastendruck. */}
-                  <textarea defaultValue={e.beschreibung || ""} rows={2} placeholder="Beschreibung"
-                    onBlur={(ev) => { if (ev.target.value !== (e.beschreibung || "")) onUpdate(e.id, { beschreibung: ev.target.value }); }}
-                    style={{ ...inputStyle, boxSizing: "border-box", background: T.leinwandTief, color: T.tinte }} />
-                  <textarea defaultValue={e.notiz || ""} rows={1} placeholder="Notiz (frei)"
-                    onBlur={(ev) => { if (ev.target.value !== (e.notiz || "")) onUpdate(e.id, { notiz: ev.target.value }); }}
-                    style={{ ...inputStyle, boxSizing: "border-box", background: T.leinwandTief, color: T.tinte }} />
+                  <KonfliktTextfeld eintrag={e} feld="beschreibung" rows={2} placeholder="Beschreibung" onUpdate={onUpdate} />
+                  <KonfliktTextfeld eintrag={e} feld="notiz" rows={1} placeholder="Notiz (frei)" onUpdate={onUpdate} />
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {e.verknuepfung
-                      ? <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", color: T.tinte, borderColor: T.tinteWeich }}
+                      ? <button style={{ ...btnStyle(false), padding: "5px 10px", color: T.tinte, borderColor: T.tinteWeich }}
                           onClick={() => onUpdate(e.id, { verknuepfung: null })}>Verknüpfung lösen</button>
-                      : <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", color: T.tinte, borderColor: T.tinteWeich }}
+                      : <button style={{ ...btnStyle(false), padding: "5px 10px", color: T.tinte, borderColor: T.tinteWeich }}
                           onClick={() => setPickerFuer(pickerFuer === e.id ? null : e.id)}>{pickerFuer === e.id ? "Picker schließen" : "Verknüpfen …"}</button>}
-                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", borderColor: T.gefahr, color: T.gefahr }}
+                    <button style={{ ...btnStyle(false), padding: "5px 10px", borderColor: T.gefahr, color: T.gefahr }}
                       onClick={() => { if (window.confirm('"' + e.titel + '" aus der Must-Watch-Liste löschen?')) onDelete(e.id); }}>
                       Entfernen
                     </button>

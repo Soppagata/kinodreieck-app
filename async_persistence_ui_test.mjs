@@ -27,12 +27,14 @@ await esbuild.build({
   stdin: {
     contents: [
       'export { FilmCard } from "./src/components/FilmCard.jsx";',
+      'export { FilmForm } from "./src/components/EintragForm.jsx";',
       'export { MedienForm } from "./src/components/MedienForm.jsx";',
       'export { StapelImport } from "./src/components/StapelImport.jsx";',
       'export { GlobalErrorQueue } from "./src/components/GlobalErrorQueue.jsx";',
       'export { Wochenplan } from "./src/components/Wochenplan.jsx";',
       'export { StreamingTab } from "./src/tabs/StreamingTab.jsx";',
       'export { ArtikelMaske } from "./src/tabs/BlogTab.jsx";',
+      'export { MustWatchListe } from "./src/components/MustWatchListe.jsx";',
       'export { KontoUebernahme } from "./src/components/KontoUebernahme.jsx";',
       'export { useBackupExportController } from "./src/controllers/useBackupExportController.js";',
       'export { useVokabularController } from "./src/controllers/useVokabularController.js";',
@@ -68,7 +70,7 @@ const React = await import("react");
 const { act, createElement: h } = React;
 const { createRoot } = await import("react-dom/client");
 const {
-  FilmCard, MedienForm, StapelImport, GlobalErrorQueue, ArtikelMaske, KontoUebernahme,
+  FilmCard, FilmForm, MedienForm, StapelImport, GlobalErrorQueue, ArtikelMaske, MustWatchListe, KontoUebernahme,
   Wochenplan, StreamingTab,
   useBackupExportController, useVokabularController, K, setGebundenerTestTreiber,
   alleStimmungen, setzeEigeneStimmungen, vokabularZuMap,
@@ -175,6 +177,39 @@ check(!!knopf(artikelFixture.container, "Speichern") && /Eingabe bleibt erhalten
   "Artikelmaske bleibt nach fehlgeschlagenem Write mit sichtbarer Diagnose offen");
 await artikelFixture.cleanup();
 
+let artikelJahrWrites = 0;
+const artikelJahrFixture = await mounte(ArtikelMaske, {
+  vorlage: {
+    id: "blog_jahr", titel: "Titel", autor: "Max", text: "Text", geordnet: false,
+    geteilt: false, liste: [{ eingabe: "Referenz", jahr: "1979.5", typ: "film" }],
+  },
+  onErstellen: async () => { artikelJahrWrites++; return "blog_jahr"; },
+  onAbbrechen() {},
+});
+await act(async () => { knopf(artikelJahrFixture.container, "Speichern").click(); await tick(); });
+check(artikelJahrWrites === 0
+  && /Referenz 1: Jahr muss leer oder eine ganze Zahl zwischen 1888/.test(artikelJahrFixture.container.textContent)
+  && artikelJahrFixture.container.querySelector('input[placeholder="Jahr"]').getAttribute("aria-invalid") === "true",
+"Artikelmaske blockiert nicht-ganzzahlige Referenzjahre mit sichtbarem Feldfehler");
+await artikelJahrFixture.cleanup();
+
+let historischerArtikel = null;
+const historischerArtikelFixture = await mounte(ArtikelMaske, {
+  vorlage: {
+    id: "blog_historisch", titel: "Historisch", autor: "Max", text: "Text", geordnet: false,
+    geteilt: false, liste: [
+      { eingabe: "Hamlet", jahr: "1603", typ: "sonstiges" },
+      { eingabe: "Frühe Quelle", jahr: "814", typ: "" },
+    ],
+  },
+  onErstellen: async (daten) => { historischerArtikel = daten; return "blog_historisch"; },
+  onAbbrechen() {},
+});
+await act(async () => { knopf(historischerArtikelFixture.container, "Speichern").click(); await tick(); });
+check(historischerArtikel?.liste[0].jahr === 1603 && historischerArtikel?.liste[1].jahr === 814,
+  "Artikelmaske bewahrt historische Nicht-Film- und untypisierte Referenzjahre");
+await historischerArtikelFixture.cleanup();
+
 const kontoFixture = await mounte(ArtikelMaske, {
   vorlage: null, angemeldet: true, onErstellen: async () => null, onAbbrechen() {},
 });
@@ -238,6 +273,108 @@ check(medienFixture.container.querySelector('input[placeholder="Titel *"]').valu
   && /Eingabe bleibt erhalten/.test(medienFixture.container.textContent),
 "MedienForm bleibt bei fehlgeschlagener Persistenz samt Eingabe offen");
 await medienFixture.cleanup();
+
+let medienJahrWrites = 0;
+const medienJahrFixture = await mounte(MedienForm, {
+  typ: "musik", startOffen: true, initial: { titel: "Zeitreise", jahr: "bald" },
+  onAdd: async () => { medienJahrWrites++; return "zeitreise"; },
+});
+await act(async () => { knopf(medienJahrFixture.container, "Hinzufügen").click(); await tick(); });
+check(medienJahrWrites === 0
+  && /Jahr muss leer oder eine ganze Zahl zwischen 1/.test(medienJahrFixture.container.textContent)
+  && medienJahrFixture.container.querySelector('input[placeholder="Jahr"]').getAttribute("aria-invalid") === "true",
+"MedienForm blockiert Freitextjahre vor onAdd und erklärt die gültige Eingabe");
+await medienJahrFixture.cleanup();
+
+let historischesMedium = null;
+const historischesMedienFixture = await mounte(MedienForm, {
+  typ: "sonstiges", startOffen: true, initial: { titel: "Hamlet", jahr: "1603" },
+  onAdd: async (daten) => { historischesMedium = daten; return "hamlet_1603"; },
+});
+await act(async () => { knopf(historischesMedienFixture.container, "Hinzufügen").click(); await tick(); });
+check(historischesMedium?.jahr === 1603 && historischesMedium?.typ === "sonstiges",
+  "MedienForm persistiert ein historisches Nicht-Film-Jahr als ganze Zahl");
+await historischesMedienFixture.cleanup();
+
+let filmJahrWrites = 0;
+const filmJahrFixture = await mounte(FilmForm, {
+  typOptionen: ["film"], startOffen: true, initial: { titel: "Vor dem Kino", jahr: "1603" },
+  onAdd: async () => { filmJahrWrites++; return "vor_dem_kino_1603"; },
+});
+await act(async () => { knopf(filmJahrFixture.container, "Hinzufügen").click(); await tick(); });
+check(filmJahrWrites === 0
+  && /Jahr muss eine ganze Zahl zwischen 1888/.test(filmJahrFixture.container.textContent)
+  && filmJahrFixture.container.querySelector('input[placeholder="Jahr *"]').getAttribute("aria-invalid") === "true",
+  "Adaptive EintragForm blockiert historische Jahreszahlen gezielt nur im Filmtyp");
+await filmJahrFixture.cleanup();
+
+let historischePerson = null;
+const personJahrFixture = await mounte(FilmForm, {
+  typOptionen: ["sonstiges"], startOffen: true, initial: { titel: "William Shakespeare", jahr: "1564" },
+  onAdd: async (daten) => { historischePerson = daten; return "william_shakespeare_1564"; },
+});
+await act(async () => { knopf(personJahrFixture.container, "Hinzufügen").click(); await tick(); });
+check(historischePerson?.jahr === 1564 && historischePerson?.typ === "sonstiges",
+  "Adaptive EintragForm persistiert historische Personenjahre als ganze Zahl");
+await personJahrFixture.cleanup();
+
+/* Must-Watch: ein offener Editor darf einen späteren Syncstand nicht beim
+   nächsten Blur mit seinem alten DOM-Wert überschreiben. Eigene parallele
+   Änderungen bleiben als Entwurf sichtbar und verlangen eine Entscheidung. */
+let setMustwatchExtern = null;
+const mustwatchWrites = [];
+function MustwatchSyncProbe() {
+  const [eintraege, setEintraege] = React.useState([{
+    id: "mw_sync", titel: "Stalker", jahr: 1979, typ: "film",
+    beschreibung: "Alter Stand", notiz: "", verknuepfung: null,
+  }]);
+  setMustwatchExtern = setEintraege;
+  return h(MustWatchListe, {
+    eintraege,
+    kandidaten: { master: [], programm: [], streaming: [] },
+    onAdd: async () => true,
+    onUpdate: async (id, changes) => {
+      mustwatchWrites.push({ id, changes });
+      setEintraege((prev) => prev.map((entry) => {
+        if (entry.id !== id) return entry;
+        const berechnet = typeof changes === "function" ? changes(entry) : changes;
+        return berechnet && typeof berechnet === "object" ? { ...entry, ...berechnet } : entry;
+      }));
+      return true;
+    },
+    onDelete: async () => true,
+  });
+}
+const mustwatchSyncFixture = await mounte(MustwatchSyncProbe, {});
+await act(async () => { mustwatchSyncFixture.container.querySelector("#mw-mw_sync").click(); await tick(); });
+let mustwatchBeschreibung = mustwatchSyncFixture.container.querySelector('textarea[placeholder="Beschreibung"]');
+await act(async () => {
+  setMustwatchExtern((prev) => prev.map((entry) => ({ ...entry, beschreibung: "Neuer Syncstand" })));
+  await tick();
+});
+mustwatchBeschreibung = mustwatchSyncFixture.container.querySelector('textarea[placeholder="Beschreibung"]');
+check(mustwatchBeschreibung.value === "Neuer Syncstand",
+  "Unberührter Must-Watch-Editor übernimmt einen neu eintreffenden Syncstand");
+await act(async () => { mustwatchBeschreibung.dispatchEvent(new dom.window.Event("blur", { bubbles: true })); await tick(); });
+check(mustwatchWrites.length === 0,
+  "Blur eines unberührten Editors schreibt keinen alten Must-Watch-Stand zurück");
+await act(async () => { setzeWert(mustwatchBeschreibung, "Mein lokaler Entwurf"); await tick(); });
+await act(async () => {
+  setMustwatchExtern((prev) => prev.map((entry) => ({ ...entry, beschreibung: "Noch neuerer Syncstand" })));
+  await tick();
+});
+mustwatchBeschreibung = mustwatchSyncFixture.container.querySelector('textarea[placeholder="Beschreibung"]');
+check(mustwatchBeschreibung.value === "Mein lokaler Entwurf"
+  && /neuere Version geladen/.test(mustwatchSyncFixture.container.textContent)
+  && !!knopf(mustwatchSyncFixture.container, "Neuere Version laden"),
+"Paralleler Must-Watch-Textkonflikt bewahrt den Entwurf und verlangt eine sichtbare Entscheidung");
+await act(async () => { mustwatchBeschreibung.dispatchEvent(new dom.window.Event("blur", { bubbles: true })); await tick(); });
+check(mustwatchWrites.length === 0,
+  "Konflikt-Blur überschreibt den neueren Must-Watch-Syncstand nicht automatisch");
+await act(async () => { knopf(mustwatchSyncFixture.container, "Neuere Version laden").click(); await tick(); });
+check(mustwatchSyncFixture.container.querySelector('textarea[placeholder="Beschreibung"]').value === "Noch neuerer Syncstand",
+  "Konflikt kann ohne Write zugunsten der neueren Must-Watch-Version aufgelöst werden");
+await mustwatchSyncFixture.cleanup();
 
 /* Stapelimport: blockierter/falscher Bulk-Write behält die geprüfte Vorschau. */
 let stapelResolver = null;
@@ -431,6 +568,20 @@ check(await ersterKlick === queueA && await zweiterKlick === queueB
 const appQuelle = fs.readFileSync(path.join(wurzel, "src/App.jsx"), "utf8");
 check(/useVokabularController\(\s*\{\s*setErr\s*\}\s*\)/.test(appQuelle),
   "App bindet den echten useVokabularController im Runtime-Pfad weiter");
+check(!/store\.set\([^\n]+\)\.catch\(\(\) => \{\}\)/.test(appQuelle)
+  && !/try \{ await store\.set[^\n]+\} catch \{ \/\* nicht fatal \*\/ \}/.test(appQuelle),
+"App verschluckt keine asynchronen Storage-Schreibfehler mehr lautlos");
+for (const text of [
+  "Die Kino-Zeitgrenze konnte nicht gespeichert werden",
+  "Die Einstellung konnte nicht gespeichert werden",
+  "Der Darstellungsmodus konnte nicht gespeichert werden",
+  "Der Kinotermin konnte nicht gespeichert werden",
+  "Die Streaming-Merkliste konnte nicht gespeichert werden",
+  "Die Streaming-Dienste konnten nicht gespeichert werden",
+  "Die Streaming-Heuristik konnte nicht gespeichert werden",
+]) {
+  check(appQuelle.includes(text), `App macht Persistenzfehler sichtbar: ${text}`);
+}
 
 const wortImFinder = (wort) => Object.prototype.hasOwnProperty.call(alleStimmungen(), wort);
 async function mounteVokabularController() {

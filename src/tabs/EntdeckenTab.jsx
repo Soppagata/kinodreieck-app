@@ -427,9 +427,12 @@ function RadarView({
       </article>
       <article className="kd-entdecken-panel">
         <h3>Neuigkeiten</h3>
-        {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId}>
-          <strong>{entry.title}</strong>
-          <span>{formatPresentationDate(entry.date, { fallback: entry.date })} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""} · Gefunden für: {target
+        {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId} className="kd-radar-neuigkeit">
+          <h4 className="kd-radar-neuigkeit-titel">{entry.title}</h4>
+          <span className="kd-radar-neuigkeit-meta">{entry.date
+            ? formatPresentationDate(entry.date, { fallback: entry.date })
+            : "Datum nicht verfügbar"} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel || "Starttermin"}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
+          <span className="kd-radar-neuigkeit-herkunft">Gefunden für: {target
             ? localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })
             : "Zuordnung nicht verfügbar"}</span>
           {entry.kind === "season" ? <details className="kd-radar-folgen">

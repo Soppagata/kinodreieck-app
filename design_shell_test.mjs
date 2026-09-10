@@ -1,0 +1,36 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+const css = read("./src/styles/design-shell.css");
+const search = read("./src/components/GlobalSearchBar.jsx");
+const navigation = read("./src/components/AppNavigation.jsx");
+const fixture = read("./tests/private-v1/fixtures.mjs");
+const browserSpec = read("./tests/private-v1/design-search-shell.spec.mjs");
+const konto = read("./src/components/KontoBereich.jsx");
+const uebernahme = read("./src/components/KontoUebernahme.jsx");
+
+assert.match(css, /\.kd-globalsuche \{[\s\S]*border-radius:12px/);
+assert.match(css, /\.kd-globalsuche \.kd-globalsuche-los \{[\s\S]*var\(--kd-wolfram\)/);
+assert.match(css, /\.kd-globalsuche-antwortkopf \{[\s\S]*position:sticky/);
+assert.match(css, /\.kd-globalsuche-trefferzeile>\.kd-globalsuche-ziel strong \{[\s\S]*white-space:normal/);
+const menuMinHeight = Number(css.match(/\.kd-mobile-menu-liste button \{[^}]*min-height:(\d+(?:\.\d+)?)px/)?.[1] || 0);
+assert.ok(menuMinHeight >= 44, "menu targets retain at least 44px height");
+assert.match(css, /\.kd-film-batch-aktionen \{[\s\S]*position:sticky/);
+assert.doesNotMatch(css, /transition\s*:[^;]*(?:top|bottom|transform|height|width)/i);
+assert.match(search, /IconSearch/);
+assert.match(search, /IconClose/);
+assert.doesNotMatch(search, />⌕</);
+assert.doesNotMatch(navigation, /icon: "⌕"/);
+assert.doesNotMatch(css, /\.kd-menu button \{/);
+assert.doesNotMatch(fixture, /__kdDesignViewport|privateViewportApp/);
+assert.match(browserSpec, /fixtureTest\.extend/);
+assert.match(browserSpec, /touchMovePrevented/);
+assert.match(browserSpec, /height: 260/);
+assert.doesNotMatch(konto, /\.\.\.btnStyle\([^)]*\),\s*fontSize/);
+assert.doesNotMatch(uebernahme, /\.\.\.btnStyle\([^)]*\),\s*fontSize/);
+assert.match(css, /\.kd-necro-glyphen[\s\S]*font-family:'Fraunces'/);
+assert.match(css, /\.kd-teppich-kicker \{[\s\S]*font-weight:400/);
+assert.match(css, /\.kd-necro-schliessen \{ min-width:44px; min-height:44px;/);
+assert.match(css, /\.kd-entry-head h1 \{[\s\S]*font-family:'Fraunces'[\s\S]*font-weight:900/);
+console.log("design_shell_test: 21 Shell-Verträge bestanden.");

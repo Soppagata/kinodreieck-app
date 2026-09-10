@@ -14,7 +14,7 @@ import { formatPresentationDate } from "../lib/presentationDate.js";
    Ingestion-Popup: Prompt für eine fremde KI, die gebunchte Listen im
    selben Format erzeugt. Eigenes wird beim Import NIE überschrieben. */
 
-const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", get color() { return T.wolfram; }, margin: "0 0 10px" };
+const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2, letterSpacing: 0, textTransform: "none", get color() { return T.leinwand; }, margin: "0 0 10px" };
 const monoKlein = { fontFamily: "'Space Mono', monospace", fontSize: 11, get color() { return T.rauch; } };
 
 /* ohneKopf: Kopfzeile weglassen, wenn der Titel außen an einer Klappe steht
@@ -101,7 +101,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
     setListe(liste.includes(wert) ? liste.filter((x) => x !== wert) : [...liste, wert]);
 
   return (
-    <div style={{ background: nurKi ? "transparent" : T.saalHoch, borderRadius: 6, padding: nurKi ? "16px 0 0" : "16px 18px", marginTop: nurKi ? 14 : 0, borderTop: nurKi ? "1px solid " + T.saal : "none" }}>
+    <div className="kd-teilen-block" style={{ background: nurKi ? "transparent" : T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: nurKi ? "16px 0 0" : "16px", marginTop: nurKi ? 14 : 0, borderTop: nurKi ? "1px solid " + T.saal : "none" }}>
       <input ref={dateiRef} type="file" accept=".json" style={{ display: "none" }} onChange={dateiGewaehlt} />
       {nurKi ? (
         <>
@@ -180,7 +180,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
           </p>
           <textarea id="kd-ingestion-prompt" readOnly value={ingestionPrompt(autorName)} rows={9}
             onFocus={(e) => e.target.select()}
-            style={{ ...inputStyle, width: "100%", maxWidth: "100%", minHeight: 240, maxHeight: "50vh", resize: "vertical", overflow: "auto", boxSizing: "border-box", fontFamily: "'Space Mono', monospace", fontSize: 11, lineHeight: 1.5 }} />
+            style={{ ...inputStyle, width: "100%", maxWidth: "100%", minHeight: 240, maxHeight: "50vh", resize: "vertical", overflow: "auto", boxSizing: "border-box", fontFamily: "'Space Mono', monospace", lineHeight: 1.5 }} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
             <button style={btnStyle(true)} onClick={kopierePrompt}>{kopiert ? "✓ Kopiert" : "Prompt kopieren"}</button>
             <button style={btnStyle(false)} onClick={() => dateiRef.current && dateiRef.current.click()}>Upload: Datei wählen</button>
@@ -190,7 +190,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
           <div style={{ marginTop: 10, borderTop: "1px solid " + T.saal, paddingTop: 10 }}>
             <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={3}
               placeholder="… oder das JSON aus der KI-Antwort hier einfügen"
-              style={{ ...inputStyle, width: "100%", boxSizing: "border-box", fontFamily: "'Space Mono', monospace", fontSize: 11 }} />
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box", fontFamily: "'Space Mono', monospace" }} />
             <button style={{ ...btnStyle(false), marginTop: 6 }} disabled={!pasteText.trim()}
               onClick={() => { ladePaketText(pasteText); setPasteText(""); }}>
               Eingefügtes importieren

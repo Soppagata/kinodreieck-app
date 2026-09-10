@@ -39,13 +39,30 @@ export function beobachteInstallation(fn) {
 }
 
 export async function installiereApp() {
-  if (!installAufruf) return { moeglich: false, angenommen: false };
+  if (!installAufruf) {
+    return { moeglich: false, angenommen: false, status: "nicht-verfuegbar" };
+  }
   const aufruf = installAufruf;
-  await aufruf.prompt();
-  const ergebnis = await aufruf.userChoice;
-  if (ergebnis?.outcome === "accepted") installAufruf = null;
+  /* BeforeInstallPromptEvent.prompt() ist nur einmal nutzbar. Der verbrauchte
+     Aufruf darf deshalb weder nach Abbruch noch nach einem Fehler als erneut
+     installierbar erscheinen. Ein späteres Browserereignis setzt den Status
+     wieder auf installierbar und bleibt von diesem Versuch unberührt. */
+  installAufruf = null;
   meldeAenderung();
-  return { moeglich: true, angenommen: ergebnis?.outcome === "accepted" };
+  try {
+    const promptResult = await aufruf.prompt();
+    const ergebnis = promptResult?.outcome ? promptResult : await aufruf.userChoice;
+    const angenommen = ergebnis?.outcome === "accepted";
+    return {
+      moeglich: true,
+      angenommen,
+      status: angenommen ? "angenommen" : "abgebrochen",
+    };
+  } catch {
+    return { moeglich: true, angenommen: false, status: "fehlgeschlagen" };
+  } finally {
+    meldeAenderung();
+  }
 }
 
 export function useInstallationsStatus() {

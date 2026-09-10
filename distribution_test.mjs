@@ -37,7 +37,7 @@ check("Der App-Start versucht unter file:// keine Service-Worker-Registrierung",
   /location\?\.protocol[\s\S]*?!==\s*"file:"/.test(mainCode)
   && /kann die API zwar vorhanden sein/.test(mainCode));
 
-function ladeInstallSkript({ registrierung = () => Promise.resolve({}) } = {}) {
+function ladeInstallSkript({ registrierung = () => Promise.resolve({}), diagnostics = null } = {}) {
   const fensterListener = {};
   const elemente = new Map();
   for (const selector of [
@@ -64,6 +64,7 @@ function ladeInstallSkript({ registrierung = () => Promise.resolve({}) } = {}) {
       matchMedia() { return { matches: false }; },
       navigator,
       setTimeout() {},
+      KdPwaDiagnostics: diagnostics,
     },
     document: {
       querySelector(selector) { return elemente.get(selector) || null; },
@@ -72,7 +73,15 @@ function ladeInstallSkript({ registrierung = () => Promise.resolve({}) } = {}) {
     URL, Blob, Date,
   };
   vm.runInNewContext(installCode, kontext, { filename: "public/download/install.js" });
-  return { fensterListener, knopfListener: knopf.listener, hinweis, registrierungen };
+  return {
+    fensterListener,
+    knopf,
+    knopfListener: knopf.listener,
+    diagnoseListener: elemente.get("[data-diagnose-android]").listener,
+    diagnoseErgebnis: elemente.get("#diagnose-ergebnis"),
+    hinweis,
+    registrierungen,
+  };
 }
 
 const direkt = ladeInstallSkript();
@@ -102,15 +111,57 @@ await fallback.knopfListener.click();
 check("Ohne Browserdialog erscheint die manuelle Installationsanleitung",
   /Browsermenü öffnen/.test(fallback.hinweis.textContent));
 
-const abgelehnt = ladeInstallSkript();
+const diagnoseOutcomes = [];
+const abgelehnt = ladeInstallSkript({
+  diagnostics: {
+    async runDiagnostics() {
+      return {
+        primaryCode: "KD-PWA-ANDROID-000",
+        findings: [{ code: "KD-PWA-ANDROID-000", message: "bereit", nextAction: "keine" }],
+      };
+    },
+    withPromptOutcome(bericht, outcome) {
+      diagnoseOutcomes.push(outcome);
+      const code = outcome === "dismissed" ? "KD-PWA-ANDROID-041" : "KD-PWA-ANDROID-000";
+      return { ...bericht, primaryCode: code, findings: [{ code, message: "Status", nextAction: "Prüfen" }] };
+    },
+  },
+});
+let abgelehntePrompts = 0;
 abgelehnt.fensterListener.beforeinstallprompt({
   preventDefault() {},
-  prompt() {},
+  prompt() { abgelehntePrompts++; },
   userChoice: Promise.resolve({ outcome: "dismissed" }),
 });
 await abgelehnt.knopfListener.click();
 check("Ein abgebrochener Browserdialog bleibt ehrlich wiederholbar",
-  /nicht gestartet/.test(abgelehnt.hinweis.textContent));
+  abgelehntePrompts === 1 && abgelehnt.knopf.disabled === false
+  && /sobald der Browser ihn wieder anbietet/.test(abgelehnt.hinweis.textContent));
+await abgelehnt.diagnoseListener.click();
+check("Eine spätere Diagnose bewahrt die belegte Prompt-Ablehnung",
+  diagnoseOutcomes.at(-1) === "dismissed"
+  && abgelehnt.diagnoseErgebnis.dataset.code === "KD-PWA-ANDROID-041");
+await abgelehnt.knopfListener.click();
+check("Ein verbrauchtes Prompt-Ereignis wird nicht fälschlich ein zweites Mal verwendet",
+  abgelehntePrompts === 1 && /Browsermenü öffnen/.test(abgelehnt.hinweis.textContent));
+let neuerPrompt = 0;
+abgelehnt.fensterListener.beforeinstallprompt({
+  preventDefault() {}, prompt() { neuerPrompt++; },
+  userChoice: Promise.resolve({ outcome: "accepted" }),
+});
+await abgelehnt.knopfListener.click();
+check("Ein später neu angebotenes Browserereignis macht den Installationsknopf wieder nutzbar",
+  neuerPrompt === 1 && /Installation wurde angenommen/.test(abgelehnt.hinweis.textContent));
+
+const promptFehler = ladeInstallSkript();
+promptFehler.fensterListener.beforeinstallprompt({
+  preventDefault() {}, async prompt() { throw new Error("prompt-unavailable"); },
+  userChoice: Promise.resolve({ outcome: "dismissed" }),
+});
+await promptFehler.knopfListener.click();
+check("Ein nicht verfügbarer Prompt entsperrt die Bedienung und verspricht keine Wiederholung",
+  promptFehler.knopf.disabled === false
+  && /gerade nicht verfügbar/.test(promptFehler.hinweis.textContent));
 
 const swFehler = ladeInstallSkript({
   registrierung: () => Promise.reject(new Error("offline")),

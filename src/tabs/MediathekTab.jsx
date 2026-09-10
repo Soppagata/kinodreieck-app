@@ -574,7 +574,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   ]);
 
   return (
-    <section>
+    <section className="kd-mediathek-tab">
       <div className="kd-mediathek-dialog-hintergrund" inert={loeschDialog ? true : undefined}
         aria-hidden={loeschDialog ? "true" : undefined}>
       {/* Ansicht-Umschalter: Einträge · Im Besitz · Must-Watch (immer sichtbar).
@@ -592,6 +592,11 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           onAdd={addMustwatch} onUpdate={updateMustwatch} onDelete={deleteMustwatch}
           kandidaten={mwKandidaten} kommtVorInMap={kommtVorInMap} onArtikelKlick={onArtikelKlick}
           onSpringeZuRef={onSpringeZuMustwatchRef} />
+      )}
+
+      {ansicht !== "mustwatch" && (
+        <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={wechsleTyp}
+          options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
       )}
 
       {ansicht !== "mustwatch" && (<>
@@ -644,16 +649,12 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           )}
         </div>
       )}
-      {/* Typ-Tabs (Filter auf typ) */}
-      <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={wechsleTyp}
-        options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
-
       <div className={`kd-kompakt kd-mediathek-suchleiste${auswahlmodus ? " kd-mediathek-suchleiste--auswahl" : ""}`}
         style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input className="kd-lokalsuche" value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel oder Originaltitel suchen …"
           style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
         {suche && <button type="button" className="kd-lokalsuche-loeschen" aria-label="Mediatheksuche leeren" title="Mediatheksuche leeren"
-          style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSuche("")}><IconClose /></button>}
+          style={{ ...btnStyle(false), padding: "6px 11px" }} onClick={() => setSuche("")}><IconClose /></button>}
         <select value={sortier} onChange={(e) => setSortier(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
           {dreieckTab && <option value="score">Bewertung: WIE · WAS · WARUM</option>}
           <option value="titel">Titel A–Z</option>
@@ -678,7 +679,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       {dreieckTab && (
         <>
           <button className="kd-seitenfilter" onClick={toggleFilterMenue} title={filterMenueOffen ? "Filter einklappen" : "Filter ausklappen"}
-            style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", marginBottom: 8 }}>
+            style={{ ...btnStyle(false), padding: "5px 10px", marginBottom: 8 }}>
             {filterMenueOffen ? "▾ Filter" : "▸ Filter"}
           </button>
           {filterMenueOffen && (
@@ -834,14 +835,14 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                   <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.leinwandTief, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ color: ROTLINK, flex: 1, minWidth: 160 }}>{o.eingabe}{o.jahr ? " (" + o.jahr + ")" : ""}{o.typ ? " · " + o.typ : ""}</span>
                     <span style={{ color: T.rauch }}>aus „{o.artikelTitel}“</span>
-                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }} onClick={() => {
+                    <button style={{ ...btnStyle(false), padding: "4px 10px" }} onClick={() => {
                       setRefAnlegen(aktiv ? null : o.draftKey);
                       if (aktiv) setBewahrterRefKey(null);
                     }}>
                       {aktiv ? "Schließen" : "✎ Anlegen"}
                     </button>
                     {onArtikelKlick && (
-                      <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }} onClick={() => onArtikelKlick(o.artikelId)}>→ Artikel</button>
+                      <button style={{ ...btnStyle(false), padding: "4px 10px" }} onClick={() => onArtikelKlick(o.artikelId)}>→ Artikel</button>
                     )}
                   </div>
                   {aktiv && (
@@ -885,7 +886,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                     <span style={{ color: T.leinwand, flex: 1, minWidth: 180 }}>{n.titel}{n.jahr ? " (" + n.jahr + ")" : ""}</span>
                     <span style={{ color: T.wolfram }}>{q.join("+")}</span>
                     {n.edition && <span style={{ color: T.rauch }}>{n.edition}</span>}
-                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }}
+                    <button style={{ ...btnStyle(false), padding: "4px 10px" }}
                       onClick={() => {
                         setBewerteTitel(aktiv ? null : n.titel);
                         if (aktiv) {

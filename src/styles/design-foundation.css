@@ -1,0 +1,248 @@
+/* Gemeinsamer Vertrag für die Designpakete D2, D3 und D5.
+   Die drei leeren Folgedateien werden bewusst erst nach dieser Grundlage
+   importiert; spätere Bereichsowner können dort gezielt ergänzen. */
+:root {
+  --kd-saal: #17151A;
+  --kd-saalHoch: #211E26;
+  --kd-leinwand: #ECE8DF;
+  --kd-leinwandTief: #DFDACD;
+  --kd-tinte: #1C1A1E;
+  --kd-tinteWeich: #57525C;
+  --kd-rauch: #B6AFBE;
+  --kd-wolfram: #E3A63B;
+  --kd-gefahr: #D96A5A;
+  --kd-kartenFeld: #FBFAF7;
+  --kd-kartenText: #1C1A1E;
+  --kd-kartenTextWeich: #57525C;
+  --kd-kartenAkzent: #E3A63B;
+  --kd-linie: #8C8593;
+  --kd-wolframText: #000000;
+  --kd-focus: var(--kd-wolfram);
+  --kd-radius-karte: 12px;
+  --kd-radius-control: 8px;
+  --kd-radius-label: 5px;
+  --kd-space-1: 4px;
+  --kd-space-2: 8px;
+  --kd-space-3: 12px;
+  --kd-space-4: 16px;
+  --kd-space-6: 24px;
+  --kd-space-8: 32px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { font-size: 100%; }
+body {
+  min-width: 320px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: calc(15px * var(--kd-schriftfaktor, 1));
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+}
+
+button, input, select, textarea { font: inherit; }
+/* The native menu and value semantics stay intact. The closed select gets
+   the same CSS chevron in every engine; these longhands must survive
+   existing inline background/padding shorthands on the shared inputs. */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%) !important;
+  background-position: right 16px center, right 12px center !important;
+  background-size: 4px 4px !important;
+  background-repeat: no-repeat !important;
+  padding-right: 32px !important;
+}
+button, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), summary { touch-action: manipulation; }
+button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opacity: .58; }
+:focus-visible { outline: 3px solid var(--kd-focus); outline-offset: 3px; }
+
+/* Die Rollen sind absichtlich nur an semantische Überschriften gebunden.
+   Bereichspakete klassifizieren ihre lokalen Titel, ohne globale Karten oder
+   besondere Egg-Gestaltungen zu überfahren. */
+h1, .kd-display-titel {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 900;
+  font-size: clamp(calc(38px * var(--kd-schriftfaktor, 1)), 7.2vw, calc(46px * var(--kd-schriftfaktor, 1)));
+  line-height: 1.08;
+  letter-spacing: -.02em;
+  text-transform: none;
+}
+h2, h3, .kd-abschnitt-titel {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: none;
+}
+.kd-film-titel {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  font-size: calc(22px * var(--kd-schriftfaktor, 1));
+  line-height: 1.2;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.kd-meta, .kd-anbieter-label { font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+.kd-kennung, time, .kd-uhrzeit { font-family: 'Space Mono', monospace; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+
+/* Der Kartenvertrag ist semantisch: helle Papierkarten im dunklen Saal,
+   dunkle Karten im hellen Foyer. Bestehende Karten nutzen weiterhin ihre
+   jeweiligen Tintenrollen, statt versehentlich Saalbegleittext zu erben. */
+.kd-karte, .kd-filmkarte, .kd-dash-karte, .kd-wochen-tag, .kd-kino-ticket {
+  border-radius: var(--kd-radius-karte);
+}
+.kd-karte, .kd-filmkarte, .kd-dash-karte, .kd-kino-ticket {
+  color: var(--kd-kartenText, var(--kd-tinte));
+  --kd-control-muted: var(--kd-kartenTextWeich, var(--kd-tinteWeich));
+  --kd-tag-text: var(--kd-kartenText);
+  --kd-achse-text: var(--kd-kartenText);
+}
+
+.kd-bereichshero {
+  position: relative;
+  display: grid;
+  gap: var(--kd-space-2);
+  margin: 0 0 var(--kd-space-6);
+  padding: var(--kd-space-4) 0 var(--kd-space-3);
+  color: var(--kd-leinwand);
+}
+.kd-bereichshero::after {
+  content: '';
+  display: block;
+  width: min(112px, 32vw);
+  height: 2px;
+  margin-top: var(--kd-space-1);
+  border-radius: var(--kd-radius-label);
+  background: linear-gradient(90deg, var(--kd-wolfram), transparent);
+}
+.kd-bereichshero-kicker {
+  color: var(--kd-wolfram);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: calc(15px * var(--kd-schriftfaktor, 1));
+  font-weight: 600;
+  line-height: 1.4;
+}
+.kd-bereichshero h1 { margin: 0; color: inherit; }
+.kd-bereichshero p {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--kd-rauch);
+  font-size: calc(15px * var(--kd-schriftfaktor, 1));
+  line-height: 1.55;
+}
+
+.kd-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--kd-space-1);
+  white-space: normal;
+  text-align: center;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.kd-chip:hover:not(:disabled), .kd-seg-control:hover:not(:disabled) {
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--kd-wolfram) 20%, transparent);
+}
+.kd-chip:active:not(:disabled), .kd-seg-control:active:not(:disabled) { transform: translateY(1px); }
+
+.kd-chiprow, .kd-seg { gap: var(--kd-space-2); }
+.kd-seg { display: flex; flex-wrap: wrap; align-items: stretch; }
+.kd-seg-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.kd-klappe {
+  border: 1px solid color-mix(in srgb, var(--kd-linie) 58%, transparent);
+  border-radius: var(--kd-radius-karte);
+  background: var(--kd-saalHoch);
+  padding: 0 var(--kd-space-3);
+}
+.kd-klappe + .kd-klappe { margin-top: var(--kd-space-3); }
+.kd-klappe-kopf {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--kd-space-2) 0;
+  cursor: pointer;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: calc(15px * var(--kd-schriftfaktor, 1));
+  font-weight: 600;
+  line-height: 1.4;
+}
+.kd-klappe-kopf::marker { color: currentColor; }
+.kd-klappe-inhalt { margin: 0 0 var(--kd-space-3); }
+.kd-klappe-status { margin-left: auto; font-family: 'Space Mono', monospace; font-size: calc(12px * var(--kd-schriftfaktor, 1)); }
+
+.kd-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 1px solid var(--kd-tag-markierung, currentColor);
+  border-radius: var(--kd-radius-label);
+  box-shadow: inset 2px 0 var(--kd-tag-markierung, currentColor);
+  color: var(--kd-tag-text, var(--kd-tag-markierung, currentColor));
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: calc(12px * var(--kd-schriftfaktor, 1));
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-transform: none;
+}
+.kd-tag-unbewertet { border-style: dashed; }
+.kd-achse { font-family: 'Space Grotesk', system-ui, sans-serif; font-size: calc(12px * var(--kd-schriftfaktor, 1)); line-height: 1.45; }
+.kd-achse-wert { color: var(--kd-achse-text, var(--kd-achse-markierung, currentColor)); text-decoration: underline 2px var(--kd-achse-markierung, currentColor); text-underline-offset: 3px; }
+
+.kd-privacy-recovery {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: max(48px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  background: var(--kd-saal);
+  color: var(--kd-leinwand);
+}
+.kd-privacy-recovery-karte {
+  width: min(100%, 680px);
+  margin: 0 auto;
+  padding: clamp(20px, 5vw, 32px);
+  border: 1px solid color-mix(in srgb, var(--kd-linie) 58%, transparent);
+  border-radius: var(--kd-radius-karte);
+  background: var(--kd-saalHoch);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
+}
+.kd-privacy-recovery-karte h1 { margin: 0 0 var(--kd-space-3); color: var(--kd-leinwand); }
+.kd-privacy-recovery-karte p { margin: 0; }
+.kd-privacy-recovery-form { display: grid; gap: var(--kd-space-3); max-width: 360px; margin-top: var(--kd-space-6); }
+.kd-privacy-recovery-form label { display: grid; gap: var(--kd-space-1); color: var(--kd-rauch); font-size: calc(14px * var(--kd-schriftfaktor, 1)); font-weight: 600; }
+.kd-privacy-recovery-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--kd-linie);
+  border-radius: var(--kd-radius-control);
+  background: var(--kd-saal);
+  color: var(--kd-leinwand);
+  font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1)));
+}
+.kd-privacy-recovery-form button {
+  min-height: 44px;
+  border: 1px solid var(--kd-wolfram);
+  border-radius: var(--kd-radius-control);
+  background: var(--kd-wolfram);
+  color: var(--kd-wolframText, #000);
+  padding: 10px 16px;
+  font-size: calc(14px * var(--kd-schriftfaktor, 1));
+  font-weight: 600;
+  line-height: 1.35;
+}
+.kd-privacy-recovery-fehler { color: var(--kd-gefahr); font-weight: 600; }
+
+@media (max-width: 360px) {
+  .kd-app { --kd-page-gutter: 16px; }
+  .kd-bereichshero { margin-bottom: var(--kd-space-4); }
+}

@@ -451,7 +451,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-wrap,.kd-app,.kd-app>header,.kd-app>main,.kd-app main { width:100%; max-width:100%; box-sizing:border-box; }
   .kd-wrap { padding-bottom:calc(72px + env(safe-area-inset-bottom)) !important; }
   .kd-app>header { padding:18px max(20px,env(safe-area-inset-right)) 10px max(20px,env(safe-area-inset-left)) !important; }.kd-app>header h1 { font-size:calc(clamp(25px,8vw,34px) * var(--kd-schriftfaktor,1)) !important; min-width:0; }
-  .kd-app main { padding:16px max(20px,env(safe-area-inset-right)) 0 max(20px,env(safe-area-inset-left)) !important; overflow-wrap:anywhere; }
+  .kd-app main { padding:16px max(var(--kd-page-gutter,20px),env(safe-area-inset-right)) 0 max(var(--kd-page-gutter,20px),env(safe-area-inset-left)) !important; overflow-wrap:anywhere; }
   .kd-app main img,.kd-app main video,.kd-app main svg { max-width:100%; }
   .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
   .kd-entdecken-toolbar { align-items:stretch; flex-direction:column; }.kd-entdecken-tabs { width:100%; box-sizing:border-box; overflow-x:auto; }.kd-entdecken-tabs button { flex:1 0 auto; min-height:44px; }
@@ -496,7 +496,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-kino-programmfilter { display:grid; grid-template-columns:minmax(132px,180px) minmax(160px,240px) auto;
   align-items:end; gap:7px 9px; min-width:0; box-sizing:border-box; margin:0 0 9px; padding:9px 10px;
   border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 42%,transparent); border-radius:7px;
-  background:color-mix(in srgb,var(--saal-hoch,#211e26) 82%,transparent); }
+  background:color-mix(in srgb,var(--saalHoch,#211e26) 82%,transparent); }
 .kd-kino-programmfilter.aktiv { border-color:color-mix(in srgb,var(--wolfram,#e3a63b) 72%,transparent); }
 .kd-kino-programmfilter label { display:grid; gap:4px; min-width:0; }
 .kd-kino-programmfilter label>span { color:var(--rauch,#948fa0);
@@ -514,7 +514,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width:760px) {
   .kd-app main { padding-bottom:calc(94px + env(safe-area-inset-bottom)) !important; }
   .kd-bereichshero { padding-top:8px; margin-bottom:13px; }
-  .kd-bereichshero h1 { font-size:calc(clamp(34px,11vw,42px) * var(--kd-schriftfaktor,1)) !important; }
   .kd-seitensuche,.kd-seitenfilter,.kd-finder-eingabe,
   .kd-kompakt .kd-lokalsuche,.kd-kompakt .kd-lokalsuche-loeschen { display:none !important; }
   .kd-globalsuche { position:fixed; left:max(10px,env(safe-area-inset-left)); right:max(10px,env(safe-area-inset-right));
@@ -668,7 +667,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-streamfilter-knopf { display:inline-flex; align-items:center; justify-content:center; gap:5px; }
 .kd-streamfilter-panel { display:grid; grid-template-columns:minmax(190px,280px) minmax(0,1fr); gap:10px 14px;
   align-items:end; box-sizing:border-box; margin:0 0 10px; padding:11px 12px; border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 52%,transparent);
-  border-radius:7px; background:color-mix(in srgb,var(--saal-hoch,#211e26) 88%,transparent); }
+  border-radius:7px; background:color-mix(in srgb,var(--saalHoch,#211e26) 88%,transparent); }
 .kd-streamfilter-plattform,.kd-streamfilter-gruppe { display:grid; gap:5px; min-width:0; }
 .kd-streamfilter-sortierung { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; min-width:0; }
 .kd-streamfilter-sortierung>label { display:grid; gap:5px; min-width:0; }
@@ -686,7 +685,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-streamfilter-regler { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0 0 12px; }
 .kd-streamfilter-abc { box-sizing:border-box; width:100%; min-width:0; margin:0; padding:8px 12px 7px;
   border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 42%,transparent); border-radius:7px;
-  background:color-mix(in srgb,var(--saal-hoch,#211e26) 76%,transparent); }
+  background:color-mix(in srgb,var(--saalHoch,#211e26) 76%,transparent); }
 .kd-streamfilter-abc-kopf { display:grid; grid-template-columns:minmax(0,1fr) 104px; align-items:center; gap:9px; margin-bottom:3px; }
 .kd-streamfilter-abc-kopf strong { display:grid; place-items:center; box-sizing:border-box; width:104px; min-width:0; height:24px; padding:0 5px; border-radius:4px;
   background:var(--wolfram,#e3a63b); color:var(--tinte,#17151a); font:800 13px/1 'Space Mono',monospace; }
@@ -708,11 +707,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   }
   .kd-chiprow > *, .kd-seg > * { flex: 1 1 auto; min-width: 0; }
   .kd-chiprow button, .kd-seg button { white-space: normal; }
-  /* !important nötig: fontSize/padding stehen INLINE an den Umschalter-Knöpfen
-     (SegmentedControl behält die Knopf-Fabrik-Optik inline) — ohne !important
-     gewinnt der Inline-Style (Scrim-Bug-Lehre, s. Kommentar oben Z.181-184).
-     Tap-Ziel bleibt >=44px über die pointer:coarse-Regel (min-height unberührt). */
-  .kd-seg > button { font-size:calc(14px * var(--kd-schriftfaktor,1)) !important; padding:7px 11px !important; }
   .kd-mediathek-ansichten, .kd-mediathek-typen { display:grid; gap:6px; }
   .kd-mediathek-ansichten { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .kd-mediathek-typen { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -1115,10 +1109,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   line-height: .96; letter-spacing: -.01em; color: var(--kd-leinwand); margin: 3px 0 10px; }
 
 /* Einheitlicher Orientierungskopf für alle Fachbereiche. */
-.kd-bereichshero { padding:14px 2px 18px; margin-bottom:16px; border-bottom:1px dashed var(--rauch,#6f6878); }
-.kd-bereichshero-kicker { color:var(--rauch,#948fa0); font:400 11px 'Space Mono',monospace; letter-spacing:.16em; text-transform:uppercase; }
-.kd-bereichshero h1 { margin:3px 0 5px; color:var(--leinwand,#ece8df); font:900 calc(40px * var(--kd-schriftfaktor,1))/.96 'Fraunces',Georgia,serif; letter-spacing:-.01em; }
-.kd-bereichshero p { max-width:620px; margin:0; color:var(--rauch,#bdb7c5); font-size:calc(13px * var(--kd-schriftfaktor,1)); line-height:1.5; }
+.kd-bereichshero { padding:16px 0 12px; margin-bottom:24px; border-bottom:0; }
+.kd-bereichshero-kicker { color:var(--wolfram,#e3a63b); font:600 calc(15px * var(--kd-schriftfaktor,1))/1.4 'Space Grotesk',sans-serif; letter-spacing:0; text-transform:none; }
+.kd-bereichshero h1 { margin:0; color:var(--leinwand,#ece8df); font:900 clamp(calc(38px * var(--kd-schriftfaktor,1)),7.2vw,calc(46px * var(--kd-schriftfaktor,1)))/1.08 'Fraunces',Georgia,serif; letter-spacing:-.02em; text-transform:none; }
+.kd-bereichshero p { max-width:62ch; margin:0; color:var(--rauch,#bdb7c5); font-size:calc(15px * var(--kd-schriftfaktor,1)); line-height:1.55; }
 .kd-apphilfe-antwort { padding:14px 16px; border-left:3px solid var(--wolfram,#e3a63b); border-radius:5px; background:var(--saalHoch,#211e26); }
 .kd-apphilfe-antwort strong { color:var(--leinwand,#ece8df); font:700 20px 'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.04em; }
 .kd-apphilfe-antwort p { margin:5px 0 10px; color:var(--leinwandTief,#d2ccd8); line-height:1.5; }
@@ -1235,6 +1229,18 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   color: var(--kd-tinte); background: var(--kd-wolfram); }
 .kd-dash-log .kd-dash-ztitel { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 12px;
   letter-spacing: 0; text-transform: none; }
+
+/* Must-Watch: Der Titel behält eine eigene Zeile; beliebig viele vollständige
+   Anbieternamen umbrechen darunter, ohne seine Breite zu beanspruchen. */
+.kd-dash-zeile.kd-dash-mustwatch { display:grid; grid-template-columns:calc(24px * var(--kd-schriftfaktor,1)) minmax(0,1fr);
+  align-items:start; gap:10px; padding:12px 0; }
+.kd-dash-mustwatch .kd-dash-rang { width:auto; font-size:calc(20px * var(--kd-schriftfaktor,1)); line-height:1.2; }
+.kd-dash-mw-inhalt { display:grid; gap:7px; min-width:0; }
+.kd-dash-mustwatch .kd-dash-ztitel { overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:anywhere;
+  font-size:calc(17px * var(--kd-schriftfaktor,1)); line-height:1.25; }
+.kd-dash-mw-verfuegbar { display:flex; flex-wrap:wrap; align-items:flex-start; gap:5px 6px; min-width:0; }
+.kd-dash-mw-verfuegbar .kd-dash-badge { flex:0 1 auto; min-width:0; max-width:100%; box-sizing:border-box;
+  white-space:normal; overflow-wrap:anywhere; text-align:left; font-size:calc(10px * var(--kd-schriftfaktor,1)); line-height:1.45; }
 
 .kd-pinboard-radar { cursor:default; }
 .kd-pinboard-kino,.kd-pinboard-titel { appearance:none; border:0; background:none; color:inherit; cursor:pointer; text-align:left; }

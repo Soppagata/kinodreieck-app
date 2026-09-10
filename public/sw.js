@@ -29,13 +29,15 @@ self.addEventListener("install", (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     const scope = self.registration.scope;
-    const shell = PRECACHE.map((pfad) => new URL(pfad, scope));
-    await Promise.all(shell.map(async (url) => {
-      try {
-        const res = await fetch(url);
-        if (res && res.ok) await c.put(url, res.clone());
-      } catch { /* Erstinstallation bleibt auch bei kurzem Offline-Zustand möglich. */ }
+    const shell = PRECACHE.map((pfad) => new Request(new URL(pfad, scope), {
+      cache: "reload",
+      credentials: "same-origin",
     }));
+    /* Cache.addAll ist absichtlich der atomare Gatekeeper: Scheitert auch nur
+       eine Shell-Datei oder antwortet nicht erfolgreich, verwirft der Browser
+       den Install-Versuch. Der bisher aktive Worker samt vollständigem alten
+       Cache bleibt dann bestehen und activate darf ihn nicht löschen. */
+    await c.addAll(shell);
     /* Der neue Worker darf übernehmen; die bereits geladene Seite navigiert
        jedoch erst nach dem sichtbaren Aktualisieren-Hinweis neu. */
     await self.skipWaiting();
@@ -44,6 +46,13 @@ self.addEventListener("install", (e) => {
 
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    const scope = self.registration.scope;
+    const shell = PRECACHE.map((pfad) => new URL(pfad, scope));
+    const vollstaendig = await Promise.all(shell.map((url) => c.match(url)));
+    if (vollstaendig.some((antwort) => !antwort)) {
+      throw new Error("KD_APP_SHELL_UNVOLLSTAENDIG");
+    }
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => (
       k !== CACHE && PRIVATE_RELEASE_CACHE_PREFIXES.some((prefix) => k.startsWith(prefix))
@@ -55,6 +64,16 @@ self.addEventListener("activate", (e) => {
       buildVersion: BUILD_VERSION,
     }));
   })());
+});
+
+self.addEventListener("message", (e) => {
+  if (e.data?.type !== "KD_GET_BUILD_VERSION") return;
+  const antwortKanal = e.ports?.[0];
+  if (!antwortKanal?.postMessage) return;
+  antwortKanal.postMessage({
+    type: "KD_BUILD_VERSION",
+    buildVersion: BUILD_VERSION,
+  });
 });
 
 self.addEventListener("fetch", (e) => {

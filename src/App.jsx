@@ -299,8 +299,9 @@ export default function App() {
 
   const saveZeitgrenze = useCallback(async (v) => {
     setZeitgrenze(v);
-    try { await store.set(K.zeitgrenze, v); } catch { /* nicht fatal */ }
-  }, []);
+    try { await store.set(K.zeitgrenze, v); }
+    catch { setErr("Die Kino-Zeitgrenze konnte nicht gespeichert werden und gilt nur bis zum Neuladen."); }
+  }, [setErr]);
 
   /* ---- Einstellungen: Theme, Startbereich, Schriftgröße, Darstellungsmodus ----
      Ein Objekt im Storage; setzeTheme tauscht die Token-Werte, der
@@ -327,8 +328,10 @@ export default function App() {
     const next = bereinigteEinstellungen({ ...einstellungen, [k]: v });
     setEinstellungenState(next);
     if (k === "theme") setzeTheme(v);
-    store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
-  }, [einstellungen, bereinigteEinstellungen]);
+    store.set(K.einstellungen, JSON.stringify(next)).catch(() => {
+      setErr("Die Einstellung konnte nicht gespeichert werden und gilt nur bis zum Neuladen.");
+    });
+  }, [einstellungen, bereinigteEinstellungen, setErr]);
   /* ---- Darstellungs-Modi: Saal/Foyer/Showa/Neon Noir in EINER Gruppe.
      Die Spezialmodi erzwingen jeweils ihr dunkles Theme;
      Saal/Foyer schalten den Modus ab und setzen das Theme direkt. ---- */
@@ -365,8 +368,10 @@ export default function App() {
     next = bereinigteEinstellungen(next);
     setEinstellungenState(next);
     setzeTheme(next.modus || next.theme);
-    store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
-  }, [einstellungen, bereinigteEinstellungen]);
+    store.set(K.einstellungen, JSON.stringify(next)).catch(() => {
+      setErr("Der Darstellungsmodus konnte nicht gespeichert werden und gilt nur bis zum Neuladen.");
+    });
+  }, [einstellungen, bereinigteEinstellungen, setErr]);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const { vokabular, setVokabular, saveVokabular } = useVokabularController({ setErr });
@@ -442,8 +447,9 @@ export default function App() {
     return heute - d > 1 * 86400000; // gestern gesehen? Heute noch stehen lassen.
   };
   const persistPins = useCallback(async (pins) => {
-    try { await store.set(K.kinoPins, JSON.stringify(pins)); } catch { /* nicht fatal */ }
-  }, []);
+    try { await store.set(K.kinoPins, JSON.stringify(pins)); }
+    catch { setErr("Der Kinotermin konnte nicht gespeichert werden. Die sichtbare Änderung gilt nur bis zum Neuladen."); }
+  }, [setErr]);
   const toggleKinoPin = useCallback((t, j, z) => {
     const ohne = kinoPins.filter((p) => !(p.t === t && p.z === z));
     const next = ohne.length < kinoPins.length
@@ -459,8 +465,9 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem(K.merkliste) || "[]"); } catch { return []; }
   });
   const persistMerk = useCallback(async (l) => {
-    try { await store.set(K.merkliste, JSON.stringify(l)); } catch { /* nicht fatal */ }
-  }, []);
+    try { await store.set(K.merkliste, JSON.stringify(l)); }
+    catch { setErr("Die Streaming-Merkliste konnte nicht gespeichert werden. Die sichtbare Änderung gilt nur bis zum Neuladen."); }
+  }, [setErr]);
   const toggleMerk = useCallback((t) => {
     const drin = merkliste.some((m) => m.watchmode_id === t.watchmode_id);
     const next = drin
@@ -692,7 +699,10 @@ export default function App() {
           if (e.startTab && e.startTab !== "start"
             && (remoteKontoAktiv || e.startTab === "mediathek")
             && NAVIGATION.some((n) => n.id === e.startTab)) setTab(e.startTab);
-          if (hatteVeralteteEinstellung) await store.set(K.einstellungen, JSON.stringify(e));
+          if (hatteVeralteteEinstellung) {
+            try { await store.set(K.einstellungen, JSON.stringify(e)); }
+            catch { setErr("Die bereinigten Einstellungen konnten nicht gespeichert werden. Bitte prüfe sie vor dem nächsten Neuladen erneut."); }
+          }
         }
       } catch { /* Defaults */ }
       try {
@@ -1054,7 +1064,7 @@ export default function App() {
     personalDataTransaktionen,
   ]);
   const planeFilmBatchLoeschung = useCallback((ids) => { if (!mustwatchGeladen || !artikelGeladen) { setErr("Mehrfachlöschen ist erst möglich, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert."); return null; } try { return personalDataTransaktionen.planeFilmLoeschungen(ids); } catch { setErr("Die Löschfolgen konnten nicht sicher geprüft werden. Es wurde nichts verändert."); return null; } }, [artikelGeladen, mustwatchGeladen, personalDataTransaktionen]);
-  const fuehreFilmBatchLoeschungAus = useCallback(async (ids, plan) => { if (!mustwatchGeladen || !artikelGeladen) { setErr("Mehrfachlöschen ist erst möglich, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert."); return false; } try { return await personalDataTransaktionen.loescheFilme(ids, { plan, meta: masterMetaRef.current, herkunft: naechsteHerkunft() }); } catch { return false; } }, [artikelGeladen, mustwatchGeladen, naechsteHerkunft, personalDataTransaktionen]);
+  const fuehreFilmBatchLoeschungAus = useCallback(async (ids, plan) => { if (!mustwatchGeladen || !artikelGeladen) { setErr("Mehrfachlöschen ist erst möglich, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert."); return false; } try { return await personalDataTransaktionen.loescheFilme(ids, { plan, meta: masterMetaRef.current, herkunft: naechsteHerkunft() }); } catch { setErr("Mehrfachlöschen ist unerwartet fehlgeschlagen. Bitte prüfe Mediathek, Must-Watch und Blog-Verweise; es wird kein Erfolg behauptet."); return false; } }, [artikelGeladen, mustwatchGeladen, naechsteHerkunft, personalDataTransaktionen, setErr]);
   /* Gibt die neue ID zurück (Blog-Rotlink-Anlage setzt damit sofort die ref).
      Nach jedem neuen Eintrag: automatische Rotlink-Heilung über alle Artikel —
      nur eindeutige Exakt-Treffer, nichts wird geraten. */
@@ -1392,8 +1402,10 @@ export default function App() {
   const toggleQuelle = useCallback((name) => {
     const next = auswahl.includes(name) ? auswahl.filter((d) => d !== name) : [...auswahl, name];
     setAuswahlRoh(next);
-    store.set(K.streamingDienste, streamingCfgJson(next, heuristikAn)).catch(() => {});
-  }, [auswahl, heuristikAn]);
+    store.set(K.streamingDienste, streamingCfgJson(next, heuristikAn)).catch(() => {
+      setErr("Die Streaming-Dienste konnten nicht gespeichert werden. Die sichtbare Auswahl gilt nur bis zum Neuladen.");
+    });
+  }, [auswahl, heuristikAn, setErr]);
 
   /* ---- Streaming-Badges für Mediathek & Kino (aus streaming_bekannt) ---- */
   const streamingMap = useMemo(() => {
@@ -1596,7 +1608,7 @@ export default function App() {
             }
           }} />
       )}
-      <header style={{ padding: "26px 22px 12px", maxWidth: 860, margin: "0 auto" }}>
+      <header style={{ padding: "var(--kd-shell-header-padding, 26px 22px 12px)", maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Logo size={34} />
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "calc(34px * var(--kd-schriftfaktor, 1))", letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
@@ -1617,9 +1629,9 @@ export default function App() {
               aria-description={id === "daten" && sicherungOffen ? "Sicherung offen" : undefined}
               onClick={() => id === "daten" && sicherungOffen ? oeffneSicherung() : navigiere(id)}
               style={{
-                fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(17px * var(--kd-schriftfaktor, 1))",
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                padding: "8px 16px", border: "none", cursor: "pointer", borderRadius: "4px 4px 0 0",
+                fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: "calc(14px * var(--kd-schriftfaktor, 1))",
+                letterSpacing: 0, textTransform: "none", minHeight: 44,
+                padding: "8px 16px", border: "none", cursor: "pointer", borderRadius: 8,
                 background: tab === id ? T.leinwand : "transparent",
                 color: tab === id ? T.tinte : T.rauch,
                 position: "relative",
@@ -1796,7 +1808,12 @@ export default function App() {
             recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             streamingNeu={streamingNeu}
             entdeckenStatus={entdeckenStatus} schreibeEntdeckenStatus={schreibeEntdeckenStatus}
-            heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
+            heuristikAn={heuristikAn} setHeuristikAn={(v) => {
+              setHeuristikAn(v);
+              store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {
+                setErr("Die Streaming-Heuristik konnte nicht gespeichert werden und gilt nur bis zum Neuladen.");
+              });
+            }}
             datenGesperrt={!snapshotFreigabe}
             katalogInfo={streamingInfo} angemeldet={remoteKontoAktiv}
             fokusTreffer={streamingFokus} onFokusVerbraucht={() => setStreamingFokus(null)}

@@ -61,7 +61,7 @@ check("Geräte-Download bleibt sichtbar vom Kontoexport getrennt und verspricht 
   sichtbar.datenTab.includes('id="gesamt-backup" titel="Konto, Daten & Sicherung"')
   && sichtbar.datenTab.includes("Sicherheitskopie dieses Geräts")
   && sichtbar.datenTab.includes("Serverweite Konto-Eigendaten")
-  && sichtbar.datenTab.includes("keinen Restore- oder Reimportweg")
+  && !sichtbar.datenTab.includes("Dieser Release bietet dafür keinen Restore- oder Reimportweg")
   && sichtbar.lokaleSicherheit.includes("Sie ist kein Server- oder Kontoexport")
   && sichtbar.lokaleSicherheit.includes("keinen Restore- oder Reimportweg")
   && sichtbar.backup.includes("keinen Restore- oder Reimportweg")

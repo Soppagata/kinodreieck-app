@@ -9,6 +9,15 @@ class FakeCache {
   constructor() { this.eintraege = new Map(); }
   async match(req) { return this.eintraege.get(schluessel(req))?.clone(); }
   async put(req, res) { this.eintraege.set(schluessel(req), res.clone()); }
+  async addAll(requests) {
+    const neueEintraege = [];
+    for (const request of requests) {
+      const response = await fetchImpl(request);
+      if (!response?.ok) throw new Error("precache-response-not-ok");
+      neueEintraege.push([schluessel(request), response.clone()]);
+    }
+    for (const [key, response] of neueEintraege) this.eintraege.set(key, response);
+  }
 }
 
 const caches = {
@@ -68,26 +77,66 @@ async function fetchEvent(req) {
 }
 
 const AKTUELLER_CACHE = "kd-shell-v3-__KD_BUILD_VERSION__";
-fetchImpl = async () => new Response("shell", { status: 200 });
+const ALTER_CACHE = "kd-shell-v2-alt";
+speicher.set(ALTER_CACHE, new FakeCache());
+fetchImpl = async (request) => {
+  if (schluessel(request).endsWith("index.html")) throw new Error("simulierter Teilfehler");
+  return new Response("shell", { status: 200 });
+};
+let fehlgeschlageneInstallation;
+listeners.install({ waitUntil(p) { fehlgeschlageneInstallation = Promise.resolve(p); } });
+let installFehler = null;
+try { await fehlgeschlageneInstallation; } catch (error) { installFehler = error; }
+check("Partieller Precache-Fehler verwirft den neuen Worker vor skipWaiting",
+  installFehler?.message === "simulierter Teilfehler" && skipWaitingAufrufe === 0);
+check("Partieller Precache-Fehler bewahrt den letzten vollständigen alten App-Shell-Cache",
+  speicher.has(ALTER_CACHE) && speicher.get(AKTUELLER_CACHE)?.eintraege.size === 0);
+let blockierteAktivierung;
+listeners.activate({ waitUntil(p) { blockierteAktivierung = Promise.resolve(p); } });
+let aktivierungsFehler = null;
+try { await blockierteAktivierung; } catch (error) { aktivierungsFehler = error; }
+check("Activate löscht bei unvollständiger neuer Shell keinen alten Cache",
+  aktivierungsFehler?.message === "KD_APP_SHELL_UNVOLLSTAENDIG"
+  && speicher.has(ALTER_CACHE) && claimAufrufe === 0);
+
+const precacheAnfragen = [];
+fetchImpl = async (request) => {
+  precacheAnfragen.push(request);
+  const istStart = new URL(schluessel(request)).pathname === "/";
+  const inhalt = istStart
+    ? request.cache === "reload" ? "frische-shell" : "veraltete-http-cache-shell"
+    : "shell";
+  return new Response(inhalt, { status: 200 });
+};
 let installation;
 listeners.install({ waitUntil(p) { installation = Promise.resolve(p); } });
 await installation;
 check("Install legt die aktuelle Shell an und übernimmt den Worker ohne Seitennavigation",
-  speicher.has(AKTUELLER_CACHE) && skipWaitingAufrufe === 1);
+  speicher.get(AKTUELLER_CACHE)?.eintraege.size === 3 && skipWaitingAufrufe === 1);
+check("Precache umgeht einen veralteten HTTP-Cache für jede Shell-Datei",
+  precacheAnfragen.length === 3 && precacheAnfragen.every((request) => request.cache === "reload")
+  && await (await speicher.get(AKTUELLER_CACHE).match("https://kino.example/")).text() === "frische-shell");
 
-speicher.set("kd-shell-v2-alt", new FakeCache());
 speicher.set("kinodreieck-katalog-v1", new FakeCache());
 let aktivierung;
 listeners.activate({ waitUntil(p) { aktivierung = Promise.resolve(p); } });
 await aktivierung;
 check("Activate löscht alte App-Shell-Caches und bewahrt nur den aktuellen Build",
-  !speicher.has("kd-shell-v2-alt") && speicher.has(AKTUELLER_CACHE));
+  !speicher.has(ALTER_CACHE) && speicher.has(AKTUELLER_CACHE));
 check("Activate entwertet den alten öffentlichen Katalog-Fallback",
   !speicher.has("kinodreieck-katalog-v1"));
 check("Activate übernimmt Clients und meldet die aktive Build-Version",
   claimAufrufe === 1 && clientNachrichten.length === 1
   && clientNachrichten[0].type === "KD_BUILD_ACTIVATED"
   && clientNachrichten[0].buildVersion === "__KD_BUILD_VERSION__");
+let buildAntwort = null;
+listeners.message({
+  data: { type: "KD_GET_BUILD_VERSION" },
+  ports: [{ postMessage(nachricht) { buildAntwort = nachricht; } }],
+});
+check("Controller-Handshake meldet die Build-Version des tatsächlich laufenden Workers",
+  buildAntwort?.type === "KD_BUILD_VERSION"
+  && buildAntwort.buildVersion === "__KD_BUILD_VERSION__");
 
 const shell = await caches.open(AKTUELLER_CACHE);
 const jsonReq = anfrage("https://kino.example/programm.json");

@@ -366,7 +366,7 @@ export function KinoTab({
           {/* ---- Treffer ---- */}
           {master && (
             <>
-              <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "10px 0 10px" }}>
+              <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: "calc(15px * var(--kd-schriftfaktor, 1))", lineHeight: 1.4, letterSpacing: 0, textTransform: "none", color: T.wolfram, margin: "10px 0 10px" }}>
                 Läuft & passt zu dir ({matchedGefiltert.length + empfohleneGefiltert.length})
               </h2>
               {matchedGefiltert.length === 0 && empfohleneGefiltert.length === 0 && (
@@ -395,7 +395,7 @@ export function KinoTab({
                             aria-pressed={istGepinnt(prog.t, zi)}
                             onClick={() => toggleKinoPin?.(prog.t, prog.j ?? film.jahr, zi)}
                             title={istGepinnt(prog.t, zi) ? "Pin lösen" : "Termin anpinnen"}
-                            style={{ ...btnStyle(false), fontSize: 11, padding: "4px 9px", color: istGepinnt(prog.t, zi) ? T.wolfram : T.tinte }}>
+                            style={{ ...btnStyle(false), padding: "4px 9px", color: istGepinnt(prog.t, zi) ? T.wolfram : T.tinte }}>
                             {istGepinnt(prog.t, zi) ? "◆" : "◇"} {zi}
                           </button>
                         ))}
@@ -449,7 +449,7 @@ export function KinoTab({
           {/* ---- Events / Demnächst (unverändert, nur wenn ungefiltert) ---- */}
           {!filterAktiv && programm.events?.length > 0 && (
             <>
-              <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "26px 0 10px" }}>
+              <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: "calc(15px * var(--kd-schriftfaktor, 1))", lineHeight: 1.4, letterSpacing: 0, textTransform: "none", color: T.wolfram, margin: "26px 0 10px" }}>
                 Events & Sondervorstellungen
               </h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -465,7 +465,7 @@ export function KinoTab({
           )}
           {!filterAktiv && programm.demnaechst?.length > 0 && (
             <>
-              <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "26px 0 10px" }}>
+              <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: "calc(15px * var(--kd-schriftfaktor, 1))", lineHeight: 1.4, letterSpacing: 0, textTransform: "none", color: T.wolfram, margin: "26px 0 10px" }}>
                 Demnächst angekündigt
               </h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -489,7 +489,7 @@ export function KinoTab({
           {/* ---- Läuft auch: gefilterte Liste statt zugeklapptem Block ---- */}
           {restNeutralGesamt > 0 && (
             <>
-              <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch, margin: "26px 0 8px" }}>
+              <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: "calc(15px * var(--kd-schriftfaktor, 1))", lineHeight: 1.4, letterSpacing: 0, textTransform: "none", color: T.rauch, margin: "26px 0 8px" }}>
                 Läuft auch{master ? ", nicht in deiner Liste" : ""} ({restGefiltert.length}{restGefiltert.length < restNeutralGesamt ? " von " + restNeutralGesamt : ""})
               </h2>
               {restSichtbar.length < kinoMatches.rest.length && !zeigeAlles && (
@@ -509,12 +509,12 @@ export function KinoTab({
                     autorName={autorName}
                     istGepinnt={istGepinnt} togglePin={toggleKinoPin}
                     fokusAktiv={fokusTreffer?.art === "programm" && String(fokusTreffer.ref) === String(pf.film_at_id || pf.t)}
-                    master={master} updateFilm={updateFilm} />
+                    master={master} updateFilm={updateFilm} variante="nebenliste" />
                   </div>
                 ))}
               </div>
               {restGefiltert.length > 40 && (
-                <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px", marginTop: 10 }} onClick={() => setZeigeMehr(!zeigeMehr)}>
+                <button style={{ ...btnStyle(false), padding: "7px 12px", marginTop: 10 }} onClick={() => setZeigeMehr(!zeigeMehr)}>
                   {zeigeMehr ? "Weniger zeigen" : `Alle ${restGefiltert.length} zeigen`}
                 </button>
               )}
@@ -536,7 +536,7 @@ export function KinoTab({
    in "Läuft & passt zu dir". */
 function KompaktEintrag({
   pf, zeiten, kinos, addFilm, addFilmMitPrognose, vorbewertungAktiv, prognoseSperrgrund,
-  autorName, istGepinnt, togglePin, master, updateFilm, fokusAktiv = false,
+  autorName, istGepinnt, togglePin, master, updateFilm, fokusAktiv = false, variante = "standard",
 }) {
   const [offen, setOffen] = useState(false);
   const [formAn, setFormAn] = useState(false);
@@ -545,20 +545,20 @@ function KompaktEintrag({
     if (fokusAktiv) setOffen(true);
   }, [fokusAktiv]);
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px" }}>
+    <div className={`kd-kompakt-eintrag kd-kompakt-eintrag--${variante}`}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
         onClick={() => { setOffen(!offen); if (offen) setFormAn(false); }}
         title={offen ? "Zuklappen" : "Details & Eintrag erstellen"}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ color: T.leinwand, fontSize: 14, fontWeight: 600 }}>
+          <div className="kd-kompakt-eintrag-titel">
             {pf.t}
             {pf.s ? <span style={{ color: T.wolfram, fontSize: 11, marginLeft: 8, fontFamily: "'Space Mono', monospace" }}>{pf.s}</span> : null}
             {pf.im_abo ? <span style={{ color: T.wolfram, fontSize: 11, marginLeft: 8, fontFamily: "'Space Mono', monospace" }}>✓Abo</span> : null}
           </div>
-          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, margin: "1px 0" }}>{pf.j || "Jahr unbekannt"}{pf.ot && pf.ot !== pf.t ? " · " + pf.ot : ""}</div>
+          <div className="kd-kompakt-eintrag-jahr">{pf.j || "Jahr unbekannt"}{pf.ot && pf.ot !== pf.t ? " · " + pf.ot : ""}</div>
           {/* Collapsed: kompakt in EINER Zeile. Bei vielen Kinos nur die Anzahl (Max 2026-07-19:
               die volle Kinoliste sprengte die Zeile). Kinos + Termine stehen aufgeklappt. */}
-          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="kd-kompakt-eintrag-meta">
             {kinos.length <= 2
               ? <span onClick={(e) => e.stopPropagation()}><KinoLinks kinos={kinos} /></span>
               : <span style={{ color: T.rauch }}>{kinos.length} Kinos</span>}
@@ -583,7 +583,7 @@ function KompaktEintrag({
               <button key={z} onClick={() => togglePin && togglePin(pf.t, pf.j, z)}
                 title={istGepinnt(pf.t, z) ? "Pin lösen" : "Termin anpinnen"}
                 style={{
-                  ...btnStyle(false), fontSize: 11, padding: "4px 9px", fontFamily: "'Space Mono', monospace", textTransform: "none", letterSpacing: 0,
+                  ...btnStyle(false), padding: "4px 9px", fontFamily: "'Space Mono', monospace", textTransform: "none", letterSpacing: 0,
                   borderColor: istGepinnt(pf.t, z) ? T.wolfram : T.saal, color: istGepinnt(pf.t, z) ? T.wolfram : T.leinwand,
                 }}>
                 {istGepinnt(pf.t, z) ? "◆" : "◇"} {z}
@@ -592,14 +592,14 @@ function KompaktEintrag({
           </div>
           {zeiten.length > 16 && (
             <button onClick={() => setZeigeAlle((v) => !v)}
-              style={{ ...btnStyle(false), fontSize: 12, padding: "5px 11px", alignSelf: "flex-start" }}>
+              style={{ ...btnStyle(false), padding: "5px 11px", alignSelf: "flex-start" }}>
               {zeigeAlle ? "Weniger Termine" : `Alle ${zeiten.length} Termine zeigen`}
             </button>
           )}
           {!formAn ? (
             addFilm && (
               <div>
-                <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 12px" }} onClick={() => setFormAn(true)}>
+                <button style={{ ...btnStyle(true), padding: "7px 12px" }} onClick={() => setFormAn(true)}>
                   Eintrag erstellen
                 </button>
               </div>
@@ -665,7 +665,7 @@ function VerknuepfenSuche({ pf, master, updateFilm }) {
   return (
     <div style={{ padding: "8px 0 2px", display: "flex", flexDirection: "column", gap: 6 }}>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="In deiner Mediathek suchen (auch Originaltitel) …"
-        style={{ ...inputStyle, maxWidth: 340, fontSize: 13 }} />
+        style={{ ...inputStyle, maxWidth: 340 }} />
       {norm(pf.t) && (
         <label className="kd-touch-checkbox" style={{ display: "inline-flex", gap: 6, alignItems: "center", fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, cursor: "pointer" }}>
           <input type="checkbox" checked={titelUebernehmen} onChange={() => setTitelUebernehmen(!titelUebernehmen)} />
@@ -675,7 +675,7 @@ function VerknuepfenSuche({ pf, master, updateFilm }) {
       {kandidaten.map((f) => (
         <button key={f.id} disabled={speichert} onClick={() => void verknuepfe(f)}
           title="Verknüpfen — setzt die film.at-ID in diesen Eintrag"
-          style={{ ...btnStyle(false), textAlign: "left", textTransform: "none", letterSpacing: 0, fontSize: 13, padding: "6px 10px" }}>
+          style={{ ...btnStyle(false), textAlign: "left", textTransform: "none", letterSpacing: 0, padding: "6px 10px" }}>
           {f.titel}{f.jahr ? " (" + f.jahr + ")" : ""}
           {f.originaltitel && norm(f.originaltitel) !== norm(f.titel) ? <span style={{ color: T.rauch }}> · {f.originaltitel}</span> : null}
           {f.bewertet_von === "max" ? <span style={{ color: T.wolfram }}> · ✓ bewertet</span> : null}

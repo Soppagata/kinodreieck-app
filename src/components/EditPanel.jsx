@@ -31,7 +31,7 @@ export function EditPanel({ film, onSave, onCancel, autorName, herkunftHinweis =
     </label>
   );
   return (
-    <div className="kd-editpanel" onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: "12px 12px", background: T.leinwandTief, borderRadius: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-editpanel" onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: "12px", background: T.leinwandTief, borderRadius: "var(--kd-radius-karte)", display: "flex", flexDirection: "column", gap: 10 }}>
       {herkunftHinweis && (
         <div role="status" style={{ padding: "8px 10px", borderLeft: `3px solid ${T.wolfram}`, background: T.saalHoch, color: T.leinwand, fontSize: 12, lineHeight: 1.5 }}>
           {herkunftHinweis}
@@ -58,13 +58,13 @@ export function EditPanel({ film, onSave, onCancel, autorName, herkunftHinweis =
       {fehler && <div role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div className="kd-edit-aktionen" style={{ display: "flex", gap: 8 }}>
         <button disabled={prognoseUnvollstaendig || speichert}
-          style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px", opacity: prognoseUnvollstaendig || speichert ? 0.5 : 1 }}
+          style={{ ...btnStyle(true), padding: "7px 14px", opacity: prognoseUnvollstaendig || speichert ? 0.5 : 1 }}
           onClick={() => onSave(alleLeer
             ? { bewertung: null, kategorie: null, begruendung: beg, notiz, bewertet_von: null }
             : { bewertung: { wie: toNum(wie), was: toNum(was), warum: toNum(warum) }, kategorie: kat, begruendung: beg, notiz, bewertet_von: autorName || "max" /* KD-030 */ })}>
           {speichert ? "Speichert …" : alleLeer ? "Als unbewertet speichern" : herkunftHinweis ? "Vorschlag übernehmen" : "Speichern"}
         </button>
-        <button disabled={speichert} style={{ ...btnStyle(false), fontSize: 14, padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>
+        <button disabled={speichert} style={{ ...btnStyle(false), padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>
           Abbrechen
         </button>
       </div>

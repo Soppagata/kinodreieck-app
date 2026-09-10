@@ -66,16 +66,16 @@ export class AppErrorBoundary extends Component {
   render() {
     if (!this.state.fehler) return this.props.children;
     return (
-      <main style={{
-        minHeight: "100vh",
+      <main className="kd-app-error" style={{
+        minHeight: "100dvh",
         display: "grid",
         placeItems: "center",
-        padding: 24,
+        padding: "max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
         background: "#171519",
         color: "#ece8df",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: "'Space Grotesk', sans-serif",
       }}>
-        <section style={{
+        <section className="kd-app-error-panel" style={{
           width: "min(42rem, 100%)",
           border: "1px solid rgba(236,232,223,.2)",
           borderRadius: 12,
@@ -90,7 +90,7 @@ export class AppErrorBoundary extends Component {
           }}>
             Kinodreieck wurde angehalten
           </p>
-          <h1 style={{ fontSize: "clamp(2rem, 7vw, 3.5rem)", lineHeight: 1 }}>
+          <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: "clamp(2rem, 7vw, 3.5rem)", lineHeight: 1.08 }}>
             Die Ansicht konnte nicht sicher aufgebaut werden.
           </h1>
           <p style={{ color: "#c8c2ce", lineHeight: 1.6 }}>

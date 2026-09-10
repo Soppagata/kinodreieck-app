@@ -4,6 +4,7 @@ import { ALLE_TYPEN, hatDreieck, normalisiereTyp } from "../lib/typen.js";
 import { quelleZuArray, arrayZuQuelle } from "../lib/quellen.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { normalisiereFilmkennung } from "../lib/filmwissen.js";
+import { lesePlausiblesJahr, plausiblerJahresbereich } from "../lib/match.js";
 import { QuellenWahl } from "./QuellenWahl.jsx";
 
 /* ---------- Adaptive Eingabemaske ----------
@@ -66,16 +67,14 @@ export function FilmForm({
   const speichern = async (mitPrognose = false) => {
     if (speicherLaufRef.current) return;
     if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
-    if (bewertbar && !f.jahr) { setFehler("Jahr ist Pflicht (Schlüssel & Abgleich)."); return; }
-    // KD-018: nicht-leeres Jahr muss eine ganze Zahl im sinnvollen Bereich sein,
-    // sonst wird z.B. "abc" still zu NaN→null und fehlt im ID-Schlüssel.
-    if (f.jahr.trim()) {
-      const j = Number(f.jahr);
-      const maxJahr = new Date().getFullYear() + 5;
-      if (!Number.isFinite(j) || !Number.isInteger(j) || j < 1870 || j > maxJahr) {
-        setFehler("Jahr muss eine ganze Zahl zwischen 1870 und " + maxJahr + " sein.");
-        return;
-      }
+    if (bewertbar && !f.jahr.trim()) { setFehler("Jahr ist Pflicht (Schlüssel & Abgleich)."); return; }
+    // KD-018: nicht-leeres Jahr muss ganzzahlig und medientypspezifisch
+    // plausibel sein, sonst wird z.B. "abc" still zu NaN→null.
+    const jahrEingabe = lesePlausiblesJahr(f.jahr, { typ: f.typ });
+    if (!jahrEingabe.ok) {
+      const { min, max } = plausiblerJahresbereich(f.typ);
+      setFehler(`Jahr muss eine ganze Zahl zwischen ${min} und ${max} sein.`);
+      return;
     }
     const externeKennungen = {
       imdb: f.imdbId ? normalisiereFilmkennung("imdb", f.imdbId) : null,
@@ -100,7 +99,7 @@ export function FilmForm({
         const eintrag = {
           titel: f.titel.trim(),
           originaltitel: f.originaltitel.trim() || f.titel.trim(),
-          jahr: Number(f.jahr),
+          jahr: jahrEingabe.jahr,
           jahr_bis: null,
           typ: f.typ,
           quelle: arrayZuQuelle(f.quellen),
@@ -126,7 +125,7 @@ export function FilmForm({
         // Musik/Sonstiges — schlichte Struktur, hart kein Dreieck.
         ergebnis = await onAdd({
           titel: f.titel.trim(),
-          jahr: f.jahr ? Number(f.jahr) : null,
+          jahr: jahrEingabe.jahr,
           typ: f.typ,
           art: f.art === "Persönlichkeit" ? ("Persönlichkeit" + (f.sub ? " · " + f.sub : "")) : (f.art || null),
           kategorie: f.art === "Persönlichkeit" ? "person" : (f.art === "Studio" ? "studio" : null),
@@ -154,12 +153,14 @@ export function FilmForm({
   };
 
   return (
-    <div className="kd-mediathek-neuformular" style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-mediathek-neuformular" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
       {/* Zeile 1: Titel, (Originaltitel nur bewertbar), Jahr */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input placeholder="Titel *" value={f.titel} onChange={set("titel")} style={{ ...inputStyle, flex: 2, minWidth: 160 }} />
         {bewertbar && <input placeholder="Originaltitel" value={f.originaltitel} onChange={set("originaltitel")} style={{ ...inputStyle, flex: 2, minWidth: 160 }} />}
-        <input placeholder={bewertbar ? "Jahr *" : "Jahr"} value={f.jahr} onChange={set("jahr")} style={{ ...inputStyle, width: 80 }} />
+        <input placeholder={bewertbar ? "Jahr *" : "Jahr"} value={f.jahr} onChange={set("jahr")}
+          inputMode="numeric" aria-invalid={!!f.jahr.trim() && !lesePlausiblesJahr(f.jahr, { typ: f.typ }).ok}
+          style={{ ...inputStyle, width: 80 }} />
       </div>
 
       {/* Zeile 2: Typ + typ-abhängige Felder */}

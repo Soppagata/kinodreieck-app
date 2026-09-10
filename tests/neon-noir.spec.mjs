@@ -715,8 +715,7 @@ test.describe("Egg-Oberflächen in der echten App", () => {
         await expect(normal).toHaveAttribute("aria-pressed", "true");
         if (modus === "neon-noir") {
           await expect(normal).toHaveCSS("background-color", "rgb(67, 234, 242)");
-          // The production SegmentedControl keeps its existing dark-ink text role.
-          await expect(normal).toHaveCSS("color", "rgb(6, 33, 44)");
+          await expect(normal).toHaveCSS("color", "rgb(0, 0, 0)");
           await expect(normal).toHaveCSS("border-radius", "3px");
           await expect(normal).toHaveCSS("outline-style", "solid");
           await expect(normal).toHaveCSS("outline-width", "2px");
@@ -724,7 +723,7 @@ test.describe("Egg-Oberflächen in der echten App", () => {
         await keineDokumentUeberbreite(page);
         if (!process.env.CI) await page.screenshot({ path:testInfo.outputPath(`${modus}-settings.png`) });
         await waehleEggAppTab(page, "Mediathek");
-        const card = page.locator(".kd-karte").filter({ hasText:EGG_FILM.titel });
+        const card = page.locator(".kd-filmkarte").filter({ hasText:EGG_FILM.titel });
         await card.click();
         await expect(card).toContainText(EGG_FILM.begruendung);
         const colors = await card.evaluate(el => ({ text:getComputedStyle(el).color, background:getComputedStyle(el).backgroundColor }));

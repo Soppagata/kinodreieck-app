@@ -402,11 +402,11 @@ for (const viewport of VIEWPORTS) {
         const popupBox = await panel.boundingBox();
         expect(popupBox.width).toBeGreaterThanOrEqual(Math.min(viewport.width * 0.76, 260) - 1);
         expect(viewport.width - popupBox.x - popupBox.width).toBeGreaterThanOrEqual(9);
-        /* Das Menü sitzt seit dem Blur-Streifen-Fix näher an der unteren
-           Bedienzone; die globale Suchleiste wird währenddessen ausgeblendet. */
-        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(60);
+        /* Die kompakte Navigation sitzt in der unteren Bedienzone;
+           „Nach oben“ gehört zur rechten Fußzeile im Paneel. */
+        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(9);
         await expect(popup.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(1);
-        await expect(panel.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(0);
+        await expect(panel.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(1);
         await expect(panel.getByRole("button", { name: "Suche", exact: true })).toHaveCount(0);
         await expect(popup.getByRole("button", { name: "Anleitung & Hilfe" })).toHaveCount(0);
         await expect(popup.getByRole("link", { name: /Installation/ })).toHaveCount(0);
