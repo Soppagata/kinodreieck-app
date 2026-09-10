@@ -27,7 +27,7 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193, CI 34509618429 und Domain/Worker/Assets grün. E11 und E13 DISPATCHED: Streaming-Datenreparatur sowie Datenschutz/Hilfe; E12 folgt wegen Datenvertrag und gemeinsamer Settingsdateien. Anschließend beauftragter Gesamtabgleich E1–E13. Natürlicher Entdecken-Erstlauf bleibt separat M3; Production 3b82a73; Master |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193, CI 34509618429 und Domain/Worker/Assets grün. E11 im tatsächlichen Pipelinecheckout INTEGRATED (6c2822e), E13 im Appmaster INTEGRATED (29a67ef). E12 DISPATCHED auf dieser gemeinsamen Appbasis; gemeinsame Prüfung und Lieferung noch offen. Anschließend beauftragter Gesamtabgleich E1–E13. Natürlicher Entdecken-Erstlauf bleibt separat M3; Production 3b82a73; Master |
 | M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für FlixPatrol E2/E3/E5/E6 und Entdecken E9/E10 auf Staging 5724193. OFFEN E11/E12: Watchmode-Known-Export verliert den belegten Werktyp; jüngste strenge Zuordnung blendet dadurch echte Mediathektreffer aus. Neu-Verfügbarkeit und sichtbare Zähler sollen aus demselben gemeinsamen Katalog entstehen; Bauplan unten |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
@@ -994,7 +994,7 @@ Max meldet 29 Titel unter „Mein Programm“, bestätigt auf Nachfrage 9.768
 unter „Alles“, abweichende Einstellungszahlen und ein leeres „Neu“. Auftrag:
 Ursachen lokalisieren und einen einfachen, stabilen Bau durch Baumeister
 planen. Max hat den Bau anschließend ausdrücklich beauftragt: „Ja bau das“.
-E11 ist DISPATCHED in seinem isolierten Pipelineworktree. Neue Providerläufe,
+E11 ist nach Paketabnahme in das tatsächliche Pipelinecheckout integriert; E12 ist auf der integrierten Datenschutz-/Hilfebasis DISPATCHED. Neue Providerläufe,
 Publisher und die geladene Schedulerinstanz werden nicht während des
 Paketbaus gestartet.
 
@@ -1130,7 +1130,8 @@ Text-/Navigationsbau gehört zu M5/M6 und ist ausdrücklich beauftragt.
 
 - Eigener App-Worktree `/private/tmp/kd-datenschutz-hilfe-e13-20260910`, Branch
   `codex/datenschutz-hilfe-e13-20260910`, Basis
-  `25a4dd75a1b7d551ae795a27a00b9c6c18dcb88a`, DISPATCHED an
+  `25a4dd75a1b7d551ae795a27a00b9c6c18dcb88a`, DELIVERED als
+  `6e5412cb7ab05d25b5443d3c3190b0a59351fd11` von
   `etappe_13_datenschutz_hilfe` (Sol/high wegen Datenschutzgrenze). SOLO unabhängig
   vom anderen Repository E11; E12 folgt auf die integrierte E13-Lieferung.
 - E13 besitzt `src/lib/privatePilotOps.js` ausschließlich deklarative
@@ -1162,6 +1163,57 @@ Text-/Navigationsbau gehört zu M5/M6 und ist ausdrücklich beauftragt.
 - Fokussierte bestehende Hilfe-/Legal-/Loginchecks und ein gezielter DOM-Pfad
   belegen den Text-/Navigationsumbau. Der gemeinsame App-Abschlusslauf folgt
   einmal nach E12; E13 startet keine zusätzliche volle Suite.
+
+### Paketabnahme E11/E13 und Dispatch E12
+
+E11 ist als `bcfad477` + `f685599` + `6c2822e` angenommen. Die beiden
+gezielten Nachbesserungen liefern echte Quelleneinzelstände und schließen
+stündliche Wiederholungen alter Pending-/Fetch-Fehler. Ein Pending-Versuch
+verwendet additiv `zuletzt_versucht_am`, ein laufender Checkpoint sein bereits
+vorhandenes `aktualisiert_am`, jeweils vor dem tatsächlichen Versuch. Job-ID,
+Cursor und Budgetgrenzen werden dadurch weder ersetzt noch zurückgesetzt.
+Der Paketabschluss bestand 31 Hardening- und 11 Pipelinechecks; die beiden
+späteren, betroffenen Hardening-Abschlüsse zuletzt 33/33. Die konkreten
+Fehlerproben belegen jeweils: erster fehlgeschlagener Wiederstart, +1h kein
+Start, exakt +48h erneut zulässig. Keine Providerrequests in diesen Proben.
+
+Am 10.09. um 21:09 UTC wurde das tatsächliche Pipelinecheckout von `f1be7f9`
+per Fast-forward auf `6c2822e43d760d8a1f00599d5361c0c8cf34a105` integriert.
+Alle drei vorher veränderten generierten Dateien blieben bytegleich. Die
+installierte LaunchAgent-Zeitplanung ist dabei noch nicht geändert worden.
+Beleg: `/private/tmp/kd-ops-audit-20260909/streaming-e11-primary-integration.json`.
+
+Der eingefrorene Consumervertrag enthält `stand_pro_quelle` (wirklicher
+Abruf), `vergleich_stand_pro_quelle` (erfolgreicher Vorhervergleich), optionale
+`dienst_diffs` je Titel und belegten Known-Werktyp. E12 übernimmt dieselbe
+synthetische Fixture einschließlich einer absichtlich älteren MUBI-Quelle.
+Die reine Auslieferungsvorschau hat 226/226 Known-Werktypen, unveränderte
+24.916 Werke und denselben Quellenstand vom 07.09. Eine zusätzliche
+feldgenaue Lieferprüfung erlaubt nur Werktyp und beauftragte Metadaten;
+persönliche Inhalte bleiben gleich. Der bereits ausgelieferte Endzähler
+951 bleibt erhalten: der Roh-Fetch-Zähler 830 liegt vor den damaligen 121
+Deep-Link-Requests und darf den Endstand bei einem Rebuild nicht ersetzen.
+Vorbereiteter Streaminghash: `1ce16d5bf5c28fa1f3640258423a806a53797914777640e4b1e27f3f84f7bd9b`.
+Der bestehende Publisher wird für diese Lieferung auf `streaming` und
+`manifest` begrenzt und prüft vorher alle Kataloghashes. Der vorhandene
+Splittrigger pflegt daraus die beiden Leseteile; Programm und Demoassets
+bleiben unangetastet. Noch keine dieser vorbereiteten Datenwrites ausgeführt.
+
+E13 ist im Appmaster als `29a67ef233a6a3801f357c47ead1ed069cbc9876` integriert.
+Hilfe-/Legal-/Login-/Settings-/Provider- und DOM-Prüfungen sowie der betroffene
+Einzeldateibau bestehen. Die Browserverträge für den neuen Hilfeeinstieg
+sind angepasst und gehören zum gemeinsamen Schlusslauf. Ein historischer,
+nicht zum normalen Gate gehöriger Cleanup-D2-Test besitzt unabhängig vom
+Hilfeumbau eine feste Checkboxzahl 14 statt 15; das ist keine Freigabe, seine
+anderen Produktflächen umzubauen. Der neue Hilfevertrag selbst besteht.
+
+E12 ist SOLO an `etappe_12_streaming_ansichten` (Sol/high für die komplexe
+App-/Kontozustandsnaht) DISPATCHED: Basis `29a67ef233a6a3801f357c47ead1ed069cbc9876`,
+Branch `codex/streaming-ansichten-e12-20260910`, Worktree
+`/private/tmp/kd-streaming-ansichten-e12-20260910`. Ownership entspricht der
+Tabelle oben; zusätzlich darf ein kleiner reiner Projektionshelper die
+Ansichten und Settings verbinden. Synthetische Consumerbrowserproben gehören
+E12, das vollständige Appgate dem Master nach Integration.
 
 ### Beauftragter Gesamtabgleich nach dem Bau
 

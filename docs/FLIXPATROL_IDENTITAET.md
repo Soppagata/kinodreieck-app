@@ -1,9 +1,10 @@
 # FlixPatrol: sichere Titelidentitaet
 
-Der reine Helper `src/lib/externalTitleIdentity.js` verbindet einen externen
+Der reine Helper `supabase/functions/_shared/externalTitleIdentity.js` verbindet einen externen
 Titel mit einem eigenen Katalogeintrag, ohne einen Bestand zu mutieren oder zu
 speichern. Er ist die gemeinsame Identitaetsgrenze fuer den bestehenden
-Streamingkatalog und eine spaetere FlixPatrol-Anreicherung.
+Streamingkatalog und die FlixPatrol-Anreicherung. Der Browser verwendet
+denselben Vertrag ueber den Reexport `src/lib/externalTitleIdentity.js`.
 
 ## Oeffentlicher Vertrag
 
@@ -17,8 +18,9 @@ Referenzjahr und einen eindeutig normalisierbaren Film-/Serientyp voraus.
 Akzeptierte Typvarianten sind `film`/`movie` sowie
 `serie`/`series`/`tv`/`tv_series`/`tv series`/`show`. Ein fehlender Typ wird
 nicht pauschal als Film gedeutet. Der vorhandene Streaming-Entdecken-Vertrag
-liefert den Typ bereits explizit; ein bekannter Streamingtitel uebernimmt ihn
-beim Zusammenfuehren aus diesem neutralen Katalogdatensatz.
+liefert den Typ explizit. Seit E11 uebernimmt auch der Known-Export den Typ
+ausschliesslich aus dem Rohkatalogeintrag mit derselben Watchmode-ID. Fehlt
+dieser Beleg, bleibt der Typ offen; persoenliche Angaben werden nicht ersetzt.
 
 Zuerst werden gemeinsame Watchmode-, IMDb-, TMDB- oder FlixPatrol-IDs
 verglichen. Eine passende starke ID gewinnt vor titelbasierten Kandidaten.
@@ -58,6 +60,8 @@ mehrdeutige oder widerspruechliche Titel bleiben in `Entdecken`. Die Ausgabe
 fuegt weiterhin Dienste, URLs und Serienstand als Anzeigeprojektion hinzu; sie
 schreibt weder in den Master noch in persoenliche Datentoepfe.
 
-Ein spaeterer FlixPatrol-Adapter soll seine Rohfelder zuerst in diesen kleinen
-Vertrag (`titel`/`originaltitel`, `jahr`, `typ`, belegte IDs) projizieren. Er
-darf fehlende Pflichtbelege nicht aus Suchnaehe oder Defaults erfinden.
+Die FlixPatrol-Faktenadapter projizieren ihre Rohfelder in diesen kleinen
+Vertrag (`titel`/`originaltitel`, `jahr`, `typ`, belegte IDs). Fehlende
+Pflichtbelege werden nicht aus Suchnaehe oder Defaults erfunden. Import,
+Prognose und strukturierter Radar verwenden bestaetigte Cachezuordnungen;
+unsichere Kandidaten bleiben getrennt.
