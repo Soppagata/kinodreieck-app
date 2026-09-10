@@ -5,9 +5,11 @@ Das Paket gehört zum Masterplan
 Der finale Kandidatencommit und sein Prüfbeleg stehen dort. Dieses Dokument
 beschreibt den ausdrücklich freigegebenen Umfang der gemeinsamen
 Backend-Lieferung. Migrationen, Functions, Buildmarker und Berechtigungsprüfung
-sind am 10. September geliefert und bestätigt. Der einzelne Initiallauf
-scheiterte am ersten FlixPatrol-Antwortparser; Tagesaktivierung und erfolgreicher
-neuer Feed stehen noch aus. Die konkreten Belege stehen im Register.
+sind am 10. September geliefert und bestätigt. Die beim einzelnen Initiallauf
+erkannte Parserabweichung ist anschließend real belegt, korrigiert und mit
+einer erfolgreichen einzelnen Chartabfrage bestätigt. Die Tagesautomatik ist
+aktiv; der erste natürliche vollständige Feed steht noch aus. Die konkreten
+Belege stehen im Register.
 
 ## Ziel und Datenumfang
 
@@ -95,5 +97,14 @@ Der Initiallauf verbrauchte genau einen FlixPatrol-Chartrequest und zwei
 abgelehnte Anbieterantwort, noch keine bestimmte Fehlerursache. Null Chart-,
 Titel- und Feedwrites sind zurückgelesen. Der bestehende Feed bleibt erhalten;
 der Tagesclaim und der terminale Laufbeleg werden nicht für einen blinden
-Nachholversuch zurückgesetzt. Der vorbereitete Tagesworkflow bleibt bis zur
-Klärung deaktiviert. Automatic-AI und kostenpflichtiges Radar bleiben aus.
+Nachholversuch zurückgesetzt. Zwei getrennte gezählte Diagnosen belegen die
+`list`-Hülle und `rankingLast: 0` für Neueinsteiger. Nach ihrer eng begrenzten
+Korrektur bestätigt eine einzelne reale Chartabfrage zehn gültige Einträge.
+Diese vier Datenrequests einschließlich des ursprünglichen Initialversuchs
+zählen gegen den freigegebenen 30-Request-Umfang; kein Feedlauf wurde wiederholt.
+
+Alle vier korrigierten Functions und der Buildmarker sind bestätigt. Der
+bereits freigegebene natürliche Tagesworkflow ist seit 10. September,
+11:31 UTC aktiv. Sein nächster natürlicher Termin am 11. September muss den
+vollständigen gespeicherten Feed noch belegen. Der Initialbeleg bleibt dabei
+`failed_confirmed`. Automatic-AI und kostenpflichtiges Radar bleiben aus.

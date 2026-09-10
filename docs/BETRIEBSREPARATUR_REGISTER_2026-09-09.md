@@ -24,12 +24,12 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE für Monitorlogik: natürlicher Lauf 34463011534 nennt nur den tatsächlichen Feed-Quellenfehler; Entdecken-Reparatur bleibt M2; E1 |
-| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | Backend live; Initiallauf am 10. September scheitert am ersten FlixPatrol-Parser, kein neuer Feed; E2 → E4 |
+| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | API-Parser real repariert, Backend live und Tagesautomatik aktiv; erster natürlicher vollständiger Feed noch offen; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | OFFEN; Master nach den Wellen |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | Lokales Gesamtgate, Backend-Readback und erforderliche Main-CI grün; natürlicher Feed-/Monitorabschluss offen; Master |
 | M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Backend und Staging geliefert; noch keine echten Chart-/Titeldaten wegen M2; E2, E3, E5, E6 |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE; erster natürlicher Tickerlauf 34462038347 erfolgreich; drei Versuche insgesamt sauber verbucht; E1 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE; erster natürlicher Tickerlauf 34462038347 erfolgreich; nach Reparatur sechs Versuche insgesamt sauber verbucht; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
 
@@ -315,12 +315,11 @@ Der einzelne freigegebene Initiallauf um 10:12 UTC hat zwei öffentliche
 Quellen-GETs und genau einen FlixPatrol-Chartrequest ausgeführt. Der erste
 Prime-AT-Movies-Chart für den 9. September erhielt HTTP 200, wurde aber vom
 Client als `invalid_response` abgelehnt. Es entstanden null Chart-, Titel-
-oder Feedwrites. Die Antwortdaten wurden nicht gespeichert; welches
-Strukturmerkmal der Parser abgelehnt hat, ist noch nicht belegt. Deshalb
-folgt eine gezielte payloadfreie Fehlerdiagnose, keine Lockerung auf Verdacht.
-Der terminale Initiallauf wird nicht automatisch wiederholt und sein
-Tagesclaim nicht zurückgesetzt. Entdecken bleibt bis zur Klärung
-`disabled_manually`; Production-Abnahme und -Merge sind offen.
+oder Feedwrites. Die Antwortdaten wurden nicht gespeichert; die Ursache
+wurde deshalb anschließend mit gezielten payloadfreien Diagnosen belegt
+(siehe Reparaturabschluss unten). Der terminale Initiallauf wird nicht
+wiederholt und sein Tagesclaim nicht zurückgesetzt. Production-Abnahme
+und -Merge bleiben bis zum natürlichen Betriebsnachweis offen.
 
 Der natürliche
 [Tickerlauf 34462038347](https://github.com/Soppagata/kinodreieck-app/actions/runs/34462038347)
@@ -361,6 +360,83 @@ Belege liegen unter `/private/tmp/kd-ops-audit-20260909` in
 `flixpatrol-approved-initial.json`, `flixpatrol-initial-failure-readback.json`
 und `flixpatrol-approved-staging-build.json`. RLS-Log:
 `/private/tmp/kd-flixpatrol-approved-rls-confirmed-20260910.log`.
+
+## Bestätigte Parserreparatur und Tagesaktivierung
+
+Zwei einzelne gezählte Diagnosen belegen die tatsächliche API-Form: die
+Top10-Antwort ist eine `list`-Hülle mit zehn typisierten `top10s`-Records;
+ein Neueinsteiger an Rang 7 hat `rankingLast: 0`. Alle erwarteten Company-,
+Österreich-, Charttyp-, Tages-, Titel-ID- und Aktualisierungszeitprüfungen
+sind dabei erfüllt. Es werden ausschließlich Strukturklassen und boolesche
+Prüfergebnisse gespeichert, keine Anbieterpayloads oder Titelkopien.
+
+E4 liefert die eng begrenzte Korrektur als `84bc913`: zusätzliche typisierte
+`list`-Hülle und Abbildung des belegten Nullplatz-Sentinels auf `null`.
+Andere Container, untypisierte oder gemischte Records, negative Vorplätze
+und alle bisherigen Identitäts-/Datumsabweichungen bleiben ungültig.
+Master integriert den Code als
+`10fc6eecbc709244d9503bf286d3a8955f8aeb18`, Staging als
+`c344b02261fe943acba4fba7a54ffb946a279600`. 34 fokussierte Checks, beide
+Deno-Checks und das einmalige abschließende `npm test` sind grün.
+Gesamtgate-Log: `/private/tmp/kd-flixpatrol-contract-repair-final-test.log`.
+
+Die einmalige reale Vertragsprüfung um 11:28 UTC bestätigt HTTP 200,
+`valid-contract` und zehn akzeptierte Einträge. Genau ein Request wurde
+vorher/nachher gezählt; Feed, Titel-/Chartcache und Tagesclaim bleiben
+unverändert. Beleg: `flixpatrol-top10-repaired-once.json`. Mitsamt Initiallauf
+und beiden Diagnosen sind damit vier der freigegebenen 30 Datenrequests
+verwendet. Der gemeinsame Septemberzähler steht auf sechs Versuchen:
+drei Erfolge, drei `invalid_response`; null offene Versuche und null
+kostenpflichtige KI-Requests. Der offizielle Quotasnapshot von 09:41 UTC
+ist älter als diese Datenabrufe und wird nicht als neuer Saldo ausgegeben.
+
+Alle vier Functions sind aus `10fc6ee` ausgeliefert und nach dem Setzen der
+Buildmarker erneut vollständig heruntergeladen und byteverglichen:
+Usage v8 / JWT false, Entdecken v67 / false, AI v86 / true, Radar v64 / false.
+Backend- und Staging-Erwartungsmarker zeigen denselben Commit; der
+authentifizierte Health-Readback um 11:31 UTC bestätigt ihn mit HTTP 200.
+Keine neue Migration, keine erneute Berechtigungsprüfung und kein persönlicher
+Datenwrite waren für diese Parserkorrektur nötig.
+
+Der natürliche Entdecken-Workflow `345914419` wurde am 10. September um
+11:31 UTC im bereits freigegebenen Umfang aktiviert und als `active`
+zurückgelesen. Die Aktivierung stützt sich auf den bestätigten reparierten
+API-Vertrag; der Initialbeleg bleibt ausdrücklich `failed_confirmed`.
+Es gab keinen manuellen Workflowstart und keine Tagesclaim-Rücksetzung.
+Der nächste natürliche Termin ist der 11. September um 02:00 UTC
+(04:00 Uhr Wien); tatsächliche GitHub-Startzeiten können später liegen.
+Automatic-AI bleibt deaktiviert, das kostenpflichtige Radar hart ausgeschaltet.
+
+Die erforderlichen Prüfungen der
+[Main-CI 34471599041](https://github.com/Soppagata/kinodreieck-app/actions/runs/34471599041)
+sind grün; Production wartet weiter am bestehenden geschützten
+Freigabeschritt. Der
+[Staging-Lauf 34471737786](https://github.com/Soppagata/kinodreieck-app/actions/runs/34471737786)
+ist einschließlich Suite, Chromium, WebKit und Deployment grün. Der atomare
+Stand `https://022fa766.kinodreieck.pages.dev` und die Staging-Domain bestehen
+Build-/Serviceworker-/Login-/Header-Smoke samt abgewiesenem anonymem
+Katalogzugriff. Der zusätzliche direkte `build-meta.json`-Readback bestätigt
+`c344b02261fe943acba4fba7a54ffb946a279600` und `appEnvironment=staging`.
+Die Abschlussdokumentation liegt auf dem Master-Koordinationsbranch; der
+ausgelieferte Produkt-/Functioncode bleibt der oben geprüfte Commit.
+
+**Noch offen:** der erste erfolgreiche natürliche 50-Titel-Feed mit fünf
+Quellen samt gespeichertem Readback und anschließend grünem Private Ops
+Monitor. Der alte Feed ist durch die Vertragsprüfung nicht aktualisiert.
+Die Task-Nachprüfung `flixpatrol-erstbetrieb-pr-fen` prüft alle drei Stunden
+rein lesend und bleibt ohne neue handlungsrelevante Evidenz still. Sie startet
+keine Providerprobe, keinen manuellen Feedlauf und keine kostenpflichtige KI.
+Nach erfolgreichem Betriebsnachweis folgen der bereits bedingt freigegebene
+Staging-Merge und getrennt davon die persönliche Control-/Sandbox-Plattform.
+
+Zusätzliche Belege im bestehenden Auditordner:
+`flixpatrol-top10-diagnostic-once.json`,
+`flixpatrol-top10-inner-shape-once.json`,
+`flixpatrol-top10-repaired-once.json`, `flixpatrol-repaired-markers.json`,
+`flixpatrol-repaired-health.json`, `flixpatrol-repaired-schedule.json`.
+Der Staging-Readback liegt in `flixpatrol-repaired-staging-build.json`.
+Historische Function-Nachweise bleiben in `backend-delivery-9bb2133`,
+`diagnostic-delivery-04bbda1` und `diagnostic-delivery-8787455` erhalten.
 
 ## Historischer Ausgang am 9. September
 
