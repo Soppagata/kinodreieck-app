@@ -121,7 +121,7 @@ await check("lädt einen eng gefilterten Tageschart als genau einen gezählten R
     chartType: "movies",
     date: "2026-09-09",
   };
-  const response = [{
+  const response = { type: "list", data: [{
     type: "top10s",
     data: {
       id: "debug-only",
@@ -131,9 +131,9 @@ await check("lädt einen eng gefilterten Tageschart als genau einen gezählten R
       language: null,
       origin: null,
       type: 2,
-      date: { type: "daterange", data: { type: 1, from: expected.date, to: expected.date } },
+      date: { type: 1, from: expected.date, to: expected.date },
       ranking: 1,
-      rankingLast: null,
+      rankingLast: 0,
       value: 10,
       valueLast: null,
       daysTotal: 1,
@@ -141,7 +141,7 @@ await check("lädt einen eng gefilterten Tageschart als genau einen gezählten R
       key: null,
       updatedAt: "2026-09-09T10:57:43",
     },
-  }];
+  }] };
   const client = createFlixPatrolClient({
     apiKey: "secret",
     randomUUID: () => "00000000-0000-4000-8000-000000000005",
@@ -152,6 +152,7 @@ await check("lädt einen eng gefilterten Tageschart als genau einen gezählten R
   const result = await client.fetchTop10(expected);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].sourceId, titleId);
+  assert.equal(result.items[0].rankingLast, null);
   assert.equal(events[0][1].requestKind, "top10s");
   assert.deepEqual(events.map(([name]) => name), ["begin", "fetch", "finish"]);
   const url = new URL(events[1][1]);

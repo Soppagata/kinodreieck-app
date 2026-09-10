@@ -329,7 +329,11 @@ function relationData(value, type, idPattern) {
 function listItems(value, expectedType) {
   if (Array.isArray(value)) return value;
   const wrapper = record(value);
-  return wrapper?.type === expectedType && Array.isArray(wrapper.data) ? wrapper.data : null;
+  if (!Array.isArray(wrapper?.data)) return null;
+  if (wrapper.type === expectedType) return wrapper.data;
+  if (wrapper.type === "list" && wrapper.data.length > 0
+      && wrapper.data.every((item) => record(item)?.type === expectedType)) return wrapper.data;
+  return null;
 }
 
 function normalizeTitleType(value) {
@@ -419,18 +423,19 @@ export function normalizeFlixPatrolTop10List(value, expected) {
     const dateWrapper = record(data?.date);
     const date = dateWrapper?.type === "daterange" ? record(dateWrapper.data) : dateWrapper;
     const chartType = normalizeChartType(data?.type);
+    const rankingLast = data?.rankingLast === 0 ? null : data?.rankingLast;
     if (!wrapper || wrapper.type !== "top10s" || !data || !movie || !company || !country || !date
         || company.id !== expected.companyId || country.id !== expected.countryId || chartType !== expected.chartType
         || date.type !== 1 || date.from !== expected.date || date.to !== expected.date
         || !Number.isInteger(data.ranking) || data.ranking < 1 || data.ranking > 10
-        || !providerNullableInt(data.rankingLast, 1) || !Number.isSafeInteger(data.value) || data.value < 0
+        || !providerNullableInt(rankingLast, 1) || !Number.isSafeInteger(data.value) || data.value < 0
         || !providerNullableInt(data.valueLast, 0) || !providerNullableInt(data.daysTotal, 0)
         || typeof data.updatedAt !== "string" || !PROVIDER_DATETIME_PATTERN.test(data.updatedAt)) return null;
     return Object.freeze({
       sourceId: movie.id,
       mediaType: expectedMediaType,
       ranking: data.ranking,
-      rankingLast: data.rankingLast,
+      rankingLast,
       value: data.value,
       valueLast: data.valueLast,
       daysTotal: data.daysTotal,
