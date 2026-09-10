@@ -188,6 +188,84 @@ await check("verwirft leere Charts nach einem gezählten Request", async () => {
   assert.equal(finishes[0].status, "invalid_response");
 });
 
+await check("diagnostiziert ungültige Charts payloadfrei und finalisiert trotz Loggerfehler", async () => {
+  const operationId = "00000000-0000-4000-8000-000000000011";
+  const sensitive = [
+    "Secret chart title", "Secret chart description", titleId,
+    FLIXPATROL_AT_SOURCES.companies.prime.id, "Basic private-api-key",
+  ];
+  const malicious = {
+    type: "unknown-provider-wrapper",
+    Authorization: sensitive[4],
+    data: [{ type: "unknown-item-wrapper", data: {
+      movie: { type: "unknown-relation", data: { id: sensitive[2], title: sensitive[0] } },
+      company: { type: "companies", data: { id: sensitive[3] } },
+      country: null, type: 99, date: [], ranking: "1", rankingLast: null,
+      value: 10, valueLast: null, daysTotal: 1, updatedAt: "invalid",
+      description: sensitive[1],
+    } }],
+  };
+  const diagnostics = [];
+  const finishes = [];
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => operationId,
+    beginOperation: async () => ({ ok: true, claim: true, replay: false }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => malicious }),
+    diagnosticLogger: (value) => diagnostics.push(value),
+    finishOperation: async (value) => {
+      finishes.push(value);
+      return { ok: true, replay: false, status: value.status, usage: {} };
+    },
+  });
+  await assert.rejects(
+    client.fetchTop10({
+      companyId: FLIXPATROL_AT_SOURCES.companies.prime.id,
+      countryId: FLIXPATROL_AT_SOURCES.country.id,
+      chartType: "movies",
+      date: "2026-09-09",
+    }),
+    (error) => error.code === "FLIXPATROL_INVALID_RESPONSE"
+      && error.providerRequests === 1
+      && error.operationId === operationId
+      && error.diagnostic === diagnostics[0],
+  );
+  assert.equal(finishes.length, 1);
+  assert.equal(finishes[0].status, "invalid_response");
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].contractGroup, "top10-list");
+  assert.equal(diagnostics[0].dataArrayLength, 1);
+  assert.equal(diagnostics[0].listLengthClass, "one-to-ten");
+  assert.equal(diagnostics[0].rankingClass, "string:other");
+  assert.equal(diagnostics[0].dateShape.kind, "array");
+  assert.equal(diagnostics[0].relations.movie.typeClass, "string:other");
+  const serialized = JSON.stringify(diagnostics[0]);
+  for (const secret of sensitive) assert.equal(serialized.includes(secret), false);
+
+  let throwingLoggerFinish = 0;
+  const throwingLoggerClient = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => "00000000-0000-4000-8000-000000000012",
+    beginOperation: async () => ({ ok: true, claim: true, replay: false }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => [] }),
+    diagnosticLogger: () => { throw new Error("logger must not escape"); },
+    finishOperation: async (value) => {
+      throwingLoggerFinish += 1;
+      return { ok: true, replay: false, status: value.status, usage: {} };
+    },
+  });
+  await assert.rejects(
+    throwingLoggerClient.fetchTop10({
+      companyId: FLIXPATROL_AT_SOURCES.companies.prime.id,
+      countryId: FLIXPATROL_AT_SOURCES.country.id,
+      chartType: "movies",
+      date: "2026-09-09",
+    }),
+    (error) => error.code === "FLIXPATROL_INVALID_RESPONSE" && error.providerRequests === 1,
+  );
+  assert.equal(throwingLoggerFinish, 1);
+});
+
 await check("normalisiert eine gezielte Titelauflösung samt nullable Fremd-IDs", async () => {
   const begins = [];
   const client = createFlixPatrolClient({

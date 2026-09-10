@@ -22,8 +22,142 @@ export const FLIXPATROL_AT_SOURCES = Object.freeze({
   }),
 });
 
+export const FLIXPATROL_RESPONSE_SHAPE_VERSION = "flixpatrol-response-shape-v1";
+const RESPONSE_CONTRACT_GROUPS = new Set(["quota", "top10-list", "title", "title-list"]);
+const RESPONSE_FAILURE_CLASSES = new Set(["json-error", "contract-mismatch"]);
+const RESPONSE_FIELDS = Object.freeze({
+  quota: Object.freeze(["used", "available", "limit", "limitExtra", "resetAt"]),
+  "top10-list": Object.freeze([
+    "movie", "company", "country", "type", "date", "ranking", "rankingLast",
+    "value", "valueLast", "daysTotal", "updatedAt",
+  ]),
+  title: Object.freeze([
+    "id", "title", "premiere", "country", "company", "genre", "keyword",
+    "description", "updatedAt", "link", "type", "premiereOnline", "length",
+    "imdbId", "tmdbId",
+  ]),
+  "title-list": Object.freeze([
+    "id", "title", "premiere", "country", "company", "genre", "keyword",
+    "description", "updatedAt", "link", "type", "premiereOnline", "length",
+    "imdbId", "tmdbId",
+  ]),
+});
+
 function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+function responseValueClass(value) {
+  if (value === undefined) return "missing";
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  if (typeof value === "object") return "object";
+  return ["string", "number", "boolean"].includes(typeof value) ? typeof value : "other";
+}
+
+function responseEnumClass(value, allowed) {
+  if (allowed.includes(value)) return `known:${String(value)}`;
+  return `${responseValueClass(value)}:other`;
+}
+
+function responseFieldTypes(value, fields) {
+  const source = record(value);
+  return Object.freeze(Object.fromEntries(fields.map((field) => [field, responseValueClass(source?.[field])])));
+}
+
+function responseRelationShape(value, allowedTypes) {
+  const wrapper = record(value);
+  const data = record(wrapper?.data);
+  return Object.freeze({
+    kind: responseValueClass(value),
+    typeClass: responseEnumClass(wrapper?.type, allowedTypes),
+    dataKind: responseValueClass(wrapper?.data),
+    idKind: responseValueClass(data?.id),
+  });
+}
+
+function responseListLengthClass(value) {
+  if (!Array.isArray(value)) return "not-array";
+  if (value.length === 0) return "empty";
+  return value.length <= 10 ? "one-to-ten" : "over-ten";
+}
+
+function responseRankingClass(value) {
+  if (Number.isInteger(value)) {
+    return value >= 1 && value <= 10 ? "integer:one-to-ten" : "integer:out-of-range";
+  }
+  if (typeof value === "number") return "number:non-integer";
+  return `${responseValueClass(value)}:other`;
+}
+
+function responseDateShape(value) {
+  const wrapper = record(value);
+  const data = record(wrapper?.data);
+  return Object.freeze({
+    kind: responseValueClass(value),
+    typeClass: responseEnumClass(wrapper?.type, ["daterange"]),
+    dataKind: responseValueClass(wrapper?.data),
+    fieldTypes: responseFieldTypes(data, ["type", "from", "to"]),
+    rangeTypeClass: responseEnumClass(data?.type, [1]),
+  });
+}
+
+/* Rein strukturelle Diagnose fuer verworfene Providerantworten. Feldnamen und
+   Enumwerte stammen ausschliesslich aus festen Whitelists; Fremdwerte werden
+   nie kopiert. Der erste Listeneintrag reicht fuer die Vertragsform, waehrend
+   die tatsaechliche Arraylaenge erhalten bleibt. */
+export function describeFlixPatrolResponseShape(value, {
+  contractGroup,
+  failureClass = "contract-mismatch",
+} = {}) {
+  if (!RESPONSE_CONTRACT_GROUPS.has(contractGroup) || !RESPONSE_FAILURE_CLASSES.has(failureClass)) return null;
+  const root = record(value);
+  const rootData = root?.data;
+  const list = Array.isArray(value) ? value : Array.isArray(rootData) ? rootData : null;
+  const sample = contractGroup === "quota" || contractGroup === "title" ? value : list?.[0];
+  const sampleWrapper = record(sample);
+  const sampleData = record(sampleWrapper?.data);
+  const fieldsTarget = contractGroup === "quota" || contractGroup === "title" ? rootData : sampleWrapper?.data;
+  const relations = contractGroup === "top10-list"
+    ? {
+      movie: responseRelationShape(sampleData?.movie, ["titles"]),
+      company: responseRelationShape(sampleData?.company, ["companies"]),
+      country: responseRelationShape(sampleData?.country, ["countries"]),
+    }
+    : ["title", "title-list"].includes(contractGroup) ? {
+      country: responseRelationShape(record(fieldsTarget)?.country, ["countries"]),
+      company: responseRelationShape(record(fieldsTarget)?.company, ["companies"]),
+      genre: responseRelationShape(record(fieldsTarget)?.genre, ["genres"]),
+      keyword: responseRelationShape(record(fieldsTarget)?.keyword, ["keywords"]),
+    } : {};
+  const enumClasses = contractGroup === "top10-list"
+    ? {
+      chartType: responseEnumClass(record(fieldsTarget)?.type, [2, 3]),
+    }
+    : ["title", "title-list"].includes(contractGroup) ? {
+      titleType: responseEnumClass(record(fieldsTarget)?.type, [1, 2]),
+    } : {};
+  return Object.freeze({
+    schemaVersion: FLIXPATROL_RESPONSE_SHAPE_VERSION,
+    contractGroup,
+    failureClass,
+    rootKind: responseValueClass(value),
+    rootArrayLength: Array.isArray(value) ? value.length : null,
+    rootTypeClass: responseEnumClass(root?.type, ["apiquota", "top10s", "titles"]),
+    dataKind: responseValueClass(rootData),
+    dataArrayLength: Array.isArray(rootData) ? rootData.length : null,
+    itemCount: list?.length ?? (sample === undefined ? 0 : 1),
+    listLengthClass: responseListLengthClass(list),
+    sampleItemKind: responseValueClass(sample),
+    sampleItemTypeClass: responseEnumClass(sampleWrapper?.type, ["apiquota", "top10s", "titles"]),
+    sampleDataKind: responseValueClass(sampleWrapper?.data),
+    whitelistFieldTypes: responseFieldTypes(fieldsTarget, RESPONSE_FIELDS[contractGroup]),
+    enumClasses: Object.freeze(enumClasses),
+    relations: Object.freeze(relations),
+    rankingClass: contractGroup === "top10-list"
+      ? responseRankingClass(sampleData?.ranking) : "not-applicable",
+    dateShape: contractGroup === "top10-list" ? responseDateShape(sampleData?.date) : null,
+  });
 }
 
 function cleanText(value, maxLength) {

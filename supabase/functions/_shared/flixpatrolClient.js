@@ -1,6 +1,7 @@
 import {
   FLIXPATROL_TITLE_TYPES,
   FLIXPATROL_TOP10_TYPES,
+  describeFlixPatrolResponseShape,
   normalizeFlixPatrolTitle,
   normalizeFlixPatrolTitleList,
   normalizeFlixPatrolTop10List,
@@ -12,13 +13,19 @@ const QUOTA_URL = `${API_ORIGIN}/v2/quota`;
 export const FLIXPATROL_TIMEOUT_MS = 15_000;
 
 export class FlixPatrolClientError extends Error {
-  constructor(code, { providerRequests = 0, httpStatus = null, operationId = null } = {}) {
+  constructor(code, {
+    providerRequests = 0,
+    httpStatus = null,
+    operationId = null,
+    diagnostic = null,
+  } = {}) {
     super(code);
     this.name = "FlixPatrolClientError";
     this.code = code;
     this.providerRequests = providerRequests;
     this.httpStatus = httpStatus;
     this.operationId = operationId;
+    this.diagnostic = diagnostic;
   }
 }
 
@@ -55,7 +62,8 @@ export function parseFlixPatrolQuota(value) {
  *   finishOperation?: (input: {operationId: string, status: string, httpStatus: number | null, quota: ReturnType<typeof parseFlixPatrolQuota>}) => Promise<{ok?: boolean, replay?: boolean, status?: string, usage?: unknown}>,
  *   fetchImpl?: typeof fetch,
  *   randomUUID?: () => string,
- *   timeoutMs?: number
+ *   timeoutMs?: number,
+ *   diagnosticLogger?: (diagnostic: unknown) => unknown
  * }} options
  */
 export function createFlixPatrolClient({
@@ -65,6 +73,7 @@ export function createFlixPatrolClient({
   fetchImpl = fetch,
   randomUUID = () => crypto.randomUUID(),
   timeoutMs = FLIXPATROL_TIMEOUT_MS,
+  diagnosticLogger = (diagnostic) => console.warn(JSON.stringify(diagnostic)),
 } = {}) {
   const configured = typeof apiKey === "string" && apiKey.length > 0
     && typeof beginOperation === "function"
@@ -73,7 +82,15 @@ export function createFlixPatrolClient({
     && typeof randomUUID === "function"
     && Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= FLIXPATROL_TIMEOUT_MS;
 
-  async function countedGet({ url, requestKind, parse }) {
+  const emitDiagnostic = (diagnostic) => {
+    if (!diagnostic || typeof diagnosticLogger !== "function") return;
+    try {
+      const pending = diagnosticLogger(diagnostic);
+      if (pending && typeof pending.catch === "function") pending.catch(() => {});
+    } catch { /* Eine Diagnose darf die terminale Ledger-Buchung nie verhindern. */ }
+  };
+
+  async function countedGet({ url, requestKind, contractGroup, parse }) {
     if (!configured) throw new FlixPatrolClientError("FLIXPATROL_NOT_CONFIGURED");
     const operationId = randomUUID();
     if (typeof operationId !== "string"
@@ -139,14 +156,22 @@ export function createFlixPatrolClient({
     }
 
     let body;
-    try { body = await response.json(); } catch { body = null; }
-    const parsed = parse(body);
-    if (parsed === null) {
+    let failureClass = "contract-mismatch";
+    try { body = await response.json(); }
+    catch { body = null; failureClass = "json-error"; }
+    let parsed = null;
+    try { parsed = parse(body); } catch { /* fail closed below */ }
+    if (parsed == null) {
+      let diagnostic = null;
+      try { diagnostic = describeFlixPatrolResponseShape(body, { contractGroup, failureClass }); }
+      catch { /* Die Providerform bleibt verworfen; keine Rohdaten als Ersatz loggen. */ }
+      emitDiagnostic(diagnostic);
       await finish("invalid_response", response.status, null);
       throw new FlixPatrolClientError("FLIXPATROL_INVALID_RESPONSE", {
         providerRequests: 1,
         httpStatus: response.status,
         operationId,
+        diagnostic,
       });
     }
 
@@ -156,7 +181,9 @@ export function createFlixPatrolClient({
   }
 
   async function fetchQuota() {
-    const result = await countedGet({ url: QUOTA_URL, requestKind: "quota", parse: parseFlixPatrolQuota });
+    const result = await countedGet({
+      url: QUOTA_URL, requestKind: "quota", contractGroup: "quota", parse: parseFlixPatrolQuota,
+    });
     return Object.freeze({ quota: result.data, usage: result.usage, providerRequests: 1 });
   }
 
@@ -180,6 +207,7 @@ export function createFlixPatrolClient({
     const result = await countedGet({
       url: `${API_ORIGIN}/v2/top10s?${query}`,
       requestKind: "top10s",
+      contractGroup: "top10-list",
       parse: (body) => normalizeFlixPatrolTop10List(body, expected),
     });
     return Object.freeze({ items: result.data, usage: result.usage, providerRequests: 1, operationId: result.operationId });
@@ -193,6 +221,7 @@ export function createFlixPatrolClient({
     const result = await countedGet({
       url: `${API_ORIGIN}/v2/titles/${encodeURIComponent(sourceId)}`,
       requestKind: "titles",
+      contractGroup: "title",
       parse: (body) => {
         const title = normalizeFlixPatrolTitle(body);
         return title && title.sourceId === sourceId
@@ -217,6 +246,7 @@ export function createFlixPatrolClient({
     const result = await countedGet({
       url: `${API_ORIGIN}/v2/titles?${query}`,
       requestKind: "titles",
+      contractGroup: "title-list",
       parse: normalizeFlixPatrolTitleList,
     });
     return Object.freeze({
