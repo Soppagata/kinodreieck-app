@@ -488,6 +488,10 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
   for (const t of bekanntAlt.titel || []) {
     const key = String(t.watchmode_id);
     const entdeckenTitel = map.get(key) || {};
+    const katalogGenres = vereinigeListen(
+      entdeckenTitel.genres ?? entdeckenTitel.genre,
+      t.genres ?? t.genre,
+    );
     const neutral = {
       watchmode_id: t.watchmode_id,
       titel: t.titel ?? entdeckenTitel.titel,
@@ -496,7 +500,10 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
          historischer Bekannt-Datensatz ohne Typ darf ihn daraus uebernehmen,
          wird aber nie pauschal zum Film erklaert. */
       typ: t.typ ?? entdeckenTitel.typ ?? null,
-      genres: vereinigeListen(entdeckenTitel.genres ?? entdeckenTitel.genre, t.genres ?? t.genre),
+      /* Leere Kataloggenres bleiben „nicht geliefert“. Nur so kann die
+         bestehende persönliche Genreangabe nach einem strengen Match wie
+         bisher einspringen. */
+      genres: katalogGenres.length ? katalogGenres : null,
       user_score: t.user_score ?? entdeckenTitel.user_score ?? null,
       tmdb_id: t.tmdb_id ?? entdeckenTitel.tmdb_id ?? null,
       imdb_id: t.imdb_id ?? entdeckenTitel.imdb_id ?? null,

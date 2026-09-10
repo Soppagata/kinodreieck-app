@@ -270,6 +270,15 @@ check("verschiedene Katalogstände mischen keinen alten Vorhervergleich in den n
   wechselnderStand.bekannt.katalog_stand_konsistent === false
   && wechselnderStand.bekannt.stand_pro_quelle.Netflix === "2026-09-10T12:00:00Z"
   && wechselnderStand.bekannt.vergleich_stand_pro_quelle.Netflix == null);
+const genreFallback = baueStreamingAnsichten({
+  bekannt: { titel: [{ watchmode_id: 907, titel: "Persönliches Genre", jahr: 2022, typ: "movie", dienste: ["Netflix"] }] },
+  entdecken: { titel: [] },
+}, [{
+  id: "persoenliches-genre", watchmode_id: 907, titel: "Persönliches Genre", jahr: 2022, typ: "film",
+  genres: ["Thriller"],
+}]);
+check("fehlende Kataloggenres erhalten beim Known-Match den persönlichen Genre-Fallback",
+  JSON.stringify(genreFallback.bekannt.titel[0]?.genres) === JSON.stringify(["Thriller"]));
 const ohneTypbeleg = baueStreamingAnsichten({
   bekannt: { titel: [{ watchmode_id: 902, titel: "Kein Typ", jahr: 2022 }] },
   entdecken: { titel: [] },
