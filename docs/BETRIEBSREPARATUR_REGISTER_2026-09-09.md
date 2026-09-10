@@ -24,11 +24,11 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: vollständiger Private Ops Monitor 34480116970 nach erfolgreichem Datenlauf und Staging-Deploy grün; E1 |
-| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | DONE: realer vollständiger Lauf und gespeicherter Format-8-Feed mit 50 Titeln am 10. September bestätigt; Main 97ade56, Staging 191392b; E2 → E4 |
+| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | DONE: realer vollständiger Lauf und gespeicherter Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56, zusammengeführtes Main/Staging bf74f25; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
-| M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE für Max' heutige technische Abnahme: Gesamtgate, erforderliche Main-/Staging-CI, Backend- und Frontend-Readback sowie echter Feed/Monitor grün; geschützte Production-Freigabe getrennt; Master |
-| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für den gelieferten Faktenpfad: fünf Charts, 50 Referenzen und 25 tatsächlich benötigte Titeldetails im gemeinsamen Cache; Main 97ade56 / Staging 191392b, KI-Vertragsprüfungen grün, kein neuer bezahlter KI-Livetest; E2, E3, E5, E6 |
+| M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE für Max' heutige technische Abnahme: bf74f25 auf Main/Staging, Gesamtgate und CI grün, Staging deployed/readback; Backend/Frontend-Readback und echter Feed/Monitor grün; geschützte Production-Freigabe getrennt; Master |
+| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für den gelieferten Faktenpfad: fünf Charts, 50 Referenzen und 25 tatsächlich benötigte Titeldetails im gemeinsamen Cache; Backend 97ade56 / Main und Staging bf74f25, KI-Vertragsprüfungen grün, kein neuer bezahlter KI-Livetest; E2, E3, E5, E6 |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -546,6 +546,37 @@ Aktuelle Belege im bestehenden Auditordner:
 CI: [Main 34479266841](https://github.com/Soppagata/kinodreieck-app/actions/runs/34479266841),
 [Staging 34479288238](https://github.com/Soppagata/kinodreieck-app/actions/runs/34479288238),
 [Monitor 34480116970](https://github.com/Soppagata/kinodreieck-app/actions/runs/34480116970).
+
+### Zusammenführung des akzeptierten Staging-Standes
+
+Nach der erfüllten heutigen Datenabnahme ist der bedingt freigegebene Merge
+als `bf74f257c4ef541eb1ab1c7d3c54ecbb9b8fff26` auf Main und Staging veröffentlicht.
+Sieben Git-Konflikte sind aufgelöst: Die aktuellen Masterbelege bleiben erhalten;
+die akzeptierten Staging-Komponenten und gemeinsamen UI-Tokens werden übernommen.
+Die bestehenden Neon-Noir-Kontrast-, Suchfeld- und Kompatibilitätskorrekturen
+bleiben zusätzlich erhalten. Gegenüber dem akzeptierten Staging-Produkt besteht
+das Produktdelta ausschließlich aus diesen erhaltenen Neon-Regeln und ihren
+Prüfungen.
+
+Der vollständig integrierte Kandidat besteht `npm test` einschließlich
+PostgreSQL und Build sowie alle zwölf gezielten Chromium-/WebKit-Prüfungen für
+Showa/Neon, Settings, Filmkarten und Controls in drei Fenstergrößen. Die
+Function-Quellen, Migrationen und Betriebsworkflows sind bytegleich mit dem
+bereits real getesteten Backendstand `97ade56`; deshalb entsteht durch diesen
+UI-Merge keine zusätzliche Providerwirkung und kein neuer Backenddeploy.
+Die dokumentierten 38 FlixPatrol-Abrufe bleiben unverändert.
+
+Die abschließenden GitHub-Läufe des Merge-Commits sind
+[Main 34481096122](https://github.com/Soppagata/kinodreieck-app/actions/runs/34481096122)
+und [Staging 34481094708](https://github.com/Soppagata/kinodreieck-app/actions/runs/34481094708).
+Beide Zielbranches bestehen alle erforderlichen CI-Prüfungen. Staging ist
+erfolgreich ausgeliefert; der direkte Domain-Readback bestätigt `bf74f25`.
+Der Abschlussbeleg `flixpatrol-final-integration-receipt.json` bestätigt außerdem
+33 unveränderte Function-Quelldateien, die vier bisherigen Live-Versionen,
+38 abgeschlossene Anbieterabrufe und den weiterhin aktiven Tagesworkflow.
+Die geschützte
+Production-Auslieferung bleibt eine eigene GitHub-Freigabe. Primärcheckout und
+vorhandene Nutzeränderungen bleiben unangetastet.
 
 ## Historischer Ausgang am 9. September
 

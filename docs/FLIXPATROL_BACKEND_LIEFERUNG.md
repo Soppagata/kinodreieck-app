@@ -133,3 +133,11 @@ Damit ist die von Max gewünschte heutige technische Abnahme erfüllt. Der
 unverändert aktive natürliche Lauf am 11. September bleibt eine zusätzliche
 Betriebsbeobachtung. Die geschützte Production-Freigabe und der spätere private
 Staging-Control-/Sandbox-Umbau bleiben getrennt.
+
+Nach erfüllter Abnahme ist der akzeptierte Staging-Stand als `bf74f25` mit Main
+zusammengeführt. Beide Remote-Refs zeigen auf diesen Commit; Gesamtgate,
+zwölf gezielte UI-Integrationsprüfungen und erforderliche CI sind grün, Staging
+ist veröffentlicht und über die Domain bestätigt. Alle 33 Function-Quelldateien,
+Migrationen und Betriebsworkflows bleiben dabei unverändert zu `97ade56`;
+Backendmarker und Live-Versionen ändern sich durch den UI-Merge nicht.
+Production wartet weiterhin auf die geschützte Freigabe in GitHub.
