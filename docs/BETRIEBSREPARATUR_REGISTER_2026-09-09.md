@@ -1,6 +1,6 @@
 # FlixPatrol und Betriebsreparatur – Masterplan
 
-Stand: 10. September 2026. Master ist dieser Task. Max hat die tägliche
+Stand: 11. September 2026. Master ist dieser Task. Max hat die tägliche
 FlixPatrol-Automatik mit den gespeicherten Schlüsseln und höchstens einem
 Quota-Request pro Tag / 31 pro Monat ausdrücklich bestätigt und die Umsetzung
 mit je einem Baumeister pro Etappe beauftragt. Das Gesamtabo umfasst 1000
@@ -23,12 +23,12 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
-| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE für den gelieferten Ops-Monitor: 34480116970 grün; E1. E11 gebaut und im tatsächlichen Pipelinecheckout integriert: 55b8392; Umstellung der geladenen Zeitplanung und erster regulärer Lauf noch offen. |
+| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: Ops-Monitor 34480116970 grün; E1. E11 auf 55b8392 tatsächlich installiert; erster regulärer Fünferlauf am 11.09., 00:02 MESZ, mit 41 Requests und grünen Fetch-/Build-/Lieferphasen beendet, kein Pending/Lock/Checkpoint zurückgelassen. |
 | M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | E7 VON MAX ABGENOMMEN: „Geht wieder alles“. E8–E10 auf Staging GELIEFERT: 5724193. E11 im tatsächlichen Pipelinecheckout INTEGRATED (55b8392), E12/E13 im Appmaster INTEGRATED (Produktstand 6848eff, Persistenzfixture 6bd48cd). Gesamtabgleich und gemeinsames Abschlussgate laufen; anschließende Staging-/Datenlieferung offen. Natürlicher Entdecken-Erstlauf bleibt separat M3; Production 3b82a73. |
-| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für FlixPatrol E2/E3/E5/E6 und Entdecken E9/E10 auf Staging 5724193. E11/E12 integriert: echte Typen, eine ausgewählte Titelmenge und producerbelegte Neu-Zugänge. Reale providerfreie Probe bestätigt 9.797 ausgewählte Titel / 123 Mein Programm statt 29, persönliche Daten vor/nach bytegleich; Lieferung noch offen. |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. |
+| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -1379,6 +1379,85 @@ die vorbereitete Streaming-/Manifestkorrektur und die bestehende lokale
 Watchmode-Automatik. Production-Frontend und geschützte Production-Freigabe
 sind kein Teil dieses Fensters. Die normale gemeinsame Datenlieferung bleibt
 auch für Production sichtbar; das ist keine isolierte Sandbox.
+
+### Tatsächliche Streaminglieferung und erster regulärer Lauf
+
+Am 11.09. um 00:00 MESZ lieferte der bestehende Publisher zunächst die
+providerfreie Typ-/Metadatenkorrektur aus. Der vorherige Vergleich sämtlicher
+Kataloghashes bestand. Nur `streaming` und `manifest` wurden geschrieben,
+der bestehende Trigger aktualisierte die beiden Leseteile. Programm und
+andere Katalogassets blieben bytegleich, persönliche Writes und zusätzliche
+Providerrequests jeweils null. Beleg: `streaming-repair-delivered.json`.
+
+Danach wurde die geprüfte Vorlage im **bestehenden** LaunchAgent
+`com.kinodreieck.streaming` installiert, aus dem tatsächlichen Pipelinecheckout
+`55b8392`. `StartCalendarInterval` enthält nur `Minute: 0`, dazu `RunAtLoad`;
+Programm und Pfad bleiben unverändert. Die 48-Stunden-Fälligkeit wird somit
+stündlich geprüft. Nach Schlafen erfolgt die nächste mögliche Gelegenheit;
+es wird keine Ausführung auf einem ausgeschalteten Mac behauptet. Die
+installierten Bytes stimmen mit dem geprüften Quellstand überein.
+
+Der dabei fällige reguläre Fünferlauf
+`auto-909842bd-8822-4116-a2d0-88991c4dab9e` erledigte Fetch, Build und Lieferung
+erfolgreich. 41 Watchmode-Requests, keine Wiederaufnahme, null Detailrequests
+bei 226 vorhandenen Cacheeinträgen; zuletzt beobachteter Providerverbrauch
+992. Die Grenzen 500 pro logischem Job und 2.000 pro Zyklus bleiben aktiv,
+das belegte Anbieterabo hat 2.500. Kein KI- oder zusätzlicher FlixPatrol-Aufruf.
+Der Lauf endet mit Exit 0, ohne Pending, Lock oder Fetchcheckpoint. Quellenstand
+der fünf Dienste: `2026-09-10T22:02:13.661Z`; alle 39 Quellenstände bleiben
+erhalten, nur die fünf geprüften Quellen erhalten neue Vergleichsbelege.
+Der Vollstand bleibt wahrheitsgemäß beim 07.09.
+
+Die anschließende reale Konto-Leseprobe bestätigt den gelieferten Hash
+`9aed91bdde7b7940c85c6a5b1f9d6d6567c9b7d32787fafa623e45dcb44c9ab2` und:
+
+- 24.728 Werke im gemeinsamen Rohbestand;
+- 9.348 Titel bei der bestehenden Fünferauswahl;
+- 123 Werke in Mein Programm und 56 belegte Neu-Zugänge;
+- gleiche persönliche Vor-/Nachhashes wie vor der Lieferung;
+- keine fremden Dienste, keine Einträge bei leerer Auswahl und konsistente
+  Teilmengen für Mein Programm/Neu.
+
+Die frühere Reparaturprobe mit dem **unveränderten alten** Quellenstand hatte
+9.797 Titel. Der echte neue Watchmode-Vergleich meldet 56 Zugänge und 505
+Abgänge aus dieser ausgewählten Gesamtmenge, also 9.348. Die Differenz ist
+durch die aktualisierten Angebote belegt und kein erneuter Filterverlust.
+Belege im Nachweisordner: `streaming-launchagent-installed.json`,
+`streaming-first-regular-run-verified.json`,
+`streaming-final-served-20260910220324450.json` und
+`streaming-actual-availability-diff.json`.
+
+### Stagingabschluss und verbleibende Beobachtung
+
+Staging liefert `9217415abb6a205a448204146e0f8d745e9ae11b` aus.
+[CI 34535276749](https://github.com/Soppagata/kinodreieck-app/actions/runs/34535276749)
+ist vollständig grün: das reguläre `npm test` samt Build, Function-Mocks,
+je 46 Browserfälle in Chromium/WebKit, das gemeinsame Required Check und
+`deploy-staging`. Beide Browserprotokolle enthalten 46 bestandene Fälle und
+keinen Retry/Flaky-Fall. Die langsamste browserseitige WebKit-Tabreaktion auf
+dem CI-Rechner lag bei 1.196 ms; die erlaubten Grenzen wurden nicht verändert.
+
+Der öffentliche Readback am 11.09., 00:11 MESZ, bestätigt denselben Commit
+in `build-meta.json` und `sw.js`. HTML, JavaScript und CSS antworten mit 200,
+beide Einstiegassets sind im Worker-Precache. Production bleibt auf
+`3b82a7305c16d5a74ba7a24786e5db068e61db95`; die bereits bestehende geschützte
+Production-Freigabe wurde nicht bedient. Beleg:
+`final-e1-e13-staging-public-readback.json`.
+
+Offen bleibt ausschließlich die gesonderte M3-Betriebsbeobachtung des ersten
+planmäßigen Entdecken-Laufs am 11.09. ab 04:00 MESZ, mit möglicher
+GitHub-Verzögerung, sowie die neue physische iPhone-/PWA-Abnahme. Die vorhandene
+aktive Nachprüfung „FlixPatrol Erstbetrieb prüfen“ liest den aktuellen Stand
+aus diesem Register und beobachtet Entdecken, Ticker und Private Ops, ohne
+weitere Provideraufrufe oder manuelle Tagesläufe zu starten. Sie bleibt bei
+unverändertem Stand still; eine zweite Automation wurde nicht angelegt.
+
+Der ursprüngliche App-Primärcheckout bleibt auf `98b5eca` mit denselben
+vorhandenen Nutzeränderungen. Im tatsächlichen Pipelinecheckout stehen nur
+die drei bereits zuvor veränderten generierten Streamingdateien; sie wurden
+durch den normalen, erfolgreichen Datenlauf aktualisiert. Die Bauzweige sind
+integriert und gesichert. Dieser abschließende Registereintrag wird nur im
+Masterzweig nachgeführt und löst keinen erneuten Staging-Deploy aus.
 
 ## Historischer Ausgang am 9. September
 
