@@ -23,13 +23,13 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
-| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE für Monitorlogik: natürlicher Lauf 34463011534 nennt nur den tatsächlichen Feed-Quellenfehler; Entdecken-Reparatur bleibt M2; E1 |
-| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | Top10-Parser real repariert; fünf Charts live gespeichert. Heutiger Owner-Test findet weitere Title-Parserabweichung; Feedabschluss offen, Tagesautomatik aktiv; E2 → E4 |
+| M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: vollständiger Private Ops Monitor 34480116970 nach erfolgreichem Datenlauf und Staging-Deploy grün; E1 |
+| M2 | Entdecken aktualisiert alle fünf Quellen im vereinbarten 50er-Mix und zeigt echte Quellenstände. | DONE: realer vollständiger Lauf und gespeicherter Format-8-Feed mit 50 Titeln am 10. September bestätigt; Main 97ade56, Staging 191392b; E2 → E4 |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | Vorreparatur integriert; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | Lokales Gesamtgate, Backend-Readback und erforderliche Main-CI grün; natürlicher Feed-/Monitorabschluss offen; Master |
-| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | Backend und Staging geliefert; fünf echte Charts und 50 Titelreferenzen gespeichert, Titeldetails noch offen wegen M2; E2, E3, E5, E6 |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE; natürlicher Ticker grün; mitsamt Owner-Test und gezielter Titeldiagnose 13 Versuche terminal verbucht; E1 |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE für Max' heutige technische Abnahme: Gesamtgate, erforderliche Main-/Staging-CI, Backend- und Frontend-Readback sowie echter Feed/Monitor grün; geschützte Production-Freigabe getrennt; Master |
+| M6 | FlixPatrol-Fakten werden einmal gepflegt, sicher zugeordnet und in den ausgewählten Nutzer-/KI-Funktionen ohne Überschreiben persönlicher Daten wiederverwendet. | DONE für den gelieferten Faktenpfad: fünf Charts, 50 Referenzen und 25 tatsächlich benötigte Titeldetails im gemeinsamen Cache; Main 97ade56 / Staging 191392b, KI-Vertragsprüfungen grün, kein neuer bezahlter KI-Livetest; E2, E3, E5, E6 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
 
@@ -483,6 +483,69 @@ Beleg: `flixpatrol-title-contract-once.json` im bestehenden Auditordner.
 Die vorhandene Nachprüfungsautomation wurde an Max' aktuelle Abnahme angepasst:
 Der vollständige manuelle Test heute mit anschließendem grünem Monitor zählt;
 die natürliche Ausführung morgen bleibt eine zusätzliche Betriebsbeobachtung.
+
+### Bestätigter Abschluss des heutigen Tests
+
+Das Korrekturdelta `b8b5aa6` ist als `97ade568b2a9006b46ea41e8501b989815999c62`
+integriert und auf Main geliefert. Derselbe Function-Quellstand ist auf Staging
+als `191392be95b88d3ce78d7ef624b37c3a74bb735d` veröffentlicht. Der einmalige
+vollständige lokale Abschlusslauf (`npm test`, einschließlich PostgreSQL und
+Build) ist grün. Die erforderlichen Suiten-, Function- und Chromium-/WebKit-
+Prüfungen sind auf beiden Zielbranches grün. Der Staging-Deploy ist erfolgreich;
+die geschützte Production-Auslieferung wartet weiterhin auf ihre eigene Freigabe.
+
+Alle vier vollständigen Function-Abhängigkeitsketten sind nach Auslieferung
+und Markerwechsel bytegleich bestätigt: Usage v11, Entdecken v69, AI v88,
+Radar v66. JWT-Einstellungen bleiben erhalten. Backendmarker und authentifizierter
+Health-Readback bestätigen `97ade56`; die öffentliche Staging-Domain bestätigt
+`191392b`. Automatik und Providerflags wurden bei dieser Korrektur nicht verändert.
+
+Der fortgesetzte echte Lauf vom 10. September, 12:54 UTC, verwendet die fünf
+gespeicherten Charts wieder und lädt genau 25 Titeldetails. Er speichert einmal
+den vollständigen Feed: 15 ÖFI, 10 Netflix, 10 Prime Video, 10 Disney+, 5 Apple TV.
+Format 8, 50 Titel, fünf Quellen, Status `ready`, `refreshedOn=2026-09-10`,
+Fehlercode leer und keine aktive Lease sind dauerhaft zurückgelesen. Die einzelne
+durch den Parserfix überholte negative Titelmarkierung durfte vorher ablaufen;
+keine erfolgreiche Chart- oder Titelbefüllung wurde gelöscht. Der temporäre
+Owner-Schalter ist danach wieder geschlossen. Keine persönliche Datenmutation,
+keine Tagesclaim-Rücksetzung, null kostenpflichtige KI.
+
+Der unveränderte Staging-Frontend-Service liest den echten Feed als `fresh`,
+`feedOrigin=server`, `retrievalStatus=loaded` und validiert alle 50 Einträge
+einschließlich der Identitäts- und Eindeutigkeitsregeln. Der alte eingebettete
+Ersatzpool wird dabei nicht gewählt. Tatsächliche Quellenstände: ÖFI und Netflix
+6. September; Prime Video, Disney+ und Apple TV 9. September. Der Abruf am
+10. September wird davon getrennt erhalten. Dies ist ein realer Daten-/Service-
+Readback, keine neue physische iPhone-PWA-Abnahme.
+
+Der erste nachgeschaltete Monitor `34479471894` wurde vor Abschluss des
+Staging-Deploys gestartet. Er bestätigte den Feed bereits als `READY`, meldete
+aber korrekt `BUILD_MISMATCH`. Nach belegtem CI-/Domainabschluss besteht der
+erneute rein lesende Monitor `34480116970` vollständig (13:02 UTC). Dabei
+entstanden keine weiteren FlixPatrol- oder KI-Requests. Die historischen Fehler-
+und Laufbelege bleiben erhalten.
+
+Der gemeinsame Monatszähler steht auf **38 abgeschlossenen Versuchen**:
+33 erfolgreich, fünf fehlgeschlagen. Die heutige ausdrücklich gewünschte
+Vollprüfung umfasst sechs Abrufe im ersten Teil, einen gezielten Diagnoseabruf
+und 25 Abrufe in der Fortsetzung; sechs frühere Ticker-/Reparaturabrufe bleiben
+mitgezählt. Der letzte offizielle Quota-Snapshot stammt noch von 09:41 UTC und
+wird nicht als aktueller Restbestand ausgegeben. Kein zusätzliches Monatsgate.
+
+Der tägliche Entdecken-Zeitplan bleibt aktiv (nächster Termin 11. September,
+02:00 UTC / 04:00 Wien; GitHub kann verzögern). Ticker und Monitor behalten ihre
+Zeiten. M3 erhält seinen ersten natürlichen Live-Beleg erst dann; dies blockiert
+gemäß Max' aktuellem Wunsch die heutige technische Merge-Bereitschaft nicht.
+Der persönliche Staging-Control-/Sandbox-Umbau bleibt separat.
+
+Aktuelle Belege im bestehenden Auditordner:
+`flixpatrol-owner-resume-once.json`, `flixpatrol-frontend-live-readback.json`,
+`flixpatrol-monitor-after-staging-once.json`, die vier
+`flixpatrol-package-source-*.json`, `flixpatrol-title-repaired-markers.json`,
+`flixpatrol-repaired-health.json` und `flixpatrol-title-repair-staging-domain.json`.
+CI: [Main 34479266841](https://github.com/Soppagata/kinodreieck-app/actions/runs/34479266841),
+[Staging 34479288238](https://github.com/Soppagata/kinodreieck-app/actions/runs/34479288238),
+[Monitor 34480116970](https://github.com/Soppagata/kinodreieck-app/actions/runs/34480116970).
 
 ## Historischer Ausgang am 9. September
 

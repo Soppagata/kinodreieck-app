@@ -105,6 +105,31 @@ zählen gegen den freigegebenen 30-Request-Umfang; kein Feedlauf wurde wiederhol
 
 Alle vier korrigierten Functions und der Buildmarker sind bestätigt. Der
 bereits freigegebene natürliche Tagesworkflow ist seit 10. September,
-11:31 UTC aktiv. Sein nächster natürlicher Termin am 11. September muss den
-vollständigen gespeicherten Feed noch belegen. Der Initialbeleg bleibt dabei
-`failed_confirmed`. Automatic-AI und kostenpflichtiges Radar bleiben aus.
+11:31 UTC aktiv. Der Initialbeleg bleibt `failed_confirmed` erhalten.
+Automatic-AI und kostenpflichtiges Radar bleiben aus.
+
+Max hat anschließend ausdrücklich den vollständigen Datenlauf noch am
+10. September verlangt und den morgigen Zeitplan bestehen lassen. Dabei wurden
+fünf Charts gespeichert; eine gezielte Diagnose belegte `length=0` als fehlende
+Laufzeit. Der schmale Parserfix ist als `97ade56` integriert, lokal vollständig
+geprüft und in allen vier Functions bytegleich ausgeliefert (Usage v11,
+Entdecken v69, AI v88, Radar v66). Backendmarker und Health stimmen überein.
+Staging `191392b` ist mit grüner CI und Domain-Readback veröffentlicht.
+
+Die Fortsetzung um 12:54 UTC verwendet alle fünf Chart-Checkpoints wieder,
+lädt 25 Titeldetails und speichert den vollständigen Format-8-Feed mit
+50 Titeln im vereinbarten Mix. Der reale Frontend-Leseweg nimmt den Serverfeed
+als frisch an. Quellenstände: ÖFI/Netflix 6. September, Prime/Disney+/Apple TV
+9. September; Abrufdatum 10. September. Der temporäre Owner-Schalter ist wieder
+geschlossen; es gab keinen globalen Claim- oder Cache-Reset und keine bezahlte KI.
+
+Der nach abgeschlossener Staging-Auslieferung ausgeführte Private Ops Monitor
+`34480116970` ist vollständig grün. Der vorherige Monitor hatte während des
+laufenden Deploys ausschließlich den Build-Zwischenstand gemeldet. Der aktuelle
+gemeinsame Monatszähler enthält alle 38 abgeschlossenen FlixPatrol-Versuche,
+darunter fünf Fehlversuche; der ältere offizielle Quota-Snapshot bleibt datiert.
+
+Damit ist die von Max gewünschte heutige technische Abnahme erfüllt. Der
+unverändert aktive natürliche Lauf am 11. September bleibt eine zusätzliche
+Betriebsbeobachtung. Die geschützte Production-Freigabe und der spätere private
+Staging-Control-/Sandbox-Umbau bleiben getrennt.
