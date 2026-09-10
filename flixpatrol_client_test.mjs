@@ -303,11 +303,13 @@ await check("diagnostiziert ungültige Charts payloadfrei und finalisiert trotz 
 
 await check("normalisiert eine gezielte Titelauflösung samt nullable Fremd-IDs", async () => {
   const begins = [];
+  const payload = makeTitlePayload();
+  payload.data.length = 0;
   const client = createFlixPatrolClient({
     apiKey: "secret",
     randomUUID: () => "00000000-0000-4000-8000-000000000007",
     beginOperation: async (value) => { begins.push(value); return { ok: true, claim: true, replay: false }; },
-    fetchImpl: async () => ({ ok: true, status: 200, json: async () => makeTitlePayload() }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => payload }),
     finishOperation: async (value) => ({ ok: true, replay: false, status: value.status, usage: {} }),
   });
   const result = await client.fetchTitle({ sourceId: titleId, mediaType: "film" });
@@ -315,6 +317,7 @@ await check("normalisiert eine gezielte Titelauflösung samt nullable Fremd-IDs"
   assert.equal(result.title.imdbNumericId, "97576");
   assert.equal(result.title.tmdbId, "89");
   assert.equal(result.title.releaseYear, 1989);
+  assert.equal(result.title.runtimeMinutes, null);
   assert.equal(begins[0].requestKind, "titles");
 });
 
