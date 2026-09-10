@@ -898,6 +898,27 @@ die bestehenden npm-Testeinstiege angeschlossen. E9 fokussiert zuletzt
 der ersten Lieferung war ebenfalls erfolgreich. Vor Staging folgen der
 finale gemeinsame Echtbeleg und ein vollständiges lokales Gesamtgate.
 
+Finaler Echtvergleich am 10. September um 17:09 UTC auf Produktstand
+`7fc1e5a`: derselbe unveränderte Owner-/Kataloghash liefert vorher 50 Titel
+(35 Streaming/15 Kino), darunter fünf unerwünschte Apple-Titel und null
+Empfehlungen; nachher 50 Titel (30 Streaming/20 Kino), null Apple-Titel
+und sechs Vorschläge: fünf mit Profil-/Mediatheksgrund, einer ausdrücklich
+neutral. Diese fünf Gründe beruhen in diesem Bestand auf strukturierten
+Merkmalen; ein zusätzlicher Beschreibungsgrund wurde hier nicht gemessen.
+Die neue zweisprachige Beschreibungsstrecke ist fokussiert mit positiven
+und negativen Inhaltsfällen belegt. 400 Mediathekeinträge/104 positive
+Bewertungen, gültiges Profil, 141 aktuell normalisierte Kinotitel; sämtliche
+Quellinputs unverändert, nur Aggregate/Hash gespeichert. 15 lesende
+Konto-/Cache-Abfragen, keine Anbieterrequests oder persönlichen Writes.
+Beleg: `/private/tmp/kd-ops-audit-20260909/entdecken-e9-e10-candidate.json`.
+
+Der erste lokale Abschlusslauf hielt eine veraltete reine Textassertion in
+`entdecken_flixpatrol_function_test.mjs` an: sie verlangte noch die pauschale
+Anzeige aller Streamingdienste. Die Integrationsnaht prüft nun den ausgewählten
+Dienstehinweis und die ehrliche Chart-/Programmkennzeichnung; fokussiert grün.
+Keine Produkt-/Backendänderung durch diese Testkorrektur. Anschließend folgt
+der vollständige Lauf auf dem nun finalen Kandidaten.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
