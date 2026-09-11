@@ -6,6 +6,36 @@ import {
 } from "./fixtures.mjs";
 
 const fullCatalogRequests = (traffic) => traffic.contracts.filter((entry) => entry === "catalog:streaming_entdecken");
+const ACCOUNT_ID = "00000000-0000-4000-8000-0000000000d3";
+
+test("vorhandener v2-Neu-Zeitbeleg überlebt Konto-Reload in Chromium und WebKit", async ({ privateApp }) => {
+  const { page } = privateApp;
+  const katalogStand = "2026-09-04T10:00:00.000Z";
+  const firstSeenAt = Date.parse("2026-09-01T08:15:00.000Z");
+  const legacyRaw = JSON.stringify({
+    format: 2,
+    owner: `account:${ACCOUNT_ID}`,
+    runId: katalogStand,
+    coverage: JSON.stringify(["Netflix"]),
+    ids: [82001],
+    neu: [{ id: 82001, firstSeenAt }],
+  });
+  const legacyKey = `kd:streaming-neu:v2:${encodeURIComponent(`account:${ACCOUNT_ID}`)}`;
+  await page.evaluate(({ key, value }) => {
+    localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true }));
+    localStorage.setItem(key, value);
+  }, { key: legacyKey, value: legacyRaw });
+
+  for (let reload = 0; reload < 2; reload++) {
+    await page.reload();
+    await navigateMobile(page, "Streaming");
+    const neu = page.getByRole("button", { name: /^Neu/u });
+    await neu.click();
+    await expect(neu).toContainText("(1)");
+    await expect(page.locator(".kd-entdecken-karte").filter({ hasText: "Zulu Fund" })).toBeVisible();
+    await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), legacyKey)).toBe(legacyRaw);
+  }
+});
 
 test("account-ready Boot, Chronik, Obsession-Suche und Auswahl-Sprungschutz", async ({ privateApp }) => {
   const { page, traffic } = privateApp;

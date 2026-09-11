@@ -8,7 +8,12 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import { baueStreamingAnsichten } from "./src/lib/katalog.js";
-import { projiziereStreamingNeu, STREAMING_NEU_DAUER_MS } from "./src/lib/streamingNeu.js";
+import {
+  parseStreamingNeuUebergang,
+  projiziereStreamingNeu,
+  STREAMING_NEU_DAUER_MS,
+  streamingNeuUebergangStorageKey,
+} from "./src/lib/streamingNeu.js";
 import {
   projiziereStreamingAnsichten,
   streamingKatalogstaendePassen,
@@ -93,6 +98,136 @@ check("Providerzugabe verlängert nicht, reine Auswahlprojektion verschiebt aber
   assert.equal(disney.neuSeit[101], "2026-09-15T12:00:00.000Z");
 });
 
+const ownerA = "account:00000000-0000-4000-8000-0000000000aa";
+const ownerB = "account:00000000-0000-4000-8000-0000000000bb";
+const mandalorianSeit = Date.parse("2026-09-07T08:15:00.000Z");
+const alterSeparaterSeit = Date.parse("2026-09-02T08:15:00.000Z");
+const v2UebergangRoh = JSON.stringify({
+  format: 2,
+  owner: ownerA,
+  runId: "2026-09-10T08:15:00.000Z",
+  coverage: JSON.stringify(["Disney+", "Netflix"]),
+  ids: [1781431, 900001],
+  neu: [
+    { id: 900001, firstSeenAt: alterSeparaterSeit },
+    { id: 1781431, firstSeenAt: mandalorianSeit },
+  ],
+});
+const v2Uebergang = parseStreamingNeuUebergang(v2UebergangRoh, ownerA);
+
+check("Gültiger ownergebundener v2-Stand bewahrt zwei unabhängige ursprüngliche Fristen", () => {
+  assert.deepEqual(v2Uebergang.neu, [
+    { id: "900001", firstSeenAt: alterSeparaterSeit },
+    { id: "1781431", firstSeenAt: mandalorianSeit },
+  ]);
+  assert.equal(parseStreamingNeuUebergang(v2UebergangRoh, ownerB), null);
+  assert.equal(parseStreamingNeuUebergang(JSON.stringify({ ...JSON.parse(v2UebergangRoh), format: 1 }), ownerA), null);
+  assert.equal(parseStreamingNeuUebergang("{kaputt", ownerA), null);
+  assert.notEqual(streamingNeuUebergangStorageKey(ownerA), streamingNeuUebergangStorageKey(ownerB));
+});
+
+const mandalorianTitel = {
+  watchmode_id: 1781431,
+  titel: "The Mandalorian and Grogu",
+  dienste: ["Disney+"],
+};
+const mandalorianKatalog = {
+  ...entdecken,
+  titel: [mandalorianTitel],
+};
+const mandalorianNeu = projiziereStreamingNeu({
+  bekannt: { ...bekannt, titel: [] },
+  entdecken: mandalorianKatalog,
+  auswahl: ["Disney+"],
+  uebergang: v2Uebergang,
+  now: NOW,
+});
+check("Mandalorian-v2-Zeitbeleg ergänzt den aktuellen ausgewählten Alles-Stand ohne Neudatierung", () => {
+  assert.deepEqual(mandalorianNeu.neueIds, ["1781431"]);
+  assert.equal(mandalorianNeu.neuSeit[1781431], new Date(mandalorianSeit).toISOString());
+  assert.equal(mandalorianNeu.naechsterAblauf, mandalorianSeit + STREAMING_NEU_DAUER_MS);
+});
+
+check("Vorhandene Einzelfrist bleibt sichtbar, wenn der heutige Dienst erst eine neue Baseline bildet", () => {
+  const ohneVergleich = {
+    ...mandalorianKatalog,
+    vergleich_stand_pro_quelle: {},
+  };
+  const ergebnis = projiziereStreamingNeu({
+    bekannt: { ...bekannt, titel: [], vergleich_stand_pro_quelle: {} }, entdecken: ohneVergleich,
+    auswahl: ["Disney+"], uebergang: v2Uebergang, now: NOW,
+  });
+  assert.equal(ergebnis.status, "ready");
+  assert.deepEqual(ergebnis.neueIds, ["1781431"]);
+  assert.deepEqual(ergebnis.baselineQuellen, ["Disney+"]);
+});
+
+check("Ein späterer Producerbeleg verlängert eine bereits laufende v2-Einzelfrist nicht", () => {
+  const frueher = Date.parse("2026-09-02T11:30:00.000Z");
+  const uebergang = parseStreamingNeuUebergang({
+    format: 2,
+    owner: ownerA,
+    runId: "2026-09-10T12:00:00.000Z",
+    ids: [101],
+    neu: [{ id: 101, firstSeenAt: frueher }],
+  }, ownerA);
+  const ergebnis = projiziereStreamingNeu({
+    bekannt, entdecken, auswahl: ["Netflix"], uebergang, now: NOW,
+  });
+  assert.equal(ergebnis.neuSeit[101], new Date(frueher).toISOString());
+});
+
+check("Legacy-Einträge laufen je Titel bis zur Millisekunde ab und fluten keine alten oder ungewählten IDs", () => {
+  const direktDavor = projiziereStreamingNeu({
+    bekannt: { ...bekannt, titel: [] }, entdecken: mandalorianKatalog,
+    auswahl: ["Disney+"], uebergang: v2Uebergang,
+    now: mandalorianSeit + STREAMING_NEU_DAUER_MS - 1,
+  });
+  const anDerGrenze = projiziereStreamingNeu({
+    bekannt: { ...bekannt, titel: [] }, entdecken: mandalorianKatalog,
+    auswahl: ["Disney+"], uebergang: v2Uebergang,
+    now: mandalorianSeit + STREAMING_NEU_DAUER_MS,
+  });
+  assert.deepEqual(direktDavor.neueIds, ["1781431"]);
+  assert.deepEqual(anDerGrenze.neueIds, []);
+  assert.ok(!direktDavor.neueIds.includes("900001"));
+  assert.deepEqual(projiziereStreamingNeu({
+    bekannt: { ...bekannt, titel: [] }, entdecken: mandalorianKatalog,
+    auswahl: [], uebergang: v2Uebergang, now: NOW,
+  }).neueIds, []);
+});
+
+check("Ab- und Wiederzugang innerhalb der aktiven Frist verlängert den Producer-Zeitpunkt nicht", () => {
+  const ersterZugang = Date.parse("2026-09-01T12:00:00.000Z");
+  const abgang = Date.parse("2026-09-05T12:00:00.000Z");
+  const wiederzugang = Date.parse("2026-09-08T12:00:00.000Z");
+  const mehrfach = {
+    ...entdecken,
+    stand_pro_quelle: { Netflix: new Date(wiederzugang).toISOString() },
+    vergleich_stand_pro_quelle: { Netflix: new Date(wiederzugang).toISOString() },
+    titel: [{
+      watchmode_id: 777,
+      titel: "Kurz verschwunden",
+      dienste: ["Netflix"],
+      dienst_diffs: [
+        { dienst: "Netflix", vorher: false, nachher: true, erkannt_am: new Date(ersterZugang).toISOString() },
+        { dienst: "Netflix", vorher: true, nachher: false, erkannt_am: new Date(abgang).toISOString() },
+        { dienst: "Netflix", vorher: false, nachher: true, erkannt_am: new Date(wiederzugang).toISOString() },
+      ],
+    }],
+  };
+  const waehrend = projiziereStreamingNeu({
+    bekannt: { ...bekannt, titel: [] }, entdecken: mehrfach,
+    auswahl: ["Netflix"], now: Date.parse("2026-09-10T12:00:00.000Z"),
+  });
+  const nachAltemAblauf = projiziereStreamingNeu({
+    bekannt: { ...bekannt, titel: [] }, entdecken: mehrfach,
+    auswahl: ["Netflix"], now: ersterZugang + STREAMING_NEU_DAUER_MS,
+  });
+  assert.equal(waehrend.neuSeit[777], new Date(ersterZugang).toISOString());
+  assert.deepEqual(nachAltemAblauf.neueIds, []);
+});
+
 check("Gleichzeitiger Wechsel zwischen gewählten Diensten erzeugt keinen Union-Zugang", () => {
   const wechsel = {
     ...entdecken,
@@ -174,6 +309,7 @@ await esbuild.build({
     contents: [
       'export { StreamingTab } from "./src/tabs/StreamingTab.jsx";',
       'export { useStreamingNeuController } from "./src/controllers/useStreamingNeuController.js";',
+      'export { setStorageDriver } from "./src/lib/storage.js";',
     ].join("\n"),
     loader: "js", resolveDir: wurzel,
   },
@@ -192,7 +328,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const React = await import("react");
 const { act, createElement: h } = React;
 const { createRoot } = await import("react-dom/client");
-const { StreamingTab, useStreamingNeuController } = await import(ausgabe);
+const { StreamingTab, useStreamingNeuController, setStorageDriver } = await import(ausgabe);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 async function mount(Component, props) {
   const container = document.createElement("div");
@@ -210,12 +346,31 @@ function ControllerProbe(props) {
 }
 const echtesDateNow = Date.now;
 Date.now = () => NOW;
+const gespeicherteWerteA = new Map([[streamingNeuUebergangStorageKey(ownerA), v2UebergangRoh]]);
+let storageWrites = 0;
+const storageDriverA = {
+  name: "test-a", owner: ownerA,
+  async get(key) { return gespeicherteWerteA.has(key) ? { key, value: gespeicherteWerteA.get(key) } : null; },
+  async set(key, value) { storageWrites++; gespeicherteWerteA.set(key, value); return { key, value }; },
+  async delete(key) { gespeicherteWerteA.delete(key); return { key, deleted: true }; },
+  async list() { return { keys: [...gespeicherteWerteA.keys()] }; },
+};
+setStorageDriver(storageDriverA);
 const controllerUi = await mount(ControllerProbe, {
   kontextKey: "konto-a", auswahl: fixture.auswahl, auswahlGeladen: true,
 });
+await act(async () => { await tick(); });
 await act(async () => { controller.uebernehmeVollkatalog({ bekannt, entdecken }); await tick(); });
-check("Controller übernimmt Producerbeleg ohne Storage-Write", () => {
+check("Controller übernimmt Producerbeleg und liest v2 ausschließlich ohne Storage-Write", () => {
   assert.match(controllerUi.container.textContent, /^ready:/u);
+  assert.equal(storageWrites, 0);
+});
+await act(async () => {
+  controller.uebernehmeVollkatalog({ bekannt: { ...bekannt, titel: [] }, entdecken: mandalorianKatalog });
+  await tick();
+});
+check("Controller stellt Mandalorian nach Reload aus dem vorhandenen v2-Zeitbeleg wieder her", () => {
+  assert.equal(controllerUi.container.textContent, "ready:1781431");
 });
 await act(async () => {
   controller.uebernehmeVollkatalog({
@@ -228,11 +383,22 @@ check("Ein inkonsistenter Folgestand verwirft den alten Neu-Beleg", () => {
   assert.equal(controllerUi.container.textContent, "loading:");
 });
 await act(async () => { controller.uebernehmeVollkatalog({ bekannt, entdecken }); await tick(); });
+await act(async () => {
+  setStorageDriver({
+    ...storageDriverA,
+    name: "test-b",
+    owner: ownerB,
+    async get() { return null; },
+  });
+  await tick();
+});
 await controllerUi.render({ kontextKey: "konto-b", auswahl: fixture.auswahl, auswahlGeladen: true });
+await act(async () => { await tick(); });
 check("Kontowechsel verwirft den alten Neu-Beleg", () => {
   assert.equal(controllerUi.container.textContent, "loading:");
 });
 await controllerUi.cleanup();
+setStorageDriver(null);
 Date.now = echtesDateNow;
 
 let letzterPin = null;
