@@ -1459,6 +1459,54 @@ durch den normalen, erfolgreichen Datenlauf aktualisiert. Die Bauzweige sind
 integriert und gesichert. Dieser abschließende Registereintrag wird nur im
 Masterzweig nachgeführt und löst keinen erneuten Staging-Deploy aus.
 
+## E14 – Neu-Verlauf erhalten und Entdecken-Texte kürzen (11. September)
+
+Max meldet verlorene 14-Tage-Einträge nach E12 und missverständliche Texte.
+Die gelieferten E1–E13-Stände bleiben als Lieferhistorie bestehen; M6, M2 und
+M5 erhalten diese klar begrenzte Nachbesserung. Der natürliche M3-Lauf bleibt
+unabhängig offen.
+
+- M6 / E14-A: Neu sammelt Unterschiede der vollständigen ausgewählten
+  Angebotsmenge zwischen erfolgreichen Datenläufen. Jeder erkannte Zugang
+  behält seinen ersten Zeitpunkt für 14 × 24 Stunden, auch über spätere
+  Läufe. Noch gültige, vorhandene v2-Verlaufseinträge aus der Zeit vor E12
+  müssen beim Übergang erhalten bleiben; keine erfundenen Starttermine und
+  kein initialer Gesamtkatalog als Neu. Konto-/Auswahlgrenzen bleiben erhalten.
+- M2 / E14-B: Den sperrigen Ablaufhinweis durch kurze ehrliche Standinformation
+  ersetzen, Erklärung unter Beliebte Titel entfernen. Quellenstände bleiben
+  an den Karten lesbar; kein Verlängern der Daten-Gültigkeit zur Textkosmetik.
+- M5 / E14: Beide Pakete integrieren, relevanten Gesamtkandidaten prüfen und
+  in der bestehenden Staging-Lieferkette veröffentlichen. Production bleibt
+  außerhalb dieser Korrektur.
+
+Belegter Ausgang: 07.09. → 10.09., 22:02 UTC. Watchmode-ID 1140725
+(From Dusk Till Dawn) kommt in der ausgewählten Menge neu hinzu, weil der
+Paramount+-Amazon-Kanal im vorherigen Abruf fehlte. ID 3180383 (Marvel
+Zombies) fehlte im gesamten vorherigen Katalog. ID 1781431 (Mandalorian and
+Grogu) war schon vorher auf Disney+ enthalten, hat deshalb keinen neuen
+10.09.-Diff. Das beweist Katalogänderungen, keine realen Plattformpremieren.
+E12 liest den früheren lokalen v2-Verlauf nicht mehr; dieser Übergang wurde
+bei der vorherigen Abnahme nicht abgedeckt. Der tatsächliche iPhone-Verlauf
+wurde nicht gelesen. Die Wiederherstellung darf nur vorhandene Zeitbelege
+verwenden.
+
+PARALLEL_WAVE, gemeinsame Nicht-main-Basis efded636f3284023a5cd045088d285a881c10f4e.
+Meister: bestehender sauberer Integrationsworktree
+`/private/tmp/kd-flixpatrol-master-20260909`, gemeinsamer Zielbranch
+`codex/flixpatrol-master-20260909`, Lieferung anschließend `staging`.
+
+| Paket | Stand | Branch / Worktree | Exklusive Schreibflächen | Gefroren / Prüfungen |
+| --- | --- | --- | --- | --- |
+| E14-A / M6 | DISPATCH | codex/streaming-neu-erhalt-e14-20260911 / /private/tmp/kd-streaming-neu-erhalt-e14-20260911 | streamingNeu.js, useStreamingNeuController.js, nötige App.jsx-Übergabe, StreamingTab.jsx, zugehörige Neu-Tests/Fixtures | Producer-Diffvertrag, Katalog-/Identitätslogik, Storage/Auth, Backend, Dependencies eingefroren; Tests für Upgrade, getrennte 14-Tage-Fristen, Folgeläufe und Konto-/Auswahlwechsel |
+| E14-B / M2 | DISPATCH | codex/entdecken-kurztext-e14-20260911 / /private/tmp/kd-entdecken-kurztext-e14-20260911 | EntdeckenTab.jsx, entdeckenDailyFeed.js ausschließlich lokale Anzeigetexte, Hilfe-Text, zugehörige Entdecken-/Hilfe-Tests | Feed-Vertrag/Validierung, tatsächliche Datenstände, Ranking, API, globale Styles und Dependencies eingefroren; fokussierte Darstellungs-/Vertragstests |
+
+A × B: PARALLEL_OK, keine gemeinsamen Schreibdateien oder Output-Abhängigkeit.
+State/Schema, globale Styles, Dependencies/Lockfile, generierte Daten und
+Remote-Wirkungen haben keinen Paket-Schreibowner und bleiben unverändert.
+Register und Integration nur beim Meister. Integration A, dann B, einmaliger
+relevanter lokaler Abschluss. Providerrequests, manuelle Tagesläufe und
+Shared-Datenwrites gehören nicht zur Korrektur. Kein zusätzlicher Prüfchat.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
