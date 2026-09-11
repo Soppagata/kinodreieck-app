@@ -35,6 +35,17 @@
   transition: transform 160ms ease;
 }
 
+.kd-entdecken .kd-entdecken-auswahlkarten .kd-entdecken-beschreibung-toggle {
+  color: var(--kd-kartenText, var(--tinte, #1c1a1e));
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: calc(20px * var(--kd-schriftfaktor, 1));
+  font-weight: 900;
+}
+
+.kd-entdecken .kd-entdecken-auswahlkarten .kd-entdecken-aufklappzeichen {
+  color: var(--kd-kartenText, var(--tinte, #1c1a1e));
+}
+
 .kd-entdecken .kd-entdecken-beschreibung-toggle[aria-expanded="true"] .kd-entdecken-aufklappzeichen {
   transform: rotate(180deg);
 }
@@ -43,13 +54,17 @@
   margin: 1px 0 7px;
   padding: 8px 10px;
   border-left: 2px solid color-mix(in srgb, var(--kd-wolfram) 66%, transparent);
-  background: color-mix(in srgb, var(--kd-saal) 42%, transparent);
+  background: color-mix(in srgb, var(--kd-kartenText, #1c1a1e) 7%, transparent);
 }
 
 .kd-entdecken .kd-entdecken-auswahlkarten .kd-entdecken-beschreibung p {
   margin: 0;
-  color: var(--kd-rauch);
+  color: var(--kd-kartenTextWeich, var(--tinte, #1c1a1e));
   font-family: 'Space Grotesk', sans-serif;
   font-size: calc(13px * var(--kd-schriftfaktor, 1));
   line-height: 1.5;
+}
+
+.kd-entdecken .kd-entdecken-auswahlkarten .kd-entdecken-beschreibung :is(small, a) {
+  color: var(--kd-kartenTextWeich, var(--tinte, #1c1a1e));
 }

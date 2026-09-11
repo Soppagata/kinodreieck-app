@@ -133,6 +133,7 @@ try {
     assert.match(personal[0].textContent, /Neuer Kinofilm/u);
     assert.doesNotMatch(personal[0].textContent, /Neutrale Premiere/u);
     assert.equal((after.container.textContent.match(/Neuer Kinofilm/gu) || []).length, 1);
+    assert.doesNotMatch(personal[0].textContent, /Profil:/u);
     assert.match(after.container.textContent, /Läuft & passt zu dir \(1\)/u);
     assert.match(after.container.textContent, /Läuft auch, nicht in deiner Liste \(1\)/u);
   });

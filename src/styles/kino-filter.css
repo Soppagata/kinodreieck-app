@@ -20,7 +20,8 @@
 }
 .kd-kino-tab .kd-kino-filter-toggle { margin-right: auto; }
 .kd-kino-tab .kd-kino-zusatzfilter button,
-.kd-kino-tab .kd-kino-zusatzfilter input {
+.kd-kino-tab .kd-kino-zusatzfilter input,
+.kd-kino-tab .kd-kino-zusatzfilter select {
   box-sizing: border-box;
   min-height: 44px;
   min-width: 44px;
@@ -39,9 +40,24 @@
   border-color: var(--wolfram, #e3a63b);
   color: var(--wolfram, #e3a63b);
 }
-.kd-kino-tab .kd-kino-zusatzfilter :is(button, input):focus-visible {
+.kd-kino-tab .kd-kino-zusatzfilter :is(button, input, select):focus-visible {
   outline: 2px solid var(--wolfram, #e3a63b);
   outline-offset: 2px;
+}
+.kd-kino-tab .kd-kino-genre {
+  display: grid;
+  grid-template-columns: auto minmax(0, 240px);
+  align-items: center;
+  gap: 8px;
+  color: var(--rauch, #948fa0);
+  font: 12px/1.3 'Space Mono', monospace;
+}
+.kd-kino-tab .kd-kino-genre select {
+  width: 100%;
+  height: 44px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: max(16px, calc(16px * var(--kd-schriftfaktor, 1)));
+  line-height: 1.4;
 }
 .kd-kino-tab .kd-kino-filterpanel:not([hidden]) { display: grid; gap: 8px; margin-top: 10px; }
 .kd-kino-tab .kd-kino-filterhinweis {

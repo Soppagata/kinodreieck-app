@@ -13,6 +13,13 @@ import { formatiereTermin } from "../lib/programm.js";
 import { filtereAktiveKinoPins } from "../lib/libraryProjection.js";
 import { rankKinoProgramRecommendations } from "../lib/kinoRecommendations.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
+import { KINO_GENRE_FACTS } from "../data/kinoGenreFacts.js";
+import {
+  createKinoGenreFactsIndex,
+  kinoGenreMatches,
+  kinoGenreOptions,
+  projectKinoGenres,
+} from "../lib/kinoGenres.js";
 import "../styles/kino-filter.css";
 
 /* ================= KINO (Dashboard) =================
@@ -41,6 +48,7 @@ export function KinoTab({
   kinoPins = [], toggleKinoPin, datenGesperrt = false,
   programmInfo = null, angemeldet = false, autorName,
   geschmacksprofil = null,
+  kinoGenreFacts = KINO_GENRE_FACTS,
   fokusTreffer = null, onFokusVerbraucht,
 }) {
   const bereichRef = useRef(null);
@@ -60,6 +68,7 @@ export function KinoTab({
   const aboLabel = { alle: "Abo: alle", nonstop: "Nur NonStop", kein: "Kein NonStop" }[aboFilter];
   const aboCycle = () => setAboFilter((v) => (v === "alle" ? "nonstop" : v === "nonstop" ? "kein" : "alle"));
   const [fassungF, setFassungF] = useState(null);
+  const [genreF, setGenreF] = useState("");
   const [zeigeMehr, setZeigeMehr] = useState(false);
   /* Filtermenü auf/zu — Default ZUGEKLAPPT. Die Filterzeile bleibt sichtbar.
      Seit Etappe 3 eine dauerhafte Sicht-Präferenz im Datentopf (vorher nur
@@ -87,7 +96,7 @@ export function KinoTab({
   useEffect(() => {
     if (!fokusTreffer) return undefined;
     setSucheK(fokusTreffer.titel || "");
-    setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null);
+    setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null); setGenreF("");
     setZeigeMehr(true);
     if (fokusTreffer.art === "film") setExpandedId("k" + fokusTreffer.ref);
     let zweiterFrame = 0;
@@ -109,6 +118,9 @@ export function KinoTab({
 
   /* Verfügbare Kinos / Tage / Fassungen aus den Daten ableiten */
   const alleProg = useMemo(() => [...kinoMatches.matched.map((m) => m.prog), ...kinoMatches.rest], [kinoMatches]);
+  const genreFactsIndex = useMemo(() => createKinoGenreFactsIndex(kinoGenreFacts), [kinoGenreFacts]);
+  const genres = useMemo(() => kinoGenreOptions(alleProg, genreFactsIndex), [alleProg, genreFactsIndex]);
+  const genresFuer = (pf) => projectKinoGenres(pf, genreFactsIndex);
   const kinos = useMemo(() => [...new Set(alleProg.flatMap((pf) => pf.k || []))].sort((a, b) => a.localeCompare(b, "de")), [alleProg]);
   const tage = useMemo(() => {
     const gesehen = new Map(); // key -> { sortwert, label }
@@ -151,6 +163,7 @@ export function KinoTab({
       if (aboFilter === "kein" && abo) return false;
     }
     if (fassungF && !(String(pf.f || "").includes(fassungF) || (pf.z || []).some((z) => z.includes("(" + fassungF)))) return false;
+    if (!kinoGenreMatches(pf, genreF, genreFactsIndex)) return false;
     return true;
   };
   /* Nächster Termin (früheste noch anstehende Vorstellung) als Sortierwert —
@@ -177,14 +190,17 @@ export function KinoTab({
       passtFilter(prog) && (!nq || norm(prog.t).includes(nq) || norm(film.titel).includes(nq) || norm(film.originaltitel || "").includes(nq)))
       .sort((a, b) => nachTermin(zeitenGefiltert(a.prog), zeitenGefiltert(b.prog))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [kinoMatches, kinoF, tagF, aboFilter, fassungF, nq]);
+    [kinoMatches, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq]);
   const kinoEmpfehlungen = useMemo(() => rankKinoProgramRecommendations({
-    programEntries: restSichtbar,
+    programEntries: restSichtbar.map((pf) => ({
+      ...pf,
+      g: projectKinoGenres(pf, genreFactsIndex).map((genre) => genre.label),
+    })),
     programArchived: programm?.status?.archiviert === true,
     programExpired: programmInfo?.abgelaufen === true,
     profile: geschmacksprofil,
     master,
-  }), [geschmacksprofil, master, programm?.status?.archiviert, programmInfo?.abgelaufen, restSichtbar]);
+  }), [geschmacksprofil, master, programm?.status?.archiviert, programmInfo?.abgelaufen, restSichtbar, genreFactsIndex]);
   const kinoEmpfehlungsIds = useMemo(
     () => new Set(kinoEmpfehlungen.map((entry) => String(entry.filmAtId))),
     [kinoEmpfehlungen],
@@ -197,15 +213,15 @@ export function KinoTab({
     passtFilter(pf) && (!nq || norm(pf.t).includes(nq))
   )).sort((a, b) => nachTermin(zeitenGefiltert(a.program), zeitenGefiltert(b.program))),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [kinoEmpfehlungen, kinoF, tagF, aboFilter, fassungF, nq]);
+  [kinoEmpfehlungen, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq]);
   const restGefiltert = useMemo(() =>
     restSichtbar.filter((pf) => !kinoEmpfehlungsIds.has(String(pf.film_at_id))
       && passtFilter(pf) && (!nq || norm(pf.t).includes(nq)))
       .sort((a, b) => nachTermin(zeitenGefiltert(a), zeitenGefiltert(b))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [restSichtbar, kinoEmpfehlungsIds, kinoF, tagF, aboFilter, fassungF, nq]);
+    [restSichtbar, kinoEmpfehlungsIds, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq]);
 
-  const programmFilterAktiv = Boolean(kinoF || tagF || aboFilter !== "alle" || fassungF);
+  const programmFilterAktiv = Boolean(kinoF || tagF || aboFilter !== "alle" || fassungF || genreF);
   const filterAktiv = Boolean(sucheK || programmFilterAktiv);
   const tagAuswahl = tage.find((tag) => tag.key === tagF);
   const programmFilterStatus = [
@@ -213,14 +229,15 @@ export function KinoTab({
     kinoF ? `Kino ${kinoF}` : "",
     aboFilter !== "alle" ? aboLabel : "",
     fassungF ? `Fassung ${fassungF}` : "",
+    genreF ? `Genre ${genres.find((genre) => genre.key === genreF)?.label || genreF}` : "",
   ]
     .filter(Boolean).join(" · ");
   const resetProgrammfilter = () => {
-    setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null);
+    setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null); setGenreF("");
   };
   // Die Zeitgrenze wirkt bereits im Elternteil auf „Läuft auch“. Beim Reset
   // bleibt die gespeicherte Uhrzeit erhalten, ihre Einschränkung wird gelöst.
-  const aktiveFilterAnzahl = [kinoF, tagF, aboFilter !== "alle", fassungF, sucheK, !zeigeAlles].filter(Boolean).length;
+  const aktiveFilterAnzahl = [kinoF, tagF, aboFilter !== "alle", fassungF, genreF, sucheK, !zeigeAlles].filter(Boolean).length;
   const resetAlleFilter = () => {
     resetProgrammfilter();
     setSucheK("");
@@ -343,6 +360,13 @@ export function KinoTab({
                     onClick={() => setFassungF(fassungF === fs ? null : fs)}>{fs}</button>
                 ))}
               </div>
+              <label className="kd-kino-genre">
+                <span>Genre</span>
+                <select aria-label="Genre im Kinoprogramm" value={genreF} onChange={(event) => setGenreF(event.target.value)}>
+                  <option value="">Alle Genres</option>
+                  {genres.map((genre) => <option key={genre.key} value={genre.key}>{genre.label}</option>)}
+                </select>
+              </label>
               <div className="kd-kino-filteroptionen">
                 <label className="kd-kino-zeitgrenze"
                   title='Zeitgrenze für „Läuft auch": Filme ohne Vorstellung ab dieser Uhrzeit werden ausgeblendet. Deine Treffer sind nie betroffen.'>
@@ -433,9 +457,9 @@ export function KinoTab({
                 })}
                 {empfohleneGefiltert.map((entry) => (
                   <div key={entry.targetId} data-testid="kino-personal-ausserhalb-mediathek">
-                    <p className="kd-entdecken-grund" style={{ margin: "0 0 5px" }}>{entry.reasons[0]}</p>
                     <KompaktEintrag
                       pf={entry.program} zeiten={zeitenGefiltert(entry.program)} kinos={kinoF ? [kinoF] : entry.program.k}
+                      genres={genresFuer(entry.program).map((genre) => genre.label)}
                       addFilm={addFilm} addFilmMitPrognose={addFilmMitPrognose}
                       vorbewertungAktiv={vorbewertungAktiv} prognoseSperrgrund={prognoseSperrgrund}
                       autorName={autorName} istGepinnt={istGepinnt} togglePin={toggleKinoPin}
@@ -503,6 +527,7 @@ export function KinoTab({
                     data-kino-suchtreffer={`programm:${pf.film_at_id || pf.t}`}>
                   <KompaktEintrag
                     pf={pf} zeiten={zeitenGefiltert(pf)} kinos={kinoF ? [kinoF] : pf.k}
+                    genres={genresFuer(pf).map((genre) => genre.label)}
                     addFilm={addFilm} addFilmMitPrognose={addFilmMitPrognose}
                     vorbewertungAktiv={vorbewertungAktiv}
                     prognoseSperrgrund={prognoseSperrgrund}
@@ -536,7 +561,7 @@ export function KinoTab({
    in "Läuft & passt zu dir". */
 function KompaktEintrag({
   pf, zeiten, kinos, addFilm, addFilmMitPrognose, vorbewertungAktiv, prognoseSperrgrund,
-  autorName, istGepinnt, togglePin, master, updateFilm, fokusAktiv = false, variante = "standard",
+  autorName, istGepinnt, togglePin, master, updateFilm, fokusAktiv = false, variante = "standard", genres = pf.g || [],
 }) {
   const [offen, setOffen] = useState(false);
   const [formAn, setFormAn] = useState(false);
@@ -575,9 +600,9 @@ function KompaktEintrag({
       </div>
       {offen && (
         <div style={{ marginTop: 8, borderTop: "1px solid " + T.saal, paddingTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-          {(pf.g || []).length > 0 && (
-            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>{pf.g.join(" · ")}</div>
-          )}
+          {genres.length > 0 ? (
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>{genres.join(" · ")}</div>
+          ) : <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>Genre nicht verfügbar</div>}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {(zeigeAlle ? zeiten : zeiten.slice(0, 16)).map((z) => (
               <button key={z} onClick={() => togglePin && togglePin(pf.t, pf.j, z)}
@@ -608,7 +633,7 @@ function KompaktEintrag({
             <FilmForm startOffen typOptionen={["film"]}
               initial={{
                 titel: pf.t, jahr: pf.j, quelle: "must_watch",
-                genre: (pf.g || []).join(", "), begruendung: pf.b || "",
+                genre: genres.join(", "), begruendung: pf.b || "",
                 film_at_id: pf.film_at_id,
               }}
               onAdd={(f) => addFilm(f)}

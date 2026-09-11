@@ -18,13 +18,13 @@ export async function buildKinoFixture() {
       import { grenzeInMinuten, hatVorstellungAb } from './src/lib/programm.js';
       import './src/index.css';
       const rest = [
-        { t:'Filtereins', j:2026, f:'OmU', im_abo:true, k:['Gartenbaukino'], z:['Montag 31.8. 18:00 · Gartenbaukino (OmU)'] },
-        { t:'Filterzwei', j:2026, f:'OV', im_abo:false, k:['Apollo'], z:['Montag 31.8. 20:00 · Apollo (OV)'] },
-        { t:'Filterdrei', j:2026, f:'DF', im_abo:true, k:['Gartenbaukino'], z:['Dienstag 1.9. 10:00 · Gartenbaukino (DF)'] },
-        { t:'Kreuzfall', j:2026, f:'DF', im_abo:false, k:['Gartenbaukino','Apollo'], z:['Montag 31.8. 21:00 · Apollo (DF)', 'Dienstag 1.9. 22:00 · Gartenbaukino (DF)'] },
+        { film_at_id:1001, t:'Filtereins', j:2026, g:['Action'], f:'OmU', im_abo:true, k:['Gartenbaukino'], z:['Montag 31.8. 18:00 · Gartenbaukino (OmU)'] },
+        { film_at_id:1002, t:'Filterzwei', j:2026, g:['Drama'], f:'OV', im_abo:false, k:['Apollo'], z:['Montag 31.8. 20:00 · Apollo (OV)'] },
+        { film_at_id:1003, t:'Filterdrei', j:2026, g:['Comedy'], f:'DF', im_abo:true, k:['Gartenbaukino'], z:['Dienstag 1.9. 10:00 · Gartenbaukino (DF)'] },
+        { film_at_id:1004, t:'Kreuzfall', j:2026, g:[], f:'DF', im_abo:false, k:['Gartenbaukino','Apollo'], z:['Montag 31.8. 21:00 · Apollo (DF)', 'Dienstag 1.9. 22:00 · Gartenbaukino (DF)'] },
       ];
       const film = { id:9, titel:'Listentreffer', jahr:2026, typ:'film' };
-      const matched = [{ film, prog:{ t:film.titel, j:2026, f:'OmU', im_abo:true, k:['Gartenbaukino'], z:['Montag 31.8. 10:00 · Gartenbaukino (OmU)'] } }];
+      const matched = [{ film, prog:{ film_at_id:2001, t:film.titel, j:2026, g:['Action'], f:'OmU', im_abo:true, k:['Gartenbaukino'], z:['Montag 31.8. 10:00 · Gartenbaukino (OmU)'] } }];
       function Fixture() {
         const [zeitgrenze, saveZeitgrenze] = useState('14:00');
         const [zeigeAlles, setZeigeAlles] = useState(true);
@@ -35,6 +35,7 @@ export async function buildKinoFixture() {
           kinoMatches={{matched, rest}} restSichtbar={zeigeAlles ? rest : rest.filter(pf => hatVorstellungAb(pf, grenzeInMinuten(zeitgrenze)))}
           zeitgrenze={zeitgrenze} saveZeitgrenze={saveZeitgrenze} zeigeAlles={zeigeAlles} setZeigeAlles={setZeigeAlles}
           expandedId={expandedId} setExpandedId={setExpandedId} updateFilm={()=>{}} addFilm={()=>{}}
+          kinoGenreFacts={[{film_at_id:1004, genres:['Horror']}]}
           fokusTreffer={fokusTreffer} onFokusVerbraucht={()=>{ window.kinoTest.focusConsumed += 1; }} />;
       }
       const root = createRoot(document.getElementById('fixture'));
@@ -80,7 +81,8 @@ async function runDomChecks() {
       el.dispatchEvent(new window.Event("change", { bubbles: true }));
     });
   };
-  const titles = () => [...doc.querySelectorAll('[data-kino-suchtreffer^="programm:"]')].map(el => el.dataset.kinoSuchtreffer.slice(9)).sort();
+  const titles = () => [...doc.querySelectorAll('[data-kino-suchtreffer^="programm:"] .kd-kompakt-eintrag-titel')]
+    .map(el => el.childNodes[0]?.textContent.trim()).sort();
   let checks = 0;
   const check = (name, fn) => { fn(); checks++; console.log(`✓ ${name}`); };
   try {
@@ -113,6 +115,17 @@ async function runDomChecks() {
       });
       await click(button(fassung));
     }
+    await select("Genre im Kinoprogramm", "drama");
+    check("Genre wirkt gemeinsam mit den bestehenden Filtern", () => {
+      assert.deepEqual(titles(), ["Filterzwei"]);
+      assert.match(doc.querySelector('.kd-kino-programmfilter-status').textContent, /Genre Drama/);
+    });
+    await select("Kino im Kinoprogramm", "Gartenbaukino");
+    check("Genre und Kino schneiden dieselbe Ergebnisliste", () => assert.deepEqual(titles(), []));
+    await select("Kino im Kinoprogramm", "");
+    await select("Genre im Kinoprogramm", "horror");
+    check("Exakte film.at-ID-Ergänzung ist filterbar", () => assert.deepEqual(titles(), ["Kreuzfall"]));
+    await click(button("Filter zurücksetzen"));
     await click(button("Zeitfilter an"));
     check("Rest ab wirkt nur auf Rest, Listentreffer bleibt", () => {
       assert.deepEqual(titles(), ["Filtereins", "Filterzwei", "Kreuzfall"]);
@@ -122,11 +135,11 @@ async function runDomChecks() {
     });
     await click(button("Ganzes Tagesprogramm"));
     check("Ganzes Tagesprogramm löst die Zeitgrenze", () => assert.equal(titles().length, 4));
-    await api.act(async () => api.focus({ art: "programm", ref: "Filtereins", titel: "Filtereins" }));
+    await api.act(async () => api.focus({ art: "programm", ref: "1001", titel: "Filtereins" }));
     await new Promise(resolve => window.setTimeout(resolve, 70));
     check("Globaler Suchauftrag fokussiert ohne lokale Suche", () => {
       assert.deepEqual(titles(), ["Filtereins"]);
-      assert.equal(doc.activeElement.dataset.kinoSuchtreffer, "programm:Filtereins");
+      assert.equal(doc.activeElement.dataset.kinoSuchtreffer, "programm:1001");
       assert.equal(api.focusConsumed, 1);
       assert.match(doc.querySelector('.kd-kino-filterhinweis').textContent, /Suchfokus: Filtereins/);
     });
