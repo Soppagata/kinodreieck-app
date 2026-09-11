@@ -14,9 +14,9 @@ Vertagung der unten historisch dokumentierten Befunde.
 
 | ID | Ergebnis und Fertigkriterium | Zuständigkeit / Stand |
 | --- | --- | --- |
-| R1 | Netflix nutzt den täglichen FlixPatrol-Feed; Ursache des realen Bündelfehlers belegt, Vertrag korrigiert, erster Feed erfolgreich und normaler Client-Read bestätigt. | Backend-Baumeister baut; Master führt begrenzte Live-Schritte aus. OFFEN |
-| R2 | Watchmode-IDs und gezielte deutsche Details erreichen den Katalog; zusätzliche Werktypen sind empirisch geklärt und nur mit belegtem Mapping aufgenommen. Bestehende 14-Tage-Fristen bleiben erhalten. | Eigene Produzenten-Etappe. OFFEN |
-| R3 | Fehlendes Namenssignal und tatsächliche Datenfrische sind geklärt und korrigiert; die Build-Chunkwarnung ist gezielt bereinigt. Kein Umbau funktionierender Nutzerwege. | Produzenten- und App-Paket mit disjunkten Dateien. OFFEN |
+| R1 | Netflix nutzt den täglichen FlixPatrol-Feed; Ursache des realen Bündelfehlers belegt, Vertrag korrigiert, erster Feed erfolgreich und normaler Client-Read bestätigt. | Backend `16dae19` integriert und live bestätigt; finaler App-Abschluss folgt. GEBAUT |
+| R2 | Watchmode-IDs und gezielte deutsche Details erreichen den Katalog; zusätzliche Werktypen sind empirisch geklärt und nur mit belegtem Mapping aufgenommen. Bestehende 14-Tage-Fristen bleiben erhalten. | Produzent `39735ae`: IDs und fünf Details veröffentlicht; Typmapping gebaut, Aktivierung bleibt am belegten Quotenrest. GEBAUT / REST |
+| R3 | Fehlendes Namenssignal und tatsächliche Datenfrische sind geklärt und korrigiert; die Build-Chunkwarnung ist gezielt bereinigt. Kein Umbau funktionierender Nutzerwege. | Namenssignal und Zeitstempel veröffentlicht; Build-Aufteilung gebaut, zugehörige Lieferprüfung wird angepasst. GEBAUT |
 | R4 | Integrierter Stand ist getestet, gepusht und auf Staging inklusive Feed, Fakten und Service Worker rückgelesen; kompakte PWA-Prüfpunkte für Max. | Master. OFFEN |
 | R5 | Nach Max' PWA-Test: Staging-Produktstand in Main, gewollte Produktionsschalter gesetzt, Production ausgeliefert und rückgelesen. | Master; abhängig von R4 und Max' Testergebnis. OFFEN |
 | R6 | Produktionsjobs besitzen ein eindeutiges Produktionsziel; Staging erhält getrenntes Pages-/Supabase-Ziel, neutrale Seeds und zunächst ausgeschaltete Anbieter/Scheduler. Control liest datierten Status über begrenzte serverseitige Wege. | Folgewelle nach R5; vorhandenen Sandbox-Vertrag konkret ausfüllen. OFFEN |
@@ -70,61 +70,88 @@ Control startet mit lesbarem Build-, Quellen-, Frische-, Job- und Budgetstatus
 sowie klar getrennten Sandbox-Eingaben. Neue produktive Schreib- oder
 Providerknöpfe gehören erst in einen eigenen konkret begrenzten Auftrag.
 
-## Aktuelle Lieferung und offene Netflix-Aktivierung
+## Aktuelle Datenlieferung und App-Abschluss
 
-Der Produktstand `ee8ef91` ist auf `staging` und
-`codex/data-plan-master-20260911` gepusht und auf
-[staging.kinodreieck.at](https://staging.kinodreieck.at) ausgeliefert.
-Vollständige lokale Suite, 341 Function-Mocks und CI einschließlich
-Chromium/WebKit sind grün. Build, Service Worker, App-Bundle und angemeldeter
-Feedweg sind rückgelesen. Der normale Feed-Read liefert 50 gültige Titel,
-der neue Cache-Lookup zwei bekannte frische Fakten; beide ohne Anbieterrequest.
-CI: [34602382336](https://github.com/Soppagata/kinodreieck-app/actions/runs/34602382336).
-Die physische iPhone/PWA-Abnahme durch Max steht aus.
+**Netflix über FlixPatrol ist aktiv.** Backend `16dae19` wurde gezielt für
+`flixpatrol-usage` und `entdecken-daily-task` ausgeliefert; die unveränderten
+KI-/Radar-Funktionsquellen wurden ebenfalls anhand ihrer tatsächlichen Bytes
+bestätigt. Drei vereinbarte Schalter und der bestehende Backend-Buildmarker
+sind gesetzt. Keine neue Migration und kein bezahlter KI-Lauf.
 
-**Netflix über FlixPatrol ist noch nicht aktiviert.** Die feste Zwei-ID-Probe
-war erfolgreich. Der danach ausdrücklich gewünschte einmalige Owner-Lauf
-scheiterte am ersten echten Titelbündel: zwei erfolgreiche Chartrequests,
-ein Titelrequest mit `invalid_response` (HTTP 200), drei vollständig gezählte
-Requests und kein Feedwrite. Das genaue verworfene Feld beziehungsweise ein
-Mengen-/Typkonflikt ist noch nicht belegt. Die Ursache wird gemäß Auftrag
-später behandelt; es gab keinen Retry und keinen Einzel-ID-Ersatzlauf.
+Der Netflix-Bündelfehler ist belegt: Ein Charteintrag an Serienrang 2 wird
+von der Titel-API als Film geliefert. Alle zehn IDs des Bündels waren korrekt;
+der Typkonflikt ließ zuvor das ganze Bündel scheitern. Nur im neuen Format 9
+wird dieser Eintrag nun mit einem eintägigen `incomplete_blocked` ausgesetzt.
+Die übrigen exakten Treffer bleiben verwendbar, Serienrang 6 rückt nach.
+Format 8 behält seinen bisherigen strikten Vertrag.
 
-Der letzte gute Format-8-Feed mit 50 Titeln und der Netflix-Wochenquelle blieb
-vollständig erhalten. Die drei neuen Batch-/Netflix-Schalter wurden entfernt
-und ihre Abwesenheit rückgelesen; Owner-Override ist aus. Der Fehlerstatus
-`source_error` bleibt als tatsächlicher letzter Versuch dokumentiert und wurde
-nicht auf Erfolg umgeschrieben. Der normale Frontend-Read ist trotzdem gültig
-und lädt den erhaltenen Feed. Nächster natürlicher Tageslauf noch unbeobachtet.
+Der erneute einmalige Owner-Lauf am 11.09., 14:58 UTC, war erfolgreich:
+Format 9, 50 Titel (15 Kino, 10 Netflix, 10 Prime Video, 10 Disney+, 5 Apple TV),
+ein Feedwrite und vier neue FlixPatrol-Requests. Bereits vorhandene Charts
+wurden wiederverwendet; nötig waren zwei Titel-, ein Genre- und ein Keyword-
+Bündel. Der Feed ist `ready`, der Fehlercode leer und der Owner-Override wieder
+aus. Netflix-Konflikt und Rang-6-Ersatz wurden im gespeicherten Feed bestätigt.
+In diesem Restauftrag insgesamt sechs zusätzliche FlixPatrol-Requests
+(eine Quota-, eine Diagnose- und vier Feedanfragen); eigener Monatszähler
+59/59 vollständig abgeschlossen. Der erste natürliche Format-9-Tageslauf
+bleibt als spätere Betriebsbeobachtung offen, ohne manuellen Wiederholungslauf.
 
-Insgesamt fünf zusätzliche gezählte FlixPatrol-Versuche in dieser Lieferung:
-eine Quota-Probe, eine Zwei-ID-Probe und drei im abgebrochenen Feedlauf.
-Gemeinsamer eigener Monatszähler anschließend 53/53 abgeschlossen,
-47 erfolgreich und sechs fehlgeschlagen (davon fünf schon vorher).
-Kein zusätzlicher Watchmode- oder KI-Request; Abrufpläne und Kontingente bleiben
-unverändert. Der Zähler und die erhaltenen Daten wurden nicht zurückgesetzt.
+**Watchmode-Produzent `39735ae` ist integriert und auf beiden bisherigen
+Datenbranches gepusht.** Die drei vorher vorhandenen generierten Änderungen
+blieben bytegleich erhalten. Eine providerfreie Katalogveröffentlichung hat
+226 bekannte Titel mit IMDb-/TMDB-IDs und fünf gespeicherten Detailtexten
+bereitgestellt. 24.502 Entdecken-Titel, Dienstauswahl und vorhandene Neu-Fristen
+bleiben erhalten; zwölf vorhandene Namenssignale werden wieder berücksichtigt.
+Der Originalpfad der bereits vorhandenen Namensliste ist lokal konfiguriert.
+Quellstand (10.09.), Projektion und tatsächliche Veröffentlichung (11.09.)
+bleiben getrennte Werte; `updated_at` wird bei echten Katalogwrites gesetzt.
+Streaming, beide durch den bestehenden Trigger erzeugten Teilpayloads und
+Manifest wurden gelesen; der Kino-Katalog blieb unverändert.
 
-Backendquellstand `22c4edf`: beide additiven Migrationen angewandt, alle vier
-betroffenen Functions mit den finalen Quellbytes rückgelesen. Beim Setzen und
-Entfernen der Schalter erhöhte Supabase automatisch die Versionsnummern;
-die Codegleichheit wurde danach erneut bestätigt. Der Backend-Buildmarker
-und die zugehörige bestehende Staging-Erwartung stehen auf `22c4edf`.
+Die begrenzte Watchmode-Probe verbrauchte neun der höchstens zehn Anfragen.
+Drei Werktyp-Seiten und fünf von sechs deutschen Detailantworten sind gesichert.
+Die erste Seite wurde nach einem leeren optionalen IMDb-Feld offline aus dem
+bereits gespeicherten Beleg normalisiert, ohne sie erneut anzufragen. Der
+letzte Detaildatensatz (Watchmode-ID `19751`) hatte keinen gültigen Antworttitel
+und bleibt ohne Cacheeintrag; die künftige Normalisierung kann erst nach
+exakter ID-/Jahr-/Typbindung auf den Katalogtitel zurückfallen. Es gab keinen
+zweiten Resume, keinen Detail-Retry und keine zusätzliche Statusanfrage.
+Konservativer Zyklusstand: 1.001/2.000. Die fünf lesbaren Beschreibungen sind
+inhaltlich deutsch; die API bestätigt die Antwortsprache nicht ausdrücklich,
+deshalb bleibt dieses Sprachmetadatum unbekannt.
 
-Watchmode-Produzent `0fd4ac1` ist auf Kandidaten- und bisherigem Datenbranch
-gepusht und im laufenden lokalen Produzenten integriert. Die drei vorhandenen
-generierten Änderungen sind bytegleich erhalten. Es gab keine zusätzliche
-Katalog-Promotion: Die providerfrei geprüften IMDb-/TMDB-IDs werden beim
-nächsten regulären erfolgreichen Export veröffentlicht. Der echte optionale
-Detailcache ist noch leer; eine deutsche Sprachprobe bleibt spätere Arbeit.
+Zusätzliche Werktypen sind empirisch belegt und im öffentlichen Film-/Serien-
+Vertrag gemappt: 420 Netflix-Miniserien (erste 250 gelesen), 155 Prime-TV-Filme
+plus ein Special sowie 180 Disney-Kurzfilme. Die reguläre Aktivierung bleibt
+aus: Der konservative Pflichtforecast beträgt 1.972/2.000, nach der Probe
+bleiben 19 Anfragen Reserve. Mit dem jüngsten kleineren Fünferlauf wären
+rechnerisch 58 frei; die belegte Mindesterweiterung benötigt bereits 48.
+Unbekannt sind zusätzliche Seiten aller 39 Quellen und neu berechtigte
+Deeplinkziele. Die Bedingung wäre `13f + 3F + 2d <= 58`; bereits vier
+zusätzliche Seiten je Fünferlauf überschreiten diesen Rahmen. Es wird kein
+unbelegter Filter oder höheres Limit aktiviert. Spätere Messung und Aktivierung
+gehören in die Sandbox-Planung; 48-Stunden-/12-Tage-Takt bleiben unverändert.
+Ein späterer Erstimport zusätzlicher Typen erzeugt dank eigener Baseline
+keinen Schub alter Titel unter `Neu`.
 
-`main` bleibt `bf74f25`, die tatsächliche Production-Auslieferung `3b82a73`.
-Vor dem gewünschten Merge bleiben die Behandlung oder bewusste Vertagung der
-fehlgeschlagenen Netflix-Umschaltung, Max' PWA-Abnahme und die konkrete
-Production-Konfiguration: `deploy.yml` hält den Tagesfeed dort derzeit
-explizit aus. Zur Zusammenführung gehören die gewollten Produktionsschalter
-und anschließend Deployment/Readback. Der ältere wartende Production-Lauf
-wurde nicht freigegeben. Sandbox-Trennung und größere Anreicherungsproben
-sind keine nachträglich eingeführten Voraussetzungen des Produktmerges.
+Die gezielte Build-Aufteilung entfernt die bisherige Chunkgrößenwarnung,
+ohne Tabs oder Nutzerzustand umzubauen. Die Gesamtsuite fand dabei vier
+Auslieferungsprüfungen, die nur die erste JavaScript-Datei untersuchten.
+Diese Integrationsnaht wird auf die tatsächlich geladenen Shell-Dateien
+angepasst; die Schutzanker bleiben erhalten. Alle vorangehenden Prüfungen
+inklusive synthetischer PostgreSQL-Tests sowie 341 Function-Mocks bestanden.
+Der vollständige Abschlusslauf und die neue Staging-Auslieferung folgen.
+
+Bis zur folgenden App-Lieferung bleibt Staging auf `ee8ef91`. `main` bleibt
+`bf74f25`, die tatsächliche Production-Auslieferung `3b82a73`; dort ist der
+Tagesfeed im Client weiterhin ausgeschaltet. Nach der neuen Staging-Lieferung
+folgt Max' kurzer physischer PWA-Test, dann der freigegebene Merge mit
+bewusster Production-Konfiguration und Readback. Erst danach werden Staging
+und die produktiven Datenjobs auf getrennte Ziele gebunden.
+
+Aktuelle technische Belege: `/private/tmp/kd-rest-delivery-20260911/`.
+Die ältere Lieferung unter `/private/tmp/kd-data-plan-delivery-20260911/`
+bleibt unverändert als Historie erhalten.
 
 ## Empfehlung
 
@@ -519,13 +546,13 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
   `kd_catalog_streaming_split` reicht bereits beide vollständigen Teilpayloads
   an die aktuellen PWA-Assets weiter; beide Payloads sind gleich. Ein zunächst
   vermuteter Publisherfehler wurde durch den Live-Readback widerlegt.
-- Für die spätere Control-Fläche: `kd_catalog.updated_at` enthält weiterhin
-  historische Werte vom 22.07.; der tatsächliche Datenstand liegt in `stand`
-  (Streaming 10.09., Kino 11.09.). Keine Frischeanzeige aus dem historischen
-  Metadatum ableiten. In diesem Auftrag nicht verändert.
-- Später behandeln: deutsche Watchmode-Abdeckung, zusätzliche Werktypen,
-  fehlende `max_namen_liste_v1.json`, bestehende Chunkgrößenwarnung und klare
-  Produktionsbindung der bisherigen Staging-Datenjobs vor Sandbox-Trennung.
+- Behoben im erneuerten Restauftrag: `kd_catalog.updated_at` enthielt alte
+  Werte vom 22.07. Der Publisher setzt jetzt die tatsächliche Schreibzeit;
+  der Quellenstand bleibt separat erhalten. Live-Readback für Streaming erfolgt.
+- Im erneuerten Restauftrag bearbeitet: deutsche Watchmode-Probe, Typmapping,
+  Namenssignal, tatsächliche Frische und Chunk-Aufteilung. Offen bleiben die
+  quotengebundene Typaktivierung und der ausdrücklich nach dem PWA-Test
+  folgende Merge samt Produktionsbindung/Sandbox-Trennung.
 
 Technische Belege: `/private/tmp/kd-data-plan-delivery-20260911/`.
 Frühere lokale Prüfstände im Plan sind historische Bau-Evidenz;
