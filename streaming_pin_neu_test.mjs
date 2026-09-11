@@ -660,6 +660,17 @@ check("Aufgeklapptes Alles nutzt dieselbe Faktenprojektion wie Mein Programm", (
   assert.match(bekannteAllesKarte.textContent, /111 Minuten · Drama/u);
   assert.match(bekannteAllesKarte.textContent, /Beschreibung: Watchmode · geprüft 11\.09\.2026/u);
 });
+check("Alles verwendet dieselbe Titel-Dienste-Aktionen-Kartenstruktur wie Neu", () => {
+  assert.ok(bekannteAllesKarte.classList.contains("kd-streaming-neu-karte"));
+  assert.ok(bekannteAllesKarte.classList.contains("kd-titelaktionskarte"));
+  const titel = bekannteAllesKarte.querySelector(".kd-entdecken-titel");
+  const dienste = bekannteAllesKarte.querySelector(".kd-streaming-neu-dienste");
+  const aktionen = bekannteAllesKarte.querySelector(".kd-titelkarten-aktionen");
+  assert.ok(titel && dienste && aktionen);
+  assert.ok(titel.compareDocumentPosition(dienste) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(dienste.compareDocumentPosition(aktionen) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.equal(aktionen.querySelectorAll("button").length, 3);
+});
 const pinButton = ui.container.querySelector('[aria-label="Unveränderter Altbestand am Pinboard anpinnen"]');
 await act(async () => { pinButton.click(); await tick(); });
 check("Alles behält Pin- und Gesehen-Aktionen", () => {

@@ -1,0 +1,70 @@
+.kd-titelaktionskarte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kd-space-2, 8px);
+  border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich, #6f6878) 34%, transparent);
+  border-radius: var(--kd-radius-karte, 8px);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 17%, transparent);
+}
+
+.kd-titelaktionskarte .kd-titelkarten-aktionen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: var(--kd-space-2, 8px);
+  padding-top: var(--kd-space-2, 8px);
+  border-top: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich, #6f6878) 28%, transparent);
+}
+
+.kd-titelaktionskarte .kd-titelkarten-aktionen button {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--kd-kartenTextWeich, #6f6878) 60%, transparent);
+  border-radius: var(--kd-radius-control, 6px);
+}
+
+.kd-titelaktionskarte .kd-titelkarten-aktionen .kd-entdecken-pin {
+  color: var(--kd-kartenTextWeich, #6f6878);
+}
+
+.kd-titelaktionskarte .kd-titelkarten-aktionen .kd-entdecken-pin:is(:hover, :focus-visible, .aktiv) {
+  color: #1c1a1e;
+  background: var(--kd-kartenAkzent, #e3a63b);
+  border-color: var(--kd-kartenAkzent, #e3a63b);
+}
+
+.kd-titelaktionskarte .kd-titelkarten-aktionen .kd-entdecken-pin:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+  color: var(--kd-kartenTextWeich, #6f6878);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--kd-kartenTextWeich, #6f6878) 42%, transparent);
+}
+
+.kd-mustwatch-karte .kd-mustwatch-kartenkopf {
+  display: block;
+  min-width: 0;
+}
+
+.kd-mustwatch-karte .kd-mustwatch-statuszeile {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.kd-mustwatch-karte .kd-mustwatch-frage {
+  margin: 2px 0 0;
+}
+
+.kd-mustwatch-karte .kd-mustwatch-besitzwahl--karte {
+  min-height: 44px;
+}

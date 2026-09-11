@@ -40,7 +40,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   filmwissenAktiv = false, filmwissenRechercheAktiv = false,
   filmwissenProFilm = {}, filmwissenRechercheLaufId = null,
   onFilmwissenLaden, onFilmwissenRecherchieren, datenKontextKey = "gast",
-  stapelimportKiAktiv = false, stapelimportFacts, setErr = () => {} }) {
+  stapelimportKiAktiv = false, stapelimportFacts, setErr = () => {},
+  recommendationPins = [], onRecommendationPinToggle }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
   const [typTab, setTypTab] = useState("filme");
   const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
@@ -591,7 +592,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         <MustWatchListe eintraege={mustwatch}
           onAdd={addMustwatch} onUpdate={updateMustwatch} onDelete={deleteMustwatch}
           kandidaten={mwKandidaten} kommtVorInMap={kommtVorInMap} onArtikelKlick={onArtikelKlick}
-          onSpringeZuRef={onSpringeZuMustwatchRef} />
+          onSpringeZuRef={onSpringeZuMustwatchRef} onAddFilm={addFilm}
+          recommendationPins={recommendationPins} onRecommendationPinToggle={onRecommendationPinToggle} />
       )}
 
       {ansicht !== "mustwatch" && (

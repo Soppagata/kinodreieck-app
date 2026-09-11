@@ -3,8 +3,11 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm } from "../lib/match.js";
 import { Chip } from "./ui.jsx";
 import { SelectionControl } from "./SelectionControl.jsx";
+import { TitelKartenAktionen } from "./TitelKartenAktionen.jsx";
+import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
+import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 import {
-  MUSTWATCH_FILTER, mustwatchTyp, mustwatchVerfuegbarkeit, projiziereMustwatch,
+  MUSTWATCH_FILTER, mustwatchJahr, mustwatchTyp, mustwatchVerfuegbarkeit, projiziereMustwatch,
 } from "../lib/mustwatch.js";
 
 /* ---------- Must-Watch: die persönliche Noch-sehen-Liste ----------
@@ -243,12 +246,20 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
   );
 }
 
-export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidaten, kommtVorInMap, onArtikelKlick, onSpringeZuRef }) {
+export function MustWatchListe({
+  eintraege, onAdd, onUpdate, onDelete, kandidaten, kommtVorInMap, onArtikelKlick,
+  onSpringeZuRef, onAddFilm, recommendationPins = [], onRecommendationPinToggle,
+}) {
   const [formOffen, setFormOffen] = useState(false);
   const [offenId, setOffenId] = useState(null);
   const [pickerFuer, setPickerFuer] = useState(null); // Eintrag-ID mit offenem Picker
   const [suche, setSuche] = useState("");
   const [filter, setFilter] = useState("alle");
+  const [markierteIds, setMarkierteIds] = useState(() => new Set());
+  const [nurMarkierte, setNurMarkierte] = useState(false);
+  const [gesehenFrage, setGesehenFrage] = useState(null);
+  const [gesehenSpeichert, setGesehenSpeichert] = useState(null);
+  const [gesehenFehler, setGesehenFehler] = useState("");
 
   const titelZu = (v) => {
     if (!v) return "";
@@ -257,15 +268,140 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
     return k ? k.titel : v.id;
   };
   /* Reine Such-/Filterprojektion der vollständigen Must-Watch-Ansicht. */
-  const sichtbar = useMemo(
+  const projektion = useMemo(
     () => projiziereMustwatch(eintraege, { filter, suche }, kandidaten),
     [eintraege, filter, suche, kandidaten],
+  );
+  const sichtbar = useMemo(
+    () => nurMarkierte ? projektion.filter((e) => markierteIds.has(String(e.id))) : projektion,
+    [markierteIds, nurMarkierte, projektion],
   );
   const jetztAnzahl = useMemo(
     () => (eintraege || []).filter((e) => mustwatchVerfuegbarkeit(e, kandidaten)?.aktuell).length,
     [eintraege, kandidaten],
   );
-  const eingeschraenkt = filter !== "alle" || !!suche.trim();
+  const eingeschraenkt = filter !== "alle" || !!suche.trim() || nurMarkierte;
+
+  useEffect(() => {
+    const vorhanden = new Set((eintraege || []).map((e) => String(e.id)));
+    setMarkierteIds((aktuell) => {
+      const sauber = new Set([...aktuell].filter((id) => vorhanden.has(id)));
+      return sauber.size === aktuell.size ? aktuell : sauber;
+    });
+  }, [eintraege]);
+
+  const schalteMarkierungUm = (id) => {
+    const key = String(id);
+    setMarkierteIds((aktuell) => {
+      const next = new Set(aktuell);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  /* Pins bleiben im vorhandenen Entdecken-Pinboardvertrag. Eine explizite
+     Must-Watch-Verknuepfung darf ihren geladenen Kino-/Streaming-Kandidaten
+     weiterreichen; lokale oder reine Master-Referenzen werden bewusst nicht
+     in einen auf der Startseite unaufloesbaren Pin umgedeutet. */
+  const pinKandidatFuer = (eintrag) => {
+    const ref = eintrag?.verknuepfung;
+    if (!ref || !["programm", "streaming"].includes(ref.ziel) || ref.id == null) return null;
+    const kandidat = (kandidaten?.[ref.ziel] || [])
+      .find((item) => item?.id != null && String(item.id) === String(ref.id));
+    if (!kandidat) return null;
+    if (ref.ziel === "streaming") {
+      return {
+        ...kandidat,
+        titel: kandidat.titel || eintrag.titel,
+        jahr: kandidat.jahr ?? eintrag.jahr,
+        typ: kandidat.typ ?? kandidat.type ?? eintrag.typ,
+        watchmode_id: kandidat.watchmode_id ?? kandidat.id,
+      };
+    }
+    return {
+      ...kandidat,
+      titel: kandidat.titel || eintrag.titel,
+      jahr: kandidat.jahr ?? eintrag.jahr,
+      typ: "film",
+      film_at_id: kandidat.film_at_id ?? kandidat.id,
+    };
+  };
+
+  const filmDatenFuer = (eintrag) => {
+    const status = mustwatchVerfuegbarkeit(eintrag, kandidaten);
+    const kandidat = status?.kandidat || null;
+    const typ = mustwatchTyp(eintrag?.typ ?? kandidat?.typ ?? kandidat?.type);
+    const jahr = mustwatchJahr(eintrag?.jahr ?? kandidat?.jahr ?? kandidat?.year);
+    if (!typ || jahr == null) return null;
+    return {
+      titel: eintrag.titel,
+      originaltitel: eintrag.originaltitel || kandidat?.originaltitel || eintrag.titel,
+      jahr, jahr_bis: null, typ, quelle: "must_watch", kategorie: null,
+      bewertet_von: null, bewertung: null, genre: kandidat?.genres || [], tags: [],
+      begruendung: "", notiz: eintrag.notiz || "", status: "gesetzt",
+      ...(kandidat?.watchmode_id != null ? { watchmode_id: kandidat.watchmode_id } : {}),
+      ...(kandidat?.imdb_id ? { imdb_id: kandidat.imdb_id } : {}),
+      ...(kandidat?.tmdb_id ? { tmdb_id: kandidat.tmdb_id } : {}),
+    };
+  };
+
+  const entferneAlsGesehen = async (eintrag) => {
+    if (gesehenSpeichert != null) return;
+    setGesehenSpeichert(eintrag.id);
+    setGesehenFehler("");
+    try {
+      if (typeof onDelete !== "function") throw new Error("delete-unavailable");
+      const ok = await onDelete(eintrag.id);
+      if (ok === false) throw new Error("delete-not-confirmed");
+      setGesehenFrage(null);
+    } catch {
+      setGesehenFehler("Der Must-Watch-Eintrag konnte nicht bestätigt abgeschlossen werden.");
+    } finally {
+      setGesehenSpeichert(null);
+    }
+  };
+
+  const uebernehmeUndSchliesseAb = async (eintrag) => {
+    const daten = filmDatenFuer(eintrag);
+    if (!daten || typeof onAddFilm !== "function" || gesehenSpeichert != null) return;
+    setGesehenSpeichert(eintrag.id);
+    setGesehenFehler("");
+    let filmId = null;
+    try {
+      const abgeschlossen = await mitBestaetigterStringId(
+        () => onAddFilm(daten),
+        async (bestaetigteId) => {
+          filmId = bestaetigteId;
+          if (typeof onDelete !== "function") return false;
+          return await onDelete(eintrag.id) !== false;
+        },
+      );
+      if (!abgeschlossen) throw new Error(filmId ? "delete-not-confirmed" : "add-not-confirmed");
+      setGesehenFrage(null);
+    } catch {
+      /* War die Mediathek-Anlage bereits bestätigt, aber das Entfernen aus dem
+         separaten Must-Watch-Topf nicht, wird die neue starke ID ausschließlich
+         bei unverändertem Eintrag explizit gebunden. Ein erneuter Klick legt
+         dadurch keinen zweiten Mediathek-Eintrag an. */
+      if (filmId) {
+        try {
+          await onUpdate?.(eintrag.id, (aktuell) => {
+            const aktuelleRef = aktuell?.verknuepfung;
+            const basisRef = eintrag.verknuepfung;
+            const unveraendert = aktuelleRef === basisRef
+              || (!!aktuelleRef && !!basisRef && aktuelleRef.ziel === basisRef.ziel
+                && String(aktuelleRef.id) === String(basisRef.id));
+            if (!unveraendert) return null;
+            return { verknuepfung: { ziel: "master", id: filmId } };
+          });
+        } catch { /* Der sichtbare Restdatensatz bleibt die fail-closed Grenze. */ }
+      }
+      setGesehenFehler("Die Übernahme konnte nicht vollständig bestätigt werden. Der Must-Watch-Eintrag bleibt sichtbar, damit nichts verloren geht.");
+    } finally {
+      setGesehenSpeichert(null);
+    }
+  };
 
   return (
     <div>
@@ -286,6 +422,9 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
         {MUSTWATCH_FILTER.map((f) => (
           <Chip key={f} active={filter === f} onClick={() => setFilter(f)}>{FILTER_LABEL[f]}</Chip>
         ))}
+        <Chip active={nurMarkierte} onClick={() => setNurMarkierte((aktiv) => !aktiv)}>
+          Markiert ({markierteIds.size})
+        </Chip>
       </div>
       {formOffen && <div style={{ marginBottom: 12 }}><MustWatchForm onAdd={onAdd} onDone={() => setFormOffen(false)} kandidaten={kandidaten} /></div>}
       <div style={{ ...monoKlein, marginBottom: 10 }}>
@@ -300,23 +439,25 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
           const typ = mustwatchTyp(e.typ);
           const meta = [e.jahr || null, typ ? TYP_LABEL[typ] : null].filter(Boolean).join(" · ");
           return (
-            <div key={e.id} id={"mw-" + e.id} className="kd-karte kd-mustwatch-karte" onClick={() => setOffenId(offen ? null : e.id)}
+            <div key={e.id} id={"mw-" + e.id} className="kd-karte kd-mustwatch-karte kd-titelaktionskarte" onClick={() => setOffenId(offen ? null : e.id)}
               style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)", borderLeft: status?.aktuell ? "4px solid " + T.wolfram : "4px solid transparent" }}>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+              <div className="kd-mustwatch-kartenkopf">
                 <span className="kd-mustwatch-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0, flex: 1, minWidth: 160, overflowWrap: "anywhere" }}>
                   {e.titel}
                 </span>
-                {/* Statusbadge NUR bei belegter aktueller Verknüpfung — ohne
-                    geladenen Katalog wird nichts behauptet. */}
-                {status && (
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.08em", padding: "3px 7px", borderRadius: 3, whiteSpace: "nowrap", border: "1px solid " + (status.aktuell ? T.wolfram : T.tinteWeich), background: status.aktuell ? T.wolfram : "transparent", color: status.aktuell ? T.tinte : T.tinteWeich }}>
-                    {status.label}
-                  </span>
-                )}
-                <div onClick={(ev) => ev.stopPropagation()}>
-                  <SelectionControl checked={!!e.im_besitz}
-                    onCheckedChange={() => onUpdate(e.id, (aktuell) => ({ im_besitz: !aktuell.im_besitz }))}
-                    label="Im Besitz" className="kd-mustwatch-besitzwahl kd-mustwatch-besitzwahl--karte" />
+                <div className="kd-mustwatch-statuszeile">
+                  {/* Statusbadge NUR bei belegter aktueller Verknüpfung — ohne
+                      geladenen Katalog wird nichts behauptet. */}
+                  {status && (
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.08em", padding: "3px 7px", borderRadius: 3, whiteSpace: "nowrap", border: "1px solid " + (status.aktuell ? T.wolfram : T.tinteWeich), background: status.aktuell ? T.wolfram : "transparent", color: status.aktuell ? T.tinte : T.tinteWeich }}>
+                      {status.label}
+                    </span>
+                  )}
+                  <div onClick={(ev) => ev.stopPropagation()}>
+                    <SelectionControl checked={!!e.im_besitz}
+                      onCheckedChange={() => onUpdate(e.id, (aktuell) => ({ im_besitz: !aktuell.im_besitz }))}
+                      label="Im Besitz" className="kd-mustwatch-besitzwahl kd-mustwatch-besitzwahl--karte" />
+                  </div>
                 </div>
               </div>
               {meta && (
@@ -334,6 +475,28 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
                     ? <a href="#" onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); onSpringeZuRef(e.verknuepfung, e); }}
                         style={{ color: T.tinte, textDecorationColor: T.wolfram, textUnderlineOffset: 3 }}>{titelZu(e.verknuepfung)}</a>
                     : titelZu(e.verknuepfung)}
+                </div>
+              )}
+              {gesehenFrage === e.id && (
+                <div className="kd-entdecken-frage kd-mustwatch-frage" onClick={(ev) => ev.stopPropagation()}>
+                  <strong>„{e.titel}“ als gesehen abschließen?</strong>
+                  <div>
+                    {e.verknuepfung?.ziel === "master"
+                      ? <button style={btnStyle(true)} disabled={gesehenSpeichert != null}
+                          onClick={() => void entferneAlsGesehen(e)}>Ja, Must-Watch abschließen</button>
+                      : <button style={btnStyle(true)} disabled={!filmDatenFuer(e) || typeof onAddFilm !== "function" || gesehenSpeichert != null}
+                          onClick={() => void uebernehmeUndSchliesseAb(e)}>In Mediathek übernehmen und abschließen</button>}
+                    {e.verknuepfung?.ziel !== "master" && (
+                      <button style={btnStyle(false)} disabled={gesehenSpeichert != null}
+                        onClick={() => void entferneAlsGesehen(e)}>Nur Must-Watch abschließen</button>
+                    )}
+                    <button style={btnStyle(false)} disabled={gesehenSpeichert != null}
+                      onClick={() => setGesehenFrage(null)}>Abbrechen</button>
+                  </div>
+                  {!filmDatenFuer(e) && e.verknuepfung?.ziel !== "master" && (
+                    <small>Für die direkte Mediathek-Übernahme zuerst Jahr und Art ergänzen oder ausdrücklich verknüpfen.</small>
+                  )}
+                  {gesehenFehler && <div role="alert" style={{ color: T.gefahr, fontSize: 12, marginTop: 6 }}>{gesehenFehler}</div>}
                 </div>
               )}
               {offen && (
@@ -378,6 +541,23 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
                   )}
                 </div>
               )}
+              {(() => {
+                const pinKandidat = pinKandidatFuer(e);
+                const pinAktiv = pinKandidat ? isEntdeckenPinned(recommendationPins, pinKandidat) : false;
+                const markiert = markierteIds.has(String(e.id));
+                const pinLabel = pinKandidat
+                  ? (pinAktiv ? `${e.titel} vom Pinboard lösen` : `${e.titel} am Pinboard anpinnen`)
+                  : `${e.titel}: zuerst ausdrücklich mit Kinoprogramm oder Streaming verknüpfen`;
+                return <TitelKartenAktionen
+                  pinAktiv={pinAktiv} pinDisabled={!pinKandidat} pinLabel={pinLabel}
+                  onPin={() => onRecommendationPinToggle?.(pinKandidat)}
+                  markiert={markiert}
+                  markierLabel={markiert ? `${e.titel}: Markierung entfernen` : `${e.titel}: markieren`}
+                  onMarkieren={() => schalteMarkierungUm(e.id)}
+                  gesehen={gesehenFrage === e.id}
+                  gesehenLabel={`${e.titel} als gesehen abschließen`}
+                  onGesehen={() => { setGesehenFrage(gesehenFrage === e.id ? null : e.id); setGesehenFehler(""); }} />;
+              })()}
             </div>
           );
         })}

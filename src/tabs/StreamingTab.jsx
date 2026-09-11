@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { T, btnStyle, inputStyle, kontrastFarbe } from "../lib/tokens.js";
+import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { norm } from "../lib/match.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
-import { Chip, ChipReihe, SegmentedControl, IconStar, IconCheck, IconArrowRight } from "../components/ui.jsx";
+import { Chip, ChipReihe, SegmentedControl, IconArrowRight } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
+import { TitelKartenAktionen } from "../components/TitelKartenAktionen.jsx";
 import {
   statusVon, mediathekIdVon, mitMediathekEintrag, gleicheMediathekStatusAb,
   neuerGesehenEintrag, toggleGesehenInStatus,
@@ -489,23 +490,21 @@ export function StreamingTab({
       </svg>
     </button>;
   };
-  const katalogAktionen = (t) => (
-    <div className="kd-entdecken-aktionen">
-      {pinButton(t)}
-      <button onClick={(e) => { e.stopPropagation(); toggleMerk(t); }}
-        title={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
-        aria-label={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
-        style={{ background: gemerkt(t) ? T.kartenAkzent : "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? kontrastFarbe(T.kartenAkzent) : T.kartenTextWeich, padding: 0 }}>
-        <IconStar size={18} filled={gemerkt(t)} />
-      </button>
-      <button onClick={(e) => { e.stopPropagation(); void toggleGesehen(t); }}
-        title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
-        aria-label={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
-        style={{ background: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.kartenAkzent : "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? kontrastFarbe(T.kartenAkzent) : T.kartenTextWeich, padding: 0 }}>
-        <IconCheck size={18} />
-      </button>
-    </div>
-  );
+  const katalogAktionen = (t) => {
+    const gepinnt = isEntdeckenPinned(recommendationPins, t);
+    const titel = t.titel || t.title || "Titel";
+    const gesehen = statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen";
+    return <TitelKartenAktionen
+      pinAktiv={gepinnt}
+      pinLabel={gepinnt ? `${titel} vom Pinboard lösen` : `${titel} am Pinboard anpinnen`}
+      onPin={() => onRecommendationPinToggle?.(t)}
+      markiert={gemerkt(t)}
+      markierLabel={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
+      onMarkieren={() => toggleMerk(t)}
+      gesehen={gesehen}
+      gesehenLabel={gesehen ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
+      onGesehen={() => { void toggleGesehen(t); }} />;
+  };
   const aendereFilter = (setter, wert) => {
     setFokusOverride(null);
     setter(wert);
@@ -804,7 +803,7 @@ export function StreamingTab({
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sichtbareKatalogTitel.map((t) => (
-              <div key={t.watchmode_id} className={`kd-entdecken-karte kd-suchfokus${ansicht === "neu" ? " kd-streaming-neu-karte" : ""}`} tabIndex={-1}
+              <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus kd-streaming-neu-karte kd-titelaktionskarte" tabIndex={-1}
                 data-streaming-suchtreffer={ansicht === "entdecken" ? `entdecken:${t.watchmode_id}` : undefined}
                 onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
                 style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer" }}>
@@ -821,13 +820,10 @@ export function StreamingTab({
                     </div>
                   </div>
                 </div>
-                {ansicht === "neu" && (
-                  <div className="kd-entdecken-meta kd-streaming-neu-dienste">
-                    <DienstBadges className="kd-entdecken-dienste" dienste={t.dienste} webUrls={t.web_urls}
-                      auswahl={auswahl} kompakt={false} />
-                  </div>
-                )}
-                {ansicht !== "neu" && katalogAktionen(t)}
+                <div className="kd-entdecken-meta kd-streaming-neu-dienste">
+                  <DienstBadges className="kd-entdecken-dienste" dienste={t.dienste} webUrls={t.web_urls}
+                    auswahl={auswahl} kompakt={false} />
+                </div>
                 {gesehenFrage === t.watchmode_id && (
                   <div className="kd-entdecken-frage" onClick={(e) => e.stopPropagation()}>
                     <strong>Auch als unbewerteten Eintrag in die Mediathek übernehmen?</strong>
@@ -871,13 +867,7 @@ export function StreamingTab({
                     )}
                   </div>
                 )}
-                {ansicht !== "neu" && (
-                  <div className="kd-entdecken-meta">
-                    <DienstBadges className="kd-entdecken-dienste" dienste={t.dienste} webUrls={t.web_urls}
-                      auswahl={auswahl} kompakt={expandedId !== "e" + t.watchmode_id} />
-                  </div>
-                )}
-                {ansicht === "neu" && katalogAktionen(t)}
+                {katalogAktionen(t)}
               </div>
             ))}
             {katalogListe.length > sichtbarE && (
