@@ -60,14 +60,16 @@ check("E5 Finder kann Kino- und Streamingfunde direkt mit Prognose anlegen", () 
   && /imdb_id: t\.imdb_id, tmdb_id: t\.tmdb_id/.test(finder)
   && /film_at_id/.test(finder));
 
-check("E6 belegtes Filmwissen bleibt eine eigene Rubrik und ist keine Bewertung", () =>
+check("E6 die KI-Bewertung verbindet Quellenbasis und Vorschlag ohne unbewussten Save", () =>
   /Belegtes Filmwissen/.test(filmwissen)
   && /keine echte Bewertung/.test(lies("./src/components/PrognoseBereich.jsx"))
   && /PrognoseBereich/.test(filmkarte)
-  && /FilmwissenBereich/.test(filmkarte));
+  && /FilmwissenBereich/.test(lies("./src/components/PrognoseBereich.jsx"))
+  && /KI-Bewertung/.test(lies("./src/components/PrognoseBereich.jsx")));
 
-check("E7 Filmwissen ist nur am geöffneten unbewerteten Eintrag sichtbar", () =>
-  /expanded && !editing && unbewertet && filmwissen/.test(filmkarte)
+check("E7 der kombinierte KI-Block bleibt auch im offenen Bewertungseditor sichtbar", () =>
+  /expanded && \(vorbewertung \|\| filmwissen\)/.test(filmkarte)
+  && !/expanded && !editing && unbewertet && filmwissen/.test(filmkarte)
   && /onFilmwissenLaden/.test(kino)
   && /onFilmwissenLaden/.test(mediathek)
   && /onFilmwissenLaden/.test(streaming));

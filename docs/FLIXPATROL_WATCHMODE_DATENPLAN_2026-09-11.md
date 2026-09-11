@@ -13,10 +13,10 @@ geoeffnet, R5/R6 folgen weiterhin nach dem PWA-Test. Keine neue Auditkette.
 
 | ID | Sichtbares Ergebnis und Fertigkriterium | Stand |
 | --- | --- | --- |
-| V1 | Filmwissen (belegte kulturelle Einordnung) und Prognose (persoenlicher Vorschlag) sind bei Jetzt bewerten und Eintrag erstellen verfuegbar. Prognose bleibt im offenen Formular, kann neu berechnet, uebernommen und korrigiert werden; erst bewusstes Speichern legt die Bewertung/den neuen Eintrag ab. Fehler werden am aktuellen Ablauf eingegrenzt. | OFFEN |
-| V2 | Mediathek bietet dieselben Alphabet-/Jahrzehntregler wie Streaming. Streaming Alles/Neu verlinkt bei eindeutigem Bestand direkt auf den vorhandenen Mediathek-Eintrag. Filter, Dienstauswahl und Neu-Fristen bleiben erhalten. | OFFEN |
-| V3 | Entdecken-Titel sind wieder dunkel auf hellen Karten lesbar; Streaming hat drei benachbarte Menuebuttons. Quellen sind einheitliche, deduplizierte Tags in einer eigenen Reihe unter WIE/WAS/WARUM/Kategorie. | OFFEN |
-| V4 | Kino hat einen echten, mit Suche/Kino/Tag/Abo/Fassung kombinierbaren Genrefilter. Die Profil-Zwischenueberschriften entfallen. Genreabdeckung wird gemessen und Luecken mit belegten Werkidentitaeten aus vorhandenen Daten bzw. oeffentlichen Quellen geschlossen. Keine erfundenen Genrewerte. | OFFEN |
+| V1 | Eine gemeinsame KI-Bewertung verbindet persoenliche Prognose und belegtes Filmwissen bei Jetzt bewerten und Eintrag erstellen. Das Ergebnis bleibt im offenen Formular, mit Quellen, Neuberechnen und Korrigieren; erst bewusstes Speichern legt Bewertung/Eintrag ab. Belegter WARUM-Wert und geschaetzte WIE/WAS/Passung bleiben unterscheidbar; ohne ausreichende Belege gilt das Ergebnis als vorlaeufig. | GEBAUT und integriert; gemeinsame Abschlusspruefung laeuft |
+| V2 | Mediathek bietet dieselben Alphabet-/Jahrzehntregler wie Streaming. Streaming Alles/Neu verlinkt bei eindeutigem Bestand direkt auf den vorhandenen Mediathek-Eintrag. Filter, Dienstauswahl und Neu-Fristen bleiben erhalten. | GEBAUT und integriert; gemeinsame Abschlusspruefung laeuft |
+| V3 | Entdecken-Titel sind wieder dunkel auf hellen Karten lesbar; Streaming hat drei benachbarte Menuebuttons. Quellen sind einheitliche, deduplizierte Tags in einer eigenen Reihe unter WIE/WAS/WARUM/Kategorie. | GEBAUT und integriert; gemeinsame Abschlusspruefung laeuft |
+| V4 | Kino hat einen echten, mit Suche/Kino/Tag/Abo/Fassung kombinierbaren Genrefilter. Die Profil-Zwischenueberschriften entfallen. Genreabdeckung wird gemessen und Luecken mit belegten Werkidentitaeten aus vorhandenen Daten bzw. oeffentlichen Quellen geschlossen. Keine erfundenen Genrewerte. | GEBAUT und integriert: 283/284, Sneak bewusst offen |
 | V5 | Gemeinsamer Kandidat lokal geprueft, committed, auf Staging gepusht und nach CI samt Build/Service Worker rueckgelesen. | OFFEN |
 
 **Parallelwelle ab dem Commit dieser Ergaenzung:**
@@ -49,6 +49,54 @@ Package-Testverdrahtung, reine Betriebsreads, Integration, dieses Register und
 Lieferung besitzt der Meister. Neue optionale Props werden mit kompatiblen
 Defaults gebaut; kleine Tab-/App-Weitergaben erfolgen erst bei Integration.
 Weitere Fachlogik wird als begrenztes Delta beim zustaendigen Baumeister gebaut.
+
+**Lieferungen und enge Integrationsnaehte:** B liefert `f430090` (gemeinsame
+Regler, direkte Mediathek-Links, drei mobile Reiter, Quellenbadges) mit lokalen
+DOM- und Chromium/WebKit-Pruefungen. C liefert `1795a26` + `bd7aafa` (Genre-
+Filter, Kontrast und 48 belegte Ergaenzungen) mit fokussierten DOM-/Browserchecks.
+A liefert `16fc65f` mit vereinter KI-Bewertung und gehaltenem Entwurf; B schliesst den reinen Prognose-Reset mit `fa5a34c`. Alle Pakete sind integriert. Die bestehende Mediathek setzte jeden offenen Editor bei
+jeder Master-Referenzaenderung zurueck; B erhaelt ihn als kleines Delta nur beim
+reinen Prognose-Metadatenwechsel des aktuell geoeffneten stabilen Eintrags im
+unveraenderten Kontokontext. Auswahl-/Restore-/Konto-Grenzen bleiben bestehen.
+Der Meister verdrahtet den vorhandenen `springeZuFilm`-Callback und passt alte
+Tests an die ausdruecklich ersetzten UI-Vertraege an. Optionen fuer den bereits
+ausgeloesten integrierten KI-Klick werden durch die Tab-Closures weitergereicht.
+
+**Nutzerergaenzung waehrend des Baus:** A fusioniert Filmwissen und Prognose zur
+sichtbaren KI-Bewertung. Bestehende serverseitige Aufgabenvertraege bleiben;
+vorhandene Belege werden wiederverwendet und Ergebnisse ohne Quellen nicht
+als validiert ausgegeben. Die korrigierte Draft-Funktion liefert keine bereits
+gespeicherte ID: B reicht `onAddMitPrognose` deshalb direkt ans Formular weiter,
+waehrend die vorhandene finale `onAdd`-Funktion erst nach Speichern markiert.
+
+**Aktuelle Betriebsdaten, 20:00–20:52 UTC:** Ein Quellenfehler um 20:16:49
+(Wikidata/LOC-Abrufe, HTTP 500) entstand vor einem Filmwissen-KI-Auftrag. Zwei
+persoenliche Prognosen um 20:26 und 20:28 wurden mit Sonnet 5 erfolgreich und
+HTTP 200 beendet. Damit ist ein erfolgreiches Providerergebnis belegt, seine
+verlorene Darstellung im Formular wurde durch die gehaltenen Entwuerfe und den begrenzten Mediathek-Reset behoben.
+Keine echte KI-Probe wurde durch den Meister gestartet.
+
+**Genreabdeckung:** Der vorhandene Kinokatalog enthaelt 284 Eintraege, davon
+235 mit Genres und 49 ohne. Eine vorhandene Detailseite bestaetigte die leere
+Genreangabe; deshalb kein Vollabruf aller film.at-Detailseiten. C belegt die
+Sonderprogramme (In These Moments, Peggy Ahwesh, Was ist Film, Kinder-/Kurzfilm-
+Programm und Sneak), der Meister die fehlenden Einzelwerke. Reine Faktenbelege
+liegen unter `/private/tmp/kd-ui-followup-evidence-20260911/`. Im Produkt stehen
+nur kurze Genre-/Identitaetsbelege samt URLs. 48 der 49 Luecken sind geschlossen;
+die Sneak Preview bleibt mangels bekanntem Filmtitel ohne geratenes Genre.
+Ein verkuerzter film.at-Titel (Die Passion nach G.H.) wurde ueber die exakt
+gleiche Votiv-Vorstellung dem Film G.H.B. von 2026 zugeordnet, ohne den
+Anzeigenamen oder andere Katalogdaten zu veraendern.
+
+**Integration:** Der Meister reicht `onEintragKlick` von App an Streaming weiter
+und bindet die gemeinsamen Quellen-Styles am App-Einstieg ein. Alte Tests folgen
+den ausdruecklich geaenderten UI-Texten und den gemeinsam genutzten Reglern;
+der vorhandene Login-DOM-Test bleibt unveraendert. Die drei neuen fokussierten
+Mocktests sind in `npm test` eingebunden. Ein bestehender Browserfall prueft
+jetzt den tatsaechlichen Streaming-Sprung zum Eintrag samt Mediathek-Reglern.
+Ein bekannter Quellenstopp vor dem KI-Auftrag erlaubt einen klar vorlaeufigen
+Vorschlag; unklare Fehler starten keinen Folgeaufruf. Die externe LOC-Sperre
+bleibt unabhaengig davon ein offener Quellenbefund.
 
 ## PWA-Rueckmeldung vom 11.09.: gezielte UI-Nacharbeit
 

@@ -1,7 +1,6 @@
 import { T, kontrastFarbe } from "../lib/tokens.js";
 import { bewertungskategorieLabel } from "../lib/kategorien.js";
 import { quelleBadges, QUELLEN_KLASSEN } from "../lib/quellen.js";
-import "../styles/library-followup.css";
 
 /* ---------- Dreieck-Glyph (Signatur) ----------
    bw == null (unbewertet): NUR der Umriss, gestrichelt — ein leeres Dreieck ist

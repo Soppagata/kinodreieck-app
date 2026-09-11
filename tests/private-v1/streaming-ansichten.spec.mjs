@@ -190,6 +190,11 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
   await expect(page.getByText("Unveränderter Altbestand", { exact: false })).toHaveCount(0);
 
   await views.filter({ hasText: /^Alles/u }).click();
+  await bekanntOhneIds.getByRole("button", { name: /in deiner Mediathek · Zum Eintrag/u }).click();
+  await expect(page.locator("#film-obsession-2024")).toBeVisible();
+  await expect(page.getByRole("slider", { name: /Mediathek: Anfangsbuchstaben filtern/u })).toBeVisible();
+  await expect(page.getByRole("slider", { name: /Mediathek: Jahrzehnt filtern/u })).toBeVisible();
+  await page.locator("#film-obsession-2024").screenshot({ path: testInfo.outputPath("ui-mediathek-verlinkt.png") });
 
   await navigateMobile(page, "Settings");
   await page.getByText("Streaming-Katalogbestand", { exact: true }).click();

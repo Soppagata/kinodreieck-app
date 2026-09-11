@@ -88,6 +88,7 @@ import { EntdeckenTab } from "./tabs/EntdeckenTab.jsx";
 import { FinderTab, erstelleFinderAntwort, kompakteFinderTreffer } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
 import "./styles/rating-followup.css";
+import "./styles/library-followup.css";
 import { EGGS_ENABLED, EGG_AKTIV } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { MobileNavigation, NAVIGATION } from "./components/AppNavigation.jsx";
@@ -1862,6 +1863,7 @@ export default function App() {
 
         {remoteKontoAktiv && tab === "streaming" && (
           <StreamingTab
+            onEintragKlick={springeZuFilm}
             bekannt={streamingBekannt} entdecken={streamingEntdecken}
             addFilm={addFilm} master={master} updateFilm={updateFilm}
             addFilmMitPrognose={addFilmMitPrognose}

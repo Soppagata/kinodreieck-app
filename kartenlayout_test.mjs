@@ -47,7 +47,7 @@ check("Kino-Programmfilter bleiben sichtbar, beschriftet und mobil kompakt", () 
   assert.ok(alleReset, "Der sichtbare Reset löst sämtliche aktiven Einschränkungen");
   assert.match(alleReset, /resetProgrammfilter\(\);\s*setSucheK\(""\);\s*setZeigeAlles\(true\);/);
   assert.doesNotMatch(alleReset, /saveZeitgrenze|setZeitgrenze/, "Die gespeicherte Uhrzeit bleibt erhalten");
-  assert.match(kino, /aktiveFilterAnzahl = \[kinoF, tagF, aboFilter !== "alle", fassungF, sucheK, !zeigeAlles\]\.filter\(Boolean\)\.length/);
+  assert.match(kino, /aktiveFilterAnzahl = \[kinoF, tagF, aboFilter !== "alle", fassungF, genreF, sucheK, !zeigeAlles\]\.filter\(Boolean\)\.length/);
   assert.match(kino, /\{aktiveFilterAnzahl > 0 && \(\s*<button type="button" onClick=\{resetAlleFilter\}>Filter zurücksetzen<\/button>/);
   assert.match(kino, /Filter\{aktiveFilterAnzahl > 0 \? ` · \$\{aktiveFilterAnzahl\}` : ""\}/);
   assert.match(kino, /className="kd-kino-filter-toggle"[\s\S]*?aria-expanded=\{filterMenueOffen\} aria-controls=\{filterPanelId\}/);
@@ -59,7 +59,7 @@ check("Kino-Programmfilter bleiben sichtbar, beschriftet und mobil kompakt", () 
   assert.match(css, /@media \(max-width:760px\)[\s\S]*\.kd-kino-programmfilter \{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(kino, /import "\.\.\/styles\/kino-filter\.css"/);
   assert.match(filterCss, /\.kd-kino-tab \.kd-kino-filteroptionen \{[^}]*flex-wrap: wrap/);
-  assert.match(filterCss, /\.kd-kino-tab \.kd-kino-zusatzfilter input \{[^}]*min-height: 44px;[^}]*min-width: 44px/);
+  assert.match(filterCss, /\.kd-kino-tab \.kd-kino-zusatzfilter input,[^{]*\.kd-kino-zusatzfilter select \{[^}]*min-height: 44px;[^}]*min-width: 44px/);
 });
 
 check("Kino-Fehler verweist auf den sichtbaren Recoveryweg statt auf entfernte Notfallimporte", () => {
@@ -163,15 +163,16 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.match(streaming, /name="Mein Programm"[\s\S]*nurBewertet/);
   assert.match(streaming, /Gesehen \(\{statusAnzahlenE\}\)/);
   assert.doesNotMatch(streaming, /Beobachtet \(\{statusAnzahlenE/);
-  assert.match(streaming, /type="range"[\s\S]*Anfangsbuchstaben filtern/);
-  assert.match(streaming, /Jahrzehntbereich/);
-  assert.match(streaming, /<strong aria-live="polite">\{bereich \? streamingJahrzehntLabel\(wert\) : "Alle"\}<\/strong>/);
-  assert.doesNotMatch(streaming, /streamingJahrzehntLabel\(wert\).*bereich\.label/);
-  assert.match(streaming, /aria-valuetext=\{bereich \? `\$\{Number\(wert\)\}er: \$\{bereich\.von\} bis \$\{bereich\.bis\}` : "Alle Jahrzehnte"\}/);
-  const alphabetFilter = streaming.match(/function AlphabetFilter[\s\S]*?\n}\n\nfunction JahrzehntFilter/)?.[0] || "";
+  const regler = lies("./src/components/KatalogRegler.jsx");
+  assert.match(regler, /type="range"[\s\S]*Anfangsbuchstaben filtern/);
+  assert.match(regler, /Jahrzehntbereich/);
+  assert.match(regler, /<strong aria-live="polite">\{bereich \? streamingJahrzehntLabel\(wert\) : "Alle"\}<\/strong>/);
+  assert.doesNotMatch(regler, /streamingJahrzehntLabel\(wert\).*bereich\.label/);
+  assert.match(regler, /aria-valuetext=\{bereich \? `\$\{Number\(wert\)\}er: \$\{bereich\.von\} bis \$\{bereich\.bis\}` : "Alle Jahrzehnte"\}/);
+  const alphabetFilter = regler.match(/export function AlphabetRegler[\s\S]*?\n}\n\nexport function JahrzehntRegler/)?.[0] || "";
   assert.doesNotMatch(alphabetFilter, /<button/);
   assert.match(streaming, /Filter &amp; Sortierung/);
-  assert.match(streaming, /name="Mein Programm"[\s\S]*optionen=\{dekadenP\}/);
+  assert.match(streaming, /name="Mein Programm"[\s\S]*jahrzehnte=\{dekadenP\}/);
   assert.match(streaming, /kd-kompakt kd-streaming-werkzeuge[\s\S]*kd-streamfilter-knopf/);
   assert.match(streaming, /genreFilterSichtbarE && <div className="kd-streamfilter-gruppe kd-streamfilter-genre"/);
   const css = lies("./src/index.css");
@@ -187,19 +188,20 @@ check("Kinoticket zeigt keine Bewertung im Programmkopf", () => {
   assert.doesNotMatch(ticket, /Dreieck|AxisChips|KategorieTag|bewertung/i);
 });
 
-check("KI-Prognose liegt als voller Kartenblock außerhalb des Filmkopfs", () => {
+check("KI-Bewertung liegt als voller Kartenblock außerhalb des Filmkopfs", () => {
   const card = lies("./src/components/FilmCard.jsx");
-  const kopfEnde = card.indexOf("{expanded && !editing && vorbewertung");
+  const kopfEnde = card.indexOf("{expanded && (vorbewertung || filmwissen)");
   assert.ok(kopfEnde > card.indexOf('className="kd-filmkopf"'));
   assert.match(card, /className="kd-film-prognose-breit"[\s\S]*width: "100%"/);
-  assert.match(lies("./src/components/PrognoseBereich.jsx"), /className="kd-prognose"[\s\S]*width: "100%"/);
+  assert.match(lies("./src/components/PrognoseBereich.jsx"), /className="kd-prognose kd-ki-bewertung"[\s\S]*width: "100%"/);
 });
 
 check("KI-Prognose ordnet ihre ausgeschriebenen Aktionen mobil untereinander an", () => {
   const prognose = lies("./src/components/PrognoseBereich.jsx");
   const css = lies("./src/index.css");
   assert.match(prognose, /className="kd-prognose-aktionen"/);
-  assert.match(prognose, />Als Bewertung übernehmen</);
+  assert.match(prognose, /uebernehmenLabel = "Als Bewertung übernehmen"/);
+  assert.match(prognose, /onClick=\{onUebernehmen\}>\{uebernehmenLabel\}/);
   assert.doesNotMatch(prognose, />Echt bewerten \/ korrigieren</);
   assert.match(css, /@media \(max-width:760px\)[\s\S]*\.kd-prognose-aktionen[\s\S]*grid-template-columns:minmax\(0,1fr\)/);
 });

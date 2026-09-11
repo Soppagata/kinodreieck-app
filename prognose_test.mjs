@@ -147,13 +147,13 @@ check("Annehmen erzeugt weiterhin keine echte Bewertung", () => {
 });
 check("Oberfläche bietet eine ausdrücklich zu prüfende Bewertungsübernahme an", () =>
   PROGNOSE_UI.includes("Als Bewertung übernehmen")
-  && PROGNOSE_UI.includes("Nur Prognose bestätigen"));
+  && PROGNOSE_UI.includes("Nur Vorschlag bestätigen"));
 check("Oberfläche zeigt WARUM aus der Prognose statt eines festen Leerwerts", () =>
   PROGNOSE_UI.includes('<Achse name="WARUM" wert={e.achsen.warum}'));
-check("Oberfläche unterscheidet geschätztes und belegtes WARUM und nennt beides nie Bewertung", () =>
+check("Oberfläche unterscheidet geschätztes und belegtes WARUM und fordert bewusstes Speichern", () =>
   PROGNOSE_UI.includes('prognose.warumHerkunft === "filmwissen"')
-  && PROGNOSE_UI.includes("vorläufige Sonnet-Schätzung")
-  && PROGNOSE_UI.includes("belegte kulturelle Einordnung")
+  && PROGNOSE_UI.includes("WARUM ist vorläufig")
+  && PROGNOSE_UI.includes("belegte gemeinsame Einordnung")
   && PROGNOSE_UI.includes("keine echte Bewertung"));
 check("ungültige gespeicherte Prognose wird beim Lesen quarantänisiert", () => {
   const r = lesePrognose({ titel: "Test", prognose: { ...prognose, status: "erfunden" } });

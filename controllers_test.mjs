@@ -643,7 +643,15 @@ check("App besitzt keinen Demo-seitigen Must-Watch-Seed; normales Laden und Schr
 check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",
   /next = ensureIds\(markNewPersonalMasterEntries\(aktuell, \[neu\]\)\)/.test(app)
   && /film\.id === id \? mergePersonalMasterEntry\(film, changes\) : film/.test(app)
-  && /next = ensureIds\(markNewPersonalMasterEntries\(aktuell, \[prepared\]\)\)/.test(intelligenceController));
+);
+const prognoseDraft = intelligenceController.slice(
+  intelligenceController.indexOf("const addFilmMitPrognose"),
+  intelligenceController.indexOf("const ladeFilmwissen"),
+);
+check("KI-Bewertung bleibt bis zum bewussten Speichern ein kontogebundener Entwurf",
+  /kontoIstAktuell\(startKonto\)/.test(prognoseDraft)
+  && /status: "bereit"/.test(prognoseDraft)
+  && !/mutiereMaster|schreibeArtikel|markNewPersonalMasterEntries/.test(prognoseDraft));
 check("Mehrtopf-Löschungen warten fail-closed auf den sicheren Must-Watch-Ladestand",
   /mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch/.test(app)
   && (app.match(/if \(!mustwatchGeladen \|\| !artikelGeladen\)/g) || []).length >= 2

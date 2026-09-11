@@ -125,13 +125,13 @@ try {
   });
   check("Prognose zeigt keine technische Kosten-/Aufrufkopie und keinen Korrekturbutton", () => {
     assert.doesNotMatch(filmUi.container.textContent, /US-Cent|Dollar|Websuche|kostenpflichtig|Echt bewerten \/ korrigieren/);
-    assert.ok(buttonByText(filmUi.container, "Als Bewertung übernehmen"));
+    assert.ok(buttonByText(filmUi.container, "Vorschlag in Eingabe übernehmen"));
   });
-  await act(async () => { buttonByText(filmUi.container, "Als Bewertung übernehmen").click(); await tick(); });
+  await act(async () => { buttonByText(filmUi.container, "Vorschlag in Eingabe übernehmen").click(); await tick(); });
   check("Normaler Übernahmeweg öffnet das vorausgefüllte Bewertungsfeld", () => {
     const panel = filmUi.container.querySelector(".kd-editpanel");
     assert.ok(panel);
-    assert.match(panel.textContent, /KI-Prognose vorausgefüllt/);
+    assert.match(panel.textContent, /KI-Bewertung vorausgefüllt/);
     assert.deepEqual([...panel.querySelectorAll('input[type="number"]')].map((input) => input.value), ["4", "3", "2"]);
     assert.equal(panel.querySelector("select")?.value, "sehenswert");
     assert.equal(panel.querySelector('textarea[placeholder^="Begründung"]')?.value, "Die ruhige Spannung passt zu deinem Profil.");
