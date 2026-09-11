@@ -547,3 +547,70 @@ export function createMixedPublicChartAdapter({
     telemetry() { return telemetry; },
   });
 }
+
+
+/* Schmaler Format-9-Vorläufer: nur der bestehende OeFI-Chart. Netflix wird in
+   diesem Modus ausschließlich durch die separat gegateten FlixPatrol-Tagescharts
+   geliefert; der öffentliche Wochenexport wird nicht redundant geladen. */
+export function createOefiPublicChartAdapter({
+  fetchImpl = globalThis.fetch,
+  now = () => new Date().toISOString(),
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  maxHtmlBytes = MAX_HTML_BYTES,
+} = {}) {
+  let telemetry = Object.freeze({
+    sourceRequests: 0, sourceItemCount: 0, eligibleUniqueCount: 0,
+    marketCounts: Object.freeze({ cinema: ENTDECKEN_MIXED_MARKET_COUNTS.cinema }),
+  });
+  return Object.freeze({
+    mode: "public-oefi",
+    async search(queryContext, { retrievedOn, claimedIsoWeek } = {}) {
+      if (typeof fetchImpl !== "function" || !validDay(retrievedOn)
+          || typeof claimedIsoWeek !== "string" || !/^\d{4}-W\d{2}$/.test(claimedIsoWeek)) {
+        throw new Error("public_oefi_setup_invalid");
+      }
+      const fetchedAt = now();
+      if (!validInstant(fetchedAt)) throw new Error("public_oefi_clock_invalid");
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+      try {
+        const response = await fetchImpl(OEFI_WEEKEND_CHART.listUrl, {
+          method: "GET", headers: { Accept: "text/html" }, redirect: "error", signal: controller.signal,
+        });
+        telemetry = Object.freeze({
+          sourceRequests: 1, sourceItemCount: 0, eligibleUniqueCount: 0,
+          marketCounts: Object.freeze({ cinema: ENTDECKEN_MIXED_MARKET_COUNTS.cinema }),
+        });
+        const contentType = text(response?.headers?.get?.("content-type")).toLowerCase();
+        if (!response?.ok || !contentType.startsWith("text/html")) {
+          const error = new Error([401, 403, 429].includes(response?.status)
+            ? "public_oefi_source_blocked" : "public_oefi_source_transport_invalid");
+          error.sourceStatus = Number(response?.status) || null;
+          throw error;
+        }
+        const html = await boundedHtml(response, maxHtmlBytes, () => controller.abort());
+        const cinemaRows = extractOefiWeekendChartItems(html);
+        if (cinemaRows.length !== ENTDECKEN_MIXED_MARKET_COUNTS.cinema) {
+          throw new Error("public_oefi_source_structure_invalid");
+        }
+        const seen = new Set();
+        const items = takeUnique(cinemaRows.map((item) => oefiItem(item, fetchedAt)),
+          ENTDECKEN_MIXED_MARKET_COUNTS.cinema, seen);
+        if (items.length !== ENTDECKEN_MIXED_MARKET_COUNTS.cinema) {
+          throw new Error("public_oefi_pool_insufficient");
+        }
+        telemetry = Object.freeze({
+          sourceRequests: 1, sourceItemCount: cinemaRows.length, eligibleUniqueCount: items.length,
+          marketCounts: Object.freeze({ cinema: ENTDECKEN_MIXED_MARKET_COUNTS.cinema }),
+        });
+        return Object.freeze({
+          sourceMode: "public-oefi", sourceId: ENTDECKEN_OEFI_SOURCE_ID,
+          sourceIds: Object.freeze([ENTDECKEN_OEFI_SOURCE_ID]), queryContext,
+          checkedAt: fetchedAt, retrievedOn, isoWeek: claimedIsoWeek,
+          items: Object.freeze(items),
+        });
+      } finally { clearTimeout(timer); }
+    },
+    telemetry() { return telemetry; },
+  });
+}

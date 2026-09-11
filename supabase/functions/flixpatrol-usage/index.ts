@@ -68,6 +68,10 @@ function runtimeDependencies() {
       sourceId: "ttl_kVkeFHRGi3CIYLPg7FTEJ9XK",
       mediaType: "film",
     }),
+    diagnoseTitleBatch: () => client.fetchTitles({
+      sourceIds: ["ttl_4tnwmMWPSCaKxwn2tVzTXmcg", "ttl_5b8ZJ3E4UMZoCD62pGqLKjO8"],
+      mediaTypes: ["film", "film"],
+    }),
   };
 }
 

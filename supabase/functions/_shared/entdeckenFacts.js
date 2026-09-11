@@ -85,12 +85,46 @@ export function normalizeEntdeckenFlixPatrolFact(value, { requireFresh = false }
     if (!TMDB_FORM.test(tmdb)) return null;
     externalIds.tmdb = tmdb;
   }
+  const vocabulary = (entries, idPattern) => {
+    if (entries === undefined) return Object.freeze([]);
+    if (!Array.isArray(entries) || entries.length > 8) return null;
+    const seen = new Set();
+    const normalized = [];
+    for (const entry of entries) {
+      const id = text(entry?.id);
+      const name = safeEntityName(entry?.name);
+      const key = name?.toLocaleLowerCase("de-AT");
+      if (!plain(entry) || !exactKeys(entry, ["id", "name"]) || !idPattern.test(id)
+          || !name || seen.has(key)) return null;
+      seen.add(key);
+      normalized.push(Object.freeze({ id, name }));
+    }
+    return Object.freeze(normalized);
+  };
+  const genreId = value.genreId == null ? null : text(value.genreId);
+  const keywordId = value.keywordId == null ? null : text(value.keywordId);
+  if ((genreId !== null && !/^gnr_[A-Za-z0-9]{20,40}$/.test(genreId))
+      || (keywordId !== null && !/^kwd_[A-Za-z0-9]{20,40}$/.test(keywordId))) return null;
+  const genres = vocabulary(value.genres, /^gnr_[A-Za-z0-9]{20,40}$/);
+  const keywords = vocabulary(value.keywords, /^kwd_[A-Za-z0-9]{20,40}$/);
+  if (!genres || !keywords) return null;
+  const cacheLabels = [];
+  const seenLabels = new Set();
+  for (const entry of [...genres, ...keywords]) {
+    const key = entry.name.toLocaleLowerCase("de-AT");
+    if (!seenLabels.has(key)) { seenLabels.add(key); cacheLabels.push(entry.name); }
+  }
   return Object.freeze({
     sourceId: value.sourceId,
     mediaType: value.mediaType,
     title: value.title,
     releaseYear: value.releaseYear,
     externalIds: Object.freeze(externalIds),
+    genreId,
+    keywordId,
+    genres,
+    keywords,
+    cacheLabels: Object.freeze(cacheLabels.slice(0, 8)),
     sourceUrl,
     checkedAt,
     freshUntil,

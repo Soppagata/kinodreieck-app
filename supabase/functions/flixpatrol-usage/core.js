@@ -2,6 +2,7 @@ const SCHEDULE_HEADER = "x-kd-flixpatrol-usage";
 const SCHEDULE_VALUE = "scheduled-daily-v1";
 const TOP10_DIAGNOSTIC_VALUE = "manual-top10-contract-v1";
 const TITLE_DIAGNOSTIC_VALUE = "manual-title-contract-v1";
+const TITLE_BATCH_DIAGNOSTIC_VALUE = "manual-title-batch-contract-v1";
 const RESPONSE_VALUE_CLASSES = new Set(["missing", "null", "array", "object", "string", "number", "boolean", "other"]);
 const RESPONSE_ENUM_CLASSES = new Set([
   ...[...RESPONSE_VALUE_CLASSES].map((value) => `${value}:other`),
@@ -382,7 +383,8 @@ function normalizeTitleDiagnostic(value) {
  *   readUsage?: () => Promise<unknown>,
  *   refreshUsage?: () => Promise<{usage: unknown, providerRequests: number}>,
  *   diagnoseTop10?: () => Promise<{items: unknown[], providerRequests: number}>,
- *   diagnoseTitle?: () => Promise<{title: unknown, providerRequests: number}>
+ *   diagnoseTitle?: () => Promise<{title: unknown, providerRequests: number}>,
+ *   diagnoseTitleBatch?: () => Promise<{items: unknown[], providerRequests: number}>
  * }} dependencies
  */
 export function createFlixPatrolUsageHandler({
@@ -391,6 +393,7 @@ export function createFlixPatrolUsageHandler({
   refreshUsage,
   diagnoseTop10,
   diagnoseTitle,
+  diagnoseTitleBatch,
 } = {}) {
   return async function handler(request) {
     if (request.headers.get("origin") !== null || !authorized(request, serviceKeys)) {
@@ -435,6 +438,22 @@ export function createFlixPatrolUsageHandler({
             ...safe,
             ...(diagnostic ? { diagnostic } : {}),
           }, 502);
+        }
+      }
+      if (request.method === "POST" && request.headers.get(SCHEDULE_HEADER) === TITLE_BATCH_DIAGNOSTIC_VALUE) {
+        try {
+          const result = await diagnoseTitleBatch?.();
+          if (!Array.isArray(result?.items) || result.items.length !== 2 || result?.providerRequests !== 1) {
+            return response({
+              ok: false, status: "failed", code: "FLIXPATROL_TITLE_BATCH_UNPROVEN",
+              providerRequests: result?.providerRequests === 1 ? 1 : 0,
+            }, 500);
+          }
+          return response({
+            ok: true, status: "valid-contract", providerRequests: 1, itemCount: result.items.length,
+          }, 200);
+        } catch (error) {
+          return response({ ok: false, status: "failed", ...safeError(error) }, 502);
         }
       }
       if (request.method === "POST" && request.headers.get(SCHEDULE_HEADER) === TITLE_DIAGNOSTIC_VALUE) {
@@ -482,3 +501,4 @@ export const FLIXPATROL_USAGE_SCHEDULE_HEADER = SCHEDULE_HEADER;
 export const FLIXPATROL_USAGE_SCHEDULE_VALUE = SCHEDULE_VALUE;
 export const FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE = TOP10_DIAGNOSTIC_VALUE;
 export const FLIXPATROL_USAGE_TITLE_DIAGNOSTIC_VALUE = TITLE_DIAGNOSTIC_VALUE;
+export const FLIXPATROL_USAGE_TITLE_BATCH_DIAGNOSTIC_VALUE = TITLE_BATCH_DIAGNOSTIC_VALUE;

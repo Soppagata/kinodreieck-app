@@ -52,6 +52,20 @@ export const FLIXPATROL_DISCOVERY_SOURCE_COUNTS = Object.freeze({
   "chart:flixpatrol-disney-at": 10,
   "chart:flixpatrol-apple-tv-at": 5,
 });
+export const FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT = 9;
+export const FLIXPATROL_DAILY_DISCOVERY_FEED_ID = "public:daily-flixpatrol-market-mix-at-v1";
+export const FLIXPATROL_DAILY_DISCOVERY_SOURCE_ID = "chart:daily-flixpatrol-market-mix-at";
+export const FLIXPATROL_DAILY_DISCOVERY_SOURCE_IDS = Object.freeze([
+  "chart:oefi-weekend-at", "chart:flixpatrol-netflix-at", "chart:flixpatrol-prime-at",
+  "chart:flixpatrol-disney-at", "chart:flixpatrol-apple-tv-at",
+]);
+export const FLIXPATROL_DAILY_DISCOVERY_SOURCE_COUNTS = Object.freeze({
+  "chart:oefi-weekend-at": 15,
+  "chart:flixpatrol-netflix-at": 10,
+  "chart:flixpatrol-prime-at": 10,
+  "chart:flixpatrol-disney-at": 10,
+  "chart:flixpatrol-apple-tv-at": 5,
+});
 export const WEB_DISCOVERY_MATCH_STATUSES = Object.freeze([
   "matched", "unmatched", "ambiguous",
 ]);
@@ -83,6 +97,10 @@ const VERSIONED_SOURCE_POLICY = Object.freeze({
 });
 
 const FLIXPATROL_SOURCE_POLICY = Object.freeze({
+  "chart:flixpatrol-netflix-at": Object.freeze({
+    sourceLabel: "Netflix · Top 10 Österreich (FlixPatrol)", service: "Netflix",
+    url: "https://flixpatrol.com/top10/netflix/austria/",
+  }),
   "chart:flixpatrol-prime-at": Object.freeze({
     sourceLabel: "Prime Video · Top 10 Österreich (FlixPatrol)", service: "Prime Video",
     url: "https://flixpatrol.com/top10/amazon-prime/austria/",
@@ -415,23 +433,32 @@ function validateVersionedRecord(value, feed, errors, index) {
   }
 }
 
-function validateFlixPatrolRecord(value, feed, errors, index) {
+function validateFlixPatrolRecord(value, feed, errors, index, { format9 = false } = {}) {
   const prefix = `item-${index}`;
-  if (!exactKeys(value, [
+  const keys = [
     "title", "sourceItemId", "sourceId", "sourceLabel", "mediaType", "releaseYear",
     "externalIds", "genres", "availability", "popularity", "sourceUrl", "fetchedAt",
-  ])) { errors.push(`${prefix}-shape-invalid`); return; }
-  if (["chart:oefi-weekend-at", "chart:netflix-weekly-at"].includes(value.sourceId)) {
+    ...(format9 ? ["availabilityConfirmed"] : []),
+  ];
+  if (!exactKeys(value, keys)) { errors.push(`${prefix}-shape-invalid`); return; }
+  if (format9 && value.availabilityConfirmed !== false) errors.push(`${prefix}-availability-proof-invalid`);
+  const publicSources = format9 ? ["chart:oefi-weekend-at"]
+    : ["chart:oefi-weekend-at", "chart:netflix-weekly-at"];
+  if (publicSources.includes(value.sourceId)) {
     if (value.releaseYear !== null || Object.keys(value.externalIds || {}).length !== 0) {
       errors.push(`${prefix}-public-identity-invalid`); return;
     }
     const legacy = { ...value };
     delete legacy.releaseYear;
     delete legacy.externalIds;
+    if (format9) delete legacy.availabilityConfirmed;
     validateMixedRecord(legacy, feed, errors, index);
     return;
   }
   const policy = FLIXPATROL_SOURCE_POLICY[value.sourceId];
+  if (!format9 && value.sourceId === "chart:flixpatrol-netflix-at") {
+    errors.push(`${prefix}-source-invalid`); return;
+  }
   const ids = normalizeDiscoveryExternalIds(value.externalIds);
   const licenses = boundedTextArray(value.availability?.licenseTypes, 4);
   if (!text(value.title) || value.title !== text(value.title) || value.title.length > 200
@@ -451,7 +478,6 @@ function validateFlixPatrolRecord(value, feed, errors, index) {
     errors.push(`${prefix}-flixpatrol-facts-invalid`);
   }
 }
-
 function validatePublicAnnotations(value, feed, errors) {
   if (!Array.isArray(value) || value.length > PUBLIC_DISCOVERY_POOL_SIZE) {
     errors.push("annotations-invalid"); return;
@@ -474,7 +500,12 @@ function validatePublicAnnotations(value, feed, errors) {
 
 export function validateWebDiscoveryFeed(value) {
   const errors = [];
-  const flixpatrolDaily = value?.format === FLIXPATROL_DISCOVERY_FEED_FORMAT;
+  const flixpatrolFormat9 = value?.format === FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT;
+  const flixpatrolDaily = value?.format === FLIXPATROL_DISCOVERY_FEED_FORMAT || flixpatrolFormat9;
+  const flixpatrolFeedId = flixpatrolFormat9 ? FLIXPATROL_DAILY_DISCOVERY_FEED_ID : FLIXPATROL_DISCOVERY_FEED_ID;
+  const flixpatrolSourceId = flixpatrolFormat9 ? FLIXPATROL_DAILY_DISCOVERY_SOURCE_ID : FLIXPATROL_DISCOVERY_SOURCE_ID;
+  const flixpatrolSourceIds = flixpatrolFormat9 ? FLIXPATROL_DAILY_DISCOVERY_SOURCE_IDS : FLIXPATROL_DISCOVERY_SOURCE_IDS;
+  const flixpatrolSourceCounts = flixpatrolFormat9 ? FLIXPATROL_DAILY_DISCOVERY_SOURCE_COUNTS : FLIXPATROL_DISCOVERY_SOURCE_COUNTS;
   const versionedWeekly = value?.format === VERSIONED_DISCOVERY_FEED_FORMAT;
   const mixedWeekly = value?.format === MIXED_DISCOVERY_FEED_FORMAT;
   const publicWeekly = value?.format === PUBLIC_DISCOVERY_FEED_FORMAT;
@@ -492,7 +523,7 @@ export function validateWebDiscoveryFeed(value) {
     return Object.freeze({ ok: false, errors: Object.freeze(["feed-shape-invalid"]), value: null });
   }
   const expected = flixpatrolDaily ? {
-    feedId: FLIXPATROL_DISCOVERY_FEED_ID, sourceId: FLIXPATROL_DISCOVERY_SOURCE_ID,
+    feedId: flixpatrolFeedId, sourceId: flixpatrolSourceId,
   } : versionedWeekly ? {
     feedId: VERSIONED_DISCOVERY_FEED_ID, sourceId: VERSIONED_DISCOVERY_SOURCE_ID,
   } : mixedWeekly ? {
@@ -518,7 +549,7 @@ export function validateWebDiscoveryFeed(value) {
   if (flixpatrolDaily && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
       || isoWeekForDay(refreshed) !== value.isoWeek || value.chartDate !== previousDay(refreshed)
       || validUntil !== refreshed || !Array.isArray(value.sourceIds)
-      || JSON.stringify([...value.sourceIds].sort()) !== JSON.stringify([...FLIXPATROL_DISCOVERY_SOURCE_IDS].sort()))) {
+      || JSON.stringify([...value.sourceIds].sort()) !== JSON.stringify([...flixpatrolSourceIds].sort()))) {
     errors.push("feed-flixpatrol-contract-invalid");
   }
   if ((mixedWeekly || publicWeekly) && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
@@ -540,28 +571,33 @@ export function validateWebDiscoveryFeed(value) {
     errors.push("feed-items-invalid");
   } else {
     if (flixpatrolDaily) {
-      value.items.forEach((item, index) => validateFlixPatrolRecord(item, value, errors, index));
+      value.items.forEach((item, index) => validateFlixPatrolRecord(item, value, errors, index, { format9: flixpatrolFormat9 }));
       if (new Set(value.items.map((item) => item?.sourceItemId)).size !== value.items.length) errors.push("feed-source-id-duplicate");
       if (new Set(value.items.map((item) => `${item?.mediaType}|${normalizeDiscoveryTitle(item?.title)}`)).size
           !== value.items.length) errors.push("feed-identity-duplicate");
       if (new Set(value.items.map((item) => `${item?.sourceId}|${item?.mediaType}|${item?.popularity?.rank}`)).size
           !== value.items.length) errors.push("feed-position-duplicate");
-      const sourceCounts = Object.fromEntries(FLIXPATROL_DISCOVERY_SOURCE_IDS.map((sourceId) => [
+      const sourceCounts = Object.fromEntries(flixpatrolSourceIds.map((sourceId) => [
         sourceId, value.items.filter((item) => item?.sourceId === sourceId).length,
       ]));
-      if (JSON.stringify(sourceCounts) !== JSON.stringify(FLIXPATROL_DISCOVERY_SOURCE_COUNTS)) {
+      if (JSON.stringify(sourceCounts) !== JSON.stringify(flixpatrolSourceCounts)) {
         errors.push("feed-source-counts-invalid");
       }
       const segmentCounts = {
+        ...(flixpatrolFormat9 ? {
+          netflixFilm: value.items.filter((item) => item?.sourceId === "chart:flixpatrol-netflix-at" && item?.mediaType === "film").length,
+          netflixSeries: value.items.filter((item) => item?.sourceId === "chart:flixpatrol-netflix-at" && item?.mediaType === "series").length,
+        } : {}),
         primeFilm: value.items.filter((item) => item?.sourceId === "chart:flixpatrol-prime-at" && item?.mediaType === "film").length,
         primeSeries: value.items.filter((item) => item?.sourceId === "chart:flixpatrol-prime-at" && item?.mediaType === "series").length,
         disneyFilm: value.items.filter((item) => item?.sourceId === "chart:flixpatrol-disney-at" && item?.mediaType === "film").length,
         disneySeries: value.items.filter((item) => item?.sourceId === "chart:flixpatrol-disney-at" && item?.mediaType === "series").length,
         appleFilm: value.items.filter((item) => item?.sourceId === "chart:flixpatrol-apple-tv-at" && item?.mediaType === "film").length,
       };
-      if (JSON.stringify(segmentCounts) !== JSON.stringify({
-        primeFilm: 5, primeSeries: 5, disneyFilm: 5, disneySeries: 5, appleFilm: 5,
-      })) errors.push("feed-segment-counts-invalid");
+      const expectedSegments = flixpatrolFormat9
+        ? { netflixFilm: 5, netflixSeries: 5, primeFilm: 5, primeSeries: 5, disneyFilm: 5, disneySeries: 5, appleFilm: 5 }
+        : { primeFilm: 5, primeSeries: 5, disneyFilm: 5, disneySeries: 5, appleFilm: 5 };
+      if (JSON.stringify(segmentCounts) !== JSON.stringify(expectedSegments)) errors.push("feed-segment-counts-invalid");
     } else if (versionedWeekly) {
       value.items.forEach((item, index) => validateVersionedRecord(item, value, errors, index));
       if (new Set(value.items.map((item) => item?.sourceItemId)).size !== value.items.length) errors.push("feed-source-id-duplicate");
@@ -644,11 +680,13 @@ function hasOverlap(left, right) {
 export function matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates = []) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
-  const embeddedFacts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+  const embeddedFacts = [
+    VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
+  ]
     .includes(checked.value.format);
   const publicWeekly = [
     PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
-    FLIXPATROL_DISCOVERY_FEED_FORMAT,
+    FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
   ].includes(checked.value.format);
   const annotations = new Map((publicWeekly ? (checked.value.annotations || []) : [])
     .map((entry) => [entry.sourceItemId, entry]));

@@ -11,8 +11,17 @@ assert.match(index, /kd_flixpatrol_usage_begin/);
 assert.match(index, /kd_flixpatrol_usage_finish/);
 assert.match(index, /kd_flixpatrol_chart_read/);
 assert.match(index, /kd_flixpatrol_titles_read/);
+assert.match(index, /kd_flixpatrol_vocabulary_read/);
+assert.match(index, /FLIXPATROL_TITLE_BATCH_MODE/);
+assert.match(index, /ENTDECKEN_FLIXPATROL_NETFLIX_MODE/);
+assert.match(index, /ENTDECKEN_FEED_CONSUMERS/);
+assert.match(index, /const format9Enabled = titleBatchEnabled/);
+assert.match(index, /netflixDaily: format9Enabled/);
 assert.doesNotMatch(index, /\.fetchQuota\s*\(/);
-assert.equal((adapter.match(/chartType: "(?:movies|tvshows)"/g) || []).length, 5);
+assert.equal((adapter.match(/chartType: "(?:movies|tvshows)"/g) || []).length, 7);
+assert.match(adapter, /ENTDECKEN_FLIXPATROL_MAX_CHART_REQUESTS = 5/);
+assert.match(adapter, /ENTDECKEN_FLIXPATROL_DAILY_MAX_CHART_REQUESTS = 7/);
+assert.match(adapter, /ENTDECKEN_FLIXPATROL_DAILY_MAX_TITLE_REQUESTS = 4/);
 assert.match(workflow, /cron: "0 2 \* \* \*"/);
 assert.match(workflow, /flixpatrolChartRequests[^\n]+<= 5/);
 assert.match(workflow, /flixpatrolTitleRequests[^\n]+<= 25/);
@@ -44,4 +53,4 @@ assert.deepEqual({
   flixpatrolTitleRequests: 25, flixpatrolRequests: 30, sourceRequests: 32,
 });
 
-console.log("Entdecken FlixPatrol function/workflow: 17 checks passed");
+console.log("Entdecken FlixPatrol function/workflow: 19 checks passed");

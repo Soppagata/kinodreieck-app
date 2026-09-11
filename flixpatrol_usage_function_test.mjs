@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   createFlixPatrolUsageHandler,
   FLIXPATROL_USAGE_TITLE_DIAGNOSTIC_VALUE,
+  FLIXPATROL_USAGE_TITLE_BATCH_DIAGNOSTIC_VALUE,
   FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE,
   normalizeFlixPatrolUsage,
   parseFlixPatrolServiceKeys,
@@ -34,8 +35,12 @@ await check("Runtime bindet den manuellen Weg fest an Prime AT Movies vom vorige
   const entry = readFileSync("supabase/functions/flixpatrol-usage/index.ts", "utf8");
   assert.equal(FLIXPATROL_USAGE_TOP10_DIAGNOSTIC_VALUE, "manual-top10-contract-v1");
   assert.equal(FLIXPATROL_USAGE_TITLE_DIAGNOSTIC_VALUE, "manual-title-contract-v1");
+  assert.equal(FLIXPATROL_USAGE_TITLE_BATCH_DIAGNOSTIC_VALUE, "manual-title-batch-contract-v1");
   assert.equal((entry.match(/client\.fetchTop10\(/g) || []).length, 1);
   assert.equal((entry.match(/client\.fetchTitle\(/g) || []).length, 1);
+  assert.equal((entry.match(/client\.fetchTitles\(/g) || []).length, 1);
+  assert.match(entry, /sourceIds: \["ttl_4tnwmMWPSCaKxwn2tVzTXmcg", "ttl_5b8ZJ3E4UMZoCD62pGqLKjO8"\]/);
+  assert.match(entry, /mediaTypes: \["film", "film"\]/);
   assert.equal((entry.match(/client\.fetchQuota\(/g) || []).length, 1);
   assert.match(entry, /companyId: FLIXPATROL_AT_SOURCES\.companies\.prime\.id/);
   assert.match(entry, /countryId: FLIXPATROL_AT_SOURCES\.country\.id/);
@@ -131,6 +136,28 @@ await check("manueller Titelheader startet genau einen festen Titel-Vertragsabru
   assert.equal(titleCalls, 1);
   assert.equal(top10Calls, 0);
   assert.equal(quotaCalls, 0);
+});
+
+await check("feste Batchdiagnose startet genau einen Request und gibt nur die Vollständigkeitszahl aus", async () => {
+  let calls = 0;
+  const handler = createFlixPatrolUsageHandler({
+    serviceKeys: [modern],
+    diagnoseTitleBatch: async () => {
+      calls += 1;
+      return { items: [{ internal: "discard" }, { internal: "discard" }], providerRequests: 1 };
+    },
+  });
+  const response = await handler(new Request("https://example.test/flixpatrol-usage", {
+    method: "POST", headers: {
+      ...headers(), "content-length": "0",
+      "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TITLE_BATCH_DIAGNOSTIC_VALUE,
+    },
+  }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ok: true, status: "valid-contract", providerRequests: 1, itemCount: 2,
+  });
+  assert.equal(calls, 1);
 });
 
 await check("Browser, Body, falscher Header und ungleiche Keys bleiben wirkungslos", async () => {
@@ -230,8 +257,8 @@ await check("Diagnosefehler meldet nur wahre Klasse und geprüfte Struktur", asy
     type: "top10s",
     Authorization: secretValues[3],
     data: [
-      row("ttl_bHyGTvopBHPVtIKhR2CF68WD", 1),
-      row("ttl_K5H0Bes9dtvkV710raDBpXoK", 2, {
+      row("ttl_4tnwmMWPSCaKxwn2tVzTXmcg", 1),
+      row("ttl_5b8ZJ3E4UMZoCD62pGqLKjO8", 2, {
         date: { type: 1, from: expected.date, to: expected.date },
         rankingLast: 0,
         valueLast: 4,

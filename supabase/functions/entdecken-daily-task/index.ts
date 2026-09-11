@@ -8,8 +8,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { requestHasForbiddenBody, validateEntdeckenDailyFeed } from "./contract.js";
 import { runEntdeckenDailyRefresh } from "./runner.js";
 import { createEntdeckenDailyResponse } from "./responseContract.js";
-import { createMixedPublicChartAdapter } from "./publicMixAdapter.js";
-import { createFlixPatrolMixAdapter } from "./flixpatrolMixAdapter.js";
+import { createMixedPublicChartAdapter, createOefiPublicChartAdapter } from "./publicMixAdapter.js";
+import {
+  createFlixPatrolMixAdapter,
+  ENTDECKEN_FLIXPATROL_BATCH_MODE,
+  ENTDECKEN_FLIXPATROL_FORMAT_9_CONSUMERS,
+} from "./flixpatrolMixAdapter.js";
 import { createFlixPatrolClient } from "../_shared/flixpatrolClient.js";
 import { createWikidataResolver } from "./wikidataResolver.js";
 import {
@@ -518,9 +522,17 @@ export function createEntdeckenDailyHandler({
       if (error) throw error;
       return data;
     };
+    const titleBatchEnabled = Deno.env.get("FLIXPATROL_TITLE_BATCH_MODE") === ENTDECKEN_FLIXPATROL_BATCH_MODE;
+    const format9Enabled = titleBatchEnabled
+      && Deno.env.get("ENTDECKEN_FLIXPATROL_NETFLIX_MODE") === "daily-format-9-v1"
+      && Deno.env.get("ENTDECKEN_FEED_CONSUMERS") === ENTDECKEN_FLIXPATROL_FORMAT_9_CONSUMERS;
     const productAdapter = (adapter ?? createFlixPatrolMixAdapter({
       publicAdapter: createMixedPublicChartAdapter({ fetchImpl }),
+      dailyPublicAdapter: createOefiPublicChartAdapter({ fetchImpl }),
       providerConfigured: flixpatrolApiKey.length > 0,
+      titleRequestMode: titleBatchEnabled ? ENTDECKEN_FLIXPATROL_BATCH_MODE : "single",
+      netflixDaily: format9Enabled,
+      format9Consumers: format9Enabled ? ENTDECKEN_FLIXPATROL_FORMAT_9_CONSUMERS : null,
       client: flixpatrolClient,
       readChart: ({ companyId, countryId, chartType }: Record<string, unknown>) => callDataRpc(
         "kd_flixpatrol_chart_read",
@@ -528,6 +540,9 @@ export function createEntdeckenDailyHandler({
       ),
       readTitles: (sourceIds: Array<string>) => callDataRpc(
         "kd_flixpatrol_titles_read", { p_source_ids: sourceIds },
+      ),
+      readVocabulary: ({ resourceType, sourceIds }: Record<string, unknown>) => callDataRpc(
+        "kd_flixpatrol_vocabulary_read", { p_resource_type: resourceType, p_source_ids: sourceIds },
       ),
       saveChart: (chart: unknown) => callDataRpc("kd_flixpatrol_data_save_chart", { p_chart: chart }),
       saveTitle: ({ title, fetchedAt, freshUntil }: Record<string, unknown>) => callDataRpc(
@@ -541,6 +556,15 @@ export function createEntdeckenDailyHandler({
           p_checked_at: checkedAt, p_fresh_until: freshUntil,
         },
       ),
+      saveVocabulary: ({
+        resourceType, sourceId, name, mediaType, providerType, providerUpdatedAt,
+        checkedAt, freshUntil, sourceUrl,
+      }: Record<string, unknown>) => callDataRpc("kd_flixpatrol_data_save_vocabulary", {
+        p_resource_type: resourceType, p_source_id: sourceId, p_name: name, p_code: null,
+        p_media_type: mediaType, p_provider_type: providerType,
+        p_provider_updated_at: providerUpdatedAt, p_checked_at: checkedAt,
+        p_fresh_until: freshUntil, p_source_url: sourceUrl,
+      }),
       recordFailure: ({ operationId, resourceType, sourceId, mediaType, errorCode, failedAt }: Record<string, unknown>) => callDataRpc(
         "kd_flixpatrol_data_record_failure",
         {

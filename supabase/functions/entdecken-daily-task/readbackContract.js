@@ -27,6 +27,10 @@ import {
   ENTDECKEN_FLIXPATROL_POOL_SIZE,
   ENTDECKEN_FLIXPATROL_SOURCE_ID,
   ENTDECKEN_FLIXPATROL_SOURCE_IDS,
+  ENTDECKEN_FLIXPATROL_DAILY_FEED_FORMAT,
+  ENTDECKEN_FLIXPATROL_DAILY_FEED_ID,
+  ENTDECKEN_FLIXPATROL_DAILY_SOURCE_ID,
+  ENTDECKEN_FLIXPATROL_DAILY_SOURCE_IDS,
 } from "./flixpatrolMixAdapter.js";
 import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
 
@@ -34,6 +38,7 @@ export const ENTDECKEN_WEEKLY_READBACK_VERSION = "entdecken-weekly-readback-v1";
 export const ENTDECKEN_PUBLIC_READBACK_VERSION = "entdecken-public-weekly-readback-v1";
 export const ENTDECKEN_MIXED_READBACK_VERSION = "entdecken-mixed-weekly-readback-v2";
 export const ENTDECKEN_FLIXPATROL_READBACK_VERSION = "entdecken-flixpatrol-daily-readback-v1";
+export const ENTDECKEN_FLIXPATROL_FORMAT_9_READBACK_VERSION = "entdecken-flixpatrol-daily-readback-v2";
 
 const OPERATION_ID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -167,11 +172,16 @@ export function normalizeEntdeckenPublicPersistenceReadback(value, {
 } = {}) {
   const persisted = validateEntdeckenDailyFeed(value?.feed);
   const expected = validateEntdeckenDailyFeed(expectedFeed);
-  const flixpatrol = persisted.ok && persisted.value.format === ENTDECKEN_FLIXPATROL_FEED_FORMAT;
+  const flixpatrol = persisted.ok && [
+    ENTDECKEN_FLIXPATROL_FEED_FORMAT, ENTDECKEN_FLIXPATROL_DAILY_FEED_FORMAT,
+  ].includes(persisted.value.format);
   if (flixpatrol) {
-    if (!expected.ok || expected.value.format !== ENTDECKEN_FLIXPATROL_FEED_FORMAT
-        || persisted.value.feedId !== ENTDECKEN_FLIXPATROL_FEED_ID
-        || persisted.value.sourceId !== ENTDECKEN_FLIXPATROL_SOURCE_ID
+    const format9 = persisted.value.format === ENTDECKEN_FLIXPATROL_DAILY_FEED_FORMAT;
+    const feedId = format9 ? ENTDECKEN_FLIXPATROL_DAILY_FEED_ID : ENTDECKEN_FLIXPATROL_FEED_ID;
+    const sourceId = format9 ? ENTDECKEN_FLIXPATROL_DAILY_SOURCE_ID : ENTDECKEN_FLIXPATROL_SOURCE_ID;
+    const sourceIds = format9 ? ENTDECKEN_FLIXPATROL_DAILY_SOURCE_IDS : ENTDECKEN_FLIXPATROL_SOURCE_IDS;
+    if (!expected.ok || expected.value.format !== persisted.value.format
+        || persisted.value.feedId !== feedId || persisted.value.sourceId !== sourceId
         || persisted.value.items.length !== ENTDECKEN_FLIXPATROL_POOL_SIZE
         || !positiveInteger(fenceToken)
         || !exactKeys(value, ["ok", "status", "feed", "fenceToken", "provenance"])
@@ -179,14 +189,14 @@ export function normalizeEntdeckenPublicPersistenceReadback(value, {
         || !sameJson(persisted.value, expected.value)
         || !exactKeys(value.provenance, ["itemCount", "sourceCount", "sourceIds", "rightsStatus"])
         || value.provenance.itemCount !== ENTDECKEN_FLIXPATROL_POOL_SIZE
-        || value.provenance.sourceCount !== ENTDECKEN_FLIXPATROL_SOURCE_IDS.length
+        || value.provenance.sourceCount !== sourceIds.length
         || value.provenance.rightsStatus !== "owner_private"
         || !Array.isArray(value.provenance.sourceIds)
-        || !sameJson([...value.provenance.sourceIds].sort(), [...ENTDECKEN_FLIXPATROL_SOURCE_IDS].sort())) return null;
+        || !sameJson([...value.provenance.sourceIds].sort(), [...sourceIds].sort())) return null;
     return freezeDeep({
       feed: persisted.value,
       readback: {
-        schemaVersion: ENTDECKEN_FLIXPATROL_READBACK_VERSION,
+        schemaVersion: format9 ? ENTDECKEN_FLIXPATROL_FORMAT_9_READBACK_VERSION : ENTDECKEN_FLIXPATROL_READBACK_VERSION,
         feedId: persisted.value.feedId,
         region: persisted.value.region,
         isoWeek: persisted.value.isoWeek,
@@ -194,7 +204,7 @@ export function normalizeEntdeckenPublicPersistenceReadback(value, {
         validUntil: persisted.value.validUntil,
         chartDate: persisted.value.chartDate,
         itemCount: persisted.value.items.length,
-        sourceCount: ENTDECKEN_FLIXPATROL_SOURCE_IDS.length,
+        sourceCount: sourceIds.length,
         sourceIds: [...persisted.value.sourceIds],
         rightsStatus: "owner_private",
         providerRequests: 0,

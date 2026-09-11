@@ -105,6 +105,22 @@ const session = Object.freeze({ mode: "account", state: "ready", account: { id: 
 const loaded = await service.load();
 assert.equal(loaded.feedOrigin, "server");
 assert.equal(loaded.feed.format, 8);
+const legacyWithFormat9Counter = createEntdeckenDailyFeedService({
+  config: { entdeckenDailyFeedEnabled: true, supabaseUrl: "https://example.supabase.co", supabasePublishableKey: "public" },
+  auth: { getSnapshot: () => session }, getAccount: () => session.account,
+  getAccessToken: async () => "token", currentDay: () => day,
+  fetchImpl: async () => ({ ok: true, async json() {
+    return {
+      ok: true, status: "fresh", feed, writes: 0, providerRequests: 0, searchRequests: 0,
+      sourceRequests: 0, publicSourceRequests: 0, flixpatrolRequests: 0,
+      flixpatrolChartRequests: 0, flixpatrolTitleRequests: 0,
+      flixpatrolGenreRequests: 0, flixpatrolKeywordRequests: 0, wikidataRequests: 0,
+      responseMode: "structured", displayText: null, warnings: [],
+      refresh: { requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1 },
+    };
+  } }),
+});
+assert.equal((await legacyWithFormat9Counter.load()).status, "invalid_response");
 
 const invalidApple = structuredClone(feed);
 invalidApple.items.at(-1).availability.service = "Apple TV+";
@@ -116,4 +132,4 @@ const trace = buildEntdeckenTitleGateTrace({ title: "Provider 46", checkedOn: da
 assert.equal(trace.preferredAction, "observe-natural-daily-refresh");
 assert.equal(trace.migrationState, "format-8-runtime-contract");
 
-console.log("Entdecken FlixPatrol frontend: 18 checks passed");
+console.log("Entdecken FlixPatrol frontend: 19 checks passed");

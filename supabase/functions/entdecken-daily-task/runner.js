@@ -33,7 +33,7 @@ function validDay(value) {
 }
 function weekStatus(feed, today, isoWeek) {
   if (!feed) return "empty";
-  if ([5, 6, 8].includes(feed.format)) return feed.refreshedOn <= today && feed.validUntil >= today ? "fresh" : "stale";
+  if ([5, 6, 8, 9].includes(feed.format)) return feed.refreshedOn <= today && feed.validUntil >= today ? "fresh" : "stale";
   if (feed.format === 4) return feed.isoWeek === isoWeek ? "fresh" : "stale";
   return feed.refreshedOn === today ? "fresh" : "stale";
 }

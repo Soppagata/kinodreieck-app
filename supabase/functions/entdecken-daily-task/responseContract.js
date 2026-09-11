@@ -65,6 +65,12 @@ export function createEntdeckenDailyResponse(result = {}, telemetry = {}) {
       ? telemetry.flixpatrolChartRequests : 0,
     flixpatrolTitleRequests: Number.isInteger(telemetry?.flixpatrolTitleRequests)
       ? telemetry.flixpatrolTitleRequests : 0,
+    ...(result?.feed?.format === 9 ? {
+      flixpatrolGenreRequests: Number.isInteger(telemetry?.flixpatrolGenreRequests)
+        ? telemetry.flixpatrolGenreRequests : 0,
+      flixpatrolKeywordRequests: Number.isInteger(telemetry?.flixpatrolKeywordRequests)
+        ? telemetry.flixpatrolKeywordRequests : 0,
+    } : {}),
     wikidataRequests: Number.isInteger(telemetry?.wikidataRequests)
       ? telemetry.wikidataRequests : 0,
     responseMode: result.responseMode,
