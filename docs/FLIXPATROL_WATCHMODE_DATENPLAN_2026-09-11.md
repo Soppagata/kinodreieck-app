@@ -4,6 +4,19 @@ Stand: 11. September 2026. Max hat den Plan zur Umsetzung freigegeben. Dieser
 Plan ergänzt die abgeschlossene Betriebsreparatur; deren Lieferregister bleibt
 [BETRIEBSREPARATUR_REGISTER_2026-09-09.md](BETRIEBSREPARATUR_REGISTER_2026-09-09.md).
 
+## Lokaler Abschluss
+
+Der vereinbarte Ausbau ist lokal gebaut, integriert und geprüft. App-Code:
+`5a31213` auf `codex/data-plan-master-20260911`; Watchmode-Produzent:
+`0fd4ac1` auf `codex/watchmode-data-plan-20260911`. Die vollständige App-Suite
+`npm test` und `npm run test:function` sind mit Exit 0 abgeschlossen.
+Der konkrete Umfang und die offenen Aktivierungsbefunde stehen unten.
+
+Dieser Stand ist nicht gepusht, remote getestet, gemergt oder deployed.
+Es gab keine neuen FlixPatrol-/Watchmode-/KI-Anbieterrequests, keine
+Shared-Datenänderung und keine Scheduleraktivierung. Netflix bleibt bis zur
+bewussten Aktivierung auf seinem funktionierenden bisherigen Quellenweg.
+
 ## Empfehlung
 
 Watchmode bleibt die Quelle für den österreichischen Streamingbestand,
@@ -19,7 +32,7 @@ akzeptierter Produktstand, Production-Zusammenführung, danach persönliche
 Control-/Sandbox-Fläche. Die weiter unten genannten Ausbauschritte sind keine
 nachträglich erfundenen Merge-Voraussetzungen.
 
-## Was geprüft wurde
+## Ausgangsbefund vor dem Bau
 
 - Vollständige Benutzer-/Ergebnisfolge von „GitHub Runs und Entdecken prüfen“
   einschließlich E15 und des natürlichen Tageslaufs vom 11.09.; außerdem der
@@ -43,7 +56,7 @@ Datum, nicht aus einer erneuten Live-Kontoprüfung. Der Feed-Readback vom 11.09.
 07:22 UTC bestätigt 50 Titel, fünf Quellen und den Stand 11.09. Die neueste
 physische iPhone/PWA-Abnahme wird dadurch nicht ersetzt.
 
-## Bereits gebaut und tatsächlich verwendet
+## Bestehender Betrieb zum Analysezeitpunkt
 
 | Bereich | Bestehender Datenweg | Bedeutung |
 | --- | --- | --- |
@@ -61,7 +74,7 @@ und 20 Kinovorschläge sowie sechs Empfehlungen. Keiner der Empfehlungstexte
 hatte in dieser Probe einen zusätzlichen Beschreibungsgrund. Das beweist
 weder schlechten Geschmack noch generelle Wirkungslosigkeit des Inhaltsabgleichs.
 
-## Konkrete Lücken
+## Festgestellte Lücken und vereinbarter Scope
 
 | Befund | Warum er relevant ist | Vorgeschlagene Änderung |
 | --- | --- | --- |
@@ -171,10 +184,10 @@ wiederverwendet werden.
 | Variante | Rechnung für 31 Tage | Einordnung |
 | --- | --- | --- |
 | FlixPatrol heute, kalter Titelcache in jedem Lauf | `(5 Charts + 25 Titel + 1 Quota) × 31 = 961` | Bestehende Obergrenze; Einmalproben zusätzlich. Der Lauf vom 11.09. brauchte laut Beleg nur neun Datenrequests. |
-| Derselbe Umfang, nach erfolgreicher Bündelprobe mit zehn IDs je Request | `(5 + 3 + 1) × 31 = 279` | Bedingte Planung, keine gemessene Ersparnis. Cachetreffer können weiter reduzieren. |
-| Zusätzlich Netflix Film/Serie täglich; maximal 35 Titel, Bündel zu zehn | `(7 + 4 + 1) × 31 = 372` | Ebenfalls bedingt. Vokabular-/Diagnose-/andere Abrufe kommen hinzu. Ohne Bündelung wären bis zu 1.333 möglich und damit zu viel. |
+| Derselbe Umfang, nach erfolgreicher Bündelprobe mit zehn IDs je Request | `(5 Charts + 3 Titelbatches + 2 Vokabular + 1 Quota) × 31 = 341` | Konservative Planung einschließlich der beiden neuen Vokabulararten, keine gemessene Ersparnis. Cachetreffer können weiter reduzieren. Diagnose-/andere Verbraucher kommen hinzu. |
+| Zusätzlich Netflix Film/Serie täglich; maximal 35 Titel, Bündel zu zehn | `(7 Charts + 4 Titelbatches + 2 Vokabular + 1 Quota) × 31 = 434` | Bedingt durch den echten Batchbeleg. Diagnose-/andere Verbraucher kommen hinzu. Ohne Bündelung wären bereits ohne Vokabular bis zu 1.333 möglich und damit zu viel. |
 | Watchmode bisheriger Betrieb | Simulation rund 1.386–1.843, konservativ bis 1.972 Credits je Zyklus | Abo laut hinterlegtem Setup 2.500; bestehende technische Grenze 2.000, je logischem Lauf 500. Größeres Abo bedeutet nicht automatisch großen freien Puffer. |
-| Watchmode-Details | Ein Credit je bestehender Watchmode-ID ohne Anhänge | 50 fehlende Titel einmalig entsprechen 50 Credits; 50 täglich wären schon 1.550 zusätzlich. Nur passende Restkapazität nach erwarteten Pflichtläufen verplanen. |
+| Watchmode-Details | Ein Credit je bestehender Watchmode-ID ohne Anhänge; maximal sechs pro explizitem Lauf | Optionales Detailbudget höchstens 28 Credits pro Zyklus im bestehenden gemeinsamen 2.000er-Zähler: konservative Pflichtlaufprognose 1.972 plus 28. Kein eigener zweiter Verbrauchszähler und kein automatischer Zusatzlauf. |
 
 Der letzte gespeicherte FlixPatrol-Nachweis zählt 47 eigene Versuche. Der darin
 enthaltene offizielle Quota-Wert ist älter und separat datiert; daraus wird kein
@@ -229,10 +242,10 @@ Hauptcheckout und vorhandene generierte Dateien bleiben unberührt.
 | ID | Nutzerergebnis | Stand |
 | --- | --- | --- |
 | D1 | Vorhandene Identitäten und neutrale Fakten bleiben vollständig und unabhängig von aktuellen Chartplätzen nutzbar. | GEBAUT, lokal geprüft: `4a55123` |
-| D2 | FlixPatrol kann benötigte Titel und Begriffe sparsam und nachweisbar vollständig laden; Netflix ist für denselben Tagesweg vorbereitet. | OFFEN |
-| D3 | Entdecken und aufgeklappte Streaming-Karten nutzen dieselben belegten Texte/Genres; Dienste, persönliche Daten und Neu-Fristen bleiben geschützt. | OFFEN |
-| D4 | Watchmode ergänzt deutsche Details gezielt im bestehenden Kontingent und erhält bekannte externe IDs im Export. | GEBAUT, eigener lokaler Kandidat `c7d6188`; echte Sprachprobe offen |
-| D5 | Der gemeinsame lokale Kandidat ist geprüft; offene Vertrags-/Liefergrenzen und spätere Befunde sind konkret dokumentiert. | OFFEN |
+| D2 | FlixPatrol kann benötigte Titel und Begriffe sparsam und nachweisbar vollständig laden; Netflix ist für denselben Tagesweg vorbereitet. | GEBAUT, lokal geprüft: `31826b7`; echte Batchverträge und Aktivierung offen |
+| D3 | Entdecken und aufgeklappte Streaming-Karten nutzen dieselben belegten Texte/Genres; Dienste, persönliche Daten und Neu-Fristen bleiben geschützt. | GEBAUT und Gesamtprüfung bestanden: `4167e2a`, Feedintegration `caa8b4e`, Angebotsfixtures `5a31213` |
+| D4 | Watchmode ergänzt deutsche Details gezielt im bestehenden Kontingent und erhält bekannte externe IDs im Export. | GEBAUT, eigener lokaler Kandidat `0fd4ac1`; echte Sprachprobe offen |
+| D5 | Der gemeinsame lokale Kandidat ist geprüft; offene Vertrags-/Liefergrenzen und spätere Befunde sind konkret dokumentiert. | LOKAL ABGESCHLOSSEN: Gesamtsuite Exit 0, 341 Function-Mocks, Aktivierungsvertrag dokumentiert |
 
 Die spätere Control-/Sandbox-Oberfläche, Infrastrukturtrennung, Änderung der
 laufenden Schedulerziele und Erweiterung der Watchmode-Werktypen werden in
@@ -248,9 +261,11 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
   als `cmp_IA6TdMqwf6kuyQvxo9bJ4nKX`. Die Tagesquelle ist damit adressierbar;
   der praktisch bestätigte Bündelvertrag bleibt Voraussetzung für die Umschaltung.
   Quelle: [Companies](https://flixpatrol.com/api2/endpoint-companies/).
-- Die gezählten vorhandenen Diagnosewege unterstützen nur einzelne festgelegte
-  Titel-/Chartproben. Ein echter Bündelbeleg erfordert einen passenden neuen
-  Diagnoseweg; ein vorhandener Einzelbeleg wird nicht als Bündelbeleg ausgegeben.
+- Die bisherigen Diagnosewege unterstützten nur einzelne festgelegte
+  Titel-/Chartproben. Ein eigener gezählter Zwei-ID-Diagnoseweg ist jetzt
+  lokal gebaut; der echte Aufruf steht aus. Der Beleg zweier Titles-IDs
+  bestätigt weder größere Mengen noch Genre-/Keywordantworten automatisch.
+  Konkrete Reihenfolge: [Aktivierungsvertrag](FLIXPATROL_BATCH_FORMAT9_AKTIVIERUNG.md).
 - Die Erweiterung der Watchmode-Werktypen und die später nötige eindeutige
   Produktionsbindung der derzeitigen `environment: staging`-Datenjobs bleiben
   wie vereinbart spätere Arbeit.
@@ -258,8 +273,8 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
 - Werkzeugbefund beim Bau: Die ersten `apply_patch`-Aufrufe der beiden
   Baupakete hingen fest und wurden wirkungslos abgebrochen. Keine Dateien,
   Anbieteraufrufe oder Shared-Daten wurden dadurch verändert. Die Ursache
-  dieses Werkzeugfehlers wird später behandelt; der Bau setzt mit lokalen
-  Dateischreibbefehlen fort.
+  dieses Werkzeugfehlers wird später behandelt; der Bau wurde mit lokalen
+  Dateischreibbefehlen abgeschlossen.
 - Frischer lesender Stand vom 11.09., 09:31 UTC: gemeinsamer FlixPatrol-Zähler
   47 Versuche, 47 abgeschlossen; der offizielle Quota-Snapshot stammt weiterhin
   vom 10.09., 09:41 UTC. Für die Reads wurden null Anbieterrequests verwendet.
@@ -276,6 +291,15 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
   Wochen-/Format-8-Weg gültig bleiben. Das ist eine Grenze der optionalen
   Quellenumschaltung, keine zusätzliche Voraussetzung für den bisherigen Merge.
 
+- Bestehender Produzentenbefund aus beiden providerfreien Vergleichsexporten:
+  `max_namen_liste_v1.json` fehlt im normalen Suchpfad; das zusätzliche
+  Namenssignal der alten Heuristik ist deshalb bereits vorher inaktiv.
+  Dieser Nebenbefund wird später behandelt und ist nicht verändert worden.
+- Eine echte deutsche Watchmode-Sprachprobe und der FlixPatrol-Bündelbeleg
+  stehen noch aus. Der Detailcache kennzeichnet die angefragte Sprache
+  separat und behauptet keine belegte deutsche Antwort. Kein Probe-Ergebnis
+  wird aus den lokalen Mocks abgeleitet.
+
 ### Paketbindung
 
 - Foundation D1/D2: `/private/tmp/kd-data-plan-foundation-20260911`, Basis
@@ -287,6 +311,12 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
   `55b8392e0d9c552c40dfb8cf3b1922326cd673d9`. Besitzt Known-Export,
   separaten Detailcache/CLI und eigene Tests. Keine generierten Echtdaten,
   bestehenden Abrufpläne oder Kontingentgrenzen ändern.
+- Parallele App-Welle auf exakt `c3dee65716ae08883b2e9e60e5a407a804e7a101`:
+  `kd-data-plan-product-20260911` besitzt Katalog-/Entdeckenprojektion,
+  Faktenwiring und die beiden Kartenansichten. `kd-data-plan-backend-20260911`
+  besitzt den Entdecken-Adapter, den kompatiblen Feedparser und eine additive
+  Feedmigration. Foundation, Workflows und persönliche Daten sind kein Scope
+  dieser Welle. Der Master übernimmt die fertigen, fokussiert geprüften Pakete.
 - Eingefrorene Repo-Naht: optionale `title_facts` je exportiertem Titel mit
   `title-facts-projection-v1`. `film`/`series`, starke Identitäten,
   Herkunft und Zeitbelege sind explizit. Unbekannte Beschreibungssprache
@@ -295,15 +325,71 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
 ### Lieferbelege
 
 - Foundation-Commit `b979974`, in den Master als `4a55123` übernommen.
-  Neue Clientprüfung 7/7, neuer Faktenservice 8/8, bestehende Data-/Client-/
+  Neue Clientprüfung 7/7, neuer Faktenservice 9/9, bestehende Data-/Client-/
   Faktenlib-/Service-/Kontextprüfungen 11/15/9/12/9 bestanden. Synthetische
   PostgreSQL-Prüfung einschließlich RLS und mehrdeutiger IDs: 5/5 bestanden.
 - Watchmode-Produzent: separater lokaler Commit `c7d61889345466661ac6ee7f0fe131bb8a88557a`.
-  Details 13/13 und bestehende Härtung 33/33 bestanden. Keine generierten
+  Details zuletzt 14/14 und bestehende Härtung 33/33 bestanden. Keine generierten
   Echtdaten, Liveabfragen oder Scheduleränderungen.
 - Bei lokalen Werkzeugfreigaben blieben Unterläufe hängen. Der Master hat
   diese wirkungslosen Starts beendet und übernimmt nötige lokale Git-/PG-
   Schritte selbst. Unkritische lokale Freigaben sind durch Max ausdrücklich
   delegiert; technisch notwendige Sandboxfreigaben bleiben Werkzeuggrenzen.
-- Produkt-/Backendintegration und gemeinsamer Abschlusslauf folgen auf der
-  integrierten Foundation; noch kein Push, CI-Lauf oder Deployment.
+- Ergänzende lokale Integrationsbelege: datierte Chartbelege bleiben beim
+  Identitätslookup erhalten (`8c9fca0`). Die Forecast-Außennaht behält ihren
+  bestehenden Payloadvertrag (`49dd685`); vier gezielte Deno-HTTP-Mocks prüfen
+  Altweg, direkten ID-Weg, Chart-unabhängigen ID-Cache und Cachefehler. Keine
+  echte KI-Anfrage. Optionaler Watchmode-Cachefehler stoppt den normalen
+  Export nicht (`0fd4ac1`); der Detail-CLI bleibt bei diesem Fehler gesperrt.
+- Watchmode-Lieferpipeline: 11/11 Mockprüfungen bestanden. Echter lokaler
+  Vorher-/Nachher-Export desselben Katalogs, ohne Anbieter: weiterhin 226
+  Known- und 24.502 Entdecken-Titel. Im Known-Export steigen vollständige
+  IMDb-/TMDB-ID-Paare von 0 auf 226. Alle bisher vorhandenen Felder jedes
+  Titels bleiben identisch; kein Detailtext wird erfunden. Vergleichsbeleg:
+  `/private/tmp/kd-watchmode-export-comparison-20260911.json`.
+- Produktintegration `4167e2a`: neue Faktenprojektion 10/10; bestehende
+  Streaming-DOM-Prüfung 44/44, Katalog 116 plus 13 Identitätsfälle und Build
+  bestanden. Neutrale Providerbeschreibungen werden nur angezeigt; persönliche
+  Titel, Notizen und gespeicherte Bewertungen werden nicht übernommen/überschrieben.
+- Backendintegration `31826b7`: Batch-/Format-9-Prüfung 47/47, alter Adapter
+  53/53, Functionkonfiguration 19/19, gezählte Diagnostik 13/13; synthetisches
+  PostgreSQL 17.10 mit alter und neuer Feedvariante, Service-Rollen und
+  Vokabulargrenzen 7/7. Keine Shared-Migration ausgeführt.
+- Gemeinsame Feednaht `caa8b4e`: 19 bisherige Frontendprüfungen plus sieben
+  neue Integrationsfälle. Beide Feedvarianten durchlaufen dieselbe reale
+  Karten-/Dienst-/Identitätsprojektion und den tatsächlich gerenderten Tab.
+  Reine Format-9-Reads ohne Adaptertelemetrie bleiben lesbar; Charts allein
+  erzeugen keine bestätigte Verfügbarkeit.
+- Vorher-/Nachhermessung mit realem Katalog und 29 gespeicherten Fakten,
+  aber rein lokal und ohne persönliche Mediathek: unverändert 9.348 Titel
+  und 96 Titel mit Genreangaben bei den fünf ausgewählten Diensten; nutzbare
+  Beschreibungen steigen von 0 auf 17, alle 17 mit Quelle und Datum.
+  Belege: `/private/tmp/kd-data-plan-product-before.json` und
+  `/private/tmp/kd-data-plan-product-after.json`. Kein Anbieterrequest.
+- Repoübergreifende DTO-Probe Watchmode-Produzent → App-Projektion:
+  sieben synthetische Assertions bestanden, Schema/IDs/Quelle/Genres bleiben
+  erhalten, unbekannte Antwortsprache bleibt unbekannt, lokaler Titel gewinnt.
+- Function-Abschlussprüfung auf dem integrierten Stand:
+  `npm run test:function` mit 341/341 Deno-Mocks, Exit 0. Kein echter KI-Aufruf.
+- Die Gesamtsuite wurde zunächst durch den bestehenden sauberen-Commit-
+  Vertrag des historischen Einmallaufs gestoppt (`RELEASE_CLOSURE_DIRTY`),
+  weil die Testsuite-Erweiterung noch uncommitted war. Der identische alte
+  Test besteht im bisherigen Master. Der Integrationscode wurde anschließend
+  regulär committed; keine Schutzregel oder Erwartung wurde abgeschwächt.
+- Zwei historische Format-5-Testfixtures hatten bislang Chartzugehörigkeit
+  ohne Angebotsbeleg als persönliche Empfehlung erwartet. `5a31213` prüft
+  nun ausdrücklich den leeren Fall und getrennt die bestätigte Watchmode-
+  Auswahl einschließlich Gesehenfilter und Sechsergrenze (je 9/9). Die
+  Produktlogik wurde dafür nicht nochmals verändert.
+- Abschluss auf App-Code `5a31213`: vollständiges `npm test` mit Exit 0,
+  einschließlich neuer Fakten-/Batch-/Format-9-Checks, synthetischer PostgreSQL-
+  Tests, vorhandener Funktions-/DOM-/Daten-/Kontoschutzprüfungen, Einzeldatei,
+  Vite-Build (238 Module) und Pages-Prüfung (72/72). Der bestehende Hinweis
+  auf große Build-Chunks bleibt ein späterer Performancebefund; dafür wurde
+  kein funktionierender Produktbereich umgebaut.
+  Log: `/private/tmp/kd-data-plan-final-npm-test.log`.
+  Function-Log: `/private/tmp/kd-data-plan-final-function-test.log`.
+- Endreadback: beide Integrationskandidaten sind committed; in den normalen
+  Hauptcheckouts stehen weiterhin ausschließlich die schon vorher vorhandenen
+  lokalen Änderungen. Kein Push, CI-Lauf, Deployment, Live-Feedwechsel oder
+  physischer iPhone/PWA-Nachweis in diesem Auftrag.
