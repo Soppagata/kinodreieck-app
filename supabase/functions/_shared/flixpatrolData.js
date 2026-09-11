@@ -262,6 +262,81 @@ function expectedMediaTypeMatches(value, expectedMediaType) {
   return normalizeTitleType(value) === expectedMediaType;
 }
 
+function titleBatchExpectation(expected) {
+  if (!Array.isArray(expected?.sourceIds) || !Array.isArray(expected?.mediaTypes)
+      || expected.sourceIds.length < 1 || expected.sourceIds.length > 10
+      || expected.mediaTypes.length !== expected.sourceIds.length
+      || new Set(expected.sourceIds).size !== expected.sourceIds.length
+      || expected.sourceIds.some((id) => !ID_PATTERNS.title.test(id))
+      || expected.mediaTypes.some((type) => !Object.hasOwn(FLIXPATROL_TITLE_TYPES, type))) return null;
+  return new Map(expected.sourceIds.map((id, index) => [id, expected.mediaTypes[index]]));
+}
+
+function titleListDiagnosticState(value, expected) {
+  const items = listItems(value, "titles");
+  const expectation = titleBatchExpectation(expected);
+  if (!items) {
+    const structuralItems = Array.isArray(record(value)?.data) ? record(value).data : null;
+    return {
+      items: structuralItems, sample: structuralItems?.[0], samplePosition: structuralItems?.length ? 1 : null,
+      listProblemClass: "outer-shape", expectedMediaType: null,
+    };
+  }
+  if (items.length === 0) {
+    return { items, sample: undefined, samplePosition: null, listProblemClass: "empty", expectedMediaType: null };
+  }
+  if (items.length > 10) {
+    return { items, sample: undefined, samplePosition: null, listProblemClass: "over-ten", expectedMediaType: null };
+  }
+  const normalized = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const item = normalizeFlixPatrolTitle(items[index]);
+    if (!item) {
+      const rawId = record(record(items[index])?.data)?.id;
+      return {
+        items, sample: items[index], samplePosition: index + 1, listProblemClass: "row-invalid",
+        expectedMediaType: typeof rawId === "string" ? expectation?.get(rawId) ?? null : null,
+      };
+    }
+    normalized.push(item);
+  }
+  const duplicatePosition = firstDuplicatePosition(normalized.map((item) => item.sourceId));
+  if (duplicatePosition !== null) {
+    return {
+      items, sample: items[duplicatePosition - 1], samplePosition: duplicatePosition,
+      listProblemClass: "duplicate-source-id",
+      expectedMediaType: expectation?.get(normalized[duplicatePosition - 1].sourceId) ?? null,
+    };
+  }
+  if (expectation) {
+    const unexpectedPosition = normalized.findIndex((item) => !expectation.has(item.sourceId));
+    if (unexpectedPosition >= 0) {
+      return {
+        items, sample: items[unexpectedPosition], samplePosition: unexpectedPosition + 1,
+        listProblemClass: "unexpected-source-id", expectedMediaType: null,
+      };
+    }
+    const mediaTypePosition = normalized.findIndex((item) => expectation.get(item.sourceId) !== item.mediaType);
+    if (mediaTypePosition >= 0) {
+      return {
+        items, sample: items[mediaTypePosition], samplePosition: mediaTypePosition + 1,
+        listProblemClass: "media-type-mismatch",
+        expectedMediaType: expectation.get(normalized[mediaTypePosition].sourceId),
+      };
+    }
+    if (normalized.length !== expectation.size) {
+      return {
+        items, sample: undefined, samplePosition: null,
+        listProblemClass: "exact-count-mismatch", expectedMediaType: null,
+      };
+    }
+  }
+  return {
+    items, sample: items[0], samplePosition: 1, listProblemClass: "none",
+    expectedMediaType: expectation?.get(normalized[0].sourceId) ?? null,
+  };
+}
+
 /* Rein strukturelle Diagnose fuer verworfene Providerantworten. Feldnamen und
    Enumwerte stammen ausschliesslich aus festen Whitelists; Fremdwerte werden
    nie kopiert. Bei TOP-10 wird hoechstens bis zum ersten vom vorhandenen
@@ -276,9 +351,11 @@ export function describeFlixPatrolResponseShape(value, {
   const rootData = root?.data;
   const genericList = Array.isArray(value) ? value : Array.isArray(rootData) ? rootData : null;
   const top10State = contractGroup === "top10-list" ? top10DiagnosticState(value, expected) : null;
-  const list = top10State ? top10State.items : genericList;
+  const titleListState = contractGroup === "title-list" ? titleListDiagnosticState(value, expected) : null;
+  const listState = top10State ?? titleListState;
+  const list = listState ? listState.items : genericList;
   const sample = contractGroup === "quota" || contractGroup === "title"
-    ? value : top10State ? top10State.sample : list?.[0];
+    ? value : listState ? listState.sample : list?.[0];
   const sampleWrapper = record(sample);
   const sampleData = record(sampleWrapper?.data);
   const top10FieldsTarget = sampleData ?? sampleWrapper;
@@ -303,7 +380,8 @@ export function describeFlixPatrolResponseShape(value, {
     : ["title", "title-list"].includes(contractGroup) ? {
       titleType: responseEnumClass(record(fieldsTarget)?.type, [1, 2]),
     } : {};
-  const titleData = contractGroup === "title" ? rootData : null;
+  const titleData = contractGroup === "title" ? rootData
+    : contractGroup === "title-list" ? sampleData : null;
   return Object.freeze({
     schemaVersion: FLIXPATROL_RESPONSE_SHAPE_VERSION,
     contractGroup,
@@ -317,8 +395,8 @@ export function describeFlixPatrolResponseShape(value, {
     dataArrayLength: Array.isArray(rootData) ? rootData.length : null,
     itemCount: list?.length ?? (sample === undefined ? 0 : 1),
     listLengthClass: responseListLengthClass(list),
-    listProblemClass: top10State?.listProblemClass ?? "not-applicable",
-    samplePosition: top10State?.samplePosition ?? null,
+    listProblemClass: listState?.listProblemClass ?? "not-applicable",
+    samplePosition: listState?.samplePosition ?? null,
     sampleItemKind: responseValueClass(sample),
     sampleItemTypeClass: responseEnumClass(sampleWrapper?.type, ["apiquota", "top10s", "titles"]),
     sampleDataKind: responseValueClass(sampleWrapper?.data),
@@ -345,7 +423,7 @@ export function describeFlixPatrolResponseShape(value, {
       titleIdValid: validTitleIdCheck(top10FieldsTarget?.movie),
       providerUpdatedAtValid: validProviderUpdatedAtCheck(top10FieldsTarget?.updatedAt),
     }) : null,
-    titleValidity: contractGroup === "title" ? Object.freeze({
+    titleValidity: ["title", "title-list"].includes(contractGroup) ? Object.freeze({
       dateClasses: Object.freeze({
         premiere: responseDateValueClass(titleData?.premiere),
         premiereOnline: responseDateValueClass(titleData?.premiereOnline),
@@ -372,8 +450,14 @@ export function describeFlixPatrolResponseShape(value, {
         sourceUrl: responsePatternCheck(titleData?.link, /^https:\/\/flixpatrol\.com\/title\/[^?#\s]+\/$/),
       }),
       expectedChecks: Object.freeze({
-        expectedTitleIdMatches: expectedTitleIdMatches(titleData?.id, expected?.sourceId),
-        expectedMediaTypeMatches: expectedMediaTypeMatches(titleData?.type, expected?.mediaType),
+        expectedTitleIdMatches: contractGroup === "title-list"
+          ? (typeof titleData?.id === "string" && titleBatchExpectation(expected)
+            ? titleBatchExpectation(expected).has(titleData.id) : null)
+          : expectedTitleIdMatches(titleData?.id, expected?.sourceId),
+        expectedMediaTypeMatches: expectedMediaTypeMatches(
+          titleData?.type,
+          contractGroup === "title-list" ? titleListState?.expectedMediaType : expected?.mediaType,
+        ),
       }),
     }) : null,
   });

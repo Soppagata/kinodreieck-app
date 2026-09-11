@@ -399,6 +399,25 @@ check("Titeldiagnose klassifiziert Parsergrenzen ohne Providerwerte", () => {
   assert.equal(serialized.includes("x".repeat(100)), false);
 });
 
+check("Titellistendiagnose findet die erste verworfene Zeile und exakte Mengenfehler", () => {
+  const broken = titlePayload({ id: secondTitleId, premiereOnline: "0000-00-00" });
+  const expected = { sourceIds: [titleId, secondTitleId], mediaTypes: ["film", "film"] };
+  const invalid = describeFlixPatrolResponseShape({ type: "list", data: [titlePayload(), broken] }, {
+    contractGroup: "title-list", failureClass: "contract-mismatch", expected,
+  });
+  assert.equal(invalid.listProblemClass, "row-invalid");
+  assert.equal(invalid.samplePosition, 2);
+  assert.equal(invalid.titleValidity.dateClasses.premiereOnline, "zero");
+  assert.deepEqual(invalid.titleValidity.expectedChecks, {
+    expectedTitleIdMatches: true, expectedMediaTypeMatches: true,
+  });
+  const incomplete = describeFlixPatrolResponseShape({ type: "list", data: [titlePayload()] }, {
+    contractGroup: "title-list", failureClass: "contract-mismatch", expected,
+  });
+  assert.equal(incomplete.listProblemClass, "exact-count-mismatch");
+  assert.equal(incomplete.samplePosition, null);
+});
+
 check("Migration und Doku begrenzen Suche, Rechte und Cache-Inhalte", () => {
   const migration = readFileSync("supabase/migrations/20260909190000_flixpatrol_data_cache.sql", "utf8");
   const docs = readFileSync("docs/FLIXPATROL_DATENVERTRAG.md", "utf8");

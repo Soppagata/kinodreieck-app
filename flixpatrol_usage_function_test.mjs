@@ -39,8 +39,8 @@ await check("Runtime bindet den manuellen Weg fest an Prime AT Movies vom vorige
   assert.equal((entry.match(/client\.fetchTop10\(/g) || []).length, 1);
   assert.equal((entry.match(/client\.fetchTitle\(/g) || []).length, 1);
   assert.equal((entry.match(/client\.fetchTitles\(/g) || []).length, 1);
-  assert.match(entry, /sourceIds: \["ttl_4tnwmMWPSCaKxwn2tVzTXmcg", "ttl_5b8ZJ3E4UMZoCD62pGqLKjO8"\]/);
-  assert.match(entry, /mediaTypes: \["film", "film"\]/);
+  assert.match(entry, /sourceIds: \[[\s\S]*?ttl_4TDOmMWPSCaKxwn2tVzTXmcg[\s\S]*?ttl_fYTRSsnlNXyvuVZT8gBAweRj[\s\S]*?\]/);
+  assert.match(entry, /mediaTypes: \["film", "film", "film", "film", "film", "series", "series", "series", "series", "series"\]/);
   assert.equal((entry.match(/client\.fetchQuota\(/g) || []).length, 1);
   assert.match(entry, /companyId: FLIXPATROL_AT_SOURCES\.companies\.prime\.id/);
   assert.match(entry, /countryId: FLIXPATROL_AT_SOURCES\.country\.id/);
@@ -144,7 +144,7 @@ await check("feste Batchdiagnose startet genau einen Request und gibt nur die Vo
     serviceKeys: [modern],
     diagnoseTitleBatch: async () => {
       calls += 1;
-      return { items: [{ internal: "discard" }, { internal: "discard" }], providerRequests: 1 };
+      return { items: Array.from({ length: 10 }, () => ({ internal: "discard" })), providerRequests: 1 };
     },
   });
   const response = await handler(new Request("https://example.test/flixpatrol-usage", {
@@ -155,9 +155,53 @@ await check("feste Batchdiagnose startet genau einen Request und gibt nur die Vo
   }));
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    ok: true, status: "valid-contract", providerRequests: 1, itemCount: 2,
+    ok: true, status: "valid-contract", providerRequests: 1, itemCount: 10,
   });
   assert.equal(calls, 1);
+});
+
+await check("Batchdiagnose gibt nur feste Klassen der verworfenen Zeile aus", async () => {
+  const firstId = "ttl_4TDOmMWPSCaKxwn2tVzTXmcg";
+  const secondId = "ttl_7nlnk4wZBnc8VylGpH5aTR6M";
+  const relation = (type, id) => ({ type, data: { id } });
+  const title = (id, overrides = {}) => ({ type: "titles", data: {
+    id, title: "SECRET_BATCH_TITLE", premiere: "2025-01-01",
+    country: relation("countries", FLIXPATROL_AT_SOURCES.country.id),
+    company: relation("companies", FLIXPATROL_AT_SOURCES.companies.prime.id),
+    genre: relation("genres", "gnr_vkhlVlz6xabS78vHh0DCIc5e"),
+    keyword: relation("keywords", "kwd_NLPueMUHlNqj02pZEBFyWIhu"),
+    description: "SECRET_BATCH_DESCRIPTION", updatedAt: "2026-09-10T12:16:27",
+    link: "https://flixpatrol.com/title/secret-batch-title/", type: 1,
+    premiereOnline: null, length: 100, imdbId: null, tmdbId: 123, ...overrides,
+  } });
+  const diagnostic = describeFlixPatrolResponseShape({
+    type: "list", data: [title(firstId), title(secondId, { premiereOnline: "0000-00-00" })],
+  }, {
+    contractGroup: "title-list", failureClass: "contract-mismatch",
+    expected: { sourceIds: [firstId, secondId], mediaTypes: ["film", "film"] },
+  });
+  const handler = createFlixPatrolUsageHandler({
+    serviceKeys: [modern],
+    diagnoseTitleBatch: async () => {
+      throw Object.assign(new Error("SECRET_BATCH_ERROR"), {
+        code: "FLIXPATROL_INVALID_RESPONSE", providerRequests: 1, diagnostic,
+      });
+    },
+  });
+  const response = await handler(new Request("https://example.test/flixpatrol-usage", {
+    method: "POST", headers: {
+      ...headers(), "content-length": "0",
+      "x-kd-flixpatrol-usage": FLIXPATROL_USAGE_TITLE_BATCH_DIAGNOSTIC_VALUE,
+    },
+  }));
+  const body = await response.json();
+  assert.equal(response.status, 502);
+  assert.equal(body.status, "invalid-response");
+  assert.equal(body.providerRequests, 1);
+  assert.equal(body.diagnostic.listProblemClass, "row-invalid");
+  assert.equal(body.diagnostic.samplePosition, 2);
+  assert.equal(body.diagnostic.titleValidity.dateClasses.premiereOnline, "zero");
+  assert.equal(/SECRET_BATCH_TITLE|SECRET_BATCH_DESCRIPTION|SECRET_BATCH_ERROR|ttl_/.test(JSON.stringify(body)), false);
 });
 
 await check("Browser, Body, falscher Header und ungleiche Keys bleiben wirkungslos", async () => {

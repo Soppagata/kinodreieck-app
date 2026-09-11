@@ -358,6 +358,36 @@ await check("verwirft eine andere Titel-ID nach genau einem gezählten Abschluss
   assert.equal(/SECRET_PROVIDER_TITLE|SECRET_PROVIDER_URL/.test(JSON.stringify(diagnostics[0])), false);
 });
 
+await check("lokalisiert einen verworfenen Eintrag im exakten Titelbatch ohne Providerwerte", async () => {
+  const first = makeTitlePayload();
+  const second = makeTitlePayload(secondTitleId, "SECRET_BATCH_TITLE");
+  second.data.link = "https://flixpatrol.com/title/secret-batch-title/";
+  second.data.premiereOnline = "0000-00-00";
+  const diagnostics = [];
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => "00000000-0000-4000-8000-000000000013",
+    beginOperation: async () => ({ ok: true, claim: true, replay: false }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ type: "list", data: [first, second] }) }),
+    diagnosticLogger: (value) => diagnostics.push(value),
+    finishOperation: async (value) => ({ ok: true, replay: false, status: value.status, usage: {} }),
+  });
+  await assert.rejects(
+    client.fetchTitles({ sourceIds: [titleId, secondTitleId], mediaTypes: ["film", "film"] }),
+    (error) => error.code === "FLIXPATROL_INVALID_RESPONSE" && error.providerRequests === 1,
+  );
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].contractGroup, "title-list");
+  assert.equal(diagnostics[0].listProblemClass, "row-invalid");
+  assert.equal(diagnostics[0].samplePosition, 2);
+  assert.equal(diagnostics[0].titleValidity.dateClasses.premiereOnline, "zero");
+  assert.deepEqual(diagnostics[0].titleValidity.expectedChecks, {
+    expectedTitleIdMatches: true,
+    expectedMediaTypeMatches: true,
+  });
+  assert.equal(JSON.stringify(diagnostics[0]).includes("SECRET_BATCH_TITLE"), false);
+});
+
 await check("Titelsuche nutzt exakten Titel, Jahr und Typ und blockiert Mehrdeutigkeit", async () => {
   let requestedUrl = "";
   const duplicate = makeTitlePayload(secondTitleId);

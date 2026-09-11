@@ -256,6 +256,7 @@ export function createFlixPatrolClient({
       url: `${API_ORIGIN}/v2/titles?${query}`,
       requestKind: "titles",
       contractGroup: "title-list",
+      diagnosticExpected: { sourceIds, mediaTypes },
       parse: (body) => {
         const items = normalizeFlixPatrolTitleList(body);
         return items && selectExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes);

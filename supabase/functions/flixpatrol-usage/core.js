@@ -18,6 +18,10 @@ const TOP10_LIST_PROBLEM_CLASSES = new Set([
   "outer-shape", "empty", "over-ten", "row-invalid",
   "duplicate-source-id", "duplicate-ranking", "none",
 ]);
+const TITLE_LIST_PROBLEM_CLASSES = new Set([
+  "outer-shape", "empty", "over-ten", "row-invalid", "duplicate-source-id",
+  "unexpected-source-id", "media-type-mismatch", "exact-count-mismatch", "none",
+]);
 const RANKING_LAST_CLASSES = new Set([
   "null", "integer:zero", "integer:negative", "integer:positive", "invalid",
 ]);
@@ -287,7 +291,7 @@ function normalizeTop10Diagnostic(value) {
   });
 }
 
-function normalizeTitleDiagnostic(value) {
+function normalizeTitleDiagnostic(value, contractGroup = "title") {
   const keys = [
     "schemaVersion", "contractGroup", "failureClass", "rootKind", "rootArrayLength",
     "rootTypeClass", "dataKind", "dataArrayLength", "itemCount", "listLengthClass",
@@ -296,14 +300,20 @@ function normalizeTitleDiagnostic(value) {
     "nullableIntegerClasses", "dateShape", "contractChecks", "titleValidity",
   ];
   const validity = value?.titleValidity;
+  const titleList = contractGroup === "title-list";
   if (!exactKeys(value, keys) || value.schemaVersion !== "flixpatrol-response-shape-v1"
-      || value.contractGroup !== "title"
+      || !["title", "title-list"].includes(contractGroup) || value.contractGroup !== contractGroup
       || !["json-error", "contract-mismatch"].includes(value.failureClass)
       || !safeResponseClass(value.rootKind) || !safeNullableCount(value.rootArrayLength)
       || !safeEnumClass(value.rootTypeClass) || !safeResponseClass(value.dataKind)
       || !safeNullableCount(value.dataArrayLength) || !nonnegativeInteger(value.itemCount)
-      || value.listLengthClass !== "not-array" || value.listProblemClass !== "not-applicable"
-      || value.samplePosition !== null
+      || (titleList
+        ? !["not-array", "empty", "one-to-ten", "over-ten"].includes(value.listLengthClass)
+          || !TITLE_LIST_PROBLEM_CLASSES.has(value.listProblemClass)
+          || !(value.samplePosition === null
+            || (Number.isSafeInteger(value.samplePosition) && value.samplePosition >= 1 && value.samplePosition <= 10))
+        : value.listLengthClass !== "not-array" || value.listProblemClass !== "not-applicable"
+          || value.samplePosition !== null)
       || !safeResponseClass(value.sampleItemKind) || !safeEnumClass(value.sampleItemTypeClass)
       || !safeResponseClass(value.sampleDataKind)
       || !exactKeys(value.whitelistFieldTypes, TITLE_FIELDS)
@@ -443,7 +453,7 @@ export function createFlixPatrolUsageHandler({
       if (request.method === "POST" && request.headers.get(SCHEDULE_HEADER) === TITLE_BATCH_DIAGNOSTIC_VALUE) {
         try {
           const result = await diagnoseTitleBatch?.();
-          if (!Array.isArray(result?.items) || result.items.length !== 2 || result?.providerRequests !== 1) {
+          if (!Array.isArray(result?.items) || result.items.length !== 10 || result?.providerRequests !== 1) {
             return response({
               ok: false, status: "failed", code: "FLIXPATROL_TITLE_BATCH_UNPROVEN",
               providerRequests: result?.providerRequests === 1 ? 1 : 0,
@@ -453,7 +463,15 @@ export function createFlixPatrolUsageHandler({
             ok: true, status: "valid-contract", providerRequests: 1, itemCount: result.items.length,
           }, 200);
         } catch (error) {
-          return response({ ok: false, status: "failed", ...safeError(error) }, 502);
+          const safe = safeError(error);
+          const diagnostic = safe.code === "FLIXPATROL_INVALID_RESPONSE"
+            ? normalizeTitleDiagnostic(error?.diagnostic, "title-list") : null;
+          return response({
+            ok: false,
+            status: diagnostic ? "invalid-response" : "failed",
+            ...safe,
+            ...(diagnostic ? { diagnostic } : {}),
+          }, 502);
         }
       }
       if (request.method === "POST" && request.headers.get(SCHEDULE_HEADER) === TITLE_DIAGNOSTIC_VALUE) {

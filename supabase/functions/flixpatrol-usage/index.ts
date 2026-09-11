@@ -69,8 +69,14 @@ function runtimeDependencies() {
       mediaType: "film",
     }),
     diagnoseTitleBatch: () => client.fetchTitles({
-      sourceIds: ["ttl_4tnwmMWPSCaKxwn2tVzTXmcg", "ttl_5b8ZJ3E4UMZoCD62pGqLKjO8"],
-      mediaTypes: ["film", "film"],
+      sourceIds: [
+        "ttl_4TDOmMWPSCaKxwn2tVzTXmcg", "ttl_7nlnk4wZBnc8VylGpH5aTR6M",
+        "ttl_UExUK0k2lQEVcb5uWXZtGhTg", "ttl_fihnSsnlNXyvuVZT8gBAweRj",
+        "ttl_4tKCmMWPSCaKxwn2tVzTXmcg", "ttl_Foflx2P39fsIlph6zrCydxTG",
+        "ttl_pgs8ns8OP1rtHnX6QwlEKhiq", "ttl_G4nYyVoYqxjfPUJzt21NZ6yg",
+        "ttl_89dO3PlONbeWiHX60xVfZLm4", "ttl_fYTRSsnlNXyvuVZT8gBAweRj",
+      ],
+      mediaTypes: ["film", "film", "film", "film", "film", "series", "series", "series", "series", "series"],
     }),
   };
 }
