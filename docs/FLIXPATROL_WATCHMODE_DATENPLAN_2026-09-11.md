@@ -6,17 +6,18 @@ Plan ergänzt die abgeschlossene Betriebsreparatur; deren Lieferregister bleibt
 
 ## PWA-Rueckmeldung vom 11.09.: gezielte UI-Nacharbeit
 
-R4 wird wegen Max' konkreter PWA-Rueckmeldung erneut geoeffnet. Der bisherige
-Staging-Nachweis bleibt gueltig fuer `72fb246`; die folgenden Aenderungen bilden
-einen neuen Kandidaten vor R5. Keine zusaetzliche Audit- oder Freigabeschleife.
+Die gezielte Nacharbeit U1–U5 ist auf Staging `b64953e` abgeschlossen und am
+11.09. um 19:23 UTC inklusive Build und Service Worker rueckgelesen. Sie ersetzt
+`72fb246` als aktuellen PWA-Kandidaten vor R5. Max' physischer PWA-Test bleibt
+der vereinbarte naechste Schritt. Keine zusaetzliche Audit- oder Freigabeschleife.
 
 | Teil von R4 | Ergebnis | Paket / Stand |
 | --- | --- | --- |
-| U1 | Must-Watch und Streaming/Alles verwenden das vorhandene Neu-Kartenlayout mit Pin, Markierung, Gesehen sowie explizitem Mediathek-Anlegen/Verknuepfen. | Karten / GEBAUT: gemeinsame Karten plus ownergebundene lokale Pins |
-| U2 | KI-Kurzbeschreibungen bleiben; Kosten-/Websuche-Betriebstexte und der redundante Korrekturbutton entfallen. Kino ohne Weiterleit-Pfeile; Empfehlungsdetails zugeklappt mit titelnahem Chevron. | Texte und Details / GEBAUT `9119b21` |
-| U3 | Quellenstaende sind mobil lesbar. Obsoleter Backup-Hinweis entfaellt; Exporterinnerung und tatsaechlich fehlgeschlagene Speicherung werden korrekt getrennt. | Settings / GEBAUT `0c2261e` |
-| U4 | Die zwei KI-Servermeldungen sind mit zeitnaher, providerfreier Betriebsdiagnose eingeordnet; belegte Fehler werden gezielt behoben oder konkret benannt. | Master / GEBAUT: Quellenfehler konkret eingegrenzt und UI-Text korrigiert; externe LOC-Sperre bleibt Befund |
-| U5 | Gemeinsamer Kandidat lokal geprueft, auf Staging gepusht, CI/Build/PWA rueckgelesen. | Master / OFFEN |
+| U1 | Must-Watch und Streaming/Alles verwenden das vorhandene Neu-Kartenlayout mit Pin, Markierung, Gesehen sowie explizitem Mediathek-Anlegen/Verknuepfen. | DONE `b64953e`: gemeinsame Karten plus ownergebundene lokale Pins und Navigation vom Start |
+| U2 | KI-Kurzbeschreibungen bleiben; Kosten-/Websuche-Betriebstexte und der redundante Korrekturbutton entfallen. Kino ohne Weiterleit-Pfeile; Empfehlungsdetails zugeklappt mit titelnahem Chevron und erhaltenem Quellenlink. | DONE `b64953e` |
+| U3 | Quellenstaende sind mobil lesbar. Obsoleter Backup-Hinweis entfaellt; Exporterinnerung und tatsaechlich fehlgeschlagene Speicherung werden korrekt getrennt. | DONE `b64953e`: Quellkarten und gestapelte Zusammenfassung auch bei 320 px; begrenzte Beobachtung laufender Konto-Synchronisation |
+| U4 | Die zwei KI-Servermeldungen sind mit zeitnaher, providerfreier Betriebsdiagnose eingeordnet; belegte Fehler werden gezielt behoben oder konkret benannt. | DONE: Quellenfehler eingegrenzt und UI-Text korrigiert; externe LOC-Sperre bleibt unten dokumentierter Befund |
+| U5 | Gemeinsamer Kandidat lokal geprueft, auf Staging gepusht, CI/Build/PWA rueckgelesen. | DONE `b64953e`, CI `34637643291`, Readback 11.09. 19:23 UTC |
 
 **Parallelmatrix:** Alle drei Pakete starten vom selben Commit dieser Planergänzung,
 in getrennten Worktrees. Karten besitzt StreamingTab, MediathekTab, MustWatchListe
@@ -60,6 +61,23 @@ Die neue Projektion beruecksichtigt bestaetigte Topfstaende und behaelt
 Pending-/Konflikt-/Stale-/Schema-/Groessengrenzen bei. Lokale Rueckholstaende
 sind keine unabhaengige Sicherheitskopie; der portable Export bleibt manuell.
 
+**U5 Liefernachweis:** Vollstaendiges `npm test` einschliesslich Client-Mocks,
+lokaler PostgreSQL-Pruefungen, Einzeldatei, Build und 72/72 Pages-Checks ist gruen.
+Die private Browsersuite umfasste 82 Faelle: Nach den gezielten Korrekturen
+bestanden alle 18 betroffenen Faelle erneut in Chromium/WebKit; die 64 uebrigen
+waren zuvor gruen. Die Kartenaktionen und Quellenstaende wurden bei 320/393 px
+auch visuell geprueft. In [CI-Lauf 34637643291](https://github.com/Soppagata/kinodreieck-app/actions/runs/34637643291)
+bestanden Test-Suiten inklusive Function-Mocks, 46 Chromium- und 46 WebKit-Faelle
+sowie das automatische Staging-Deployment. Der normale angemeldete Readback
+um 19:23 UTC bestaetigte einen frischen Format-9-Feed mit 50 Titeln und zwei
+frische Netflix-Fakten; null Feedwrites, null FlixPatrol- und null KI-Requests.
+Domain, Build, Service Worker, Shell-Dateien und privater Katalogzugriff stimmen
+mit `b64953ed46fa255e78dc17aa5ddab7a6b77ee854` ueberein. Es gab fuer dieses
+UI-Paket keine Backend-, Migrations-, Scheduler- oder Anbieter-Aktivierung.
+Belege: `/private/tmp/kd-ui-feedback-evidence-20260911/`. Ein anschliessender
+reiner Dokumentationscommit bleibt auf dem Kandidatenbranch und loest kein
+erneutes Staging-Deployment aus.
+
 ## Verbindlicher Restweg ab 11.09.2026
 
 Max beauftragt die Auflösung des Netflix-Blockers und aller notierten
@@ -73,7 +91,7 @@ Vertagung der unten historisch dokumentierten Befunde.
 | R1 | Netflix nutzt den täglichen FlixPatrol-Feed; Ursache des realen Bündelfehlers belegt, Vertrag korrigiert, erster Feed erfolgreich und normaler Client-Read bestätigt. | Backend `16dae19`, Staging `72fb246`: Feed/Fakten live bestätigt, Abschlussprüfung grün. DONE |
 | R2 | Watchmode-IDs und gezielte deutsche Details erreichen den Katalog; zusätzliche Werktypen sind empirisch geklärt und nur mit belegtem Mapping aufgenommen. Bestehende 14-Tage-Fristen bleiben erhalten. | Produzent `39735ae`: IDs und fünf Details veröffentlicht; Typmapping gebaut, Aktivierung bleibt am belegten Quotenrest. GEBAUT / REST |
 | R3 | Fehlendes Namenssignal und tatsächliche Datenfrische sind geklärt und korrigiert; die Build-Chunkwarnung ist gezielt bereinigt. Kein Umbau funktionierender Nutzerwege. | Namenssignal und Zeitstempel veröffentlicht; Build und vollständige Lieferprüfung auf `72fb246` grün. DONE |
-| R4 | Integrierter Stand ist getestet, gepusht und auf Staging inklusive Feed, Fakten und Service Worker rückgelesen; kompakte PWA-Prüfpunkte für Max. | Staging `72fb246`, CI `34618596758`, normaler Feed-/Fakten-/PWA-Readback grün. Fuer neue UI-Rueckmeldung U1–U5 erneut OFFEN |
+| R4 | Integrierter Stand ist getestet, gepusht und auf Staging inklusive Feed, Fakten und Service Worker rückgelesen; kompakte PWA-Prüfpunkte für Max. | DONE inklusive U1–U5: Staging `b64953e`, CI `34637643291`, normaler Feed-/Fakten-/PWA-Readback am 11.09. 19:23 UTC gruen |
 | R5 | Nach Max' PWA-Test: Staging-Produktstand in Main, gewollte Produktionsschalter gesetzt, Production ausgeliefert und rückgelesen. | Master; abhängig von R4 und Max' Testergebnis. OFFEN |
 | R6 | Produktionsjobs besitzen ein eindeutiges Produktionsziel; Staging erhält getrenntes Pages-/Supabase-Ziel, neutrale Seeds und zunächst ausgeschaltete Anbieter/Scheduler. Control liest datierten Status über begrenzte serverseitige Wege. | Folgewelle nach R5; vorhandenen Sandbox-Vertrag konkret ausfüllen. OFFEN |
 
@@ -126,7 +144,7 @@ Control startet mit lesbarem Build-, Quellen-, Frische-, Job- und Budgetstatus
 sowie klar getrennten Sandbox-Eingaben. Neue produktive Schreib- oder
 Providerknöpfe gehören erst in einen eigenen konkret begrenzten Auftrag.
 
-## Bestätigte Staging-Lieferung und verbleibender Weg
+## Bestätigte Daten-Lieferung vor der UI-Nacharbeit
 
 **Netflix über FlixPatrol ist aktiv.** Backend `16dae19` wurde gezielt für
 `flixpatrol-usage` und `entdecken-daily-task` ausgeliefert; die unveränderten
@@ -216,19 +234,21 @@ Format-9-Feed auch dann, wenn der vollständige Produktmerge später folgt.
 Die tatsächliche Production-Version bleibt frisch bestätigt `3b82a73`; dort
 ist der Tagesfeed im Client weiterhin ausgeschaltet.
 
-**Ab hier:** Max testet [die Staging-PWA](https://staging.kinodreieck.at) kurz:
-Entdecken mit seinen gewählten Diensten, Streaming `Alles`/`Neu`, einmal
-schließen und neu öffnen. Nach seinem Testergebnis folgt der freigegebene
+**Ab hier:** Max testet [die Staging-PWA](https://staging.kinodreieck.at) auf dem
+aktuellen UI-Stand `b64953e` kurz: Must-Watch-Kartenaktionen und Pin auf Start,
+Entdecken-Details, Streaming `Alles`/`Neu`, mobile Quellenstaende und einmal
+Speichern im Konto; anschliessend schliessen und neu oeffnen. Nach seinem
+Testergebnis folgt der freigegebene
 Produktmerge mit bewusster Production-Konfiguration und Readback. Erst danach
 werden Staging und die produktiven Datenjobs auf die oben konkretisierten
 getrennten Ziele gebunden. Die zusätzliche Watchmode-Typaktivierung bleibt
 wegen der belegten Quotenfrage offen; sie blockiert diesen Produktmerge nicht.
 
-Der reine Dokumentationsnachtrag auf dem Kandidatenbranch enthält diesen
-Readback. Der getestete und tatsächlich ausgelieferte Produktstand bleibt
-exakt `72fb246`; dafür wird kein erneutes Deployment ausgelöst.
+Der damalige Dokumentationsnachtrag auf dem Daten-Kandidatenbranch enthaelt
+den Readback von `72fb246`. Der neuere UI-Liefernachweis fuer `b64953e` steht
+oben unter U5; dessen Dokumentationsnachtrag loest ebenfalls kein Deployment aus.
 
-Aktuelle technische Belege: `/private/tmp/kd-rest-delivery-20260911/`.
+Technische Belege der Daten-Lieferung: `/private/tmp/kd-rest-delivery-20260911/`.
 Die ältere Lieferung unter `/private/tmp/kd-data-plan-delivery-20260911/`
 bleibt unverändert als Historie erhalten.
 
