@@ -85,31 +85,72 @@ check("Gesehenfilter nutzt starke IDs vor dem exakten Titel-Fallback", () => {
   assert.ok(conflict.some((entry) => entry.sourceItemId === items[1].sourceItemId));
 });
 
-const selection = createEntdeckenRecommendations({
+const unconfirmedSelection = createEntdeckenRecommendations({
   streamingEntdecken: { region: "AT", titel: [] },
   streamingKnown: { region: "AT", titel: [] },
   profile: {
     signals: [{ kind: "genre", value: "drama", direction: "positive", confirmed: true, strength: 4 }],
   },
-  master: [{
-    id: "seen", titel: "Schon gesehen", jahr: 2024, typ: "film", gesehen: true,
-    bewertung: { wie: 4, was: 4, warum: 4 }, genre: ["Drama"],
-  }],
-  selectedServices: ["Joyn"],
-  webDiscoveryFeed: feed,
+  master: [], selectedServices: ["Joyn"], webDiscoveryFeed: feed,
   selectionDay: "2026-08-27",
 });
 
-check("Persoenliche Lane nutzt Joyn-Genres, nie Popularitaet, und ist auf sechs begrenzt", () => {
+check("Historischer Joyn-Chart ohne Watchmode-Angebotsbeleg bleibt aus Fuer mich", () => {
+  assert.deepEqual(unconfirmedSelection.personal, []);
+  assert.deepEqual(unconfirmedSelection.popular, []);
+});
+
+const offeredItems = [
+  items[0],
+  ...items.filter((item, index) => index > 0 && item.genres.includes("Drama")).slice(0, 6),
+  items[2],
+];
+const offeredFeed = {
+  ...feed,
+  annotations: offeredItems.map((item, index) => ({
+    sourceItemId: item.sourceItemId,
+    qid: `Q${2000 + index}`,
+    mediaType: item.mediaType,
+    releaseYear: 2024,
+    externalIds: { watchmode: String(8200 + index) },
+    resolvedAt: "2026-08-27T02:01:00.000Z",
+  })),
+};
+const offeredCatalog = offeredItems.map((item, index) => ({
+  watchmode_id: 8200 + index,
+  titel: item.title,
+  jahr: 2024,
+  typ: item.mediaType,
+  dienste: ["Joyn"],
+  genres: item.genres,
+}));
+const seenOffer = offeredCatalog[0];
+const selection = createEntdeckenRecommendations({
+  streamingEntdecken: { region: "AT", titel: offeredCatalog },
+  streamingKnown: { region: "AT", titel: [] },
+  profile: {
+    signals: [{ kind: "genre", value: "drama", direction: "positive", confirmed: true, strength: 4 }],
+  },
+  master: [{
+    id: "seen", watchmode_id: seenOffer.watchmode_id, titel: seenOffer.titel,
+    jahr: seenOffer.jahr, typ: seenOffer.typ, gesehen: true,
+    bewertung: { wie: 4, was: 4, warum: 4 }, genre: ["Drama"],
+  }],
+  selectedServices: ["Joyn"],
+  webDiscoveryFeed: offeredFeed,
+  selectionDay: "2026-08-27",
+});
+
+check("Persoenliche Lane nutzt nur bestaetigte Joyn-Angebote, nie Popularitaet, und ist auf sechs begrenzt", () => {
   assert.equal(selection.personal.length, 6);
-  assert.ok(selection.personal.every((entry) => entry.targetId.startsWith("joyn:")));
+  assert.ok(selection.personal.every((entry) => entry.targetId.startsWith("watchmode:")));
   assert.ok(selection.personal.every((entry) => entry.reasons.length > 0));
   assert.ok(selection.personal.every((entry) => entry.reasons.some((reason) => /Profil:|Mediathek/.test(reason))));
   assert.ok(selection.personal.every((entry) => !entry.reasons.some((reason) => /Platz|beliebt|Rang/i.test(reason))));
-  assert.ok(!selection.personal.some((entry) => entry.title === "Schon gesehen"));
+  assert.ok(!selection.personal.some((entry) => entry.targetId === `watchmode:${seenOffer.watchmode_id}`));
 });
 
-check("Historischer Joyn-Feed bleibt persoenlich lesbar, aber ist keine Popularitaetslane mehr", () => {
+check("Historischer Joyn-Feed bleibt ohne Popularitaetslane und dedupliziert die bestaetigte Auswahl", () => {
   assert.deepEqual(selection.popular, []);
   assert.deepEqual(selection.further, []);
   assert.equal(new Set(selection.personal.map((entry) => entry.targetId)).size, 6);
@@ -117,9 +158,9 @@ check("Historischer Joyn-Feed bleibt persoenlich lesbar, aber ist keine Populari
 
 check("Ohne kompatibles Profil bleibt der historische Joyn-Pfad vollstaendig leer", () => {
   const neutral = createEntdeckenRecommendations({
-    streamingEntdecken: { region: "AT", titel: [] },
+    streamingEntdecken: { region: "AT", titel: offeredCatalog },
     profile: { signals: [{ kind: "genre", value: "horror", direction: "positive", confirmed: true, strength: 4 }] },
-    master: [], selectedServices: ["Joyn"], webDiscoveryFeed: feed,
+    master: [], selectedServices: ["Joyn"], webDiscoveryFeed: offeredFeed,
   });
   assert.deepEqual(neutral.personal, []);
   assert.deepEqual(neutral.popular, []);
@@ -127,14 +168,14 @@ check("Ohne kompatibles Profil bleibt der historische Joyn-Pfad vollstaendig lee
 
 check("Persistierte Profilwerte und ein beschaedigtes Profil bleiben fail-closed", () => {
   const comedy = createEntdeckenRecommendations({
-    streamingEntdecken: { region: "AT", titel: [] }, master: [],
+    streamingEntdecken: { region: "AT", titel: offeredCatalog }, master: [],
     profile: { signale: [{ art: "genre", wert: "komoedie", richtung: "zieht_an", staerke: 4 }] },
-    selectedServices: ["Joyn"], webDiscoveryFeed: feed,
+    selectedServices: ["Joyn"], webDiscoveryFeed: offeredFeed,
   });
   assert.deepEqual(comedy.personal.map((entry) => entry.sourceItemId), [items[2].sourceItemId]);
   assert.equal(comedy.personal[0].sourceRank, null);
   const damaged = createEntdeckenRecommendations({
-    streamingEntdecken: { region: "AT", titel: [] }, webDiscoveryFeed: feed,
+    streamingEntdecken: { region: "AT", titel: offeredCatalog }, webDiscoveryFeed: offeredFeed,
     profile: { beschaedigt: true }, selectedServices: ["Joyn"],
     master: [{ bewertung: { wie: 5, was: 5, warum: 5 }, genre: ["Drama"] }],
   });

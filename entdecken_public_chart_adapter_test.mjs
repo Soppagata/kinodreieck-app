@@ -163,23 +163,57 @@ await checkAsync("Adapter macht genau zwei retryfreie GETs und erzeugt 50 Minima
   endToEndFeed = evaluated.feed;
 });
 
-check("Historischer 50er-Feed bleibt fuer Fuer mich lesbar, aber aus der Popular-Lane entfernt", () => {
+check("Historischer 50er-Feed ohne Watchmode-Angebotsbeleg erzeugt keine persoenliche Auswahl", () => {
   assert.ok(endToEndFeed);
-  const seen = endToEndFeed.items.find((item) => item.genres.includes("Drama"));
   const result = createEntdeckenRecommendations({
     streamingEntdecken: { region: "AT", titel: [] },
     streamingKnown: { region: "AT", titel: [] },
-    master: [{
-      id: "seen-joyn", titel: seen.title, jahr: 2025, typ: seen.mediaType, gesehen: true,
-      bewertung: { wie: 4, was: 4, warum: 4 }, genre: ["Drama"],
-    }],
+    master: [],
     profile: { signale: [{ art: "genre", wert: "Drama", richtung: "zieht_an", staerke: 4 }] },
     selectedServices: ["Joyn"], webDiscoveryFeed: endToEndFeed,
   });
+  assert.equal(result.personal.length, 0);
+  assert.equal(result.popular.length, 0);
+});
+
+check("Eindeutig annotierte Watchmode-Angebote bleiben persoenlich lesbar und schliessen Gesehenes aus", () => {
+  const matchedItems = endToEndFeed.items.filter((item) => item.genres.includes("Drama")).slice(0, 7);
+  const matchedFeed = {
+    ...endToEndFeed,
+    annotations: matchedItems.map((item, index) => ({
+      sourceItemId: item.sourceItemId,
+      qid: `Q${1000 + index}`,
+      mediaType: item.mediaType,
+      releaseYear: 2025,
+      externalIds: { watchmode: String(8100 + index) },
+      resolvedAt: "2026-08-27T07:31:00.000Z",
+    })),
+  };
+  const catalogTitles = matchedItems.map((item, index) => ({
+    watchmode_id: 8100 + index,
+    titel: item.title,
+    jahr: 2025,
+    typ: item.mediaType,
+    dienste: ["Joyn"],
+    genres: item.genres,
+  }));
+  const seen = catalogTitles[0];
+  const result = createEntdeckenRecommendations({
+    streamingEntdecken: { region: "AT", titel: catalogTitles },
+    streamingKnown: { region: "AT", titel: [] },
+    master: [{
+      id: "seen-joyn", watchmode_id: seen.watchmode_id, titel: seen.titel,
+      jahr: seen.jahr, typ: seen.typ, gesehen: true,
+      bewertung: { wie: 4, was: 4, warum: 4 }, genre: ["Drama"],
+    }],
+    profile: { signale: [{ art: "genre", wert: "Drama", richtung: "zieht_an", staerke: 4 }] },
+    selectedServices: ["Joyn"], webDiscoveryFeed: matchedFeed,
+  });
   assert.equal(result.personal.length, 6);
   assert.equal(result.popular.length, 0);
-  assert.ok(result.personal.every((item) => item.reasons.length > 0));
-  assert.ok(![...result.personal, ...result.popular].some((item) => item.title === seen.title));
+  assert.ok(result.personal.every((item) => item.targetId.startsWith("watchmode:")
+    && item.reasons.length > 0));
+  assert.ok(!result.personal.some((item) => item.targetId === `watchmode:${seen.watchmode_id}`));
   assert.equal(new Set(result.personal.map((item) => item.targetId)).size, 6);
 });
 
