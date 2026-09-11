@@ -6,6 +6,7 @@ import {
   normalisiereExternenTitel,
   pruefeExterneTitelIdentitaet,
 } from "./externalTitleIdentity.js";
+import { formatPresentationDate } from "./presentationDate.js";
 
 const text = (value, max = 5000) => String(value ?? "").trim().slice(0, max);
 const list = (value) => Array.isArray(value) ? value : [];
@@ -225,10 +226,7 @@ export function projectTitleFacts(entry, facts = []) {
 }
 
 export function formatTitleFactsDate(value) {
-  const raw = text(value, 64);
-  const parsed = Date.parse(raw);
-  if (!Number.isFinite(parsed)) return null;
-  return new Intl.DateTimeFormat("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(parsed));
+  return formatPresentationDate(value, { fallback: null });
 }
 
 
