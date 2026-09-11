@@ -6,7 +6,7 @@ import {
   normalisiereExterneWerkart,
   ordneExternenTitelZu,
 } from "./externalTitleIdentity.js";
-import { FLIXPATROL_AT_CHARTS } from "./flixpatrolFacts.js";
+import { FLIXPATROL_AT_CHARTS, normalisiereTitleFactsProjektionen } from "./flixpatrolFacts.js";
 
 export const FLIXPATROL_CONTEXT_AT_CHARTS = FLIXPATROL_AT_CHARTS;
 
@@ -117,37 +117,27 @@ export function baueFlixpatrolKontextIdentitaet({
 }
 
 export function normalisiereFlixpatrolKontextTitel(rows) {
-  if (!Array.isArray(rows)) return Object.freeze([]);
-  const seen = new Set();
-  const facts = [];
-  for (const row of rows) {
-    const sourceId = text(row?.sourceId, 64);
-    const titel = text(row?.title, 240);
-    const typ = mediaType(row?.mediaType);
-    const jahr = year(row?.releaseYear);
-    if (!sourceId || !FLIXPATROL_ID.test(sourceId) || seen.has(sourceId)
-        || row?.status !== "resolved" || !titel || !typ || jahr === null) continue;
-    const sourceUrl = text(row?.sourceUrl, 1000);
-    seen.add(sourceId);
-    facts.push(freezeDeep({
-      sourceId,
-      flixpatrol_id: sourceId,
-      titel,
-      jahr,
-      typ,
-      imdb_id: imdbId(row?.imdbId),
-      tmdb_id: positiveId(row?.tmdbId),
-      beschreibung: text(row?.description, 2000),
-      laufzeit_minuten: Number.isInteger(row?.runtimeMinutes) && row.runtimeMinutes > 0 && row.runtimeMinutes <= 1440
-        ? row.runtimeMinutes : null,
-      premiere: /^\d{4}-\d{2}-\d{2}$/.test(String(row?.premiere ?? "")) ? row.premiere : null,
-      checkedAt: text(row?.checkedAt, 64),
-      freshUntil: text(row?.freshUntil, 64),
-      fresh: row?.fresh === true,
-      sourceUrl: sourceUrl && HTTP_URL.test(sourceUrl) ? sourceUrl : null,
-    }));
-  }
-  return Object.freeze(facts);
+  return Object.freeze(normalisiereTitleFactsProjektionen(rows).map((projection) => freezeDeep({
+    projection,
+    sourceId: projection.identity.flixpatrolId,
+    flixpatrol_id: projection.identity.flixpatrolId,
+    titel: projection.identity.title,
+    jahr: projection.identity.year,
+    typ: projection.identity.mediaType === "series" ? "serie" : projection.identity.mediaType,
+    imdb_id: projection.identity.imdbId,
+    tmdb_id: projection.identity.tmdbId,
+    beschreibung: projection.description,
+    laufzeit_minuten: projection.runtimeMinutes,
+    premiere: projection.premiere,
+    checkedAt: projection.checkedAt,
+    fetchedAt: projection.fetchedAt,
+    freshUntil: projection.freshUntil,
+    fresh: projection.fresh,
+    sourceUrl: projection.sourceUrl,
+    genres: projection.genres,
+    keywords: projection.keywords,
+    descriptionLanguage: projection.descriptionLanguage,
+  })));
 }
 
 function chartIds(result, spec) {
@@ -169,23 +159,27 @@ export function findeFlixpatrolKontextFakt(identity, facts) {
 
 export function projiziereFlixpatrolKontext(fact) {
   if (!fact) return null;
-  return freezeDeep({
-    source: "FlixPatrol",
-    checkedAt: fact.checkedAt,
-    fresh: fact.fresh === true,
-    sourceUrl: fact.sourceUrl,
-    identity: {
-      flixpatrolId: fact.flixpatrol_id,
-      imdbId: fact.imdb_id,
-      tmdbId: fact.tmdb_id,
-      title: fact.titel,
-      year: fact.jahr,
-      mediaType: fact.typ,
-    },
+  if (fact.projection?.schemaVersion === "title-facts-projection-v1") return fact.projection;
+  return normalisiereTitleFactsProjektionen([{
+    sourceId: fact.flixpatrol_id,
+    mediaType: fact.typ === "serie" ? "series" : fact.typ,
+    status: "resolved",
+    title: fact.titel,
+    releaseYear: fact.jahr,
+    imdbId: fact.imdb_id,
+    tmdbId: fact.tmdb_id,
     description: fact.beschreibung,
+    descriptionLanguage: fact.descriptionLanguage,
     runtimeMinutes: fact.laufzeit_minuten,
     premiere: fact.premiere,
-  });
+    checkedAt: fact.checkedAt,
+    fetchedAt: fact.fetchedAt,
+    freshUntil: fact.freshUntil,
+    fresh: fact.fresh,
+    sourceUrl: fact.sourceUrl,
+    genres: fact.genres,
+    keywords: fact.keywords,
+  }])[0] ?? null;
 }
 
 export function baueFlixpatrolProfilHinweise(mentions, facts) {
@@ -243,21 +237,36 @@ export function createFlixpatrolFactsContextReader({
   const load = async (identity = null) => {
     const deadline = now() + Math.max(1, Number(timeoutMs) || 1);
     try {
+      const identifiers = externeTitelKennungen(identity);
       const directId = directFlixpatrolId(identity);
-      let ids;
       if (directId) {
-        ids = [directId];
-      } else {
-        const charts = await Promise.all(FLIXPATROL_CONTEXT_AT_CHARTS.map(async (spec) => ({
-          spec,
-          result: await call("kd_flixpatrol_chart_read", {
-            p_company_id: spec.companyId,
-            p_country_id: spec.countryId,
-            p_chart_type: spec.chartType,
-          }, deadline),
-        })));
-        ids = [...new Set(charts.flatMap(({ result, spec }) => chartIds(result, spec)))].slice(0, 50);
+        const titles = await call("kd_flixpatrol_titles_read", { p_source_ids: [directId] }, deadline);
+        return titles?.ok === true ? normalisiereFlixpatrolKontextTitel(titles.items) : Object.freeze([]);
       }
+      if (identifiers.imdb || identifiers.tmdb) {
+        try {
+          const expectedMediaType = mediaType(identity?.typ ?? identity?.mediaType);
+          const lookup = await call("kd_title_facts_lookup", {
+            p_identities: [{
+              ...(identifiers.imdb ? { imdbId: identifiers.imdb } : {}),
+              ...(identifiers.tmdb ? { tmdbId: identifiers.tmdb } : {}),
+              ...(expectedMediaType ? { mediaType: expectedMediaType } : {}),
+            }],
+          }, deadline);
+          if (lookup?.ok === true && Array.isArray(lookup.items) && lookup.items.length) {
+            return normalisiereFlixpatrolKontextTitel(lookup.items);
+          }
+        } catch { /* Ohne additive Migration bleibt der bisherige Chartfallback wirksam. */ }
+      }
+      const charts = await Promise.all(FLIXPATROL_CONTEXT_AT_CHARTS.map(async (spec) => ({
+        spec,
+        result: await call("kd_flixpatrol_chart_read", {
+          p_company_id: spec.companyId,
+          p_country_id: spec.countryId,
+          p_chart_type: spec.chartType,
+        }, deadline),
+      })));
+      const ids = [...new Set(charts.flatMap(({ result, spec }) => chartIds(result, spec)))].slice(0, 50);
       if (!ids.length) return Object.freeze([]);
       const titles = await call("kd_flixpatrol_titles_read", { p_source_ids: ids }, deadline);
       if (titles?.ok !== true) return Object.freeze([]);

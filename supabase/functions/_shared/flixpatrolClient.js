@@ -5,6 +5,9 @@ import {
   normalizeFlixPatrolTitle,
   normalizeFlixPatrolTitleList,
   normalizeFlixPatrolTop10List,
+  normalizeFlixPatrolVocabularyList,
+  selectExactFlixPatrolTitleBatch,
+  selectExactFlixPatrolVocabularyBatch,
   selectStrictFlixPatrolTitleCandidate,
 } from "./flixpatrolData.js";
 
@@ -240,6 +243,50 @@ export function createFlixPatrolClient({
     return Object.freeze({ title: result.data, usage: result.usage, providerRequests: 1, operationId: result.operationId });
   }
 
+  async function fetchTitles({ sourceIds, mediaTypes } = {}) {
+    if (!Array.isArray(sourceIds) || !Array.isArray(mediaTypes)
+        || sourceIds.length < 1 || sourceIds.length > 10 || mediaTypes.length !== sourceIds.length
+        || new Set(sourceIds).size !== sourceIds.length
+        || sourceIds.some((id) => !/^ttl_[A-Za-z0-9]{20,40}$/.test(id))
+        || mediaTypes.some((type) => !Object.hasOwn(FLIXPATROL_TITLE_TYPES, type))) {
+      throw new FlixPatrolClientError("FLIXPATROL_REQUEST_INVALID");
+    }
+    const query = new URLSearchParams([["id[in]", sourceIds.join(",")]]);
+    const result = await countedGet({
+      url: `${API_ORIGIN}/v2/titles?${query}`,
+      requestKind: "titles",
+      contractGroup: "title-list",
+      parse: (body) => {
+        const items = normalizeFlixPatrolTitleList(body);
+        return items && selectExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes);
+      },
+    });
+    return Object.freeze({ items: result.data, usage: result.usage, providerRequests: 1, operationId: result.operationId });
+  }
+
+  async function fetchVocabulary(resourceType, sourceIds) {
+    const pattern = resourceType === "genres"
+      ? /^gnr_[A-Za-z0-9]{20,40}$/ : resourceType === "keywords" ? /^kwd_[A-Za-z0-9]{20,40}$/ : null;
+    if (!pattern || !Array.isArray(sourceIds) || sourceIds.length < 1 || sourceIds.length > 10
+        || new Set(sourceIds).size !== sourceIds.length || sourceIds.some((id) => !pattern.test(id))) {
+      throw new FlixPatrolClientError("FLIXPATROL_REQUEST_INVALID");
+    }
+    const query = new URLSearchParams([["id[in]", sourceIds.join(",")]]);
+    const result = await countedGet({
+      url: `${API_ORIGIN}/v2/${resourceType}?${query}`,
+      requestKind: resourceType,
+      contractGroup: resourceType === "genres" ? "genre-list" : "keyword-list",
+      parse: (body) => {
+        const items = normalizeFlixPatrolVocabularyList(body, resourceType);
+        return items && selectExactFlixPatrolVocabularyBatch(items, sourceIds);
+      },
+    });
+    return Object.freeze({ items: result.data, usage: result.usage, providerRequests: 1, operationId: result.operationId });
+  }
+
+  const fetchGenres = ({ sourceIds } = {}) => fetchVocabulary("genres", sourceIds);
+  const fetchKeywords = ({ sourceIds } = {}) => fetchVocabulary("keywords", sourceIds);
+
   async function searchTitles({ title, mediaType, releaseYear } = {}) {
     if (typeof title !== "string" || title.trim() !== title || title.length < 1 || title.length > 240
         || !Object.hasOwn(FLIXPATROL_TITLE_TYPES, mediaType)
@@ -267,5 +314,7 @@ export function createFlixPatrolClient({
     });
   }
 
-  return Object.freeze({ fetchQuota, fetchTop10, fetchTitle, searchTitles });
+  return Object.freeze({
+    fetchQuota, fetchTop10, fetchTitle, fetchTitles, fetchGenres, fetchKeywords, searchTitles,
+  });
 }

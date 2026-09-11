@@ -21,6 +21,87 @@ const positiveId = (value) => /^\d+$/.test(String(value ?? "").trim()) && BigInt
 const imdbId = (value) => /^(?:tt)?[0-9]{5,12}$/i.test(String(value ?? "").trim())
   && /[1-9]/.test(String(value)) ? `tt${String(value).trim().toLowerCase().replace(/^tt/, "")}` : null;
 
+function vocabularyTerms(value, pattern) {
+  if (!Array.isArray(value)) return Object.freeze([]);
+  const seen = new Set();
+  const terms = [];
+  for (const item of value) {
+    const id = text(item?.id, 64);
+    const name = text(item?.name, 240);
+    if (!pattern.test(id) || !name || seen.has(id)) continue;
+    seen.add(id);
+    terms.push(Object.freeze({ id, name }));
+  }
+  return Object.freeze(terms);
+}
+
+export function normalisiereTitleFactsProjektionen(rows, chartsBySourceId = new Map()) {
+  if (!Array.isArray(rows)) return Object.freeze([]);
+  const facts = [];
+  const gesehen = new Set();
+  for (const item of rows) {
+    const sourceId = text(item?.sourceId, 64);
+    const providerType = item?.mediaType === "film" ? "film" : item?.mediaType === "series" ? "series" : null;
+    const titel = text(item?.title, 240);
+    const jahr = year(item?.releaseYear);
+    if (!ID.test(sourceId) || !providerType || !titel || jahr == null
+        || item?.status !== "resolved" || gesehen.has(sourceId)) continue;
+    gesehen.add(sourceId);
+    const descriptionLanguage = text(item?.descriptionLanguage, 32) || null;
+    const charts = Array.isArray(chartsBySourceId?.get?.(sourceId))
+      ? Object.freeze([...chartsBySourceId.get(sourceId)]) : Object.freeze([]);
+    facts.push(Object.freeze({
+      schemaVersion: "title-facts-projection-v1",
+      source: "flixpatrol",
+      checkedAt: text(item.checkedAt, 64) || null,
+      fetchedAt: text(item.fetchedAt, 64) || null,
+      freshUntil: text(item.freshUntil, 64) || null,
+      fresh: item.fresh === true,
+      sourceUrl: text(item.sourceUrl, 1000) || null,
+      identity: Object.freeze({
+        flixpatrolId: sourceId,
+        imdbId: imdbId(item.imdbId),
+        tmdbId: positiveId(item.tmdbId),
+        watchmodeId: null,
+        title: titel,
+        originalTitle: null,
+        year: jahr,
+        mediaType: providerType,
+      }),
+      description: text(item.description, 4000) || null,
+      descriptionLanguage,
+      runtimeMinutes: Number.isInteger(Number(item.runtimeMinutes)) && Number(item.runtimeMinutes) > 0
+        ? Number(item.runtimeMinutes) : null,
+      premiere: /^\d{4}-\d{2}-\d{2}$/.test(String(item?.premiere ?? "")) ? item.premiere : null,
+      genres: vocabularyTerms(item.genres, /^gnr_[A-Za-z0-9]{20,40}$/),
+      keywords: vocabularyTerms(item.keywords, /^kwd_[A-Za-z0-9]{20,40}$/),
+      charts,
+    }));
+  }
+  return Object.freeze(facts);
+}
+
+function legacyFact(projection) {
+  return Object.freeze({
+    ...projection,
+    sourceId: projection.identity.flixpatrolId,
+    flixpatrol_id: projection.identity.flixpatrolId,
+    titel: projection.identity.title,
+    jahr: projection.identity.year,
+    typ: projection.identity.mediaType === "series" ? "serie" : projection.identity.mediaType,
+    imdb_id: projection.identity.imdbId,
+    tmdb_id: projection.identity.tmdbId,
+    beschreibung: projection.description,
+    laufzeit_minuten: projection.runtimeMinutes,
+    premiere: projection.premiere,
+    status: "resolved",
+  });
+}
+
+export function normalisiereFlixpatrolFaktenAusCache(rows) {
+  return Object.freeze(normalisiereTitleFactsProjektionen(rows).map(legacyFact));
+}
+
 export function normalisiereFlixpatrolFakten(chartAntworten, titelAntwort) {
   if (!Array.isArray(chartAntworten) || chartAntworten.length !== FLIXPATROL_AT_CHARTS.length
       || !titelAntwort || titelAntwort.ok !== true || !Array.isArray(titelAntwort.items)) return [];
@@ -43,31 +124,8 @@ export function normalisiereFlixpatrolFakten(chartAntworten, titelAntwort) {
       }));
     }
   }
-  const facts = [];
-  const gesehen = new Set();
-  for (const item of titelAntwort.items) {
-    const sourceId = text(item?.sourceId, 64);
-    const typ = mediaType(item?.mediaType);
-    const titel = text(item?.title, 240);
-    const jahr = year(item?.releaseYear);
-    if (!ID.test(sourceId) || !charts.has(sourceId) || !typ || !titel || jahr == null
-        || item?.status !== "resolved" || gesehen.has(sourceId)) continue;
-    gesehen.add(sourceId);
-    facts.push(Object.freeze({
-      sourceId, flixpatrol_id: sourceId, titel, jahr, typ,
-      imdb_id: imdbId(item.imdbId), tmdb_id: positiveId(item.tmdbId),
-      beschreibung: text(item.description, 4000) || null,
-      laufzeit_minuten: Number.isInteger(Number(item.runtimeMinutes)) && Number(item.runtimeMinutes) > 0
-        ? Number(item.runtimeMinutes) : null,
-      premiere: text(item.premiere, 32) || null,
-      status: "resolved", fresh: item.fresh === true,
-      checkedAt: text(item.checkedAt, 64) || null,
-      freshUntil: text(item.freshUntil, 64) || null,
-      sourceUrl: text(item.sourceUrl, 1000) || null,
-      charts: Object.freeze(charts.get(sourceId)),
-    }));
-  }
-  return Object.freeze(facts);
+  const rows = titelAntwort.items.filter((item) => charts.has(text(item?.sourceId, 64)));
+  return Object.freeze(normalisiereTitleFactsProjektionen(rows, charts).map(legacyFact));
 }
 
 function ergaenzungenFuer(eigen, fakt) {

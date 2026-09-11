@@ -184,7 +184,9 @@ await check("Forecast-Projektion enthält neutrale Fakten, aber keinen Chart- od
   assert.equal(context.identity.mediaType, "film");
   assert.equal(context.description, "Ein neutrales Werkporträt.");
   assert.equal(context.runtimeMinutes, 117);
-  assert.equal(Object.hasOwn(context, "charts"), false);
+  assert.deepEqual(context.charts, []);
+  assert.equal(context.schemaVersion, "title-facts-projection-v1");
+  assert.equal(context.descriptionLanguage, null);
   assert.equal(Object.hasOwn(context, "ranking"), false);
   assert.equal(Object.hasOwn(context, "taste"), false);
 });

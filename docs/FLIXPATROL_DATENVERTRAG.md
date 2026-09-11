@@ -311,3 +311,46 @@ Es gibt kein zusätzliches Quota- oder Budgetgate. Der bestehende Ticker zählt
 jede Pagination- oder Lookup-Anfrage einzeln vor dem Netzwerkaufruf. Da dieser
 Vertrag keine Pagination implementiert, ist aktuell jeder Methodenaufruf genau
 ein gezählter Request.
+
+
+## Additive D1/D2-Faktenbasis (11.09.2026)
+
+Der bestehende Einzelabruf und die vorhandenen RPCs bleiben kompatibel. Der
+Providerclient ergänzt `fetchTitles({ sourceIds, mediaTypes })` für genau 1–10
+bekannte Titel-IDs. Er sendet den dokumentierten `id[in]`-Filter und akzeptiert
+nur die vollständige erwartete ID-Menge mit den erwarteten Film-/Serientypen.
+Teilantworten, Zusatz- oder Doppel-IDs und Typkonflikte sind terminal ungültig;
+es gibt keinen Retry. `fetchGenres` und `fetchKeywords` lösen nur kleine
+bekannte ID-Mengen auf und unterliegen denselben Grenzen.
+
+Jeder Referenzabruf läuft durch den vorhandenen gezählten Client. Die additive
+Migration erlaubt dafür die Ledger-Requesttypen `genres` und `keywords` sowohl
+in der Tabellen-Constraint als auch in `kd_flixpatrol_usage_begin`; damit kann
+kein erlaubter Referenzrequest am Ledger vorbeilaufen oder still am alten
+Requesttyp-Check scheitern. Unverändert gelten maximal 15 Sekunden, genau ein
+GET, `redirect: "error"` und kein automatischer Retry. Eine echte Providerprobe
+oder allgemeine Vollständigkeit der Batchroute ist mit diesem lokalen Paket
+nicht behauptet.
+
+`kd_title_facts_lookup(jsonb)` liest höchstens 50 namenfreie Identitäten aus
+dem vorhandenen Cache nach FlixPatrol-, IMDb- und/oder TMDB-ID. Mehrere IDs in
+einem Objekt müssen dieselbe Zeile bezeichnen. Reine TMDB-Zahlen bleiben über
+Film und Serie mehrdeutig; `mediaType` grenzt sie ein, andernfalls liefert ein
+Mehrfachtreffer leer. Die RPC verlangt weiterhin `authenticated` plus aktives
+Konto oder `service_role`; Tabellen, interner Projektionshelper und
+Schreibfunktionen bleiben Browserrollen entzogen.
+
+Die Projektion löst `genre_id` und `keyword_id` nur über den zentralen
+`kd_flixpatrol_vocabulary_cache` zu Namen auf. Fehlende Vocabulary-Treffer
+bleiben leere Mengen. FlixPatrol dokumentiert für Beschreibungen keine deutsche
+Sprachgarantie, daher bleibt `descriptionLanguage` ohne separaten Beleg `null`.
+Die verbindliche, auch für spätere Watchmode-Details nutzbare DTO-Form steht in
+[TITLE_FACTS_PROJECTION.md](TITLE_FACTS_PROJECTION.md).
+
+`load()` behält den bisherigen Chartweg. `loadByIdentities()` ergänzt den
+letzten autorisierten Cachetreffer; `peek()` vereinigt beide nach
+FlixPatrol-ID und behält die Legacy-Aliasfelder für bestehende Verbraucher.
+Abmeldung, Konto-/Projektwechsel und verspätete Antworten leeren oder verwerfen
+beide Flächen. Bereits belegte alte Fakten bleiben kurz mit `fresh: false`
+lesbar; nur als frisch markierte Fakten werden bis höchstens `freshUntil`
+gecacht. Daraus entsteht kein neuer Provider- oder Refreshpfad.

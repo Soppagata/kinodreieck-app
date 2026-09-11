@@ -12,6 +12,7 @@ const PROVIDER_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1
 
 export const FLIXPATROL_TITLE_TYPES = Object.freeze({ film: 1, series: 2 });
 export const FLIXPATROL_TOP10_TYPES = Object.freeze({ movies: 2, tvshows: 3 });
+export const FLIXPATROL_VOCABULARY_TYPES = Object.freeze({ genres: "genres", keywords: "keywords" });
 export const FLIXPATROL_AT_SOURCES = Object.freeze({
   country: Object.freeze({ id: "cnt_gGE4RaeXpyz2U9Q5tEMYDwri", code: "AT", name: "Austria" }),
   companies: Object.freeze({
@@ -23,7 +24,9 @@ export const FLIXPATROL_AT_SOURCES = Object.freeze({
 });
 
 export const FLIXPATROL_RESPONSE_SHAPE_VERSION = "flixpatrol-response-shape-v1";
-const RESPONSE_CONTRACT_GROUPS = new Set(["quota", "top10-list", "title", "title-list"]);
+const RESPONSE_CONTRACT_GROUPS = new Set([
+  "quota", "top10-list", "title", "title-list", "genre-list", "keyword-list",
+]);
 const RESPONSE_FAILURE_CLASSES = new Set(["json-error", "contract-mismatch"]);
 const RESPONSE_FIELDS = Object.freeze({
   quota: Object.freeze(["used", "available", "limit", "limitExtra", "resetAt"]),
@@ -41,6 +44,8 @@ const RESPONSE_FIELDS = Object.freeze({
     "description", "updatedAt", "link", "type", "premiereOnline", "length",
     "imdbId", "tmdbId",
   ]),
+  "genre-list": Object.freeze(["id", "name", "type"]),
+  "keyword-list": Object.freeze(["id", "name"]),
 });
 
 function record(value) {
@@ -488,6 +493,50 @@ export function normalizeFlixPatrolTitleList(value) {
   if (normalized.some((item) => !item)) return null;
   if (new Set(normalized.map((item) => item.sourceId)).size !== normalized.length) return null;
   return Object.freeze(normalized);
+}
+
+export function selectExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes) {
+  if (!Array.isArray(items) || !Array.isArray(sourceIds) || !Array.isArray(mediaTypes)
+      || sourceIds.length < 1 || sourceIds.length > 10 || mediaTypes.length !== sourceIds.length
+      || new Set(sourceIds).size !== sourceIds.length
+      || sourceIds.some((id) => !ID_PATTERNS.title.test(id))
+      || mediaTypes.some((type) => !Object.hasOwn(FLIXPATROL_TITLE_TYPES, type))) return null;
+  const expected = new Map(sourceIds.map((id, index) => [id, mediaTypes[index]]));
+  if (items.length !== expected.size || new Set(items.map((item) => item?.sourceId)).size !== items.length) return null;
+  if (items.some((item) => !item || expected.get(item.sourceId) !== item.mediaType)) return null;
+  return Object.freeze(sourceIds.map((id) => items.find((item) => item.sourceId === id)));
+}
+
+export function normalizeFlixPatrolVocabularyList(value, resourceType) {
+  if (!Object.hasOwn(FLIXPATROL_VOCABULARY_TYPES, resourceType)) return null;
+  const items = listItems(value, resourceType);
+  if (!items || items.length < 1 || items.length > 10) return null;
+  const idPattern = resourceType === "genres" ? ID_PATTERNS.genre : ID_PATTERNS.keyword;
+  const normalized = items.map((item) => {
+    const wrapper = record(item);
+    const data = record(wrapper?.data);
+    const sourceId = cleanText(data?.id, 48);
+    const name = cleanText(data?.name, 240);
+    if (!wrapper || wrapper.type !== resourceType || !sourceId || !idPattern.test(sourceId) || !name) return null;
+    if (resourceType === "genres") {
+      const mediaType = normalizeTitleType(data.type);
+      if (!mediaType) return null;
+      return Object.freeze({ sourceId, name, mediaType, providerType: data.type });
+    }
+    return Object.freeze({ sourceId, name, mediaType: null, providerType: null });
+  });
+  if (normalized.some((item) => !item)
+      || new Set(normalized.map((item) => item.sourceId)).size !== normalized.length) return null;
+  return Object.freeze(normalized);
+}
+
+export function selectExactFlixPatrolVocabularyBatch(items, sourceIds) {
+  if (!Array.isArray(items) || !Array.isArray(sourceIds) || sourceIds.length < 1 || sourceIds.length > 10
+      || new Set(sourceIds).size !== sourceIds.length || items.length !== sourceIds.length) return null;
+  const expected = new Set(sourceIds);
+  if (items.some((item) => !item || !expected.has(item.sourceId))
+      || new Set(items.map((item) => item.sourceId)).size !== items.length) return null;
+  return Object.freeze(sourceIds.map((id) => items.find((item) => item.sourceId === id)));
 }
 
 export function normalizeFlixPatrolTop10List(value, expected) {

@@ -1,6 +1,8 @@
 import { authDriver, authService } from "./auth.js";
 import { runtimeConfig } from "../config/runtime.js";
-import { FLIXPATROL_AT_CHARTS, normalisiereFlixpatrolFakten } from "../lib/flixpatrolFacts.js";
+import {
+  FLIXPATROL_AT_CHARTS, normalisiereFlixpatrolFakten, normalisiereFlixpatrolFaktenAusCache,
+} from "../lib/flixpatrolFacts.js";
 
 const TIMEOUT_MS = 12000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -19,6 +21,41 @@ function configured(config) {
   const url = String(config?.supabaseUrl || "").trim().replace(/\/+$/, "");
   const key = String(config?.supabasePublishableKey || "").trim();
   return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url) && key ? { url, key } : null;
+}
+
+function normalizeIdentities(identities) {
+  if (!Array.isArray(identities) || identities.length < 1 || identities.length > 50) return null;
+  const normalized = [];
+  const seen = new Set();
+  for (const identity of identities) {
+    if (!identity || typeof identity !== "object" || Array.isArray(identity)) return null;
+    const keys = Object.keys(identity);
+    if (keys.length < 1 || keys.some((key) => !["flixpatrolId", "imdbId", "tmdbId", "mediaType"].includes(key))) return null;
+    const next = {};
+    if (identity.flixpatrolId !== undefined) {
+      if (typeof identity.flixpatrolId !== "string"
+          || !/^ttl_[A-Za-z0-9]{20,40}$/.test(identity.flixpatrolId)) return null;
+      next.flixpatrolId = identity.flixpatrolId;
+    }
+    if (identity.imdbId !== undefined) {
+      if (typeof identity.imdbId !== "string" || !/^tt[0-9]{7,10}$/.test(identity.imdbId)) return null;
+      next.imdbId = identity.imdbId;
+    }
+    if (identity.tmdbId !== undefined) {
+      const tmdbId = typeof identity.tmdbId === "number" && Number.isSafeInteger(identity.tmdbId)
+        ? String(identity.tmdbId) : identity.tmdbId;
+      if (typeof tmdbId !== "string" || !/^[1-9][0-9]{0,8}$/.test(tmdbId)) return null;
+      next.tmdbId = tmdbId;
+    }
+    if (identity.mediaType !== undefined) {
+      if (!["film", "series"].includes(identity.mediaType)) return null;
+      next.mediaType = identity.mediaType;
+    }
+    if (!next.flixpatrolId && !next.imdbId && !next.tmdbId) return null;
+    const key = JSON.stringify(next);
+    if (!seen.has(key)) { seen.add(key); normalized.push(Object.freeze(next)); }
+  }
+  return normalized.length ? Object.freeze(normalized) : null;
 }
 
 async function rpc(fetchImpl, config, token, name, body, signal) {
@@ -40,6 +77,8 @@ export function createFlixpatrolFactsService({
 } = {}) {
   let cache = null;
   let inflight = null;
+  let identityCache = null;
+  let identityInflight = null;
   let generation = 0;
   const authorityKey = () => {
     const accountId = activeAccount(auth);
@@ -47,7 +86,9 @@ export function createFlixpatrolFactsService({
     return accountId && project ? `${project}|${accountId}` : null;
   };
   let lastAuthorityKey = authorityKey();
-  const clear = () => { generation += 1; cache = null; inflight = null; };
+  const clear = () => {
+    generation += 1; cache = null; inflight = null; identityCache = null; identityInflight = null;
+  };
   auth?.subscribe?.(() => {
     const nextAuthorityKey = authorityKey();
     if (nextAuthorityKey !== lastAuthorityKey) {
@@ -61,7 +102,10 @@ export function createFlixpatrolFactsService({
     const ttl = facts.length ? cacheTtlMs : emptyCacheTtlMs;
     let expiresAt = now() + Math.max(0, Number(ttl) || 0);
     for (const fact of facts) {
-      if (fact?.fresh !== true) expiresAt = Math.min(expiresAt, now() + Math.max(0, Number(emptyCacheTtlMs) || 0));
+      if (fact?.fresh !== true) {
+        expiresAt = Math.min(expiresAt, now() + Math.max(0, Number(emptyCacheTtlMs) || 0));
+        continue;
+      }
       const freshUntil = Date.parse(String(fact?.freshUntil || ""));
       if (Number.isFinite(freshUntil)) expiresAt = Math.min(expiresAt, freshUntil);
     }
@@ -77,10 +121,58 @@ export function createFlixpatrolFactsService({
       const accountId = activeAccount(auth);
       const project = configured(config)?.url || null;
       const key = accountId && project ? `${project}|${accountId}` : null;
-      if (key && cacheValid(key)) return cache.facts;
-      if (cache && cache.key !== key) clear();
-      else if (cache?.key === key) cache = null;
-      return [];
+      if (!key) { clear(); return []; }
+      if ((cache && cache.key !== key) || (identityCache && !identityCache.key.startsWith(`${key}|`))) {
+        clear();
+        return [];
+      }
+      if (cache?.key === key && cache.expiresAt <= now()) cache = null;
+      if (identityCache?.expiresAt <= now()) identityCache = null;
+      const merged = [...(identityCache?.facts || []), ...(cache?.facts || [])];
+      const seen = new Set();
+      return Object.freeze(merged.filter((fact) => {
+        const id = fact?.sourceId ?? fact?.identity?.flixpatrolId;
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      }));
+    },
+    async loadByIdentities(identities) {
+      const requested = normalizeIdentities(identities);
+      const accountId = activeAccount(auth);
+      const project = configured(config);
+      if (!requested || !accountId || !project) {
+        if (!accountId || !project) clear();
+        return [];
+      }
+      const authority = `${project.url}|${accountId}`;
+      const requestKey = `${authority}|${JSON.stringify(requested)}`;
+      if (identityCache?.key === requestKey && identityCache.expiresAt > now()) return identityCache.facts;
+      if (identityInflight?.key === requestKey) return identityInflight.promise;
+      lastAuthorityKey = authority;
+      const runGeneration = generation;
+      const promise = (async () => {
+        const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+        try {
+          const token = await driver.getAccessToken({ erwarteteKontoId: accountId });
+          if (!token || !runStillValid(runGeneration, authority)) return [];
+          const result = await rpc(fetchImpl, project, token, "kd_title_facts_lookup", {
+            p_identities: requested,
+          }, ctrl?.signal);
+          if (!runStillValid(runGeneration, authority)) return [];
+          const facts = normalisiereFlixpatrolFaktenAusCache(result.items);
+          if (!runStillValid(runGeneration, authority)) return [];
+          identityCache = { key: requestKey, facts, expiresAt: expiryFor(facts) };
+          return facts;
+        } catch {
+          if (runStillValid(runGeneration, authority)) identityCache = null;
+          return [];
+        } finally { if (timer) clearTimeout(timer); }
+      })();
+      identityInflight = { key: requestKey, promise };
+      try { return await promise; }
+      finally { if (identityInflight?.promise === promise) identityInflight = null; }
     },
     async load() {
       const accountId = activeAccount(auth);
