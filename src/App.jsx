@@ -974,8 +974,8 @@ export default function App() {
   }, [artikelListe, fuehrePublikationsAktion, remoteKontoAktiv]);
 
   /* ---- Export-Wächter: ungesicherte Browser-Änderungen sichtbar machen ----
-     Browser-Speicher ist kein Backup. Sobald der Storage-Stand jünger ist
-     als der letzte Export, markiert Settings den zuständigen Backup-Bereich. */
+     Settings markiert nur lokal ausstehende Sicherung: bestaetigte Konto-
+     Speicherung wird beruecksichtigt, der optionale Datei-Export bleibt getrennt. */
   const {
     markiereExport,
     sicherheitskopieGeraet,
@@ -1820,6 +1820,7 @@ export default function App() {
             onSelectionStateChange={meldeMediathekAuswahl}
             mustwatch={mustwatch} addMustwatch={addMustwatch}
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
+            recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef} datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
             stapelimportKiAktiv={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true && kiAn("stapelimport")}

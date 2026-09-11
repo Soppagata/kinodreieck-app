@@ -200,7 +200,7 @@ check("KI-Prognose ordnet ihre ausgeschriebenen Aktionen mobil untereinander an"
   const css = lies("./src/index.css");
   assert.match(prognose, /className="kd-prognose-aktionen"/);
   assert.match(prognose, />Als Bewertung übernehmen</);
-  assert.match(prognose, />Echt bewerten \/ korrigieren</);
+  assert.doesNotMatch(prognose, />Echt bewerten \/ korrigieren</);
   assert.match(css, /@media \(max-width:760px\)[\s\S]*\.kd-prognose-aktionen[\s\S]*grid-template-columns:minmax\(0,1fr\)/);
 });
 

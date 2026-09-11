@@ -12,9 +12,9 @@ einen neuen Kandidaten vor R5. Keine zusaetzliche Audit- oder Freigabeschleife.
 
 | Teil von R4 | Ergebnis | Paket / Stand |
 | --- | --- | --- |
-| U1 | Must-Watch und Streaming/Alles verwenden das vorhandene Neu-Kartenlayout mit Pin, Markierung, Gesehen sowie explizitem Mediathek-Anlegen/Verknuepfen. | Karten / OFFEN |
-| U2 | KI-Kurzbeschreibungen bleiben; Kosten-/Websuche-Betriebstexte und der redundante Korrekturbutton entfallen. Kino ohne Weiterleit-Pfeile; Empfehlungsdetails zugeklappt mit titelnahem Chevron. | Texte und Details / OFFEN |
-| U3 | Quellenstaende sind mobil lesbar. Obsoleter Backup-Hinweis entfaellt; Exporterinnerung und tatsaechlich fehlgeschlagene Speicherung werden korrekt getrennt. | Settings / OFFEN |
+| U1 | Must-Watch und Streaming/Alles verwenden das vorhandene Neu-Kartenlayout mit Pin, Markierung, Gesehen sowie explizitem Mediathek-Anlegen/Verknuepfen. | Karten / GEBAUT `60a2fae`, lokale Pin-Naht noch OFFEN |
+| U2 | KI-Kurzbeschreibungen bleiben; Kosten-/Websuche-Betriebstexte und der redundante Korrekturbutton entfallen. Kino ohne Weiterleit-Pfeile; Empfehlungsdetails zugeklappt mit titelnahem Chevron. | Texte und Details / GEBAUT `9119b21` |
+| U3 | Quellenstaende sind mobil lesbar. Obsoleter Backup-Hinweis entfaellt; Exporterinnerung und tatsaechlich fehlgeschlagene Speicherung werden korrekt getrennt. | Settings / GEBAUT `0c2261e` |
 | U4 | Die zwei KI-Servermeldungen sind mit zeitnaher, providerfreier Betriebsdiagnose eingeordnet; belegte Fehler werden gezielt behoben oder konkret benannt. | Master / OFFEN |
 | U5 | Gemeinsamer Kandidat lokal geprueft, auf Staging gepusht, CI/Build/PWA rueckgelesen. | Master / OFFEN |
 
@@ -30,8 +30,34 @@ und CI bleiben waehrend des Baus read-only. Neue Styles werden direkt aus den
 zugeordneten Komponenten importiert. Einzige vorab benannte Integrationsnaht:
 der Master reicht vorhandene Pin-Callbacks an MediathekTab weiter; bei Bedarf
 bindet er den bestehenden Kontomodus an die Exporthinweis-Projektion.
+Nach erster Integration folgt ein kleines disjunktes Delta: Karten erweitert
+nur den vorhandenen Pin-Resolver/StartTab um exakte lokale Must-Watch-IDs;
+Texte praezisiert ausschliesslich die UI-Uebersetzung bestehender
+Filmwissen-Quellenfehler. Beide starten vom selben Integrationscommit.
 Kein automatisches Titelmatching, keine neue Persistenzarchitektur, kein
 bezahlter KI-Aufruf, keine Backend-/Scheduler-Aenderung fuer reine UI-Arbeit.
+
+**U4, providerfreie Betriebsdaten (11.09., 18:47–18:53 UTC):**
+Im Testfenster 17:30–18:47 UTC steht genau eine KI-Operation im inhaltsfreien
+Log: `film-forecast`, 18:18:09–18:18:26 UTC, erfolgreich mit Sonnet 5.
+Die Gatewayfehler betreffen `ai-task` um 18:17:56 und 18:22:40 UTC (HTTP 500).
+Die Quellenzaehler belegen je einen Wikidata- und LOC-Abruf in den Minuten
+18:17 und 18:22; kein Filmwissen-Auftrag oder zahlender KI-Lauf entstand.
+Quellenfreigaben und Kontaktkonfiguration sind vorhanden. Die historische
+HTTP-Antworthuelle wurde nicht gespeichert; ihr exakter Quellenfehlercode ist
+daher nicht rueckwirkend beweisbar. Ein einzelner aktueller oeffentlicher
+LOC-Abruf mit dem vorhandenen Adapter wurde mit HTTP 403 abgewiesen.
+Kein weiterer Quellenretry, keine Umgehung, keine neue Quelle oder KI-Probe.
+Die offizielle Claude-Statusseite meldete die API gleichzeitig betriebsbereit.
+Folge: konkrete Recherchequellenfehler in der UI passend benennen; den
+externen LOC-Zugriff nicht durch einen Quellen-/Backendumbau in diesem UI-Paket
+ersetzen. Bereinigte lokale Belege: `/private/tmp/kd-ui-feedback-evidence-20260911`.
+
+**U3 Sicherungsmodell:** Konto-Sync speichert automatisch. Die bisherige
+Warnung verglich ausschliesslich gegen den letzten manuellen JSON-Export.
+Die neue Projektion beruecksichtigt bestaetigte Topfstaende und behaelt
+Pending-/Konflikt-/Stale-/Schema-/Groessengrenzen bei. Lokale Rueckholstaende
+sind keine unabhaengige Sicherheitskopie; der portable Export bleibt manuell.
 
 ## Verbindlicher Restweg ab 11.09.2026
 
