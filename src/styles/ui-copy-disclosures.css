@@ -1,0 +1,55 @@
+.kd-entdecken :is(.kd-entdecken-auswahlkarten, .kd-entdecken-beliebtliste) .kd-entdecken-beschreibung-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--kd-space-2);
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--kd-leinwand);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: calc(22px * var(--kd-schriftfaktor, 1));
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.kd-entdecken .kd-entdecken-beschreibung-toggle > span:first-child {
+  min-width: 0;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--kd-wolfram) 58%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.kd-entdecken .kd-entdecken-beschreibung-toggle:is(:hover, :focus-visible) > span:first-child {
+  text-decoration-color: var(--kd-wolfram);
+}
+
+.kd-entdecken .kd-entdecken-aufklappzeichen {
+  display: inline-flex;
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.kd-entdecken .kd-entdecken-beschreibung-toggle[aria-expanded="true"] .kd-entdecken-aufklappzeichen {
+  transform: rotate(180deg);
+}
+
+.kd-entdecken .kd-entdecken-auswahlkarten .kd-entdecken-beschreibung {
+  margin: 1px 0 7px;
+  padding: 8px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--kd-wolfram) 66%, transparent);
+  background: color-mix(in srgb, var(--kd-saal) 42%, transparent);
+}
+
+.kd-entdecken .kd-entdecken-auswahlkarten .kd-entdecken-beschreibung p {
+  margin: 0;
+  color: var(--kd-rauch);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: calc(13px * var(--kd-schriftfaktor, 1));
+  line-height: 1.5;
+}

@@ -72,10 +72,11 @@ check("E7 Filmwissen ist nur am geöffneten unbewerteten Eintrag sichtbar", () =
   && /onFilmwissenLaden/.test(mediathek)
   && /onFilmwissenLaden/.test(streaming));
 
-check("E8 Recherche bleibt eine einzelne bestätigte Sonnet-Ausgabe ohne Auto-Retry", () =>
-  /höchstens 6 US-Cent/.test(intelligenceController)
-  && /genau einen Sonnet-Aufruf/.test(intelligenceController)
-  && /keine automatische Wiederholung/.test(filmwissen));
+check("E8 Recherche bleibt eine bestätigte einzelne KI-Aktion ohne Betriebshinweise in der Oberfläche", () =>
+  /window\.confirm\([\s\S]*Jetzt Filmwissen mit KI recherchieren/.test(intelligenceController)
+  && (intelligenceController.match(/filmwissenDienst\.recherchiere\(film\)/g) || []).length === 1
+  && /KI-Recherchebericht erstellen/.test(filmwissen)
+  && !/US-Cent|Websuche|genau einen Sonnet-Aufruf/.test(filmwissen));
 
 check("E8a Teil- und Entwurfsantworten bleiben sichtbar von belegtem Filmwissen getrennt", () =>
   /FILMWISSEN_STATUS\.ENTWURF/.test(filmwissen)

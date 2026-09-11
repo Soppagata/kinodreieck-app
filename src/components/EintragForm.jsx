@@ -251,7 +251,7 @@ export function FilmForm({
         <button style={btnStyle(true)} disabled={speicherLauf} onClick={() => speichern(false)}>{speicherLauf && !prognoseLauf ? "Speichert …" : "Hinzufügen"}</button>
         {bewertbar && prognoseAktiv && onAddMitPrognose && (
           <button style={btnStyle(false)} disabled={speicherLauf || !!prognoseSperrgrund}
-            title="Speichert zuerst einen unbewerteten Eintrag und startet danach genau einen kostenpflichtigen KI-Aufruf"
+            title="Speichert zuerst einen unbewerteten Eintrag und erstellt danach eine KI-Prognose"
             onClick={() => speichern(true)}>
             {prognoseLauf ? "Speichert & prognostiziert …" : "Anlegen & KI-Prognose erstellen"}
           </button>
@@ -262,7 +262,7 @@ export function FilmForm({
         <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>
           {prognoseSperrgrund
             ? prognoseSperrgrund
-            : "Der Eintrag wird zuerst unbewertet gespeichert. Danach folgt genau ein kostenpflichtiger KI-Aufruf ohne Websuche."}
+            : "Der Eintrag wird zuerst unbewertet gespeichert. Danach wird die unverbindliche KI-Prognose erstellt."}
         </span>
       )}
     </div>

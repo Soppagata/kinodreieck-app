@@ -29,12 +29,6 @@ function Achse({ name, wert, farbe }) {
   );
 }
 
-function kostenText(kosten) {
-  if (!Number.isFinite(kosten)) return null;
-  if (kosten > 0 && kosten < 1) return "< 1 US-Cent";
-  return `${kosten.toLocaleString("de-AT", { maximumFractionDigits: 2 })} US-Cent`;
-}
-
 function PrognoseMeldung({ meldung }) {
   if (meldung?.art === "hinweis" && typeof meldung.text === "string" && meldung.text) {
     return (
@@ -74,11 +68,11 @@ export function PrognoseBereich({
     return (
       <div className="kd-prognose-start">
         <button style={btnStyle(false)} disabled={laeuft || !erstellenMoeglich} onClick={onErstellen}
-          title={!erstellenMoeglich ? (sperrgrund || "Prognose derzeit nicht möglich") : "Startet genau einen kostenpflichtigen KI-Aufruf"}>
+          title={!erstellenMoeglich ? (sperrgrund || "Prognose derzeit nicht möglich") : "Erstellt eine unverbindliche KI-Prognose"}>
           {laeuft ? "KI-Prognose wird erstellt …" : "KI-Prognose erstellen"}
         </button>
         <span style={{ ...mono, lineHeight: 1.45 }}>
-          Auf Wunsch · genau ein kostenpflichtiger KI-Aufruf · keine Websuche
+          Unverbindliche Einschätzung auf Basis deines Geschmacksprofils.
         </span>
         {!erstellenMoeglich && sperrgrund && <span style={{ color: T.wolfram, fontSize: 12 }}>{sperrgrund}</span>}
         <PrognoseMeldung meldung={fehler} />
@@ -89,7 +83,6 @@ export function PrognoseBereich({
   const e = prognose.ergebnis;
   const band = passungsBand(e.passung);
   const veraltet = prognoseIstVeraltet(prognose, aktuelleProfilVersion);
-  const kosten = kostenText(prognose.verbrauch.kostenUsdCent);
   return (
     <section className="kd-prognose" aria-label={`KI-Prognose für ${film?.titel || "Eintrag"}`}
       style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${T.saal}`, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "grid", gap: 10 }}>
@@ -143,7 +136,6 @@ export function PrognoseBereich({
       <div style={{ ...mono, opacity: 0.8 }}>
         Profil {prognose.profilVersion} · Modell {prognose.modell}
         {prognose.warumHerkunft === "filmwissen" ? ` · Filmwissen ${prognose.filmwissenVersionId}` : ""}
-        {kosten ? ` · ${kosten}` : ""}
         {veraltet ? " · mit älterem Profil erstellt" : ""}
       </div>
       <PrognoseMeldung meldung={fehler} />
@@ -152,17 +144,16 @@ export function PrognoseBereich({
         <div className="kd-prognose-aktionen">
           {onUebernehmen && <button style={btnStyle(true)} onClick={onUebernehmen}>Als Bewertung übernehmen</button>}
           {prognose.status === "offen" && <button style={btnStyle(false)} onClick={onAnnehmen}>Nur Prognose bestätigen</button>}
-          <button style={btnStyle(false)} onClick={onKorrigieren}>Echt bewerten / korrigieren</button>
           <button style={{ ...btnStyle(false), color: T.gefahr, borderColor: T.gefahr }} onClick={onVerwerfen}>Verwerfen</button>
         </div>
       )}
       {onErstellen && (
         <div className="kd-prognose-neuberechnen">
           <button style={btnStyle(false)} disabled={laeuft || !erstellenMoeglich} onClick={onErstellen}
-            title="Fragt vor dem Ersetzen noch einmal nach und startet dann genau einen kostenpflichtigen KI-Aufruf">
+            title="Fragt vor dem Ersetzen noch einmal nach">
             {laeuft ? "KI-Prognose wird neu erstellt …" : "Prognose neu berechnen"}
           </button>
-          <span style={mono}>Ersetzt diese Prognose nach Bestätigung · kostenpflichtig · keine Websuche</span>
+          <span style={mono}>Ersetzt diese Prognose nach Bestätigung.</span>
         </div>
       )}
     </section>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlogTab } from "./BlogTab.jsx";
+import { IconChevronDown } from "../components/ui.jsx";
 import { ladeProfil } from "../lib/profil.js";
 import {
   createEntdeckenRecommendations,
@@ -21,6 +22,7 @@ import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { entdeckenDailyFeedNotice } from "../services/entdeckenDailyFeed.js";
 import { formatTitleFactsDate } from "../lib/titleFacts.js";
+import "../styles/ui-copy-disclosures.css";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -215,6 +217,7 @@ function RecommendationsView({
   recommendationPins, onRecommendationPinToggle, programm, programmInfo, flixpatrolFacts,
 }) {
   const [showAllPopular, setShowAllPopular] = useState(false);
+  const [offeneEmpfehlungBeschreibung, setOffeneEmpfehlungBeschreibung] = useState(null);
   const [offeneBeliebtBeschreibung, setOffeneBeliebtBeschreibung] = useState(null);
   const selection = useMemo(() => createEntdeckenRecommendations({
     streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
@@ -271,19 +274,28 @@ function RecommendationsView({
       <p>Verfügbar und noch nicht gesehen. Beste Passung zuerst.</p>
     </div>
     {profile?.beschaedigt ? <p className="kd-entdecken-warnung" role="status">Das Geschmacksprofil ist nicht lesbar. Empfehlungen bleiben vorsichtshalber leer.</p> : null}
-    {personal.length ? <div className="kd-entdecken-karten kd-entdecken-auswahlkarten">{personal.map((entry) => (
-      <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-auswahlkarte">
+    {personal.length ? <div className="kd-entdecken-karten kd-entdecken-auswahlkarten">{personal.map((entry, index) => {
+      const hatBeschreibung = Boolean(entry.description);
+      const istBeschreibungOffen = hatBeschreibung && offeneEmpfehlungBeschreibung === entry.targetId;
+      const beschreibungId = `kd-entdecken-empfehlung-beschreibung-${index}`;
+      return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-auswahlkarte">
         {pinButton(entry)}
         <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Zum Entdecken"}</span>
-        {titleHeading(entry)}
+        {hatBeschreibung ? <h3><button type="button" className="kd-entdecken-beschreibung-toggle"
+          aria-expanded={istBeschreibungOffen} aria-controls={beschreibungId}
+          onClick={() => setOffeneEmpfehlungBeschreibung(istBeschreibungOffen ? null : entry.targetId)}>
+          <span>{entry.title}</span><span className="kd-entdecken-aufklappzeichen" aria-hidden="true"><IconChevronDown /></span>
+        </button></h3> : titleHeading(entry)}
         <p className="kd-entdecken-grund">{entry.reasons[0] || "Noch ohne persönliche Passung."}</p>
-        {entry.description ? <p>{entry.description}</p> : null}
-        {descriptionEvidenceLabel(entry) ? <small>{descriptionEvidenceLabel(entry)}</small> : null}
+        {istBeschreibungOffen ? <div id={beschreibungId} className="kd-entdecken-beschreibung">
+          <p>{entry.description}</p>
+          {descriptionEvidenceLabel(entry) ? <small>{descriptionEvidenceLabel(entry)}</small> : null}
+        </div> : null}
         <small>{meta(entry)} · Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
           rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
-      </article>
-    ))}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
+      </article>;
+    })}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
@@ -301,7 +313,7 @@ function RecommendationsView({
             {hatBeschreibung ? <h3><button type="button" className="kd-entdecken-beschreibung-toggle"
               aria-expanded={istBeschreibungOffen} aria-controls={beschreibungId}
               onClick={() => setOffeneBeliebtBeschreibung(istBeschreibungOffen ? null : entry.targetId)}>
-              <span>{entry.title}</span><span className="kd-entdecken-aufklappzeichen" aria-hidden="true">{istBeschreibungOffen ? "−" : "+"}</span>
+              <span>{entry.title}</span><span className="kd-entdecken-aufklappzeichen" aria-hidden="true"><IconChevronDown /></span>
             </button></h3> : titleHeading(entry)}
             {istBeschreibungOffen ? <div id={beschreibungId} className="kd-entdecken-beschreibung">
               <p>{entry.description}</p>

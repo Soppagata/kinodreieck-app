@@ -118,7 +118,7 @@ export function useIntelligenceController({
   const starteVorbewertung = useCallback(async (film) => {
     if (!film?.id || !vorbewertungAktiv || prognoseLaufRef.current) return false;
     if (film.prognose && !window.confirm(
-      "Die bestehende KI-Prognose durch eine neue kostenpflichtige Prognose ersetzen?",
+      "Die bestehende KI-Prognose durch eine neue Prognose ersetzen?",
     )) return false;
 
     const startKonto = accountId;
@@ -159,7 +159,7 @@ export function useIntelligenceController({
         ...alt,
         [film.id]: lokal
           ? basis
-          : `${basis} Der Eintrag bleibt erhalten. Bitte nicht automatisch wiederholen — ein neuer Versuch kann erneut Kosten verursachen.`,
+          : `${basis} Der Eintrag bleibt erhalten. Bitte versuche es später erneut.`,
       }));
       return false;
     } finally {
@@ -286,7 +286,7 @@ export function useIntelligenceController({
   const recherchiereFilmwissen = useCallback(async (film) => {
     if (!film?.id || !filmwissenRechercheAktiv || filmwissenRechercheRef.current) return false;
     if (!window.confirm(
-      "Jetzt Filmwissen recherchieren? Nur einzeln belegte Bausteine dürfen veröffentlicht werden; unsichere Teile bleiben höchstens ein unverbindlicher Entwurf. Das startet genau einen Sonnet-Aufruf und kostet höchstens 6 US-Cent. Es gibt keine automatische Wiederholung.",
+      "Jetzt Filmwissen mit KI recherchieren? Nur einzeln belegte Bausteine dürfen veröffentlicht werden; unsichere Teile bleiben höchstens ein unverbindlicher Entwurf.",
     )) return false;
     const key = String(film.id);
     const startKonto = accountId;
@@ -311,7 +311,7 @@ export function useIntelligenceController({
         [key]: {
           ...(alt[key] || {}),
           phase: "fehler",
-          fehler: `${errorText(error)} Bitte nicht automatisch wiederholen — ein neuer Versuch kann erneut Kosten verursachen.`,
+          fehler: `${errorText(error)} Bitte versuche es später erneut.`,
         },
       }));
       return false;

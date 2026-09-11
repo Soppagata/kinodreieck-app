@@ -114,11 +114,8 @@ export function FilmwissenBereich({
             <>
               <button style={btnStyle(false)} disabled={rechercheLaeuft}
                 onClick={onRecherchieren}>
-                {rechercheLaeuft ? "Bericht wird erstellt …" : "Recherchebericht erstellen"}
+                {rechercheLaeuft ? "KI-Bericht wird erstellt …" : "KI-Recherchebericht erstellen"}
               </button>
-              <div style={{ ...mono, color: T.rauch, marginTop: 7, textTransform: "none", letterSpacing: 0 }}>
-                Ein ausdrücklicher Sonnet-Aufruf · höchstens 6 US-Cent · keine automatische Wiederholung
-              </div>
             </>
           )}
         </>
@@ -141,11 +138,8 @@ export function FilmwissenBereich({
             <>
               <button style={btnStyle(false)} disabled={rechercheLaeuft}
                 onClick={onRecherchieren}>
-                {rechercheLaeuft ? "Bericht wird erstellt …" : "Recherchebericht erstellen"}
+                {rechercheLaeuft ? "KI-Bericht wird erstellt …" : "KI-Recherchebericht erstellen"}
               </button>
-              <div style={{ ...mono, color: T.rauch, marginTop: 7, textTransform: "none", letterSpacing: 0 }}>
-                Ein ausdrücklicher Sonnet-Aufruf · höchstens 6 US-Cent · keine automatische Wiederholung
-              </div>
             </>
           )}
         </>

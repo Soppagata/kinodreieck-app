@@ -13,7 +13,7 @@ export function KinoLinks({ kinos }) {
           <a href={kinoLink(k)} target="_blank" rel="noopener noreferrer"
             style={{ color: "inherit", textDecorationColor: T.wolfram, textUnderlineOffset: 3 }}
             title={kinoLink(k) === NONSTOP_PROGRAMM_URL ? "Zur Nonstop-Programmseite (Buchung dort)" : "Zur Kino-Website / Buchung"}>
-            {k}&thinsp;↗
+            {k}
           </a>
           {istImAbo(k) && <span title="Im Nonstop-Abo (Sonderveranstaltungen ggf. ausgenommen)" style={{ color: T.wolfram }}> ✓</span>}
         </span>
