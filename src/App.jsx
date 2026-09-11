@@ -87,6 +87,7 @@ import { StreamingTab } from "./tabs/StreamingTab.jsx";
 import { EntdeckenTab } from "./tabs/EntdeckenTab.jsx";
 import { FinderTab, erstelleFinderAntwort, kompakteFinderTreffer } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
+import "./styles/rating-followup.css";
 import { EGGS_ENABLED, EGG_AKTIV } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { MobileNavigation, NAVIGATION } from "./components/AppNavigation.jsx";
@@ -1495,7 +1496,8 @@ export default function App() {
     const dienste = gruppiereDienstBadges(sichtbareDienste(t.dienste, sichtbareAuswahl), { kompakt: true });
     if (!dienste.length) return null;
     return (
-      <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
+      <span data-kd-source-labels={JSON.stringify(dienste.map(({ label }) => label))}
+        style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
         {dienste.slice(0, 3).map(({ label }) => (
           <span key={label} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "2px 6px", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {label}

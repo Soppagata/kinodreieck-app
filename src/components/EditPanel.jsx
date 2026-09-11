@@ -62,7 +62,7 @@ export function EditPanel({ film, onSave, onCancel, autorName, herkunftHinweis =
           onClick={() => onSave(alleLeer
             ? { bewertung: null, kategorie: null, begruendung: beg, notiz, bewertet_von: null }
             : { bewertung: { wie: toNum(wie), was: toNum(was), warum: toNum(warum) }, kategorie: kat, begruendung: beg, notiz, bewertet_von: autorName || "max" /* KD-030 */ })}>
-          {speichert ? "Speichert …" : alleLeer ? "Als unbewertet speichern" : herkunftHinweis ? "Vorschlag übernehmen" : "Speichern"}
+          {speichert ? "Speichert …" : alleLeer ? "Als unbewertet speichern" : herkunftHinweis ? "Bewertung speichern" : "Speichern"}
         </button>
         <button disabled={speichert} style={{ ...btnStyle(false), padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>
           Abbrechen

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { ALLE_TYPEN, hatDreieck, normalisiereTyp } from "../lib/typen.js";
 import { quelleZuArray, arrayZuQuelle } from "../lib/quellen.js";
@@ -6,6 +6,28 @@ import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { normalisiereFilmkennung } from "../lib/filmwissen.js";
 import { lesePlausiblesJahr, plausiblerJahresbereich } from "../lib/match.js";
 import { QuellenWahl } from "./QuellenWahl.jsx";
+import { PrognoseBereich } from "./PrognoseBereich.jsx";
+import { setzePrognoseStatus } from "../lib/prognose.js";
+
+function prognoseIdentitaet(f) {
+  return JSON.stringify([
+    String(f.titel || "").trim(), String(f.originaltitel || "").trim(),
+    String(f.jahr || "").trim(), f.typ, String(f.genre || "").trim(),
+    String(f.imdbId || "").trim(), String(f.tmdbId || "").trim(),
+    String(f.wikidataId || "").trim(),
+  ]);
+}
+
+function prognosePasstZurBewertung(prognose, eintrag) {
+  const vorschlag = prognose?.ergebnis;
+  const bewertung = eintrag?.bewertung;
+  return !!vorschlag && !!bewertung
+    && vorschlag.achsen?.wie === bewertung.wie
+    && vorschlag.achsen?.was === bewertung.was
+    && vorschlag.achsen?.warum === bewertung.warum
+    && vorschlag.kategorie_vorschlag === eintrag.kategorie
+    && (vorschlag.begruendung || "") === (eintrag.begruendung || "");
+}
 
 /* ---------- Adaptive Eingabemaske ----------
    EIN Formular für alle Typen. Der Typ-Dropdown steuert die Felder:
@@ -49,23 +71,49 @@ export function FilmForm({
   const [speicherLauf, setSpeicherLauf] = useState(false);
   const speicherLaufRef = useRef(false);
   const [prognoseLauf, setPrognoseLauf] = useState(false);
+  const prognoseLaufRef = useRef(false);
+  const prognoseAnfrageRef = useRef(0);
+  const gemountetRef = useRef(true);
+  const [prognoseEntwurf, setPrognoseEntwurf] = useState(null);
+  const [prognoseHinweis, setPrognoseHinweis] = useState(null);
+  const [filmwissenEntwurf, setFilmwissenEntwurf] = useState(null);
   /* Unbewertet speichern (Besitz erfassen, Dreieck kommt später): blendet
      Kategorie + Achsen aus; gespeichert wird bewertung: null. */
   const [ohneBewertung, setOhneBewertung] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const clamp = (v) => Math.max(0, Math.min(5, Number(v) || 0));
   const bewertbar = hatDreieck(f.typ);
+  const aktuellePrognoseIdentitaet = useMemo(() => prognoseIdentitaet(f), [f]);
+  const prognoseIdentitaetRef = useRef(aktuellePrognoseIdentitaet);
+  prognoseIdentitaetRef.current = aktuellePrognoseIdentitaet;
+  const letztePrognoseIdentitaetRef = useRef(aktuellePrognoseIdentitaet);
   const artOptionen = f.typ === "musik"
     ? ["Album", "Soundtrack", "Konzert", "Single", "Sonstiges"]
     : ["Persönlichkeit", "Studio", "Videospiel", "Theaterstück", "Interview", "Buch", "Podcast", "Sonstiges"];
   const rollen = ["Regisseur:In", "Schauspieler:In", "Komponist:In", "Drehbuch:In", "Sonstige"];
 
+  useEffect(() => {
+    gemountetRef.current = true;
+    return () => {
+      gemountetRef.current = false;
+      prognoseAnfrageRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (letztePrognoseIdentitaetRef.current !== aktuellePrognoseIdentitaet) {
+      letztePrognoseIdentitaetRef.current = aktuellePrognoseIdentitaet;
+      setPrognoseEntwurf(null);
+      setPrognoseHinweis(null);
+      setFilmwissenEntwurf(null);
+    }
+  }, [aktuellePrognoseIdentitaet]);
+
   if (!open) {
     return <button className="kd-mediathek-hinzufuegen" style={btnStyle(false)} onClick={() => setOpen(true)}>+ Eintrag hinzufügen</button>;
   }
 
-  const speichern = async (mitPrognose = false) => {
-    if (speicherLaufRef.current) return;
+  const baueFilmEintrag = ({ unbewertet = false } = {}) => {
     if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
     if (bewertbar && !f.jahr.trim()) { setFehler("Jahr ist Pflicht (Schlüssel & Abgleich)."); return; }
     // KD-018: nicht-leeres Jahr muss ganzzahlig und medientypspezifisch
@@ -87,45 +135,115 @@ export function FilmForm({
       setFehler("Eine optionale Film-ID hat nicht das erwartete Format. Leere das betreffende Feld oder prüfe die ID bei IMDb, TMDB beziehungsweise Wikidata.");
       return;
     }
+    return {
+      titel: f.titel.trim(),
+      originaltitel: f.originaltitel.trim() || f.titel.trim(),
+      jahr: jahrEingabe.jahr,
+      jahr_bis: null,
+      typ: f.typ,
+      quelle: arrayZuQuelle(f.quellen),
+      kategorie: unbewertet ? null : f.kategorie,
+      bewertet_von: unbewertet ? null : (autorName || "max"),
+      bewertung: unbewertet ? null : { wie: f.wie, was: f.was, warum: f.warum },
+      genre: f.genre.split(",").map((g) => g.trim()).filter(Boolean),
+      tags: [],
+      begruendung: unbewertet ? "" : f.begruendung.trim(),
+      notiz: (initial && initial.notiz) || "",
+      status: "gesetzt",
+      ...(initial?.film_at_id ? { film_at_id: initial.film_at_id } : {}),
+      ...(initial?.watchmode_id ? { watchmode_id: initial.watchmode_id } : {}),
+      ...(externeKennungen.imdb ? { imdb_id: externeKennungen.imdb } : {}),
+      ...(externeKennungen.tmdb ? { tmdb_id: externeKennungen.tmdb } : {}),
+      ...(externeKennungen.wikidata ? { wikidata_id: externeKennungen.wikidata } : {}),
+    };
+  };
+
+  const startePrognoseEntwurf = async () => {
+    if (prognoseLaufRef.current || speicherLaufRef.current || !onAddMitPrognose) return;
+    const kandidat = baueFilmEintrag({ unbewertet: true });
+    if (!kandidat) return;
+    if (prognoseEntwurf && !window.confirm("Die angezeigte KI-Bewertung neu berechnen?")) return;
+    const startIdentitaet = prognoseIdentitaetRef.current;
+    const anfrage = ++prognoseAnfrageRef.current;
+    setFehler("");
+    setPrognoseHinweis(null);
+    prognoseLaufRef.current = true;
+    setPrognoseLauf(true);
+    let ergebnis;
+    try {
+      ergebnis = await onAddMitPrognose(kandidat);
+    } catch (error) {
+      ergebnis = { status: "fehler", fehler: error?.message || "KI-Bewertung konnte nicht erstellt werden." };
+    }
+    prognoseLaufRef.current = false;
+    if (gemountetRef.current) setPrognoseLauf(false);
+    if (!gemountetRef.current || prognoseAnfrageRef.current !== anfrage) return;
+    if (prognoseIdentitaetRef.current !== startIdentitaet) {
+      setFehler("Die Angaben wurden während der KI-Anfrage geändert. Die alte Antwort wurde verworfen; dein Entwurf bleibt erhalten.");
+      return;
+    }
+    if (ergebnis?.status === "bereit" && ergebnis.prognose) {
+      setPrognoseEntwurf(ergebnis.prognose);
+      setFilmwissenEntwurf(ergebnis.filmwissen || null);
+      setPrognoseHinweis(ergebnis.hinweis
+        ? { art: "hinweis", text: ergebnis.hinweis }
+        : null);
+      return;
+    }
+    if (ergebnis?.status === "hinweis") {
+      setPrognoseEntwurf(null);
+      setFilmwissenEntwurf(ergebnis.filmwissen || null);
+      setPrognoseHinweis({ art: "hinweis", text: ergebnis.text });
+      return;
+    }
+    if (ergebnis?.status === "veraltet") {
+      setFehler("Der Kontostand hat während der KI-Anfrage gewechselt. Die Antwort wurde verworfen; dein Entwurf bleibt erhalten.");
+      return;
+    }
+    setFilmwissenEntwurf(ergebnis?.filmwissen || null);
+    setFehler(ergebnis?.fehler || "KI-Bewertung konnte nicht erstellt werden. Dein Entwurf bleibt erhalten.");
+  };
+
+  const uebernehmePrognoseInFormular = () => {
+    const ergebnis = prognoseEntwurf?.ergebnis;
+    if (!ergebnis || [ergebnis.achsen?.wie, ergebnis.achsen?.was, ergebnis.achsen?.warum].some((wert) => wert == null)
+        || !ergebnis.kategorie_vorschlag) return;
+    setOhneBewertung(false);
+    setF((aktuell) => ({
+      ...aktuell,
+      wie: ergebnis.achsen.wie,
+      was: ergebnis.achsen.was,
+      warum: ergebnis.achsen.warum,
+      kategorie: ergebnis.kategorie_vorschlag,
+      begruendung: ergebnis.begruendung || aktuell.begruendung,
+    }));
+  };
+
+  const speichern = async () => {
+    if (speicherLaufRef.current) return;
+    const validierterFilm = baueFilmEintrag({ unbewertet: ohneBewertung });
+    if (!validierterFilm) return;
     setFehler("");
     speicherLaufRef.current = true;
     setSpeicherLauf(true);
-    if (mitPrognose) setPrognoseLauf(true);
     // KD-019: Rückgabewert von onAdd/addFilm auswerten (null/false = Dublette).
     let ergebnis;
     try {
       if (bewertbar) {
-        const unbewertet = mitPrognose || ohneBewertung;
-        const eintrag = {
-          titel: f.titel.trim(),
-          originaltitel: f.originaltitel.trim() || f.titel.trim(),
-          jahr: jahrEingabe.jahr,
-          jahr_bis: null,
-          typ: f.typ,
-          quelle: arrayZuQuelle(f.quellen),
-          kategorie: unbewertet ? null : f.kategorie,
-          bewertet_von: unbewertet ? null : (autorName || "max"), // KD-030
-          bewertung: unbewertet ? null : { wie: f.wie, was: f.was, warum: f.warum },
-          genre: f.genre.split(",").map((g) => g.trim()).filter(Boolean),
-          tags: [],
-          begruendung: unbewertet ? "" : f.begruendung.trim(),
-          notiz: (initial && initial.notiz) || "",
-          status: "gesetzt",
-          /* Externe IDs aus Kino/Streaming nicht beim Anlegen verlieren. */
-          ...(initial?.film_at_id ? { film_at_id: initial.film_at_id } : {}),
-          ...(initial?.watchmode_id ? { watchmode_id: initial.watchmode_id } : {}),
-          ...(externeKennungen.imdb ? { imdb_id: externeKennungen.imdb } : {}),
-          ...(externeKennungen.tmdb ? { tmdb_id: externeKennungen.tmdb } : {}),
-          ...(externeKennungen.wikidata ? { wikidata_id: externeKennungen.wikidata } : {}),
-        };
-        ergebnis = mitPrognose
-          ? await onAddMitPrognose?.(eintrag)
-          : await onAdd(eintrag);
+        let eintrag = validierterFilm;
+        if (prognoseEntwurf) {
+          const zielStatus = prognosePasstZurBewertung(prognoseEntwurf, eintrag)
+            ? "angenommen"
+            : eintrag.bewertung ? "korrigiert" : null;
+          const wechsel = zielStatus ? setzePrognoseStatus(prognoseEntwurf, zielStatus) : null;
+          eintrag = { ...eintrag, prognose: wechsel?.ok ? wechsel.prognose : prognoseEntwurf };
+        }
+        ergebnis = await onAdd(eintrag);
       } else {
         // Musik/Sonstiges — schlichte Struktur, hart kein Dreieck.
         ergebnis = await onAdd({
           titel: f.titel.trim(),
-          jahr: jahrEingabe.jahr,
+          jahr: validierterFilm.jahr,
           typ: f.typ,
           art: f.art === "Persönlichkeit" ? ("Persönlichkeit" + (f.sub ? " · " + f.sub : "")) : (f.art || null),
           kategorie: f.art === "Persönlichkeit" ? "person" : (f.art === "Studio" ? "studio" : null),
@@ -138,7 +256,6 @@ export function FilmForm({
       setFehler(error?.message || "Eintrag konnte nicht gespeichert werden.");
       return;
     } finally {
-      if (mitPrognose) setPrognoseLauf(false);
       speicherLaufRef.current = false;
       setSpeicherLauf(false);
     }
@@ -148,7 +265,9 @@ export function FilmForm({
       setFehler("Eintrag existiert bereits (Titel + Jahr) — nichts gespeichert, Eingabe bleibt erhalten.");
       return;
     }
-    setF(leer); setOhneBewertung(false); setOpen(false); setFehler("");
+    prognoseAnfrageRef.current += 1;
+    setF(leer); setOhneBewertung(false); setPrognoseEntwurf(null); setPrognoseHinweis(null); setFilmwissenEntwurf(null);
+    setOpen(false); setFehler("");
     if (onDone) onDone();
   };
 
@@ -248,22 +367,47 @@ export function FilmForm({
 
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button style={btnStyle(true)} disabled={speicherLauf} onClick={() => speichern(false)}>{speicherLauf && !prognoseLauf ? "Speichert …" : "Hinzufügen"}</button>
+        <button style={btnStyle(true)} disabled={speicherLauf || prognoseLauf} onClick={speichern}>{speicherLauf ? "Speichert …" : "Hinzufügen"}</button>
         {bewertbar && prognoseAktiv && onAddMitPrognose && (
-          <button style={btnStyle(false)} disabled={speicherLauf || !!prognoseSperrgrund}
-            title="Speichert zuerst einen unbewerteten Eintrag und erstellt danach eine KI-Prognose"
-            onClick={() => speichern(true)}>
-            {prognoseLauf ? "Speichert & prognostiziert …" : "Anlegen & KI-Prognose erstellen"}
+          <button style={btnStyle(false)} disabled={speicherLauf || prognoseLauf || !!prognoseSperrgrund}
+            title="Erstellt eine unverbindliche Vorschau; gespeichert wird erst mit Hinzufügen"
+            onClick={startePrognoseEntwurf}>
+            {prognoseLauf ? "KI-Bewertung wird erstellt …" : prognoseEntwurf ? "KI-Bewertung neu berechnen" : "KI-Bewertung erstellen"}
           </button>
         )}
-        <button style={btnStyle(false)} disabled={speicherLauf} onClick={() => { setOpen(false); setFehler(""); if (onDone) onDone(); }}>Abbrechen</button>
+        <button style={btnStyle(false)} disabled={speicherLauf} onClick={() => {
+          prognoseAnfrageRef.current += 1;
+          setOpen(false); setFehler(""); setPrognoseEntwurf(null); setPrognoseHinweis(null); setFilmwissenEntwurf(null);
+          if (onDone) onDone();
+        }}>Abbrechen</button>
       </div>
       {bewertbar && prognoseAktiv && onAddMitPrognose && (
         <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>
           {prognoseSperrgrund
             ? prognoseSperrgrund
-            : "Der Eintrag wird zuerst unbewertet gespeichert. Danach wird die unverbindliche KI-Prognose erstellt."}
+            : "Die persönliche KI-Bewertung erscheint hier im Entwurf. Erst Hinzufügen speichert den Eintrag und deine geprüften Werte."}
         </span>
+      )}
+      {bewertbar && (prognoseLauf || prognoseEntwurf || prognoseHinweis || filmwissenEntwurf) && (
+        <div className="kd-rating-prognose-entwurf" onClick={(event) => event.stopPropagation()}>
+          <PrognoseBereich
+            film={{
+              id: "prognose-entwurf",
+              titel: f.titel.trim(),
+              jahr: Number(f.jahr) || null,
+              typ: f.typ,
+              prognose: prognoseEntwurf,
+            }}
+            laeuft={prognoseLauf}
+            fehler={prognoseHinweis}
+            erstellenMoeglich={!prognoseSperrgrund}
+            sperrgrund={prognoseSperrgrund}
+            onUebernehmen={prognoseEntwurf ? uebernehmePrognoseInFormular : null}
+            uebernehmenLabel="Vorschlag in Eingabe übernehmen"
+            onVerwerfen={prognoseEntwurf ? () => { setPrognoseEntwurf(null); setPrognoseHinweis(null); } : null}
+            filmwissen={filmwissenEntwurf}
+          />
+        </div>
       )}
     </div>
   );

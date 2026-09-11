@@ -3,6 +3,7 @@ import { bewertungskategorieLabel } from "../lib/kategorien.js";
 import {
   lesePrognose, passungsBand, prognoseIstVeraltet,
 } from "../lib/prognose.js";
+import { FilmwissenBereich } from "./FilmwissenBereich.jsx";
 
 const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", color: T.rauch };
 const SICHERHEIT_LABEL = {
@@ -54,29 +55,42 @@ export function PrognoseBereich({
   onUebernehmen,
   onKorrigieren,
   onVerwerfen,
+  uebernehmenLabel = "Als Bewertung übernehmen",
+  filmwissen = null,
 }) {
   const gelesen = lesePrognose(film);
   if (!gelesen.ok) {
     return (
       <div role="alert" style={{ borderLeft: `3px solid ${T.gefahr}`, paddingLeft: 10, color: T.rauch, fontSize: 12 }}>
-        Die gespeicherte KI-Prognose ist nicht lesbar und wird nicht als Bewertung angezeigt.
+        Die gespeicherte KI-Bewertung ist nicht lesbar und wird nicht als Bewertung angezeigt.
       </div>
     );
   }
   const prognose = gelesen.prognose;
   if (!prognose) {
     return (
-      <div className="kd-prognose-start">
-        <button style={btnStyle(false)} disabled={laeuft || !erstellenMoeglich} onClick={onErstellen}
-          title={!erstellenMoeglich ? (sperrgrund || "Prognose derzeit nicht möglich") : "Erstellt eine unverbindliche KI-Prognose"}>
-          {laeuft ? "KI-Prognose wird erstellt …" : "KI-Prognose erstellen"}
-        </button>
-        <span style={{ ...mono, lineHeight: 1.45 }}>
-          Unverbindliche Einschätzung auf Basis deines Geschmacksprofils.
-        </span>
-        {!erstellenMoeglich && sperrgrund && <span style={{ color: T.wolfram, fontSize: 12 }}>{sperrgrund}</span>}
-        <PrognoseMeldung meldung={fehler} />
-      </div>
+      <section className="kd-prognose kd-ki-bewertung" aria-label={`KI-Bewertung für ${film?.titel || "Eintrag"}`}>
+        <div className="kd-ki-bewertung-kopf">
+          <strong>KI-Bewertung</strong>
+          <span>Persönliche Einschätzung mit Quellenprüfung für WARUM.</span>
+        </div>
+        {filmwissen && (
+          <FilmwissenBereich {...filmwissen} eingebettet zeigeRechercheAktion={false} />
+        )}
+        <div className="kd-prognose-start">
+          {onErstellen && (
+            <button style={btnStyle(false)} disabled={laeuft || !erstellenMoeglich} onClick={onErstellen}
+              title={!erstellenMoeglich ? (sperrgrund || "KI-Bewertung derzeit nicht möglich") : "Erstellt eine unverbindliche persönliche KI-Bewertung"}>
+              {laeuft ? "KI-Bewertung wird erstellt …" : "KI-Bewertung erstellen"}
+            </button>
+          )}
+          <span style={{ ...mono, lineHeight: 1.45 }}>
+            WIE, WAS und Passung sind persönlich geschätzt. Ohne belegte Quellenbasis bleibt WARUM klar als vorläufig markiert.
+          </span>
+          {!erstellenMoeglich && sperrgrund && <span style={{ color: T.wolfram, fontSize: 12 }}>{sperrgrund}</span>}
+          <PrognoseMeldung meldung={fehler} />
+        </div>
+      </section>
     );
   }
 
@@ -84,12 +98,20 @@ export function PrognoseBereich({
   const band = passungsBand(e.passung);
   const veraltet = prognoseIstVeraltet(prognose, aktuelleProfilVersion);
   return (
-    <section className="kd-prognose" aria-label={`KI-Prognose für ${film?.titel || "Eintrag"}`}
+    <section className="kd-prognose kd-ki-bewertung" aria-label={`KI-Bewertung für ${film?.titel || "Eintrag"}`}
       style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${T.saal}`, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <strong style={{ color: T.leinwand, fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2 }}>KI-Prognose</strong>
+        <strong style={{ color: T.leinwand, fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2 }}>KI-Bewertung</strong>
         <span style={{ ...mono }}>{STATUS_LABEL[prognose.status]}</span>
       </div>
+
+      <p style={{ margin: 0, color: T.rauch, fontSize: 12 }}>
+        WIE, WAS und Passung sind persönliche KI-Einschätzungen. Filmwissen prüft, ob WARUM quellenbasiert belegt werden kann.
+      </p>
+
+      {filmwissen && (
+        <FilmwissenBereich {...filmwissen} eingebettet zeigeRechercheAktion={false} />
+      )}
 
       <div style={{ color: T.leinwand, fontSize: 16 }}>
         Persönliche Passung: <strong>{band?.label || "nicht bestimmbar"}</strong>
@@ -101,11 +123,11 @@ export function PrognoseBereich({
       </div>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12 }}>
         {e.achsen.warum == null
-          ? "Für WARUM liegt kein sicher validierbarer Prognosewert vor."
+          ? "Für WARUM liegt kein sicher belegbarer Wert vor; die Quellenlage reicht derzeit nicht aus."
           : prognose.warumHerkunft === "filmwissen"
-            ? "WARUM übernimmt die belegte kulturelle Einordnung aus dem gemeinsamen Filmwissen; Sonnet erklärt nur die persönliche Verbindung dazu."
-            : "WARUM ist eine vorläufige Sonnet-Schätzung aus Filmkontext und deinem Geschmacksprofil – kein belegter gemeinsamer Filmwissen-Wert."}
-        {" "}Die KI-Prognose ist keine echte Bewertung.
+            ? "WARUM übernimmt die belegte gemeinsame Einordnung aus dem Filmwissen; die persönliche KI verbindet sie mit deinem Geschmacksprofil."
+            : "WARUM ist vorläufig aus Filmkontext und deinem Geschmacksprofil geschätzt; ein belegter gemeinsamer Quellenwert liegt nicht vor."}
+        {" "}Die KI-Bewertung ist ohne dein bewusstes Speichern keine echte Bewertung.
       </p>
       {e.begruendung && (
         <div style={{ color: T.leinwandTief, fontSize: 13, lineHeight: 1.55 }}>{e.begruendung}</div>
@@ -142,18 +164,18 @@ export function PrognoseBereich({
 
       {(prognose.status === "offen" || prognose.status === "angenommen") && (
         <div className="kd-prognose-aktionen">
-          {onUebernehmen && <button style={btnStyle(true)} onClick={onUebernehmen}>Als Bewertung übernehmen</button>}
-          {prognose.status === "offen" && <button style={btnStyle(false)} onClick={onAnnehmen}>Nur Prognose bestätigen</button>}
-          <button style={{ ...btnStyle(false), color: T.gefahr, borderColor: T.gefahr }} onClick={onVerwerfen}>Verwerfen</button>
+          {onUebernehmen && <button style={btnStyle(true)} onClick={onUebernehmen}>{uebernehmenLabel}</button>}
+          {prognose.status === "offen" && onAnnehmen && <button style={btnStyle(false)} onClick={onAnnehmen}>Nur Vorschlag bestätigen</button>}
+          {onVerwerfen && <button style={{ ...btnStyle(false), color: T.gefahr, borderColor: T.gefahr }} onClick={onVerwerfen}>Verwerfen</button>}
         </div>
       )}
       {onErstellen && (
         <div className="kd-prognose-neuberechnen">
           <button style={btnStyle(false)} disabled={laeuft || !erstellenMoeglich} onClick={onErstellen}
             title="Fragt vor dem Ersetzen noch einmal nach">
-            {laeuft ? "KI-Prognose wird neu erstellt …" : "Prognose neu berechnen"}
+            {laeuft ? "KI-Bewertung wird neu erstellt …" : "KI-Bewertung neu berechnen"}
           </button>
-          <span style={mono}>Ersetzt diese Prognose nach Bestätigung.</span>
+          <span style={mono}>Ersetzt den Vorschlag nach Bestätigung.</span>
         </div>
       )}
     </section>

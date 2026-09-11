@@ -11,12 +11,12 @@ import { errorText } from "../services/errors.js";
 import { kiAn } from "../lib/kiSchalter.js";
 import { ladeProfil } from "../lib/profil.js";
 import { setzePrognoseStatus } from "../lib/prognose.js";
-import { ensureIds, slugId } from "../lib/match.js";
-import { heileRotlinks } from "../lib/artikel.js";
+import { slugId } from "../lib/match.js";
+import { mergePersonalMasterEntry } from "../lib/personalEntryChronology.js";
 import {
-  markNewPersonalMasterEntries,
-  mergePersonalMasterEntry,
-} from "../lib/personalEntryChronology.js";
+  FILMWISSEN_STATUS, filmwissenRechercheKennung, filmwissenSonderstatus,
+} from "../lib/filmwissen.js";
+import { istSichererFilmwissenQuellenstopp } from "../lib/kiBewertungFlow.js";
 
 export function istFilmwissenRechercheFreigegeben(session, filmwissenAn) {
   return session?.mode === "account"
@@ -39,6 +39,7 @@ export function useIntelligenceController({
   schreibeArtikel,
   setErr,
   filmwissenDienst = filmwissenService,
+  vorbewertungDienst = erstelleVorbewertungsErgebnis,
 }) {
   const prognoseLaufRef = useRef(null);
   const prognoseAbortRef = useRef(null);
@@ -46,6 +47,10 @@ export function useIntelligenceController({
   const [prognoseFehler, setPrognoseFehler] = useState({});
   const [aktuellesProfil, setAktuellesProfil] = useState(undefined);
   const [aktuelleProfilVersion, setAktuelleProfilVersion] = useState(null);
+
+  const accountId = session.mode === "account" && session.state === "ready"
+    ? session.account?.id || null
+    : null;
 
   useEffect(() => {
     if (!["mediathek", "kino", "streaming", "finder"].includes(tab)) return undefined;
@@ -60,7 +65,7 @@ export function useIntelligenceController({
       setAktuelleProfilVersion(null);
     });
     return () => { aktiv = false; };
-  }, [tab, master]);
+  }, [tab, master, accountId]);
 
   const vorbewertungAktiv = session.mode === "account"
     && session.state === "ready"
@@ -77,10 +82,6 @@ export function useIntelligenceController({
           : !Array.isArray(aktuellesProfil.signale) || aktuellesProfil.signale.length === 0
             ? "Bestätige zuerst mindestens ein Signal in deinem Geschmacksprofil."
             : null;
-  const accountId = session.mode === "account" && session.state === "ready"
-    ? session.account?.id || null
-    : null;
-
   useEffect(() => {
     prognoseAbortRef.current?.abort();
     prognoseAbortRef.current = null;
@@ -116,9 +117,10 @@ export function useIntelligenceController({
   ]);
 
   const starteVorbewertung = useCallback(async (film) => {
-    if (!film?.id || !vorbewertungAktiv || prognoseLaufRef.current) return false;
+    if (!film?.id || !vorbewertungAktiv || prognoseLaufRef.current
+        || filmwissenRechercheRef.current) return false;
     if (film.prognose && !window.confirm(
-      "Die bestehende KI-Prognose durch eine neue Prognose ersetzen?",
+      "Den bestehenden KI-Bewertungsvorschlag neu berechnen?",
     )) return false;
 
     const startKonto = accountId;
@@ -129,7 +131,7 @@ export function useIntelligenceController({
     setPrognoseLaufId(film.id);
     setPrognoseFehler((alt) => ({ ...alt, [film.id]: null }));
     try {
-      const ergebnis = await erstelleVorbewertungsErgebnis(film, { signal: controller.signal });
+      const ergebnis = await vorbewertungDienst(film, { signal: controller.signal });
       if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
       if (!ergebnis.prognose) {
         setPrognoseFehler((alt) => ({
@@ -140,7 +142,7 @@ export function useIntelligenceController({
       }
       const prognose = ergebnis.prognose;
       if (!await speichereFilmAenderungStrikt(film.id, { prognose }, startKonto)) {
-        throw new Error("Die KI-Prognose konnte nicht im Eintrag gespeichert werden.");
+        throw new Error("Der KI-Bewertungsvorschlag konnte nicht im Eintrag gespeichert werden.");
       }
       if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
       setAktuelleProfilVersion(prognose.profilVersion);
@@ -169,7 +171,7 @@ export function useIntelligenceController({
         setPrognoseLaufId(null);
       }
     }
-  }, [accountId, kontoIstAktuell, speichereFilmAenderungStrikt, vorbewertungAktiv]);
+  }, [accountId, kontoIstAktuell, speichereFilmAenderungStrikt, vorbewertungAktiv, vorbewertungDienst]);
 
   const setzeFilmPrognoseStatus = useCallback(async (film, status) => {
     const startKonto = accountId;
@@ -188,52 +190,127 @@ export function useIntelligenceController({
     if (!gespeichert && kontoIstAktuell(startKonto)) {
       setPrognoseFehler((alt) => ({
         ...alt,
-        [film.id]: "Der Prognosestatus konnte nicht gespeichert werden.",
+        [film.id]: "Der Status der KI-Bewertung konnte nicht gespeichert werden.",
       }));
     }
     return gespeichert;
   }, [accountId, kontoIstAktuell, speichereFilmAenderungStrikt]);
 
   const addFilmMitPrognose = useCallback(async (film) => {
-    if (!vorbewertungAktiv) return null;
+    if (!vorbewertungAktiv) {
+      return { status: "gesperrt", fehler: vorbewertungSperrgrund || "KI-Bewertung ist derzeit nicht verfügbar." };
+    }
     const startKonto = accountId;
-    if (!startKonto || !kontoIstAktuell(startKonto)) return null;
+    if (!startKonto || !kontoIstAktuell(startKonto)) return { status: "veraltet" };
     const kandidat = {
       ...film,
+      id: film.id || slugId(film.titel, film.jahr),
       bewertung: null,
       kategorie: null,
       bewertet_von: null,
       begruendung: "",
     };
-    const id = kandidat.id || slugId(kandidat.titel, kandidat.jahr);
-    let neu = null, next = null, doppelt = false;
-    const gespeichert = await mutiereMaster((aktuell) => {
-      if (!kontoIstAktuell(startKonto)) return { abgebrochen: true };
-      if (aktuell.some((eintrag) => eintrag.id === id)) {
-        doppelt = true;
-        return { abgebrochen: true };
-      }
-      const prepared = ensureIds([{ ...kandidat, id }])[0];
-      next = ensureIds(markNewPersonalMasterEntries(aktuell, [prepared]));
-      neu = next[next.length - 1];
-      return { master: next, meta: masterMeta, herkunft: naechsteHerkunft() };
-    });
-    if (!gespeichert || !kontoIstAktuell(startKonto)) {
-      if (doppelt) setErr("Eintrag existiert bereits: " + kandidat.titel
-        + (kandidat.jahr ? ` (${kandidat.jahr})` : ""));
-      return null;
+    if (prognoseLaufRef.current || filmwissenRechercheRef.current) {
+      return { status: "beschaeftigt", fehler: "Eine andere KI-Bewertung wird gerade erstellt." };
     }
-    await schreibeArtikel((prev) => {
-      const [geheilt, anzahl] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
-      if (anzahl > 0) return geheilt;
-      return prev;
-    });
-    await starteVorbewertung(neu);
-    return id;
+
+    const controller = new AbortController();
+    const lauf = { accountId: startKonto, filmId: String(kandidat.id), controller, entwurf: true };
+    prognoseLaufRef.current = lauf;
+    prognoseAbortRef.current = controller;
+    setPrognoseLaufId(kandidat.id);
+    try {
+      let filmwissen = null;
+      let filmwissenFehler = null;
+      try {
+        filmwissen = await filmwissenDienst.read(kandidat, { signal: controller.signal });
+      } catch (error) {
+        filmwissenFehler = errorText(error);
+      }
+      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) {
+        return { status: "veraltet" };
+      }
+      if (filmwissen?.status === FILMWISSEN_STATUS.VERALTET) {
+        return { status: "veraltet" };
+      }
+      const brauchtQuellenlauf = [
+        FILMWISSEN_STATUS.CACHE_MISS,
+        FILMWISSEN_STATUS.NICHT_ZUORDENBAR,
+      ].includes(filmwissen?.status)
+        && istFilmwissenRechercheFreigegeben(session, kiAn("filmwissen"))
+        && !!filmwissenRechercheKennung(kandidat);
+      if (brauchtQuellenlauf) {
+        try {
+          filmwissen = await filmwissenDienst.recherchiere(kandidat, { signal: controller.signal });
+          filmwissenFehler = null;
+        } catch (error) {
+          if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) {
+            return { status: "veraltet" };
+          }
+          if (!istSichererFilmwissenQuellenstopp(error)) {
+            return {
+              status: "fehler",
+              fehler: `${errorText(error)} Die Quellenprüfung wurde nicht sicher abgeschlossen; deshalb wurde keine persönliche Einschätzung gestartet.`,
+              filmwissen: { phase: "fehler", daten: null, fehler: errorText(error) },
+            };
+          }
+          filmwissen = filmwissenSonderstatus(FILMWISSEN_STATUS.GESPERRT);
+          filmwissenFehler = `${errorText(error)} WARUM bleibt deshalb vorläufig.`;
+        }
+      }
+      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) {
+        return { status: "veraltet" };
+      }
+      if (filmwissen?.status === FILMWISSEN_STATUS.VERALTET) {
+        return { status: "veraltet" };
+      }
+      const ergebnis = await vorbewertungDienst(kandidat, { signal: controller.signal });
+      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) {
+        return { status: "veraltet" };
+      }
+      if (!ergebnis.prognose) {
+        return {
+          status: "hinweis",
+          id: kandidat.id,
+          text: ergebnis.displayText || "Es konnten keine sicheren Werte für die KI-Bewertung übernommen werden.",
+          filmwissen: {
+            phase: filmwissenFehler ? "fehler" : "fertig",
+            daten: filmwissen,
+            fehler: filmwissenFehler,
+          },
+        };
+      }
+      setAktuelleProfilVersion(ergebnis.prognose.profilVersion);
+      return {
+        status: "bereit",
+        id: kandidat.id,
+        prognose: ergebnis.prognose,
+        hinweis: ergebnis.responseMode === "partial" ? ergebnis.displayText : null,
+        filmwissen: {
+          phase: filmwissenFehler ? "fehler" : "fertig",
+          daten: filmwissen,
+          fehler: filmwissenFehler,
+        },
+      };
+    } catch (error) {
+      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) {
+        return { status: "veraltet" };
+      }
+      const lokal = error?.source === "forecast" && error?.operation === "forecast.validate";
+      return {
+        status: "fehler",
+        fehler: lokal ? error.message : `${errorText(error)} Bitte versuche es später erneut.`,
+      };
+    } finally {
+      if (prognoseLaufRef.current === lauf) {
+        prognoseLaufRef.current = null;
+        if (prognoseAbortRef.current === controller) prognoseAbortRef.current = null;
+        setPrognoseLaufId(null);
+      }
+    }
   }, [
-    accountId, kontoIstAktuell, masterMeta, mitMustwatch, mustwatch,
-    mutiereMaster, naechsteHerkunft, schreibeArtikel, setErr,
-    starteVorbewertung, vorbewertungAktiv,
+    accountId, filmwissenDienst, kontoIstAktuell, session, vorbewertungAktiv,
+    vorbewertungDienst, vorbewertungSperrgrund,
   ]);
 
   const [filmwissenProFilm, setFilmwissenProFilm] = useState({});
@@ -283,9 +360,10 @@ export function useIntelligenceController({
     }
   }, [accountId, filmwissenDienst, filmwissenLesenAktiv, kontoIstAktuell]);
 
-  const recherchiereFilmwissen = useCallback(async (film) => {
-    if (!film?.id || !filmwissenRechercheAktiv || filmwissenRechercheRef.current) return false;
-    if (!window.confirm(
+  const recherchiereFilmwissen = useCallback(async (film, optionen = {}) => {
+    if (!film?.id || !filmwissenRechercheAktiv || filmwissenRechercheRef.current
+        || prognoseLaufRef.current) return false;
+    if (!optionen?.bereitsAusgeloest && !window.confirm(
       "Jetzt Filmwissen mit KI recherchieren? Nur einzeln belegte Bausteine dürfen veröffentlicht werden; unsichere Teile bleiben höchstens ein unverbindlicher Entwurf.",
     )) return false;
     const key = String(film.id);
@@ -306,15 +384,19 @@ export function useIntelligenceController({
       return true;
     } catch (error) {
       if (filmwissenRechercheRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
+      const vorlaeufig = istSichererFilmwissenQuellenstopp(error);
       setFilmwissenProFilm((alt) => ({
         ...alt,
         [key]: {
           ...(alt[key] || {}),
           phase: "fehler",
-          fehler: `${errorText(error)} Bitte versuche es später erneut.`,
+          daten: vorlaeufig ? filmwissenSonderstatus(FILMWISSEN_STATUS.GESPERRT) : null,
+          fehler: vorlaeufig
+            ? `${errorText(error)} Die persönliche Einschätzung kann fortfahren; WARUM bleibt vorläufig.`
+            : `${errorText(error)} Die Quellenprüfung wurde nicht sicher abgeschlossen; deshalb wurde keine persönliche Einschätzung gestartet.`,
         },
       }));
-      return false;
+      return vorlaeufig ? { status: "vorlaeufig", vorlaeufig: true } : false;
     } finally {
       if (filmwissenRechercheRef.current === lauf) filmwissenRechercheRef.current = null;
     }

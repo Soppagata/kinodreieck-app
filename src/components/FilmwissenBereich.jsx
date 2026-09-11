@@ -18,11 +18,21 @@ export function FilmwissenBereich({
   rechercheLaeuft = false,
   rechercheMoeglich = false,
   onRecherchieren,
+  eingebettet = false,
+  zeigeRechercheAktion = true,
 }) {
   const status = daten?.status || null;
   return (
-    <section className="kd-filmwissen" aria-label="Belegtes Filmwissen">
-      <div className="kd-filmwissen-titel" style={{ color: T.leinwand, marginBottom: 7 }}>Belegtes Filmwissen</div>
+    <section className={`kd-filmwissen${eingebettet ? " kd-filmwissen--eingebettet" : ""}`} aria-label="Quellenbasis für WARUM">
+      <div className="kd-filmwissen-titel" style={{ color: T.leinwand, marginBottom: 7 }}>
+        {eingebettet ? "Quellenbasis für WARUM" : "Belegtes Filmwissen"}
+      </div>
+
+      {phase === "idle" && !status && (
+        <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>
+          Vorhandenes gemeinsames Filmwissen wird für den WARUM-Wert wiederverwendet.
+        </p>
+      )}
 
       {phase === "laedt" && (
         <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>Gemeinsamer Bericht wird geladen …</p>
@@ -110,7 +120,7 @@ export function FilmwissenBereich({
               ? "Die Filmkennung ist eindeutig, aber noch keinem gemeinsamen Werkbericht zugeordnet."
               : "Für diesen Eintrag fehlt noch eine eindeutige IMDb-, TMDB- oder Wikidata-Kennung."}
           </p>
-          {rechercheMoeglich && (
+          {zeigeRechercheAktion && rechercheMoeglich && (
             <>
               <button style={btnStyle(false)} disabled={rechercheLaeuft}
                 onClick={onRecherchieren}>
@@ -134,7 +144,7 @@ export function FilmwissenBereich({
               ? "Für diesen Film gibt es noch keinen gemeinsamen Bericht."
               : "Für diesen Eintrag fehlt noch eine eindeutige IMDb-, TMDB- oder Wikidata-Kennung."}
           </p>
-          {rechercheMoeglich && (
+          {zeigeRechercheAktion && rechercheMoeglich && (
             <>
               <button style={btnStyle(false)} disabled={rechercheLaeuft}
                 onClick={onRecherchieren}>

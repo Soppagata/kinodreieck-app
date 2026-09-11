@@ -4,8 +4,65 @@ import { hatDreieck } from "../lib/typen.js";
 import { Dreieck, AxisChips, KategorieTag, UnbewertetTag, IconDelete } from "./ui.jsx";
 import { EditPanel } from "./EditPanel.jsx";
 import { PrognoseBereich } from "./PrognoseBereich.jsx";
-import { FilmwissenBereich } from "./FilmwissenBereich.jsx";
 import { setzePrognoseStatus } from "../lib/prognose.js";
+import { FILMWISSEN_STATUS } from "../lib/filmwissen.js";
+import { QUELLEN_KLASSEN, quelleBadges } from "../lib/quellen.js";
+
+function normalisiereQuellenLabel(label) {
+  return String(label || "").trim().toLocaleLowerCase("de").replace(/[^a-z0-9]+/g, "");
+}
+
+function aktuelleQuellenLabels(node) {
+  const roh = node?.props?.["data-kd-source-labels"];
+  if (Array.isArray(roh)) return roh;
+  if (typeof roh !== "string") return [];
+  try {
+    const gelesen = JSON.parse(roh);
+    return Array.isArray(gelesen) ? gelesen : [];
+  } catch {
+    return [];
+  }
+}
+
+function QuellenTagZeile({ film, streamBadge }) {
+  const farben = {
+    [QUELLEN_KLASSEN.PHYSISCH]: T.wie,
+    [QUELLEN_KLASSEN.DIGITAL_GEKAUFT]: T.was,
+    [QUELLEN_KLASSEN.ABO]: T.wolfram,
+    [QUELLEN_KLASSEN.SONSTIG]: T.rauch,
+  };
+  const gespeichert = quelleBadges(film?.quelle).map(({ key, label, klasse }) => ({
+    key: `gespeichert:${key}`, label, art: "gespeichert", klasse,
+  }));
+  const verfuegbar = aktuelleQuellenLabels(streamBadge).map((label) => ({
+    key: `aktuell:${normalisiereQuellenLabel(label)}`, label, art: "aktuell",
+    klasse: QUELLEN_KLASSEN.ABO,
+  }));
+  const gesehen = new Set();
+  const tags = [...gespeichert, ...verfuegbar].filter(({ label }) => {
+    const key = normalisiereQuellenLabel(label);
+    if (!key || gesehen.has(key)) return false;
+    gesehen.add(key);
+    return true;
+  });
+  if (!tags.length && !streamBadge) return null;
+  const sichtbar = tags.slice(0, 4);
+  return (
+    <div className="kd-film-quellenzeile" aria-label="Quellen">
+      {sichtbar.map(({ key, label, art, klasse }) => (
+        <span key={key}
+          className={`kd-film-quellentag kd-film-quellentag--${art} kd-film-quellentag--${klasse}`}
+          style={{ "--kd-quellenfarbe": farben[klasse] }}>
+          {label}
+        </span>
+      ))}
+      {tags.length > sichtbar.length && (
+        <span className="kd-film-quellenmehr">+{tags.length - sichtbar.length}</span>
+      )}
+      {!tags.length ? streamBadge : null}
+    </div>
+  );
+}
 
 /* Einfacher Editor für Einträge ohne Dreieck (musik/sonstiges):
    Beschreibung + Notiz — die Notiz ist bei JEDEM Eintrag editierbar. */
@@ -44,6 +101,7 @@ export function FilmCard({
   const speichertRef = useRef(false);
   const [speicherFehler, setSpeicherFehler] = useState("");
   const dreieck = hatDreieck(film.typ);
+  const kinoInfoIstGespeicherteQuelle = kinoInfo?.props?.quelle != null;
   const angezeigteBeschreibung = String(beschreibungAnzeige || "").trim();
   /* unbewertet = bewertung fehlt komplett (null). 0/0/0 ist eine ECHTE Bewertung. */
   const unbewertet = dreieck && film.bewertung == null;
@@ -115,7 +173,7 @@ export function FilmCard({
             </span>
           </div>
           {dreieck && (
-            <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            <div className="kd-film-bewertungszeile" style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
               {unbewertet ? (
                 <>
                   <UnbewertetTag />
@@ -130,10 +188,10 @@ export function FilmCard({
                   <KategorieTag k={film.kategorie} />
                 </>
               )}
-              {streamBadge}
             </div>
           )}
-          {kinoInfo && (
+          <QuellenTagZeile film={film} streamBadge={streamBadge} />
+          {kinoInfo && !kinoInfoIstGespeicherteQuelle && (
             <div style={{ marginTop: 8, fontFamily: "'Space Mono', monospace", fontSize: 13, lineHeight: 1.6 }}>{kinoInfo}</div>
           )}
           {expanded && !editing && !auswahlmodus && (
@@ -186,37 +244,44 @@ export function FilmCard({
               )}
             </div>
           )}
-          {expanded && !editing && unbewertet && filmwissen && !auswahlmodus && (
-            <div onClick={(e) => e.stopPropagation()}
-              style={{ marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
-              <FilmwissenBereich
-                phase={filmwissen.phase}
-                daten={filmwissen.daten}
-                fehler={filmwissen.fehler}
-                rechercheLaeuft={filmwissen.rechercheLaeuft}
-                rechercheMoeglich={filmwissen.rechercheMoeglich}
-                onRecherchieren={filmwissen.onRecherchieren}
-              />
-            </div>
-          )}
         </div>
         {headerAction ? <div onClick={(event) => event.stopPropagation()}>{headerAction}</div> : null}
       </div>
-      {expanded && !editing && vorbewertung && !auswahlmodus && (unbewertet || film.prognose) && (
+      {expanded && (vorbewertung || filmwissen) && !auswahlmodus && (unbewertet || film.prognose) && (
         <div className="kd-film-prognose-breit" onClick={(e) => e.stopPropagation()}
           style={{ width: "100%", boxSizing: "border-box", marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
           <PrognoseBereich
             film={film}
-            laeuft={vorbewertung.laeuft}
-            fehler={vorbewertung.fehler}
-            erstellenMoeglich={!vorbewertung.sperrgrund}
-            sperrgrund={vorbewertung.sperrgrund}
-            aktuelleProfilVersion={vorbewertung.aktuelleProfilVersion}
-            onErstellen={vorbewertung.onErstellen}
-            onAnnehmen={vorbewertung.onAnnehmen}
-            onVerwerfen={vorbewertung.onVerwerfen}
+            laeuft={vorbewertung?.laeuft || filmwissen?.rechercheLaeuft}
+            fehler={vorbewertung?.fehler}
+            erstellenMoeglich={!!vorbewertung && !vorbewertung.sperrgrund}
+            sperrgrund={vorbewertung?.sperrgrund}
+            aktuelleProfilVersion={vorbewertung?.aktuelleProfilVersion}
+            onErstellen={vorbewertung ? async () => {
+              const filmwissenStatus = filmwissen?.daten?.status;
+              const brauchtQuellenlauf = !film.prognose
+                && filmwissen?.rechercheMoeglich
+                && typeof filmwissen?.onRecherchieren === "function"
+                && [FILMWISSEN_STATUS.CACHE_MISS, FILMWISSEN_STATUS.NICHT_ZUORDENBAR]
+                  .includes(filmwissenStatus);
+              if (brauchtQuellenlauf) {
+                const quellenErgebnis = await filmwissen.onRecherchieren({ bereitsAusgeloest: true });
+                if (quellenErgebnis !== true && quellenErgebnis?.vorlaeufig !== true) return false;
+              }
+              return vorbewertung.onErstellen?.();
+            } : null}
+            onVerwerfen={vorbewertung?.onVerwerfen}
             onKorrigieren={() => { setSpeicherFehler(""); setPrognoseEntwurf(false); setEditing(true); }}
             onUebernehmen={onSave ? () => { setSpeicherFehler(""); setPrognoseEntwurf(true); setEditing(true); } : null}
+            uebernehmenLabel="Vorschlag in Eingabe übernehmen"
+            filmwissen={filmwissen ? {
+              phase: filmwissen.phase,
+              daten: filmwissen.daten,
+              fehler: filmwissen.fehler,
+              rechercheLaeuft: filmwissen.rechercheLaeuft,
+              rechercheMoeglich: filmwissen.rechercheMoeglich,
+              onRecherchieren: filmwissen.onRecherchieren,
+            } : null}
           />
         </div>
       )}
@@ -231,8 +296,8 @@ export function FilmCard({
                 kategorie: film.prognose?.ergebnis?.kategorie_vorschlag || null,
                 begruendung: film.prognose?.ergebnis?.begruendung || "",
               } : film}
-              autorName={prognoseEntwurf ? "KI-Prognose (übernommen)" : undefined}
-              herkunftHinweis={prognoseEntwurf ? "KI-Prognose vorausgefüllt – prüfe alle Werte. Erst Speichern macht daraus eine Bewertung." : null}
+              autorName={prognoseEntwurf ? "KI-Bewertung (übernommen)" : undefined}
+              herkunftHinweis={prognoseEntwurf ? "KI-Bewertung vorausgefüllt – prüfe alle Werte. Erst Speichern macht daraus eine Bewertung." : null}
               speichert={speichert} fehler={speicherFehler}
               onCancel={() => { if (!speichert) { setPrognoseEntwurf(false); setEditing(false); } }}
               onSave={async (changes) => {

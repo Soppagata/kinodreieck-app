@@ -1,0 +1,79 @@
+.kd-film-quellenzeile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.kd-film-quellentag {
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  padding: 2px 7px;
+  border: 1px solid var(--kd-quellenfarbe, var(--kd-rauch));
+  border-radius: 3px;
+  background: var(--kd-quellenfarbe, var(--kd-rauch));
+  color: var(--kd-tinte);
+  font: 10px 'Space Mono', monospace;
+  letter-spacing: .035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kd-film-quellentag--gespeichert {
+  border-style: solid;
+}
+
+.kd-film-quellentag--aktuell {
+  border-style: dashed;
+}
+
+.kd-film-quellenmehr {
+  color: var(--kd-rauch);
+  font: 10px 'Space Mono', monospace;
+}
+
+.kd-ki-bewertung {
+  box-sizing: border-box;
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--kd-saal);
+  border-radius: var(--kd-radius-karte);
+}
+
+.kd-ki-bewertung-kopf {
+  display: grid;
+  gap: 3px;
+}
+
+.kd-ki-bewertung-kopf strong {
+  color: var(--kd-leinwand);
+  font: 600 calc(22px * var(--kd-schriftfaktor, 1))/1.2 'Barlow Condensed', sans-serif;
+}
+
+.kd-ki-bewertung-kopf span {
+  color: var(--kd-rauch);
+  font-size: calc(12px * var(--kd-schriftfaktor, 1));
+  line-height: 1.45;
+}
+
+.kd-filmwissen--eingebettet {
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--kd-rauch) 35%, transparent);
+}
+
+.kd-rating-prognose-entwurf {
+  padding: 10px;
+  border-radius: var(--kd-radius-karte);
+  background: var(--kd-saalHoch);
+}
+
+@media (max-width: 760px) {
+  .kd-ki-bewertung,
+  .kd-rating-prognose-entwurf {
+    padding: 11px 10px;
+  }
+}
