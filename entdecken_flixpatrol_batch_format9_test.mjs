@@ -47,6 +47,7 @@ function createHarness({
   failBatch = false,
   failSaveAt = null,
   mediaTypeConflict = false,
+  legacyFormat8Conflict = false,
   mismatchedGenre = false,
   manyKeywords = false,
 } = {}) {
@@ -73,7 +74,11 @@ function createHarness({
     async fetchTitle() { counts.single += 1; throw new Error("single fallback forbidden"); },
     async fetchTitles({ sourceIds, mediaTypes, mediaTypeConflictPolicy }) {
       counts.batch += 1;
-      assert.equal(mediaTypeConflictPolicy, "separate");
+      assert.equal(mediaTypeConflictPolicy, legacyFormat8Conflict ? undefined : "separate");
+      if (legacyFormat8Conflict) throw Object.assign(new Error("strict format 8 conflict"), {
+        code: "FLIXPATROL_INVALID_RESPONSE", providerRequests: 1,
+        operationId: "00000000-0000-4000-8000-000000000098",
+      });
       if (failBatch) throw Object.assign(new Error("batch provider failed"), {
         code: "FLIXPATROL_TRANSPORT_ERROR", providerRequests: 1,
         operationId: "00000000-0000-4000-8000-000000000099",
@@ -118,11 +123,25 @@ function createHarness({
         })) };
     },
   };
+  const legacyItems = Array.from({ length: 25 }, (_, index) => ({
+    ...oefiItems[index % oefiItems.length],
+    title: `Legacy ${index + 1}`,
+    sourceItemId: `f_legacy-${String(index + 1).padStart(4, "0")}`,
+  }));
+  const legacyPublicAdapter = {
+    mode: "public-mix",
+    telemetry: () => ({ sourceRequests: 2 }),
+    async search(queryContext) {
+      return { sourceMode: "public-mix", sourceId: "chart:public-mix-at", sourceIds: ["chart:oefi-weekend-at"],
+        queryContext, checkedAt, retrievedOn: today, isoWeek: "2026-W37", items: legacyItems };
+    },
+  };
   const adapter = createFlixPatrolMixAdapter({
-    publicAdapter: { mode: "public-mix", async search() { throw new Error("weekly Netflix forbidden"); } },
+    publicAdapter: legacyFormat8Conflict ? legacyPublicAdapter
+      : { mode: "public-mix", async search() { throw new Error("weekly Netflix forbidden"); } },
     dailyPublicAdapter: publicAdapter, client, now: () => checkedAt,
-    titleRequestMode: ENTDECKEN_FLIXPATROL_BATCH_MODE, netflixDaily: true,
-    format9Consumers: ENTDECKEN_FLIXPATROL_FORMAT_9_CONSUMERS,
+    titleRequestMode: ENTDECKEN_FLIXPATROL_BATCH_MODE, netflixDaily: !legacyFormat8Conflict,
+    format9Consumers: legacyFormat8Conflict ? null : ENTDECKEN_FLIXPATROL_FORMAT_9_CONSUMERS,
     readChart: async (key) => ({ ok: true, chart: charts.get(chartKey(key)) || null }),
     saveChart: async (chart) => { charts.set(chartKey(chart), { ...chart, fresh: true }); return { ok: true }; },
     readTitles: async (ids) => {
@@ -249,6 +268,14 @@ assert.equal(conflictEnvelope.items.some((item) => item.sourceItemId === titleId
 assert.equal(conflictEnvelope.items.some((item) => item.sourceItemId === titleId(2, 6)), true);
 assert.equal(conflictEnvelope.items.filter((item) => item.sourceId === "chart:flixpatrol-netflix-at").length, 10);
 
+const strictFormat8 = createHarness({ legacyFormat8Conflict: true });
+await assert.rejects(
+  strictFormat8.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" }),
+  /strict format 8 conflict/,
+);
+assert.equal(strictFormat8.counts.batch, 1);
+assert.equal(strictFormat8.counts.savedMisses, 0);
+
 const failed = createHarness({ failBatch: true });
 await assert.rejects(failed.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" }), /batch provider failed/);
 assert.equal(failed.counts.batch, 1);
@@ -274,4 +301,4 @@ assert.equal(boundedVocabulary.counts.keyword, 1);
 assert.equal(boundedEnvelope.items.filter((item) => item.genres.some((name) => name.startsWith("Keyword "))).length, 10);
 assert.equal(boundedVocabulary.adapter.telemetry().flixpatrolKeywordRequests, 1);
 
-console.log("Entdecken FlixPatrol Batch/Format 9: 54 checks passed");
+console.log("Entdecken FlixPatrol Batch/Format 9: 57 checks passed");

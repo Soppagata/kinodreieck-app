@@ -328,7 +328,7 @@ export function createFlixPatrolMixAdapter({
         fetched = await client.fetchTitles({
           sourceIds: batch.map((row) => row.sourceId),
           mediaTypes: batch.map((row) => row.spec.mediaType),
-          mediaTypeConflictPolicy: "separate",
+          ...(format9 ? { mediaTypeConflictPolicy: "separate" } : {}),
         });
         updateTelemetry({ flixpatrolTitleRequests: telemetry.flixpatrolTitleRequests + 1 });
         const conflicts = fetched.conflicts ?? [];
