@@ -60,14 +60,25 @@ jobs:
             const refreshStatuses = new Set([
               "refreshed", "not_due", "outside_window", "in_progress", "held", "failed",
             ]);
+            const format9 = body?.feed?.format === 9;
+            const vocabularyCountsValid = format9
+              ? Number.isInteger(body?.flixpatrolGenreRequests) && body.flixpatrolGenreRequests >= 0 && body.flixpatrolGenreRequests <= 1
+                && Number.isInteger(body?.flixpatrolKeywordRequests) && body.flixpatrolKeywordRequests >= 0 && body.flixpatrolKeywordRequests <= 1
+              : body?.flixpatrolGenreRequests === undefined && body?.flixpatrolKeywordRequests === undefined;
+            const flixpatrolParts = body?.flixpatrolChartRequests + body?.flixpatrolTitleRequests
+              + (format9 ? body?.flixpatrolGenreRequests + body?.flixpatrolKeywordRequests : 0);
             const countsValid = Number.isInteger(body?.providerRequests) && body.providerRequests === 0
               && Number.isInteger(body?.searchRequests) && body.searchRequests === 0
-              && Number.isInteger(body?.publicSourceRequests) && body.publicSourceRequests >= 0 && body.publicSourceRequests <= 2
-              && Number.isInteger(body?.flixpatrolChartRequests) && body.flixpatrolChartRequests >= 0 && body.flixpatrolChartRequests <= 5
-              && Number.isInteger(body?.flixpatrolTitleRequests) && body.flixpatrolTitleRequests >= 0 && body.flixpatrolTitleRequests <= 25
-              && Number.isInteger(body?.flixpatrolRequests)
-              && body.flixpatrolRequests === body.flixpatrolChartRequests + body.flixpatrolTitleRequests
-              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0 && body.sourceRequests <= 32
+              && Number.isInteger(body?.publicSourceRequests) && body.publicSourceRequests >= 0
+              && body.publicSourceRequests <= (format9 ? 1 : 2)
+              && Number.isInteger(body?.flixpatrolChartRequests) && body.flixpatrolChartRequests >= 0
+              && body.flixpatrolChartRequests <= (format9 ? 7 : 5)
+              && Number.isInteger(body?.flixpatrolTitleRequests) && body.flixpatrolTitleRequests >= 0
+              && body.flixpatrolTitleRequests <= (format9 ? 4 : 25)
+              && vocabularyCountsValid
+              && Number.isInteger(body?.flixpatrolRequests) && body.flixpatrolRequests === flixpatrolParts
+              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0
+              && body.sourceRequests <= (format9 ? 14 : 32)
               && body.sourceRequests === body.publicSourceRequests + body.flixpatrolRequests
               && Number.isInteger(body?.wikidataRequests) && body.wikidataRequests === 0
               && Number.isInteger(body?.writes) && body.writes >= 0 && body.writes <= 1;
@@ -91,8 +102,11 @@ jobs:
               counts[key] = (counts[key] || 0) + 1;
               return counts;
             }, {});
-            const fullMixFeedValid = body?.feed?.format === 8
+            const fullMixFeedValid = [8, 9].includes(body?.feed?.format)
               && items.length === 50
+              && items.every((item) => format9
+                ? item?.availabilityConfirmed === false
+                : !Object.hasOwn(item || {}, "availabilityConfirmed"))
               && marketCounts.cinema === 15
               && marketCounts.netflix === 10
               && marketCounts.prime === 10
@@ -109,7 +123,7 @@ jobs:
               && body.feedReadback.rightsStatus === "owner_private"
               && body.feedReadback.providerRequests === 0;
             if (body.refresh.status === "refreshed" && body.status === "fresh"
-                && body.publicSourceRequests === 2 && body.sourceRequests >= 2
+                && body.publicSourceRequests === (format9 ? 1 : 2) && body.sourceRequests >= (format9 ? 1 : 2)
                 && body.writes === 1 && fullMixReadbackValid) {
               process.stdout.write("refreshed");
             } else if (body.refresh.status === "failed" && body.responseMode === "degraded"
