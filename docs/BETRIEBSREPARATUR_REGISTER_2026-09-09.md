@@ -1625,6 +1625,36 @@ die regulären Datenläufe bleiben aktiv. E14-Lieferung und die noch separate
 physische iPhone-Abnahme bleiben unverändert. Die geschützte
 Production-Freigabe wurde nicht bedient.
 
+## E15 – Streaming-Karten und einheitliche Beliebte-Titel-Anzeige
+
+Max fragt nach der fehlenden früheren Neu-Frist von Mandalorian and Grogu.
+Der gespeicherte Vergleich zeigt den
+Titel bereits am 07.09. unter Disney+; der 10.09.-Lauf liefert keinen neuen
+Zugang. E14 übernimmt noch vorhandene Gerätefristen, rekonstruiert aber keinen
+verlorenen Erstzeitpunkt aus einem Plattformstartdatum. Der tatsächliche
+iPhone-Verlauf ist weiter nicht gelesen; die Diff-/Fristenlogik bleibt im
+folgenden reinen UI-Paket unverändert.
+
+SOLO: ein Ende-zu-Ende-Baumeister, ein isolierter Worktree. Keine Nebenagenten.
+
+| Ergebnis | Zuständigkeit / Stand | Schreibflächen und Grenze |
+| --- | --- | --- |
+| M6 / E15: Neu-Karten nennen den vollständigen ausgewählten Dienst und ordnen Titel, Dienst-Tags und Aktionen übersichtlich an. | E15-UI OFFEN | StreamingTab.jsx und ausschließlich dafür begrenzte CSS-Regeln; bestehende Pin-/Merken-/Gesehen-/Aufklappfunktionen sowie andere Streamingansichten erhalten. |
+| M2 / E15: Beliebte Titel zeigen einheitlich keine Kurzbeschreibung; Für mich behält seine Beschreibungen. | E15-UI OFFEN | EntdeckenTab.jsx; keine Änderungen an Fakten, Ranking, Quellenständen oder gespeicherten Beschreibungen. |
+| M5 / E15: Kleine UI-Korrektur getestet und auf Staging nachvollziehbar ausgeliefert. | Meisterlieferung OFFEN | Baumeister besitzt zugehörige bestehende UI-/Browsertests und den einmaligen lokalen Abschluss; Meister besitzt Register, Integration, force-freie Staging-Lieferung und Readback. |
+
+Basis vor dem Plan: `9fdeac3816d224d1be4581e126c001687ff32ed7`.
+Zielbranch bleibt `codex/flixpatrol-master-20260909`, danach `staging`.
+Schmaler Bau mit bestehenden Tokens und mindestens 44-px-Touchzielen;
+lange Channelnamen umbrechen, keine neue globale Designsprache.
+Diff-/Fristen-/Diensteverträge, Storage/Auth, Backend, Pipeline, Workflows,
+Dependencies/Lockfile und generierte Katalogdaten bleiben eingefroren.
+Prüfung: tatsächliche mobile Karten mit langen Titeln und Channelnamen,
+Aktionen und Aufklappen; Für-mich-Beschreibung bleibt sichtbar, Beliebte-Titel-
+Beschreibung entfällt. Keine Providerrequests und keine Shared-Datenwrites.
+Der aktuelle öffentliche Staging-Ausgang ist am 11.09., 09:52 MESZ, erneut
+als `819ceac` belegt. M3 bleibt abgeschlossen, seine Nachprüfung pausiert.
+
 ## Historischer Ausgang am 9. September
 
 Ticker: Migration `20260909153000`, Function v2, Quellcodebytegleichheit,
