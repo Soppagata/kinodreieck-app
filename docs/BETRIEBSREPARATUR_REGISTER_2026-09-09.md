@@ -24,11 +24,11 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: Ops-Monitor 34480116970 grün; E1. E11 auf 55b8392 tatsächlich installiert; erster regulärer Fünferlauf am 11.09., 00:02 MESZ, mit 41 Requests und grünen Fetch-/Build-/Lieferphasen beendet, kein Pending/Lock/Checkpoint zurückgelassen. |
-| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9. Nachbesserung E14-B: kompakte Standanzeige OFFEN. |
+| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9. Nachbesserung E14-B: kompakte Standanzeige GEBAUT und lokal geprüft, Staging-Lieferung läuft. |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. Neue Korrektur E14 noch nicht geliefert. |
-| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. E14-A OFFEN: erhaltene v2-Fristen beim Upgrade übernehmen. |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. E14 integriert und vollständig lokal grün auf a76be91; Staging-Lieferung läuft. |
+| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. E14-A GEBAUT und vollständig lokal grün: erhaltene v2-Fristen plus individuelles Fristen-/Belegbuch; Staging-Lieferung läuft. |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -1497,8 +1497,8 @@ Meister: bestehender sauberer Integrationsworktree
 
 | Paket | Stand | Branch / Worktree | Exklusive Schreibflächen | Gefroren / Prüfungen |
 | --- | --- | --- | --- | --- |
-| E14-A / M6 | DELIVERED: 1daad0a | codex/streaming-neu-erhalt-e14-20260911 / /private/tmp/kd-streaming-neu-erhalt-e14-20260911 | streamingNeu.js, useStreamingNeuController.js, nötige App.jsx-Übergabe, StreamingTab.jsx, zugehörige Neu-Tests/Fixtures | Producer-Diffvertrag, Katalog-/Identitätslogik, Storage/Auth, Backend, Dependencies eingefroren; Tests für Upgrade, getrennte 14-Tage-Fristen, Folgeläufe und Konto-/Auswahlwechsel |
-| E14-B / M2 | DELIVERED: 5ed1f54 | codex/entdecken-kurztext-e14-20260911 / /private/tmp/kd-entdecken-kurztext-e14-20260911 | EntdeckenTab.jsx, entdeckenDailyFeed.js ausschließlich lokale Anzeigetexte, Hilfe-Text, zugehörige Entdecken-/Hilfe-Tests | Feed-Vertrag/Validierung, tatsächliche Datenstände, Ranking, API, globale Styles und Dependencies eingefroren; fokussierte Darstellungs-/Vertragstests |
+| E14-A / M6 | INTEGRATED: 5363996 | codex/streaming-neu-erhalt-e14-20260911 / /private/tmp/kd-streaming-neu-erhalt-e14-20260911 | streamingNeu.js, useStreamingNeuController.js, nötige App.jsx-Übergabe, StreamingTab.jsx, zugehörige Neu-Tests/Fixtures | Producer-Diffvertrag, Katalog-/Identitätslogik, Storage/Auth, Backend, Dependencies eingefroren; Tests für Upgrade, getrennte 14-Tage-Fristen, Folgeläufe und Konto-/Auswahlwechsel |
+| E14-B / M2 | INTEGRATED: a76be91 | codex/entdecken-kurztext-e14-20260911 / /private/tmp/kd-entdecken-kurztext-e14-20260911 | EntdeckenTab.jsx, entdeckenDailyFeed.js ausschließlich lokale Anzeigetexte, Hilfe-Text, zugehörige Entdecken-/Hilfe-Tests | Feed-Vertrag/Validierung, tatsächliche Datenstände, Ranking, API, globale Styles und Dependencies eingefroren; fokussierte Darstellungs-/Vertragstests |
 
 A × B: PARALLEL_OK, keine gemeinsamen Schreibdateien oder Output-Abhängigkeit.
 E14-B ist mit 5ed1f54 geliefert und fokussiert grün. E14-A hat Upgrade- und
@@ -1527,6 +1527,34 @@ haben keinen Paket-Schreibowner und bleiben unverändert.
 Register und Integration nur beim Meister. Integration A, dann B, einmaliger
 relevanter lokaler Abschluss. Providerrequests, manuelle Tagesläufe und
 Shared-Datenwrites gehören nicht zur Korrektur. Kein zusätzlicher Prüfchat.
+
+### E14 – Integration und lokaler Abschluss
+
+Beide Pakete sind konfliktfrei integriert: E14-A als cd8740f → e47c1d7 →
+5363996, E14-B als a76be91. Der einmalige lokale Abschluss auf a76be91 ist
+vollständig grün: reguläres `npm test` einschließlich aller PostgreSQL-Mocks,
+App-/Vertrags-/UI-Tests, Einzeldatei, Vite-Build und 72 Pages-Checks; zusätzlich
+`npm run test:function` mit 340/340 Mocks. Kein Retry und kein Providerrequest.
+Die zuvor am Paket geprüften vier echten App-Browserfälle in Chromium/WebKit
+und 38 fokussierten Streamingprüfungen bleiben durch die disjunkte Integration
+gedeckt. Der getestete Produktbaum ist
+`584183bc5ce805bc21f1f7a34f0e0b528ebfd7eb` (`HEAD:src`).
+
+Belege: `/private/tmp/kd-ops-audit-20260909/e14-final-app.log`,
+`e14-final-functions.log`, `e14-streaming-title-diff-evidence.json`.
+Der eigene Datenbank-Readback vom 11.09., 08:08 MESZ, bestätigt denselben
+Streamingdatenstand 10.09., 22:02 UTC: 9.348 ausgewählte Titel, 123 Mein
+Programm, 56 Producer-Zugänge. Persönliche Daten vor/nach der Probe bytegleich.
+Die auf dem iPhone verbliebenen v2-Fristen sind nur dort lesbar und werden
+beim Upgrade vor Ort übernommen; keine Termine werden rückdatiert erfunden.
+
+Der neue kleine Fristencache enthält abgeleitete Kennungen und Zeitpunkte,
+keine Titeltexte oder zweite Katalogbaseline. Ein Speicherfehler verhindert
+keine Bedienung und lässt noch lesbare Provider-/v2-Belege nutzbar; ohne
+vorhandene Zeitbelege kann die App keine frühere Frist rekonstruieren. Die
+Provider-Pipeline, deren 48-Stunden-Takt und Shared-Daten bleiben unverändert.
+Die Staging-Lieferung folgt diesem geprüften Produktbaum; Dokumentationscommits
+ändern ihn nicht. M3-Erstbetrieb bleibt die gesonderte bestehende Nachprüfung.
 
 ## Historischer Ausgang am 9. September
 
