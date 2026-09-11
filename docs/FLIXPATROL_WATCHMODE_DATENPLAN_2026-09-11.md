@@ -7,17 +7,18 @@ Plan ergänzt die abgeschlossene Betriebsreparatur; deren Lieferregister bleibt
 ## Zweite PWA-Rueckmeldung vom 11.09., 22:22–22:40: klare Nutzerwege
 
 Max beauftragt Erfassung, stabile Etappen und sofortigen parallelen Bau, begrenzt
-auf die genannten Stellen. `b64953e` bleibt bis zur neuen Lieferung Staging-Stand;
-die Dokumentation `2654017` ist die Ausgangsbasis. R4 wird fuer V1–V5 wieder
-geoeffnet, R5/R6 folgen weiterhin nach dem PWA-Test. Keine neue Auditkette.
+auf die genannten Stellen. V1–V5 sind auf Staging `15b9704` geliefert;
+`b64953e` war der vorherige PWA-Stand und `2654017` die Dokumentationsbasis.
+R4 ist damit technisch abgeschlossen. R5/R6 folgen weiterhin nach Max' physischem
+PWA-Test. Keine neue Auditkette.
 
 | ID | Sichtbares Ergebnis und Fertigkriterium | Stand |
 | --- | --- | --- |
-| V1 | Eine gemeinsame KI-Bewertung verbindet persoenliche Prognose und belegtes Filmwissen bei Jetzt bewerten und Eintrag erstellen. Das Ergebnis bleibt im offenen Formular, mit Quellen, Neuberechnen und Korrigieren; erst bewusstes Speichern legt Bewertung/Eintrag ab. Belegter WARUM-Wert und geschaetzte WIE/WAS/Passung bleiben unterscheidbar; ohne ausreichende Belege gilt das Ergebnis als vorlaeufig. | GEBAUT, integriert und lokal geprueft |
-| V2 | Mediathek bietet dieselben Alphabet-/Jahrzehntregler wie Streaming. Streaming Alles/Neu verlinkt bei eindeutigem Bestand direkt auf den vorhandenen Mediathek-Eintrag. Filter, Dienstauswahl und Neu-Fristen bleiben erhalten. | GEBAUT, integriert und lokal geprueft |
-| V3 | Entdecken-Titel sind wieder dunkel auf hellen Karten lesbar; Streaming hat drei benachbarte Menuebuttons. Quellen sind einheitliche, deduplizierte Tags in einer eigenen Reihe unter WIE/WAS/WARUM/Kategorie. | GEBAUT, integriert und lokal geprueft |
-| V4 | Kino hat einen echten, mit Suche/Kino/Tag/Abo/Fassung kombinierbaren Genrefilter. Die Profil-Zwischenueberschriften entfallen. Genreabdeckung wird gemessen und Luecken mit belegten Werkidentitaeten aus vorhandenen Daten bzw. oeffentlichen Quellen geschlossen. Keine erfundenen Genrewerte. | GEBAUT und integriert: 283/284, Sneak bewusst offen |
-| V5 | Gemeinsamer Kandidat lokal geprueft, committed, auf Staging gepusht und nach CI samt Build/Service Worker rueckgelesen. | LOKAL GRUEN auf Code `219613d`; Push/CI/Readback folgen |
+| V1 | Eine gemeinsame KI-Bewertung verbindet persoenliche Prognose und belegtes Filmwissen bei Jetzt bewerten und Eintrag erstellen. Das Ergebnis bleibt im offenen Formular, mit Quellen, Neuberechnen und Korrigieren; erst bewusstes Speichern legt Bewertung/Eintrag ab. Belegter WARUM-Wert und geschaetzte WIE/WAS/Passung bleiben unterscheidbar; ohne ausreichende Belege gilt das Ergebnis als vorlaeufig. | DONE auf Staging `15b9704` |
+| V2 | Mediathek bietet dieselben Alphabet-/Jahrzehntregler wie Streaming. Streaming Alles/Neu verlinkt bei eindeutigem Bestand direkt auf den vorhandenen Mediathek-Eintrag. Filter, Dienstauswahl und Neu-Fristen bleiben erhalten. | DONE auf Staging `15b9704` |
+| V3 | Entdecken-Titel sind wieder dunkel auf hellen Karten lesbar; Streaming hat drei benachbarte Menuebuttons. Quellen sind einheitliche, deduplizierte Tags in einer eigenen Reihe unter WIE/WAS/WARUM/Kategorie. | DONE auf Staging `15b9704` |
+| V4 | Kino hat einen echten, mit Suche/Kino/Tag/Abo/Fassung kombinierbaren Genrefilter. Die Profil-Zwischenueberschriften entfallen. Genreabdeckung wird gemessen und Luecken mit belegten Werkidentitaeten aus vorhandenen Daten bzw. oeffentlichen Quellen geschlossen. Keine erfundenen Genrewerte. | DONE auf Staging `15b9704`: 283/284, Sneak bewusst offen |
+| V5 | Gemeinsamer Kandidat lokal geprueft, committed, auf Staging gepusht und nach CI samt Build/Service Worker rueckgelesen. | DONE auf Staging `15b9704`; CI `34649591518`, Build/SW/Domain rueckgelesen |
 
 **Parallelwelle ab dem Commit dieser Ergaenzung:**
 
@@ -107,8 +108,33 @@ Kino-Filter und Entdecken-Kontrast. Mobile WebKit-Screenshots der Mediathek-
 Quellenreihe und Streaming-Neu-Karte wurden gesichtet. Belege liegen in
 `/private/tmp/kd-ui-followup-evidence-20260911/`. Keine echten KI-Anbieterrequests,
 Shared-Datenwrites, Migrationen oder Scheduler-Aenderungen in V1–V5.
-Push, CI und Staging-Readback werden separat nachgetragen; Max' physische
-PWA-Abnahme ist weiterhin Voraussetzung fuer R5/R6.
+Die nachfolgenden Lieferbelege schliessen V5 ab; Max' physische PWA-Abnahme
+ist weiterhin Voraussetzung fuer R5/R6.
+
+**Staging-Lieferung V5:** Code `219613d`, Liefercommit `15b9704`, sauber auf
+Staging und den Master-Arbeitszweig gepusht. CI
+[34649591518](https://github.com/Soppagata/kinodreieck-app/actions/runs/34649591518)
+ist gruen fuer Gesamtsuite, Function-Mocks, Chromium, WebKit und Deployment.
+Beim ersten Deploy bestand der atomare Pages-Readback; die feste Domain lieferte
+einen neuen JavaScript-Chunk kurzzeitig noch als HTML-Fallback aus. Der getrennte
+Readback am 11.09. um 21:38 UTC bestaetigte Build, Service Worker, Login-Shell,
+Header und private Kataloggrenze. Auch exakt der zuvor fehlende Chunk war dann
+HTTP 200 mit JavaScript-Content-Type. Danach wurde einmal nur der fehlgeschlagene
+Deployment-Job desselben Commits wiederholt; atomare und feste Domain sind auch
+in dieser CI gruen. Kein Code-/Cache-/Infrastrukturumbau, keine Testvollwiederholung.
+
+Der lesende Datenbeleg bestaetigt weiter den frischen Format-9-Feed mit 50 Titeln,
+Netflix ueber FlixPatrol und zwei frische Netflix-Faktenrecords. Zaehler dieses
+Readbacks: ein Feed-GET, ein Faktenlookup, null Writes, null FlixPatrol- und null
+zahlende KI-Anfragen. Der Hauptcheckout mit Max' vorhandenen lokalen Aenderungen
+blieb erhalten. Dieser nachtraegliche Lieferbeleg wird nur im Master-Arbeitszweig
+gepusht; die PWA bleibt auf dem geprueften Liefercommit `15b9704`.
+
+**Verbleibende Grenzen:** Der externe LOC-Quellenzugriff ist weiterhin ein
+separater offener Betriebsbefund. Ohne ausreichende Quellen bleibt die vereinte
+KI-Bewertung ausdruecklich vorlaeufig; persoenliche Achsen/Passung werden nicht
+als objektiv validiert ausgegeben. Die Sneak Preview erhaelt kein geratenes
+Genre. Keine physische iPhone-PWA-Abnahme und kein Produktionsmerge behauptet.
 
 ## PWA-Rueckmeldung vom 11.09.: gezielte UI-Nacharbeit
 
