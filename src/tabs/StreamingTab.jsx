@@ -660,7 +660,7 @@ export function StreamingTab({
         <>
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.rauch }}>
             {ansicht === "neu"
-              ? "Tatsächliche Angebotszugänge bei deinen ausgewählten Diensten bleiben ab dem belegten Vergleich 14 volle Tage sichtbar."
+              ? "Neu im Katalog deiner ausgewählten Dienste erkannt. Jeder Titel bleibt ab seiner Erkennung 14 Tage sichtbar."
               : "Alle Werke im aktuellen Angebot deiner ausgewählten Dienste, einschließlich deiner Titel aus Mein Programm."}
           </div>
           {!katalogAnsichtBereit ? (

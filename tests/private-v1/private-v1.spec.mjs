@@ -35,6 +35,14 @@ test("vorhandener v2-Neu-Zeitbeleg überlebt Konto-Reload in Chromium und WebKit
     await expect(page.locator(".kd-entdecken-karte").filter({ hasText: "Zulu Fund" })).toBeVisible();
     await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), legacyKey)).toBe(legacyRaw);
   }
+  const fristenbuecher = await page.evaluate(() => Object.entries(localStorage)
+    .filter(([key]) => key.startsWith("kd:streaming-neu:fristen:v1:"))
+    .map(([key, value]) => [key, JSON.parse(value)]));
+  expect(fristenbuecher).toHaveLength(1);
+  expect(fristenbuecher[0][1].eintraege).toEqual([{
+    id: "82001", fensterBeginn: firstSeenAt, verbrauchtBis: firstSeenAt,
+  }]);
+  expect(fristenbuecher[0][1]).not.toHaveProperty("ids");
 });
 
 test("account-ready Boot, Chronik, Obsession-Suche und Auswahl-Sprungschutz", async ({ privateApp }) => {

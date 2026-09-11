@@ -9,9 +9,12 @@ import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import { baueStreamingAnsichten } from "./src/lib/katalog.js";
 import {
+  aktualisiereStreamingNeuFristenbuch,
+  parseStreamingNeuFristenbuch,
   parseStreamingNeuUebergang,
   projiziereStreamingNeu,
   STREAMING_NEU_DAUER_MS,
+  streamingNeuFristenbuchStorageKey,
   streamingNeuUebergangStorageKey,
 } from "./src/lib/streamingNeu.js";
 import {
@@ -100,6 +103,8 @@ check("Providerzugabe verlängert nicht, reine Auswahlprojektion verschiebt aber
 
 const ownerA = "account:00000000-0000-4000-8000-0000000000aa";
 const ownerB = "account:00000000-0000-4000-8000-0000000000bb";
+const ownerC = "account:00000000-0000-4000-8000-0000000000cc";
+const ownerD = "account:00000000-0000-4000-8000-0000000000dd";
 const mandalorianSeit = Date.parse("2026-09-07T08:15:00.000Z");
 const alterSeparaterSeit = Date.parse("2026-09-02T08:15:00.000Z");
 const v2UebergangRoh = JSON.stringify({
@@ -242,6 +247,119 @@ check("Ab- und Wiederzugang innerhalb der aktiven Frist verlängert den Producer
   assert.deepEqual(nachAltemAblauf.neueIds, []);
 });
 
+const FRISTEN_T0 = Date.parse("2026-08-01T12:00:00.000Z");
+const tag = (tagNummer) => FRISTEN_T0 + (tagNummer - 1) * TAG;
+const tagIso = (wert) => new Date(wert).toISOString();
+function prunedKatalog(nowTag, zugangstage, { letzterBleibt = true } = {}) {
+  const now = tag(nowTag);
+  const alleDiffs = [];
+  zugangstage.forEach((zugangstag, index) => {
+    alleDiffs.push({
+      dienst: "Netflix", vorher: false, nachher: true, erkannt_am: tagIso(tag(zugangstag)),
+    });
+    if (!letzterBleibt || index < zugangstage.length - 1) {
+      alleDiffs.push({
+        dienst: "Netflix", vorher: true, nachher: false, erkannt_am: tagIso(tag(zugangstag) + TAG),
+      });
+    }
+  });
+  const dienst_diffs = alleDiffs.filter((diff) => Date.parse(diff.erkannt_am) >= now - STREAMING_NEU_DAUER_MS);
+  const daten = {
+    stand: tagIso(now), katalog_stand: tagIso(now), katalogMengen: { umfang: "voll" },
+    stand_pro_quelle: { Netflix: tagIso(now) }, vergleich_stand_pro_quelle: { Netflix: tagIso(now) },
+  };
+  return {
+    now,
+    bekannt: { ...daten, titel: [] },
+    entdecken: { ...daten, titel: [{
+      watchmode_id: 777, titel: "Wiederkehrend", dienste: letzterBleibt ? ["Netflix"] : [], dienst_diffs,
+    }] },
+  };
+}
+
+check("Fristenbuch verhindert nach Pruning von Tag 1 eine Neudatierung auf Tag 4", () => {
+  const tag4 = prunedKatalog(4, [1, 4]);
+  const ersterStand = aktualisiereStreamingNeuFristenbuch(null, {
+    owner: ownerA, auswahl: ["Netflix"], ...tag4, now: tag4.now,
+  });
+  const tag16 = prunedKatalog(16, [1, 4]);
+  const nachPruning = aktualisiereStreamingNeuFristenbuch(ersterStand.fristenbuch, {
+    owner: ownerA, auswahl: ["Netflix"], ...tag16, now: tag16.now,
+  });
+  assert.equal(nachPruning.fristenbuch.eintraege[0].fensterBeginn, tag(1));
+  assert.equal(nachPruning.fristenbuch.eintraege[0].verbrauchtBis, tag(4));
+  assert.deepEqual(projiziereStreamingNeu({
+    ...tag16, auswahl: ["Netflix"], fristenbuch: nachPruning.fristenbuch, now: tag16.now,
+  }).neueIds, []);
+});
+
+check("Abgelaufener v2-Beginn wird durch einen jüngeren Restdiff nicht wiederbelebt", () => {
+  const tag20 = prunedKatalog(20, [10]);
+  const legacy = Object.freeze({
+    owner: ownerA,
+    neu: Object.freeze([{ id: "777", firstSeenAt: tag(1) }]),
+  });
+  const buch = aktualisiereStreamingNeuFristenbuch(null, {
+    owner: ownerA, auswahl: ["Netflix"], ...tag20, uebergang: legacy, now: tag20.now,
+  }).fristenbuch;
+  assert.equal(buch.eintraege[0].fensterBeginn, tag(1));
+  assert.equal(buch.eintraege[0].verbrauchtBis, tag(10));
+  assert.deepEqual(projiziereStreamingNeu({
+    ...tag20, auswahl: ["Netflix"], fristenbuch: buch, now: tag20.now,
+  }).neueIds, []);
+});
+
+check("Verbrauchte Restdiffs bleiben über Reload und mehrere geprunte Fenster phasenfest", () => {
+  let buch = null;
+  for (const [nowTag, zugaenge] of [
+    [13, [1, 4, 7, 10, 13]],
+    [16, [1, 4, 7, 10, 13, 16]],
+    [28, [1, 4, 7, 10, 13, 16, 19, 22, 25, 28]],
+  ]) {
+    const lauf = prunedKatalog(nowTag, zugaenge);
+    buch = aktualisiereStreamingNeuFristenbuch(buch, {
+      owner: ownerA, auswahl: ["Netflix"], ...lauf, now: lauf.now,
+    }).fristenbuch;
+    buch = parseStreamingNeuFristenbuch(JSON.stringify(buch), ownerA, ["Netflix"]);
+  }
+  assert.equal(buch.eintraege[0].fensterBeginn, tag(16));
+  assert.equal(buch.eintraege[0].verbrauchtBis, tag(28));
+  const tag31 = prunedKatalog(31, [1, 4, 7, 10, 13, 16, 19, 22, 25, 28]);
+  const final = aktualisiereStreamingNeuFristenbuch(buch, {
+    owner: ownerA, auswahl: ["Netflix"], ...tag31, now: tag31.now,
+  }).fristenbuch;
+  assert.deepEqual(projiziereStreamingNeu({
+    ...tag31, auswahl: ["Netflix"], fristenbuch: final, now: tag31.now,
+  }).neueIds, []);
+  assert.equal(parseStreamingNeuFristenbuch(JSON.stringify(final), ownerB, ["Netflix"]), null);
+  assert.equal(parseStreamingNeuFristenbuch(JSON.stringify(final), ownerA, ["Disney+"]), null);
+  assert.notEqual(
+    streamingNeuFristenbuchStorageKey(ownerA, ["Netflix"]),
+    streamingNeuFristenbuchStorageKey(ownerA, ["Disney+"]),
+  );
+});
+
+check("v2 wird je Auswahl nur einmal und nur bei aktuell passender Dienstquelle adaptiert", () => {
+  const disneyKatalog = {
+    bekannt: { ...bekannt, titel: [] }, entdecken: mandalorianKatalog,
+  };
+  const netflixErststand = aktualisiereStreamingNeuFristenbuch(null, {
+    owner: ownerA, auswahl: ["Netflix"], ...disneyKatalog,
+    uebergang: v2Uebergang, now: NOW,
+  }).fristenbuch;
+  assert.deepEqual(netflixErststand.eintraege, []);
+  assert.equal(netflixErststand.v2Uebernommen, true);
+  const spaeterAufNetflix = {
+    ...mandalorianKatalog,
+    titel: [{ ...mandalorianTitel, dienste: ["Netflix"] }],
+  };
+  const spaeter = aktualisiereStreamingNeuFristenbuch(netflixErststand, {
+    owner: ownerA, auswahl: ["Netflix"], bekannt: { ...bekannt, titel: [] },
+    entdecken: spaeterAufNetflix, uebergang: v2Uebergang, now: NOW,
+  }).fristenbuch;
+  assert.deepEqual(spaeter.eintraege, []);
+});
+
 check("Gleichzeitiger Wechsel zwischen gewählten Diensten erzeugt keinen Union-Zugang", () => {
   const wechsel = {
     ...entdecken,
@@ -375,9 +493,16 @@ const controllerUi = await mount(ControllerProbe, {
 });
 await act(async () => { await tick(); });
 await act(async () => { controller.uebernehmeVollkatalog({ bekannt, entdecken }); await tick(); });
-check("Controller übernimmt Producerbeleg und liest v2 ausschließlich ohne Storage-Write", () => {
+check("Controller lässt v2 bytegleich und schreibt nur das kleine Fristenbuch", () => {
   assert.match(controllerUi.container.textContent, /^ready:/u);
-  assert.equal(storageWrites, 0);
+  assert.equal(gespeicherteWerteA.get(streamingNeuUebergangStorageKey(ownerA)), v2UebergangRoh);
+  assert.equal(storageWrites, 1);
+  const fristenKey = streamingNeuFristenbuchStorageKey(ownerA, fixture.auswahl);
+  const gespeichert = JSON.parse(gespeicherteWerteA.get(fristenKey));
+  assert.deepEqual(Object.keys(gespeichert).sort(), ["auswahl", "eintraege", "format", "owner", "v2Uebernommen"]);
+  assert.ok(gespeichert.eintraege.every((entry) => (
+    Object.keys(entry).sort().join(",") === "fensterBeginn,id,verbrauchtBis"
+  )));
 });
 await act(async () => {
   controller.uebernehmeVollkatalog({ bekannt: { ...bekannt, titel: [] }, entdecken: mandalorianKatalog });
@@ -410,6 +535,48 @@ await controllerUi.render({ kontextKey: "konto-b", auswahl: fixture.auswahl, aus
 await act(async () => { await tick(); });
 check("Kontowechsel verwirft den alten Neu-Beleg", () => {
   assert.equal(controllerUi.container.textContent, "loading:");
+});
+await act(async () => {
+  setStorageDriver({
+    ...storageDriverA,
+    name: "test-c",
+    owner: ownerC,
+    async get() { throw new Error("lokaler Cache nicht lesbar"); },
+  });
+  await tick();
+});
+await controllerUi.render({ kontextKey: "konto-c", auswahl: fixture.auswahl, auswahlGeladen: true });
+await act(async () => {
+  controller.uebernehmeVollkatalog({ bekannt, entdecken });
+  await tick();
+  await tick();
+});
+check("Nicht lesbarer lokaler Fristencache lässt die aktuelle Producerprojektion nutzbar", () => {
+  assert.match(controllerUi.container.textContent, /^ready:/u);
+  assert.doesNotMatch(controllerUi.container.textContent, /1781431/u);
+});
+const v2UebergangRohD = v2UebergangRoh.replace(ownerA, ownerD);
+await act(async () => {
+  setStorageDriver({
+    ...storageDriverA,
+    name: "test-d",
+    owner: ownerD,
+    async get(key) {
+      if (key === streamingNeuUebergangStorageKey(ownerD)) return { key, value: v2UebergangRohD };
+      throw new Error("Fristencache nicht lesbar");
+    },
+    async set() { throw new Error("Fristencache nicht schreibbar"); },
+  });
+  await tick();
+});
+await controllerUi.render({ kontextKey: "konto-d", auswahl: ["Disney+"], auswahlGeladen: true });
+await act(async () => {
+  controller.uebernehmeVollkatalog({ bekannt: { ...bekannt, titel: [] }, entdecken: mandalorianKatalog });
+  await tick();
+  await tick();
+});
+check("Lesbarer v2-Beleg bleibt trotz nicht verfügbarem Fristencache nutzbar", () => {
+  assert.equal(controllerUi.container.textContent, "ready:1781431");
 });
 await controllerUi.cleanup();
 setStorageDriver(null);
@@ -452,6 +619,7 @@ check("Alles behält Pin- und Gesehen-Aktionen", () => {
 await act(async () => { tab("Neu").click(); await tick(); });
 check("Neu ist Teilmenge von Alles und enthält auch Mein-Programm-Titel", () => {
   assert.equal(tab("Neu").textContent.trim(), "Neu (2)");
+  assert.match(ui.container.textContent, /Neu im Katalog deiner ausgewählten Dienste erkannt/u);
   assert.match(ui.container.textContent, /Bestehender Auswahlzugang/u);
   assert.match(ui.container.textContent, /Neuer Auswahlzugang/u);
   assert.doesNotMatch(ui.container.textContent, /Unveränderter Altbestand/u);
