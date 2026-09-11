@@ -29,6 +29,26 @@ const OWN_DATA_FELDER = Object.freeze([
   "auth", "access", "personal", "aiLogs", "seriesWatch", "sharedArticles",
   "sharedClaims", "radar", "retention", "deletion",
 ]);
+const SYNC_SICHERHEITSFELDER = Object.freeze([
+  "pending", "conflict", "stale", "zuGross", "schemaVeraltet",
+]);
+const SYNC_SICHERHEITSKEYS = Object.freeze([K.master, K.artikel]);
+const SYNC_PRUEFUNG_MAX = 30;
+
+function syncSicherheitsSignatur(status, kontoSpeicherAktiv) {
+  if (!kontoSpeicherAktiv) return "guest-local";
+  return JSON.stringify([
+    status?.configured === true,
+    ...SYNC_SICHERHEITSFELDER.map((feld) => Array.isArray(status?.[feld])
+      ? SYNC_SICHERHEITSKEYS.filter((key) => status[feld].includes(key))
+      : null),
+  ]);
+}
+
+function hatLaufendenSicherheitsSync(status) {
+  if (status?.configured !== true || !Array.isArray(status?.pending)) return false;
+  return SYNC_SICHERHEITSKEYS.some((key) => status.pending.includes(key));
+}
 
 function exportFehler(code, message) {
   const error = new Error(message);
@@ -148,7 +168,7 @@ export function useBackupExportController({
   );
   const exportOwner = String(owner || "guest-local");
   const [exportStand, setExportStand] = useState(() => leererStand(storageGeneration, exportOwner));
-  const [syncTick, setSyncTick] = useState(0);
+  const [, setSyncRevision] = useState(0);
   const aktuellerExportStand = exportStand.generation === storageGeneration && exportStand.owner === exportOwner
     ? exportStand
     : leererStand(storageGeneration, exportOwner);
@@ -186,12 +206,6 @@ export function useBackupExportController({
     }).catch(() => {});
     return () => { aktiv = false; };
   }, [exportOwner, storageGeneration]);
-  useEffect(() => {
-    const tick = () => setSyncTick((wert) => wert + 1);
-    const interval = setInterval(tick, 1000);
-    window.addEventListener("focus", tick);
-    return () => { clearInterval(interval); window.removeEventListener("focus", tick); };
-  }, [storageGeneration]);
   const markiereExport = useCallback((feld, enthaltenerStand = Date.now()) => {
     if (!Number.isFinite(enthaltenerStand)) return false;
     const kontext = captureStorageContext();
@@ -234,9 +248,44 @@ export function useBackupExportController({
   const storageContext = captureStorageContext();
   const kontoSpeicherAktiv = storageContext.generation === storageGeneration && storageContext.name === "konto";
   const syncStatus = kontoSpeicherAktiv ? activeSyncStatus() : null;
-  /* `syncTick` hält die Projektion nach dem asynchronen Hintergrund-Commit
-     aktuell; der Status selbst bleibt die einzige fachliche Wahrheit. */
-  void syncTick;
+  const syncSignatur = syncSicherheitsSignatur(syncStatus, kontoSpeicherAktiv);
+  const syncSignaturRef = useRef(syncSignatur);
+  syncSignaturRef.current = syncSignatur;
+  const syncPruefungLaeuft = hatLaufendenSicherheitsSync(syncStatus);
+  useEffect(() => {
+    if (!kontoSpeicherAktiv) return undefined;
+    let aktiv = true;
+    let timer = null;
+    let pruefungen = 0;
+    const aktualisiereBeiAenderung = () => {
+      const kontext = captureStorageContext();
+      const kontoAktuell = kontext.generation === storageGeneration && kontext.name === "konto";
+      const status = kontoAktuell ? activeSyncStatus() : null;
+      const next = syncSicherheitsSignatur(status, kontoAktuell);
+      if (next !== syncSignaturRef.current) {
+        syncSignaturRef.current = next;
+        setSyncRevision((wert) => wert + 1);
+      }
+      return { kontoAktuell, status };
+    };
+    const pruefeLaufendenSync = () => {
+      if (!aktiv) return;
+      pruefungen += 1;
+      const next = aktualisiereBeiAenderung();
+      if (next.kontoAktuell && hatLaufendenSicherheitsSync(next.status)
+          && pruefungen < SYNC_PRUEFUNG_MAX) {
+        timer = setTimeout(pruefeLaufendenSync, 1000);
+      }
+    };
+    const beiFokus = () => aktualisiereBeiAenderung();
+    window.addEventListener("focus", beiFokus);
+    if (syncPruefungLaeuft) timer = setTimeout(pruefeLaufendenSync, 1000);
+    return () => {
+      aktiv = false;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("focus", beiFokus);
+    };
+  }, [exportOwner, kontoSpeicherAktiv, storageGeneration, syncPruefungLaeuft]);
   const masterImKontoBestaetigt = istKontoTopfBestaetigt(K.master, syncStatus, kontoSpeicherAktiv);
   const artikelImKontoBestaetigt = istKontoTopfBestaetigt(K.artikel, syncStatus, kontoSpeicherAktiv);
   return {
