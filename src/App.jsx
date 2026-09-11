@@ -1759,6 +1759,7 @@ export default function App() {
                keine neuen Fetches: Matches, Must-Watch, Abo-Auswahl, Kataloge,
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */
             kinoMatches={kinoMatches} mustwatch={mustwatch} mwKandidaten={mwKandidaten} auswahl={sichtbareAuswahl}
+            pinOwnerKey={streamingKontextKey} mustwatchReady={mustwatchGeladen}
             streamingEntdecken={streamingEntdecken} streamingBekannt={streamingBekannt}
             progStand={progStand} programmInfo={programmInfo} streamingInfo={streamingInfo} />
         )}

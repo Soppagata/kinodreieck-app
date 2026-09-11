@@ -12,10 +12,10 @@ einen neuen Kandidaten vor R5. Keine zusaetzliche Audit- oder Freigabeschleife.
 
 | Teil von R4 | Ergebnis | Paket / Stand |
 | --- | --- | --- |
-| U1 | Must-Watch und Streaming/Alles verwenden das vorhandene Neu-Kartenlayout mit Pin, Markierung, Gesehen sowie explizitem Mediathek-Anlegen/Verknuepfen. | Karten / GEBAUT `60a2fae`, lokale Pin-Naht noch OFFEN |
+| U1 | Must-Watch und Streaming/Alles verwenden das vorhandene Neu-Kartenlayout mit Pin, Markierung, Gesehen sowie explizitem Mediathek-Anlegen/Verknuepfen. | Karten / GEBAUT: gemeinsame Karten plus ownergebundene lokale Pins |
 | U2 | KI-Kurzbeschreibungen bleiben; Kosten-/Websuche-Betriebstexte und der redundante Korrekturbutton entfallen. Kino ohne Weiterleit-Pfeile; Empfehlungsdetails zugeklappt mit titelnahem Chevron. | Texte und Details / GEBAUT `9119b21` |
 | U3 | Quellenstaende sind mobil lesbar. Obsoleter Backup-Hinweis entfaellt; Exporterinnerung und tatsaechlich fehlgeschlagene Speicherung werden korrekt getrennt. | Settings / GEBAUT `0c2261e` |
-| U4 | Die zwei KI-Servermeldungen sind mit zeitnaher, providerfreier Betriebsdiagnose eingeordnet; belegte Fehler werden gezielt behoben oder konkret benannt. | Master / OFFEN |
+| U4 | Die zwei KI-Servermeldungen sind mit zeitnaher, providerfreier Betriebsdiagnose eingeordnet; belegte Fehler werden gezielt behoben oder konkret benannt. | Master / GEBAUT: Quellenfehler konkret eingegrenzt und UI-Text korrigiert; externe LOC-Sperre bleibt Befund |
 | U5 | Gemeinsamer Kandidat lokal geprueft, auf Staging gepusht, CI/Build/PWA rueckgelesen. | Master / OFFEN |
 
 **Parallelmatrix:** Alle drei Pakete starten vom selben Commit dieser Planergänzung,
@@ -33,7 +33,8 @@ bindet er den bestehenden Kontomodus an die Exporthinweis-Projektion.
 Nach erster Integration folgt ein kleines disjunktes Delta: Karten erweitert
 nur den vorhandenen Pin-Resolver/StartTab um exakte lokale Must-Watch-IDs;
 Texte praezisiert ausschliesslich die UI-Uebersetzung bestehender
-Filmwissen-Quellenfehler. Beide starten vom selben Integrationscommit.
+Filmwissen-Quellenfehler; Settings begrenzt die Statusbeobachtung auf laufende
+Synchronisation, ohne dauernde Root-Renders. Alle starten von `42dde0d`.
 Kein automatisches Titelmatching, keine neue Persistenzarchitektur, kein
 bezahlter KI-Aufruf, keine Backend-/Scheduler-Aenderung fuer reine UI-Arbeit.
 

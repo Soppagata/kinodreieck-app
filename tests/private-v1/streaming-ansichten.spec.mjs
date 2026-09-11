@@ -201,4 +201,17 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
   await expect(audit).toContainText("Netflix · Paramount+ (Via Amazon Prime) · Crunchyroll Premium (Via Prime) · 4 Titel");
   await expect(audit).toContainText("alle 48 Stunden");
   await expect(audit).toContainText("15.09.2026");
+  for (const width of [393, 320]) {
+    await page.setViewportSize({ width, height: 852 });
+    const sources = audit.locator(".kd-katalog-quellenkarte");
+    expect(await sources.count()).toBeGreaterThan(0);
+    for (const source of await sources.all()) {
+      expect(await source.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      for (const value of await source.locator("dd").all()) {
+        expect(await value.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      }
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  }
+  await audit.screenshot({ path: testInfo.outputPath("ui-quellenstaende-mobile.png") });
 });
