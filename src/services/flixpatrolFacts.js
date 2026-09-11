@@ -129,13 +129,17 @@ export function createFlixpatrolFactsService({
       if (cache?.key === key && cache.expiresAt <= now()) cache = null;
       if (identityCache?.expiresAt <= now()) identityCache = null;
       const merged = [...(identityCache?.facts || []), ...(cache?.facts || [])];
-      const seen = new Set();
-      return Object.freeze(merged.filter((fact) => {
+      const byId = new Map();
+      for (const fact of merged) {
         const id = fact?.sourceId ?? fact?.identity?.flixpatrolId;
-        if (!id || seen.has(id)) return false;
-        seen.add(id);
-        return true;
-      }));
+        if (!id) continue;
+        const existing = byId.get(id);
+        if (!existing) { byId.set(id, fact); continue; }
+        const charts = new Map([...(existing.charts || []), ...(fact.charts || [])]
+          .map((chart) => [JSON.stringify(chart), chart]));
+        byId.set(id, Object.freeze({ ...existing, charts: Object.freeze([...charts.values()]) }));
+      }
+      return Object.freeze([...byId.values()]);
     },
     async loadByIdentities(identities) {
       const requested = normalizeIdentities(identities);

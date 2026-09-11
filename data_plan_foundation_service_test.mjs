@@ -29,6 +29,9 @@ const fetchImpl = async (url, options) => {
       ? [{ sourceId: chartId, ranking: 1 }] : [],
   } }), { status: 200 });
   if (url.endsWith("kd_flixpatrol_titles_read")) return new Response(JSON.stringify({ ok: true, items: [row(chartId, "Chart")] }), { status: 200 });
+  if (JSON.parse(options.body).p_identities?.some((identity) => identity.flixpatrolId === chartId)) {
+    return new Response(JSON.stringify({ ok: true, items: [row(chartId, "Chart")] }), { status: 200 });
+  }
   return new Response(JSON.stringify({ ok: true, schemaVersion: "title-facts-projection-v1", items: [row(outsideId, "Outside", {
     genres: [{ id: "gnr_vkhlVlz6xabS78vHh0DCIc5e", name: "Drama" }],
     keywords: [{ id: "kwd_NLPueMUHlNqj02pZEBFyWIhu", name: "space" }],
@@ -67,6 +70,15 @@ assert.deepEqual(await service.loadByIdentities([{ flixpatrolId: 123456, mediaTy
 assert.deepEqual(await service.loadByIdentities([{ imdbId: 7654321, mediaType: "film" }]), []);
 assert.deepEqual(await service.loadByIdentities(Array.from({ length: 51 }, () => ({ imdbId: "tt7654321" }))), []);
 check("Typ-only, Namen, falsch typisierte IDs und mehr als 50 Identitäten stoppen vor dem RPC", () => assert.equal(requests.length, beforeInvalid));
+
+await service.loadByIdentities([{ flixpatrolId: chartId, mediaType: "film" }]);
+check("Identitaetslookup erhaelt datierte Chartbelege desselben Titels", () => {
+  const fact = service.peek().find((item) => item.sourceId === chartId);
+  assert.equal(fact.charts.length, 1);
+  assert.equal(fact.charts[0].chartDate, "2026-09-11");
+  assert.equal(fact.charts[0].rank, 1);
+  assert.equal(fact.description, "Chart description");
+});
 
 let staleClock = Date.parse("2026-09-11T12:00:00Z");
 const staleService = createFlixpatrolFactsService({
