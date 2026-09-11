@@ -24,10 +24,10 @@ export function streamingNeuUebergangStorageKey(owner) {
   return saubererOwner ? STREAMING_NEU_UEBERGANG_KEY_PREFIX + encodeURIComponent(saubererOwner) : null;
 }
 
-/* E11 schrieb diesen kleinen, ownergebundenen v2-Verlauf bereits auf das
-   Gerät. E12 ließ ihn liegen, las ihn aber nicht mehr. Der Übergangsleser
-   übernimmt ausschließlich gültige Neu-Einträge samt ursprünglicher Frist;
-   v1-Baselines und jede Kataloghistorie bleiben außen vor. */
+/* App-SN14 schrieb diesen kleinen, ownergebundenen v2-Verlauf vor E12 bereits
+   auf das Gerät. E12 ließ ihn liegen, las ihn aber nicht mehr. Der
+   Übergangsleser übernimmt ausschließlich gültige Neu-Einträge samt
+   ursprünglicher Frist; v1-Baselines und jede Kataloghistorie bleiben außen. */
 export function parseStreamingNeuUebergang(raw, owner) {
   const value = rawValue(raw);
   const saubererOwner = text(owner);
@@ -178,7 +178,7 @@ export function projiziereStreamingNeu({
     const id = text(entry?.id);
     const firstSeenAt = zeitpunkt(entry?.firstSeenAt);
     if (!id || !aktuelleAuswahlIds.has(id) || firstSeenAt == null
-        || zeit >= firstSeenAt + STREAMING_NEU_DAUER_MS) continue;
+        || firstSeenAt > zeit || zeit >= firstSeenAt + STREAMING_NEU_DAUER_MS) continue;
     neuSeit[id] = new Date(firstSeenAt).toISOString();
   }
   const antworteMitNeu = (extra = {}) => {

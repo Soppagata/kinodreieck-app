@@ -197,6 +197,20 @@ check("Legacy-Einträge laufen je Titel bis zur Millisekunde ab und fluten keine
   }).neueIds, []);
 });
 
+check("Ein gültiger v2-Eintrag mit zukünftigem firstSeenAt bleibt bis zu seiner Erkennung unsichtbar", () => {
+  const zukunft = parseStreamingNeuUebergang({
+    format: 2,
+    owner: ownerA,
+    runId: "2026-09-20T12:00:00.000Z",
+    ids: [1781431],
+    neu: [{ id: 1781431, firstSeenAt: Date.parse("2026-09-18T12:00:00.000Z") }],
+  }, ownerA);
+  assert.deepEqual(projiziereStreamingNeu({
+    bekannt: { ...bekannt, titel: [] }, entdecken: mandalorianKatalog,
+    auswahl: ["Disney+"], uebergang: zukunft, now: NOW,
+  }).neueIds, []);
+});
+
 check("Ab- und Wiederzugang innerhalb der aktiven Frist verlängert den Producer-Zeitpunkt nicht", () => {
   const ersterZugang = Date.parse("2026-09-01T12:00:00.000Z");
   const abgang = Date.parse("2026-09-05T12:00:00.000Z");
