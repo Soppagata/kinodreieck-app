@@ -13,11 +13,11 @@ geoeffnet, R5/R6 folgen weiterhin nach dem PWA-Test. Keine neue Auditkette.
 
 | ID | Sichtbares Ergebnis und Fertigkriterium | Stand |
 | --- | --- | --- |
-| V1 | Eine gemeinsame KI-Bewertung verbindet persoenliche Prognose und belegtes Filmwissen bei Jetzt bewerten und Eintrag erstellen. Das Ergebnis bleibt im offenen Formular, mit Quellen, Neuberechnen und Korrigieren; erst bewusstes Speichern legt Bewertung/Eintrag ab. Belegter WARUM-Wert und geschaetzte WIE/WAS/Passung bleiben unterscheidbar; ohne ausreichende Belege gilt das Ergebnis als vorlaeufig. | GEBAUT und integriert; gemeinsame Abschlusspruefung laeuft |
-| V2 | Mediathek bietet dieselben Alphabet-/Jahrzehntregler wie Streaming. Streaming Alles/Neu verlinkt bei eindeutigem Bestand direkt auf den vorhandenen Mediathek-Eintrag. Filter, Dienstauswahl und Neu-Fristen bleiben erhalten. | GEBAUT und integriert; gemeinsame Abschlusspruefung laeuft |
-| V3 | Entdecken-Titel sind wieder dunkel auf hellen Karten lesbar; Streaming hat drei benachbarte Menuebuttons. Quellen sind einheitliche, deduplizierte Tags in einer eigenen Reihe unter WIE/WAS/WARUM/Kategorie. | GEBAUT und integriert; gemeinsame Abschlusspruefung laeuft |
+| V1 | Eine gemeinsame KI-Bewertung verbindet persoenliche Prognose und belegtes Filmwissen bei Jetzt bewerten und Eintrag erstellen. Das Ergebnis bleibt im offenen Formular, mit Quellen, Neuberechnen und Korrigieren; erst bewusstes Speichern legt Bewertung/Eintrag ab. Belegter WARUM-Wert und geschaetzte WIE/WAS/Passung bleiben unterscheidbar; ohne ausreichende Belege gilt das Ergebnis als vorlaeufig. | GEBAUT, integriert und lokal geprueft |
+| V2 | Mediathek bietet dieselben Alphabet-/Jahrzehntregler wie Streaming. Streaming Alles/Neu verlinkt bei eindeutigem Bestand direkt auf den vorhandenen Mediathek-Eintrag. Filter, Dienstauswahl und Neu-Fristen bleiben erhalten. | GEBAUT, integriert und lokal geprueft |
+| V3 | Entdecken-Titel sind wieder dunkel auf hellen Karten lesbar; Streaming hat drei benachbarte Menuebuttons. Quellen sind einheitliche, deduplizierte Tags in einer eigenen Reihe unter WIE/WAS/WARUM/Kategorie. | GEBAUT, integriert und lokal geprueft |
 | V4 | Kino hat einen echten, mit Suche/Kino/Tag/Abo/Fassung kombinierbaren Genrefilter. Die Profil-Zwischenueberschriften entfallen. Genreabdeckung wird gemessen und Luecken mit belegten Werkidentitaeten aus vorhandenen Daten bzw. oeffentlichen Quellen geschlossen. Keine erfundenen Genrewerte. | GEBAUT und integriert: 283/284, Sneak bewusst offen |
-| V5 | Gemeinsamer Kandidat lokal geprueft, committed, auf Staging gepusht und nach CI samt Build/Service Worker rueckgelesen. | OFFEN |
+| V5 | Gemeinsamer Kandidat lokal geprueft, committed, auf Staging gepusht und nach CI samt Build/Service Worker rueckgelesen. | LOKAL GRUEN auf Code `219613d`; Push/CI/Readback folgen |
 
 **Parallelwelle ab dem Commit dieser Ergaenzung:**
 
@@ -97,6 +97,18 @@ jetzt den tatsaechlichen Streaming-Sprung zum Eintrag samt Mediathek-Reglern.
 Ein bekannter Quellenstopp vor dem KI-Auftrag erlaubt einen klar vorlaeufigen
 Vorschlag; unklare Fehler starten keinen Folgeaufruf. Die externe LOC-Sperre
 bleibt unabhaengig davon ein offener Quellenbefund.
+
+**Lokaler Abschluss auf Code `219613d`:** `npm test` vollstaendig mit Exit 0,
+einschliesslich neuer Bewertungs-/Mediathek-/Genretests, vorhandener Konto- und
+Async-Schutzpruefungen, Einzeldatei, Build und 72/72 Pages-Checks. Die gezielte
+integrierte Browserpruefung besteht in Chromium und WebKit mit 18/18 Faellen:
+Streaming-Reiter, wirklicher Mediathek-Sprung samt Reglern, Must-Watch-Pin,
+Kino-Filter und Entdecken-Kontrast. Mobile WebKit-Screenshots der Mediathek-
+Quellenreihe und Streaming-Neu-Karte wurden gesichtet. Belege liegen in
+`/private/tmp/kd-ui-followup-evidence-20260911/`. Keine echten KI-Anbieterrequests,
+Shared-Datenwrites, Migrationen oder Scheduler-Aenderungen in V1–V5.
+Push, CI und Staging-Readback werden separat nachgetragen; Max' physische
+PWA-Abnahme ist weiterhin Voraussetzung fuer R5/R6.
 
 ## PWA-Rueckmeldung vom 11.09.: gezielte UI-Nacharbeit
 
