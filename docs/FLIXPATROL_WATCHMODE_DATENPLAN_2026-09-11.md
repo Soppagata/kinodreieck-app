@@ -14,10 +14,10 @@ Vertagung der unten historisch dokumentierten Befunde.
 
 | ID | Ergebnis und Fertigkriterium | Zuständigkeit / Stand |
 | --- | --- | --- |
-| R1 | Netflix nutzt den täglichen FlixPatrol-Feed; Ursache des realen Bündelfehlers belegt, Vertrag korrigiert, erster Feed erfolgreich und normaler Client-Read bestätigt. | Backend `16dae19` integriert und live bestätigt; finaler App-Abschluss folgt. GEBAUT |
+| R1 | Netflix nutzt den täglichen FlixPatrol-Feed; Ursache des realen Bündelfehlers belegt, Vertrag korrigiert, erster Feed erfolgreich und normaler Client-Read bestätigt. | Backend `16dae19`, Staging `72fb246`: Feed/Fakten live bestätigt, Abschlussprüfung grün. DONE |
 | R2 | Watchmode-IDs und gezielte deutsche Details erreichen den Katalog; zusätzliche Werktypen sind empirisch geklärt und nur mit belegtem Mapping aufgenommen. Bestehende 14-Tage-Fristen bleiben erhalten. | Produzent `39735ae`: IDs und fünf Details veröffentlicht; Typmapping gebaut, Aktivierung bleibt am belegten Quotenrest. GEBAUT / REST |
-| R3 | Fehlendes Namenssignal und tatsächliche Datenfrische sind geklärt und korrigiert; die Build-Chunkwarnung ist gezielt bereinigt. Kein Umbau funktionierender Nutzerwege. | Namenssignal und Zeitstempel veröffentlicht; Build-Aufteilung gebaut, zugehörige Lieferprüfung wird angepasst. GEBAUT |
-| R4 | Integrierter Stand ist getestet, gepusht und auf Staging inklusive Feed, Fakten und Service Worker rückgelesen; kompakte PWA-Prüfpunkte für Max. | Master. OFFEN |
+| R3 | Fehlendes Namenssignal und tatsächliche Datenfrische sind geklärt und korrigiert; die Build-Chunkwarnung ist gezielt bereinigt. Kein Umbau funktionierender Nutzerwege. | Namenssignal und Zeitstempel veröffentlicht; Build und vollständige Lieferprüfung auf `72fb246` grün. DONE |
+| R4 | Integrierter Stand ist getestet, gepusht und auf Staging inklusive Feed, Fakten und Service Worker rückgelesen; kompakte PWA-Prüfpunkte für Max. | Staging `72fb246`, CI `34618596758`, normaler Feed-/Fakten-/PWA-Readback grün. DONE |
 | R5 | Nach Max' PWA-Test: Staging-Produktstand in Main, gewollte Produktionsschalter gesetzt, Production ausgeliefert und rückgelesen. | Master; abhängig von R4 und Max' Testergebnis. OFFEN |
 | R6 | Produktionsjobs besitzen ein eindeutiges Produktionsziel; Staging erhält getrenntes Pages-/Supabase-Ziel, neutrale Seeds und zunächst ausgeschaltete Anbieter/Scheduler. Control liest datierten Status über begrenzte serverseitige Wege. | Folgewelle nach R5; vorhandenen Sandbox-Vertrag konkret ausfüllen. OFFEN |
 
@@ -70,7 +70,7 @@ Control startet mit lesbarem Build-, Quellen-, Frische-, Job- und Budgetstatus
 sowie klar getrennten Sandbox-Eingaben. Neue produktive Schreib- oder
 Providerknöpfe gehören erst in einen eigenen konkret begrenzten Auftrag.
 
-## Aktuelle Datenlieferung und App-Abschluss
+## Bestätigte Staging-Lieferung und verbleibender Weg
 
 **Netflix über FlixPatrol ist aktiv.** Backend `16dae19` wurde gezielt für
 `flixpatrol-usage` und `entdecken-daily-task` ausgeliefert; die unveränderten
@@ -134,20 +134,43 @@ gehören in die Sandbox-Planung; 48-Stunden-/12-Tage-Takt bleiben unverändert.
 Ein späterer Erstimport zusätzlicher Typen erzeugt dank eigener Baseline
 keinen Schub alter Titel unter `Neu`.
 
-Die gezielte Build-Aufteilung entfernt die bisherige Chunkgrößenwarnung,
-ohne Tabs oder Nutzerzustand umzubauen. Die Gesamtsuite fand dabei vier
-Auslieferungsprüfungen, die nur die erste JavaScript-Datei untersuchten.
-Diese Integrationsnaht wird auf die tatsächlich geladenen Shell-Dateien
-angepasst; die Schutzanker bleiben erhalten. Alle vorangehenden Prüfungen
-inklusive synthetischer PostgreSQL-Tests sowie 341 Function-Mocks bestanden.
-Der vollständige Abschlusslauf und die neue Staging-Auslieferung folgen.
+**Staging `72fb246` ist gepusht, CI-grün und ausgeliefert.** Vollständiges
+`npm test` einschließlich synthetischer PostgreSQL-Prüfungen, Einzeldatei,
+Build und 72/72 Pages-Checks sowie 341 Function-Mocks bestanden. In
+[CI-Lauf 34618596758](https://github.com/Soppagata/kinodreieck-app/actions/runs/34618596758)
+bestanden außerdem 46 Chromium- und 46 WebKit-Fälle und das Deployment.
+Die gezielte Build-Aufteilung entfernt die Chunkgrößenwarnung, ohne Tabs oder
+Nutzerzustand umzubauen. Die vier zunächst gefundenen Auslieferungsprüfungen
+prüfen jetzt alle tatsächlich gebundenen Shell-Bundles; Login-, Secret- und
+Offline-Schutzanker bleiben erhalten.
 
-Bis zur folgenden App-Lieferung bleibt Staging auf `ee8ef91`. `main` bleibt
-`bf74f25`, die tatsächliche Production-Auslieferung `3b82a73`; dort ist der
-Tagesfeed im Client weiterhin ausgeschaltet. Nach der neuen Staging-Lieferung
-folgt Max' kurzer physischer PWA-Test, dann der freigegebene Merge mit
-bewusster Production-Konfiguration und Readback. Erst danach werden Staging
-und die produktiven Datenjobs auf getrennte Ziele gebunden.
+Der normale angemeldete Clientweg wurde am 11.09. um 16:00 UTC bestätigt:
+ein GET lädt den frischen Format-9-Feed mit 50 Titeln vom Server, ein weiterer
+Cache-Read zwei frische Netflix-Fakten. Null Feedwrites, null FlixPatrol-
+und null KI-Requests beim Readback. Build, Service Worker, gebundene Shell-
+Dateien und privater Katalogzugriff wurden ebenfalls geprüft. Physischer
+PWA-Test durch Max bleibt der ausdrücklich vereinbarte nächste Schritt.
+
+Der nächtliche GitHub-Job läuft vom Defaultbranch. Deshalb wurde die bereits
+geprüfte Format-8/9-Antwortvalidierung separat als `cc016a2` auf `main`
+übernommen: nur Workflow und seine beiden Tests, keine Produktdateien.
+Auch dessen CI-Prüfungen sind grün; die geschützte Production-Auslieferung
+wurde nicht freigegeben. So erkennt der nächste natürliche Job den aktiven
+Format-9-Feed auch dann, wenn der vollständige Produktmerge später folgt.
+Die tatsächliche Production-Version bleibt frisch bestätigt `3b82a73`; dort
+ist der Tagesfeed im Client weiterhin ausgeschaltet.
+
+**Ab hier:** Max testet [die Staging-PWA](https://staging.kinodreieck.at) kurz:
+Entdecken mit seinen gewählten Diensten, Streaming `Alles`/`Neu`, einmal
+schließen und neu öffnen. Nach seinem Testergebnis folgt der freigegebene
+Produktmerge mit bewusster Production-Konfiguration und Readback. Erst danach
+werden Staging und die produktiven Datenjobs auf die oben konkretisierten
+getrennten Ziele gebunden. Die zusätzliche Watchmode-Typaktivierung bleibt
+wegen der belegten Quotenfrage offen; sie blockiert diesen Produktmerge nicht.
+
+Der reine Dokumentationsnachtrag auf dem Kandidatenbranch enthält diesen
+Readback. Der getestete und tatsächlich ausgelieferte Produktstand bleibt
+exakt `72fb246`; dafür wird kein erneutes Deployment ausgelöst.
 
 Aktuelle technische Belege: `/private/tmp/kd-rest-delivery-20260911/`.
 Die ältere Lieferung unter `/private/tmp/kd-data-plan-delivery-20260911/`
