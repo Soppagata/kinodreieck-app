@@ -1,8 +1,10 @@
 import {
   buildMetaFehler,
+  gebundeneShellBundlePfade,
   privateReleaseAnonKatalogFehler,
   privateReleaseLoginFehler,
   serviceWorkerBuildFehler,
+  serviceWorkerPrecacheFehler,
   serviceWorkerRevalidiert,
 } from "./deployment_contract.mjs";
 
@@ -68,17 +70,13 @@ for (let versuch = 1; versuch <= metaVersuche; versuch++) {
       metaFehler = serviceWorkerBuildFehler(swText, erwarteteVersion || meta?.buildVersion);
       if (!metaFehler) {
         const loginStartText = await (await hole(`/?${parameter}`, "text/html")).text();
-        const entrySrc = (loginStartText.match(/<script\b[^>]*\bsrc=["']([^"']+\.js(?:\?[^"']*)?)["'][^>]*>/i) || [])[1];
-        if (!entrySrc) throw new Error("Login-Readback: gehashtes Entry-Bundle fehlt in index.html.");
-        const entryUrl = new URL(entrySrc, basis + "/");
-        if (entryUrl.origin !== new URL(basis).origin || !/^\/assets\/[^/]+\.js$/.test(entryUrl.pathname)) {
-          throw new Error("Login-Readback: Entry-Bundle liegt nicht als eigenes gehashtes Asset vor.");
-        }
-        if (!swText.includes(entryUrl.pathname.slice(1))) {
-          throw new Error("Login-Readback: Entry-Bundle gehört nicht zum verifizierten Service Worker.");
-        }
-        const entryBundle = await (await hole(entryUrl.pathname + entryUrl.search, "javascript")).text();
-        const loginFehler = privateReleaseLoginFehler(loginStartText, entryBundle);
+        const shell = gebundeneShellBundlePfade(loginStartText, basis + "/");
+        const precacheFehler = serviceWorkerPrecacheFehler(swText, shell.bundlePfade);
+        if (precacheFehler) throw new Error(`Login-Readback: ${precacheFehler}.`);
+        const shellBundles = await Promise.all(shell.bundlePfade.map(async (pfad) => (
+          await (await hole(pfad, "javascript")).text()
+        )));
+        const loginFehler = privateReleaseLoginFehler(loginStartText, shellBundles.join("\n"));
         if (loginFehler) throw new Error(`Login-Readback: ${loginFehler}.`);
       }
     }

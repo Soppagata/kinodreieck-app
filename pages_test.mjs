@@ -4,9 +4,11 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   buildMetaFehler,
+  gebundeneShellBundlePfade,
   privateReleaseAnonKatalogFehler,
   privateReleaseLoginFehler,
   serviceWorkerBuildFehler,
+  serviceWorkerPrecacheFehler,
   serviceWorkerRevalidiert,
 } from "./tools/deployment_contract.mjs";
 
@@ -16,9 +18,10 @@ const check = (n, p) => { checks.push([n, p]); console.log((p ? "✓ " : "✗ ")
 
 const indexHtml = readFileSync(join(DIST, "index.html"), "utf8");
 const assets = readdirSync(join(DIST, "assets"));
-const jsDatei = assets.find((f) => f.endsWith(".js"));
+const shell = gebundeneShellBundlePfade(indexHtml, "https://lokaler-build.invalid/");
+const jsDateien = shell.bundlePfade.map((pfad) => join(DIST, pfad.slice(1)));
 const cssDatei = assets.find((f) => f.endsWith(".css"));
-const js = jsDatei ? readFileSync(join(DIST, "assets", jsDatei), "utf8") : "";
+const js = jsDateien.map((pfad) => readFileSync(pfad, "utf8")).join("\n");
 const css = cssDatei ? readFileSync(join(DIST, "assets", cssDatei), "utf8") : "";
 const viteConfig = readFileSync("vite.config.js", "utf8");
 const headers = existsSync(join(DIST, "_headers")) ? readFileSync(join(DIST, "_headers"), "utf8") : "";
@@ -51,8 +54,9 @@ check("sw.js: Shell-Cache ist an denselben Build wie die App gebunden",
   serviceWorkerBuildFehler(sw, erwarteteBuildVersion) === null
   && !sw.includes("__KD_BUILD_VERSION__"));
 check("sw.js: .json-Datendateien network-first (kein Einfrieren)", sw.includes('endsWith(".json")'));
-check("sw.js: gehashte JS-/CSS-App-Shell wird vorab gecacht",
-  /PRECACHE[^\n]+assets\/[^"]+\.js/.test(sw) && /PRECACHE[^\n]+assets\/[^"]+\.css/.test(sw));
+check("sw.js: exakt die gebundenen JS- und die CSS-App-Shell-Assets werden vorab gecacht",
+  serviceWorkerPrecacheFehler(sw, shell.bundlePfade) === null
+  && /PRECACHE[^\n]+assets\/[^"]+\.css/.test(sw));
 check("dist/manifest.webmanifest vorhanden", existsSync(join(DIST, "manifest.webmanifest")));
 check("index.html: Manifest verlinkt", indexHtml.includes("manifest.webmanifest"));
 const manifest = existsSync(join(DIST, "manifest.webmanifest"))
@@ -94,9 +98,10 @@ const remoteRetryOrder = [
   "serviceWorkerRevalidiert(swCache, swSharedCache)",
   "serviceWorkerBuildFehler(swText",
   "hole(`/?${parameter}`, \"text/html\")",
-  "swText.includes(entryUrl.pathname.slice(1))",
-  "const entryBundle = await",
-  "privateReleaseLoginFehler(loginStartText, entryBundle)",
+  "gebundeneShellBundlePfade(loginStartText, basis + \"/\")",
+  "serviceWorkerPrecacheFehler(swText, shell.bundlePfade)",
+  "Promise.all(shell.bundlePfade.map",
+  "privateReleaseLoginFehler(loginStartText, shellBundles.join",
 ].map((marker) => remoteRetryBlock.indexOf(marker));
 const deployStagingBlock = workflow.match(/deploy-staging:[\s\S]*?^\s{2}deploy-production:/m)?.[0] || "";
 const deployProductionBlock = workflow.match(/deploy-production:[\s\S]*$/m)?.[0] || "";
@@ -192,13 +197,29 @@ check("Remote-Smoke erkennt eine feste Domain mit falschem Commit",
   && remoteSmoke.includes("DEPLOY_TARGET muss staging oder production sein")
   && serviceWorkerBuildFehler('const BUILD_VERSION = "alt";\nconst CACHE = `kd-shell-v3-${BUILD_VERSION}`;', "neu") !== null
   && serviceWorkerBuildFehler('const BUILD_VERSION = "neu";\nconst CACHE = `kd-shell-v3-${BUILD_VERSION}`;', "neu") === null);
-check("Remote-Smoke liest den ausgelieferten Minimal-Login statt nur eine leere Shell",
+check("Remote-Smoke liest den Minimal-Login nur aus den gebundenen Shell-Bundles",
   privateReleaseLoginFehler(indexHtml, js) === null
   && privateReleaseLoginFehler(indexHtml, js.replace("Ohne Konto fortfahren", ""))?.includes("Ohne Konto fortfahren")
+  && shell.bundlePfade.length === jsDateien.length
+  && (() => {
+    try {
+      gebundeneShellBundlePfade(
+        '<div id="root"></div><script type="module" src="./assets/index-ABCDEF12.js"></script>'
+          + '<link rel="modulepreload" href="https://fremd.invalid/assets/vendor-ABCDEF12.js">',
+        "https://lokaler-build.invalid/",
+      );
+      return false;
+    } catch { return true; }
+  })()
+  && serviceWorkerPrecacheFehler(
+    'const PRECACHE = ["assets/index-ABCDEF12.js","assets/fremd-ABCDEF12.js"];',
+    ["/assets/index-ABCDEF12.js"],
+  )?.includes("andere JS-Bundles")
   && remoteRetryBlock.includes("hole(`/?${parameter}`, \"text/html\")")
-  && remoteRetryBlock.includes("const entryBundle = await")
-  && remoteRetryBlock.includes("privateReleaseLoginFehler(loginStartText, entryBundle)")
-  && remoteRetryBlock.includes("swText.includes(entryUrl.pathname.slice(1))"));
+  && remoteRetryBlock.includes("gebundeneShellBundlePfade(loginStartText, basis + \"/\")")
+  && remoteRetryBlock.includes("serviceWorkerPrecacheFehler(swText, shell.bundlePfade)")
+  && remoteRetryBlock.includes("Promise.all(shell.bundlePfade.map")
+  && remoteRetryBlock.includes("privateReleaseLoginFehler(loginStartText, shellBundles.join"));
 check("Remote-Smoke verlangt für anon den privaten Leer- oder echten Rechtestopp",
   privateReleaseAnonKatalogFehler({ status: 200, daten: [] }) === null
   && privateReleaseAnonKatalogFehler({ status: 401, code: "42501" }) === null

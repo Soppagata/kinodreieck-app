@@ -56,6 +56,53 @@ export function serviceWorkerBuildFehler(quelltext, erwarteteVersion = "") {
   return null;
 }
 
+export function serviceWorkerPrecacheFehler(quelltext, bundlePfade = []) {
+  const treffer = String(quelltext || "").match(/const PRECACHE = (\[[^\n]+\]);/);
+  if (!treffer) return "Service-Worker-PRECACHE fehlt";
+  let precache;
+  try { precache = JSON.parse(treffer[1]); } catch { return "Service-Worker-PRECACHE ist ungültig"; }
+  if (!Array.isArray(precache)) return "Service-Worker-PRECACHE ist ungültig";
+  const erwartet = [...new Set(bundlePfade.map((pfad) => String(pfad).replace(/^\//, "")))].sort();
+  const vorhanden = [...new Set(precache.filter((pfad) => typeof pfad === "string" && pfad.endsWith(".js")))].sort();
+  return JSON.stringify(vorhanden) === JSON.stringify(erwartet)
+    ? null
+    : `Service-Worker-PRECACHE enthält andere JS-Bundles: ${vorhanden.join(", ") || "keine"}`;
+}
+
+export function gebundeneShellBundlePfade(indexHtml, basisUrl) {
+  const html = String(indexHtml || "");
+  let basis;
+  try { basis = new URL(basisUrl); } catch { throw new Error("Shell-Bundles: ungültige Basis-URL."); }
+
+  const attribut = (tag, name) => (
+    tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, "i")) || []
+  )[1] || "";
+  const tags = html.match(/<(?:script|link)\b[^>]*>/gi) || [];
+  const entries = tags
+    .filter((tag) => /^<script\b/i.test(tag) && attribut(tag, "type").toLowerCase() === "module")
+    .map((tag) => attribut(tag, "src"))
+    .filter(Boolean);
+  if (entries.length !== 1) {
+    throw new Error(`Shell-Bundles: genau ein Modul-Entry erwartet, erhalten: ${entries.length}.`);
+  }
+  const preloads = tags
+    .filter((tag) => /^<link\b/i.test(tag)
+      && attribut(tag, "rel").toLowerCase().split(/\s+/).includes("modulepreload"))
+    .map((tag) => attribut(tag, "href"))
+    .filter(Boolean);
+  if (!preloads.length) throw new Error("Shell-Bundles: JS-modulepreload-Assets fehlen.");
+
+  const pfade = [...new Set([...entries, ...preloads].map((referenz) => {
+    const url = new URL(referenz, basis);
+    if (url.origin !== basis.origin || url.search || url.hash
+      || !/^\/assets\/[A-Za-z0-9._-]+-[A-Za-z0-9_-]{6,}\.js$/.test(url.pathname)) {
+      throw new Error(`Shell-Bundles: ungebundenes oder ungehashtes JS-Asset ${referenz}.`);
+    }
+    return url.pathname;
+  }))];
+  return { entryPfad: pfade[0], bundlePfade: pfade };
+}
+
 export function privateReleaseLoginFehler(indexHtml, bundleText) {
   const html = String(indexHtml || "");
   const bundle = String(bundleText || "");
