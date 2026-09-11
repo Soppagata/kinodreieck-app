@@ -125,8 +125,43 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
     ...common, status: "stale", responseMode: "degraded", sourceRequests: 1, publicSourceRequests: 1,
     refresh: { requested: true, mode: "scheduled", status: "failed", attemptCount: 1, maxAttempts: 1 },
   }));
+  const format9SourceIds = [oefiSourceId, "chart:flixpatrol-netflix-at", ...sourceIds.slice(2)];
+  const format9Items = poolItems.map((item) => ({
+    ...item,
+    sourceId: item.sourceId === netflixSourceId ? format9SourceIds[1] : item.sourceId,
+    availabilityConfirmed: false,
+  }));
+  const format9Common = {
+    ...common,
+    flixpatrolGenreRequests: 0,
+    flixpatrolKeywordRequests: 0,
+  };
+  const format9Refreshed = runResponseParser(JSON.stringify({
+    ...format9Common,
+    sourceRequests: 14,
+    publicSourceRequests: 1,
+    flixpatrolRequests: 13,
+    flixpatrolChartRequests: 7,
+    flixpatrolTitleRequests: 4,
+    flixpatrolGenreRequests: 1,
+    flixpatrolKeywordRequests: 1,
+    writes: 1,
+    feed: { format: 9, sourceIds: format9SourceIds, items: format9Items },
+    feedReadback: {
+      itemCount: 50, sourceCount: 5, sourceIds: format9SourceIds,
+      rightsStatus: "owner_private", providerRequests: 0,
+    },
+    refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
+  }));
+  const format9NotDue = runResponseParser(JSON.stringify({
+    ...format9Common,
+    feed: { format: 9, sourceIds: format9SourceIds, items: format9Items },
+    refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
+  }));
   assert.deepEqual([refreshed.status, refreshed.stdout], [0, "refreshed"]);
   assert.deepEqual([notDue.status, notDue.stdout], [0, "not_due"]);
+  assert.deepEqual([format9Refreshed.status, format9Refreshed.stdout], [0, "refreshed"]);
+  assert.deepEqual([format9NotDue.status, format9NotDue.stdout], [0, "not_due"]);
   assert.deepEqual([failed.status, failed.stdout], [0, "failed"]);
   assert.notEqual(runResponseParser(JSON.stringify({
     ...common, providerRequests: 1,
@@ -135,6 +170,20 @@ check("Parser akzeptiert nur providerfreie Refresh-/Haltezustaende", () => {
   assert.notEqual(runResponseParser(JSON.stringify({
     ...common, wikidataRequests: 25,
     refresh: { requested: true, mode: "scheduled", status: "not_due", attemptCount: 0, maxAttempts: 1 },
+  })).status, 0);
+  assert.notEqual(runResponseParser(JSON.stringify({
+    ...format9Common, sourceRequests: 15, publicSourceRequests: 1, flixpatrolRequests: 14,
+    flixpatrolChartRequests: 7, flixpatrolTitleRequests: 5,
+    flixpatrolGenreRequests: 1, flixpatrolKeywordRequests: 1, writes: 1,
+    feed: { format: 9, sourceIds: format9SourceIds, items: format9Items },
+    refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
+  })).status, 0);
+  assert.notEqual(runResponseParser(JSON.stringify({
+    ...format9Common, sourceRequests: 13, publicSourceRequests: 1, flixpatrolRequests: 12,
+    flixpatrolChartRequests: 7, flixpatrolTitleRequests: 4,
+    flixpatrolGenreRequests: 1, flixpatrolKeywordRequests: 1, writes: 1,
+    feed: { format: 9, sourceIds: format9SourceIds, items: format9Items },
+    refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   })).status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
     ...common, sourceRequests: 33, publicSourceRequests: 2, flixpatrolRequests: 31,
