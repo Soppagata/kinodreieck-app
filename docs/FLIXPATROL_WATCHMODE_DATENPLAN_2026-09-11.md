@@ -4,18 +4,61 @@ Stand: 11. September 2026. Max hat den Plan zur Umsetzung freigegeben. Dieser
 Plan ergänzt die abgeschlossene Betriebsreparatur; deren Lieferregister bleibt
 [BETRIEBSREPARATUR_REGISTER_2026-09-09.md](BETRIEBSREPARATUR_REGISTER_2026-09-09.md).
 
-## Lokaler Abschluss
+## Aktuelle Lieferung und offene Netflix-Aktivierung
 
-Der vereinbarte Ausbau ist lokal gebaut, integriert und geprüft. App-Code:
-`5a31213` auf `codex/data-plan-master-20260911`; Watchmode-Produzent:
-`0fd4ac1` auf `codex/watchmode-data-plan-20260911`. Die vollständige App-Suite
-`npm test` und `npm run test:function` sind mit Exit 0 abgeschlossen.
-Der konkrete Umfang und die offenen Aktivierungsbefunde stehen unten.
+Der Produktstand `ee8ef91` ist auf `staging` und
+`codex/data-plan-master-20260911` gepusht und auf
+[staging.kinodreieck.at](https://staging.kinodreieck.at) ausgeliefert.
+Vollständige lokale Suite, 341 Function-Mocks und CI einschließlich
+Chromium/WebKit sind grün. Build, Service Worker, App-Bundle und angemeldeter
+Feedweg sind rückgelesen. Der normale Feed-Read liefert 50 gültige Titel,
+der neue Cache-Lookup zwei bekannte frische Fakten; beide ohne Anbieterrequest.
+CI: [34602382336](https://github.com/Soppagata/kinodreieck-app/actions/runs/34602382336).
+Die physische iPhone/PWA-Abnahme durch Max steht aus.
 
-Dieser Stand ist nicht gepusht, remote getestet, gemergt oder deployed.
-Es gab keine neuen FlixPatrol-/Watchmode-/KI-Anbieterrequests, keine
-Shared-Datenänderung und keine Scheduleraktivierung. Netflix bleibt bis zur
-bewussten Aktivierung auf seinem funktionierenden bisherigen Quellenweg.
+**Netflix über FlixPatrol ist noch nicht aktiviert.** Die feste Zwei-ID-Probe
+war erfolgreich. Der danach ausdrücklich gewünschte einmalige Owner-Lauf
+scheiterte am ersten echten Titelbündel: zwei erfolgreiche Chartrequests,
+ein Titelrequest mit `invalid_response` (HTTP 200), drei vollständig gezählte
+Requests und kein Feedwrite. Das genaue verworfene Feld beziehungsweise ein
+Mengen-/Typkonflikt ist noch nicht belegt. Die Ursache wird gemäß Auftrag
+später behandelt; es gab keinen Retry und keinen Einzel-ID-Ersatzlauf.
+
+Der letzte gute Format-8-Feed mit 50 Titeln und der Netflix-Wochenquelle blieb
+vollständig erhalten. Die drei neuen Batch-/Netflix-Schalter wurden entfernt
+und ihre Abwesenheit rückgelesen; Owner-Override ist aus. Der Fehlerstatus
+`source_error` bleibt als tatsächlicher letzter Versuch dokumentiert und wurde
+nicht auf Erfolg umgeschrieben. Der normale Frontend-Read ist trotzdem gültig
+und lädt den erhaltenen Feed. Nächster natürlicher Tageslauf noch unbeobachtet.
+
+Insgesamt fünf zusätzliche gezählte FlixPatrol-Versuche in dieser Lieferung:
+eine Quota-Probe, eine Zwei-ID-Probe und drei im abgebrochenen Feedlauf.
+Gemeinsamer eigener Monatszähler anschließend 53/53 abgeschlossen,
+47 erfolgreich und sechs fehlgeschlagen (davon fünf schon vorher).
+Kein zusätzlicher Watchmode- oder KI-Request; Abrufpläne und Kontingente bleiben
+unverändert. Der Zähler und die erhaltenen Daten wurden nicht zurückgesetzt.
+
+Backendquellstand `22c4edf`: beide additiven Migrationen angewandt, alle vier
+betroffenen Functions mit den finalen Quellbytes rückgelesen. Beim Setzen und
+Entfernen der Schalter erhöhte Supabase automatisch die Versionsnummern;
+die Codegleichheit wurde danach erneut bestätigt. Der Backend-Buildmarker
+und die zugehörige bestehende Staging-Erwartung stehen auf `22c4edf`.
+
+Watchmode-Produzent `0fd4ac1` ist auf Kandidaten- und bisherigem Datenbranch
+gepusht und im laufenden lokalen Produzenten integriert. Die drei vorhandenen
+generierten Änderungen sind bytegleich erhalten. Es gab keine zusätzliche
+Katalog-Promotion: Die providerfrei geprüften IMDb-/TMDB-IDs werden beim
+nächsten regulären erfolgreichen Export veröffentlicht. Der echte optionale
+Detailcache ist noch leer; eine deutsche Sprachprobe bleibt spätere Arbeit.
+
+`main` bleibt `bf74f25`, die tatsächliche Production-Auslieferung `3b82a73`.
+Vor dem gewünschten Merge bleiben die Behandlung oder bewusste Vertagung der
+fehlgeschlagenen Netflix-Umschaltung, Max' PWA-Abnahme und die konkrete
+Production-Konfiguration: `deploy.yml` hält den Tagesfeed dort derzeit
+explizit aus. Zur Zusammenführung gehören die gewollten Produktionsschalter
+und anschließend Deployment/Readback. Der ältere wartende Production-Lauf
+wurde nicht freigegeben. Sandbox-Trennung und größere Anreicherungsproben
+sind keine nachträglich eingeführten Voraussetzungen des Produktmerges.
 
 ## Empfehlung
 
@@ -237,15 +280,15 @@ Master: `/private/tmp/kd-data-plan-master-20260911`, Branch
 Arbeitsweg: gemeinsame Foundation, danach abhängige Produktintegration.
 Der Watchmode-Produzent wird als eigene Etappe im getrennten Repository
 bearbeitet und bekommt einen eigenen Integrationskandidaten. Der normale
-Hauptcheckout und vorhandene generierte Dateien bleiben unberührt.
+App-Hauptcheckout und vorhandene generierte Dateien bleiben unberührt.
 
 | ID | Nutzerergebnis | Stand |
 | --- | --- | --- |
-| D1 | Vorhandene Identitäten und neutrale Fakten bleiben vollständig und unabhängig von aktuellen Chartplätzen nutzbar. | GEBAUT, lokal geprüft: `4a55123` |
-| D2 | FlixPatrol kann benötigte Titel und Begriffe sparsam und nachweisbar vollständig laden; Netflix ist für denselben Tagesweg vorbereitet. | GEBAUT, lokal geprüft: `31826b7`; echte Batchverträge und Aktivierung offen |
-| D3 | Entdecken und aufgeklappte Streaming-Karten nutzen dieselben belegten Texte/Genres; Dienste, persönliche Daten und Neu-Fristen bleiben geschützt. | GEBAUT und Gesamtprüfung bestanden: `4167e2a`, Feedintegration `caa8b4e`, Angebotsfixtures `5a31213` |
-| D4 | Watchmode ergänzt deutsche Details gezielt im bestehenden Kontingent und erhält bekannte externe IDs im Export. | GEBAUT, eigener lokaler Kandidat `0fd4ac1`; echte Sprachprobe offen |
-| D5 | Der gemeinsame lokale Kandidat ist geprüft; offene Vertrags-/Liefergrenzen und spätere Befunde sind konkret dokumentiert. | LOKAL ABGESCHLOSSEN: Gesamtsuite Exit 0, 341 Function-Mocks, Aktivierungsvertrag dokumentiert |
+| D1 | Vorhandene Identitäten und neutrale Fakten bleiben vollständig und unabhängig von aktuellen Chartplätzen nutzbar. | DONE auf Staging `ee8ef91`; neuer Cache-Lookup live rückgelesen |
+| D2 | FlixPatrol kann benötigte Titel und Begriffe sparsam und nachweisbar vollständig laden; Netflix ist für denselben Tagesweg vorbereitet. | GEBAUT und gepusht; Zwei-ID-Probe bestanden, reales Titelbündel gescheitert; Netflix-/Batchmodus wieder aus |
+| D3 | Entdecken und aufgeklappte Streaming-Karten nutzen dieselben belegten Texte/Genres; Dienste, persönliche Daten und Neu-Fristen bleiben geschützt. | DONE auf Staging `ee8ef91`; lokale Suite und CI-Browser grün |
+| D4 | Watchmode ergänzt deutsche Details gezielt im bestehenden Kontingent und erhält bekannte externe IDs im Export. | CODE GELIEFERT: `0fd4ac1`, gepusht und im Produzenten integriert; Daten beim nächsten regulären Export, Sprachprobe offen |
+| D5 | Der gemeinsame lokale Kandidat ist geprüft; offene Vertrags-/Liefergrenzen und spätere Befunde sind konkret dokumentiert. | APP GELIEFERT; Netflix-Blocker und spätere Befunde dokumentiert; physische PWA-Abnahme offen |
 
 Die spätere Control-/Sandbox-Oberfläche, Infrastrukturtrennung, Änderung der
 laufenden Schedulerziele und Erweiterung der Watchmode-Werktypen werden in
@@ -253,7 +296,7 @@ diesem Auftrag nicht gebaut. Die Analyse hierzu bleibt als spätere Arbeit
 erhalten. Netflix-Umschaltung setzt den im Plan geforderten Bündel-/Budgetbeleg
 voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
 
-### Festgehaltene Blocker und spätere Befunde
+### Befunde vor der Aktivierung (historischer Ausgangsstand)
 
 - Netflix wurde ursprünglich auf der funktionierenden öffentlichen Wochenquelle
   belassen; FlixPatrol ergänzte die fehlenden Prime-/Disney-/Apple-Quellen.
@@ -285,10 +328,11 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
   nicht durch ähnliche Namen ersetzt. Die Messung startet keinen Provider.
 
 - Aktivierungsreihenfolge Netflix: Ein eigenständig gekennzeichneter
-  Tagesfeed braucht einen kompatiblen Feedvertrag. Weil Staging und Production
-  denselben Feed lesen, darf diese neue Variante erst veröffentlichen, wenn
-  beide ausgelieferten Consumer sie unterstützen. Bis dahin muss der bestehende
-  Wochen-/Format-8-Weg gültig bleiben. Das ist eine Grenze der optionalen
+  Tagesfeed braucht einen kompatiblen Feedvertrag. Alle aktiven Consumer
+  müssen Format 9 unterstützen. Der spätere Live-Readback bestätigt, dass
+  Production seinen Feed ausgeschaltet hat; der alte Production-Build
+  blockiert die ausdrückliche Staging-Aktivierung deshalb nicht. Der bestehende
+  Wochen-/Format-8-Weg bleibt für eine sichere Rücknahme gültig. Das ist eine Grenze der optionalen
   Quellenumschaltung, keine zusätzliche Voraussetzung für den bisherigen Merge.
 
 - Bestehender Produzentenbefund aus beiden providerfreien Vergleichsexporten:
@@ -389,7 +433,34 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
   kein funktionierender Produktbereich umgebaut.
   Log: `/private/tmp/kd-data-plan-final-npm-test.log`.
   Function-Log: `/private/tmp/kd-data-plan-final-function-test.log`.
-- Endreadback: beide Integrationskandidaten sind committed; in den normalen
-  Hauptcheckouts stehen weiterhin ausschließlich die schon vorher vorhandenen
-  lokalen Änderungen. Kein Push, CI-Lauf, Deployment, Live-Feedwechsel oder
-  physischer iPhone/PWA-Nachweis in diesem Auftrag.
+- Historischer lokaler Endreadback vor der Lieferfortsetzung: beide
+  Integrationskandidaten waren committed; die ursprünglichen lokalen
+  Änderungen in den Hauptcheckouts waren erhalten. Push, CI, Deployment und
+  Live-Aktivierung waren zu diesem Zeitpunkt noch nicht erfolgt. Den
+  tatsächlichen späteren Lieferstand nennt der erste Abschnitt dieses Plans.
+
+## Weitere Befunde aus der tatsächlichen Lieferung
+
+- Behoben: Eine Host-Zeitzonenabhängigkeit im neuen Quellen-Datum wurde im
+  ersten CI-Lauf sichtbar. Der bestehende Europe/Vienna-Helfer wird jetzt
+  wiederverwendet; UTC-/Wien-Probe und vollständige Suite sind grün.
+- Behoben: Fünf Cage-/Streaming-Browserfälle verloren ihren Katalog, weil
+  die additive Faktenmethode auch bei bestehenden schmalen Katalogadaptern
+  vorausgesetzt wurde. Ein Guard hält sie optional; alle zehn betroffenen
+  Chromium-/WebKit-Fälle bestehen mit unveränderten Erwartungen. Keine
+  Cage-Logik umgebaut.
+- Kein Publisher-Umbau nötig: Der remote aktive Trigger
+  `kd_catalog_streaming_split` reicht bereits beide vollständigen Teilpayloads
+  an die aktuellen PWA-Assets weiter; beide Payloads sind gleich. Ein zunächst
+  vermuteter Publisherfehler wurde durch den Live-Readback widerlegt.
+- Für die spätere Control-Fläche: `kd_catalog.updated_at` enthält weiterhin
+  historische Werte vom 22.07.; der tatsächliche Datenstand liegt in `stand`
+  (Streaming 10.09., Kino 11.09.). Keine Frischeanzeige aus dem historischen
+  Metadatum ableiten. In diesem Auftrag nicht verändert.
+- Später behandeln: deutsche Watchmode-Abdeckung, zusätzliche Werktypen,
+  fehlende `max_namen_liste_v1.json`, bestehende Chunkgrößenwarnung und klare
+  Produktionsbindung der bisherigen Staging-Datenjobs vor Sandbox-Trennung.
+
+Technische Belege: `/private/tmp/kd-data-plan-delivery-20260911/`.
+Frühere lokale Prüfstände im Plan sind historische Bau-Evidenz;
+der Abschnitt zur aktuellen Lieferung ist die Statusautorität.
