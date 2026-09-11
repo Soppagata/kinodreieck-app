@@ -228,10 +228,10 @@ Hauptcheckout und vorhandene generierte Dateien bleiben unberührt.
 
 | ID | Nutzerergebnis | Stand |
 | --- | --- | --- |
-| D1 | Vorhandene Identitäten und neutrale Fakten bleiben vollständig und unabhängig von aktuellen Chartplätzen nutzbar. | OFFEN |
+| D1 | Vorhandene Identitäten und neutrale Fakten bleiben vollständig und unabhängig von aktuellen Chartplätzen nutzbar. | GEBAUT, lokal geprüft: `4a55123` |
 | D2 | FlixPatrol kann benötigte Titel und Begriffe sparsam und nachweisbar vollständig laden; Netflix ist für denselben Tagesweg vorbereitet. | OFFEN |
 | D3 | Entdecken und aufgeklappte Streaming-Karten nutzen dieselben belegten Texte/Genres; Dienste, persönliche Daten und Neu-Fristen bleiben geschützt. | OFFEN |
-| D4 | Watchmode ergänzt deutsche Details gezielt im bestehenden Kontingent und erhält bekannte externe IDs im Export. | OFFEN |
+| D4 | Watchmode ergänzt deutsche Details gezielt im bestehenden Kontingent und erhält bekannte externe IDs im Export. | GEBAUT, eigener lokaler Kandidat `c7d6188`; echte Sprachprobe offen |
 | D5 | Der gemeinsame lokale Kandidat ist geprüft; offene Vertrags-/Liefergrenzen und spätere Befunde sind konkret dokumentiert. | OFFEN |
 
 Die spätere Control-/Sandbox-Oberfläche, Infrastrukturtrennung, Änderung der
@@ -255,6 +255,27 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
   Produktionsbindung der derzeitigen `environment: staging`-Datenjobs bleiben
   wie vereinbart spätere Arbeit.
 
+- Werkzeugbefund beim Bau: Die ersten `apply_patch`-Aufrufe der beiden
+  Baupakete hingen fest und wurden wirkungslos abgebrochen. Keine Dateien,
+  Anbieteraufrufe oder Shared-Daten wurden dadurch verändert. Die Ursache
+  dieses Werkzeugfehlers wird später behandelt; der Bau setzt mit lokalen
+  Dateischreibbefehlen fort.
+- Frischer lesender Stand vom 11.09., 09:31 UTC: gemeinsamer FlixPatrol-Zähler
+  47 Versuche, 47 abgeschlossen; der offizielle Quota-Snapshot stammt weiterhin
+  vom 10.09., 09:41 UTC. Für die Reads wurden null Anbieterrequests verwendet.
+- Gesicherter Vorhervergleich (11.09., 09:46 UTC): 29 gespeicherte
+  FlixPatrol-Beschreibungen; im Watchmode-Katalog vom 10.09., 22:02 UTC passen
+  22 Titel eindeutig über IMDb-ID, Jahr und Werktyp, davon 17 bei den fünf
+  ausgewählten Diensten. Fehlende Angebotsbelege der übrigen Titel werden
+  nicht durch ähnliche Namen ersetzt. Die Messung startet keinen Provider.
+
+- Aktivierungsreihenfolge Netflix: Ein eigenständig gekennzeichneter
+  Tagesfeed braucht einen kompatiblen Feedvertrag. Weil Staging und Production
+  denselben Feed lesen, darf diese neue Variante erst veröffentlichen, wenn
+  beide ausgelieferten Consumer sie unterstützen. Bis dahin muss der bestehende
+  Wochen-/Format-8-Weg gültig bleiben. Das ist eine Grenze der optionalen
+  Quellenumschaltung, keine zusätzliche Voraussetzung für den bisherigen Merge.
+
 ### Paketbindung
 
 - Foundation D1/D2: `/private/tmp/kd-data-plan-foundation-20260911`, Basis
@@ -273,5 +294,16 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
 
 ### Lieferbelege
 
-Noch kein neuer Lieferkandidat. Die obigen alten Belege beschreiben nur die
-Ausgangslage dieses Auftrags.
+- Foundation-Commit `b979974`, in den Master als `4a55123` übernommen.
+  Neue Clientprüfung 7/7, neuer Faktenservice 8/8, bestehende Data-/Client-/
+  Faktenlib-/Service-/Kontextprüfungen 11/15/9/12/9 bestanden. Synthetische
+  PostgreSQL-Prüfung einschließlich RLS und mehrdeutiger IDs: 5/5 bestanden.
+- Watchmode-Produzent: separater lokaler Commit `c7d61889345466661ac6ee7f0fe131bb8a88557a`.
+  Details 13/13 und bestehende Härtung 33/33 bestanden. Keine generierten
+  Echtdaten, Liveabfragen oder Scheduleränderungen.
+- Bei lokalen Werkzeugfreigaben blieben Unterläufe hängen. Der Master hat
+  diese wirkungslosen Starts beendet und übernimmt nötige lokale Git-/PG-
+  Schritte selbst. Unkritische lokale Freigaben sind durch Max ausdrücklich
+  delegiert; technisch notwendige Sandboxfreigaben bleiben Werkzeuggrenzen.
+- Produkt-/Backendintegration und gemeinsamer Abschlusslauf folgen auf der
+  integrierten Foundation; noch kein Push, CI-Lauf oder Deployment.
