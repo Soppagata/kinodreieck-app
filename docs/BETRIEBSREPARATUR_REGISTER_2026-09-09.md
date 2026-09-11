@@ -24,11 +24,11 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: Ops-Monitor 34480116970 grün; E1. E11 auf 55b8392 tatsächlich installiert; erster regulärer Fünferlauf am 11.09., 00:02 MESZ, mit 41 Requests und grünen Fetch-/Build-/Lieferphasen beendet, kein Pending/Lock/Checkpoint zurückgelassen. |
-| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9. E14-B DONE auf Staging 819ceac: kompakte ehrliche Standanzeige; CI 34570706839 und Readback grün. |
+| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: natürlicher Format-8-Feed mit 50 Titeln am 11.09. bestätigt. E9-Projektion real mit 30 Streaming/20 Kino und ausschließlich ausgewählten Diensten belegt; E14 kompakte Standanzeige geliefert. E15 auf Staging 34e772b: Beliebte-Beschreibungen per Titel aufklappen, Für mich unverändert; CI 34578638091 und Readback grün. |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | DONE: erster natürlicher Entdecken-Lauf 34571613249 am 11.09., 08:49 MESZ, erfolgreich; trotz GitHub-Verzögerung neuer 50-Titel-Feed für den 11.09. gespeichert und unabhängig zurückgelesen. Bestehende Erstbetriebsnachprüfung abgeschlossen und pausiert; E4. |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. E14 DONE auf Staging 819ceac, CI 34570706839/Domain-/Worker-/Asset-Readback grün; ein WebKit-Screenshotfall nach automatischem Retry grün dokumentiert. |
-| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. E14-A DONE auf Staging 819ceac: erhaltene v2-Fristen plus individuelles Fristen-/Belegbuch, 38 fokussierte und 4 Browserfälle grün; realer iPhone-Altverlauf nicht aus der Ferne lesbar. |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: E1–E14 mit erhaltenen Lieferbelegen; E11 auf 55b8392 installiert und regulär erfolgreich gelaufen, M3 natürlich abgeschlossen. E15 auf Staging 34e772b, lokaler Abschluss, CI 34578638091 und Domain-/Worker-/Asset-Readback grün; 92 CI-Browserfälle ohne Retry. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Production 3b82a73. |
+| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 geliefert. Letzter echter Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. E14 erhält vorhandene v2-Fristen plus individuelles Fristenbuch; realer iPhone-Altverlauf nicht aus der Ferne lesbar. E15-Neu-Karten mit konkreten Diensttags und geordneten Aktionen auf Staging 34e772b geliefert. |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; beim Readback am 11.09., 09:22 MESZ, 47 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -1639,9 +1639,9 @@ SOLO: ein Ende-zu-Ende-Baumeister, ein isolierter Worktree. Keine Nebenagenten.
 
 | Ergebnis | Zuständigkeit / Stand | Schreibflächen und Grenze |
 | --- | --- | --- |
-| M6 / E15: Neu-Karten nennen den vollständigen ausgewählten Dienst und ordnen Titel, Dienst-Tags und Aktionen übersichtlich an. | GEBAUT, integriert als 2fecfc2 + bb035cf | StreamingTab.jsx und ausschließlich dafür begrenzte CSS-Regeln; bestehende Pin-/Merken-/Gesehen-/Aufklappfunktionen sowie andere Streamingansichten erhalten. |
-| M2 / E15: Beliebte Titel zeigen Beschreibungen erst nach Tippen auf den Titel; Für mich behält seine sichtbaren Beschreibungen. | GEBAUT, integriert als 2fecfc2 + bb035cf | EntdeckenTab.jsx und eng begrenzte Dropdown-CSS-Regeln; vorhandene Beschreibung zugänglich auf-/zuklappen, externe Quelle bleibt erreichbar. Keine Änderungen an Fakten, Ranking, Quellenständen oder gespeicherten Beschreibungen. |
-| M5 / E15: Kleine UI-Korrektur getestet und auf Staging nachvollziehbar ausgeliefert. | Lokal grün, Staging-Lieferung folgt | Baumeister besitzt zugehörige bestehende UI-/Browsertests und den einmaligen lokalen Abschluss; Meister besitzt Register, Integration, force-freie Staging-Lieferung und Readback. |
+| M6 / E15: Neu-Karten nennen den vollständigen ausgewählten Dienst und ordnen Titel, Dienst-Tags und Aktionen übersichtlich an. | DONE: Staging 34e772b | StreamingTab.jsx und ausschließlich dafür begrenzte CSS-Regeln; bestehende Pin-/Merken-/Gesehen-/Aufklappfunktionen sowie andere Streamingansichten erhalten. |
+| M2 / E15: Beliebte Titel zeigen Beschreibungen erst nach Tippen auf den Titel; Für mich behält seine sichtbaren Beschreibungen. | DONE: Staging 34e772b | EntdeckenTab.jsx und eng begrenzte Dropdown-CSS-Regeln; vorhandene Beschreibung zugänglich auf-/zuklappen, externe Quelle bleibt erreichbar. Keine Änderungen an Fakten, Ranking, Quellenständen oder gespeicherten Beschreibungen. |
+| M5 / E15: Kleine UI-Korrektur getestet und auf Staging nachvollziehbar ausgeliefert. | DONE: CI und öffentlicher Readback grün | Baumeister besitzt zugehörige bestehende UI-/Browsertests und den einmaligen lokalen Abschluss; Meister besitzt Register, Integration, force-freie Staging-Lieferung und Readback. |
 
 Basis vor dem Plan: `9fdeac3816d224d1be4581e126c001687ff32ed7`.
 Zielbranch bleibt `codex/flixpatrol-master-20260909`, danach `staging`.
@@ -1695,6 +1695,33 @@ Der integrierte geprüfte `src`-Baum ist
 `f495c5e04cc4d34997f9d2c75809a4cbdfe30e39`; finaler Diff-Check grün.
 Null Providerrequests, null Shared-Datenwrites; Fristen, Pipeline und
 Backend bleiben unverändert. Es folgt die vorhandene Staging-Lieferkette.
+
+### E15 – Staging ausgeliefert
+
+Der Kandidat `34e772b989c09a359a23ebcdba6fcb11ced9d0f0` wurde force-frei
+atomar auf Masterzweig und Staging gesichert. Der
+[CI-Lauf 34578638091](https://github.com/Soppagata/kinodreieck-app/actions/runs/34578638091)
+ist vollständig erfolgreich: Testsuiten einschließlich 340 Function-Mocks,
+Chromium 46/46 und WebKit 46/46 ohne Retry, Required Check und deploy-staging
+grün. Production-Deploy wurde übersprungen.
+
+Der öffentliche Readback am 11.09., 10:28:43 MESZ, bestätigt `34e772b` in
+build-meta und Service Worker. HTML/JS/CSS liefern 200, beide Einstiegassets
+stehen im Worker-Precache. Production bleibt auf `3b82a73`. Beleg:
+`e15-staging-public-readback-2026-09-11T082843481Z.json` im bekannten
+Auditverzeichnis; CI-Logs `github-job-103196830631.log`,
+`github-job-103196830602.log`, `github-job-103196830426.log`.
+
+E15 ist gebaut, getestet, committed, gepusht, CI-grün und auf Staging
+zurückgelesen. Die Bedienung auf Max' physischem iPhone bleibt seine Abnahme.
+Für die noch vorhandenen alten Neu-Fristen sollen die PWA-Appdaten erhalten
+bleiben. Das von Max genannte Disney+-Startdatum 02.09. ersetzt keinen
+gespeicherten Katalog-Diffzeitpunkt; ein am Gerät fehlender Altbeleg kann
+daraus nicht sicher rekonstruiert werden. Der Titel selbst ist im belegten
+Katalog erhalten. Keine Anbieterrequests oder Shared-Datenwrites durch E15.
+M3 und seine pausierte Nachprüfung bleiben abgeschlossen. Der abschließende
+Registercommit wird nur im Masterzweig gesichert und verändert keine
+ausgelieferten Produktbytes.
 
 ## Historischer Ausgang am 9. September
 
