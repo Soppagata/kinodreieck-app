@@ -24,11 +24,11 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: Ops-Monitor 34480116970 grün; E1. E11 auf 55b8392 tatsächlich installiert; erster regulärer Fünferlauf am 11.09., 00:02 MESZ, mit 41 Requests und grünen Fetch-/Build-/Lieferphasen beendet, kein Pending/Lock/Checkpoint zurückgelassen. |
-| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9. Nachbesserung E14-B: kompakte Standanzeige GEBAUT und lokal geprüft, Staging-Lieferung läuft. |
+| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9. E14-B DONE auf Staging 819ceac: kompakte ehrliche Standanzeige; CI 34570706839 und Readback grün. |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. E14 integriert und vollständig lokal grün auf a76be91; Staging-Lieferung läuft. |
-| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. E14-A GEBAUT und vollständig lokal grün: erhaltene v2-Fristen plus individuelles Fristen-/Belegbuch; Staging-Lieferung läuft. |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. E14 DONE auf Staging 819ceac, CI 34570706839/Domain-/Worker-/Asset-Readback grün; ein WebKit-Screenshotfall nach automatischem Retry grün dokumentiert. |
+| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. E14-A DONE auf Staging 819ceac: erhaltene v2-Fristen plus individuelles Fristen-/Belegbuch, 38 fokussierte und 4 Browserfälle grün; realer iPhone-Altverlauf nicht aus der Ferne lesbar. |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -1497,8 +1497,8 @@ Meister: bestehender sauberer Integrationsworktree
 
 | Paket | Stand | Branch / Worktree | Exklusive Schreibflächen | Gefroren / Prüfungen |
 | --- | --- | --- | --- | --- |
-| E14-A / M6 | INTEGRATED: 5363996 | codex/streaming-neu-erhalt-e14-20260911 / /private/tmp/kd-streaming-neu-erhalt-e14-20260911 | streamingNeu.js, useStreamingNeuController.js, nötige App.jsx-Übergabe, StreamingTab.jsx, zugehörige Neu-Tests/Fixtures | Producer-Diffvertrag, Katalog-/Identitätslogik, Storage/Auth, Backend, Dependencies eingefroren; Tests für Upgrade, getrennte 14-Tage-Fristen, Folgeläufe und Konto-/Auswahlwechsel |
-| E14-B / M2 | INTEGRATED: a76be91 | codex/entdecken-kurztext-e14-20260911 / /private/tmp/kd-entdecken-kurztext-e14-20260911 | EntdeckenTab.jsx, entdeckenDailyFeed.js ausschließlich lokale Anzeigetexte, Hilfe-Text, zugehörige Entdecken-/Hilfe-Tests | Feed-Vertrag/Validierung, tatsächliche Datenstände, Ranking, API, globale Styles und Dependencies eingefroren; fokussierte Darstellungs-/Vertragstests |
+| E14-A / M6 | DONE: Staging 819ceac | codex/streaming-neu-erhalt-e14-20260911 / /private/tmp/kd-streaming-neu-erhalt-e14-20260911 | streamingNeu.js, useStreamingNeuController.js, nötige App.jsx-Übergabe, StreamingTab.jsx, zugehörige Neu-Tests/Fixtures | Producer-Diffvertrag, Katalog-/Identitätslogik, Storage/Auth, Backend, Dependencies eingefroren; Tests für Upgrade, getrennte 14-Tage-Fristen, Folgeläufe und Konto-/Auswahlwechsel |
+| E14-B / M2 | DONE: Staging 819ceac | codex/entdecken-kurztext-e14-20260911 / /private/tmp/kd-entdecken-kurztext-e14-20260911 | EntdeckenTab.jsx, entdeckenDailyFeed.js ausschließlich lokale Anzeigetexte, Hilfe-Text, zugehörige Entdecken-/Hilfe-Tests | Feed-Vertrag/Validierung, tatsächliche Datenstände, Ranking, API, globale Styles und Dependencies eingefroren; fokussierte Darstellungs-/Vertragstests |
 
 A × B: PARALLEL_OK, keine gemeinsamen Schreibdateien oder Output-Abhängigkeit.
 E14-B ist mit 5ed1f54 geliefert und fokussiert grün. E14-A hat Upgrade- und
@@ -1555,6 +1555,41 @@ vorhandene Zeitbelege kann die App keine frühere Frist rekonstruieren. Die
 Provider-Pipeline, deren 48-Stunden-Takt und Shared-Daten bleiben unverändert.
 Die Staging-Lieferung folgt diesem geprüften Produktbaum; Dokumentationscommits
 ändern ihn nicht. M3-Erstbetrieb bleibt die gesonderte bestehende Nachprüfung.
+
+### E14 – Staging ausgeliefert
+
+Staging und der gesicherte Masterzweig wurden force-frei atomar auf
+`819ceac76b3e797a8b7c021ba10a6764621a92dd` gepusht. Der vollständige
+[CI-Lauf 34570706839](https://github.com/Soppagata/kinodreieck-app/actions/runs/34570706839)
+und `deploy-staging` sind erfolgreich. Chromium: 46/46 beim ersten Versuch.
+WebKit: 45/46 beim ersten Versuch, ein unveränderter Screenshot-Stressfall
+(`PWA-Dauerbedienung 393px, ohne Showa, no-preference`, neon-noir.spec.mjs:1008)
+meldete einen geschlossenen Browserkontext und bestand beim konfigurierten
+automatischen Retry. Dies ist kein Lauf ohne Wiederholungen. Der erfolgreiche
+zweite Durchgang hat 32 Navigationsmessungen, maximal 713 ms im Browser.
+Keine Testgrenze oder Retrykonfiguration wurde geändert, kein manueller
+Workflow-Rerun ausgeführt.
+
+Der öffentliche Readback am 11.09., 08:48 MESZ, bestätigt `819ceac` in
+`build-meta.json` und `sw.js`. HTML, JS und CSS liefern 200; beide
+Einstiegassets stehen im Worker-Precache. Beleg: `e14-staging-public-readback.json`.
+Production bleibt auf `3b82a7305c16d5a74ba7a24786e5db068e61db95`; ihr Deployment
+wurde im E14-Lauf übersprungen, die bestehende geschützte Main-Freigabe bleibt
+unbedient. Der Staging-Lieferworktree wurde ebenfalls sauber nachgezogen.
+
+Der Entdecken-Datenreadback um 08:48 MESZ hat weiterhin Format 8 / 50 Titel
+mit Abruf- und Gültigkeitstag 10.09., ohne neuen Fehlercode. Daher bleibt die
+kurze Anzeige `Stand: 10.09.2026 · Aktualisierung ausstehend.` korrekt. M3 ist
+weiter OFFEN für den ersten natürlichen Tageslauf; die bestehende stille
+Nachprüfung bleibt aktiv. Der gemeinsame FlixPatrol-Zähler bleibt bei 38
+Versuchen / 33 Erfolgen / 5 historischen Fehlern. E14 hat null neue
+Watchmode-/FlixPatrol-/KI-Requests und null Shared-Datenwrites verursacht.
+
+E14 ist gebaut, lokal geprüft, committed, gepusht, CI-grün und auf Staging
+zurückgelesen. Die praktische Abnahme des neuen Verlaufs auf Max' iPhone bleibt
+separat: normal schließen/öffnen, vorhandene PWA-Appdaten für die Übernahme
+nicht löschen. Der Abschluss wird nur im Masterregister gesichert; sein
+Dokumentationscommit löst keinen erneuten Staging-Deploy aus.
 
 ## Historischer Ausgang am 9. September
 
