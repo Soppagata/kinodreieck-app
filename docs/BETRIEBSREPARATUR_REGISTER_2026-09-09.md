@@ -25,11 +25,11 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: Ops-Monitor 34480116970 grün; E1. E11 auf 55b8392 tatsächlich installiert; erster regulärer Fünferlauf am 11.09., 00:02 MESZ, mit 41 Requests und grünen Fetch-/Build-/Lieferphasen beendet, kein Pending/Lock/Checkpoint zurückgelassen. |
 | M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9. E14-B DONE auf Staging 819ceac: kompakte ehrliche Standanzeige; CI 34570706839 und Readback grün. |
-| M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
+| M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | DONE: erster natürlicher Entdecken-Lauf 34571613249 am 11.09., 08:49 MESZ, erfolgreich; trotz GitHub-Verzögerung neuer 50-Titel-Feed für den 11.09. gespeichert und unabhängig zurückgelesen. Bestehende Erstbetriebsnachprüfung abgeschlossen und pausiert; E4. |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
 | M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. E14 DONE auf Staging 819ceac, CI 34570706839/Domain-/Worker-/Asset-Readback grün; ein WebKit-Screenshotfall nach automatischem Retry grün dokumentiert. |
 | M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. E14-A DONE auf Staging 819ceac: erhaltene v2-Fristen plus individuelles Fristen-/Belegbuch, 38 fokussierte und 4 Browserfälle grün; realer iPhone-Altverlauf nicht aus der Ferne lesbar. |
-| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
+| M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; beim Readback am 11.09., 09:22 MESZ, 47 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
 
@@ -1590,6 +1590,40 @@ zurückgelesen. Die praktische Abnahme des neuen Verlaufs auf Max' iPhone bleibt
 separat: normal schließen/öffnen, vorhandene PWA-Appdaten für die Übernahme
 nicht löschen. Der Abschluss wird nur im Masterregister gesichert; sein
 Dokumentationscommit löst keinen erneuten Staging-Deploy aus.
+
+### M3 – natürlicher Entdecken-Erstbetrieb abgeschlossen
+
+Der natürliche [Entdecken-Lauf 34571613249](https://github.com/Soppagata/kinodreieck-app/actions/runs/34571613249)
+startete am 11.09. um 06:49:51 UTC (08:49 MESZ) auf Main
+`bf74f257c4ef541eb1ab1c7d3c54ecbb9b8fff26` und endete um 06:50:27 UTC
+erfolgreich. Das Protokoll bestätigt einen neu gespeicherten 50-Titel-Stand
+aus fünf Bereichen. Der verspätete Start nach dem 02:00-UTC-Termin wurde
+verarbeitet; es gab keinen manuellen Dispatch oder Rerun dieser Nachprüfung.
+
+Der unabhängige Supabase-Readback um 07:22:49 UTC bestätigt Format 8,
+Status ready, Abruf-/Gültigkeits-/Versuchstag 11.09., keinen Fehlercode und
+50 Titel: 15 ÖFI, 10 Netflix, 10 Prime Video, 10 Disney+, 5 Apple TV.
+Damit ist der zuvor um 08:48 MESZ noch ausstehende Tagesstand tatsächlich
+aktualisiert. Die individuellen Quellenstände bleiben davon getrennt.
+
+Der gemeinsame Monatszähler stieg von 38 auf 47 abgeschlossene Versuche:
+42 Erfolge und unverändert 5 historische Fehler, somit 9 neue erfolgreiche
+Requests. Die separat gespeicherte offizielle Quota-Auskunft stammt weiterhin
+vom 10.09., 09:41 UTC; sie wird nicht als aktueller Anbieterstand ausgegeben
+oder zum eigenen Zähler addiert. Der jüngste natürliche Ticker-Lauf bleibt
+34462038347 vom 10.09. erfolgreich. Für Private Ops bleibt der erfolgreiche
+Reparaturbeleg 34480116970 ein manueller Lauf; diese Nachprüfung behauptet
+keinen neuen natürlichen Ops-Erfolg.
+
+Belege: `github-job-103174742076.log` und
+`flixpatrol-heartbeat-20260911T072249546270Z.json` unter
+`/private/tmp/kd-ops-audit-20260909/`. Die Prüfung selbst war ausschließlich
+lesend: null Anbieterrequests, null Shared-Datenwrites und keine bezahlte KI.
+M3 ist damit abgeschlossen. Die bestehende Automation
+`flixpatrol-erstbetrieb-pr-fen` wurde über das App-Werkzeug auf PAUSED gesetzt;
+die regulären Datenläufe bleiben aktiv. E14-Lieferung und die noch separate
+physische iPhone-Abnahme bleiben unverändert. Die geschützte
+Production-Freigabe wurde nicht bedient.
 
 ## Historischer Ausgang am 9. September
 
