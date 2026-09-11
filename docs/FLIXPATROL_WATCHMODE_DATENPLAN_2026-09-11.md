@@ -242,8 +242,34 @@ voraus; bis dahin bleibt der laufende Quellenweg funktionsfähig.
 
 ### Festgehaltene Blocker und spätere Befunde
 
-Hier nur neue konkrete Befunde aufnehmen. Außerhalb des Datenplans liegende
-Fehler werden entsprechend Max' Auftrag dokumentiert, nicht nebenbei repariert.
+- Netflix wurde ursprünglich auf der funktionierenden öffentlichen Wochenquelle
+  belassen; FlixPatrol ergänzte die fehlenden Prime-/Disney-/Apple-Quellen.
+  Die offizielle Companies-Dokumentation belegt inzwischen Netflix eindeutig
+  als `cmp_IA6TdMqwf6kuyQvxo9bJ4nKX`. Die Tagesquelle ist damit adressierbar;
+  der praktisch bestätigte Bündelvertrag bleibt Voraussetzung für die Umschaltung.
+  Quelle: [Companies](https://flixpatrol.com/api2/endpoint-companies/).
+- Die gezählten vorhandenen Diagnosewege unterstützen nur einzelne festgelegte
+  Titel-/Chartproben. Ein echter Bündelbeleg erfordert einen passenden neuen
+  Diagnoseweg; ein vorhandener Einzelbeleg wird nicht als Bündelbeleg ausgegeben.
+- Die Erweiterung der Watchmode-Werktypen und die später nötige eindeutige
+  Produktionsbindung der derzeitigen `environment: staging`-Datenjobs bleiben
+  wie vereinbart spätere Arbeit.
+
+### Paketbindung
+
+- Foundation D1/D2: `/private/tmp/kd-data-plan-foundation-20260911`, Basis
+  `f3abe990dea3604f5d3b053c8fcc21e2d28ee876`. Besitzt gemeinsamen Providerclient,
+  Faktennormalisierung, Cache-Lookup-RPC, Faktenservice, Vertragsdokumentation
+  und die dazugehörigen fokussierten Tests. Folgepakete starten nach Integration.
+- Eigene Produzenten-Etappe D4:
+  `/private/tmp/kd-watchmode-data-plan-20260911`, Basis
+  `55b8392e0d9c552c40dfb8cf3b1922326cd673d9`. Besitzt Known-Export,
+  separaten Detailcache/CLI und eigene Tests. Keine generierten Echtdaten,
+  bestehenden Abrufpläne oder Kontingentgrenzen ändern.
+- Eingefrorene Repo-Naht: optionale `title_facts` je exportiertem Titel mit
+  `title-facts-projection-v1`. `film`/`series`, starke Identitäten,
+  Herkunft und Zeitbelege sind explizit. Unbekannte Beschreibungssprache
+  bleibt `null`; angefragte Sprache ist davon getrennt.
 
 ### Lieferbelege
 
