@@ -1,7 +1,6 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { IconDelete, IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
-import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
@@ -338,7 +337,6 @@ export function DatenTab({
           )}
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den gebundenen persönlichen App-Stand dieses Browsers als portable JSON-Datei herunter. Serverweite Konto-Eigendaten und der gemeinsame Kino- und Streamingkatalog sind nicht enthalten.</p>
           {sicherheitskopieGeraet && <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={sicherheitskopieGeraet}><IconExport size={16} />Sicherheitskopie dieses Geräts herunterladen</button>}
-          <FeldHinweis feld="backup" text="Enthält den gebundenen persönlichen App-Stand dieses Geräts, aber keine serverweiten Konto-Eigendaten." />
       </div>
         </div>
       </Klappe>

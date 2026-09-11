@@ -11,12 +11,14 @@ import {
 import { accountSelfService } from "../services/accountSelfService.js";
 import {
   K,
+  activeSyncStatus,
   captureStorageContext,
   storageContextGenerationSnapshot,
   subscribeStorageContext,
 } from "../services/storage.js";
 import {
   istArtikelUngesichert,
+  istKontoTopfBestaetigt,
   istMasterUngesichert,
   starteGesamtBackupDownload,
 } from "./backupExportController.js";
@@ -146,6 +148,7 @@ export function useBackupExportController({
   );
   const exportOwner = String(owner || "guest-local");
   const [exportStand, setExportStand] = useState(() => leererStand(storageGeneration, exportOwner));
+  const [syncTick, setSyncTick] = useState(0);
   const aktuellerExportStand = exportStand.generation === storageGeneration && exportStand.owner === exportOwner
     ? exportStand
     : leererStand(storageGeneration, exportOwner);
@@ -183,6 +186,12 @@ export function useBackupExportController({
     }).catch(() => {});
     return () => { aktiv = false; };
   }, [exportOwner, storageGeneration]);
+  useEffect(() => {
+    const tick = () => setSyncTick((wert) => wert + 1);
+    const interval = setInterval(tick, 1000);
+    window.addEventListener("focus", tick);
+    return () => { clearInterval(interval); window.removeEventListener("focus", tick); };
+  }, [storageGeneration]);
   const markiereExport = useCallback((feld, enthaltenerStand = Date.now()) => {
     if (!Number.isFinite(enthaltenerStand)) return false;
     const kontext = captureStorageContext();
@@ -222,13 +231,21 @@ export function useBackupExportController({
       return false;
     }
   }, [markiereExport, onFehler]);
+  const storageContext = captureStorageContext();
+  const kontoSpeicherAktiv = storageContext.generation === storageGeneration && storageContext.name === "konto";
+  const syncStatus = kontoSpeicherAktiv ? activeSyncStatus() : null;
+  /* `syncTick` hält die Projektion nach dem asynchronen Hintergrund-Commit
+     aktuell; der Status selbst bleibt die einzige fachliche Wahrheit. */
+  void syncTick;
+  const masterImKontoBestaetigt = istKontoTopfBestaetigt(K.master, syncStatus, kontoSpeicherAktiv);
+  const artikelImKontoBestaetigt = istKontoTopfBestaetigt(K.artikel, syncStatus, kontoSpeicherAktiv);
   return {
     markiereExport,
     sicherheitskopieGeraet,
     kontoExportVollstaendig,
     /* Übergangskompatibilität für noch nicht umgestellte interne Aufrufer. */
     backupGesamt: sicherheitskopieGeraet,
-    ungesichertMaster: istMasterUngesichert(masterHerkunft, aktuellerExportStand.master),
-    ungesichertArtikel: istArtikelUngesichert(artikelListe, artikelGespeichertAm, aktuellerExportStand.artikel),
+    ungesichertMaster: istMasterUngesichert(masterHerkunft, aktuellerExportStand.master, masterImKontoBestaetigt),
+    ungesichertArtikel: istArtikelUngesichert(artikelListe, artikelGespeichertAm, aktuellerExportStand.artikel, artikelImKontoBestaetigt),
   };
 }

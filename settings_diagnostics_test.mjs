@@ -231,6 +231,8 @@ check("Owner-Recovery nutzt denselben begrenzten Handler ohne Technikmutation",
 
 const appQuelle = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
 const datenQuelle = fs.readFileSync(path.join(WURZEL, "src/tabs/DatenTab.jsx"), "utf8");
+const katalogQuelle = fs.readFileSync(path.join(WURZEL, "src/components/KatalogAuditStatus.jsx"), "utf8");
+const katalogCss = fs.readFileSync(path.join(WURZEL, "src/components/KatalogAuditStatus.css"), "utf8");
 const mainQuelle = fs.readFileSync(path.join(WURZEL, "src/main.jsx"), "utf8");
 const kontoQuelle = fs.readFileSync(path.join(WURZEL, "src/components/KontoBereich.jsx"), "utf8");
 check("Die Fehlergrenze leitet Ownerzugriff weiterhin aus der zentralen Rollenfunktion ab",
@@ -240,6 +242,10 @@ check("App und DatenTab enthalten keine unerreichbaren technischen Mutationshand
     && !/importProgramm|importNonstop|clearProgrammCache|onTechnikKatalogRefresh/.test(datenQuelle));
 check("Auch die KI-Verbindungsdiagnose im Kontoweg verlangt bestätigten Owner",
   kontoQuelle.includes('ownerTechnikBestaetigt && personalAiFreigegeben && kiAn("diagnose")'));
+check("Quellenstände nutzen kompakte Dienstkarten statt einer mobilen Datentabelle",
+  katalogQuelle.includes('className="kd-katalog-quellenkarte"')
+    && !katalogQuelle.includes("<table")
+    && /@media \(max-width:420px\)[\s\S]*grid-template-columns:1fr/.test(katalogCss));
 check("Der DOM-Lauf hat weder Netz noch automatischen Diagnosetransport ausgelöst", netzVersuche.length === 0);
 
 await act(async () => { root.unmount(); });

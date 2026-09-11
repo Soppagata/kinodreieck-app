@@ -1,0 +1,14 @@
+.kd-katalog-quellen { margin-top:12px; }
+.kd-katalog-quellen>h3 { margin:0 0 8px; color:var(--kd-rauch,#948fa0); font:600 12px/1.4 'Space Grotesk',sans-serif; }
+.kd-katalog-quellenraster { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); gap:8px; }
+.kd-katalog-quellenkarte { min-width:0; padding:11px 12px; border:1px solid color-mix(in srgb,var(--kd-rauch,#948fa0) 28%,transparent); border-radius:8px; background:var(--kd-saal,#17151a); }
+.kd-katalog-quellenkarte h4 { margin:0 0 7px; color:var(--kd-leinwand,#ece8df); font:700 16px/1.25 'Barlow Condensed',sans-serif; overflow-wrap:anywhere; }
+.kd-katalog-quellenkarte dl { display:grid; gap:0; margin:0; }
+.kd-katalog-quellenkarte dl>div { display:grid; grid-template-columns:minmax(92px,.8fr) minmax(0,1fr); gap:8px; padding:6px 0; border-top:1px solid color-mix(in srgb,var(--kd-rauch,#948fa0) 18%,transparent); }
+.kd-katalog-quellenkarte dt { color:var(--kd-rauch,#948fa0); font:10px/1.45 'Space Mono',monospace; letter-spacing:.03em; text-transform:uppercase; }
+.kd-katalog-quellenkarte dd { min-width:0; margin:0; color:var(--kd-leinwandTief,#dfdacd); font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
+
+@media (max-width:420px) {
+  .kd-katalog-quellenkarte { padding:10px; }
+  .kd-katalog-quellenkarte dl>div { grid-template-columns:1fr; gap:2px; }
+}

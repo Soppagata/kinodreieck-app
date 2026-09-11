@@ -68,6 +68,10 @@ check("Geräte-Download bleibt sichtbar vom Kontoexport getrennt und verspricht 
   && !sichtbar.backup.includes("Backup wiederherstellen")
   && !sichtbar.datenschutz.includes("sicherer Restore"));
 
+check("Gerätesicherung behält die klare Beschreibung ohne doppelten Backup-Feldhinweis",
+  sichtbar.datenTab.includes("Lädt den gebundenen persönlichen App-Stand dieses Browsers als portable JSON-Datei herunter")
+  && !sichtbar.datenTab.includes('<FeldHinweis feld="backup"'));
+
 check("Manueller Rechteweg ist verständlich auffindbar und erfindet weder Adresse noch Versand",
   sichtbar.hilfe.includes('id: "datenrechte-anfragen"')
   && sichtbar.hilfe.includes("Datenschutz & Rechtliches")

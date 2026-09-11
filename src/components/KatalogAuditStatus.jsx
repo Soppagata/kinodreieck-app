@@ -2,6 +2,7 @@ import { T } from "../lib/tokens.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { projiziereStreamingAnsichten } from "../lib/streamingProjection.js";
 import { streamingQuellenstaende } from "../lib/streamingNeu.js";
+import "./KatalogAuditStatus.css";
 
 const ZAHL = new Intl.NumberFormat("de-AT");
 const SCHNELLE_QUELLEN = new Set([
@@ -25,7 +26,6 @@ export function KatalogAuditStatus({
 }) {
   const projektion = projiziereStreamingAnsichten({ bekannt, entdecken, auswahl, auswahlGeladen });
   const quellen = streamingQuellenstaende({ bekannt, entdecken, auswahl, auswahlGeladen });
-  const cell = { padding: "7px 8px", borderBottom: `1px solid ${T.saal}`, textAlign: "left", verticalAlign: "top" };
   const neuText = !auswahlGeladen
     ? "Auswahl wird geladen"
     : streamingNeu.status === "baseline"
@@ -50,19 +50,18 @@ export function KatalogAuditStatus({
       <div><dt>Mein Programm</dt><dd>{auswahlGeladen ? ZAHL.format(projektion.meinProgramm.length) : "wird geladen"}</dd></div>
       <div><dt>Neu</dt><dd>{neuText}</dd></div>
     </dl>
-    {auswahlGeladen && quellen.length > 0 && <div style={{ overflowX: "auto", marginTop: 12 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-        <caption style={{ textAlign: "left", color: T.rauch, paddingBottom: 6 }}>Stände der ausgewählten Dienste</caption>
-        <thead><tr><th style={cell}>Dienst</th><th style={cell}>Letzter Abruf</th><th style={cell}>Vorhervergleich</th><th style={cell}>Takt</th></tr></thead>
-        <tbody>{quellen.map((quelle) => <tr key={quelle.dienst}>
-          <td style={cell}>{quelle.dienst}</td>
-          <td style={cell}>{datum(quelle.stand)}</td>
-          <td style={cell}>{datum(quelle.vergleichStand)}</td>
-          <td style={cell}>{SCHNELLE_QUELLEN.has(quelle.dienst)
+    {auswahlGeladen && quellen.length > 0 && <section className="kd-katalog-quellen" aria-labelledby="kd-katalog-quellen-titel">
+      <h3 id="kd-katalog-quellen-titel">Stände der ausgewählten Dienste</h3>
+      <div className="kd-katalog-quellenraster">{quellen.map((quelle) => <article className="kd-katalog-quellenkarte" key={quelle.dienst}>
+        <h4>{quelle.dienst}</h4>
+        <dl>
+          <div><dt>Letzter Abruf</dt><dd>{datum(quelle.stand)}</dd></div>
+          <div><dt>Vorhervergleich</dt><dd>{datum(quelle.vergleichStand)}</dd></div>
+          <div><dt>Takt</dt><dd>{SCHNELLE_QUELLEN.has(quelle.dienst)
             ? "alle 48 Stunden"
-            : "im Gesamtlauf alle 12 Tage"}</td>
-        </tr>)}</tbody>
-      </table>
-    </div>}
+            : "im Gesamtlauf alle 12 Tage"}</dd></div>
+        </dl>
+      </article>)}</div>
+    </section>}
   </div>;
 }

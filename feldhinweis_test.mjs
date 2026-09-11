@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
@@ -8,8 +9,11 @@ import { createRoot } from "react-dom/client";
 
 const WURZEL = process.cwd();
 const cssQuelle = fs.readFileSync(path.join(WURZEL, "src/index.css"), "utf8");
-const cache = path.join(WURZEL, "node_modules/.cache/feldhinweis-test");
-fs.mkdirSync(cache, { recursive: true });
+const cache = fs.mkdtempSync(path.join(os.tmpdir(), "kd-feldhinweis-test-"));
+process.on("exit", () => {
+  try { fs.rmSync(cache, { recursive: true, force: true }); } catch {}
+});
+fs.symlinkSync(path.join(WURZEL, "node_modules"), path.join(cache, "node_modules"), "dir");
 const ausgabe = path.join(cache, "FeldHinweis.mjs");
 let esbuild;
 try { esbuild = await import("esbuild"); }

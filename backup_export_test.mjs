@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   istArtikelUngesichert,
+  istKontoTopfBestaetigt,
   istMasterUngesichert,
   starteEinzelExportDownload,
   starteGesamtBackupDownload,
@@ -13,7 +14,7 @@ import {
   ACCOUNT_EXPORT_REQUIRED_SCOPE,
   ACCOUNT_EXPORT_SCOPE_VERSION,
 } from "./src/lib/privatePilotOps.js";
-import { setStorageDriver } from "./src/lib/storage.js";
+import { K, setStorageDriver } from "./src/lib/storage.js";
 import {
   ladeGebundeneSicherheitskopieHerunter,
   ladeVollstaendigenKontoexportHerunter,
@@ -115,6 +116,28 @@ const nachManuellemEdit = naechsteLokaleMasterHerkunft({ typ: "manuell", zeit: 2
 ok(nachManuellemEdit.typ === "storage" && nachManuellemEdit.basis === "Manueller Import"
   && istMasterUngesichert(nachManuellemEdit, 20),
 "manueller Import wird beim nächsten lokalen Edit zu einem sichtbar ungesicherten Storage-Stand");
+
+const synchron = {
+  configured: true,
+  pending: [], conflict: [], stale: [], zuGross: [], schemaVeraltet: [],
+};
+ok(istKontoTopfBestaetigt(K.master, synchron, true)
+  && !istMasterUngesichert(nachManuellemEdit, 20, true),
+"bestätigter Konto-Sync löst wegen eines fehlenden Datei-Exports keinen Master-Alarm aus");
+ok(istKontoTopfBestaetigt(K.artikel, synchron, true)
+  && !istArtikelUngesichert([{ id: "konto-artikel" }], 50, 20, true),
+"bestätigter Konto-Sync löst wegen eines fehlenden Datei-Exports keinen Artikel-Alarm aus");
+for (const feld of ["pending", "conflict", "stale", "zuGross", "schemaVeraltet"]) {
+  const blockiert = { ...synchron, [feld]: [K.master] };
+  ok(!istKontoTopfBestaetigt(K.master, blockiert, true)
+    && istMasterUngesichert(nachManuellemEdit, 20, false),
+  `${feld} bleibt als echter unbestätigter Konto-Write sichtbar`);
+}
+ok(!istKontoTopfBestaetigt(K.master, { configured: true, pending: [] }, true),
+"unvollständiger Syncstatus bestätigt keinen Konto-Write");
+ok(!istKontoTopfBestaetigt(K.master, synchron, false)
+  && istMasterUngesichert(nachManuellemEdit, 20),
+"Gast-Lokaldaten behalten den Export- und Datenverlustschutz");
 
 /* Ein Treiberwechsel während des ersten blockierten Reads darf niemals mit
    dem neuen Treiber weiterlaufen und so A-/B-Töpfe in einem Export mischen. */
