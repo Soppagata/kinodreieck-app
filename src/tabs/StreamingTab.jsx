@@ -7,14 +7,15 @@ import { Chip, ChipReihe, SegmentedControl, IconArrowRight } from "../components
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { TitelKartenAktionen } from "../components/TitelKartenAktionen.jsx";
+import { KatalogRegler } from "../components/KatalogRegler.jsx";
 import {
   statusVon, mediathekIdVon, mitMediathekEintrag, gleicheMediathekStatusAb,
   neuerGesehenEintrag, toggleGesehenInStatus,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import {
-  sortiereStreamingTitel, STREAMING_ALPHABET, streamingAnfangsbuchstabe,
-  streamingJahrzehnte, streamingJahrzehntLabel, streamingJahrzehntBereich, streamingGenreFilterSichtbar,
+  sortiereStreamingTitel, streamingAnfangsbuchstabe,
+  streamingJahrzehnte, streamingJahrzehntBereich, streamingGenreFilterSichtbar,
   passtInJahrzehntMitKulanz,
 } from "../lib/streamingSort.js";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
@@ -22,6 +23,7 @@ import { formatPresentationDate } from "../lib/presentationDate.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { projiziereStreamingAnsichten } from "../lib/streamingProjection.js";
 import { formatTitleFactsDate } from "../lib/titleFacts.js";
+import "../styles/library-followup.css";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -41,6 +43,30 @@ function download(dateiname, obj) {
 
 const istStreamingSerie = (titel) => ["tv_series", "serie", "series"]
   .includes(String(titel?.typ || titel?.type || "").toLowerCase());
+
+export function bestaetigteMediathekNavigationId({ titel, master, statusMap, bekannteId = null }) {
+  const filme = Array.isArray(master) ? master : [];
+  const findeId = (id) => id == null || id === true ? null : filme.find((film) => (
+    film?.id != null && String(film.id) === String(id)
+  )) || null;
+
+  /* `streaming_bekannt` ist bereits streng einem Masterwerk zugeordnet. Auch
+     diese Zuordnung navigiert nur, solange die konkrete Master-ID noch lebt. */
+  const bekanntesWerk = findeId(bekannteId);
+  if (bekanntesWerk) return bekanntesWerk.id;
+
+  /* Der bestehende Resolver bleibt die Wahrheit für starke Watchmode-/IMDb-/
+     TMDb-Identitäten. Eine bloß gespeicherte, inzwischen fremde ID genügt nie. */
+  const abgeglichen = gleicheMediathekStatusAb(statusMap, [titel], filme);
+  const kandidat = findeId(mediathekIdVon(abgeglichen?.[titel?.watchmode_id]));
+  if (!kandidat) return null;
+  const gleicheKennung = [
+    [titel?.watchmode_id, kandidat.watchmode_id],
+    [titel?.imdb_id, kandidat.imdb_id],
+    [titel?.tmdb_id, kandidat.tmdb_id],
+  ].some(([links, rechts]) => links != null && rechts != null && String(links) === String(rechts));
+  return gleicheKennung ? kandidat.id : null;
+}
 
 function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className }) {
   /* Badges UND web_urls-Links folgen der bereits geprüften Abo-Auswahl der
@@ -122,59 +148,6 @@ function SortierFilter({ feld, richtung, onFeld, onRichtung, name, entdecken = f
   );
 }
 
-function AlphabetFilter({ wert, onChange, name }) {
-  const index = wert ? STREAMING_ALPHABET.indexOf(wert) + 1 : 0;
-  return (
-    <div className="kd-streamfilter-abc" data-aktiv={wert ? "1" : "0"}>
-      <div className="kd-streamfilter-abc-kopf">
-        <span>Anfangsbuchstabe</span>
-        <strong aria-live="polite">{wert || "Alle"}</strong>
-      </div>
-      <input type="range" min="0" max={STREAMING_ALPHABET.length} step="1" value={index}
-        onChange={(event) => {
-          const naechsterIndex = Number(event.target.value);
-          onChange(naechsterIndex === 0 ? null : STREAMING_ALPHABET[naechsterIndex - 1]);
-        }}
-        aria-label={`${name}: Anfangsbuchstaben filtern`}
-        aria-valuetext={wert ? `Buchstabe ${wert}` : "Alle Anfangsbuchstaben"} />
-      <div className="kd-streamfilter-abc-skala" aria-hidden="true">
-        <span className={!wert ? "aktiv alle" : "alle"}>•</span>
-        {STREAMING_ALPHABET.map((buchstabe) => (
-          <span key={buchstabe} className={wert === buchstabe ? "aktiv" : ""}>{buchstabe}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function JahrzehntFilter({ wert, optionen, onChange, name }) {
-  if (!optionen.length) return null;
-  const index = wert == null ? 0 : Math.max(0, optionen.indexOf(wert) + 1);
-  const bereich = streamingJahrzehntBereich(wert);
-  return (
-    <div className="kd-streamfilter-abc kd-streamfilter-dekade" data-aktiv={bereich ? "1" : "0"}>
-      <div className="kd-streamfilter-abc-kopf">
-        <span>Jahrzehntbereich</span>
-        <strong aria-live="polite">{bereich ? streamingJahrzehntLabel(wert) : "Alle"}</strong>
-      </div>
-      <input type="range" min="0" max={optionen.length} step="1" value={index}
-        onChange={(event) => {
-          const naechsterIndex = Number(event.target.value);
-          onChange(naechsterIndex === 0 ? null : optionen[naechsterIndex - 1]);
-        }}
-        aria-label={`${name}: Jahrzehnt filtern`}
-        aria-valuetext={bereich ? `${Number(wert)}er: ${bereich.von} bis ${bereich.bis}` : "Alle Jahrzehnte"} />
-      <div className="kd-streamfilter-dekade-skala" aria-hidden="true" data-dicht={optionen.length > 10 ? "1" : "0"}
-        style={{ gridTemplateColumns: `repeat(${optionen.length + 1}, minmax(0, 1fr))` }}>
-        <span className={wert == null ? "aktiv alle" : "alle"}>•</span>
-        {optionen.map((jahrzehnt) => (
-          <span key={jahrzehnt} className={wert === jahrzehnt ? "aktiv" : ""} title={streamingJahrzehntLabel(jahrzehnt)}>{String(jahrzehnt).slice(-2)}er</span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function StreamingTab({
   bekannt, entdecken, auswahl, auswahlGeladen = true, merkliste = [], toggleMerk, addFilm, master, updateFilm,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
@@ -189,6 +162,7 @@ export function StreamingTab({
   recommendationPins = [], onRecommendationPinToggle,
   streamingNeu = { status: "idle", neueIds: [] },
   entdeckenStatus = {}, schreibeEntdeckenStatus = async () => false,
+  onEintragKlick,
 }) {
   const bereichRef = useRef(null);
   const [ansicht, setAnsicht] = useState("programm");
@@ -227,6 +201,11 @@ export function StreamingTab({
   const mediathekIdFuer = useCallback((titel) => (
     mediathekIdVon(entdeckenStatus[titel?.watchmode_id]) ?? bekannteMediathekIdFuer(titel)
   ), [entdeckenStatus, bekannteMediathekIdFuer]);
+  const bestaetigteMediathekIdFuer = useCallback((titel) => {
+    return bestaetigteMediathekNavigationId({
+      titel, master, statusMap: entdeckenStatus, bekannteId: bekannteMediathekIdFuer(titel),
+    });
+  }, [master, entdeckenStatus, bekannteMediathekIdFuer]);
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
   const [gesehenFrage, setGesehenFrage] = useState(null);
@@ -553,7 +532,7 @@ export function StreamingTab({
   return (
     <section ref={bereichRef} className="kd-streaming-tab">
       {/* dataTour="streaming-views" bleibt am SegmentedControl-Container — Tour-Anker. */}
-      <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={aendereAnsicht}
+      <SegmentedControl className="kd-streaming-ansichten" dataTour="streaming-views" value={ansicht} onChange={aendereAnsicht}
         options={[
           { id: "programm", label: "Mein Programm", badge: datenDa && auswahlGeladen ? programm.length : undefined },
           { id: "entdecken", label: "Alles", badge: entdeckenVollstaendig && auswahlGeladen ? (ansicht === "entdecken" ? katalogListe.length : allesAnzahlFuerAuswahl) : undefined },
@@ -639,12 +618,9 @@ export function StreamingTab({
               </div>
             </div>
           )}
-          <div className="kd-streamfilter-regler">
-            <AlphabetFilter name="Mein Programm" wert={buchstabeP}
-              onChange={(wert) => aendereFilter(setBuchstabeP, wert)} />
-            <JahrzehntFilter name="Mein Programm" wert={dekadeP} optionen={dekadenP}
-              onChange={aendereDekadeP} />
-          </div>
+          <KatalogRegler name="Mein Programm" buchstabe={buchstabeP}
+            onBuchstabe={(wert) => aendereFilter(setBuchstabeP, wert)}
+            jahrzehnt={dekadeP} jahrzehnte={dekadenP} onJahrzehnt={aendereDekadeP} />
           {programm.length === 0 && <p style={{ color: T.rauch, fontSize: 14 }}>Kein Titel deiner Liste auf den gewählten Diensten.</p>}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {programm.map((f) => {
@@ -789,12 +765,9 @@ export function StreamingTab({
               </div>}
             </div>
           )}
-          <div className="kd-streamfilter-regler">
-            <AlphabetFilter name={katalogAnsicht} wert={buchstabeE}
-              onChange={(wert) => aendereFilter(setBuchstabeE, wert)} />
-            <JahrzehntFilter name={katalogAnsicht} wert={dekadeE} optionen={dekadenE}
-              onChange={aendereDekadeE} />
-          </div>
+          <KatalogRegler name={katalogAnsicht} buchstabe={buchstabeE}
+            onBuchstabe={(wert) => aendereFilter(setBuchstabeE, wert)}
+            jahrzehnt={dekadeE} jahrzehnte={dekadenE} onJahrzehnt={aendereDekadeE} />
           {auswahlGeladen && auswahl.length === 0 && (
             <p style={{ color: T.rauch, fontSize: 14 }}>Keine Streaming-Dienste ausgewählt.</p>
           )}
@@ -814,7 +787,18 @@ export function StreamingTab({
                       {(entdeckenStatus[t.watchmode_id] || bekannteMediathekIdFuer(t)) && (
                         <span style={{ ...mono, color: T.kartenTextWeich, marginLeft: 8 }}>
                           {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
-                          {mediathekIdFuer(t) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
+                          {bestaetigteMediathekIdFuer(t) && typeof onEintragKlick === "function" ? (
+                            <button type="button" className="kd-streaming-mediathek-link"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                const zielId = bestaetigteMediathekIdFuer(t);
+                                if (zielId != null) onEintragKlick(zielId);
+                              }}>
+                              {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek · Zum Eintrag
+                            </button>
+                          ) : bestaetigteMediathekIdFuer(t)
+                            ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek`
+                            : ""}
                         </span>
                       )}
                     </div>
@@ -856,10 +840,7 @@ export function StreamingTab({
                             imdb_id: t.imdb_id, tmdb_id: t.tmdb_id,
                           }}
                           onAdd={async (f) => markiereAlsErstellt(t, await addFilm(f))}
-                          onAddMitPrognose={async (f) => markiereAlsErstellt(
-                            t,
-                            await addFilmMitPrognose?.(f),
-                          )}
+                          onAddMitPrognose={addFilmMitPrognose}
                           prognoseAktiv={vorbewertungAktiv}
                           prognoseSperrgrund={prognoseSperrgrund}
                           onDone={() => setFormFuer(null)} />

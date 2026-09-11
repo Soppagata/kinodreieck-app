@@ -1,6 +1,7 @@
 import { T, kontrastFarbe } from "../lib/tokens.js";
 import { bewertungskategorieLabel } from "../lib/kategorien.js";
 import { quelleBadges, QUELLEN_KLASSEN } from "../lib/quellen.js";
+import "../styles/library-followup.css";
 
 /* ---------- Dreieck-Glyph (Signatur) ----------
    bw == null (unbewertet): NUR der Umriss, gestrichelt — ein leeres Dreieck ist
@@ -164,17 +165,21 @@ export function KategorieTag({ k }) {
   );
 }
 
-export function QuellenBadges({ quelle }) {
+export function QuellenBadges({ quelle, className = "", kompakt = false, ariaLabel = "Gespeicherte Quellen" }) {
   const farben = {
     [QUELLEN_KLASSEN.PHYSISCH]: T.wie,
     [QUELLEN_KLASSEN.DIGITAL_GEKAUFT]: T.was,
     [QUELLEN_KLASSEN.ABO]: T.wolfram,
     [QUELLEN_KLASSEN.SONSTIG]: T.rauch,
   };
-  const badges = quelleBadges(quelle);
+  const badges = [...new Map(quelleBadges(quelle).map((badge) => [
+    `${badge.key}:${String(badge.label).trim().toLocaleLowerCase("de-AT")}`,
+    badge,
+  ])).values()];
   if (!badges.length) return null;
   return (
-    <span className="kd-quellenbadges" aria-label="Gespeicherte Quellen">
+    <span className={`kd-quellenbadges${kompakt ? " kd-quellenbadges--kompakt" : ""}${className ? ` ${className}` : ""}`}
+      aria-label={ariaLabel}>
       {badges.map(({ key, label, klasse }) => (
         <span key={key} className={`kd-quellenbadge kd-quellenbadge-${klasse}`}
           style={{ "--kd-quellenfarbe": farben[klasse], borderColor: farben[klasse] }}>

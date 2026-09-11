@@ -9,6 +9,7 @@ import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js
 import {
   MUSTWATCH_FILTER, mustwatchJahr, mustwatchTyp, mustwatchVerfuegbarkeit, projiziereMustwatch,
 } from "../lib/mustwatch.js";
+import { passtInJahrzehntMitKulanz, streamingAnfangsbuchstabe, streamingJahrzehntBereich } from "../lib/streamingSort.js";
 
 /* ---------- Must-Watch: die persönliche Noch-sehen-Liste ----------
    Eigener Datentopf, KEIN Filter über die Mediathek: eigene Einträge mit
@@ -249,7 +250,7 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
 export function MustWatchListe({
   eintraege, onAdd, onUpdate, onDelete, kandidaten, kommtVorInMap, onArtikelKlick,
   onSpringeZuRef, onAddFilm, recommendationPins = [], onRecommendationPinToggle,
-  pinOwnerKey = null,
+  pinOwnerKey = null, alphabetBuchstabe = null, jahrzehnt = null,
 }) {
   const [formOffen, setFormOffen] = useState(false);
   const [offenId, setOffenId] = useState(null);
@@ -269,10 +270,16 @@ export function MustWatchListe({
     return k ? k.titel : v.id;
   };
   /* Reine Such-/Filterprojektion der vollständigen Must-Watch-Ansicht. */
-  const projektion = useMemo(
-    () => projiziereMustwatch(eintraege, { filter, suche }, kandidaten),
-    [eintraege, filter, suche, kandidaten],
-  );
+  const projektion = useMemo(() => {
+    let liste = projiziereMustwatch(eintraege, { filter, suche }, kandidaten);
+    if (alphabetBuchstabe) {
+      liste = liste.filter((eintrag) => streamingAnfangsbuchstabe(eintrag.titel) === alphabetBuchstabe);
+    }
+    if (streamingJahrzehntBereich(jahrzehnt)) {
+      liste = liste.filter((eintrag) => passtInJahrzehntMitKulanz(eintrag.jahr, jahrzehnt));
+    }
+    return liste;
+  }, [eintraege, filter, suche, kandidaten, alphabetBuchstabe, jahrzehnt]);
   const sichtbar = useMemo(
     () => nurMarkierte ? projektion.filter((e) => markierteIds.has(String(e.id))) : projektion,
     [markierteIds, nurMarkierte, projektion],
@@ -281,7 +288,8 @@ export function MustWatchListe({
     () => (eintraege || []).filter((e) => mustwatchVerfuegbarkeit(e, kandidaten)?.aktuell).length,
     [eintraege, kandidaten],
   );
-  const eingeschraenkt = filter !== "alle" || !!suche.trim() || nurMarkierte;
+  const eingeschraenkt = filter !== "alle" || !!suche.trim() || nurMarkierte
+    || !!alphabetBuchstabe || !!streamingJahrzehntBereich(jahrzehnt);
 
   useEffect(() => {
     const vorhanden = new Set((eintraege || []).map((e) => String(e.id)));

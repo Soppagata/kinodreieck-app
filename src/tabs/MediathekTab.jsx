@@ -20,6 +20,14 @@ import { MedienForm } from "../components/MedienForm.jsx";
 import { MustWatchListe } from "../components/MustWatchListe.jsx";
 import { FilmBatchLoeschDialog } from "../components/FilmBatchLoeschDialog.jsx";
 import { StapelImport } from "../components/StapelImport.jsx";
+import { KatalogRegler } from "../components/KatalogRegler.jsx";
+import {
+  passtInJahrzehntMitKulanz,
+  streamingAnfangsbuchstabe,
+  streamingJahrzehnte,
+  streamingJahrzehntBereich,
+} from "../lib/streamingSort.js";
+import "../styles/library-followup.css";
 
 const STALE_LOESCH_HINWEIS = "Der Datenstand hat sich geändert. Bitte Datenstand, Konto oder Sitzung neu prüfen und die Einträge erneut auswählen.";
 
@@ -226,6 +234,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const [katF, setKatF] = useState(null);
   const [suche, setSuche] = useState("");
   const [sortier, setSortier] = useState("score");
+  const [buchstabe, setBuchstabe] = useState(null);
+  const [dekade, setDekade] = useState(null);
   /* Filtermenü (Chip-Filter) auf/zu — Default ZUGEKLAPPT. Seit Etappe 3 eine
      dauerhafte Sicht-Präferenz im Datentopf (vorher nur sessionStorage): sie
      überlebt den App-Neustart und wandert bei angemeldetem Konto mit. */
@@ -273,6 +283,14 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   }, [master, ansicht]);
   const besitzAnzahl = useMemo(() => (master || []).filter((f) => hatPhysischeQuelle(f.quelle)).length, [master]);
   const unbewertetAnzahl = useMemo(() => basis.filter((f) => hatDreieck(f.typ) && f.bewertung == null).length, [basis]);
+  const reglerQuelle = useMemo(() => ansicht === "mustwatch"
+    ? (mustwatch || [])
+    : basis.filter((f) => TYP_GRUPPEN[typTab].includes(f.typ || "film")),
+  [ansicht, mustwatch, basis, typTab]);
+  const reglerJahrzehnte = useMemo(() => streamingJahrzehnte(reglerQuelle), [reglerQuelle]);
+  useEffect(() => {
+    if (dekade != null && !reglerJahrzehnte.includes(dekade)) setDekade(null);
+  }, [dekade, reglerJahrzehnte]);
 
   const counts = useMemo(() => {
     const c = { filme: 0, serien: 0, musik: 0, sonstiges: 0 };
@@ -289,6 +307,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const mediathek = useMemo(() => {
     if (!basis.length) return [];
     let list = basis.filter((f) => TYP_GRUPPEN[typTab].includes(f.typ || "film"));
+    if (buchstabe) list = list.filter((f) => streamingAnfangsbuchstabe(f.titel) === buchstabe);
+    if (streamingJahrzehntBereich(dekade)) {
+      list = list.filter((f) => passtInJahrzehntMitKulanz(f.jahr, dekade));
+    }
     if (ansicht === "besitz" && nurUnbewertet) list = list.filter((f) => hatDreieck(f.typ) && f.bewertung == null);
     if (dreieckTab) {
       if (ansicht === "bestand") {
@@ -320,7 +342,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     const aktiv = dreieckTab ? (sortierer[sortier] || sortierer.score)
       : (["titel", "jahr_neu", "jahr_alt"].includes(sortier) ? sortierer[sortier] : sortierer.titel);
     return list.sort(aktiv);
-  }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, genreF, katF, suche, sortier]);
+  }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, genreF, katF, suche, sortier, buchstabe, dekade]);
 
   const sichtbareObjekte = useMemo(() => new Set(mediathek), [mediathek]);
   const bewahrteKarte = useMemo(() => {
@@ -574,6 +596,11 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     bewahrterRefKey, bewahrterBewerteTitel,
   ]);
 
+  const aendereDekade = useCallback((wert) => {
+    setDekade(streamingJahrzehntBereich(wert) ? wert : null);
+    if (ansicht !== "mustwatch") setSortier("jahr_alt");
+  }, [ansicht]);
+
   return (
     <section className="kd-mediathek-tab">
       <div className="kd-mediathek-dialog-hintergrund" inert={loeschDialog ? true : undefined}
@@ -589,12 +616,18 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {/* ===== Must-Watch: eigener Datentopf, eigene Liste ===== */}
       {ansicht === "mustwatch" && (
+        <>
+        <KatalogRegler className="kd-mediathek-regler" name="Must-Watch"
+          buchstabe={buchstabe} onBuchstabe={setBuchstabe}
+          jahrzehnt={dekade} jahrzehnte={reglerJahrzehnte} onJahrzehnt={aendereDekade} />
         <MustWatchListe eintraege={mustwatch}
+          alphabetBuchstabe={buchstabe} jahrzehnt={dekade}
           onAdd={addMustwatch} onUpdate={updateMustwatch} onDelete={deleteMustwatch}
           kandidaten={mwKandidaten} kommtVorInMap={kommtVorInMap} onArtikelKlick={onArtikelKlick}
           onSpringeZuRef={onSpringeZuMustwatchRef} onAddFilm={addFilm}
           recommendationPins={recommendationPins} onRecommendationPinToggle={onRecommendationPinToggle}
           pinOwnerKey={datenKontextKey} />
+        </>
       )}
 
       {ansicht !== "mustwatch" && (
@@ -668,6 +701,9 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           {dreieckTab && <option value="warum">WARUM absteigend</option>}
         </select>
       </div>
+      <KatalogRegler className="kd-mediathek-regler" name={ansicht === "besitz" ? "Im Besitz" : "Mediathek"}
+        buchstabe={buchstabe} onBuchstabe={setBuchstabe}
+        jahrzehnt={dekade} jahrzehnte={reglerJahrzehnte} onJahrzehnt={aendereDekade} />
 
       {/* Besitz-Ansicht: unbewertet-Filter prominent (nicht im eingeklappten Menü) */}
       {ansicht === "besitz" && (
