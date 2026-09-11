@@ -14,6 +14,7 @@ const bundled = await build({ stdin: { contents: `
   export {createRadarWebsearchHandler} from './supabase/functions/radar-websearch-task/index.ts';
   export {parseAnthropicRadarWebsearchResponse} from './supabase/functions/radar-websearch-task/anthropicAdapter.js';
 `, resolveDir: process.cwd(), loader: "js" }, bundle:true, write:false, format:"cjs", platform:"node",
+  loader:{".css":"empty"},
   jsx:"automatic", external:["react","react/jsx-runtime"], define:{"import.meta.main":"false"}, logLevel:"silent",
   plugins:[{name:"mock-supabase",setup(b){b.onResolve({filter:/^npm:@supabase/},()=>({path:"mock",namespace:"mock"}));
     b.onLoad({filter:/.*/,namespace:"mock"},()=>({contents:"export const createClient = (...args) => globalThis.__radarClient(...args);"}));}}],
