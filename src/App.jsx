@@ -1424,7 +1424,8 @@ export default function App() {
         : EINZELDATEI_BUILD ? streamingEntdeckenSnapshot : { titel: [] },
       entdeckenUmfang: hatGeladenenEntdeckenStand && roh.entdeckenUmfang === "voll" ? "voll" : "begrenzt",
     };
-    if (!optionaleFakten && sichtbareAuswahlGeladen && sichtbareAuswahl.length) {
+    if (!optionaleFakten && sichtbareAuswahlGeladen && sichtbareAuswahl.length
+        && typeof catalogService.loadFactsForTitles === "function") {
       optionaleFakten = catalogService.loadFactsForTitles(anzeigeRoh.entdecken?.titel || [], {
         preferredTitles: anzeigeRoh.bekannt?.titel || [],
         services: sichtbareAuswahl,
