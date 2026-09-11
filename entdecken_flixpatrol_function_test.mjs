@@ -20,8 +20,8 @@ assert.match(workflow, /sourceRequests[^\n]+<= 32/);
 assert.match(workflow, /service === "Apple TV"/);
 assert.doesNotMatch(workflow, /service === "Apple TV\+"/);
 assert.match(tab, /entry\.popularity\?\.measuredOn \|\| source\(entry\)\?\.retrievedOn/);
-assert.match(tab, /Titel deiner ausgewählten Streamingdienste/);
-assert.match(tab, /Nur Titel aus den Charts tragen eine Popularitätsaussage/);
+assert.match(tab, /`Stand: \$\{formatPresentationDate\(webDiscoveryFeed\.refreshedOn\)\}`/);
+assert.doesNotMatch(tab, /Titel deiner ausgewählten Streamingdienste|Popularitätsaussage/);
 assert.equal(31 * (5 + 25) + 31, 961);
 
 const response = createEntdeckenDailyResponse({

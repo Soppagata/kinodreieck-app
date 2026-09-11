@@ -678,20 +678,18 @@ try {
     assert.equal(expandVersioned?.getAttribute("aria-expanded"), "false");
     assert.match(versionedSection.textContent, /Österreichische Quellenliste/u);
     assert.match(versionedSection.textContent, /Beliebte Titel/u);
-    assert.match(versionedSection.textContent, /Kinocharts des Österreichischen Filminstituts und aktuelles Kinoprogramm/u);
-    assert.match(versionedSection.textContent, /Nur Titel aus den Charts tragen eine Popularitätsaussage/u);
-    assert.match(versionedSection.textContent, /Popularität ist kein persönlicher Passungsgrund/u);
-    assert.match(versionedSection.textContent, /Ersatzstand gepflegt 29\.08\.2026/u);
+    assert.match(versionedSection.textContent, /Stand: 29\.08\.2026/u);
+    assert.doesNotMatch(versionedSection.textContent, /Kinocharts des Österreichischen Filminstituts|Popularitätsaussage|persönlicher Passungsgrund/u);
     assert.doesNotMatch(versionedSection.textContent, /Aktuelle österreichische Liste|Diese Woche beliebt|Aktuelle Kino-/u);
   });
   await versionedUi.render({
     ...versionedProps,
-    webDiscoveryStatus: { status: "stale", responseMode: "structured" },
+    webDiscoveryStatus: { status: "stale", responseMode: "structured", feedOrigin: "embedded_fallback" },
   });
   check("Der bekannte eingebettete Format-7-Fallback bleibt datiert und abgelaufen sichtbar", () => {
     assert.equal(versionedUi.container.querySelector('[role="status"]')?.textContent,
-      "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar.");
-    assert.match(versionedUi.container.textContent, /Ersatzstand gepflegt 29\.08\.2026/u);
+      "Ersatzstand: 29.08.2026 · Aktualisierung ausstehend.");
+    assert.match(versionedUi.container.textContent, /Stand: 29\.08\.2026/u);
   });
   await versionedUi.render({
     ...versionedProps,
@@ -701,7 +699,7 @@ try {
   check("Ein abgelaufener echter Serverstand zeigt den festen Gültigkeitshinweis", () => {
     const status = versionedUi.container.querySelector('[role="status"]');
     assert.equal(status?.textContent,
-      "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar.");
+      "Stand: 27.08.2026 · Aktualisierung ausstehend.");
   });
   await versionedUi.render({
     ...versionedProps,
@@ -714,7 +712,7 @@ try {
   check("Stale plus degraded bewahrt Ausfall- und Gültigkeitsinformation als lokalen Festtext", () => {
     const status = versionedUi.container.querySelector('[role="status"]');
     assert.equal(status?.textContent,
-      "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums und bleibt nur zur Orientierung sichtbar.");
+      "Aktueller Abruf fehlgeschlagen. Stand: 27.08.2026 · Aktualisierung ausstehend.");
     assert.doesNotMatch(versionedUi.container.textContent, /Dieser freie Servertext/u);
   });
   await versionedUi.render(versionedProps);
@@ -764,7 +762,7 @@ try {
   await act(async () => { await tick(); await tick(); });
   const mixedPopularSection = mixedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
   const expandPopular = button(mixedPopularSection, "Weitere 19 Titel anzeigen");
-  check("Format 6 benennt ausschließlich OeFI und Netflix und verlinkt jede sichtbare Titelüberschrift neutral", () => {
+  check("Format 6 zeigt nur den kompakten Stand und verlinkt jede sichtbare Titelüberschrift neutral", () => {
     const cards = [...mixedPopularSection.querySelectorAll(".kd-entdecken-neutral")];
     const links = cards.map((card) => card.querySelector("h3 > a.kd-entdecken-titellink"));
     assert.equal(cards.length, 6);
@@ -773,8 +771,8 @@ try {
       && link.getAttribute("rel") === "noopener noreferrer"
       && /Referenz bei/.test(link.getAttribute("aria-label") || "")));
     assert.equal(expandPopular?.getAttribute("aria-expanded"), "false");
-    assert.match(mixedPopularSection.textContent, /Titel deiner ausgewählten Streamingdienste \(Netflix\) sowie Kinocharts des Österreichischen Filminstituts und aktuelles Kinoprogramm/u);
-    assert.match(mixedPopularSection.textContent, /Popularität ist kein persönlicher Passungsgrund/u);
+    assert.match(mixedPopularSection.textContent, /Stand: 27\.08\.2026/u);
+    assert.doesNotMatch(mixedPopularSection.textContent, /ausgewählten Streamingdienste|Kinocharts des Österreichischen Filminstituts|persönlicher Passungsgrund/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /Joyn|Prime Video|Disney\+|Apple TV\+/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /Quelle ansehen|Bei Joyn ansehen/);
   });

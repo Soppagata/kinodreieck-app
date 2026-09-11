@@ -13,7 +13,6 @@ import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import {
   FLIXPATROL_DISCOVERY_FEED_FORMAT,
   VERSIONED_DISCOVERY_FEED_FORMAT,
-  VERSIONED_DISCOVERY_FEED_ID,
 } from "../lib/webDiscoveryFeed.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "../lib/radarNews.js";
@@ -234,17 +233,13 @@ function RecommendationsView({
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
     .includes(webDiscoveryFeed?.format);
-  /* Format 7 ist der bewusst datierte, eingebettete 50er-Fallback. Abruf- und
-     Quellenstand werden getrennt benannt; auch sein Ablauf bleibt sichtbar. */
-  const usesVersionedFallback = webDiscoveryFeed?.format === VERSIONED_DISCOVERY_FEED_FORMAT
-    && webDiscoveryFeed?.feedId === VERSIONED_DISCOVERY_FEED_ID;
-  const feedNotice = entdeckenDailyFeedNotice(webDiscoveryStatus);
+  /* Abrufstatus und Quellenstand werden getrennt knapp benannt. */
+  const feedNotice = entdeckenDailyFeedNotice({ ...webDiscoveryStatus, feed: webDiscoveryFeed });
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
   const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
     .includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn
-    ? `${webDiscoveryStatus?.feedOrigin === "embedded_fallback" || usesVersionedFallback
-      ? "Ersatzstand gepflegt" : "Zuletzt erfolgreich abgerufen"} ${formatPresentationDate(webDiscoveryFeed.refreshedOn)}`
+    ? `Stand: ${formatPresentationDate(webDiscoveryFeed.refreshedOn)}`
     : weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   const pinButton = (entry) => {
     const pinned = isEntdeckenPinned(recommendationPins, entry);
@@ -280,11 +275,7 @@ function RecommendationsView({
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
-        <p>{[FLIXPATROL_DISCOVERY_FEED_FORMAT, 6, VERSIONED_DISCOVERY_FEED_FORMAT]
-          .includes(webDiscoveryFeed?.format)
-          ? `${selectedServices.length ? `Titel deiner ausgewählten Streamingdienste (${selectedServices.join(", ")}) sowie ` : ""}Kinocharts des Österreichischen Filminstituts und aktuelles Kinoprogramm. Nur Titel aus den Charts tragen eine Popularitätsaussage; Popularität ist kein persönlicher Passungsgrund.`
-          : "Belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
-          {weekLabel ? ` · ${weekLabel}` : ""}</p>
+        {weekLabel ? <p>{weekLabel}</p> : null}
       </div>
       {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-beliebtliste">{visiblePopular.map((entry) => (
         <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">

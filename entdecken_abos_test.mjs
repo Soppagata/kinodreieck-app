@@ -231,11 +231,11 @@ check("beschädigtes Profil wird nicht durch neutrale Vorschläge als gesund beh
 
 const uiSource = await readFile(new URL("./src/tabs/EntdeckenTab.jsx", import.meta.url), "utf8");
 const appSource = await readFile(new URL("./src/App.jsx", import.meta.url), "utf8");
-check("UI kennzeichnet neutrale Vorschläge, beschreibt den gefilterten Pool ehrlich und Mediathek erhält Rohmaster", () => {
+check("UI kennzeichnet neutrale Vorschläge, zeigt den kompakten Stand und Mediathek erhält Rohmaster", () => {
   assert.match(uiSource, /Zum Entdecken/);
   assert.match(uiSource, /Noch ohne persönliche Passung/);
-  assert.match(uiSource, /Titel deiner ausgewählten Streamingdienste/);
-  assert.match(uiSource, /Nur Titel aus den Charts tragen eine Popularitätsaussage/);
+  assert.match(uiSource, /`Stand: \$\{formatPresentationDate\(webDiscoveryFeed\.refreshedOn\)\}`/);
+  assert.doesNotMatch(uiSource, /Titel deiner ausgewählten Streamingdienste|Popularitätsaussage/);
   assert.match(appSource, /master=\{master \?\? LEERER_MEDIATHEK_MASTER\}/);
   assert.doesNotMatch(appSource, /mediathekMaster|projectTransientDescriptions/);
 });

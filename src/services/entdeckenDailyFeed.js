@@ -12,30 +12,38 @@ export const ENTDECKEN_DAILY_PARTIAL_NOTICE =
 export const ENTDECKEN_DAILY_DEGRADED_NOTICE =
   "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar.";
 export const ENTDECKEN_DAILY_STALE_NOTICE =
-  "Der angezeigte datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums. Er bleibt nur zur Orientierung sichtbar.";
+  "Aktualisierung ausstehend.";
 export const ENTDECKEN_DAILY_STALE_DEGRADED_NOTICE =
-  "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige datierte Stand liegt außerhalb seines bestätigten Gültigkeitszeitraums und bleibt nur zur Orientierung sichtbar.";
+  "Aktueller Abruf fehlgeschlagen. Aktualisierung ausstehend.";
 export const ENTDECKEN_DAILY_FALLBACK_NOTICE =
-  "Angezeigt wird der ältere eingebettete Ersatzstand mit 50 Titeln aus fünf Bereichen.";
+  "Ersatzstand";
 export const ENTDECKEN_DAILY_CLIENT_TIMEOUT_MS = 20_000;
 const READ_REFRESH_STATUSES = new Set(["read_only", "disabled", "unavailable"]);
 
+function noticeDate(value) {
+  const day = String(value?.feed?.refreshedOn || "");
+  const match = day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : null;
+}
+
 export function entdeckenDailyFeedNotice(value) {
+  const date = noticeDate(value);
   if (value?.feedOrigin === "embedded_fallback") {
     const retrieval = ({
-      unavailable: "Der aktuelle Abruf war nicht erreichbar. ",
-      invalid_response: "Der aktuelle Abruf war nicht verlässlich lesbar. ",
-      server_feed_rejected: "Der aktuelle Serverstand enthielt nicht den bestätigten Umfang von 50 Titeln aus fünf Bereichen. ",
-      server_feed_older: "Der aktuelle Serverstand war älter als der eingebettete Ersatzstand. ",
-    })[value?.retrievalStatus] || "";
-    const expired = value?.status === "stale"
-      ? " Sein bestätigter Gültigkeitszeitraum ist abgelaufen."
-      : "";
-    return `${retrieval}${ENTDECKEN_DAILY_FALLBACK_NOTICE}${expired}`;
+      unavailable: "Abruf nicht erreichbar.",
+      invalid_response: "Abruf fehlgeschlagen.",
+      server_feed_rejected: "Serverstand unvollständig.",
+      server_feed_older: "Serverstand älter.",
+    })[value?.retrievalStatus] || null;
+    const stand = `${ENTDECKEN_DAILY_FALLBACK_NOTICE}${date ? `: ${date}` : ""}`;
+    const stale = value?.status === "stale" ? " · Aktualisierung ausstehend." : ".";
+    return [retrieval, `${stand}${stale}`].filter(Boolean).join(" ");
   }
   if (value?.status === "stale") {
+    const stand = date ? `Stand: ${date} · ` : "";
     return value?.responseMode === "degraded"
-      ? ENTDECKEN_DAILY_STALE_DEGRADED_NOTICE : ENTDECKEN_DAILY_STALE_NOTICE;
+      ? `Aktueller Abruf fehlgeschlagen. ${stand}${ENTDECKEN_DAILY_STALE_NOTICE}`
+      : `${stand}${ENTDECKEN_DAILY_STALE_NOTICE}`;
   }
   if (value?.responseMode === "partial") return ENTDECKEN_DAILY_PARTIAL_NOTICE;
   if (value?.responseMode === "degraded") return ENTDECKEN_DAILY_DEGRADED_NOTICE;

@@ -237,6 +237,18 @@ check("Bereichs-ID-/Zielvertrag ist stabil", new Set(BEREICHE_IDS).size === BERE
 );
 check("Bereichstexte sind eindeutig und kanonisch", BEREICHE_TITEL.length === BEREICHE_TITEL_SET.size);
 
+const STREAMING_BEREICH = BEREICHE_BY_ID.get("streaming");
+const STREAMING_DETAILS = STREAMING_BEREICH?.details || [];
+check("Streaming-Hilfe erklärt Neu als 14-mal-24-Stunden-Abrufdifferenz", !!STREAMING_BEREICH
+  && STREAMING_DETAILS.some((text) => text.includes("seit dem letzten erfolgreichen Katalogabruf")
+    && text.includes("neu in „Alles“")
+    && text.includes("14 × 24 Stunden")
+    && text.includes("kein Plattform-Premierendatum"))
+  && STREAMING_DETAILS.some((text) => text.includes("48-Stunden-Takt")
+    && text.includes("alle 12 Tage"))
+  && STREAMING_DETAILS.every((text) => !text.includes("volle Kalendertage")
+    && !text.includes("12 bis 14 Tage")));
+
 for (const bereich of HILFE_BEREICHE) {
   const keys = new Set(Object.keys(bereich));
   const erwartet = ["id", "titel", "kurztext", "details", "suchwoerter", "ziel"];
@@ -518,12 +530,12 @@ check(
 );
 
 check(
-  "Streaming-Hilfe trennt Alles, Mein Programm und 14-Tage-Neuzugänge ohne pauschale 48h-Garantie",
+  "Streaming-Hilfe trennt Alles, Mein Programm und erkannte 14-mal-24-Stunden-Neuzugänge",
   (() => {
     const details = (BEREICHE_BY_ID.get("streaming")?.details || []).join(" ").toLowerCase();
     return containsAllWords(details, ["alles", "gesamtmenge", "mein programm", "teilmenge"])
-      && containsAllWords(details, ["neu", "angebotszugänge", "14 volle"])
-      && containsAllWords(details, ["fünf", "48-stunden", "gesamtkatalog", "12 bis 14 tage"])
+      && containsAllWords(details, ["neu", "letzten erfolgreichen katalogabruf", "14 × 24 stunden", "kein plattform-premierendatum"])
+      && containsAllWords(details, ["fünf", "48-stunden", "gesamtkatalog", "alle 12 tage"])
       && /(?:keine allgemeine 48-stunden-garantie|allgemeine 48-stunden-garantie[^.]*gibt es nicht)/.test(details);
   })(),
 );

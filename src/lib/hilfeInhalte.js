@@ -91,11 +91,11 @@ const BEREICHE = [
   {
     id: "streaming",
     titel: "Streaming",
-    kurztext: "Angebote deiner gewählten Dienste ansehen und neue Zugänge der letzten 14 vollen Tage finden.",
+    kurztext: "Angebote deiner gewählten Dienste und neue Zugänge der letzten 14 Tage ansehen.",
     details: [
       "Alles zeigt die Gesamtmenge der bekannten Angebote deiner gewählten Streamingdienste. Mein Programm ist daraus die Teilmenge, die zu deiner Mediathek und deinen Listen passt.",
-      "Neu zeigt echte Angebotszugänge bei deinen gewählten Diensten für 14 volle Kalendertage. Dort kannst du Titel als gesehen markieren oder für später merken.",
-      "Watchmode liefert die Streaming-Verfügbarkeiten. Für fünf aktuell schnell geführte Dienste ist ein Abruf im 48-Stunden-Takt vorgesehen; der Gesamtkatalog wird turnusmäßig über 12 bis 14 Tage erneuert. Der angezeigte Quellenstand bleibt maßgeblich, eine allgemeine 48-Stunden-Garantie für alle Dienste gibt es nicht.",
+      "Neu zeigt Titel, die seit dem letzten erfolgreichen Katalogabruf neu in „Alles“ deiner gewählten Dienste erkannt wurden. Jeder Zugang bleibt ab seiner Erkennung 14 × 24 Stunden sichtbar; das ist kein Plattform-Premierendatum.",
+      "Watchmode liefert die Streaming-Verfügbarkeiten. Für fünf aktuell schnell geführte Dienste ist ein Abruf im 48-Stunden-Takt vorgesehen; der Gesamtkatalog wird turnusmäßig alle 12 Tage erneuert. Der angezeigte Quellenstand bleibt maßgeblich, eine allgemeine 48-Stunden-Garantie für alle Dienste gibt es nicht.",
       "Welche Streamingdienste berücksichtigt werden, stellst du in Settings unter Streaming-Quellen ein.",
     ],
     suchwoerter: ["streaming", "streamingdienst", "mein programm", "alles", "neu", "streaming entdecken", "gesehen", "merkliste", "watchmode"],

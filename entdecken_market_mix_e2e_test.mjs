@@ -293,8 +293,20 @@ await checkAsync("Der eingebettete Format-7-Fallback bleibt nach Ablauf ehrlich 
   assert.equal(loaded.feed.validUntil, "2026-09-04");
   assert.equal(loaded.feedOrigin, "embedded_fallback");
   assert.equal(loaded.retrievalStatus, "not_requested");
-  assert.match(entdeckenDailyFeedNotice(loaded), /ältere eingebettete Ersatzstand/u);
-  assert.match(entdeckenDailyFeedNotice(loaded), /Gültigkeitszeitraum ist abgelaufen/u);
+  assert.equal(entdeckenDailyFeedNotice(loaded), "Ersatzstand: 29.08.2026 · Aktualisierung ausstehend.");
+});
+
+check("Der gespeicherte Stand bleibt knapp datiert und echte Abruffehler bleiben sichtbar", () => {
+  const feed = { refreshedOn: "2026-09-10" };
+  assert.equal(entdeckenDailyFeedNotice({ status: "stale", responseMode: "structured", feed }),
+    "Stand: 10.09.2026 · Aktualisierung ausstehend.");
+  assert.equal(entdeckenDailyFeedNotice({
+    status: "stale", responseMode: "structured", feed,
+    feedOrigin: "embedded_fallback", retrievalStatus: "unavailable",
+  }), "Abruf nicht erreichbar. Ersatzstand: 10.09.2026 · Aktualisierung ausstehend.");
+  assert.equal(entdeckenDailyFeedNotice({
+    status: "stale", responseMode: "degraded", feed,
+  }), "Aktueller Abruf fehlgeschlagen. Stand: 10.09.2026 · Aktualisierung ausstehend.");
 });
 
 await checkAsync("Netflix-Prefixgrenze stoppt auch einen einzelnen übergroßen Chunk vor ÖFI", async () => {
