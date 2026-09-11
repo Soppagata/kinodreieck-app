@@ -45,6 +45,26 @@ const TEXTE = Object.freeze({
   [ERROR_CODES.AI_DUPLICATE]: "Dieser Vorgang läuft bereits.",
 });
 
+const FILMWISSEN_QUELLE_NICHT_VERFUEGBAR = "Eine Recherchequelle für das Filmwissen ist derzeit nicht verfügbar. Bitte versuche es später erneut.";
+const FILMWISSEN_KEINE_BELEGE = "Die Recherchequellen haben keine geeigneten Belege für diesen Film geliefert.";
+
+function filmwissenQuellenText(error) {
+  if (error?.code !== ERROR_CODES.SERVER
+      || error?.source !== "ai"
+      || error?.operation !== "task.run"
+      || typeof error?.reason !== "string") return null;
+  const match = /^filmwissen-quelle:([a-z0-9-]{1,80})$/.exec(error.reason);
+  if (!match) return null;
+  const grund = match[1];
+  if (/^(?:adapter-|antwort-|wikimedia-kontakt-fehlt$|wikidata-(?:voruebergehend|api-fehler|entity-schema|entity-identitaet|suchantwort|entity-anzahl)$|loc-(?:komponenten|json|markup|tabellen|header|body|zeilen|snapshot|jahr-ungueltig$))/.test(grund)) {
+    return FILMWISSEN_QUELLE_NICHT_VERFUEGBAR;
+  }
+  if (/^(?:kennung-ungueltig$|wikidata-(?:nicht-gefunden|kennung-mehrdeutig|kein-film|imdb-widerspruch|tmdb-widerspruch|label-fehlt|keine-fakten|provenienz)$|loc-(?:jahrgang|doppelte-identitaet|identitaet-ungeeignet|treffer-mehrdeutig))/.test(grund)) {
+    return FILMWISSEN_KEINE_BELEGE;
+  }
+  return null;
+}
+
 export class BoundaryError extends Error {
   constructor(code, options = {}) {
     super(options.message || TEXTE[code] || TEXTE[ERROR_CODES.SERVER], { cause: options.cause });
@@ -61,7 +81,7 @@ export class BoundaryError extends Error {
 }
 
 export function errorText(error) {
-  return TEXTE[error?.code] || TEXTE[ERROR_CODES.SERVER];
+  return filmwissenQuellenText(error) || TEXTE[error?.code] || TEXTE[ERROR_CODES.SERVER];
 }
 
 export function errorFromStatus(status, options = {}) {

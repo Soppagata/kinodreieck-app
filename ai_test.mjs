@@ -941,6 +941,33 @@ check("T17-Eichung: errorText() vergibt sehr wohl eigene Texte — INVALID_KEY u
   && errorText({ code: ERROR_CODES.NO_DEMO_DATA }) !== SERVER_TEXT
   && errorText({ code: "gibt-es-nicht" }) === SERVER_TEXT);
 
+const filmwissenQuellenFehler = new BoundaryError(ERROR_CODES.SERVER, {
+  source: "ai", operation: "task.run", reason: "filmwissen-quelle:adapter-http-403",
+});
+const filmwissenBelegFehler = new BoundaryError(ERROR_CODES.SERVER, {
+  source: "ai", operation: "task.run", reason: "filmwissen-quelle:wikidata-keine-fakten",
+});
+check("T17: bekannte Filmwissen-Quellenfehler erhalten einen ruhigen eigenen Text ohne Rohgrund",
+  /Recherchequelle.*nicht verfügbar/.test(errorText(filmwissenQuellenFehler))
+  && /keine geeigneten Belege/.test(errorText(filmwissenBelegFehler))
+  && !/adapter-http-403|wikidata-keine-fakten/.test(
+    errorText(filmwissenQuellenFehler) + errorText(filmwissenBelegFehler)
+  ));
+check("T17: fremder Grund und echter Serverfehler bleiben beim allgemeinen Servertext",
+  errorText(new BoundaryError(ERROR_CODES.SERVER, {
+    source: "catalog", operation: "load", reason: "filmwissen-quelle:adapter-http-403",
+  })) === SERVER_TEXT
+  && errorText(new BoundaryError(ERROR_CODES.SERVER, {
+    source: "ai", operation: "task.run", reason: "filmwissen-quelle:fremder-grund",
+  })) === SERVER_TEXT
+  && errorText(new BoundaryError(ERROR_CODES.SERVER, {
+    source: "ai", operation: "task.run", reason: "provider-error",
+  })) === SERVER_TEXT);
+check("T17: Authentifizierung bleibt trotz Filmwissen-Grund eine eigene Fehlerklasse",
+  errorText(new BoundaryError(ERROR_CODES.UNAUTHENTICATED, {
+    source: "ai", operation: "task.run", reason: "filmwissen-quelle:adapter-http-403",
+  })) === errorText({ code: ERROR_CODES.UNAUTHENTICATED }));
+
 const neueTexte = NEUE_CODES.map((c) => errorText({ code: c }));
 check("T17: jeder der drei neuen Codes hat einen eigenen, nicht-leeren deutschen Text (nicht den Serverfehler-Text)",
   neueTexte.every((t) => typeof t === "string" && t.trim().length > 0 && t !== SERVER_TEXT)
