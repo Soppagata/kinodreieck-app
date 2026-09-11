@@ -1639,9 +1639,9 @@ SOLO: ein Ende-zu-Ende-Baumeister, ein isolierter Worktree. Keine Nebenagenten.
 
 | Ergebnis | Zuständigkeit / Stand | Schreibflächen und Grenze |
 | --- | --- | --- |
-| M6 / E15: Neu-Karten nennen den vollständigen ausgewählten Dienst und ordnen Titel, Dienst-Tags und Aktionen übersichtlich an. | E15-UI OFFEN | StreamingTab.jsx und ausschließlich dafür begrenzte CSS-Regeln; bestehende Pin-/Merken-/Gesehen-/Aufklappfunktionen sowie andere Streamingansichten erhalten. |
-| M2 / E15: Beliebte Titel zeigen Beschreibungen erst nach Tippen auf den Titel; Für mich behält seine sichtbaren Beschreibungen. | E15-UI OFFEN | EntdeckenTab.jsx; vorhandene Beschreibung zugänglich auf-/zuklappen, externe Quelle bleibt erreichbar. Keine Änderungen an Fakten, Ranking, Quellenständen oder gespeicherten Beschreibungen. |
-| M5 / E15: Kleine UI-Korrektur getestet und auf Staging nachvollziehbar ausgeliefert. | Meisterlieferung OFFEN | Baumeister besitzt zugehörige bestehende UI-/Browsertests und den einmaligen lokalen Abschluss; Meister besitzt Register, Integration, force-freie Staging-Lieferung und Readback. |
+| M6 / E15: Neu-Karten nennen den vollständigen ausgewählten Dienst und ordnen Titel, Dienst-Tags und Aktionen übersichtlich an. | GEBAUT, integriert als 2fecfc2 + bb035cf | StreamingTab.jsx und ausschließlich dafür begrenzte CSS-Regeln; bestehende Pin-/Merken-/Gesehen-/Aufklappfunktionen sowie andere Streamingansichten erhalten. |
+| M2 / E15: Beliebte Titel zeigen Beschreibungen erst nach Tippen auf den Titel; Für mich behält seine sichtbaren Beschreibungen. | GEBAUT, integriert als 2fecfc2 + bb035cf | EntdeckenTab.jsx und eng begrenzte Dropdown-CSS-Regeln; vorhandene Beschreibung zugänglich auf-/zuklappen, externe Quelle bleibt erreichbar. Keine Änderungen an Fakten, Ranking, Quellenständen oder gespeicherten Beschreibungen. |
+| M5 / E15: Kleine UI-Korrektur getestet und auf Staging nachvollziehbar ausgeliefert. | Lokal grün, Staging-Lieferung folgt | Baumeister besitzt zugehörige bestehende UI-/Browsertests und den einmaligen lokalen Abschluss; Meister besitzt Register, Integration, force-freie Staging-Lieferung und Readback. |
 
 Basis vor dem Plan: `9fdeac3816d224d1be4581e126c001687ff32ed7`.
 Zielbranch bleibt `codex/flixpatrol-master-20260909`, danach `staging`.
@@ -1657,6 +1657,44 @@ ist dadurch ersetzt. Titel ohne Beschreibung erhalten keine leere Fläche.
 Keine Providerrequests und keine Shared-Datenwrites.
 Der aktuelle öffentliche Staging-Ausgang ist am 11.09., 09:52 MESZ, erneut
 als `819ceac` belegt. M3 bleibt abgeschlossen, seine Nachprüfung pausiert.
+
+### E15 – integriert und lokal geprüft
+
+Der Solo-Baumeister `etappe_15_karten` arbeitete in
+`/private/tmp/kd-streaming-karten-e15-20260911` auf
+`codex/streaming-karten-e15-20260911`, Basis
+`30f60aeb6e8754ba953a71be7e551e224323e04a`. Lieferung
+`2aaee21254be960c6367c68f105a097651bd3355` →
+`2f7a1a5e49f69bd7494dea88af63eaa8b9c392a2`, konfliktfrei integriert als
+`2fecfc2` → `bb035cf`. Neben dem Masterregister sind nur drei Produktdateien
+und zwei bestehende Browserspecs geändert. Der Meister hat den Produktcode
+bei der Integration nicht geändert.
+
+Neu nutzt die vorhandenen konkreten Dienstlabels wie aufgeklappte Karten,
+platziert diese direkt nach dem Titel und die 44-px-Aktionen am Kartenfuß.
+Unter Beliebte Titel öffnet der Titelbutton eine vorhandene Beschreibung;
+die vorige Quellenreferenz ist dort als `Quelle ansehen` erreichbar. Ohne
+Beschreibung bleibt der vorhandene Titellink. Die sichtbare Für-mich-
+Beschreibung bleibt erhalten; keine Inhaltsdaten werden gelöscht.
+
+Fokussierte Node-Prüfungen sowie vier Browserfälle in Chromium/WebKit bei
+393 × 852 sind grün: lange Titel, mehrere Channels, Überlauf/Touchziele,
+Pin/Merken/Gesehen/Aufklappen und Beschreibung auf/zu. Bilder unter
+`/private/tmp/kd-ops-audit-20260909/e15-*` wurden angesehen, einschließlich
+neutraler geschlossener Neu-Karte und geöffneter Beschreibung. Die Bilder
+verwenden feste Mockdaten, keinen aktuellen Quellenstand.
+
+Der einmalige vollständige Solo-Abschluss `npm test` auf `2aaee21` endete
+mit Exit 0 einschließlich PostgreSQL-Mocks, Einzeldatei/Vite-Build und
+72 Pages-Prüfungen; Log `e15-final-app.log` im selben Belegverzeichnis.
+Das anschließende reine Testdelta entfernt sechs redundante JSX-Assertions
+und verwendet portable `testInfo.outputPath`-Bildpfade. Die vier betroffenen
+Browserfälle wurden danach erneut erfolgreich ausgeführt. Produktbytes
+blieben gleich; kein zweiter vollständiger lokaler Produktabschluss.
+Der integrierte geprüfte `src`-Baum ist
+`f495c5e04cc4d34997f9d2c75809a4cbdfe30e39`; finaler Diff-Check grün.
+Null Providerrequests, null Shared-Datenwrites; Fristen, Pipeline und
+Backend bleiben unverändert. Es folgt die vorhandene Staging-Lieferkette.
 
 ## Historischer Ausgang am 9. September
 
