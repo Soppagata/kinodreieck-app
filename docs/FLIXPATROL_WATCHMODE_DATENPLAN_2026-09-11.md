@@ -28,7 +28,10 @@ Build-Aufteilung und ihre gezielten Schutzprüfungen. Keine gemeinsame Änderung
 an `package.json`, Lockfile, Migrationen oder Deploy-Workflows während dieser
 Welle ohne Master-Zuordnung. Die getrennte Produzenten-Etappe startet von
 `0fd4ac1866210eea49a8c3a89ecfae08197729ea` und hält das bestehende Katalog-/
-Fakten-DTO unverändert. Der Master besitzt dieses Register, Live-Reads,
+Fakten-DTO unverändert. R1 besitzt zusätzlich den Antwortvalidator in
+`entdecken-six-day.yml`: Er muss Format 9, sieben Charts und die gezählten
+Genre-/Keyword-Bündel korrekt erkennen; Zeitplan und Environment bleiben in
+dieser Welle unverändert. Der Master besitzt dieses Register, Live-Reads,
 Providerläufe, Integration und Lieferung. Kein zusätzlicher Reviewchat.
 
 **Begrenzte echte Abrufe:** Zuerst gespeicherte Antwortdiagnostik und bestehende
@@ -48,6 +51,24 @@ Menge gebunden. Die Sandbox wird erst nach Production-Erfolg umgeschaltet;
 ihre Provisionierung verwendet belegte getrennte Ziele und keinen
 unbemerkt kostenpflichtigen Tarif. Neue Zugangsdaten bleiben außerhalb von
 Chat, Git und Browser. Bestehende persönliche Daten werden nicht kopiert.
+
+**Vorbereiteter Übergang R5/R6, frisch gelesen am 11.09.:** Beide Domains
+verwenden derzeit Pages-Projekt `kinodreieck` und Supabase
+`bscjgwcntapobyxsiyce`. Die Supabase-Organisation hat den Free-Tarif und genau
+ein sichtbares Projekt; ein Sandbox-Projekt existiert noch nicht. Ziel ist
+ein eigenes Pages-Projekt `kinodreieck-sandbox` mit der bestehenden
+Staging-Domain und einer getrennten Supabase-Ref. Cloudflare Access schützt
+Hostname und Assets für Max; App-Login und serverseitige Zielbindung bleiben
+zusätzlich bestehen. Die Provisionierung wird erst nach R5 konkret geprüft.
+
+Die Produktionsumgebung hat einen Deployment-Reviewer. Unbeaufsichtigte
+Datenjobs erhalten deshalb eine eigene, auf `main` begrenzte Umgebung
+`production-data`, bevor `staging` umgebunden wird. Dies betrifft neben
+Entdecken/FlixPatrol auch Radar, Keep-alive und Private Ops Monitor; der
+deaktivierte KI-Check bleibt deaktiviert und bekommt kein Sandbox-Ziel.
+Control startet mit lesbarem Build-, Quellen-, Frische-, Job- und Budgetstatus
+sowie klar getrennten Sandbox-Eingaben. Neue produktive Schreib- oder
+Providerknöpfe gehören erst in einen eigenen konkret begrenzten Auftrag.
 
 ## Aktuelle Lieferung und offene Netflix-Aktivierung
 
