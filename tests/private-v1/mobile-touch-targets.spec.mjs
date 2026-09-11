@@ -37,8 +37,8 @@ test("sichtbare mobile Schaltflaechen erreichen mindestens 44 mal 44 Pixel", asy
       await backup.locator(":scope > summary").click();
       await expect(backup).toHaveAttribute("open", "");
       await expectTouchTarget(
-        backup.getByRole("button", { name: "Was bedeutet dieses Feld? backup" }),
-        "Settings-Feldhinweis",
+        backup.getByRole("button", { name: "Sicherheitskopie dieses Geräts herunterladen", exact: true }),
+        "Settings-Sicherheitskopie",
       );
     }
     zuKlein.push(...await sammleZuKleine(bereich));

@@ -290,6 +290,8 @@ function RecommendationsView({
         {istBeschreibungOffen ? <div id={beschreibungId} className="kd-entdecken-beschreibung">
           <p>{entry.description}</p>
           {descriptionEvidenceLabel(entry) ? <small>{descriptionEvidenceLabel(entry)}</small> : null}
+          {source(entry) && publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
+            rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
         </div> : null}
         <small>{meta(entry)} · Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
@@ -318,6 +320,8 @@ function RecommendationsView({
             {istBeschreibungOffen ? <div id={beschreibungId} className="kd-entdecken-beschreibung">
               <p>{entry.description}</p>
               {descriptionEvidenceLabel(entry) ? <small>{descriptionEvidenceLabel(entry)}</small> : null}
+              {source(entry) ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
+                rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
               {entry.descriptionEvidence?.sourceUrl ? <a className="kd-entdecken-quellenlink" href={entry.descriptionEvidence.sourceUrl}
                 rel="noopener noreferrer" target="_blank">Beschreibungsquelle ansehen</a> : null}
             </div> : null}

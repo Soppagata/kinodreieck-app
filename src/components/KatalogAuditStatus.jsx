@@ -34,7 +34,7 @@ export function KatalogAuditStatus({
         ? ZAHL.format(streamingNeu.neueIds?.length || 0)
         : "Vollkatalog noch nicht geladen";
 
-  return <div data-testid="streaming-catalog-audit" style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+  return <div className="kd-katalog-status" data-testid="streaming-catalog-audit" style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
     <p style={{ color: T.leinwandTief, fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
       {projektion.vollstaendig
         ? "Vollständiger geladener Streaming-Katalog."

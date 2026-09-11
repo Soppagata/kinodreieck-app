@@ -12,3 +12,8 @@
   .kd-katalog-quellenkarte { padding:10px; }
   .kd-katalog-quellenkarte dl>div { grid-template-columns:1fr; gap:2px; }
 }
+
+@media (max-width:480px) {
+  .kd-katalog-status .kd-statusliste>div { grid-template-columns:minmax(0,1fr); gap:4px; }
+  .kd-katalog-status .kd-statusliste dd { font:14px/1.5 'Space Grotesk',sans-serif; }
+}

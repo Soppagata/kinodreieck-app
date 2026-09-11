@@ -36,6 +36,7 @@ async function boot(page, { theme, schrift }) {
         if (name === "eq.streaming_entdecken") payload = { stand: NOW, region: "AT", dienste: SERVICES, titel: [] };
         if (payload) return json([{ payload, updated_at: NOW, quelle: "synthetic-layout-fixture", stand: NOW, gueltig_bis: "2099-01-01T00:00:00.000Z" }]);
       }
+      if (["/rest/v1/rpc/kd_flixpatrol_chart_read", "/rest/v1/rpc/kd_flixpatrol_titles_read"].includes(url.pathname)) return json([]);
       if (url.pathname === "/rest/v1/rpc/kd_radar_pilot_feed") return json({
         format: "kd-radar-pilot-feed-v2", revision: 1, checksum: "a".repeat(64), reconciledAt: NOW,
         subscriptions: [], events: [], receipts: [], operationAcks: [], radarReview: false, personResults: [], searchStatuses: [],
