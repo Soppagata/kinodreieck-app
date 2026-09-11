@@ -4,7 +4,7 @@ import { norm } from "../lib/match.js";
 import { Chip } from "./ui.jsx";
 import { SelectionControl } from "./SelectionControl.jsx";
 import { TitelKartenAktionen } from "./TitelKartenAktionen.jsx";
-import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
+import { createEntdeckenPin, isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 import {
   MUSTWATCH_FILTER, mustwatchJahr, mustwatchTyp, mustwatchVerfuegbarkeit, projiziereMustwatch,
@@ -249,6 +249,7 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
 export function MustWatchListe({
   eintraege, onAdd, onUpdate, onDelete, kandidaten, kommtVorInMap, onArtikelKlick,
   onSpringeZuRef, onAddFilm, recommendationPins = [], onRecommendationPinToggle,
+  pinOwnerKey = null,
 }) {
   const [formOffen, setFormOffen] = useState(false);
   const [offenId, setOffenId] = useState(null);
@@ -300,32 +301,41 @@ export function MustWatchListe({
     });
   };
 
-  /* Pins bleiben im vorhandenen Entdecken-Pinboardvertrag. Eine explizite
-     Must-Watch-Verknuepfung darf ihren geladenen Kino-/Streaming-Kandidaten
-     weiterreichen; lokale oder reine Master-Referenzen werden bewusst nicht
-     in einen auf der Startseite unaufloesbaren Pin umgedeutet. */
+  /* Ein bereits gesetzter oeffentlicher Pin aus der ersten Kartenwelle bleibt
+     erkennbar und entfernbar. Neue Must-Watch-Pins nutzen jedoch immer die
+     eigene stabile ID plus Datenkontext; Titel, Jahr und Art sind keine Identität. */
   const pinKandidatFuer = (eintrag) => {
+    const lokal = pinOwnerKey
+      ? { mustwatchId: eintrag.id, pinOwnerKey, titel: eintrag.titel,
+        jahr: eintrag.jahr, typ: eintrag.typ }
+      : null;
+    if (lokal && isEntdeckenPinned(recommendationPins, lokal)) return lokal;
     const ref = eintrag?.verknuepfung;
-    if (!ref || !["programm", "streaming"].includes(ref.ziel) || ref.id == null) return null;
-    const kandidat = (kandidaten?.[ref.ziel] || [])
-      .find((item) => item?.id != null && String(item.id) === String(ref.id));
-    if (!kandidat) return null;
-    if (ref.ziel === "streaming") {
-      return {
-        ...kandidat,
-        titel: kandidat.titel || eintrag.titel,
-        jahr: kandidat.jahr ?? eintrag.jahr,
-        typ: kandidat.typ ?? kandidat.type ?? eintrag.typ,
-        watchmode_id: kandidat.watchmode_id ?? kandidat.id,
-      };
+    if (["programm", "streaming"].includes(ref?.ziel) && ref.id != null) {
+      const kandidat = (kandidaten?.[ref.ziel] || [])
+        .find((item) => item?.id != null && String(item.id) === String(ref.id));
+      if (kandidat && ref.ziel === "streaming") {
+        const extern = {
+          ...kandidat,
+          titel: kandidat.titel || eintrag.titel,
+          jahr: kandidat.jahr ?? eintrag.jahr,
+          typ: kandidat.typ ?? kandidat.type ?? eintrag.typ,
+          watchmode_id: kandidat.watchmode_id ?? kandidat.id,
+        };
+        if (createEntdeckenPin(extern, 0) && isEntdeckenPinned(recommendationPins, extern)) return extern;
+      }
+      if (kandidat) {
+        const extern = {
+          ...kandidat,
+          titel: kandidat.titel || eintrag.titel,
+          jahr: kandidat.jahr ?? eintrag.jahr,
+          typ: "film",
+          film_at_id: kandidat.film_at_id ?? kandidat.id,
+        };
+        if (createEntdeckenPin(extern, 0) && isEntdeckenPinned(recommendationPins, extern)) return extern;
+      }
     }
-    return {
-      ...kandidat,
-      titel: kandidat.titel || eintrag.titel,
-      jahr: kandidat.jahr ?? eintrag.jahr,
-      typ: "film",
-      film_at_id: kandidat.film_at_id ?? kandidat.id,
-    };
+    return lokal;
   };
 
   const filmDatenFuer = (eintrag) => {
@@ -547,7 +557,7 @@ export function MustWatchListe({
                 const markiert = markierteIds.has(String(e.id));
                 const pinLabel = pinKandidat
                   ? (pinAktiv ? `${e.titel} vom Pinboard lösen` : `${e.titel} am Pinboard anpinnen`)
-                  : `${e.titel}: zuerst ausdrücklich mit Kinoprogramm oder Streaming verknüpfen`;
+                  : `${e.titel}: Pin erst nach geladenem Datenkontext verfügbar`;
                 return <TitelKartenAktionen
                   pinAktiv={pinAktiv} pinDisabled={!pinKandidat} pinLabel={pinLabel}
                   onPin={() => onRecommendationPinToggle?.(pinKandidat)}

@@ -1,7 +1,9 @@
-/* Geraetelokale Pins aus Entdecken.
+/* Geraetelokale Titelpins.
    Der Topf speichert nur die Identitaet, nie eine zweite Empfehlungsliste.
    Die Startansicht loest jeden Pin gegen die aktuell geladenen Bereiche auf:
-   Entdecken zuerst, danach Streaming und Kino. */
+   Entdecken zuerst, danach Streaming und Kino. Format 2 ergänzt ausschließlich
+   ownergebundene Must-Watch-IDs; öffentliche Format-1-Pins bleiben byte- und
+   verhaltenskompatibel. */
 
 const MEDIA_TYPES = Object.freeze({
   film: "film", movie: "film",
@@ -68,7 +70,40 @@ function primaryId(ids) {
   return null;
 }
 
+function mustwatchPinIdentity(entry) {
+  const sourceId = text(entry?.sourceId ?? entry?.source_id);
+  const sourceItemId = text(entry?.sourceItemId ?? entry?.source_item_id);
+  const mustwatchId = text(entry?.mustwatchId ?? (sourceId === "mustwatch" ? sourceItemId : ""));
+  const ownerKey = text(entry?.pinOwnerKey ?? entry?.ownerKey);
+  const title = text(entry?.title ?? entry?.titel);
+  if (!mustwatchId.startsWith("mw_") || !ownerKey || !title) return null;
+  return {
+    mustwatchId, ownerKey, title,
+    year: year(entry?.year ?? entry?.jahr ?? entry?.releaseYear),
+    type: normalizeEntdeckenPinType(entry?.type ?? entry?.typ ?? entry?.mediaType),
+  };
+}
+
+function createMustwatchPin(entry, now = Date.now()) {
+  const identity = mustwatchPinIdentity(entry);
+  if (!identity) return null;
+  return Object.freeze({
+    format: 2,
+    kind: "mustwatch",
+    pinId: `mustwatch:${encodeURIComponent(identity.ownerKey)}:${encodeURIComponent(identity.mustwatchId)}`,
+    title: identity.title,
+    year: identity.year,
+    type: identity.type,
+    ownerKey: identity.ownerKey,
+    mustwatchId: identity.mustwatchId,
+    ids: Object.freeze({ record: `mustwatch|${identity.mustwatchId}` }),
+    pinnedAt: Number.isFinite(Number(now)) ? Number(now) : Date.now(),
+  });
+}
+
 export function createEntdeckenPin(entry, now = Date.now()) {
+  const mustwatchPin = createMustwatchPin(entry, now);
+  if (mustwatchPin) return mustwatchPin;
   const identity = entryIdentity(entry);
   if (!identity?.normalizedTitle) return null;
   const stable = primaryId(identity.ids);
@@ -87,6 +122,17 @@ export function normalizeEntdeckenPins(value) {
   if (!Array.isArray(value)) return Object.freeze([]);
   const unique = new Map();
   for (const raw of value.slice(0, 100)) {
+    if (raw?.format === 2 && raw?.kind === "mustwatch") {
+      const pin = createMustwatchPin({
+        title: raw.title,
+        year: raw.year,
+        type: raw.type,
+        mustwatchId: raw.mustwatchId,
+        pinOwnerKey: raw.ownerKey,
+      }, raw.pinnedAt);
+      if (pin && !unique.has(pin.pinId)) unique.set(pin.pinId, pin);
+      continue;
+    }
     if (raw?.format !== 1) continue;
     const pin = createEntdeckenPin({
       title: raw.title,
@@ -149,7 +195,12 @@ function matchCandidates(pin, candidates) {
 export function isEntdeckenPinned(pins, entry) {
   const candidate = createEntdeckenPin(entry, 0);
   if (!candidate) return false;
+  if (candidate.format === 2) {
+    return normalizeEntdeckenPins(pins).some((pin) => pin.format === 2
+      && pin.ownerKey === candidate.ownerKey && pin.mustwatchId === candidate.mustwatchId);
+  }
   return normalizeEntdeckenPins(pins).some((pin) => {
+    if (pin.format !== 1) return false;
     const left = entryIdentity(pin);
     const right = entryIdentity(candidate);
     return (left.type === right.type && !!sharedIdentity(left.ids, right.ids)
@@ -195,15 +246,40 @@ function cinemaDestination(pin, entry) {
     }),
   });
 }
+function mustwatchDestination(pin, entry) {
+  return Object.freeze({
+    pinId: pin.pinId,
+    title: entry?.titel ?? entry?.title ?? pin.title,
+    year: year(entry?.jahr ?? entry?.year) ?? pin.year,
+    type: normalizeEntdeckenPinType(entry?.typ ?? entry?.type) ?? pin.type,
+    destination: "mustwatch",
+    label: "Must-Watch",
+    target: Object.freeze({ id: pin.mustwatchId }),
+  });
+}
 
 export function resolveEntdeckenPins(pins, {
-  recommendations = [], streaming = [], cinema = [],
-  recommendationReady = false, streamingReady = false, cinemaReady = false,
+  recommendations = [], streaming = [], cinema = [], mustwatch = [], pinOwnerKey = null,
+  recommendationReady = false, streamingReady = false, cinemaReady = false, mustwatchReady = false,
 } = {}) {
   const resolved = [];
   const discardedPinIds = [];
   const pendingPinIds = [];
   for (const pin of normalizeEntdeckenPins(pins)) {
+    if (pin.format === 2 && pin.kind === "mustwatch") {
+      /* Fremde Konten bleiben im geraetelokalen Topf erhalten, sind im
+         aktuellen Datenkontext aber weder sichtbar noch loeschbar. */
+      if (!text(pinOwnerKey) || pin.ownerKey !== text(pinOwnerKey)) {
+        pendingPinIds.push(pin.pinId);
+        continue;
+      }
+      const treffer = (Array.isArray(mustwatch) ? mustwatch : [])
+        .filter((entry) => text(entry?.id) === pin.mustwatchId);
+      if (treffer.length === 1) resolved.push(mustwatchDestination(pin, treffer[0]));
+      else if (mustwatchReady) discardedPinIds.push(pin.pinId);
+      else pendingPinIds.push(pin.pinId);
+      continue;
+    }
     const recommendation = matchCandidates(pin, recommendations);
     if (recommendation.status === "matched") {
       resolved.push(recommendationDestination(pin, recommendation.candidate));

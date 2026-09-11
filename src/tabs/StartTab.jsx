@@ -117,7 +117,7 @@ function StartDashboard({
   programmInfo = null, streamingInfo = null,
   wochenplan, onWochenplanAendern, entdeckenStatus = {},
   master = [], onSpringeZuStreaming, onSpringeZuKino, onFilmAnlegen, toggleKinoPin,
-  onStreamingKatalogLaden,
+  onStreamingKatalogLaden, pinOwnerKey = null, mustwatchReady = false,
 }) {
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
@@ -234,11 +234,14 @@ function StartDashboard({
     recommendations: aktuelleEmpfehlungen,
     streaming: serienKatalog,
     cinema: kinoKatalog.map((entry) => ({ ...entry, type: "film" })),
+    mustwatch,
+    pinOwnerKey,
     recommendationReady: !!webDiscoveryFeed,
     streamingReady: !!streamingEntdecken && !!streamingBekannt,
     cinemaReady: !!progStand,
-  }), [aktuelleEmpfehlungen, entdeckenPins, kinoKatalog, progStand, serienKatalog,
-    streamingBekannt, streamingEntdecken, webDiscoveryFeed]);
+    mustwatchReady,
+  }), [aktuelleEmpfehlungen, entdeckenPins, kinoKatalog, mustwatch, mustwatchReady,
+    pinOwnerKey, progStand, serienKatalog, streamingBekannt, streamingEntdecken, webDiscoveryFeed]);
   useEffect(() => {
     if (entdeckenPinAufloesung.discardedPinIds.length) {
       onEntdeckenPinsBereinigen?.(entdeckenPinAufloesung.discardedPinIds);
@@ -279,6 +282,7 @@ function StartDashboard({
                 <button key={`entdecken-${pin.pinId}`} className="kd-dash-zeile kd-pinboard-titel" onClick={() => {
                   if (pin.destination === "streaming") onSpringeZuStreaming?.(pin.target);
                   else if (pin.destination === "kino") onSpringeZuKino?.(pin.target);
+                  else if (pin.destination === "mustwatch") zuEintrag(pin.target.id, "mediathek");
                   else onSpringeZuEntdecken?.(pin.target);
                 }}>
                   <span className="kd-pinboard-kino-titel">

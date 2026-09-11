@@ -593,7 +593,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           onAdd={addMustwatch} onUpdate={updateMustwatch} onDelete={deleteMustwatch}
           kandidaten={mwKandidaten} kommtVorInMap={kommtVorInMap} onArtikelKlick={onArtikelKlick}
           onSpringeZuRef={onSpringeZuMustwatchRef} onAddFilm={addFilm}
-          recommendationPins={recommendationPins} onRecommendationPinToggle={onRecommendationPinToggle} />
+          recommendationPins={recommendationPins} onRecommendationPinToggle={onRecommendationPinToggle}
+          pinOwnerKey={datenKontextKey} />
       )}
 
       {ansicht !== "mustwatch" && (
