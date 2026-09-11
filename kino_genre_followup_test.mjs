@@ -63,4 +63,25 @@ check("Belegtes All-My-Sisters-Overlay ist ID-gebunden", () => {
   assert.deepEqual(projectKinoGenres({ film_at_id: 403137797, t: "All My Sisters", g: [] }, facts), []);
 });
 
+check("Overlay deckt den belegten Katalogstand ab und lässt nur die Sneak offen", () => {
+  const facts = createKinoGenreFactsIndex(KINO_GENRE_FACTS);
+  assert.equal(facts.size, 48);
+  assert.deepEqual(projectKinoGenres({ film_at_id: 403189398, t: "Peter Hujar's Day", j: 2025, g: [] }, facts), [
+    { key: "drama", label: "Drama" },
+  ]);
+  assert.deepEqual(projectKinoGenres({ film_at_id: 402900260, t: "Shén nü", j: 1934, g: [] }, facts), [
+    { key: "drama", label: "Drama" },
+  ]);
+  assert.deepEqual(projectKinoGenres({ film_at_id: 403189390, t: "Die Passion nach G.H.", g: [] }, facts), [
+    { key: "drama", label: "Drama" },
+  ]);
+  assert.deepEqual(projectKinoGenres({ film_at_id: 400201602, t: "Was ist Film - Programm 5", g: [] }, facts), [
+    { key: "drama", label: "Drama" },
+  ]);
+  assert.deepEqual(projectKinoGenres({ film_at_id: 400201599, t: "Was ist Film - Programm 6", g: [] }, facts), [
+    { key: "experimentalfilm", label: "Experimentalfilm" },
+    { key: "dokumentarfilm", label: "Dokumentarfilm" },
+  ]);
+});
+
 console.log(`\n${checks}/${checks} Kino-Genre-Follow-up-Checks bestanden.`);
