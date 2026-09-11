@@ -43,11 +43,20 @@ const publicAdapter = {
 };
 function chartKey({ companyId, countryId, chartType }) { return `${companyId}|${countryId}|${chartType}`; }
 function titleId(chartNumber, rank) { return `ttl_F9Chart${chartNumber}Title${String(rank).padStart(10, "0")}`; }
-function createHarness({ failBatch = false, failSaveAt = null, mismatchedGenre = false, manyKeywords = false } = {}) {
+function createHarness({
+  failBatch = false,
+  failSaveAt = null,
+  mediaTypeConflict = false,
+  mismatchedGenre = false,
+  manyKeywords = false,
+} = {}) {
   const charts = new Map();
   const titles = new Map();
   const vocabulary = new Map();
-  const counts = { chart: 0, batch: 0, single: 0, genre: 0, keyword: 0, titleReads: [], savedTitles: 0, failures: 0 };
+  const counts = {
+    chart: 0, batch: 0, single: 0, genre: 0, keyword: 0,
+    titleReads: [], savedTitles: 0, savedMisses: 0, failures: 0,
+  };
   const chartNumbers = new Map();
   const client = {
     async fetchTop10({ companyId, countryId, chartType, date }) {
@@ -62,14 +71,21 @@ function createHarness({ failBatch = false, failSaveAt = null, mismatchedGenre =
           providerUpdatedAt: `${date}T01:00:00Z` })) };
     },
     async fetchTitle() { counts.single += 1; throw new Error("single fallback forbidden"); },
-    async fetchTitles({ sourceIds, mediaTypes }) {
+    async fetchTitles({ sourceIds, mediaTypes, mediaTypeConflictPolicy }) {
       counts.batch += 1;
+      assert.equal(mediaTypeConflictPolicy, "separate");
       if (failBatch) throw Object.assign(new Error("batch provider failed"), {
         code: "FLIXPATROL_TRANSPORT_ERROR", providerRequests: 1,
         operationId: "00000000-0000-4000-8000-000000000099",
       });
-      return { operationId: `00000000-0000-4000-8000-${String(100 + counts.batch).padStart(12, "0")}`,
-        providerRequests: 1, items: sourceIds.map((sourceId, index) => ({
+      const conflictId = mediaTypeConflict ? titleId(2, 5) : null;
+      const conflicts = [];
+      const items = sourceIds.flatMap((sourceId, index) => {
+        if (sourceId === conflictId) {
+          conflicts.push({ sourceId, mediaType: mediaTypes[index] });
+          return [];
+        }
+        return [{
           sourceId, mediaType: mediaTypes[index], title: `Daily ${sourceId.slice(4)}`,
           premiere: "2020-01-01", releaseYear: 2020, premiereOnline: null, runtimeMinutes: 100,
           imdbNumericId: null, imdbId: null, tmdbId: String(5000 + counts.savedTitles + index),
@@ -77,7 +93,12 @@ function createHarness({ failBatch = false, failSaveAt = null, mismatchedGenre =
           genreId: mediaTypes[index] === "film" ? filmGenreId : seriesGenreId,
           keywordId: manyKeywords ? `kwd_${sourceId.slice(4)}` : keywordId, description: null,
           providerUpdatedAt: "2026-09-10T01:00:00Z", sourceUrl: `https://flixpatrol.com/title/${sourceId.toLowerCase()}/`,
-        })) };
+        }];
+      });
+      return {
+        operationId: `00000000-0000-4000-8000-${String(100 + counts.batch).padStart(12, "0")}`,
+        providerRequests: 1, items, conflicts,
+      };
     },
     async fetchGenres({ sourceIds }) {
       counts.genre += 1; assert.deepEqual(sourceIds, [filmGenreId, seriesGenreId]);
@@ -122,7 +143,14 @@ function createHarness({ failBatch = false, failSaveAt = null, mismatchedGenre =
       titles.set(title.sourceId, { ...title, status: "resolved", checkedAt: fetchedAt, fetchedAt, freshUntil, fresh: true });
       return { ok: true };
     },
-    saveTitleMiss: async () => { throw new Error("batch must not write attributed misses"); },
+    saveTitleMiss: async ({ sourceId, mediaType, status, checkedAt: missCheckedAt, freshUntil }) => {
+      if (!mediaTypeConflict) throw new Error("batch must not write unattributed misses");
+      counts.savedMisses += 1;
+      titles.set(sourceId, {
+        sourceId, mediaType, status, checkedAt: missCheckedAt, freshUntil, fresh: true,
+      });
+      return { ok: true };
+    },
     readVocabulary: async ({ resourceType, sourceIds }) => ({ ok: true,
       items: sourceIds.flatMap((id) => vocabulary.has(id) ? [{ ...vocabulary.get(id), sourceId: id, fresh: true }] : []) }),
     saveVocabulary: async (row) => { vocabulary.set(row.sourceId, row); return { ok: true }; },
@@ -139,10 +167,10 @@ assert.equal(envelope.items.length, 50);
 assert.equal(cold.counts.chart, 7);
 assert.equal(cold.counts.batch, 4);
 assert.equal(cold.counts.single, 0);
-assert.equal(cold.counts.savedTitles, 35);
+assert.equal(cold.counts.savedTitles, 40);
 assert.equal(cold.counts.genre, 1);
 assert.equal(cold.counts.keyword, 1);
-assert.deepEqual(cold.counts.titleReads, [50, 20, 35, 35]);
+assert.deepEqual(cold.counts.titleReads, [50, 20, 50, 20, 35, 35]);
 assert.deepEqual(cold.adapter.telemetry(), {
   providerRequests: 0, publicSourceRequests: 1, flixpatrolChartRequests: 7,
   flixpatrolTitleRequests: 4, flixpatrolGenreRequests: 1, flixpatrolKeywordRequests: 1,
@@ -212,6 +240,15 @@ const gated = createFlixPatrolMixAdapter({
 await assert.rejects(gated.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" }), /setup_invalid/);
 assert.equal(publicCalls, 0);
 
+const conflictingTitle = createHarness({ mediaTypeConflict: true });
+const conflictEnvelope = await conflictingTitle.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" });
+assert.equal(conflictingTitle.counts.batch, 4);
+assert.equal(conflictingTitle.counts.savedTitles, 39);
+assert.equal(conflictingTitle.counts.savedMisses, 1);
+assert.equal(conflictEnvelope.items.some((item) => item.sourceItemId === titleId(2, 5)), false);
+assert.equal(conflictEnvelope.items.some((item) => item.sourceItemId === titleId(2, 6)), true);
+assert.equal(conflictEnvelope.items.filter((item) => item.sourceId === "chart:flixpatrol-netflix-at").length, 10);
+
 const failed = createHarness({ failBatch: true });
 await assert.rejects(failed.adapter.search(query, { retrievedOn: today, claimedIsoWeek: "2026-W37" }), /batch provider failed/);
 assert.equal(failed.counts.batch, 1);
@@ -237,4 +274,4 @@ assert.equal(boundedVocabulary.counts.keyword, 1);
 assert.equal(boundedEnvelope.items.filter((item) => item.genres.some((name) => name.startsWith("Keyword "))).length, 10);
 assert.equal(boundedVocabulary.adapter.telemetry().flixpatrolKeywordRequests, 1);
 
-console.log("Entdecken FlixPatrol Batch/Format 9: 47 checks passed");
+console.log("Entdecken FlixPatrol Batch/Format 9: 54 checks passed");

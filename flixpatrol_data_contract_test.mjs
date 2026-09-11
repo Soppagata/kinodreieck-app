@@ -10,6 +10,7 @@ import {
   normalizeFlixPatrolTitleList,
   normalizeFlixPatrolTop10List,
   normalizeTitleFingerprint,
+  partitionExactFlixPatrolTitleBatch,
   selectStrictFlixPatrolTitleCandidate,
 } from "./supabase/functions/_shared/flixpatrolData.js";
 
@@ -105,6 +106,19 @@ check("Eine teilweise ungültige Titelliste wird nicht als Teilresultat angenomm
   assert.equal(normalizeFlixPatrolTitleList({ type: "collection", data: [titlePayload()] }), null);
   assert.equal(normalizeFlixPatrolTitleList({ type: "list", data: [] }), null);
   assert.deepEqual(normalizeFlixPatrolTitleList([]), []);
+});
+
+check("Exakter Titelbatch trennt nur Medientypkonflikte und schützt die ID-Menge", () => {
+  const film = normalizeFlixPatrolTitle(titlePayload());
+  const returnedFilm = normalizeFlixPatrolTitle(titlePayload({ id: secondTitleId }));
+  assert.deepEqual(partitionExactFlixPatrolTitleBatch(
+    [film, returnedFilm], [titleId, secondTitleId], ["film", "series"],
+  ), {
+    items: [film], conflicts: [{ sourceId: secondTitleId, mediaType: "series" }],
+  });
+  assert.equal(partitionExactFlixPatrolTitleBatch(
+    [film], [titleId, secondTitleId], ["film", "series"],
+  ), null);
 });
 
 check("Striktes Matching verlangt Titel, Jahr, Typ und genau eine Quellen-ID", () => {

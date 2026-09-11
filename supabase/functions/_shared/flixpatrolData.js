@@ -579,16 +579,33 @@ export function normalizeFlixPatrolTitleList(value) {
   return Object.freeze(normalized);
 }
 
-export function selectExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes) {
+export function partitionExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes) {
   if (!Array.isArray(items) || !Array.isArray(sourceIds) || !Array.isArray(mediaTypes)
       || sourceIds.length < 1 || sourceIds.length > 10 || mediaTypes.length !== sourceIds.length
       || new Set(sourceIds).size !== sourceIds.length
       || sourceIds.some((id) => !ID_PATTERNS.title.test(id))
       || mediaTypes.some((type) => !Object.hasOwn(FLIXPATROL_TITLE_TYPES, type))) return null;
   const expected = new Map(sourceIds.map((id, index) => [id, mediaTypes[index]]));
-  if (items.length !== expected.size || new Set(items.map((item) => item?.sourceId)).size !== items.length) return null;
-  if (items.some((item) => !item || expected.get(item.sourceId) !== item.mediaType)) return null;
-  return Object.freeze(sourceIds.map((id) => items.find((item) => item.sourceId === id)));
+  if (items.length !== expected.size || new Set(items.map((item) => item?.sourceId)).size !== items.length
+      || items.some((item) => !item || !expected.has(item.sourceId))) return null;
+  const byId = new Map(items.map((item) => [item.sourceId, item]));
+  const accepted = [];
+  const conflicts = [];
+  for (const sourceId of sourceIds) {
+    const item = byId.get(sourceId);
+    const mediaType = expected.get(sourceId);
+    if (item.mediaType === mediaType) accepted.push(item);
+    else conflicts.push(Object.freeze({ sourceId, mediaType }));
+  }
+  return Object.freeze({
+    items: Object.freeze(accepted),
+    conflicts: Object.freeze(conflicts),
+  });
+}
+
+export function selectExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes) {
+  const partition = partitionExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes);
+  return partition && partition.conflicts.length === 0 ? partition.items : null;
 }
 
 export function normalizeFlixPatrolVocabularyList(value, resourceType) {

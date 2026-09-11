@@ -167,12 +167,20 @@ function checkedChart(value, spec, chartDate) {
       || chart.fresh !== true || !fetchedAt || !freshUntil || !items) return null;
   return Object.freeze({ ...chart, fetchedAt, freshUntil, items });
 }
-function selectedChartRows(charts, titleById, publicItems) {
+function selectedChartRows(charts, titleById, publicItems, {
+  reserveSourceId = null,
+  reserveMediaType = null,
+  reserveCount = 0,
+} = {}) {
   const seen = new Set();
   const identities = new Set(publicItems.map((item) => identityKey(item?.mediaType, item?.title)).filter(Boolean));
   const rows = [];
   for (const { chart, spec } of charts) {
     const selected = [];
+    /* Die Reserve ist best effort: ein frischer negativer Cacheeintrag darf
+       einen Folgelauf nicht blockieren, solange der Chart noch genug Titel hat. */
+    const limit = spec.take + (spec.source.sourceId === reserveSourceId
+      && spec.mediaType === reserveMediaType ? reserveCount : 0);
     for (const item of chart.items) {
       const cached = titleById.get(item.sourceId);
       if (cached?.mediaType && cached.mediaType !== spec.mediaType) throw new Error("flixpatrol_mix_media_type_conflict");
@@ -184,9 +192,9 @@ function selectedChartRows(charts, titleById, publicItems) {
       seen.add(item.sourceId);
       if (cachedIdentity) identities.add(cachedIdentity);
       selected.push(Object.freeze({ ...item, spec, chart }));
-      if (selected.length === spec.take) break;
+      if (selected.length === limit) break;
     }
-    if (selected.length !== spec.take) throw new Error("flixpatrol_mix_unique_scope_unproven");
+    if (selected.length < spec.take) throw new Error("flixpatrol_mix_unique_scope_unproven");
     rows.push(...selected);
   }
   return Object.freeze(rows);
@@ -320,15 +328,34 @@ export function createFlixPatrolMixAdapter({
         fetched = await client.fetchTitles({
           sourceIds: batch.map((row) => row.sourceId),
           mediaTypes: batch.map((row) => row.spec.mediaType),
+          mediaTypeConflictPolicy: "separate",
         });
         updateTelemetry({ flixpatrolTitleRequests: telemetry.flixpatrolTitleRequests + 1 });
-        if (!Array.isArray(fetched.items) || fetched.items.length !== batch.length) {
+        const conflicts = fetched.conflicts ?? [];
+        const expected = new Map(batch.map((row) => [row.sourceId, row.spec.mediaType]));
+        const resultIds = [...(fetched.items ?? []), ...conflicts].map((item) => item?.sourceId);
+        if (!Array.isArray(fetched.items) || !Array.isArray(conflicts)
+            || fetched.items.length + conflicts.length !== batch.length
+            || new Set(resultIds).size !== batch.length
+            || resultIds.some((id) => !expected.has(id))
+            || fetched.items.some((item) => expected.get(item?.sourceId) !== item?.mediaType)
+            || conflicts.some((item) => expected.get(item?.sourceId) !== item?.mediaType)) {
           throw new Error("flixpatrol_mix_title_batch_incomplete");
         }
         for (const title of fetched.items) {
           const saved = await saveTitle({
             title, fetchedAt: checkedAt,
             freshUntil: plusDays(checkedAt, ENTDECKEN_FLIXPATROL_TITLE_TTL_DAYS),
+          });
+          if (saved?.ok !== true) throw new Error("flixpatrol_mix_title_checkpoint_failed");
+        }
+        for (const conflict of conflicts) {
+          const saved = await saveTitleMiss({
+            sourceId: conflict.sourceId,
+            mediaType: conflict.mediaType,
+            status: "incomplete_blocked",
+            checkedAt,
+            freshUntil: plusDays(checkedAt, ENTDECKEN_FLIXPATROL_NEGATIVE_TTL_DAYS),
           });
           if (saved?.ok !== true) throw new Error("flixpatrol_mix_title_checkpoint_failed");
         }
@@ -529,8 +556,13 @@ export function createFlixPatrolMixAdapter({
       if (chartIds.length < minChartIds || chartIds.length > maxChartIds) throw new Error("flixpatrol_mix_chart_ids_invalid");
       let titleRows = await readTitleRows(chartIds);
       let titleById = new Map(titleRows.map((row) => [row.sourceId, row]));
-      const selected = selectedChartRows(charts, titleById, publicEnvelope.items);
-      const selectedIds = selected.map((row) => row.sourceId);
+      /* Die belegte Providerabweichung betrifft einen Netflix-Serieneintrag.
+         Fünf weitere Reihen aus demselben Chart passen noch in vier 10er-Batches. */
+      let selected = selectedChartRows(charts, titleById, publicEnvelope.items, batchEnabled && format9 ? {
+        reserveSourceId: ENTDECKEN_FLIXPATROL_SOURCES.netflix.sourceId,
+        reserveMediaType: "series",
+        reserveCount: 5,
+      } : {});
       const missing = selected.filter((row) => {
         const cached = titleById.get(row.sourceId);
         if (cached?.mediaType && cached.mediaType !== row.spec.mediaType) throw new Error("flixpatrol_mix_media_type_conflict");
@@ -541,6 +573,12 @@ export function createFlixPatrolMixAdapter({
       if (batchEnabled) await checkpointBatch(missing, checkedAt);
       else await checkpointSingles(selected, titleById, checkedAt);
 
+      if (batchEnabled && format9) {
+        titleRows = await readTitleRows(chartIds);
+        titleById = new Map(titleRows.map((row) => [row.sourceId, row]));
+        selected = selectedChartRows(charts, titleById, publicEnvelope.items);
+      }
+      const selectedIds = selected.map((row) => row.sourceId);
       titleRows = await readTitleRows(selectedIds);
       if (titleRows.length !== selectedIds.length) throw new Error("flixpatrol_mix_titles_readback_incomplete");
       const acceptedVocabulary = await refreshVocabulary(titleRows, checkedAt);

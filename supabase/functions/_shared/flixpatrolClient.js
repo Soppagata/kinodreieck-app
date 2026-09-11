@@ -6,6 +6,7 @@ import {
   normalizeFlixPatrolTitleList,
   normalizeFlixPatrolTop10List,
   normalizeFlixPatrolVocabularyList,
+  partitionExactFlixPatrolTitleBatch,
   selectExactFlixPatrolTitleBatch,
   selectExactFlixPatrolVocabularyBatch,
   selectStrictFlixPatrolTitleCandidate,
@@ -243,12 +244,13 @@ export function createFlixPatrolClient({
     return Object.freeze({ title: result.data, usage: result.usage, providerRequests: 1, operationId: result.operationId });
   }
 
-  async function fetchTitles({ sourceIds, mediaTypes } = {}) {
+  async function fetchTitles({ sourceIds, mediaTypes, mediaTypeConflictPolicy = "reject" } = {}) {
     if (!Array.isArray(sourceIds) || !Array.isArray(mediaTypes)
         || sourceIds.length < 1 || sourceIds.length > 10 || mediaTypes.length !== sourceIds.length
         || new Set(sourceIds).size !== sourceIds.length
         || sourceIds.some((id) => !/^ttl_[A-Za-z0-9]{20,40}$/.test(id))
-        || mediaTypes.some((type) => !Object.hasOwn(FLIXPATROL_TITLE_TYPES, type))) {
+        || mediaTypes.some((type) => !Object.hasOwn(FLIXPATROL_TITLE_TYPES, type))
+        || !["reject", "separate"].includes(mediaTypeConflictPolicy)) {
       throw new FlixPatrolClientError("FLIXPATROL_REQUEST_INVALID");
     }
     const query = new URLSearchParams([["id[in]", sourceIds.join(",")]]);
@@ -259,10 +261,27 @@ export function createFlixPatrolClient({
       diagnosticExpected: { sourceIds, mediaTypes },
       parse: (body) => {
         const items = normalizeFlixPatrolTitleList(body);
-        return items && selectExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes);
+        if (!items) return null;
+        return mediaTypeConflictPolicy === "separate"
+          ? partitionExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes)
+          : selectExactFlixPatrolTitleBatch(items, sourceIds, mediaTypes);
       },
     });
-    return Object.freeze({ items: result.data, usage: result.usage, providerRequests: 1, operationId: result.operationId });
+    if (mediaTypeConflictPolicy === "separate") {
+      return Object.freeze({
+        items: result.data.items,
+        conflicts: result.data.conflicts,
+        usage: result.usage,
+        providerRequests: 1,
+        operationId: result.operationId,
+      });
+    }
+    return Object.freeze({
+      items: result.data,
+      usage: result.usage,
+      providerRequests: 1,
+      operationId: result.operationId,
+    });
   }
 
   async function fetchVocabulary(resourceType, sourceIds) {

@@ -388,6 +388,26 @@ await check("lokalisiert einen verworfenen Eintrag im exakten Titelbatch ohne Pr
   assert.equal(JSON.stringify(diagnostics[0]).includes("SECRET_BATCH_TITLE"), false);
 });
 
+await check("trennt einen belegten Medientypkonflikt nur im ausdrücklichen Batchmodus ab", async () => {
+  const film = makeTitlePayload();
+  const conflicting = makeTitlePayload(secondTitleId, "Provider film despite series chart");
+  conflicting.data.link = "https://flixpatrol.com/title/provider-film-despite-series-chart/";
+  const client = createFlixPatrolClient({
+    apiKey: "secret",
+    randomUUID: () => "00000000-0000-4000-8000-000000000014",
+    beginOperation: async () => ({ ok: true, claim: true, replay: false }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ type: "list", data: [film, conflicting] }) }),
+    finishOperation: async (value) => ({ ok: true, replay: false, status: value.status, usage: {} }),
+  });
+  const result = await client.fetchTitles({
+    sourceIds: [titleId, secondTitleId], mediaTypes: ["film", "series"],
+    mediaTypeConflictPolicy: "separate",
+  });
+  assert.deepEqual(result.items.map((item) => item.sourceId), [titleId]);
+  assert.deepEqual(result.conflicts, [{ sourceId: secondTitleId, mediaType: "series" }]);
+  assert.equal(result.providerRequests, 1);
+});
+
 await check("Titelsuche nutzt exakten Titel, Jahr und Typ und blockiert Mehrdeutigkeit", async () => {
   let requestedUrl = "";
   const duplicate = makeTitlePayload(secondTitleId);
