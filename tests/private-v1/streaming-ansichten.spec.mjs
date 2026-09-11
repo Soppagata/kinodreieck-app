@@ -82,7 +82,7 @@ test("Beliebte Titel klappt eine vorhandene Beschreibung per Titel auf", async (
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(karte.getByText(description, { exact: true })).toBeVisible();
   await expect(karte.getByRole("link", { name: "Quelle ansehen", exact: true })).toBeVisible();
-  await karte.screenshot({ path: `/private/tmp/kd-ops-audit-20260909/e15-entdecken-beliebt-${testInfo.project.name}.png` });
+  await karte.screenshot({ path: testInfo.outputPath("e15-entdecken-beliebt.png") });
   await toggle.click();
   await expect(karte.getByText(description, { exact: true })).toHaveCount(0);
 });
@@ -171,7 +171,7 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
     await expectTouchTarget(neuKarte.locator(".kd-entdecken-aktionen button").nth(index), `Neu-Karte ${aktion}`);
   }
   expect(await neuKarte.evaluate((karte) => karte.scrollWidth <= karte.clientWidth + 1)).toBe(true);
-  await neuKarte.screenshot({ path: `/private/tmp/kd-ops-audit-20260909/e15-streaming-neu-neutral-${testInfo.project.name}.png` });
+  await neuKarte.screenshot({ path: testInfo.outputPath("e15-streaming-neu-neutral.png") });
 
   await neuKarte.click();
   await expect(neuKarte.getByRole("button", { name: "Eintrag erstellen", exact: true })).toBeVisible();
@@ -186,7 +186,7 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
   await expect(page.getByText("Auch als unbewerteten Eintrag in die Mediathek übernehmen?", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Nur als gesehen markieren", exact: true }).click();
   await expect(neuKarte.getByRole("button", { name: "Gesehen-Markierung entfernen" })).toBeVisible();
-  await neuKarte.screenshot({ path: `/private/tmp/kd-ops-audit-20260909/e15-streaming-neu-${testInfo.project.name}.png` });
+  await neuKarte.screenshot({ path: testInfo.outputPath("e15-streaming-neu.png") });
   await expect(page.getByText("Unveränderter Altbestand", { exact: false })).toHaveCount(0);
 
   await views.filter({ hasText: /^Alles/u }).click();
