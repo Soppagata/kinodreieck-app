@@ -61,7 +61,7 @@ import {
   normalisiereExternenTitel,
   ordneExternenTitelZu,
 } from "./externalTitleIdentity.js";
-import { baueFlixpatrolVorschlaege, uebernehmeFlixpatrolVorschlag } from "./flixpatrolFacts.js";
+import { createTitleFactsProjector, projectTitleFacts } from "./titleFacts.js";
 
 const TABLE = "kd_catalog";
 const CACHE = "kinodreieck-katalog-v1";
@@ -424,8 +424,8 @@ export async function testeKatalogZugang({
    Danach wird „Mein Programm“ immer im Browser gegen die AKTIVE Masterliste
    gebildet. Damit funktionieren Demo- und Clean-Modus mit derselben DB-Payload. */
 export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten = []) {
-  const masterMitFakten = baueFlixpatrolVorschlaege(master, flixpatrolFakten)
-    .map(uebernehmeFlixpatrolVorschlag);
+  const projectFacts = createTitleFactsProjector(flixpatrolFakten);
+  const masterMitFakten = (Array.isArray(master) ? master : []).map((entry) => ({ ...entry }));
   /* Ein Vollkatalog enthaelt derzeit rund 25.000 Titel. Jeden davon gegen
      jeden Mediathek-Eintrag zu pruefen blockiert den Browser auf Mobilgeraeten
      fuer viele Sekunden. Die eigentliche strenge Identitaetspruefung bleibt
@@ -484,7 +484,10 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
     return map.size ? [...map.values()] : undefined;
   };
   const map = new Map();
-  for (const t of entdeckenAlt.titel || []) map.set(String(t.watchmode_id), { ...t });
+  for (const t of entdeckenAlt.titel || []) {
+    const projected = projectFacts(t);
+    map.set(String(projected.watchmode_id), { ...projected });
+  }
   for (const t of bekanntAlt.titel || []) {
     const key = String(t.watchmode_id);
     const entdeckenTitel = map.get(key) || {};
@@ -525,7 +528,9 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
          der aktuellen Auswahl, ob daraus ein sichtbarer Zugang folgt. */
       dienst_diffs: vereinigeDienstDiffs(entdeckenTitel.dienst_diffs, t.dienst_diffs),
     };
-    map.set(key, { ...entdeckenTitel, ...neutral });
+    map.set(key, projectFacts({ ...entdeckenTitel, ...neutral,
+      title_facts: t.title_facts ?? entdeckenTitel.title_facts,
+    }));
   }
 
   const meine = [], entdecken = [];
@@ -533,9 +538,25 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
     const zuordnung = ordneExternenTitelZu(t, kandidatenFuer(t));
     if (zuordnung.status === "matched") {
       const film = ergaenzeFehlendeExterneKennungen(zuordnung.match, t);
+      const filmMitFakten = projectTitleFacts(film, t.titleFactsEvidence || flixpatrolFakten);
+      const genreMap = new Map();
+      for (const genre of [
+        ...(Array.isArray(filmMitFakten.genres) ? filmMitFakten.genres : Array.isArray(filmMitFakten.genre) ? filmMitFakten.genre : []),
+        ...(Array.isArray(t.genres) ? t.genres : []),
+      ]) {
+        const wert = String(typeof genre === "object" ? genre?.name || "" : genre).trim();
+        const genreKey = wert.toLocaleLowerCase("de-AT");
+        if (wert && !genreMap.has(genreKey)) genreMap.set(genreKey, wert);
+      }
       meine.push({
-        ...film,
-        genres: t.genres || film.genres || film.genre || [],
+        ...filmMitFakten,
+        genres: [...genreMap.values()],
+        beschreibung: filmMitFakten.beschreibung || filmMitFakten.description || t.beschreibung || t.description || null,
+        laufzeit_minuten: filmMitFakten.laufzeit_minuten ?? filmMitFakten.runtimeMinutes ?? t.laufzeit_minuten ?? t.runtimeMinutes ?? null,
+        titleFacts: filmMitFakten.titleFacts || t.titleFacts || null,
+        titleFactsEvidence: filmMitFakten.titleFactsEvidence || t.titleFactsEvidence || [],
+        descriptionEvidence: filmMitFakten.descriptionEvidence || t.descriptionEvidence || null,
+        chartEvidence: filmMitFakten.chartEvidence || t.chartEvidence || [],
         dienste: t.dienste || [],
         web_urls: t.web_urls || null,
         staffeln_verfuegbar: t.staffeln_verfuegbar ?? film.staffeln_verfuegbar ?? null,

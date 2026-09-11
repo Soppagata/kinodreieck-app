@@ -34,6 +34,8 @@ const NOW = Date.parse("2026-09-16T11:00:00.000Z");
 const knownTitle = {
   ...fixture.titel[0], id: "master-101", bewertung: { wie: 4, was: 4, warum: 4 },
   quelle: "streaming", typ: "film", genres: ["Drama"], web_urls: { Netflix: "https://example.test/101" },
+  beschreibung: "Belegte gemeinsame Kartenbeschreibung.", laufzeit_minuten: 111,
+  descriptionEvidence: { source: "watchmode", checkedAt: "2026-09-10T22:00:00.000Z", fetchedAt: "2026-09-10T22:00:00.000Z", sourceUrl: null },
 };
 const bekannt = {
   ...fixture,
@@ -439,7 +441,8 @@ const esbuild = await ladeEsbuild();
 await esbuild.build({
   stdin: {
     contents: [
-      'export { StreamingTab } from "./src/tabs/StreamingTab.jsx";',
+      'export { StreamingTab, TitleFactsDetails } from "./src/tabs/StreamingTab.jsx";',
+      'export { FilmCard } from "./src/components/FilmCard.jsx";',
       'export { useStreamingNeuController } from "./src/controllers/useStreamingNeuController.js";',
       'export { setStorageDriver } from "./src/lib/storage.js";',
     ].join("\n"),
@@ -460,7 +463,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const React = await import("react");
 const { act, createElement: h } = React;
 const { createRoot } = await import("react-dom/client");
-const { StreamingTab, useStreamingNeuController, setStorageDriver } = await import(ausgabe);
+const { StreamingTab, TitleFactsDetails, FilmCard, useStreamingNeuController, setStorageDriver } = await import(ausgabe);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 async function mount(Component, props) {
   const container = document.createElement("div");
@@ -470,6 +473,39 @@ async function mount(Component, props) {
   await render(props);
   return { container, render, async cleanup() { await act(async () => root.unmount()); container.remove(); } };
 }
+
+const emptyFactsUi = await mount(TitleFactsDetails, {
+  titel: { beschreibung: null, laufzeit_minuten: null, genres: [], descriptionEvidence: null },
+});
+check("Leere Fakten mit null-Laufzeit rendern keine leere Detailbox", () => {
+  assert.equal(emptyFactsUi.container.querySelector('[data-title-facts="title-facts-projection-v1"]'), null);
+  assert.equal(emptyFactsUi.container.textContent, "");
+});
+await emptyFactsUi.cleanup();
+
+let gespeicherteKartenAenderung = null;
+const filmCardUi = await mount(FilmCard, {
+  film: { id: "neutral-test", titel: "Neutraler Musiktitel", typ: "musik", notiz: "Meine Notiz" },
+  beschreibungAnzeige: "Nur angezeigter Providertext.", expanded: true, onToggle() {},
+  onSave: async (changes) => { gespeicherteKartenAenderung = changes; return true; },
+});
+check("Read-only Providertext erscheint einmal und bleibt aus persönlichen Editorwerten", () => {
+  assert.equal((filmCardUi.container.textContent.match(/Nur angezeigter Providertext\./gu) || []).length, 1);
+});
+const beschreibungBearbeiten = [...filmCardUi.container.querySelectorAll("button")]
+  .find((button) => button.textContent.includes("Beschreibung bearbeiten"));
+await act(async () => { beschreibungBearbeiten.click(); await tick(); });
+check("Beschreibung/Notiz-Editor übernimmt nur persönliche Werte", () => {
+  const felder = [...filmCardUi.container.querySelectorAll("textarea")];
+  assert.deepEqual(felder.map((feld) => feld.value), ["", "Meine Notiz"]);
+});
+const speichern = [...filmCardUi.container.querySelectorAll("button")]
+  .find((button) => button.textContent.trim() === "Speichern");
+await act(async () => { speichern.click(); await tick(); });
+check("Notizspeichern kopiert keinen Providertext in persönliche Daten", () => {
+  assert.deepEqual(gespeicherteKartenAenderung, { beschreibung: "", notiz: "Meine Notiz" });
+});
+await filmCardUi.cleanup();
 
 let controller;
 function ControllerProbe(props) {
@@ -586,7 +622,9 @@ let letzterPin = null;
 let status = {};
 const props = {
   bekannt, entdecken, auswahl: fixture.auswahl, auswahlGeladen: true,
-  merkliste: [], toggleMerk() {}, addFilm: async () => "neu", master: [knownTitle],
+  merkliste: [], toggleMerk() {}, addFilm: async () => "neu", master: [{
+    ...knownTitle, beschreibung: undefined, laufzeit_minuten: undefined, descriptionEvidence: undefined,
+  }],
   mustwatchIds: new Set(["master-101"]), entdeckenStatus: status,
   schreibeEntdeckenStatus: async (update) => { status = update(status); return true; },
   onAllesKatalogLaden() {}, recommendationPins: [], onRecommendationPinToggle(titel) { letzterPin = titel; },
@@ -600,6 +638,13 @@ check("Mein Programm bleibt pinnbar und behält den Must-Watch-Filter", () => {
   assert.ok(ui.container.querySelector('[aria-label="Bestehender Auswahlzugang am Pinboard anpinnen"]'));
   assert.match(ui.container.textContent, /Nur Must-Watch/u);
 });
+const programmKarte = ui.container.querySelector(".kd-filmkarte");
+await act(async () => { programmKarte.click(); await tick(); });
+check("Aufgeklapptes Mein Programm zeigt Beschreibung, Laufzeit, Genre und Faktenzeit", () => {
+  assert.equal((programmKarte.textContent.match(/Belegte gemeinsame Kartenbeschreibung\./gu) || []).length, 1);
+  assert.match(programmKarte.textContent, /111 Minuten · Drama/u);
+  assert.match(programmKarte.textContent, /Beschreibung: Watchmode · geprüft 11\.09\.2026/u);
+});
 await act(async () => { tab("Alles").click(); await tick(); });
 const bekannteAllesKarte = [...ui.container.querySelectorAll(".kd-entdecken-karte")]
   .find((karte) => /Bestehender Auswahlzugang/u.test(karte.textContent));
@@ -609,6 +654,11 @@ check("Alles zeigt Known einschließlich echter Links und den übrigen ausgewäh
   assert.match(ui.container.textContent, /Bestehender Auswahlzugang/u);
   assert.match(ui.container.textContent, /Neuer Auswahlzugang/u);
   assert.equal(ui.container.querySelector('a[href="https://example.test/101"]')?.textContent, "Netflix");
+});
+check("Aufgeklapptes Alles nutzt dieselbe Faktenprojektion wie Mein Programm", () => {
+  assert.match(bekannteAllesKarte.textContent, /Belegte gemeinsame Kartenbeschreibung/u);
+  assert.match(bekannteAllesKarte.textContent, /111 Minuten · Drama/u);
+  assert.match(bekannteAllesKarte.textContent, /Beschreibung: Watchmode · geprüft 11\.09\.2026/u);
 });
 const pinButton = ui.container.querySelector('[aria-label="Unveränderter Altbestand am Pinboard anpinnen"]');
 await act(async () => { pinButton.click(); await tick(); });
@@ -622,6 +672,8 @@ check("Neu ist Teilmenge von Alles und enthält auch Mein-Programm-Titel", () =>
   assert.match(ui.container.textContent, /Neu im Katalog deiner ausgewählten Dienste erkannt/u);
   assert.match(ui.container.textContent, /Bestehender Auswahlzugang/u);
   assert.match(ui.container.textContent, /Neuer Auswahlzugang/u);
+  assert.match(ui.container.textContent, /Belegte gemeinsame Kartenbeschreibung/u);
+  assert.match(ui.container.textContent, /Beschreibung: Watchmode · geprüft 11\.09\.2026/u);
   assert.doesNotMatch(ui.container.textContent, /Unveränderter Altbestand/u);
 });
 await ui.render({ ...props, auswahl: [], streamingNeu: projiziereStreamingNeu({ bekannt, entdecken, auswahl: [], now: NOW }) });

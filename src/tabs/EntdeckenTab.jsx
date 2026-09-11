@@ -19,6 +19,7 @@ import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarVi
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { entdeckenDailyFeedNotice } from "../services/entdeckenDailyFeed.js";
+import { formatTitleFactsDate } from "../lib/titleFacts.js";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -28,6 +29,14 @@ const ANSICHTEN = Object.freeze([
 
 const ROLLEN_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
 const RADAR_TEXT_FINDING_ID = /^release:v1:[a-f0-9]{16}$/;
+function descriptionEvidenceLabel(entry) {
+  const evidence = entry?.descriptionEvidence;
+  const source = evidence?.source === "watchmode" ? "Watchmode"
+    : evidence?.source === "flixpatrol" ? "FlixPatrol" : null;
+  if (!source) return null;
+  const checked = formatTitleFactsDate(evidence.checkedAt ?? evidence.fetchedAt);
+  return `Beschreibung: ${source}${checked ? ` · geprüft ${checked}` : ""}`;
+}
 function ereignisLabel(entry) {
   if (radarEpisodeIdentity(entry)?.episodeNumber) return "Staffel · Folge";
   if (entry?.targetId?.startsWith("release:v1:")) {
@@ -268,6 +277,7 @@ function RecommendationsView({
         {titleHeading(entry)}
         <p className="kd-entdecken-grund">{entry.reasons[0] || "Noch ohne persönliche Passung."}</p>
         {entry.description ? <p>{entry.description}</p> : null}
+        {descriptionEvidenceLabel(entry) ? <small>{descriptionEvidenceLabel(entry)}</small> : null}
         <small>{meta(entry)} · Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
           rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
@@ -294,8 +304,9 @@ function RecommendationsView({
             </button></h3> : titleHeading(entry)}
             {istBeschreibungOffen ? <div id={beschreibungId} className="kd-entdecken-beschreibung">
               <p>{entry.description}</p>
-              {source(entry) ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
-                rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
+              {descriptionEvidenceLabel(entry) ? <small>{descriptionEvidenceLabel(entry)}</small> : null}
+              {entry.descriptionEvidence?.sourceUrl ? <a className="kd-entdecken-quellenlink" href={entry.descriptionEvidence.sourceUrl}
+                rel="noopener noreferrer" target="_blank">Beschreibungsquelle ansehen</a> : null}
             </div> : null}
             <p>{meta(entry)}</p>
             <small>Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>

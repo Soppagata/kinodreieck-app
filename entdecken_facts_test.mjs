@@ -560,10 +560,14 @@ await check("Fehlerhafte Batchantwort persistiert kein Item", async () => {
 });
 
 await check("Ein belegtes ungesehenes Poolitem erreicht Für mich ohne Rankeränderung", () => {
+  const input = inputs[15];
   let snapshot = emptySnapshot();
-  snapshot = mergeEntdeckenFactsSnapshot(snapshot, inputs[0], normalizedResult(inputs[0], 0));
+  snapshot = mergeEntdeckenFactsSnapshot(snapshot, input, normalizedResult(input, 15));
   const result = createEntdeckenRecommendations({
-    streamingEntdecken: { region: "AT", titel: [] },
+    streamingEntdecken: { region: "AT", titel: [{
+      watchmode_id: 5015, titel: input.title, jahr: input.releaseYear, typ: input.mediaType,
+      imdb_id: "tt1000015", dienste: ["Netflix"], genres: ["action"],
+    }] },
     streamingKnown: { region: "AT", titel: [] },
     master: [],
     profile: { signale: [{ art: "genre", wert: "action", richtung: "zieht_an", staerke: 4 }] },
@@ -572,13 +576,13 @@ await check("Ein belegtes ungesehenes Poolitem erreicht Für mich ohne Rankerän
     factsSnapshot: snapshot,
     selectionDay: "2026-08-29",
   });
-  assert.equal(result.personal.length, 6);
-  assert.equal(result.personal[0].title, inputs[0].title);
+  assert.equal(result.personal.length, 1);
+  assert.equal(result.personal[0].title, input.title);
   assert.match(result.personal[0].reasons[0], /^Profil:/);
   assert.equal(result.diagnostics.candidates, 50);
   assert.equal(result.diagnostics.metadata, 1);
   assert.equal(result.diagnostics.profileMatches, 1);
-  assert.ok(result.personal.slice(1).every((entry) => entry.reasons.length === 0));
+  assert.equal(result.personal[0].watchmodeId, 5015);
 });
 
 await check("AGENTS-konformer Wrapper akzeptiert exakt Owner-Zusatz zuerst und startet nur Fakten", async () => {

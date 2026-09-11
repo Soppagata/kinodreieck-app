@@ -36,8 +36,21 @@ function normalize(value) {
   return text(value).toLocaleLowerCase("de-AT").normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
-function description(item) {
-  return [item?.description, item?.beschreibung].map(text).filter(Boolean).join(" ");
+function structuredNames(value) {
+  return (Array.isArray(value) ? value : []).map((entry) => (
+    text(typeof entry === "object" ? entry?.name : entry)
+  )).filter(Boolean);
+}
+function contentVocabulary(item) {
+  return [
+    item?.description,
+    item?.beschreibung,
+    ...structuredNames(item?.genres),
+    ...structuredNames(item?.genre),
+    ...structuredNames(item?.keywords),
+    ...structuredNames(item?.titleFacts?.genres),
+    ...structuredNames(item?.titleFacts?.keywords),
+  ].map(text).filter(Boolean).join(" ");
 }
 function containsPhrase(haystack, phrase) {
   const needle = normalize(phrase);
@@ -61,13 +74,13 @@ export function bereiteInhaltsEvidenz({ positiveSignals = [], negativeSignals = 
     positiveSignals: Object.freeze(signalTopics(positiveSignals)),
     negativeSignals: Object.freeze(signalTopics(negativeSignals)),
     positiveLibrary: Object.freeze(positiveLibrary.map((item) => ({
-      item, topics: new Set(inhaltsthemen(description(item))),
+      item, topics: new Set(inhaltsthemen(contentVocabulary(item))),
     })).filter((entry) => entry.topics.size > 0)),
   });
 }
 
 export function analysiereInhaltsPassung(candidate, evidence) {
-  const candidateTopics = new Set(inhaltsthemen(description(candidate)));
+  const candidateTopics = new Set(inhaltsthemen(contentVocabulary(candidate)));
   const intersects = (entry) => [...entry.topics].some((topic) => candidateTopics.has(topic));
   const positiveSignalEntries = (evidence?.positiveSignals || []).filter(intersects);
   const negativeSignalEntries = (evidence?.negativeSignals || []).filter(intersects);

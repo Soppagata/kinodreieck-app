@@ -20,6 +20,7 @@ import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { projiziereStreamingAnsichten } from "../lib/streamingProjection.js";
+import { formatTitleFactsDate } from "../lib/titleFacts.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -60,6 +61,26 @@ function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className })
       })}
     </span>
   );
+}
+
+export function TitleFactsDetails({ titel, includeDescription = true }) {
+  const description = String(titel?.beschreibung ?? titel?.description ?? "").trim();
+  const runtime = Number(titel?.laufzeit_minuten ?? titel?.runtimeMinutes);
+  const hasRuntime = Number.isInteger(runtime) && runtime > 0;
+  const evidence = titel?.descriptionEvidence;
+  const source = evidence?.source === "watchmode" ? "Watchmode" : evidence?.source === "flixpatrol" ? "FlixPatrol" : null;
+  const checked = formatTitleFactsDate(evidence?.checkedAt ?? evidence?.fetchedAt);
+  const genres = Array.isArray(titel?.genres) ? titel.genres : [];
+  if (!description && !hasRuntime && !genres.length && !source) return null;
+  return <div data-title-facts="title-facts-projection-v1" style={{ marginTop: 8, lineHeight: 1.55 }}>
+    {includeDescription && description ? <div>{description}</div> : null}
+    <div style={{ marginTop: includeDescription && description ? 6 : 0 }}>
+      {hasRuntime ? <span>{runtime} Minuten</span> : null}
+      {hasRuntime && genres.length ? <span> · </span> : null}
+      {genres.length ? <span>{genres.join(", ")}</span> : null}
+    </div>
+    {source ? <small>Beschreibung: {source}{checked ? ` · geprüft ${checked}` : ""}</small> : null}
+  </div>;
 }
 
 function PlattformFilter({ wert, optionen, onChange, name }) {
@@ -631,13 +652,41 @@ export function StreamingTab({
               /* Editierbar: den Master-Eintrag überlagern (frische Begründung/Bewertung),
                  Streaming-Felder behalten. onSave schreibt in die Masterliste. */
               const mf = master && master.find((m) => m.id === f.id);
+              const persoenlicheGenres = Array.isArray(mf?.genres) ? mf.genres
+                : Array.isArray(mf?.genre) ? mf.genre : [];
+              const kartenGenres = [...new Map([
+                ...persoenlicheGenres, ...(Array.isArray(f.genres) ? f.genres : []),
+              ].map((genre) => [String(genre).toLocaleLowerCase("de-AT"), genre])).values()];
+              const persoenlicherText = String(mf?.beschreibung ?? mf?.description ?? "").trim();
+              const neutralerText = persoenlicherText
+                ? "" : String(f.beschreibung ?? f.description ?? "").trim();
+              /* Der editierbare Film bleibt ausschließlich der persönliche
+                 Datensatz. Neutrale Fakten liegen nur in der Anzeigeprojektion
+                 und können dadurch beim Speichern keiner Notiz mitwandern. */
               const kartenFilm = mf
-                ? { ...f, ...mf, dienste: f.dienste, web_urls: f.web_urls }
+                ? {
+                  ...f, ...mf, dienste: f.dienste, web_urls: f.web_urls,
+                  genres: persoenlicheGenres,
+                  beschreibung: mf.beschreibung ?? mf.description ?? null,
+                  laufzeit_minuten: mf.laufzeit_minuten ?? mf.runtimeMinutes ?? null,
+                  descriptionEvidence: null,
+                  titleFacts: null,
+                }
                 : f;
+              const factsAnzeige = {
+                ...kartenFilm,
+                beschreibung: persoenlicherText || neutralerText || null,
+                genres: kartenGenres,
+                laufzeit_minuten: mf?.laufzeit_minuten ?? mf?.runtimeMinutes
+                  ?? f.laufzeit_minuten ?? f.runtimeMinutes ?? null,
+                descriptionEvidence: persoenlicherText ? null : f.descriptionEvidence || null,
+                titleFacts: f.titleFacts || null,
+              };
               return (
                 <div key={f.id} className="kd-suchfokus" tabIndex={-1}
                   data-streaming-suchtreffer={`programm:${f.id}`}>
                 <FilmCard film={kartenFilm}
+                  beschreibungAnzeige={persoenlicherText || neutralerText || null}
                   expanded={expandedId === "s" + f.id}
                   onToggle={() => {
                     const key = "s" + f.id;
@@ -662,7 +711,10 @@ export function StreamingTab({
                       && !!filmwissenRechercheKennung(kartenFilm),
                     onRecherchieren: () => onFilmwissenRecherchieren?.(kartenFilm),
                   } : null}
-                  kinoInfo={<DienstBadges dienste={f.dienste} webUrls={f.web_urls} auswahl={auswahl} />}
+                  kinoInfo={<>
+                    <DienstBadges dienste={f.dienste} webUrls={f.web_urls} auswahl={auswahl} />
+                    {expandedId === "s" + f.id ? <TitleFactsDetails titel={factsAnzeige} includeDescription={false} /> : null}
+                  </>}
                   headerAction={pinButton(kartenFilm)}
                   />
                 </div>
@@ -790,7 +842,7 @@ export function StreamingTab({
                 )}
                 {expandedId === "e" + t.watchmode_id && (
                   <div style={{ marginTop: 6, fontSize: 12, color: T.kartenTextWeich }} onClick={(e) => e.stopPropagation()}>
-                    {(t.genres || []).length > 0 && <span>{t.genres.join(", ")}</span>}
+                    <TitleFactsDetails titel={t} />
                     {addFilm && formFuer !== t.watchmode_id && !mediathekIdFuer(t) && (
                       <button style={{ ...btnStyle(true), padding: "6px 11px", marginTop: 8 }}
                         onClick={() => setFormFuer(t.watchmode_id)}>

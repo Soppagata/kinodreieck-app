@@ -20,6 +20,7 @@ import { authDriver, authService } from "./auth.js";
 import { runtimeConfig } from "../config/runtime.js";
 import { BoundaryError, ERROR_CODES, normalizeBoundaryError } from "./errors.js";
 import { createFlixpatrolFactsService, flixpatrolFactsService } from "./flixpatrolFacts.js";
+import { titleFactIdentity } from "../lib/titleFacts.js";
 
 /* Projekt-URLs vergleichen: Groß-/Kleinschreibung und ein Schrägstrich am Ende
    dürfen den Vergleich nicht entscheiden. */
@@ -130,6 +131,44 @@ function bereichOder(bereich) {
   return b;
 }
 
+function kanonischerDienst(value) {
+  return String(value ?? "").trim().toLocaleLowerCase("de-AT")
+    .replace(/\s*\(via (?:amazon )?prime\)\s*$/u, "")
+    .replace(/^crunchyroll\s+premium\b/u, "crunchyroll")
+    .replace(/^paramount\s+plus\b/u, "paramount+")
+    .replace(/_/gu, " ").replace(/\+/gu, " plus ").replace(/[^a-z0-9]+/gu, "")
+    .replace(/^amazonprimevideo$/u, "primevideo").replace(/^amazonprime$/u, "primevideo")
+    .replace(/^appletvplus$/u, "appletv");
+}
+
+/* Die RPC sieht nur die höchstens 50 tatsächlich benötigten starken IDs. Der
+   große Katalog bleibt lokale Auswahlbasis; Titel/Freitext verlassen den
+   Browser über diesen Pfad nicht. */
+export function titleFactIdentitiesForTitles(titles, { services = null, limit = 50 } = {}) {
+  const hasServiceSelection = Array.isArray(services);
+  const selected = new Set((hasServiceSelection ? services : []).map(kanonischerDienst).filter(Boolean));
+  if (hasServiceSelection && !selected.size) return Object.freeze([]);
+  const identities = [];
+  const seen = new Set();
+  const ordered = [...(Array.isArray(titles) ? titles : [])].sort((left, right) => (
+    String(left?.titel ?? left?.title ?? "").localeCompare(String(right?.titel ?? right?.title ?? ""), "de-AT")
+    || String(left?.watchmode_id ?? left?.watchmodeId ?? "").localeCompare(String(right?.watchmode_id ?? right?.watchmodeId ?? ""), "de-AT")
+  ));
+  for (const title of ordered) {
+    if (identities.length >= Math.min(50, Math.max(0, Number(limit) || 0))) break;
+    if (selected.size) {
+      const offered = Array.isArray(title?.dienste) ? title.dienste : Array.isArray(title?.services) ? title.services : [];
+      if (!offered.some((service) => selected.has(kanonischerDienst(service)))) continue;
+    }
+    const identity = titleFactIdentity(title);
+    if (!identity) continue;
+    const key = JSON.stringify(identity);
+    if (seen.has(key)) continue;
+    seen.add(key); identities.push(identity);
+  }
+  return Object.freeze(identities);
+}
+
 /* Capability zuerst, Token als zweite Grenze. Nach dem asynchronen Tokengriff
    wird die Capability erneut geprüft: Widerruf oder A→B während des Wartens
    darf den alten Lauf nicht live schalten. */
@@ -159,6 +198,7 @@ function gespeicherteVariante(auth = authService) {
 export function createCatalogService({ auth = authService, driver = authDriver, factsService = null } = {}) {
   const facts = factsService || (auth === authService && driver === authDriver
     ? flixpatrolFactsService : createFlixpatrolFactsService({ auth, driver }));
+  let optionalFactsQueue = Promise.resolve();
   const aktuelleFreigabe = () => remoteKonto(auth);
   const fordereGebundeneFreigabe = (accountId, operation) => {
     const aktuell = aktuelleFreigabe();
@@ -231,6 +271,40 @@ export function createCatalogService({ auth = authService, driver = authDriver, 
     }
   },
   buildStreamingViews: (streaming, master) => baueStreamingAnsichten(streaming, master, facts.peek()),
+  async loadFactsForTitles(titles, options = {}) {
+    const konto = aktuelleFreigabe();
+    if (!konto) return [];
+    const load = async () => {
+      let chartFacts = [];
+      try {
+        chartFacts = await facts.load();
+        fordereGebundeneFreigabe(konto.id, "facts.titles.charts-after");
+        const preferred = titleFactIdentitiesForTitles(options.preferredTitles, {
+          services: options.services, limit: 50,
+        });
+        const remaining = titleFactIdentitiesForTitles(titles, {
+          services: options.services, limit: 50 - preferred.length,
+        });
+        const identities = [];
+        const seen = new Set();
+        for (const identity of [...preferred, ...remaining]) {
+          const key = JSON.stringify(identity);
+          if (seen.has(key)) continue;
+          seen.add(key); identities.push(identity);
+          if (identities.length >= 50) break;
+        }
+        if (identities.length && typeof facts.loadByIdentities === "function") {
+          await facts.loadByIdentities(identities);
+        }
+      } catch { /* Optionale Cachemigration darf den Katalog nicht blockieren. */ }
+      fordereGebundeneFreigabe(konto.id, "facts.titles.after");
+      const snapshot = facts.peek();
+      return Array.isArray(snapshot) && snapshot.length ? snapshot : chartFacts;
+    };
+    const run = optionalFactsQueue.then(load, load);
+    optionalFactsQueue = run.catch(() => []);
+    return run;
+  },
   /* Bereich laden ("programm" | "streamingBekannt" |
      "streamingEntdecken"; "streaming" bleibt Übergangskompatibilität).
      Berechtigte Konten behalten unverändert die bisherigen Live-Zeilen. */
@@ -246,20 +320,51 @@ export function createCatalogService({ auth = authService, driver = authDriver, 
       let factsReady = null;
       if (bereich === "streaming" || bereich === "streamingBekannt" || bereich === "streamingEntdecken") {
         const ladeOptionaleFakten = async () => {
-          let geladeneFakten = [];
-          try { geladeneFakten = await facts.load(); } catch { facts.clear?.(); }
+          let chartFacts = [];
+          try {
+            /* load() leert absichtlich die vorige Lookup-Generation. Daher
+               bleibt die Reihenfolge seriell: Charts zuerst, dann Cache-IDs. */
+            chartFacts = await facts.load();
+            fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-charts-after");
+            const preferred = titleFactIdentitiesForTitles(options.factTitles, {
+              services: options.factServices,
+              limit: 50,
+            });
+            const remaining = titleFactIdentitiesForTitles(r?.payload?.titel, {
+              services: options.factServices,
+              limit: 50 - preferred.length,
+            });
+            const identities = [];
+            const seen = new Set();
+            for (const identity of [...preferred, ...remaining]) {
+              const identityKey = JSON.stringify(identity);
+              if (seen.has(identityKey)) continue;
+              seen.add(identityKey); identities.push(identity);
+              if (identities.length >= 50) break;
+            }
+            if (identities.length && typeof facts.loadByIdentities === "function") {
+              await facts.loadByIdentities(identities);
+            }
+          } catch { /* Fehlende Migration oder Cache bleibt optionale Leere. */ }
           fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-after");
-          return geladeneFakten;
+          const snapshot = facts.peek();
+          return Array.isArray(snapshot) && snapshot.length ? snapshot : chartFacts;
+
+        };
+        const enqueueOptionalFacts = () => {
+          const run = optionalFactsQueue.then(ladeOptionaleFakten, ladeOptionaleFakten);
+          optionalFactsQueue = run.catch(() => []);
+          return run;
         };
         if (options.deferOptionalFacts === true) {
-          factsReady = ladeOptionaleFakten();
+          factsReady = enqueueOptionalFacts();
           /* Der Aufrufer kann den Katalog schon weiterverarbeiten und den
              Faktenlauf deshalb erst deutlich später abwarten. Markiere eine
              mögliche Ablehnung sofort als behandelt; das ursprüngliche
              Promise bleibt für den späteren Aufrufer unverändert ablehnbar. */
           factsReady.catch(() => {});
         }
-        else await ladeOptionaleFakten();
+        else await enqueueOptionalFacts();
       } else fordereGebundeneFreigabe(auswahl.accountId, "area.load.facts-after");
       /* Sprang der Cache ein, ist der Direkt-Read trotzdem gescheitert. Sein
          Grund reist als stabiler `code` mit — sonst hörte ein Tester mit

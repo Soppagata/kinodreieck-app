@@ -1298,7 +1298,12 @@ export default function App() {
          keine Voraussetzung für Programm, Streamingkarten oder Dashboard.
          Ihr Read läuft mit der unveränderten Service-Freigabe im Hintergrund;
          die eigentliche Katalogantwort darf sofort sichtbar werden. */
-      const lauf = catalogService.loadArea(bereich, { timeout, deferOptionalFacts: true });
+      const lauf = catalogService.loadArea(bereich, {
+        timeout,
+        deferOptionalFacts: true,
+        factServices: sichtbareAuswahl,
+        factTitles: bereich === "streamingEntdecken" ? (roh?.bekannt?.titel || []) : [],
+      });
       ref.current = lauf;
       try { return await lauf; }
       finally { if (ref.current === lauf) ref.current = null; }
@@ -1419,6 +1424,12 @@ export default function App() {
         : EINZELDATEI_BUILD ? streamingEntdeckenSnapshot : { titel: [] },
       entdeckenUmfang: hatGeladenenEntdeckenStand && roh.entdeckenUmfang === "voll" ? "voll" : "begrenzt",
     };
+    if (!optionaleFakten && sichtbareAuswahlGeladen && sichtbareAuswahl.length) {
+      optionaleFakten = catalogService.loadFactsForTitles(anzeigeRoh.entdecken?.titel || [], {
+        preferredTitles: anzeigeRoh.bekannt?.titel || [],
+        services: sichtbareAuswahl,
+      });
+    }
     const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
     setStreamingBekannt(a.bekannt);
     setStreamingEntdecken(a.entdecken);
@@ -1441,7 +1452,8 @@ export default function App() {
       }).catch(() => { /* Optionale Fakten blockieren den Katalog nie. */ });
     }
     return a;
-  }, [snapshotFreigabe, master, reportError, resolveError, uebernehmeVollkatalog]);
+  }, [snapshotFreigabe, master, reportError, resolveError, uebernehmeVollkatalog,
+    sichtbareAuswahl, sichtbareAuswahlGeladen]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
   /* Dashboard und „Mein Programm" leben zuerst aus dem leichten Bekannt-
      Katalog. Sobald Streaming selbst offen ist, wird der Vollkatalog geladen:

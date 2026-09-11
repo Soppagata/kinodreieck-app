@@ -210,6 +210,11 @@ export function localRecommendationCandidates(streamingEntdecken, {
         type: entry.typ || null,
         originalTitle: text(entry.originaltitel || entry.original_title) || null,
         description: text(entry.beschreibung ?? entry.description) || null,
+        title_facts: entry.title_facts ?? null,
+        titleFacts: entry.titleFacts ?? null,
+        descriptionEvidence: entry.descriptionEvidence ?? null,
+        chartEvidence: Object.freeze([...list(entry.chartEvidence)]),
+        keywords: Object.freeze([...list(entry.keywords)]),
         externalIds: discoveryExternalIdsFromCatalog(entry),
         seenStatus: entdeckenStatus?.[watchmodeId] ?? null,
       });
@@ -471,7 +476,7 @@ export function publicDiscoveryCandidates({
     const local = decisions.get(item.sourceItemId)?.status === "matched"
       ? decisions.get(item.sourceItemId).candidate : null;
     const genres = profileCompatibleGenres(uniqueText([
-      ...item.genres, ...list(enriched?.genres), ...list(local?.genres),
+      ...list(local?.genres), ...item.genres, ...list(enriched?.genres),
     ]));
     const tags = uniqueText([...list(enriched?.tags), ...list(local?.tags)]);
     const franchiseId = enriched?.franchiseId || local?.franchiseId || null;
@@ -483,10 +488,11 @@ export function publicDiscoveryCandidates({
       targetId: local?.targetId || enriched?.strongId || `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
       watchmodeId: local?.watchmodeId ?? null,
       sourceItemId: item.sourceItemId,
-      title: item.title,
+      title: text(local?.title ?? local?.titel) || item.title,
       matchStatus: "matched",
       region: "AT",
-      availabilityConfirmed: true,
+      availabilityConfirmed: local?.availabilityConfirmed === true
+        && matchingServices(local, services).length > 0,
       eligible: true,
       genres: Object.freeze(genres),
       tags: Object.freeze(tags),
@@ -504,6 +510,10 @@ export function publicDiscoveryCandidates({
       year: facts?.releaseYear ?? local?.year ?? null,
       type: item.mediaType,
       description: text(local?.description ?? local?.beschreibung) || null,
+      title_facts: local?.title_facts ?? null,
+      titleFacts: local?.titleFacts ?? null,
+      descriptionEvidence: local?.descriptionEvidence ?? null,
+      chartEvidence: Object.freeze([...list(local?.chartEvidence)]),
       externalIds: Object.freeze({ ...(facts?.externalIds || {}) }),
       externalDiscovery: true,
       externalEvidence: Object.freeze([
@@ -769,12 +779,10 @@ export function createEntdeckenRecommendations({
       catalogEntries: streamingKnown?.titel || [], facts: flixpatrolFacts,
     });
     const rankingLibrary = localLibraryProjection(rankingMaster);
-    const eligibleDirect = profile?.beschaedigt === true ? direct : rankRecommendations(direct, {
-      profile: profile && profile.beschaedigt !== true ? profile : {},
-      library: rankingLibrary, useLibrary, excludedTargetIds: [], includeNeutral: mixed,
-    });
-    const eligibleDirectIds = new Set(eligibleDirect.map((candidate) => candidate.targetId));
-    const feedPopular = direct.filter((candidate) => eligibleDirectIds.has(candidate.targetId));
+    /* Die Quellenliste darf Popularität zeigen, ohne daraus Verfügbarkeit zu
+       behaupten. Erst die persönliche Rankinglane verlangt weiterhin den
+       echten Watchmode-/Kinoprogrammbeleg über availabilityConfirmed. */
+    const feedPopular = direct;
     const cinemaCandidates = currentCinemaDiscoveryCandidates({ program, programInfo, now })
       .filter((candidate) => !sourceItemSeen(candidate, master, catalogCandidates));
     const cinemaAllowedIds = profile?.beschaedigt === true
@@ -796,6 +804,9 @@ export function createEntdeckenRecommendations({
     const ranked = Object.freeze(rankedRaw.map((entry) => Object.freeze({
       ...entry,
       description: poolById.get(entry.targetId)?.description || null,
+      descriptionEvidence: poolById.get(entry.targetId)?.descriptionEvidence || null,
+      titleFacts: poolById.get(entry.targetId)?.titleFacts || null,
+      chartEvidence: poolById.get(entry.targetId)?.chartEvidence || Object.freeze([]),
       program: poolById.get(entry.targetId)?.program,
       filmAtId: poolById.get(entry.targetId)?.filmAtId,
     })));

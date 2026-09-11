@@ -2,6 +2,7 @@ import {
   normalisiereExternenTitel,
   ordneExternenTitelZu,
 } from "./externalTitleIdentity.js";
+import { projectTitleFacts } from "./titleFacts.js";
 
 const list = (value) => Array.isArray(value) ? value : [];
 const text = (value) => String(value ?? "").trim();
@@ -126,20 +127,26 @@ function descriptionOf(entry) {
 export function projectTransientDescriptions(entries, {
   catalogEntries = [], facts = [],
 } = {}) {
-  const sources = [...list(catalogEntries), ...list(facts)].filter(descriptionOf);
+  const sources = list(catalogEntries).filter(descriptionOf);
   const comparableSources = sources.map(comparableIdentity);
   return Object.freeze(list(entries).map((entry) => {
-    if (descriptionOf(entry) || !sources.length) return entry;
-    const decision = ordneExternenTitelZu(comparableIdentity(entry), comparableSources);
-    if (decision.status !== "matched") return entry;
-    const description = descriptionOf(decision.match);
-    if (!description) return entry;
-    const usesGermanField = Object.prototype.hasOwnProperty.call(entry || {}, "titel")
-      || Object.prototype.hasOwnProperty.call(entry || {}, "jahr");
-    return Object.freeze({
-      ...entry,
-      ...(usesGermanField ? { beschreibung: description } : { description }),
-    });
+    let projected = entry;
+    if (!descriptionOf(entry) && sources.length) {
+      const decision = ordneExternenTitelZu(comparableIdentity(entry), comparableSources);
+      if (decision.status === "matched") {
+        const description = descriptionOf(decision.match);
+        if (description) {
+          const usesGermanField = Object.prototype.hasOwnProperty.call(entry || {}, "titel")
+            || Object.prototype.hasOwnProperty.call(entry || {}, "jahr");
+          projected = Object.freeze({
+            ...entry,
+            ...(usesGermanField ? { beschreibung: description } : { description }),
+            descriptionEvidence: decision.match?.descriptionEvidence || null,
+          });
+        }
+      }
+    }
+    return projectTitleFacts(projected, facts);
   }));
 }
 

@@ -44,8 +44,9 @@ const kinoOnly = createEntdeckenRecommendations({
   streamingEntdecken: { region: "AT", titel: [] }, master: [], profile: {}, selectedServices: [],
   webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50, selectionDay: "2026-09-10", now: NOW,
 });
-check("ohne Streamingauswahl bleiben Für mich und Beliebte Titel reine Kinolisten", () => {
-  assert.ok(kinoOnly.personal.length > 0 && kinoOnly.popularPool.length > 0);
+check("ohne Streamingauswahl bleiben unbelegte Charttitel aus Für mich; Beliebte Titel zeigen den Kinomarkt", () => {
+  assert.equal(kinoOnly.personal.length, 0);
+  assert.ok(kinoOnly.popularPool.length > 0);
   assert.ok([...kinoOnly.personal, ...kinoOnly.popularPool]
     .every((entry) => entry.availability?.market === "cinema"));
 });
@@ -136,12 +137,12 @@ const guarded = createEntdeckenRecommendations({
   profile: { signale: [{ art: "genre", wert: "Drama", richtung: "stoesst_ab", blocking: true }] },
   selectedServices: ["Netflix"], webDiscoveryFeed: hardFeed, selectionDay: "2026-09-10", now: NOW,
 });
-check("gesehen und hart abgelehnt bleiben ausgeschlossen; neutrale Vorschläge bleiben ehrlich", () => {
+check("gesehen bleibt überall ausgeschlossen; hart abgelehnte Charts bleiben nur aus Für mich", () => {
   assert.ok(!guarded.personal.some((entry) => entry.title === ENTDECKEN_MARKET_POOL_50.items[0].title));
   assert.ok(!guarded.personal.some((entry) => entry.sourceItemId === oneNetflix.sourceItemId));
   assert.ok(!guarded.popularPool.some((entry) => entry.title === ENTDECKEN_MARKET_POOL_50.items[0].title));
-  assert.ok(!guarded.popularPool.some((entry) => entry.sourceItemId === oneNetflix.sourceItemId));
-  assert.ok(guarded.personal.some((entry) => entry.reasons.length === 0));
+  assert.ok(guarded.popularPool.some((entry) => entry.sourceItemId === oneNetflix.sourceItemId));
+  assert.equal(guarded.personal.length, 0);
   assert.equal(guarded.diagnostics.profileMatches,
     guarded.personal.filter((entry) => entry.reasons.length > 0).length);
 });

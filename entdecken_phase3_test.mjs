@@ -642,16 +642,11 @@ try {
   check("Für mich prüft alle ausgewählten Quellen, nutzt belegte Snapshot-Fakten und behält neutrale Kandidaten ehrlich", () => {
     assert.deepEqual(versionedRecommendations.diagnostics, {
       candidates: 50, metadata: 39, afterExclusions: 50,
-      profileMatches: 5, visible: 6, duplicatesRemoved: 0,
+      profileMatches: 1, visible: 1, duplicatesRemoved: 0,
     });
-    assert.deepEqual(versionedRecommendations.personal.slice(0, 5).map((item) => item.title), [
-      "Reacher", "Blood Sacrifice", "The Shards", "Sterling Point", "Facing El Chapo",
-    ]);
+    assert.deepEqual(versionedRecommendations.personal.map((item) => item.title), ["Reacher"]);
     assert.equal(versionedRecommendations.personal[0].watchmodeId, 9901);
-    assert.ok(versionedRecommendations.personal.slice(0, 5).every((item) => (
-      item.reasons.includes("Profil: drama")
-    )));
-    assert.deepEqual(versionedRecommendations.personal[5].reasons, []);
+    assert.ok(versionedRecommendations.personal[0].reasons.includes("Profil: drama"));
     assert.equal(versionedRecommendations.popular.length, 6);
     assert.equal(versionedRecommendations.popularPool.length, 50);
   });
@@ -666,11 +661,10 @@ try {
   await act(async () => { await tick(); await tick(); });
   const versionedSection = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
   const expandVersioned = button(versionedSection, "Weitere 9 Titel anzeigen");
-  check("Neutrale aktuelle Vorschläge heißen Zum Entdecken und behaupten keine Passung", () => {
+  check("Unbestätigte Chartverfügbarkeit erzeugt keine persönliche Passung", () => {
     const personal = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-empfehlungen"]');
-    assert.match(personal.textContent, /Zum Entdecken/u);
-    assert.match(personal.textContent, /Noch ohne persönliche Passung/u);
-    assert.doesNotMatch(personal.textContent, /Persönliche Passung|Profil:/u);
+    assert.match(personal.textContent, /Noch keine bestätigte Passung/u);
+    assert.doesNotMatch(personal.textContent, /Zum Entdecken|Persönliche Passung|Profil:/u);
   });
   check("Format 7 benennt den datierten Fünf-Quellen-Snapshot ohne Aktualitätsversprechen", () => {
     assert.equal(versionedSection.querySelectorAll(".kd-entdecken-neutral").length, 6);

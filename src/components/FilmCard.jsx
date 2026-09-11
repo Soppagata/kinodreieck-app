@@ -36,7 +36,7 @@ export function FilmCard({
   film, kinoInfo, streamBadge, expanded, onToggle, onSave, onDelete, kommtVorIn, onArtikelKlick,
   vorbewertung = null, filmwissen = null,
   auswahlmodus = false, auswaehlbar = true, ausgewaehlt = false, onAuswahl = null,
-  headerAction = null,
+  headerAction = null, beschreibungAnzeige = null,
 }) {
   const [editing, setEditing] = useState(false);
   const [prognoseEntwurf, setPrognoseEntwurf] = useState(false);
@@ -44,6 +44,7 @@ export function FilmCard({
   const speichertRef = useRef(false);
   const [speicherFehler, setSpeicherFehler] = useState("");
   const dreieck = hatDreieck(film.typ);
+  const angezeigteBeschreibung = String(beschreibungAnzeige || "").trim();
   /* unbewertet = bewertung fehlt komplett (null). 0/0/0 ist eine ECHTE Bewertung. */
   const unbewertet = dreieck && film.bewertung == null;
   /* Schneller Bewerten-Einstieg: Karte aufklappen + direkt ins EditPanel. */
@@ -138,8 +139,13 @@ export function FilmCard({
           {expanded && !editing && !auswahlmodus && (
             <div style={{ marginTop: 10, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 400, fontSize: 14, lineHeight: 1.55 }}>
               {dreieck
-                ? (film.begruendung || "Keine Begründung hinterlegt.")
-                : (film.beschreibung || "Keine Beschreibung hinterlegt.")}
+                ? <>
+                  <div>{film.begruendung || "Keine Begründung hinterlegt."}</div>
+                  {angezeigteBeschreibung ? (
+                    <div data-read-only-beschreibung="true" style={{ marginTop: 8 }}>{angezeigteBeschreibung}</div>
+                  ) : null}
+                </>
+                : (film.beschreibung || angezeigteBeschreibung || "Keine Beschreibung hinterlegt.")}
               {/* Notiz (persistiertes Freifeld) und "Kommt vor in" (Laufzeit-
                  Backlink aus dem Blog) sind bewusst ZWEI getrennte Blöcke —
                  der Backlink wird nie gespeichert. */}
