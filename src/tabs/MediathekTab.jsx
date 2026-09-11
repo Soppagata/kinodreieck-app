@@ -28,8 +28,42 @@ import {
   streamingJahrzehntBereich,
 } from "../lib/streamingSort.js";
 import "../styles/library-followup.css";
+import { pruefePrognose } from "../lib/prognose.js";
 
 const STALE_LOESCH_HINWEIS = "Der Datenstand hat sich geändert. Bitte Datenstand, Konto oder Sitzung neu prüfen und die Einträge erneut auswählen.";
+
+function strukturellGleich(links, rechts) {
+  if (Object.is(links, rechts)) return true;
+  if (!links || !rechts || typeof links !== "object" || typeof rechts !== "object") return false;
+  if (Array.isArray(links) !== Array.isArray(rechts)) return false;
+  const linksKeys = Object.keys(links).sort();
+  const rechtsKeys = Object.keys(rechts).sort();
+  return linksKeys.length === rechtsKeys.length
+    && linksKeys.every((key, index) => key === rechtsKeys[index]
+      && strukturellGleich(links[key], rechts[key]));
+}
+
+export function istReinerPrognoseMasterwechsel(vorher, nachher, expandedId) {
+  if (!Array.isArray(vorher) || !Array.isArray(nachher) || vorher.length !== nachher.length) return false;
+  const offeneId = typeof expandedId === "string" && expandedId.startsWith("b") ? expandedId.slice(1) : null;
+  if (!offeneId) return false;
+  let zielGefunden = false;
+  for (let index = 0; index < vorher.length; index += 1) {
+    const alt = vorher[index];
+    const neu = nachher[index];
+    if (alt?.id == null || neu?.id == null || String(alt.id) !== String(neu.id)) return false;
+    if (String(alt.id) !== offeneId) {
+      if (!strukturellGleich(alt, neu)) return false;
+      continue;
+    }
+    if (zielGefunden || neu.prognose == null || pruefePrognose(neu.prognose).length) return false;
+    const { prognose: altePrognose, ...alterRest } = alt;
+    const { prognose: neuePrognose, ...neuerRest } = neu;
+    if (strukturellGleich(altePrognose, neuePrognose) || !strukturellGleich(alterRest, neuerRest)) return false;
+    zielGefunden = true;
+  }
+  return zielGefunden;
+}
 
 /* ================= MEDIATHEK =================
    Drei Ansichten über EINEN Umschalter (kein 8. Nav-Bereich):
@@ -91,11 +125,15 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     kopierRequestRef.current += 1;
     const erwartung = erwarteterMasterUebergangRef.current;
     erwarteterMasterUebergangRef.current = null;
-    const erwartet = !!erwartung
+    const erwarteteLoeschProjektion = !!erwartung
       && erwartung.alterMaster === draftGrenzeRef.current.master
       && erwartung.datenKontextKey === draftGrenzeRef.current.datenKontextKey
       && erwartung.datenKontextKey === datenKontextKey
       && istErwarteteLoeschProjektion(erwartung.alterMaster, master, erwartung.zielIds);
+    const reinePrognoseProjektion = !auswahlmodus
+      && draftGrenzeRef.current.datenKontextKey === datenKontextKey
+      && istReinerPrognoseMasterwechsel(draftGrenzeRef.current.master, master, expandedId);
+    const erwartet = erwarteteLoeschProjektion || reinePrognoseProjektion;
     if (!erwartet) dialogLaufRef.current += 1;
     draftGrenzeRef.current = {
       master, datenKontextKey,
@@ -843,7 +881,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                 ...(filmwissenProFilm[f.id] || { phase: "idle", daten: null, fehler: null }),
                 rechercheLaeuft: filmwissenRechercheLaufId === String(f.id),
                 rechercheMoeglich: filmwissenRechercheAktiv && !!filmwissenRechercheKennung(f),
-                onRecherchieren: () => onFilmwissenRecherchieren?.(f),
+                onRecherchieren: (optionen) => onFilmwissenRecherchieren?.(f, optionen),
               } : null}
             />
           </div>

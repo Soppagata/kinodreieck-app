@@ -23,6 +23,8 @@ await esbuild.build({
       'export { QuellenBadges } from "./src/components/ui.jsx";',
       'export { bestaetigteMediathekNavigationId } from "./src/tabs/StreamingTab.jsx";',
       'export { MediathekTab } from "./src/tabs/MediathekTab.jsx";',
+      'export { istReinerPrognoseMasterwechsel } from "./src/tabs/MediathekTab.jsx";',
+      'export { erstellePrognose } from "./src/lib/prognose.js";',
       'export { default as React, act } from "react";',
       'export { createRoot } from "react-dom/client";',
     ].join("\n"),
@@ -48,7 +50,10 @@ for (const name of ["window", "document", "navigator", "HTMLElement", "HTMLInput
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
-const { KatalogRegler, QuellenBadges, bestaetigteMediathekNavigationId, MediathekTab, React, act, createRoot } = await import(pathToFileURL(bundle).href);
+const {
+  KatalogRegler, QuellenBadges, bestaetigteMediathekNavigationId, MediathekTab,
+  istReinerPrognoseMasterwechsel, erstellePrognose, React, act, createRoot,
+} = await import(pathToFileURL(bundle).href);
 const app = document.getElementById("app");
 const reactRoot = createRoot(app);
 const changes = [];
@@ -102,6 +107,9 @@ assert.match(css, /\.kd-streaming-mediathek-link\s*\{[\s\S]*min-height: 44px/u);
 const mediathek = fs.readFileSync("src/tabs/MediathekTab.jsx", "utf8");
 assert.match(mediathek, /name="Must-Watch"[\s\S]*alphabetBuchstabe=\{buchstabe\} jahrzehnt=\{dekade\}/u);
 assert.match(mediathek, /streamingAnfangsbuchstabe\(f\.titel\)[\s\S]*passtInJahrzehntMitKulanz\(f\.jahr, dekade\)/u);
+assert.match(mediathek, /onRecherchieren: \(optionen\) => onFilmwissenRecherchieren\?\.\(f, optionen\)/u);
+assert.match(fs.readFileSync("src/tabs/StreamingTab.jsx", "utf8"),
+  /onRecherchieren: \(optionen\) => onFilmwissenRecherchieren\?\.\(kartenFilm, optionen\)/u);
 
 await act(async () => reactRoot.unmount());
 const mediathekRoot = createRoot(app);
@@ -134,5 +142,50 @@ assert.ok(app.querySelector('input[aria-label="Must-Watch: Anfangsbuchstaben fil
 assert.equal(app.querySelectorAll(".kd-mustwatch-karte").length, 1, "Must-Watch kombiniert den Regler mit seiner eigenen Projektion");
 assert.match(app.querySelector(".kd-mustwatch-karte")?.textContent || "", /Zulu/u);
 await act(async () => mediathekRoot.unmount());
-console.log("ui_library_followup_test: 20 Checks bestanden.");
+
+const prognose = erstellePrognose({
+  ergebnis: {
+    format: "film-prognose-v1", achsen: { wie: 4, was: 3, warum: 4 }, passung: 72,
+    kategorie_vorschlag: "sehenswert", sicherheit: "mittel",
+    begruendung: "Formale Energie und trockener Humor passen zu deinem Profil.",
+    verwendete_signale: [{ id: "S1", art: "genre", wert: "drama", richtung: "zieht_an" }],
+  },
+  profilVersion: "p3", modell: "claude-sonnet-5-20260715", modellAlias: "gross",
+  vorgangId: "forecast-followup", verbrauch: { inputTokens: 10, outputTokens: 10, kostenUsdCent: 0.1, dauerMs: 20 },
+  jetzt: "2026-09-11T12:00:00.000Z",
+}).prognose;
+const prognoseBasis = [{ id: "offen", typ: "film", titel: "Offener Editor", jahr: 2001, quelle: "dvd", bewertung: null }];
+const prognoseMaster = [{ ...prognoseBasis[0], prognose }];
+assert.equal(istReinerPrognoseMasterwechsel(prognoseBasis, prognoseMaster, "boffen"), true,
+  "nur gültige Prognosemetadaten am geöffneten stabilen Eintrag sind erlaubt");
+assert.equal(istReinerPrognoseMasterwechsel(prognoseBasis, [{ ...prognoseMaster[0], titel: "Geändert" }], "boffen"), false,
+  "sonstige Datenänderung bleibt harte Mastergrenze");
+assert.equal(istReinerPrognoseMasterwechsel(prognoseBasis, [{ ...prognoseBasis[0], prognose: { status: "offen" } }], "boffen"), false,
+  "ungültige Prognose lockert die Grenze nicht");
+
+function PrognoseHarness({ master, kontext = "followup-prognose" }) {
+  const [expandedId, setExpandedId] = React.useState(null);
+  return React.createElement(MediathekTab, {
+    master, datenKontextKey: kontext, expandedId, setExpandedId, nachtragFlach: [], mustwatch: [],
+    updateFilm: async () => true, deleteFilm: () => {}, addFilm: async () => true, badgeFuer: () => null,
+    vorbewertungAktiv: true,
+  });
+}
+const prognoseRoot = createRoot(app);
+await act(async () => prognoseRoot.render(React.createElement(PrognoseHarness, { master: prognoseBasis })));
+await act(async () => {
+  [...app.querySelectorAll("button")].find((button) => button.textContent.includes("Jetzt bewerten"))
+    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+});
+const offenerEditor = app.querySelector('.kd-film-editor-shell textarea[placeholder^="Begründung"]');
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value").set.call(offenerEditor, "MEIN OFFENER ENTWURF");
+  offenerEditor.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+await act(async () => prognoseRoot.render(React.createElement(PrognoseHarness, { master: prognoseMaster })));
+assert.equal(app.querySelector('.kd-film-editor-shell textarea[placeholder^="Begründung"]'), offenerEditor,
+  "reine erfüllte Prognose bewahrt dieselbe offene Editorinstanz");
+assert.equal(offenerEditor.value, "MEIN OFFENER ENTWURF", "offener Bewertungsentwurf bleibt unverändert");
+await act(async () => prognoseRoot.unmount());
+console.log("ui_library_followup_test: 27 Checks bestanden.");
 process.exit(0);

@@ -684,7 +684,7 @@ export function StreamingTab({
                     rechercheLaeuft: filmwissenRechercheLaufId === String(f.id),
                     rechercheMoeglich: filmwissenRechercheAktiv
                       && !!filmwissenRechercheKennung(kartenFilm),
-                    onRecherchieren: () => onFilmwissenRecherchieren?.(kartenFilm),
+                    onRecherchieren: (optionen) => onFilmwissenRecherchieren?.(kartenFilm, optionen),
                   } : null}
                   kinoInfo={<>
                     <DienstBadges dienste={f.dienste} webUrls={f.web_urls} auswahl={auswahl} />
