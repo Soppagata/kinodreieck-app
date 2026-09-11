@@ -97,6 +97,7 @@ test("account-ready Boot, Chronik, Obsession-Suche und Auswahl-Sprungschutz", as
 
 test("Haupt-Entdecken bleibt leicht; Streaming Alles und beide Jahrzehntregler bleiben kompatibel", async ({ privateApp }) => {
   const { page, traffic } = privateApp;
+  await page.setViewportSize({ width: 393, height: 852 });
   await expect.poll(() => traffic.contracts.filter((entry) => entry === "catalog:streaming_bekannt").length).toBe(1);
   expect(fullCatalogRequests(traffic)).toHaveLength(0);
 
@@ -104,6 +105,9 @@ test("Haupt-Entdecken bleibt leicht; Streaming Alles und beide Jahrzehntregler b
   await expect(page.getByTestId("entdecken-tab")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Beliebte Titel" })).toBeVisible();
   await expect(page.locator(".kd-entdecken-neutral").first()).toBeVisible();
+  for (const karte of await page.locator(".kd-entdecken-neutral").all()) {
+    await expect(karte.locator(".kd-entdecken-beschreibung")).toHaveCount(0);
+  }
   expect(fullCatalogRequests(traffic)).toHaveLength(0);
 
   await navigateMobile(page, "Streaming");

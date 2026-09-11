@@ -205,6 +205,7 @@ function RecommendationsView({
   recommendationPins, onRecommendationPinToggle, programm, programmInfo, flixpatrolFacts,
 }) {
   const [showAllPopular, setShowAllPopular] = useState(false);
+  const [offeneBeliebtBeschreibung, setOffeneBeliebtBeschreibung] = useState(null);
   const selection = useMemo(() => createEntdeckenRecommendations({
     streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
     entdeckenStatus, webDiscoveryFeed, dailyVariety, selectionDay,
@@ -277,24 +278,35 @@ function RecommendationsView({
         <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
         {weekLabel ? <p>{weekLabel}</p> : null}
       </div>
-      {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-beliebtliste">{visiblePopular.map((entry) => (
-        <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
+      {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-beliebtliste">{visiblePopular.map((entry, index) => {
+        const hatBeschreibung = Boolean(entry.description);
+        const istBeschreibungOffen = hatBeschreibung && offeneBeliebtBeschreibung === entry.targetId;
+        const beschreibungId = `kd-entdecken-beliebt-beschreibung-${index}`;
+        return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
           <div className="kd-entdecken-listeninhalt">
             <span className="kd-entdecken-kicker">{entry.availability?.market === "cinema"
               ? entry.popularity ? "Im Kino beliebt" : "Jetzt im Kino"
               : mediaLabel(entry) === "Serie" ? "Beliebte Serie" : "Beliebter Streamingfilm"}</span>
-            {titleHeading(entry)}
-            {entry.description ? <p>{entry.description}</p> : null}
+            {hatBeschreibung ? <h3><button type="button" className="kd-entdecken-beschreibung-toggle"
+              aria-expanded={istBeschreibungOffen} aria-controls={beschreibungId}
+              onClick={() => setOffeneBeliebtBeschreibung(istBeschreibungOffen ? null : entry.targetId)}>
+              <span>{entry.title}</span><span className="kd-entdecken-aufklappzeichen" aria-hidden="true">{istBeschreibungOffen ? "−" : "+"}</span>
+            </button></h3> : titleHeading(entry)}
+            {istBeschreibungOffen ? <div id={beschreibungId} className="kd-entdecken-beschreibung">
+              <p>{entry.description}</p>
+              {source(entry) ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
+                rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
+            </div> : null}
             <p>{meta(entry)}</p>
             <small>Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
-            {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
+            {!hatBeschreibung && source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
               rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
           </div>
           <div className="kd-entdecken-listenaktionen">
             {pinButton(entry)}
           </div>
-        </article>
-      ))}</div> : <p className="kd-entdecken-leer gross">Noch keine aktuelle beliebte Liste geladen.</p>}
+        </article>;
+      })}</div> : <p className="kd-entdecken-leer gross">Noch keine aktuelle beliebte Liste geladen.</p>}
       {popularPool.length > popular.length ? <button type="button" className="kd-entdecken-mehr"
         aria-expanded={showAllPopular} aria-controls="kd-entdecken-beliebt-karten"
         onClick={() => setShowAllPopular((value) => !value)}>

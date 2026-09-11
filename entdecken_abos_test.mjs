@@ -238,6 +238,12 @@ check("UI kennzeichnet neutrale Vorschläge, zeigt den kompakten Stand und Media
   assert.doesNotMatch(uiSource, /Titel deiner ausgewählten Streamingdienste|Popularitätsaussage/);
   assert.match(appSource, /master=\{master \?\? LEERER_MEDIATHEK_MASTER\}/);
   assert.doesNotMatch(appSource, /mediathekMaster|projectTransientDescriptions/);
+  const personalUi = uiSource.slice(uiSource.indexOf('className="kd-entdecken-karten kd-entdecken-auswahlkarten"'), uiSource.indexOf('className="kd-entdecken-weitere"'));
+  const popularUi = uiSource.slice(uiSource.indexOf('id="kd-entdecken-beliebt-karten"'), uiSource.indexOf('popularPool.length > popular.length'));
+  assert.match(personalUi, /entry\.description \? <p>\{entry\.description\}<\/p>/);
+  assert.match(popularUi, /aria-expanded=\{istBeschreibungOffen\} aria-controls=\{beschreibungId\}/);
+  assert.match(popularUi, /istBeschreibungOffen \? <div id=\{beschreibungId\}/);
+  assert.match(popularUi, /Quelle ansehen/);
 });
 
 console.log(`\n${passed}/${passed} E9-Checks bestanden.`);
