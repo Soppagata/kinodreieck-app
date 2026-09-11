@@ -30,6 +30,7 @@ import {
 import {
   discoveryExternalIdsFromCatalog,
   FLIXPATROL_DISCOVERY_FEED_FORMAT,
+  FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
   matchWebDiscoveryFeed,
   MIXED_DISCOVERY_FEED_FORMAT,
   normalizeDiscoveryTitle,
@@ -110,7 +111,7 @@ function discoveryRecordIdsWithExcludedStrongId(webDiscoveryFeed, excludedTarget
   const watchmodeIds = new Set([...excludedTargetIds]
     .filter((targetId) => targetId.startsWith("watchmode:"))
     .map((targetId) => targetId.slice("watchmode:".length)));
-  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
     .includes(checked.value.format)) return new Set();
   return new Set(checked.value.items
     .filter((record) => watchmodeIds.has(record.externalIds?.watchmode))
@@ -449,10 +450,10 @@ export function publicDiscoveryCandidates({
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok || ![
     PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
-    FLIXPATROL_DISCOVERY_FEED_FORMAT,
+    FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
   ]
     .includes(checked.value.format)) return Object.freeze([]);
-  const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+  const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
     .includes(checked.value.format);
   const services = selectedServiceSet(selectedServices);
   if (!mixed && services.size && !services.has("joyn")) return Object.freeze([]);
@@ -466,7 +467,7 @@ export function publicDiscoveryCandidates({
     .map((decision) => [decision.record.sourceItemId, decision]));
   const projected = checked.value.items.map((item) => {
     const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
-    const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+    const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
       .includes(checked.value.format) ? Object.freeze({
       qid: enriched?.strongId?.startsWith("wikidata:")
         ? enriched.strongId.slice("wikidata:".length) : null,
@@ -561,9 +562,9 @@ export function webDiscoveryFeedCards({
 } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
-  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
     .includes(checked.value.format)) {
-    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
       .includes(checked.value.format);
     const annotations = new Map((checked.value.annotations || []).map((entry) => [entry.sourceItemId, entry]));
     const checkedFactsSnapshot = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT
@@ -575,7 +576,7 @@ export function webDiscoveryFeedCards({
       .map((decision) => [decision.record.sourceItemId, decision]));
     const projected = checked.value.items.map((item) => {
       const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
-      const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+      const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
         .includes(checked.value.format) ? Object.freeze({
         qid: enriched?.strongId?.startsWith("wikidata:")
           ? enriched.strongId.slice("wikidata:".length) : null,
@@ -757,13 +758,13 @@ export function createEntdeckenRecommendations({
   const checkedFeed = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (checkedFeed.ok && [
     PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
-    FLIXPATROL_DISCOVERY_FEED_FORMAT,
+    FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
   ]
     .includes(checkedFeed.value.format)) {
     /* Das Matching darf den breiten lokalen Katalog als reine Identitaetshilfe
        sehen. Erst die explizite Entdecken-Projektion filtert den sichtbaren
        Feed auf Kino plus die ausgewaehlten Streamingdienste. */
-    const broadCatalog = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+    const broadCatalog = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
       .includes(checkedFeed.value.format)
       ? localRecommendationCandidates(streamingEntdecken, {
         streamingKnown, selectedServices: [], entdeckenStatus, includeSeenForMatching: true,
@@ -773,7 +774,7 @@ export function createEntdeckenRecommendations({
       includeSeen: true, requireMetadata: false, factsSnapshot, flixpatrolFacts,
     });
     const direct = allDirect.filter((candidate) => !candidate.seen);
-    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
       .includes(checkedFeed.value.format);
     const rankingMaster = projectTransientDescriptions(master, {
       catalogEntries: streamingKnown?.titel || [], facts: flixpatrolFacts,

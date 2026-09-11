@@ -12,6 +12,7 @@ import {
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import {
   FLIXPATROL_DISCOVERY_FEED_FORMAT,
+  FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
   VERSIONED_DISCOVERY_FEED_FORMAT,
 } from "../lib/webDiscoveryFeed.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
@@ -241,12 +242,12 @@ function RecommendationsView({
   const titleHeading = (entry) => <h3>{source(entry) ? <a className="kd-entdecken-titellink"
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
-  const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+  const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
     .includes(webDiscoveryFeed?.format);
   /* Abrufstatus und Quellenstand werden getrennt knapp benannt. */
   const feedNotice = entdeckenDailyFeedNotice({ ...webDiscoveryStatus, feed: webDiscoveryFeed });
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
-  const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT]
+  const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
     .includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn
     ? `Stand: ${formatPresentationDate(webDiscoveryFeed.refreshedOn)}`
