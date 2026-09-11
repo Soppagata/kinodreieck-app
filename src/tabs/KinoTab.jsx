@@ -448,7 +448,7 @@ export function KinoTab({
                             ...(filmwissenProFilm[film.id] || { phase: "idle", daten: null, fehler: null }),
                             rechercheLaeuft: filmwissenRechercheLaufId === String(film.id),
                             rechercheMoeglich: filmwissenRechercheAktiv && !!filmwissenRechercheKennung(film),
-                            onRecherchieren: () => onFilmwissenRecherchieren?.(film),
+                            onRecherchieren: (optionen) => onFilmwissenRecherchieren?.(film, optionen),
                           } : null} />
                       </details>
                       </KinoTicket>
