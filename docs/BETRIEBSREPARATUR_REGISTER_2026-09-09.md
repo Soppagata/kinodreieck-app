@@ -24,11 +24,11 @@ Verbraucher. Damit geht kein früherer Lieferstand verloren.
 | ID | Fertiges Nutzerergebnis | Stand / Etappe |
 | --- | --- | --- |
 | M1 | Betriebschecks prüfen die richtige Umgebung; Fehlermeldungen nennen die echte Ursache und verschleiern keinen Ausfall. | DONE: Ops-Monitor 34480116970 grün; E1. E11 auf 55b8392 tatsächlich installiert; erster regulärer Fünferlauf am 11.09., 00:02 MESZ, mit 41 Requests und grünen Fetch-/Build-/Lieferphasen beendet, kein Pending/Lock/Checkpoint zurückgelassen. |
-| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9 |
+| M2 | Entdecken aktualisiert alle fünf Quellen, zeigt echte Quellenstände und berücksichtigt in beiden Listen die ausgewählten Streamingdienste; aktuelles Kino ergänzt bis 50. | DONE: globaler Format-8-Feed mit 50 Titeln am 10. September bestätigt; Backend 97ade56. Persönliche Projektion E9 auf Staging 5724193 geliefert: reale Probe 30 Streaming/20 Kino, alle Streamingtreffer aus ausgewählten Diensten; E2 → E4, E9. Nachbesserung E14-B: kompakte Standanzeige OFFEN. |
 | M3 | Verspätete natürliche Tagesläufe erledigen fällige Arbeit ohne doppelte Tagesversuche. | GEBAUT und Migration live; erster natürlicher Entdecken-Lauf offen; E4 |
 | M4 | Entdecken und kostenpflichtiges Radar sind getrennt betreibbar; keine versteckte neue KI-Aktivierung. | DONE: getrennte Workflows in bf74f25; Entdecken aktiv, Automatic-AI deaktiviert, Radar-Job weiterhin hart ausgeschaltet; null bezahlte KI in der realen Datenabnahme; E1 |
-| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. |
-| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. |
+| M5 | Der gemeinsame Kandidat ist geprüft, geliefert und anhand echter Läufe sowie Datenständen belegt. | DONE: Gesamtabgleich E1–E13, lokaler Abschluss, Staging 9217415, CI 34535276749 und Domain-/Worker-/Asset-Readback grün. E11 auf 55b8392 installiert; regulärer Datenlauf erfolgreich zurückgelesen. E7 von Max angenommen; neue physische PWA-Abnahme bleibt separat. Natürlicher Entdecken-Erstlauf bleibt M3; Production 3b82a73. Neue Korrektur E14 noch nicht geliefert. |
+| M6 | Gemeinsame Katalogfakten werden vollständig geliefert, sicher zugeordnet und ohne Überschreiben persönlicher Daten wiederverwendet. | DONE: FlixPatrol-Faktenpfad und E11/E12 samt Staging-Frontend geliefert. Die Typkorrektur stellt 123 Mein-Programm-Treffer wieder her. Nach dem neuen echten Watchmode-Lauf: 9.348 ausgewählte Titel, 123 Mein Programm, 56 belegte Neu-Zugänge; persönliche Daten vor/nach gleich. E14-A OFFEN: erhaltene v2-Fristen beim Upgrade übernehmen. |
 | M7 | FlixPatrol-Abrufe werden im Hintergrund dauerhaft gezählt und täglich mit dem offiziellen Kontostand abgeglichen. | DONE: natürlicher Ticker grün; 38 abgeschlossene FlixPatrol-Versuche im gemeinsamen Monatszähler, einschließlich Diagnosen/Fehlern; E1 |
 
 ## Sechs Etappen mit je einem Baumeister
@@ -1497,12 +1497,33 @@ Meister: bestehender sauberer Integrationsworktree
 
 | Paket | Stand | Branch / Worktree | Exklusive Schreibflächen | Gefroren / Prüfungen |
 | --- | --- | --- | --- | --- |
-| E14-A / M6 | DISPATCH | codex/streaming-neu-erhalt-e14-20260911 / /private/tmp/kd-streaming-neu-erhalt-e14-20260911 | streamingNeu.js, useStreamingNeuController.js, nötige App.jsx-Übergabe, StreamingTab.jsx, zugehörige Neu-Tests/Fixtures | Producer-Diffvertrag, Katalog-/Identitätslogik, Storage/Auth, Backend, Dependencies eingefroren; Tests für Upgrade, getrennte 14-Tage-Fristen, Folgeläufe und Konto-/Auswahlwechsel |
-| E14-B / M2 | DISPATCH | codex/entdecken-kurztext-e14-20260911 / /private/tmp/kd-entdecken-kurztext-e14-20260911 | EntdeckenTab.jsx, entdeckenDailyFeed.js ausschließlich lokale Anzeigetexte, Hilfe-Text, zugehörige Entdecken-/Hilfe-Tests | Feed-Vertrag/Validierung, tatsächliche Datenstände, Ranking, API, globale Styles und Dependencies eingefroren; fokussierte Darstellungs-/Vertragstests |
+| E14-A / M6 | DELIVERED: 1daad0a | codex/streaming-neu-erhalt-e14-20260911 / /private/tmp/kd-streaming-neu-erhalt-e14-20260911 | streamingNeu.js, useStreamingNeuController.js, nötige App.jsx-Übergabe, StreamingTab.jsx, zugehörige Neu-Tests/Fixtures | Producer-Diffvertrag, Katalog-/Identitätslogik, Storage/Auth, Backend, Dependencies eingefroren; Tests für Upgrade, getrennte 14-Tage-Fristen, Folgeläufe und Konto-/Auswahlwechsel |
+| E14-B / M2 | DELIVERED: 5ed1f54 | codex/entdecken-kurztext-e14-20260911 / /private/tmp/kd-entdecken-kurztext-e14-20260911 | EntdeckenTab.jsx, entdeckenDailyFeed.js ausschließlich lokale Anzeigetexte, Hilfe-Text, zugehörige Entdecken-/Hilfe-Tests | Feed-Vertrag/Validierung, tatsächliche Datenstände, Ranking, API, globale Styles und Dependencies eingefroren; fokussierte Darstellungs-/Vertragstests |
 
 A × B: PARALLEL_OK, keine gemeinsamen Schreibdateien oder Output-Abhängigkeit.
-State/Schema, globale Styles, Dependencies/Lockfile, generierte Daten und
-Remote-Wirkungen haben keinen Paket-Schreibowner und bleiben unverändert.
+E14-B ist mit 5ed1f54 geliefert und fokussiert grün. E14-A hat Upgrade- und
+Browserbelege mit bcdbd77 sowie Zukunftszeitpunkt-Guard 0ba6f98 geliefert; vor Integration bleibt der nachfolgende
+Fristfall zu korrigieren: temporärer Ab-/Wiederzugang innerhalb einer aktiven
+Frist darf diese nach dem serverseitigen Abschneiden alter Diffevents nicht
+neu beginnen lassen. Auch künftige Legacy-Zeitpunkte werden abgewiesen.
+Meisterentscheidung zum belegten Scope-Blocker: E14-A erhält ein kleines
+ownergebundenes lokales Fristen-/Belegbuch. Der Producer verwirft alte
+Diffevents; ursprüngliche Fristen sind daraus anschließend nicht mehr
+eindeutig ableitbar. Das Buch speichert nur diesen abgeleiteten Zustand,
+keinen zweiten Vollkatalog. Der vorhandene v2-Stand bleibt bytegleich lesend;
+Mediathek, Bewertungen, Abos und persönliche Registry bleiben unberührt.
+Lokale Cachewrites sind in dieser Korrektur enthalten; keine Shared-Writes.
+Ein bloßes Verlängern auf 28 Tage wäre bei wiederholten Wechseln wiederum
+mehrdeutig und wird deshalb nicht als Lösung ausgegeben.
+Lieferung E14-A: bcdbd77 → 0ba6f98 → 1daad0a. 38 fokussierte Checks und
+4 Chromium-/WebKit-Appfälle grün. Das Buch enthält nur ID, Fensterbeginn
+und verbrauchten Diffzeitpunkt, gebunden an Owner und normalisierte Auswahl;
+der originale v2-Key bleibt unverändert. Sichtbare Titel bleiben eine
+Teilmenge des aktuellen Angebots ausgewählter Dienste. Der tatsächliche
+iPhone-Speicher ist nicht zugänglich; kein Wiederherstellungsdatum erfunden.
+Das neue lokale Fristen-/Belegbuch gehört ausschließlich E14-A. Shared-State/Schema,
+globale Styles, Dependencies/Lockfile, generierte Daten und Remote-Wirkungen
+haben keinen Paket-Schreibowner und bleiben unverändert.
 Register und Integration nur beim Meister. Integration A, dann B, einmaliger
 relevanter lokaler Abschluss. Providerrequests, manuelle Tagesläufe und
 Shared-Datenwrites gehören nicht zur Korrektur. Kein zusätzlicher Prüfchat.
