@@ -4,6 +4,51 @@ Stand: 11. September 2026. Max hat den Plan zur Umsetzung freigegeben. Dieser
 Plan ergänzt die abgeschlossene Betriebsreparatur; deren Lieferregister bleibt
 [BETRIEBSREPARATUR_REGISTER_2026-09-09.md](BETRIEBSREPARATUR_REGISTER_2026-09-09.md).
 
+## Verbindlicher Restweg ab 11.09.2026
+
+Max beauftragt die Auflösung des Netflix-Blockers und aller notierten
+Daten-/Betriebsbefunde mit Subchats. Reihenfolge: fertige Staging-Lieferung →
+Max testet kurz auf der PWA → Merge/Production-Readback → isolierte Staging-
+Sandbox samt persönlichem Control-Backend. Diese Folge ersetzt die bisherige
+Vertagung der unten historisch dokumentierten Befunde.
+
+| ID | Ergebnis und Fertigkriterium | Zuständigkeit / Stand |
+| --- | --- | --- |
+| R1 | Netflix nutzt den täglichen FlixPatrol-Feed; Ursache des realen Bündelfehlers belegt, Vertrag korrigiert, erster Feed erfolgreich und normaler Client-Read bestätigt. | Backend-Baumeister baut; Master führt begrenzte Live-Schritte aus. OFFEN |
+| R2 | Watchmode-IDs und gezielte deutsche Details erreichen den Katalog; zusätzliche Werktypen sind empirisch geklärt und nur mit belegtem Mapping aufgenommen. Bestehende 14-Tage-Fristen bleiben erhalten. | Eigene Produzenten-Etappe. OFFEN |
+| R3 | Fehlendes Namenssignal und tatsächliche Datenfrische sind geklärt und korrigiert; die Build-Chunkwarnung ist gezielt bereinigt. Kein Umbau funktionierender Nutzerwege. | Produzenten- und App-Paket mit disjunkten Dateien. OFFEN |
+| R4 | Integrierter Stand ist getestet, gepusht und auf Staging inklusive Feed, Fakten und Service Worker rückgelesen; kompakte PWA-Prüfpunkte für Max. | Master. OFFEN |
+| R5 | Nach Max' PWA-Test: Staging-Produktstand in Main, gewollte Produktionsschalter gesetzt, Production ausgeliefert und rückgelesen. | Master; abhängig von R4 und Max' Testergebnis. OFFEN |
+| R6 | Produktionsjobs besitzen ein eindeutiges Produktionsziel; Staging erhält getrenntes Pages-/Supabase-Ziel, neutrale Seeds und zunächst ausgeschaltete Anbieter/Scheduler. Control liest datierten Status über begrenzte serverseitige Wege. | Folgewelle nach R5; vorhandenen Sandbox-Vertrag konkret ausfüllen. OFFEN |
+
+**Bauaufteilung:** Zwei unabhängige App-Pakete starten vom selben
+committeden Planstand: Backend besitzt FlixPatrol-Client/Normalisierung,
+Entdecken-Adapter und zugehörige Tests; App besitzt die kleinste notwendige
+Build-Aufteilung und ihre gezielten Schutzprüfungen. Keine gemeinsame Änderung
+an `package.json`, Lockfile, Migrationen oder Deploy-Workflows während dieser
+Welle ohne Master-Zuordnung. Die getrennte Produzenten-Etappe startet von
+`0fd4ac1866210eea49a8c3a89ecfae08197729ea` und hält das bestehende Katalog-/
+Fakten-DTO unverändert. Der Master besitzt dieses Register, Live-Reads,
+Providerläufe, Integration und Lieferung. Kein zusätzlicher Reviewchat.
+
+**Begrenzte echte Abrufe:** Zuerst gespeicherte Antwortdiagnostik und bestehende
+Cachebelege auswerten. Für R1 höchstens zwei zusätzliche Diagnoserequests,
+eine frische Quota-Messung und ein Feedlauf mit höchstens 13 FlixPatrol-
+Requests: insgesamt höchstens 16 neue gezählte Versuche im unveränderten
+1000er-Monatszähler. Kein blinder Retry. Für R2 höchstens sechs Details über
+bekannte Watchmode-IDs und drei gezielte Werktyp-Seiten plus höchstens eine
+Statusabfrage; bestehender 2000er-Zyklus-/500er-Jobzaun und 28er-Detailanteil
+bleiben maßgeblich. Jeder Lauf braucht einen aktuellen verlässlichen Stand.
+Kein bezahlter KI-Lauf und kein Vollkatalogabruf zur Probe.
+
+Der Nutzerauftrag erneuert die Aktivierung nach dem bekannten, vollständig
+verbuchten Fehler. Der alte Lauf wird weder wiederverwendet noch seine Zähler
+zurückgesetzt. Neue Datenwirkung wird vorher konkret an Ziel, Commit und
+Menge gebunden. Die Sandbox wird erst nach Production-Erfolg umgeschaltet;
+ihre Provisionierung verwendet belegte getrennte Ziele und keinen
+unbemerkt kostenpflichtigen Tarif. Neue Zugangsdaten bleiben außerhalb von
+Chat, Git und Browser. Bestehende persönliche Daten werden nicht kopiert.
+
 ## Aktuelle Lieferung und offene Netflix-Aktivierung
 
 Der Produktstand `ee8ef91` ist auf `staging` und
