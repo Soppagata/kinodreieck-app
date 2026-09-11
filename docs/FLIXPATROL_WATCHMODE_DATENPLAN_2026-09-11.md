@@ -4,6 +4,52 @@ Stand: 11. September 2026. Max hat den Plan zur Umsetzung freigegeben. Dieser
 Plan ergänzt die abgeschlossene Betriebsreparatur; deren Lieferregister bleibt
 [BETRIEBSREPARATUR_REGISTER_2026-09-09.md](BETRIEBSREPARATUR_REGISTER_2026-09-09.md).
 
+## Zweite PWA-Rueckmeldung vom 11.09., 22:22–22:40: klare Nutzerwege
+
+Max beauftragt Erfassung, stabile Etappen und sofortigen parallelen Bau, begrenzt
+auf die genannten Stellen. `b64953e` bleibt bis zur neuen Lieferung Staging-Stand;
+die Dokumentation `2654017` ist die Ausgangsbasis. R4 wird fuer V1–V5 wieder
+geoeffnet, R5/R6 folgen weiterhin nach dem PWA-Test. Keine neue Auditkette.
+
+| ID | Sichtbares Ergebnis und Fertigkriterium | Stand |
+| --- | --- | --- |
+| V1 | Filmwissen (belegte kulturelle Einordnung) und Prognose (persoenlicher Vorschlag) sind bei Jetzt bewerten und Eintrag erstellen verfuegbar. Prognose bleibt im offenen Formular, kann neu berechnet, uebernommen und korrigiert werden; erst bewusstes Speichern legt die Bewertung/den neuen Eintrag ab. Fehler werden am aktuellen Ablauf eingegrenzt. | OFFEN |
+| V2 | Mediathek bietet dieselben Alphabet-/Jahrzehntregler wie Streaming. Streaming Alles/Neu verlinkt bei eindeutigem Bestand direkt auf den vorhandenen Mediathek-Eintrag. Filter, Dienstauswahl und Neu-Fristen bleiben erhalten. | OFFEN |
+| V3 | Entdecken-Titel sind wieder dunkel auf hellen Karten lesbar; Streaming hat drei benachbarte Menuebuttons. Quellen sind einheitliche, deduplizierte Tags in einer eigenen Reihe unter WIE/WAS/WARUM/Kategorie. | OFFEN |
+| V4 | Kino hat einen echten, mit Suche/Kino/Tag/Abo/Fassung kombinierbaren Genrefilter. Die Profil-Zwischenueberschriften entfallen. Genreabdeckung wird gemessen und Luecken mit belegten Werkidentitaeten aus vorhandenen Daten bzw. oeffentlichen Quellen geschlossen. Keine erfundenen Genrewerte. | OFFEN |
+| V5 | Gemeinsamer Kandidat lokal geprueft, committed, auf Staging gepusht und nach CI samt Build/Service Worker rueckgelesen. | OFFEN |
+
+**Parallelwelle ab dem Commit dieser Ergaenzung:**
+
+- **A Bewertung (V1, FilmCard-Anteil V3):** App.jsx,
+  controllers/useIntelligenceController.js, components/EintragForm.jsx,
+  EditPanel.jsx, FilmCard.jsx, PrognoseBereich.jsx, FilmwissenBereich.jsx;
+  services/vorbewertung.js und services/filmwissen.js nur fuer nachgewiesene
+  Clientfehler; neue klar benannte Bewertungs-Komponenten/-Hooks/-Styles und
+  eigene fokussierte Tests. A besitzt den Konto-/Entwurfs-/Async-Zustand,
+  verhindert spaete Ergebnisse nach Konto- oder Filmwechsel und setzt Quellen
+  innerhalb der FilmCard in die eigene Reihe. Profil-/Provider-/Persistenz-
+  Vertraege bleiben unveraendert. High wegen dieser Shared-State-Grenze.
+- **B Mediathek/Streaming (V2, Menue-/Quellen-Anteil V3):**
+  tabs/MediathekTab.jsx, tabs/StreamingTab.jsx, components/ui.jsx nur QuellenBadges,
+  bestehende Streaming-Styles und neue lokale Filter-/Quellen-Komponenten plus
+  eigene fokussierte Tests. Dieselben vorhandenen Regler wiederverwenden;
+  bekannte Master-/Watchmode-IDs fuer Navigation nutzen. FilmCard und App sind
+  read-only. Eine kleine benannte Master-Naht reicht `onEintragKlick` weiter.
+- **C Entdecken/Kino (V4, Kontrast-Anteil V3):** tabs/KinoTab.jsx,
+  tabs/EntdeckenTab.jsx, styles/ui-copy-disclosures.css, styles/kino-filter.css,
+  neue Kino-Genre-Projektion/-Belege und eigene Tests. Kein Ranking-/Profilumbau.
+  Vorhandene Genres und starke IDs auswerten; bei benoetigter Datenveroeffentlichung
+  die exakte lokale Aenderung und Menge an den Meister liefern.
+
+Alle drei arbeiten von derselben Basis in eigenen Worktrees. Keine fremden
+Commits, keine Nebenagenten, keine Remote-/Provider-/Datenwrites der Baumeister.
+Globale Styles, Schema, Migrationen, Dependencies/Lockfile und CI sind read-only.
+Package-Testverdrahtung, reine Betriebsreads, Integration, dieses Register und
+Lieferung besitzt der Meister. Neue optionale Props werden mit kompatiblen
+Defaults gebaut; kleine Tab-/App-Weitergaben erfolgen erst bei Integration.
+Weitere Fachlogik wird als begrenztes Delta beim zustaendigen Baumeister gebaut.
+
 ## PWA-Rueckmeldung vom 11.09.: gezielte UI-Nacharbeit
 
 Die gezielte Nacharbeit U1–U5 ist auf Staging `b64953e` abgeschlossen und am
