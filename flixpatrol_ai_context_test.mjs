@@ -178,17 +178,31 @@ await check("TMDB-Untertyp und strukturierter Radar-Medientyp müssen zusammenpa
   }
 });
 
-await check("Forecast-Projektion enthält neutrale Fakten, aber keinen Chart- oder Geschmackswert", () => {
+await check("Forecast-Projektion wahrt exakt den bestehenden Legacyvertrag", () => {
   const [fact] = normalisiereFlixpatrolKontextTitel(titleRows);
   const context = projiziereFlixpatrolKontext(fact);
+  assert.deepEqual(Object.keys(context), [
+    "source", "checkedAt", "fresh", "sourceUrl", "identity", "description", "runtimeMinutes", "premiere",
+  ]);
+  assert.deepEqual(Object.keys(context.identity), [
+    "flixpatrolId", "imdbId", "tmdbId", "title", "year", "mediaType",
+  ]);
+  assert.equal(context.source, "FlixPatrol");
   assert.equal(context.identity.mediaType, "film");
   assert.equal(context.description, "Ein neutrales Werkporträt.");
   assert.equal(context.runtimeMinutes, 117);
-  assert.deepEqual(context.charts, []);
-  assert.equal(context.schemaVersion, "title-facts-projection-v1");
-  assert.equal(context.descriptionLanguage, null);
+  assert.equal(Object.hasOwn(context, "schemaVersion"), false);
+  assert.equal(Object.hasOwn(context, "charts"), false);
+  assert.equal(Object.hasOwn(context, "descriptionLanguage"), false);
   assert.equal(Object.hasOwn(context, "ranking"), false);
   assert.equal(Object.hasOwn(context, "taste"), false);
+
+  const [series] = normalisiereFlixpatrolKontextTitel([{
+    ...titleRows[0], mediaType: "series", description: "x".repeat(2001),
+  }]);
+  const seriesContext = projiziereFlixpatrolKontext(series);
+  assert.equal(seriesContext.identity.mediaType, "serie");
+  assert.equal(seriesContext.description, null);
 });
 
 await check("jahr- oder typfreie Profilnennung erhält nur klar getrennte mögliche Werke", () => {

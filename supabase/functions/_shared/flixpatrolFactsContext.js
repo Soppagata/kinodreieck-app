@@ -159,27 +159,46 @@ export function findeFlixpatrolKontextFakt(identity, facts) {
 
 export function projiziereFlixpatrolKontext(fact) {
   if (!fact) return null;
-  if (fact.projection?.schemaVersion === "title-facts-projection-v1") return fact.projection;
-  return normalisiereTitleFactsProjektionen([{
-    sourceId: fact.flixpatrol_id,
-    mediaType: fact.typ === "serie" ? "series" : fact.typ,
-    status: "resolved",
-    title: fact.titel,
-    releaseYear: fact.jahr,
-    imdbId: fact.imdb_id,
-    tmdbId: fact.tmdb_id,
-    description: fact.beschreibung,
-    descriptionLanguage: fact.descriptionLanguage,
-    runtimeMinutes: fact.laufzeit_minuten,
-    premiere: fact.premiere,
-    checkedAt: fact.checkedAt,
-    fetchedAt: fact.fetchedAt,
-    freshUntil: fact.freshUntil,
-    fresh: fact.fresh,
-    sourceUrl: fact.sourceUrl,
-    genres: fact.genres,
-    keywords: fact.keywords,
-  }])[0] ?? null;
+  const projection = fact.projection?.schemaVersion === "title-facts-projection-v1"
+    ? fact.projection
+    : normalisiereTitleFactsProjektionen([{
+      sourceId: fact.flixpatrol_id,
+      mediaType: fact.typ === "serie" ? "series" : fact.typ,
+      status: "resolved",
+      title: fact.titel,
+      releaseYear: fact.jahr,
+      imdbId: fact.imdb_id,
+      tmdbId: fact.tmdb_id,
+      description: fact.beschreibung,
+      descriptionLanguage: fact.descriptionLanguage,
+      runtimeMinutes: fact.laufzeit_minuten,
+      premiere: fact.premiere,
+      checkedAt: fact.checkedAt,
+      fetchedAt: fact.fetchedAt,
+      freshUntil: fact.freshUntil,
+      fresh: fact.fresh,
+      sourceUrl: fact.sourceUrl,
+      genres: fact.genres,
+      keywords: fact.keywords,
+    }])[0];
+  if (!projection) return null;
+  return freezeDeep({
+    source: "FlixPatrol",
+    checkedAt: projection.checkedAt,
+    fresh: projection.fresh === true,
+    sourceUrl: projection.sourceUrl,
+    identity: {
+      flixpatrolId: projection.identity.flixpatrolId,
+      imdbId: projection.identity.imdbId,
+      tmdbId: projection.identity.tmdbId,
+      title: projection.identity.title,
+      year: projection.identity.year,
+      mediaType: projection.identity.mediaType === "series" ? "serie" : projection.identity.mediaType,
+    },
+    description: text(projection.description, 2000),
+    runtimeMinutes: projection.runtimeMinutes,
+    premiere: projection.premiere,
+  });
 }
 
 export function baueFlixpatrolProfilHinweise(mentions, facts) {
