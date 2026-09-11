@@ -250,6 +250,7 @@ const z = {
   } as unknown,
   flixpatrolCharts: null as null | ((body: Record<string, unknown> | null) => unknown),
   flixpatrolTitles: { ok: true, items: [] } as unknown,
+  titleFactsLookup: { ok: true, items: [] } as unknown,
   flixpatrolRpcStatus: 200,
   filmwissenVorbereitung: {
     status: "quellen_nicht_verfuegbar",
@@ -300,6 +301,7 @@ function stelleZurueck() {
   z.filmwissenAktuell = { format: "filmwissen-cache-v1", status: "cache_miss" };
   z.flixpatrolCharts = null;
   z.flixpatrolTitles = { ok: true, items: [] };
+  z.titleFactsLookup = { ok: true, items: [] };
   z.flixpatrolRpcStatus = 200;
   z.filmwissenVorbereitung = {
     status: "quellen_nicht_verfuegbar",
@@ -393,6 +395,9 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
   if (url.includes("/rest/v1/rpc/kd_ai_stand")) return antwort(z.stand);
   if (url.includes("/rest/v1/rpc/kd_filmwissen_aktuell_lesen")) {
     return antwort(z.filmwissenAktuell);
+  }
+  if (url.includes("/rest/v1/rpc/kd_title_facts_lookup")) {
+    return antwort(z.titleFactsLookup, z.flixpatrolRpcStatus);
   }
   if (url.includes("/rest/v1/rpc/kd_flixpatrol_chart_read")) {
     const result = z.flixpatrolCharts ? z.flixpatrolCharts(koerper) : { ok: true, chart: null };
@@ -8262,6 +8267,33 @@ test("FF3e gecachte FlixPatrol-Fakten werden serverseitig streng zugeordnet", as
   gleich(rpc("kd_flixpatrol_chart_read").length, 5, "fünf feste Chartreads");
   gleich(rpc("kd_flixpatrol_titles_read").length, 1, "ein gebündelter Titelread");
   gleich(anbieterAufrufe().length, 1, "kein zusätzlicher KI-Request");
+});
+
+test("FF3e2 FlixPatrol-Identitaetscache ausserhalb der Charts behaelt den Forecast-Vertrag", async () => {
+  z.titleFactsLookup = { ok: true, items: [{
+    sourceId: FLIXPATROL_TEST_ID, mediaType: "film", status: "resolved",
+    title: "Translated title", releaseYear: 1999, imdbId: "tt1234567",
+    description: "Neutral ".repeat(300), runtimeMinutes: 101,
+    checkedAt: "2026-09-11T10:00:00.000Z", fetchedAt: "2026-09-11T10:00:00.000Z",
+    freshUntil: "2026-10-11T10:00:00.000Z", fresh: true,
+    sourceUrl: "https://flixpatrol.com/title/testfilm/",
+    genres: [{ id: "gnr_vkhlVlz6xabS78vHh0DCIc5e", name: "Drama" }],
+  }] };
+  const payload = ffAendere((p) => {
+    (p.film as Record<string, unknown>).externeIds = { imdb: "tt1234567" };
+  });
+  forecastMit(FF_ANTWORT());
+  const r = await forecastRuf(payload);
+  gleich(r.status, 200, "neuer Cacheweg bleibt mit bestehendem Forecast kompatibel");
+  const facts = forecastAusNutzertext().flixpatrolFakten as Record<string, unknown>;
+  gleich(facts.source, "FlixPatrol", "bestehende Quellkennung");
+  gleich(String(facts.description).length <= 2000, true, "bestehende Beschreibungsgrenze");
+  gleich(Object.keys(facts).length, 8, "bestehende Payloadform");
+  gleich((facts.identity as Record<string, unknown>).title, "Translated title", "starke ID statt Titelgleichheit");
+  gleich(rpc("kd_title_facts_lookup").length, 1, "genau ein neutraler ID-Cachelookup");
+  gleich(rpc("kd_flixpatrol_chart_read").length, 0, "kein Chartscan fuer vorhandenen Titel");
+  gleich(rpc("kd_flixpatrol_titles_read").length, 0, "kein doppelter Titelread");
+  gleich(anbieterAufrufe().length, 1, "nur vorhandener gemockter Prognoserequest");
 });
 
 test("FF3f direkte FlixPatrol-ID liest genau einen Titel und Browserfakten bleiben gesperrt", async () => {

@@ -59,6 +59,15 @@ Faktenbestand. Die alte `kd_flixpatrol_titles_read(text[])` bleibt verfügbar.
 Ohne eingespielte Migration funktionieren die bestehenden Aufrufer weiter; der
 neue Identitätsweg fällt leer aus.
 
+## Bestehender Prognosevertrag
+
+Der Faktenkontext verwendet intern dieselbe neutrale Projektion. An der
+bestehenden Forecast-Schnittstelle wird sie weiterhin in deren acht belegte
+Legacyfelder übersetzt (`source: "FlixPatrol"`, bisherige Identitätsfelder,
+`film`/`serie`, Beschreibung höchstens 2.000 Zeichen). Zusätzliche DTO-Felder
+ändern weder den KI-Payloadvertrag noch den bestehenden Prognoseweg. Der
+Identitätslookup ermöglicht dort weiterhin Fakten außerhalb aktueller Charts.
+
 ## Providergrenze
 
 `fetchTitles({ sourceIds, mediaTypes })` akzeptiert 1–10 eindeutige bekannte
