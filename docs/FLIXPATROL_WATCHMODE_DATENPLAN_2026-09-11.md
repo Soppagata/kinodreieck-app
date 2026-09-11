@@ -4,6 +4,35 @@ Stand: 11. September 2026. Max hat den Plan zur Umsetzung freigegeben. Dieser
 Plan ergänzt die abgeschlossene Betriebsreparatur; deren Lieferregister bleibt
 [BETRIEBSREPARATUR_REGISTER_2026-09-09.md](BETRIEBSREPARATUR_REGISTER_2026-09-09.md).
 
+## PWA-Rueckmeldung vom 11.09.: gezielte UI-Nacharbeit
+
+R4 wird wegen Max' konkreter PWA-Rueckmeldung erneut geoeffnet. Der bisherige
+Staging-Nachweis bleibt gueltig fuer `72fb246`; die folgenden Aenderungen bilden
+einen neuen Kandidaten vor R5. Keine zusaetzliche Audit- oder Freigabeschleife.
+
+| Teil von R4 | Ergebnis | Paket / Stand |
+| --- | --- | --- |
+| U1 | Must-Watch und Streaming/Alles verwenden das vorhandene Neu-Kartenlayout mit Pin, Markierung, Gesehen sowie explizitem Mediathek-Anlegen/Verknuepfen. | Karten / OFFEN |
+| U2 | KI-Kurzbeschreibungen bleiben; Kosten-/Websuche-Betriebstexte und der redundante Korrekturbutton entfallen. Kino ohne Weiterleit-Pfeile; Empfehlungsdetails zugeklappt mit titelnahem Chevron. | Texte und Details / OFFEN |
+| U3 | Quellenstaende sind mobil lesbar. Obsoleter Backup-Hinweis entfaellt; Exporterinnerung und tatsaechlich fehlgeschlagene Speicherung werden korrekt getrennt. | Settings / OFFEN |
+| U4 | Die zwei KI-Servermeldungen sind mit zeitnaher, providerfreier Betriebsdiagnose eingeordnet; belegte Fehler werden gezielt behoben oder konkret benannt. | Master / OFFEN |
+| U5 | Gemeinsamer Kandidat lokal geprueft, auf Staging gepusht, CI/Build/PWA rueckgelesen. | Master / OFFEN |
+
+**Parallelmatrix:** Alle drei Pakete starten vom selben Commit dieser Planergänzung,
+in getrennten Worktrees. Karten besitzt StreamingTab, MediathekTab, MustWatchListe
+und eigene neue Kartenkomponenten/-Styles sowie zugehoerige Kartentests. Texte
+besitzt FilmwissenBereich, PrognoseBereich, EintragForm, useIntelligenceController
+(nur Produkttexte), EntdeckenTab, KinoLinks und eigene Styles/Tests. Settings
+besitzt DatenTab, KatalogAuditStatus, useBackupExportController,
+backupExportController und die zugehoerigen Sicherungs-/Settings-Tests.
+App.jsx, index.css, ui.jsx, Daten-/Providervertraege, Schema, Lockfile, package.json
+und CI bleiben waehrend des Baus read-only. Neue Styles werden direkt aus den
+zugeordneten Komponenten importiert. Einzige vorab benannte Integrationsnaht:
+der Master reicht vorhandene Pin-Callbacks an MediathekTab weiter; bei Bedarf
+bindet er den bestehenden Kontomodus an die Exporthinweis-Projektion.
+Kein automatisches Titelmatching, keine neue Persistenzarchitektur, kein
+bezahlter KI-Aufruf, keine Backend-/Scheduler-Aenderung fuer reine UI-Arbeit.
+
 ## Verbindlicher Restweg ab 11.09.2026
 
 Max beauftragt die Auflösung des Netflix-Blockers und aller notierten
@@ -17,7 +46,7 @@ Vertagung der unten historisch dokumentierten Befunde.
 | R1 | Netflix nutzt den täglichen FlixPatrol-Feed; Ursache des realen Bündelfehlers belegt, Vertrag korrigiert, erster Feed erfolgreich und normaler Client-Read bestätigt. | Backend `16dae19`, Staging `72fb246`: Feed/Fakten live bestätigt, Abschlussprüfung grün. DONE |
 | R2 | Watchmode-IDs und gezielte deutsche Details erreichen den Katalog; zusätzliche Werktypen sind empirisch geklärt und nur mit belegtem Mapping aufgenommen. Bestehende 14-Tage-Fristen bleiben erhalten. | Produzent `39735ae`: IDs und fünf Details veröffentlicht; Typmapping gebaut, Aktivierung bleibt am belegten Quotenrest. GEBAUT / REST |
 | R3 | Fehlendes Namenssignal und tatsächliche Datenfrische sind geklärt und korrigiert; die Build-Chunkwarnung ist gezielt bereinigt. Kein Umbau funktionierender Nutzerwege. | Namenssignal und Zeitstempel veröffentlicht; Build und vollständige Lieferprüfung auf `72fb246` grün. DONE |
-| R4 | Integrierter Stand ist getestet, gepusht und auf Staging inklusive Feed, Fakten und Service Worker rückgelesen; kompakte PWA-Prüfpunkte für Max. | Staging `72fb246`, CI `34618596758`, normaler Feed-/Fakten-/PWA-Readback grün. DONE |
+| R4 | Integrierter Stand ist getestet, gepusht und auf Staging inklusive Feed, Fakten und Service Worker rückgelesen; kompakte PWA-Prüfpunkte für Max. | Staging `72fb246`, CI `34618596758`, normaler Feed-/Fakten-/PWA-Readback grün. Fuer neue UI-Rueckmeldung U1–U5 erneut OFFEN |
 | R5 | Nach Max' PWA-Test: Staging-Produktstand in Main, gewollte Produktionsschalter gesetzt, Production ausgeliefert und rückgelesen. | Master; abhängig von R4 und Max' Testergebnis. OFFEN |
 | R6 | Produktionsjobs besitzen ein eindeutiges Produktionsziel; Staging erhält getrenntes Pages-/Supabase-Ziel, neutrale Seeds und zunächst ausgeschaltete Anbieter/Scheduler. Control liest datierten Status über begrenzte serverseitige Wege. | Folgewelle nach R5; vorhandenen Sandbox-Vertrag konkret ausfüllen. OFFEN |
 
