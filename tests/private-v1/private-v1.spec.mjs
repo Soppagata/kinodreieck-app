@@ -173,28 +173,42 @@ test("Mobile Haupttabs merken Scrollpositionen und Same-tab-Schließen springt n
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(settingsY - 12);
 });
 
-test("Entdecken-Verwaltung hält Kopf und Schließen beim internen Scrollen im Viewport", async ({ privateApp }) => {
+test("Entdecken-Verwaltung startet ohne verdeckten ersten Abschnitt", async ({ privateApp }) => {
   const { page } = privateApp;
   const viewport = { width: 393, height: 568 };
   await page.setViewportSize(viewport);
   await navigateMobile(page, "Entdecken");
 
+  await page.evaluate(() => {
+    const nativeFocus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function focusMitIosScroll(options) {
+      const result = nativeFocus.call(this, options);
+      if (this.matches?.(".kd-entdecken-schliessen") && !options?.preventScroll) {
+        const dialog = this.closest(".kd-entdecken-dialog");
+        if (dialog) dialog.scrollTop = Math.min(80, dialog.scrollHeight - dialog.clientHeight);
+      }
+      return result;
+    };
+  });
+
   const ausloeser = page.getByRole("button", { name: "Entdecken verwalten" });
   await ausloeser.click();
   const dialog = page.getByRole("dialog", { name: "Entdecken verwalten" });
   const schliessen = dialog.getByRole("button", { name: "Entdecken verwalten schließen und zurück" });
+  const kopf = dialog.locator(".kd-entdecken-dialog-kopf");
+  const ersterAbschnitt = dialog.getByRole("heading", { name: "Mein Radar" });
   await expect(dialog).toBeVisible();
   await expect.poll(() => dialog.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect.poll(() => dialog.evaluate((element) => element.scrollTop)).toBe(0);
 
-  const start = await schliessen.boundingBox();
-  expect(start.y).toBeGreaterThanOrEqual(-1);
-  expect(start.y + start.height).toBeLessThanOrEqual(viewport.height + 1);
-
-  await dialog.evaluate((element) => { element.scrollTop = element.scrollHeight; });
-  await expect.poll(() => dialog.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  const gescrollt = await schliessen.boundingBox();
-  expect(gescrollt.y).toBeGreaterThanOrEqual(-1);
-  expect(gescrollt.y + gescrollt.height).toBeLessThanOrEqual(viewport.height + 1);
+  const kopfBox = await kopf.boundingBox();
+  const abschnittBox = await ersterAbschnitt.boundingBox();
+  const schliessenBox = await schliessen.boundingBox();
+  expect(kopfBox.y).toBeGreaterThanOrEqual(-1);
+  expect(abschnittBox.y).toBeGreaterThanOrEqual(kopfBox.y + kopfBox.height - 1);
+  expect(schliessenBox.y).toBeGreaterThanOrEqual(-1);
+  expect(schliessenBox.y + schliessenBox.height).toBeLessThanOrEqual(viewport.height + 1);
 
   await schliessen.click();
   await expect(dialog).toBeHidden();

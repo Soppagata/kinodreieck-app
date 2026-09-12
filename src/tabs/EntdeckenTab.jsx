@@ -94,7 +94,13 @@ function ManageDialog({
   useEffect(() => {
     const vorher = returnFocusRef?.current || document.activeElement;
     const entsperren = sperreDokumentScroll();
-    const frame = requestAnimationFrame(() => dialogRef.current?.querySelector("button")?.focus());
+    const frame = requestAnimationFrame(() => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      dialog.scrollTop = 0;
+      dialog.querySelector("button")?.focus({ preventScroll: true });
+      dialog.scrollTop = 0;
+    });
     const taste = (event) => {
       if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
       if (event.key !== "Tab") return;
