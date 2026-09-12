@@ -639,7 +639,7 @@ try {
     webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
     selectionDay: "2026-08-29",
   });
-  check("Für mich prüft alle ausgewählten Quellen, nutzt belegte Snapshot-Fakten und behält neutrale Kandidaten ehrlich", () => {
+  check("Für mich nutzt belegte Snapshot-Fakten; neutrale Kandidaten bleiben im Quellenpool", () => {
     assert.deepEqual(versionedRecommendations.diagnostics, {
       candidates: 50, metadata: 39, afterExclusions: 50,
       profileMatches: 1, visible: 1, duplicatesRemoved: 0,
@@ -663,7 +663,8 @@ try {
   const expandVersioned = button(versionedSection, "Weitere 9 Titel anzeigen");
   check("Unbestätigte Chartverfügbarkeit erzeugt keine persönliche Passung", () => {
     const personal = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-empfehlungen"]');
-    assert.match(personal.textContent, /Noch keine bestätigte Passung/u);
+    assert.match(personal.textContent, /Noch keine persönliche Passung im aktuellen Angebot/u);
+    assert.equal(personal.querySelectorAll(".kd-entdecken-auswahlkarte").length, 0);
     assert.doesNotMatch(personal.textContent, /Zum Entdecken|Persönliche Passung|Profil:/u);
   });
   check("Format 7 benennt den datierten Fünf-Quellen-Snapshot ohne Aktualitätsversprechen", () => {
