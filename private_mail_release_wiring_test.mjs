@@ -9,9 +9,12 @@ const production = workflow.match(/deploy-production:[\s\S]*$/m)?.[0] || "";
 
 assert.match(staging, /VITE_PRIVATE_MAIL_ENABLED:\s*"true"/);
 assert.match(staging, /VITE_PRIVATE_MAIL_ENDPOINT_NAME:\s*"private-mail-request"/);
-assert.match(production, /VITE_PRIVATE_MAIL_ENABLED:\s*"false"/);
-assert.match(production, /VITE_PRIVATE_MAIL_ENDPOINT_NAME:\s*""/);
-assert.doesNotMatch(production, /VITE_PRIVATE_MAIL_ENDPOINT_NAME:\s*"private-mail-request"/);
+assert.match(production, /VITE_PRIVATE_MAIL_ENABLED:\s*"true"/);
+assert.match(production, /VITE_PRIVATE_MAIL_ENDPOINT_NAME:\s*"private-mail-request"/);
+assert.doesNotMatch(
+  production,
+  /VITE_PRIVATE_MAIL_ENABLED:\s*"false"|VITE_PRIVATE_MAIL_ENDPOINT_NAME:\s*""/,
+);
 
 const functionSections = supabaseConfig.match(/^\[functions\.private-mail-request\]$/gm) || [];
 assert.equal(functionSections.length, 1, "private-mail-request braucht genau eine Function-Konfiguration");
@@ -49,20 +52,20 @@ assert.equal(deployCheck({
   DEPLOY_TARGET: "production",
   VITE_APP_ENV: "production",
   VITE_APP_URL: "https://kinodreieck.at",
-  VITE_PRIVATE_MAIL_ENABLED: "false",
-  VITE_PRIVATE_MAIL_ENDPOINT_NAME: "",
-}).status, 0, "deaktivierte Production-Konfiguration ohne Endpoint muss passieren");
-assert.notEqual(deployCheck({
-  DEPLOY_TARGET: "production",
-  VITE_APP_ENV: "production",
-  VITE_APP_URL: "https://kinodreieck.at",
   VITE_PRIVATE_MAIL_ENABLED: "true",
-}).status, 0, "Production darf den privaten Mailweg nicht aktivieren");
+  VITE_PRIVATE_MAIL_ENDPOINT_NAME: "private-mail-request",
+}).status, 0, "aktive Production-Konfiguration mit festem Endpoint muss passieren");
 assert.notEqual(deployCheck({
   DEPLOY_TARGET: "production",
   VITE_APP_ENV: "production",
   VITE_APP_URL: "https://kinodreieck.at",
   VITE_PRIVATE_MAIL_ENABLED: "false",
-}).status, 0, "Production darf keinen nutzbaren Mail-Endpoint enthalten");
+}).status, 0, "Production darf den privaten Mailweg nicht deaktivieren");
+assert.notEqual(deployCheck({
+  DEPLOY_TARGET: "production",
+  VITE_APP_ENV: "production",
+  VITE_APP_URL: "https://kinodreieck.at",
+  VITE_PRIVATE_MAIL_ENDPOINT_NAME: "",
+}).status, 0, "Production braucht den festen Mail-Endpoint");
 
 console.log("private_mail_release_wiring_test: 13/13 Checks bestanden");

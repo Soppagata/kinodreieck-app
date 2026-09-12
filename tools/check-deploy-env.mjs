@@ -26,8 +26,9 @@ if (ziel === "staging"
   throw new Error("Staging muss den privaten Mailweg über private-mail-request aktivieren.");
 }
 if (ziel === "production"
-    && (config.privateMailEnabled !== false || config.privateMailEndpointName !== "")) {
-  throw new Error("Production muss den privaten Mailweg ohne nutzbaren Endpoint deaktivieren.");
+    && (config.privateMailEnabled !== true
+      || config.privateMailEndpointName !== "private-mail-request")) {
+  throw new Error("Production muss den privaten Mailweg über private-mail-request aktivieren.");
 }
 
 const ERLAUBTE_VITE_KEIN_SECRET = new Set([
