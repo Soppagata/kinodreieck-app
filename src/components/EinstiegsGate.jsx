@@ -12,7 +12,6 @@ import {
 import { runtimeConfig } from "../config/runtime.js";
 
 const EINSTIEGS_LOGIN_OEFFNEN = "kd:einstieg:login-oeffnen";
-const RECHTLICHER_KONTAKT = "max.rinke@hotmail.com";
 
 function LegalAbschnitt({ titel, children }) {
   return <section aria-label={titel}><h3>{titel}</h3>{children}</section>;
@@ -23,7 +22,7 @@ function ProduktionsRechtliches() {
     <p><strong>Stand: privater Release.</strong> Hier findest du die wichtigsten Informationen zu den Datenwegen von Kinodreieck.</p>
 
     <LegalAbschnitt titel="Kontakt und Geltungsbereich">
-      <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen erreichst du Max Rinke unter <strong>{RECHTLICHER_KONTAKT}</strong>.</p>
+      <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen nutze den privaten Kontaktweg, über den du deinen Zugang erhalten hast. Nach der Anmeldung kannst du dein Anliegen außerdem über den privaten Feedbackweg unter Settings → Datenschutz &amp; Rechtliches senden, sofern dieser Weg dort verfügbar ist.</p>
     </LegalAbschnitt>
 
     <LegalAbschnitt titel="Deine Daten im Browser und im Konto">
@@ -167,7 +166,7 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
           <p><strong>Stand: privater Release.</strong> Dieser ENTWURF beschreibt die derzeitigen Datenwege der Staging-Fassung. Eine formelle rechtliche Endprüfung und noch fehlende gesetzlich erforderliche Betreiberangaben werden dadurch nicht ersetzt.</p>
 
           <LegalAbschnitt titel="Kontakt und Geltungsbereich">
-            <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung oder andere rechtliche Anliegen erreichst du Max Rinke unter <strong>{RECHTLICHER_KONTAKT}</strong>.</p>
+            <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen nutze den privaten Kontaktweg, über den du deinen Zugang erhalten hast. Nach der Anmeldung kannst du dein Anliegen außerdem über den privaten Feedbackweg unter Settings → Datenschutz &amp; Rechtliches senden, sofern dieser Weg dort verfügbar ist.</p>
           </LegalAbschnitt>
 
           <LegalAbschnitt titel="Daten im Browser und auf diesem Gerät">
@@ -206,7 +205,7 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
 
           <LegalAbschnitt titel="Download, Rechte und Löschung">
             <p>Der lokale JSON-Sicherheitsdownload bildet den Stand dieses Geräts ab. Er ist kein bestätigter vollständiger Server- oder Kontoexport und keine Zusage, dass eine Wiederherstellung oder ein Reimport verfügbar ist. Ein Kontoexport wird nur angezeigt, wenn sein vollständiger Umfang technisch verifiziert ist; andernfalls kannst du deine Betroffenenrechte über den oben genannten Kontakt manuell ausüben.</p>
-            <p>Eine Kontolöschung beginnt in der App ausschließlich mit einer authentifizierten Anfrage. Sie löscht nicht sofort automatisch. Die Anfrage wird manuell geprüft; Konto und betroffene Daten werden anschließend im vereinbarten Einzelfall deaktiviert, archiviert und/oder gelöscht. Für eine manuelle Anfrage außerhalb dieses App-Wegs oder für Auskunft und Berichtigung nutze den öffentlichen Kontakt oben.</p>
+            <p>Eine Kontolöschung beginnt in der App ausschließlich mit einer authentifizierten Anfrage. Sie löscht nicht sofort automatisch. Die Anfrage wird manuell geprüft; Konto und betroffene Daten werden anschließend im vereinbarten Einzelfall deaktiviert, archiviert und/oder gelöscht. Für eine manuelle Anfrage außerhalb dieses App-Wegs oder für Auskunft und Berichtigung nutze den oben genannten privaten Kontaktweg.</p>
           </LegalAbschnitt>
 
           <LegalAbschnitt titel="Technisch notwendige Speicherung">

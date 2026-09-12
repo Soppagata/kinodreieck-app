@@ -86,13 +86,15 @@ try {
 
   const prodLegal = await render(components.EinstiegsGate, { config: production, children: h("div", null, "App") });
   check("Production zeigt kurze, nutzbare Rechts- und Kontaktinformationen", () => {
-    assert.match(prodLegal.text(), /max\.rinke@hotmail\.com/);
+    assert.match(prodLegal.text(), /privaten Kontaktweg, über den du deinen Zugang erhalten hast/);
+    assert.match(prodLegal.text(), /privaten Feedbackweg unter Settings → Datenschutz & Rechtliches/);
     assert.match(prodLegal.text(), /Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung/);
     assert.match(prodLegal.text(), /Supabase Auth/);
     assert.match(prodLegal.text(), /Anthropic/);
   });
   check("Production zeigt keine Staging-Analyse oder detaillierte Betriebsdiagnose", () => {
-    assert.doesNotMatch(prodLegal.text(), /ENTWURF|Staging-Fassung|Betreiber-API-Key|DPA-Aussage|Build- und Umgebungsangaben|Statuscodes|revisionsbasiert/);
+    assert.doesNotMatch(prodLegal.text(), /ENTWURF|Staging-Fassung|Betreiber-API-Key|DPA-Aussage|Build- und Umgebungsangaben|Statuscodes|revisionsbasiert|@hotmail\.com/i);
+    assert.doesNotMatch(fs.readFileSync(outfile, "utf8"), /@hotmail\.com/i);
   });
   await prodLegal.close();
 

@@ -44,9 +44,11 @@ check("KI-Hinweise begrenzen FlixPatrol auf Forecast, strukturiertes Radar und n
   assert.match(source, /FlixPatrol-Nachprüfung bei Import und Kataloganreicherung[\s\S]*keine zusätzlichen FlixPatrol- oder KI-Anfragen/);
 });
 
-check("Resend- und Kontaktinformation ist eng und ausdrücklich", () => {
-  assert.equal((source.match(/max\.rinke@hotmail\.com/g) || []).length, 1);
+check("Resend- und Kontaktinformation ist eng und ohne private Adresse", () => {
+  assert.doesNotMatch(source, /@hotmail\.com/i);
   assert.equal((source.match(/<a\b/g) || []).length, 1);
+  assert.match(source, /privaten Kontaktweg, über den du deinen Zugang erhalten hast/);
+  assert.match(source, /privaten Feedbackweg unter Settings → Datenschutz &amp; Rechtliches/);
   assert.match(source, /Resend in den USA/);
   assert.match(source, /technischen Metadaten standardmäßig 30 Tage/);
   assert.match(source, /interne Empfänger bleibt serverseitig gebunden und wird nicht veröffentlicht/);
