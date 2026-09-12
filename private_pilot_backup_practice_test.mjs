@@ -225,7 +225,7 @@ await check("Gast-, Konto- und Logoutpfad bleiben getrennt", async () => {
   const account = coordinatorFixture({ current: session("synthetic-a"), owner: "synthetic-a", confirmed: ["synthetic-a"] });
   await account.coordinator.initialize();
   assert.equal(account.coordinator.getStorageState(), STORAGE_SESSION_STATES.READY);
-  assert.deepEqual(account.calls.slice(0, 3), [["prepare", "synthetic-a"], ["confirm", "synthetic-a"], ["pull"]]);
+  assert.deepEqual(account.calls.slice(0, 4), [["prepare", "synthetic-a"], ["confirm", "synthetic-a"], ["flush"], ["pull"]]);
 
   const pending = coordinatorFixture({ current: session("synthetic-a"), owner: "synthetic-a", confirmed: ["synthetic-a"], open: true });
   await pending.coordinator.initialize();
