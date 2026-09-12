@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { persoenlicherAutorName } from "../services/auth.js";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { ALLE_TYPEN, hatDreieck, normalisiereTyp } from "../lib/typen.js";
 import { quelleZuArray, arrayZuQuelle } from "../lib/quellen.js";
@@ -143,7 +144,7 @@ export function FilmForm({
       typ: f.typ,
       quelle: arrayZuQuelle(f.quellen),
       kategorie: unbewertet ? null : f.kategorie,
-      bewertet_von: unbewertet ? null : (autorName || "max"),
+      bewertet_von: unbewertet ? null : persoenlicherAutorName(autorName),
       bewertung: unbewertet ? null : { wie: f.wie, was: f.was, warum: f.warum },
       genre: f.genre.split(",").map((g) => g.trim()).filter(Boolean),
       tags: [],

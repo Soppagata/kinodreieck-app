@@ -8,7 +8,8 @@ import "./styles/design-shell.css";
 import App from "./App.jsx";
 import { AppErrorBoundary } from "./components/AppErrorBoundary.jsx";
 import { sessionCoordinator, STORAGE_SESSION_STATES } from "./services/sessionCoordinator.js";
-import { subscribeStorageContext } from "./services/storage.js";
+import { activeSyncStatus, subscribeStorageContext } from "./services/storage.js";
+import { startAccountAutoSync } from "./services/accountAutoSync.js";
 import { EinstiegsGate } from "./components/EinstiegsGate.jsx";
 import { AppUpdateHinweis } from "./components/AppUpdateHinweis.jsx";
 import { bereinigeVeralteteImportSnapshots } from "./lib/personalDataRegistry.js";
@@ -103,19 +104,10 @@ async function boot() {
 
   bootGerendert = true;
   renderSicherenBaum();
+  startAccountAutoSync({ coordinator: sessionCoordinator, status: activeSyncStatus });
 }
 
 boot();
-
-/* Die Sitzung wird beim Sichtbarwerden geprüft, nicht per Zeitgeber: iOS hält
-   Zeitgeber in der installierten App an, sobald sie in den Hintergrund geht. */
-if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      sessionCoordinator.refresh().catch(() => { /* stiller Versuch */ });
-    }
-  });
-}
 
 /* PWA: Service Worker nur in echten Browser-Kontexten registrieren. Unter
    file:// kann die API zwar vorhanden sein; eine Registrierung ist dort aber

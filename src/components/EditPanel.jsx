@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { persoenlicherAutorName } from "../services/auth.js";
 import { T, btnStyle, lightInput } from "../lib/tokens.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 
@@ -61,7 +62,7 @@ export function EditPanel({ film, onSave, onCancel, autorName, herkunftHinweis =
           style={{ ...btnStyle(true), padding: "7px 14px", opacity: prognoseUnvollstaendig || speichert ? 0.5 : 1 }}
           onClick={() => onSave(alleLeer
             ? { bewertung: null, kategorie: null, begruendung: beg, notiz, bewertet_von: null }
-            : { bewertung: { wie: toNum(wie), was: toNum(was), warum: toNum(warum) }, kategorie: kat, begruendung: beg, notiz, bewertet_von: autorName || "max" /* KD-030 */ })}>
+            : { bewertung: { wie: toNum(wie), was: toNum(was), warum: toNum(warum) }, kategorie: kat, begruendung: beg, notiz, bewertet_von: persoenlicherAutorName(autorName) })}>
           {speichert ? "Speichert …" : alleLeer ? "Als unbewertet speichern" : herkunftHinweis ? "Bewertung speichern" : "Speichern"}
         </button>
         <button disabled={speichert} style={{ ...btnStyle(false), padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>

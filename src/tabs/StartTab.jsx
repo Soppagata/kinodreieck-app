@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { T } from "../lib/tokens.js";
+import { syncStatusAnzeige } from "../lib/syncStatus.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { formatiereTermin } from "../lib/programm.js";
 import { Wochenplan } from "../components/Wochenplan.jsx";
@@ -82,11 +83,7 @@ function Modul({ name, ziel, linkLabel, onNavigiere, tour, children }) {
    Vertrauen. Fehlt etwas, steht das hier. */
 function VertrauensZeile({ progStand, streamingBekannt, programmInfo = null, streamingInfo = null }) {
   const s = useSyncStatus();
-  const sync = !s || !s.configured ? null
-    : (s.conflict && s.conflict.length) ? { farbe: T.gefahr, text: "Konflikt" }
-    : (s.pending && s.pending.length) ? { farbe: T.wolfram, text: "ausstehend " + s.pending.length }
-    : (s.stale && s.stale.length) ? { farbe: T.wolfram, text: "nicht aktuell" }
-    : { farbe: T.ok, text: "synchron" };
+  const sync = syncStatusAnzeige(s);
   const fmt = (ms) => formatPresentationDate(ms, { includeTime: true, fallback: "—" });
   const katalog = streamingBekannt && streamingBekannt.stand ? (streamingBekannt.titel || []).length : null;
   const fehltText = (info) => (info?.anmeldungNoetig ? "Anmeldung nötig" : info?.fehler ? "nicht geladen" : "noch nicht geladen");

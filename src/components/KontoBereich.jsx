@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
+import { syncStatusTeile } from "../lib/syncStatus.js";
 import { sessionCoordinator } from "../services/sessionCoordinator.js";
 import {
   accountSync, istKontoTreiberAktiv, istKontoTreiberVorbereitet,
@@ -26,13 +27,7 @@ import { runtimeConfig } from "../config/runtime.js";
 
 function Statuszeile({ status }) {
   if (!status?.configured) return null;
-  const teile = [];
-  if (status.conflict?.length) teile.push({ text: status.conflict.length + " Konflikt(e)", farbe: T.gefahr });
-  if (status.zuGross?.length) teile.push({ text: status.zuGross.length + " zu groß", farbe: T.gefahr });
-  if (status.schemaVeraltet?.length) teile.push({ text: status.schemaVeraltet.length + " wartet auf Migration", farbe: T.gefahr });
-  if (status.pending?.length) teile.push({ text: status.pending.length + " ausstehend", farbe: T.wolfram });
-  if (status.stale?.length) teile.push({ text: "nicht aktuell", farbe: T.wolfram });
-  if (!teile.length) teile.push({ text: "synchron", farbe: T.ok });
+  const teile = syncStatusTeile(status);
   return (
     <p style={{ margin: "0 0 10px", fontSize: 13 }}>
       {teile.map((t, i) => (

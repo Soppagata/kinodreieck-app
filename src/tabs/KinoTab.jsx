@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useId } from "react";
+import { useRemoteStorageValue } from "../controllers/useRemoteStorageValue.js";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { matchFilm, norm } from "../lib/match.js";
 import { istImAbo } from "../lib/kinos.js";
@@ -77,6 +78,10 @@ export function KinoTab({
   const [filterMenueOffen, setFilterMenueOffen] = useState(false);
   const filterMenueOffenRef = useRef(filterMenueOffen);
   filterMenueOffenRef.current = filterMenueOffen;
+  useRemoteStorageValue(K.filterKino, (value) => {
+    filterMenueOffenRef.current = value === "1";
+    setFilterMenueOffen(value === "1");
+  });
   useEffect(() => {
     let aktiv = true;
     store.get(K.filterKino).then((r) => {

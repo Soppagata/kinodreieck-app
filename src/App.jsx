@@ -49,6 +49,7 @@ import { useEntdeckenRadarController } from "./controllers/useEntdeckenRadarCont
 import { radarClientRuntimeAvailable, runtimeConfig } from "./config/runtime.js";
 import { naechsteLokaleMasterHerkunft } from "./controllers/masterOriginController.js";
 import { useConfirmedStorageState } from "./controllers/useConfirmedStorageState.js";
+import { useRemoteStorageValue } from "./controllers/useRemoteStorageValue.js";
 import { ERROR_SCOPE } from "./controllers/appErrorScopes.js";
 import { erstellePersonalDataTransactionController } from "./controllers/personalDataTransactionController.js";
 import {
@@ -227,6 +228,7 @@ export default function App() {
     master, setMaster, masterRef, masterMeta, setMasterMeta, masterMetaRef,
     masterHerkunft, setMasterHerkunft, masterHerkunftRef, commitMaster,
   } = useMasterStateController();
+  const remoteMasterStandRef = useRef(null);
   const [programm, setProgramm] = useState(null);
   const [programmArt, setProgrammArt] = useState(null);
   const [progStand, setProgStand] = useState(null);
@@ -1010,6 +1012,39 @@ export default function App() {
   useEffect(() => {
     store.get(K.autorName).then((r) => { if (r && r.value) setAutorName(r.value); }).catch(() => {});
   }, []);
+
+  // Ein Pull aktualisiert gespeicherte Listen und Präferenzen im bestehenden
+  // App-Baum. Navigation und noch nicht gespeicherte Formulare bleiben erhalten.
+  const meldeRemoteLesefehler = () => setErr("Der neuere Kontostand konnte nicht vollständig angezeigt werden. Bitte lade die App erneut.");
+  useRemoteStorageValue(K.master, (value) => {
+    const p = value == null ? {} : JSON.parse(value);
+    const next = ensureIds(p.filme || []);
+    remoteMasterStandRef.current = next;
+    setMaster(next);
+    setMasterMeta(p.meta || null);
+    setMasterHerkunft({ typ: "storage", zeit: p.gespeichertAm || Date.now(), basis: p.herkunft?.basis });
+  }, meldeRemoteLesefehler);
+  useRemoteStorageValue(K.kinoPins, (value) => {
+    setKinoPins((value == null ? [] : JSON.parse(value)).filter((pin) => !pinAbgelaufen(pin)));
+  }, meldeRemoteLesefehler);
+  useRemoteStorageValue(K.merkliste, (value) => setMerkliste(value == null ? [] : JSON.parse(value)), meldeRemoteLesefehler);
+  useRemoteStorageValue(K.zeitgrenze, (value) => setZeitgrenze(value || "14:00"));
+  useRemoteStorageValue(K.autorName, (value) => setAutorName(value || ""));
+  useRemoteStorageValue(K.einstellungen, (value) => {
+    const roh = value == null ? {} : JSON.parse(value);
+    const e = { theme: "dunkel", startTab: "start", modus: "", ...roh,
+      schrift: normalisiereSchrift(roh.schrift), entdeckenTaeglich: roh.entdeckenTaeglich === true };
+    if (["kurosawa", "grindhouse"].includes(e.modus)) e.modus = "";
+    if (e.modus === "nerv") e.modus = "neon-noir";
+    setEinstellungenState(e);
+    setzeTheme(e.modus || e.theme);
+  }, meldeRemoteLesefehler);
+  useRemoteStorageValue(K.streamingDienste, (value) => {
+    const v = value == null ? {} : JSON.parse(value);
+    setAuswahlRoh(Array.isArray(v.quellen) ? v.quellen
+      : Array.isArray(v.dienste) ? v.dienste.map((d) => ALTE_SLUGS[d] || d) : []);
+    setHeuristikAn(v.heuristik !== false);
+  }, meldeRemoteLesefehler);
 
   /* Kandidaten für Picker und lokale Startprojektion: Master, aktuelles
      Kinoprogramm (stabile ID oder rein lokaler Projektionsschlüssel) sowie
@@ -1826,6 +1861,7 @@ export default function App() {
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
             recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef} datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
+            remoteMasterStand={remoteMasterStandRef.current}
             stapelimportKiAktiv={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true && kiAn("stapelimport")}
             setErr={setErr}

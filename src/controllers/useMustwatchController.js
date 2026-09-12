@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useRemoteStorageValue } from "./useRemoteStorageValue.js";
 import {
   K,
   captureStorageContext,
@@ -88,6 +89,10 @@ export function useMustwatchController({ master, masterRef: externerMasterRef, s
     geladenRef.current = true;
     setMustwatchGeladen(true);
   }, [uebernehmeState]);
+
+  useRemoteStorageValue(K.mustwatch, (value) => {
+    setMustwatch(value == null ? [] : parseMustwatchSicher(value));
+  }, () => setErrRef.current("Neuere Must-Watch-Einträge konnten nicht sicher geladen werden. Bitte lade die App erneut."));
 
   useEffect(() => {
     let aktiv = true;

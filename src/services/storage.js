@@ -8,10 +8,11 @@ export {
   store, K, PROGRAMM_TTL_MS,
   activeSyncStatus, activePull,
   captureStorageContext, storageContextGenerationSnapshot, storageOwnerKennung, subscribeStorageContext,
+  subscribeRemoteStorage,
   getTreiber, setTreiber,
 } from "../lib/storage.js";
 
-import { store as personalStore, setStorageDriver, storageDriverName } from "../lib/storage.js";
+import { store as personalStore, setStorageDriver, storageDriverName, notifyRemoteStorage } from "../lib/storage.js";
 import {
   createAccountDriver, ACCOUNT_SYNC_KEYS, bereinigeVerwaisteTreiberMetadaten,
   getCacheOwner, setCacheOwner, verwerfeTreiberZustand,
@@ -249,6 +250,9 @@ function baueAccountDriver(accountId) {
   const generation = ++treiberGeneration;
   const driver = createAccountDriver({
     owner: `account:${id}`,
+    onRemoteChange: (changes) => {
+      if (kontoAktiv && accountDriver === driver && vorbereitetesKonto === id) notifyRemoteStorage(changes);
+    },
     config: runtimeConfig,
     isActive: () => vorbereitetesKonto === id
       && treiberGeneration === generation
@@ -358,7 +362,7 @@ export function bestaetigeKontoTreiber(accountId, optionen) {
     const beendet = beendeGebundeneAccountTransition(lokalerTransitionToken);
     if (!beendet) throw privacyError();
   }
-  setStorageDriver(driver);
+  if (!kontoAktiv) setStorageDriver(driver);
   kontoAktiv = true;
   return driver;
 }

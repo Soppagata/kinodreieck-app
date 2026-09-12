@@ -368,7 +368,14 @@ export function createSessionCoordinator({
     if (storage.confirm.length >= 2) await storage.confirm(id, { remoteStorage: true });
     else await storage.confirm(id);
     if (pullWhenReady) {
-      try { await storage.pull(); } catch { /* lokaler Start bleibt möglich */ }
+      try {
+        // Die lokale Queue zuerst senden: ein Offline-Entwurf ist kein Konflikt
+        // mit genau der Serverrevision, auf der er entstanden ist.
+        await storage.flush?.();
+        if (accountId(auth.getSnapshot?.()) === id && storage.active?.()
+            && storage.preparedAccountId?.() === id
+            && remoteStorageFreigegeben(auth.getSnapshot?.())) await storage.pull();
+      } catch { /* Der gebundene lokale Stand bleibt bei Netzfehlern erhalten. */ }
     }
     return STORAGE_SESSION_STATES.READY;
   }
@@ -495,7 +502,7 @@ export function createSessionCoordinator({
     async refresh() {
       return serialisiereSicher(async () => {
       const session = await auth.refresh();
-      await align(session);
+      await align(session, { pullWhenReady: true });
       return publish(session);
       });
     },

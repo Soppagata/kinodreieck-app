@@ -1,16 +1,9 @@
 import { useState, useEffect } from "react";
-import { T } from "../lib/tokens.js";
+import { syncStatusAnzeige } from "../lib/syncStatus.js";
 import { activeSyncStatus } from "../services/storage.js";
 
 /* Leitet aus dem aktiven Kontospeicher die drei Vertrauens-Zustände ab:
    synchron / ausstehend / Konflikt. Im lokalen Gastmodus: neutral (null). */
-function ableiten(s) {
-  if (!s || !s.configured) return null;
-  if (s.conflict && s.conflict.length) return { farbe: T.gefahr, bg: "rgba(217,106,90,0.14)", text: "Konflikt" };
-  if (s.pending && s.pending.length) return { farbe: T.wolfram, bg: "rgba(227,166,59,0.14)", text: "ausstehend " + s.pending.length };
-  if (s.stale && s.stale.length) return { farbe: T.wolfram, bg: "rgba(227,166,59,0.14)", text: "nicht aktuell" };
-  return { farbe: T.ok, bg: "rgba(111,206,143,0.12)", text: "synchron" };
-}
 
 /* Pollt den Sync-Status leichtgewichtig (alle 3s + bei Fensterfokus). Der Status
    ändert sich durch asynchrone Commits/Pulls, ist aber nicht reaktiv — daher Poll. */
@@ -27,7 +20,7 @@ export function useSyncStatus() {
 
 /* Persistentes Status-Pill (Header). Auf dem Handy die Vertrauensfrage der App. */
 export function SyncStatusChip() {
-  const v = ableiten(useSyncStatus());
+  const v = syncStatusAnzeige(useSyncStatus());
   if (!v) return null;
   return (
     <span className="kd-syncchip" title={"Geräte-Sync: " + v.text} style={{

@@ -6,9 +6,12 @@ import { EGGS_ENABLED, EGG_AKTIV } from "../lib/modus.js";
 import {
   berechneUnlocks,
   ladeAchievements,
+  parseAchievements,
   speichereAchievements,
 } from "../lib/eggs.js";
 import { versucheCageTag } from "../lib/eggFrequenz.js";
+import { K } from "../services/storage.js";
+import { useRemoteStorageValue } from "./useRemoteStorageValue.js";
 import { baueCagePool } from "../lib/cagePool.js";
 import {
   DEEP_SPACE_HORROR_ID,
@@ -40,6 +43,7 @@ export function useEggController({
   zufall = browserZufall,
 }) {
   const [achievements, setAchievements] = useState(null);
+  useRemoteStorageValue(K.achievements, (value) => setAchievements(parseAchievements(value)));
   const backfillRef = useRef(false);
   const unlockPendingRef = useRef(new Set());
   const toastSeq = useRef(0);

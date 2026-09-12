@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { persoenlicherAutorName } from "../services/auth.js";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
 import { SHARED_PUBLICATION_STATUS, publicationState } from "../lib/sharedPublication.js";
@@ -22,7 +23,7 @@ const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px *
 /* ---------- Eingabemaske ---------- */
 export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   const [titel, setTitel] = useState(vorlage ? vorlage.titel : "");
-  const [autor, setAutor] = useState(vorlage ? vorlage.autor : "Max");
+  const [autor, setAutor] = useState(vorlage ? vorlage.autor : persoenlicherAutorName());
   const [text, setText] = useState(vorlage ? vorlage.text : "");
   const [geordnet, setGeordnet] = useState(vorlage ? !!vorlage.geordnet : false);
   const [liste, setListe] = useState(vorlage ? vorlage.liste.map((l) => ({ eingabe: l.eingabe, jahr: l.jahr ? String(l.jahr) : "", typ: l.typ ? normalisiereTyp(l.typ) : "" })) : []);

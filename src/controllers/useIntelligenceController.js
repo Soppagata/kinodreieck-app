@@ -9,7 +9,9 @@ import { erstelleVorbewertungsErgebnis } from "../services/vorbewertung.js";
 import { filmwissenService } from "../services/filmwissen.js";
 import { errorText } from "../services/errors.js";
 import { kiAn } from "../lib/kiSchalter.js";
-import { ladeProfil } from "../lib/profil.js";
+import { ladeProfil, pruefeProfil } from "../lib/profil.js";
+import { K } from "../services/storage.js";
+import { useRemoteStorageValue } from "./useRemoteStorageValue.js";
 import { setzePrognoseStatus } from "../lib/prognose.js";
 import { slugId } from "../lib/match.js";
 import { mergePersonalMasterEntry } from "../lib/personalEntryChronology.js";
@@ -47,6 +49,15 @@ export function useIntelligenceController({
   const [prognoseFehler, setPrognoseFehler] = useState({});
   const [aktuellesProfil, setAktuellesProfil] = useState(undefined);
   const [aktuelleProfilVersion, setAktuelleProfilVersion] = useState(null);
+  useRemoteStorageValue(K.geschmacksprofil, (value) => {
+    const profil = value == null ? null : JSON.parse(value);
+    if (profil && pruefeProfil(profil).length) throw new Error("Profil nicht lesbar");
+    setAktuellesProfil(profil);
+    setAktuelleProfilVersion(profil?.version || null);
+  }, () => {
+    setAktuellesProfil({ beschaedigt: true });
+    setAktuelleProfilVersion(null);
+  });
 
   const accountId = session.mode === "account" && session.state === "ready"
     ? session.account?.id || null

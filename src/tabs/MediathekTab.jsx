@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useRemoteStorageValue } from "../controllers/useRemoteStorageValue.js";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm, score } from "../lib/match.js";
 import { store, K } from "../services/storage.js";
@@ -82,6 +83,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   filmwissenAktiv = false, filmwissenRechercheAktiv = false,
   filmwissenProFilm = {}, filmwissenRechercheLaufId = null,
   onFilmwissenLaden, onFilmwissenRecherchieren, datenKontextKey = "gast",
+  remoteMasterStand = null,
   stapelimportKiAktiv = false, stapelimportFacts, setErr = () => {},
   recommendationPins = [], onRecommendationPinToggle }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
@@ -133,7 +135,12 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     const reinePrognoseProjektion = !auswahlmodus
       && draftGrenzeRef.current.datenKontextKey === datenKontextKey
       && istReinerPrognoseMasterwechsel(draftGrenzeRef.current.master, master, expandedId);
-    const erwartet = erwarteteLoeschProjektion || reinePrognoseProjektion;
+    // Der automatische Pull desselben Kontos aktualisiert die Sammlung,
+    // ohne normale Eingabeformulare auszuhängen. Laufende Auswahl-/Löschpläne
+    // bleiben dagegen an ihren ursprünglichen Gesamtbestand gebunden.
+    const kontoPull = master === remoteMasterStand && !auswahlmodus && !loeschDialog
+      && draftGrenzeRef.current.datenKontextKey === datenKontextKey;
+    const erwartet = erwarteteLoeschProjektion || reinePrognoseProjektion || kontoPull;
     if (!erwartet) dialogLaufRef.current += 1;
     draftGrenzeRef.current = {
       master, datenKontextKey,
@@ -280,6 +287,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const [filterMenueOffen, setFilterMenueOffen] = useState(false);
   const filterMenueOffenRef = useRef(filterMenueOffen);
   filterMenueOffenRef.current = filterMenueOffen;
+  useRemoteStorageValue(K.filterMediathek, (value) => {
+    filterMenueOffenRef.current = value === "1";
+    setFilterMenueOffen(value === "1");
+  });
   useEffect(() => {
     let aktiv = true;
     store.get(K.filterMediathek).then((r) => {

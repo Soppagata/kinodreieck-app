@@ -104,7 +104,7 @@
     "test:kischalter": "node kischalter_test.mjs",
     "test:filmwissen-gate": "node filmwissen_gate_test.mjs",
     "test:account-epoch-upgrade": "node account_epoch_upgrade_test.mjs",
-    "test:account-sync-scenarios": "node account_sync_scenarios_test.mjs",
+    "test:account-sync-scenarios": "node account_sync_scenarios_test.mjs && node account_autosync_test.mjs",
     "test:data-safety": "node data_safety_wording_test.mjs && node account_export_release_ui_test.mjs",
     "test:e17b-remote-window": "node --check tools/e17b-remote-window.mjs && node --check e17b_remote_window_test.mjs && node --unhandled-rejections=strict e17b_remote_window_test.mjs",
     "test:e17b-canonical-pg17": "node --unhandled-rejections=strict e17b_canonical_pg17_integration_test.mjs",

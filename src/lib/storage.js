@@ -30,6 +30,20 @@ export const localDriver = {
 let activeDriver = localDriver;
 let storageContextGeneration = 0;
 const storageContextListeners = new Set();
+const remoteStorageListeners = new Set();
+
+export function subscribeRemoteStorage(listener) {
+  remoteStorageListeners.add(listener);
+  return () => remoteStorageListeners.delete(listener);
+}
+
+/* Datenänderung im selben Konto: keine neue Treibergeneration und kein
+   Remount. Offene Formulare behalten dadurch ihren eigenen Entwurf. */
+export function notifyRemoteStorage(changes) {
+  for (const listener of [...remoteStorageListeners]) {
+    try { listener(changes); } catch { /* Ein Ansichtsfehler stoppt keinen Pull. */ }
+  }
+}
 
 function storageContextError() {
   const error = new Error("Der Speicherkontext hat sich während des Auftrags geändert.");

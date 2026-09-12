@@ -24,6 +24,15 @@ export function guestSession() {
   });
 }
 
+/* Ein neuer Account darf seine Bewertungen nicht automatisch Max zuschreiben.
+   Ein bewusst gesetzter Autorenname bleibt erhalten; sonst gilt der Loginname. */
+export function persoenlicherAutorName(wunsch, session = authService.getSnapshot()) {
+  if (typeof wunsch === "string" && wunsch.trim()) return wunsch.trim();
+  if (session?.mode === "account") return session.account?.displayName
+    || session.account?.email?.split("@")[0] || "ich";
+  return "max";
+}
+
 /* Gastzustand NACH einer abgelaufenen Anmeldung. Bewusst weiterhin ein
    vollwertiger, betriebsbereiter Gast (lokale Daten bleiben nutzbar) — der
    Fehler ist nur der Anlass für einen ehrlichen Hinweis in der Oberfläche.

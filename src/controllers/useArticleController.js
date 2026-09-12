@@ -7,6 +7,7 @@ import {
 } from "../services/storage.js";
 import { normalisiereArtikelTypen } from "../lib/artikel.js";
 import { recoverInterruptedPublication } from "../lib/sharedPublication.js";
+import { useRemoteStorageValue } from "./useRemoteStorageValue.js";
 
 function gueltigeArtikelListe(liste) {
   return Array.isArray(liste) && liste.every((artikel) => (
@@ -74,6 +75,11 @@ export function useArticleController({ setErr }) {
     setArtikelGeladen(true);
     return true;
   }, [uebernehmeState]);
+
+  useRemoteStorageValue(K.artikel, (value) => {
+    const gelesen = value == null ? { liste: [], gespeichertAm: 0 } : parseArtikelSicher(value);
+    setArtikelListe(gelesen.liste, gelesen.gespeichertAm);
+  }, () => setErrRef.current("Neuere Artikel konnten nicht sicher geladen werden. Bitte lade die App erneut."));
 
   useEffect(() => {
     let aktiv = true;

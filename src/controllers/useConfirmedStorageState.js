@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { captureStorageContext } from "../services/storage.js";
+import { useRemoteStorageValue } from "./useRemoteStorageValue.js";
 
 /* Queue-zeitige, bestätigte Persistenz für kleine persönliche UI-Töpfe.
    Der sichtbare State wird erst nach erfolgreichem Write übernommen; ein
@@ -68,5 +69,8 @@ export function useConfirmedStorageState({ key, initial, normalisiere, setErr, f
     catch { return false; }
   }, [commit]);
   const schreibe = useCallback((berechne) => writerRef.current(berechne), []);
+  useRemoteStorageValue(key, (value) => {
+    commit(normalisiereRef.current(value == null ? initial : JSON.parse(value)));
+  }, () => setErrRef.current?.("Der neuere Kontostand konnte nicht gelesen werden. Bitte lade die App erneut."));
   return { wert, wertRef, uebernehmeBestaetigt, schreibe };
 }

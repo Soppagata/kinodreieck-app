@@ -346,7 +346,7 @@ function aufbau({
   await a.coordinator.initialize();
   check("Bestätigtes Konto wird beim Boot aktiviert und einmal abgeglichen",
     JSON.stringify(a.calls) === JSON.stringify([
-      ["prepare", "konto-A"], ["confirm", "konto-A"], ["pull"],
+      ["prepare", "konto-A"], ["confirm", "konto-A"], ["flush"], ["pull"],
     ])
     && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.READY);
 }
@@ -408,6 +408,7 @@ function aufbau({
   check("Reaktivierung desselben Owners erhält offene Änderungen und schaltet den bestehenden Cache kontrolliert wieder frei",
     JSON.stringify(a.calls) === JSON.stringify([
       ["unblock-access", "konto-A"], ["prepare", "konto-A"], ["confirm", "konto-A"],
+      ["flush"], ["pull"],
     ])
     && a.coordinator.getSnapshot().capabilities.remoteStorage === true
     && a.coordinator.getSnapshot().capabilities.personalAi === false
@@ -693,7 +694,7 @@ function aufbau({
     neu.account?.id === "konto-A"
     && JSON.stringify(a.calls) === JSON.stringify([
       ["unlock-owner", "konto-A"], ["prepare", "konto-A"],
-      ["confirm", "konto-A"], ["pull"],
+      ["confirm", "konto-A"], ["flush"], ["pull"],
     ])
     && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.READY);
 }

@@ -138,6 +138,7 @@ export function createAccountDriver({
   fetchImpl = null,
   isActive = () => true,
   owner = "account:unknown",
+  onRemoteChange = () => {},
 } = {}) {
   const basis = String(config.supabaseUrl || "").trim().replace(/\/+$/, "");
   const anon = String(config.supabasePublishableKey || "").trim();
@@ -242,6 +243,7 @@ export function createAccountDriver({
     if (!aktiv()) return { ...inaktiv(), geladen: [], angelegt: [], konflikt: [], fehler: [] };
     if (!konfiguriert()) return { ok: false, message: "nicht konfiguriert" };
     const ergebnis = { geladen: [], angelegt: [], konflikt: [], fehler: [] };
+    const geaendert = [];
     let rows;
     try {
       const r = await rest("GET", `/${TABLE}?select=key,value,revision`);
@@ -270,8 +272,15 @@ export function createAccountDriver({
       const remoteVal = (row.value == null) ? null : String(row.value);
       const lokal = localStorage.getItem(key);
       const st = getStatus();
-      const ungesynct = !!((st.pending && st.pending[key]) || (st.conflict && st.conflict[key]));
+      const ungesynct = !!(st.pending?.[key] || st.conflict?.[key]
+        || st.zuGross?.[key] || st.schemaVeraltet?.[key]);
       if (lokal !== remoteVal && ungesynct && lokal != null) {
+        // Ein noch unveränderter Serverstand ist keine konkurrierende Änderung.
+        // Auch terminal abgelehnte lokale Inhalte bleiben bis zur Lösung erhalten.
+        if (row.revision === getVer(key) && !st.conflict?.[key]) {
+          markStale(key, false);
+          continue;
+        }
         /* Lokale, noch nicht übertragene Änderung trifft auf abweichendes Remote:
            nie stillschweigend verwerfen. Konflikt melden, revision NICHT übernehmen. */
         snapshot(key, lokal);
@@ -289,6 +298,7 @@ export function createAccountDriver({
         if (!aktiv()) return { ...inaktiv(), ...ergebnis };
         if (remoteVal == null) localStorage.removeItem(key);
         else localStorage.setItem(key, remoteVal);
+        geaendert.push({ key, value: remoteVal });
       }
       if (!aktiv()) return { ...inaktiv(), ...ergebnis };
       setVer(key, row.revision);
@@ -297,6 +307,7 @@ export function createAccountDriver({
     }
     if (!aktiv()) return { ...inaktiv(), ...ergebnis };
     setStatus({ lastPull: nowIso() });
+    if (geaendert.length) onRemoteChange(geaendert);
     return { ok: ergebnis.fehler.length === 0, ...ergebnis };
   }
 
@@ -321,11 +332,20 @@ export function createAccountDriver({
     if (r.inactive) return r;
     if ((r.status === 201 || r.status === 200) && Array.isArray(r.data) && r.data[0]) {
       setVer(key, r.data[0].revision);
-      markPending(key, false); markConflict(key, false); markStale(key, false); markZuGross(key, false); markSchemaVeraltet(key, false);
+      markPending(key, localStorage.getItem(key) !== value); markConflict(key, false); markStale(key, false); markZuGross(key, false); markSchemaVeraltet(key, false);
       setStatus({ lastCommit: nowIso() });
       return { ok: true, status: r.status };
     }
     if (r.status === 409) {
+      const g = await rest("GET", `/${TABLE}?key=eq.${q(key)}&select=key,value,revision`);
+      if (g.inactive) return g;
+      if (g.ok && g.data?.length === 1 && g.data[0].value === value) {
+        setVer(key, g.data[0].revision);
+        markPending(key, localStorage.getItem(key) !== value); markConflict(key, false); markStale(key, false);
+        setStatus({ lastCommit: nowIso() });
+        return { ok: true, status: 200, recovered: true };
+      }
+      if (!g.ok) { markPending(key, true); return { ok: false, status: g.status }; }
       snapshot(key, value);
       markConflict(key, true); markPending(key, true);
       return { ok: false, conflict: true, status: r.status };
@@ -356,7 +376,7 @@ export function createAccountDriver({
       if (r.inactive) return r;
       if (r.ok && Array.isArray(r.data) && r.data.length === 1) {
         setVer(key, r.data[0].revision);
-        markPending(key, false); markConflict(key, false); markStale(key, false); markZuGross(key, false); markSchemaVeraltet(key, false);
+        markPending(key, localStorage.getItem(key) !== value); markConflict(key, false); markStale(key, false); markZuGross(key, false); markSchemaVeraltet(key, false);
         setStatus({ lastCommit: nowIso() });
         return { ok: true, status: r.status };
       }
@@ -365,6 +385,14 @@ export function createAccountDriver({
         const g = await rest("GET", `/${TABLE}?key=eq.${q(key)}&select=key,value,revision`);
         if (g.inactive) return g;
         if (g.ok && Array.isArray(g.data) && g.data.length === 1) {
+          // Die Antwort auf einen erfolgreichen Write kann im Netz verloren
+          // gehen. Ein identischer Serverwert bestätigt genau diesen Auftrag.
+          if (g.data[0].value === value) {
+            setVer(key, g.data[0].revision);
+            markPending(key, localStorage.getItem(key) !== value); markConflict(key, false); markStale(key, false);
+            setStatus({ lastCommit: nowIso() });
+            return { ok: true, status: 200, recovered: true };
+          }
           snapshot(key, value);
           markConflict(key, true); markPending(key, true);
           return { ok: false, conflict: true, status: 409 };
