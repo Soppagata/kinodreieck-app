@@ -245,7 +245,7 @@ export function DatenTab({
               etwas bewirken. */}
           {kiStand.global === true && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingLeft: 4, borderLeft: "2px solid " + T.saalHoch }}>
-              {Object.entries(KI_FUNKTIONEN).map(([id, f]) => (
+              {Object.entries(KI_FUNKTIONEN).filter(([id]) => id !== "filmwissen").map(([id, f]) => (
                 <div key={id} style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
                   <SegmentedControl style={{ marginBottom: 0, minWidth: 0 }}
                     value={istEinzelfunktionAn(id, kiStand) ? "an" : "aus"}

@@ -5,7 +5,6 @@ import { Dreieck, AxisChips, KategorieTag, UnbewertetTag, IconDelete } from "./u
 import { EditPanel } from "./EditPanel.jsx";
 import { PrognoseBereich } from "./PrognoseBereich.jsx";
 import { setzePrognoseStatus } from "../lib/prognose.js";
-import { FILMWISSEN_STATUS } from "../lib/filmwissen.js";
 import { QUELLEN_KLASSEN, quelleBadges } from "../lib/quellen.js";
 
 function normalisiereQuellenLabel(label) {
@@ -258,19 +257,7 @@ export function FilmCard({
             erstellenMoeglich={!!vorbewertung && !vorbewertung.sperrgrund}
             sperrgrund={vorbewertung?.sperrgrund}
             aktuelleProfilVersion={vorbewertung?.aktuelleProfilVersion}
-            onErstellen={vorbewertung ? async () => {
-              const filmwissenStatus = filmwissen?.daten?.status;
-              const brauchtQuellenlauf = !film.prognose
-                && filmwissen?.rechercheMoeglich
-                && typeof filmwissen?.onRecherchieren === "function"
-                && [FILMWISSEN_STATUS.CACHE_MISS, FILMWISSEN_STATUS.NICHT_ZUORDENBAR]
-                  .includes(filmwissenStatus);
-              if (brauchtQuellenlauf) {
-                const quellenErgebnis = await filmwissen.onRecherchieren({ bereitsAusgeloest: true });
-                if (quellenErgebnis !== true && quellenErgebnis?.vorlaeufig !== true) return false;
-              }
-              return vorbewertung.onErstellen?.();
-            } : null}
+            onErstellen={vorbewertung?.onErstellen}
             onVerwerfen={vorbewertung?.onVerwerfen}
             onKorrigieren={() => { setSpeicherFehler(""); setPrognoseEntwurf(false); setEditing(true); }}
             onUebernehmen={onSave ? () => { setSpeicherFehler(""); setPrognoseEntwurf(true); setEditing(true); } : null}

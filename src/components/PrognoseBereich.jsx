@@ -4,6 +4,7 @@ import {
   lesePrognose, passungsBand, prognoseIstVeraltet,
 } from "../lib/prognose.js";
 import { FilmwissenBereich } from "./FilmwissenBereich.jsx";
+import { FILMWISSEN_STATUS } from "../lib/filmwissen.js";
 import { runtimeConfig } from "../config/runtime.js";
 
 const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", color: T.rauch };
@@ -69,15 +70,17 @@ export function PrognoseBereich({
     );
   }
   const prognose = gelesen.prognose;
+  const belegtesFilmwissen = filmwissen?.daten?.status === FILMWISSEN_STATUS.BELEGT
+    ? filmwissen : null;
   if (!prognose) {
     return (
       <section className="kd-prognose kd-ki-bewertung" aria-label={`KI-Bewertung für ${film?.titel || "Eintrag"}`}>
         <div className="kd-ki-bewertung-kopf">
           <strong>KI-Bewertung</strong>
-          <span>Persönliche Einschätzung mit Quellenprüfung für WARUM.</span>
+          <span>Persönliche Einschätzung auf Basis deines Geschmacksprofils.</span>
         </div>
-        {filmwissen && (
-          <FilmwissenBereich {...filmwissen} eingebettet zeigeRechercheAktion={false} />
+        {belegtesFilmwissen && (
+          <FilmwissenBereich {...belegtesFilmwissen} eingebettet zeigeRechercheAktion={false} />
         )}
         <div className="kd-prognose-start">
           {onErstellen && (
@@ -108,11 +111,11 @@ export function PrognoseBereich({
       </div>
 
       <p style={{ margin: 0, color: T.rauch, fontSize: 12 }}>
-        WIE, WAS und Passung sind persönliche KI-Einschätzungen. Filmwissen prüft, ob WARUM quellenbasiert belegt werden kann.
+        WIE, WAS und Passung sind persönliche KI-Einschätzungen auf Basis deines Geschmacksprofils.
       </p>
 
-      {filmwissen && (
-        <FilmwissenBereich {...filmwissen} eingebettet zeigeRechercheAktion={false} />
+      {belegtesFilmwissen && (
+        <FilmwissenBereich {...belegtesFilmwissen} eingebettet zeigeRechercheAktion={false} />
       )}
 
       <div style={{ color: T.leinwand, fontSize: 16 }}>
@@ -125,7 +128,7 @@ export function PrognoseBereich({
       </div>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12 }}>
         {e.achsen.warum == null
-          ? "Für WARUM liegt kein sicher belegbarer Wert vor; die Quellenlage reicht derzeit nicht aus."
+          ? "Für WARUM liegt keine ausreichend sichere Einschätzung vor."
           : prognose.warumHerkunft === "filmwissen"
             ? "WARUM übernimmt die belegte gemeinsame Einordnung aus dem Filmwissen; die persönliche KI verbindet sie mit deinem Geschmacksprofil."
             : "WARUM ist vorläufig aus Filmkontext und deinem Geschmacksprofil geschätzt; ein belegter gemeinsamer Quellenwert liegt nicht vor."}

@@ -341,7 +341,7 @@ export function FilmForm({
       {bewertbar && kennungenBearbeitbar && (
         <details>
           <summary style={{ cursor: "pointer", color: T.tinteWeich, fontSize: 12 }}>
-            Filmkennung verknüpfen (optional, für belegtes Filmwissen)
+            Filmkennung verknüpfen (optional)
           </summary>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
             <input placeholder="IMDb · tt0078748" value={f.imdbId} onChange={set("imdbId")}

@@ -23,7 +23,10 @@ await esbuild.build({
     contents: [
       'export { FilmForm } from "./src/components/EintragForm.jsx";',
       'export { FilmCard } from "./src/components/FilmCard.jsx";',
+      'export { PrognoseBereich } from "./src/components/PrognoseBereich.jsx";',
+      'export { useIntelligenceController } from "./src/controllers/useIntelligenceController.js";',
       'export { erstellePrognose } from "./src/lib/prognose.js";',
+      'export { setzeGlobal, setzeFunktion } from "./src/lib/kiSchalter.js";',
       'export { istSichererFilmwissenQuellenstopp } from "./src/lib/kiBewertungFlow.js";',
     ].join("\n"),
     loader: "js",
@@ -36,6 +39,15 @@ await esbuild.build({
   target: "es2022",
   logLevel: "warning",
   external: ["react", "react-dom", "react/jsx-runtime", "react-dom/client"],
+  plugins: [{
+    name: "rating-session-mock",
+    setup(builder) {
+      builder.onLoad({ filter: /\/services\/sessionCoordinator\.js$/ }, () => ({
+        contents: "export const sessionCoordinator = { getSnapshot: () => globalThis.__kdRatingSession };",
+        loader: "js",
+      }));
+    },
+  }],
 });
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -56,7 +68,8 @@ const React = await import("react");
 const { act, createElement: h } = React;
 const { createRoot } = await import("react-dom/client");
 const {
-  FilmForm, FilmCard, erstellePrognose, istSichererFilmwissenQuellenstopp,
+  FilmForm, FilmCard, PrognoseBereich, useIntelligenceController,
+  erstellePrognose, istSichererFilmwissenQuellenstopp, setzeGlobal, setzeFunktion,
 } = await import(ausgabe);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -219,28 +232,26 @@ check(quellenTags.join(",") === "DVD,Netflix,Disney+"
 await act(async () => { knopf(card.container, "Jetzt bewerten").click(); await tick(); });
 check(!!card.container.querySelector(".kd-editpanel") && !!card.container.querySelector(".kd-ki-bewertung")
   && card.container.querySelectorAll(".kd-ki-bewertung").length === 1
-  && /Quellenbasis für WARUM/.test(card.container.textContent),
-"Jetzt bewerten hält Editor, persönliche Prognose und Quellenbasis in einem sichtbaren KI-Bewertungsblock");
+  && !card.container.querySelector(".kd-filmwissen"),
+"Jetzt bewerten hält Editor und Prognose sichtbar und lässt einen leeren Filmwissen-Block weg");
 await card.cleanup();
 
 const ablauf = [];
-let rechercheOptionen = null;
 const combined = await mounte(FilmCard, {
   film: { id: "arrival_2016", titel: "Arrival", jahr: 2016, typ: "film", bewertung: null },
   expanded: true,
   vorbewertung: { onErstellen: async () => { ablauf.push("prognose"); return true; } },
   filmwissen: {
     phase: "fertig", daten: { status: "cache_miss" }, rechercheMoeglich: true,
-    onRecherchieren: async (optionen) => {
-      rechercheOptionen = optionen;
+    onRecherchieren: async () => {
       ablauf.push("quellen");
       return { status: "vorlaeufig", vorlaeufig: true };
     },
   },
 });
 await act(async () => { knopf(combined.container, "KI-Bewertung erstellen").click(); await tick(); });
-check(ablauf.join(",") === "quellen,prognose" && rechercheOptionen?.bereitsAusgeloest === true,
-  "Ein KI-Bewertungs-Klick überspringt den zweiten Dialog und setzt nach sicherem Quellenstopp mit einer vorläufigen Prognose fort");
+check(ablauf.join(",") === "prognose",
+  "Ein KI-Bewertungs-Klick startet bei fehlendem Filmwissen direkt eine Prognose ohne Recherche");
 await combined.cleanup();
 
 const unklarerAblauf = [];
@@ -249,14 +260,125 @@ const unklar = await mounte(FilmCard, {
   expanded: true,
   vorbewertung: { onErstellen: async () => { unklarerAblauf.push("prognose"); return true; } },
   filmwissen: {
-    phase: "fertig", daten: { status: "cache_miss" }, rechercheMoeglich: true,
+    phase: "fehler", daten: { status: "gesperrt" }, rechercheMoeglich: true,
+    fehler: "Eine Recherchequelle für das Filmwissen ist derzeit nicht verfügbar.",
     onRecherchieren: async () => { unklarerAblauf.push("quellen"); return false; },
   },
 });
 await act(async () => { knopf(unklar.container, "KI-Bewertung erstellen").click(); await tick(); });
-check(unklarerAblauf.join(",") === "quellen",
-  "Ein unklarer Quellen- oder Providerfehler stoppt vor der persönlichen Prognose");
+check(unklarerAblauf.join(",") === "prognose"
+  && !unklar.container.querySelector(".kd-filmwissen")
+  && !unklar.container.querySelector('[role="alert"]'),
+  "Ein alter Quellenfehler erscheint nicht mehr und löst weder einen neuen Quellenlauf noch eine Prognosesperre aus");
 await unklar.cleanup();
+
+const belegteDaten = {
+  status: "belegt",
+  warum: { wert: 4, sicherheit: "hoch", kurztext: "Kulturelle Bedeutung ist belegt." },
+  version: { id: "filmwissen-test-v1", nr: 1, stand: "2026-09-12T10:00:00.000Z" },
+  fundstellen: [{
+    quelle: "loc-nfr", url: "https://www.loc.gov/programs/national-film-preservation-board/film-registry/",
+    titel: "National Film Registry", attribution: "Library of Congress",
+    kernaussagen: ["Im National Film Registry aufgenommen."],
+  }],
+};
+const belegtePrognose = {
+  ...prognose, warumHerkunft: "filmwissen",
+  filmwissenVersionId: "11111111-1111-4111-8111-111111111111",
+};
+const belegt = await mounte(PrognoseBereich, {
+  film: { titel: "Alien", prognose: belegtePrognose },
+  filmwissen: { phase: "fertig", daten: belegteDaten },
+});
+check(!!belegt.container.querySelector(".kd-filmwissen")
+  && belegt.container.querySelector('a[href^="https://www.loc.gov/"]')
+  && /belegte gemeinsame Einordnung/.test(belegt.container.textContent),
+  "Vorhandenes belegtes Filmwissen bleibt mit Fundstellen und korrekter WARUM-Herkunft sichtbar");
+await belegt.cleanup();
+
+const prognoseFehler = await mounte(PrognoseBereich, {
+  film: { titel: "Heat" }, fehler: "Das Nutzungslimit ist erreicht.",
+  filmwissen: { phase: "fehler", daten: null, fehler: "Recherchequelle nicht verfügbar." },
+});
+check(prognoseFehler.container.querySelector('[role="alert"]')?.textContent === "Das Nutzungslimit ist erreicht."
+  && !prognoseFehler.container.querySelector(".kd-filmwissen"),
+  "Fehler der eigentlichen Prognose bleiben sichtbar, auch wenn optionale Quellen ausfallen");
+await prognoseFehler.cleanup();
+
+async function mountePrognoseController({ antwort = { prognose }, read = async () => belegteDaten } = {}) {
+  setzeGlobal(true, "2026-09-12T10:00:00.000Z");
+  setzeFunktion("vorbewertung", true);
+  setzeFunktion("filmwissen", true);
+  const session = { mode: "account", state: "ready", account: { id: "rating-test" }, capabilities: { personalAi: true } };
+  globalThis.__kdRatingSession = session;
+  const rufe = { prognose: 0, lesen: 0, recherche: 0, schreiben: 0 };
+  let api;
+  const filmwissenDienst = {
+    invalidate() {},
+    async read(...args) { rufe.lesen++; return read(...args); },
+    async recherchiere() { rufe.recherche++; throw new Error("Quellen nicht verfügbar"); },
+  };
+  function Harness() {
+    api = useIntelligenceController({
+      tab: "daten", session, master: [], masterMeta: {},
+      filmwissenDienst,
+      vorbewertungDienst: async () => { rufe.prognose++; return antwort; },
+      mutiereMaster: async () => { rufe.schreiben++; return true; },
+      naechsteHerkunft: () => "test",
+    });
+    return null;
+  }
+  const ui = await mounte(Harness, {});
+  return { ...ui, api: () => api, rufe };
+}
+
+const filmEntwurf = { id: "alien_1979", titel: "Alien", jahr: 1979, imdb_id: "tt0078748", typ: "film" };
+const nurPrognose = await mountePrognoseController();
+let entwurf;
+await act(async () => { entwurf = await nurPrognose.api().addFilmMitPrognose(filmEntwurf); });
+check(entwurf.status === "bereit" && entwurf.prognose === prognose && entwurf.filmwissen === null
+  && nurPrognose.rufe.prognose === 1 && nurPrognose.rufe.recherche === 0
+  && nurPrognose.rufe.lesen === 0 && nurPrognose.rufe.schreiben === 0,
+  "Eintrag erstellen liefert genau eine persönliche Prognose als Entwurf ohne Quellenabruf oder Eintragswrite");
+await nurPrognose.cleanup();
+
+const mitBelegen = await mountePrognoseController({ antwort: { prognose: belegtePrognose } });
+await act(async () => { entwurf = await mitBelegen.api().addFilmMitPrognose(filmEntwurf); });
+check(entwurf.status === "bereit" && entwurf.filmwissen.daten === belegteDaten
+  && mitBelegen.rufe.prognose === 1 && mitBelegen.rufe.lesen === 1
+  && mitBelegen.rufe.recherche === 0 && mitBelegen.rufe.schreiben === 0,
+  "Nur für eine tatsächlich belegte Prognose werden vorhandene Quellen zur Anzeige gelesen");
+await mitBelegen.cleanup();
+
+const quellenausfall = await mountePrognoseController({
+  antwort: { prognose: belegtePrognose }, read: async () => { throw new Error("Cache nicht erreichbar"); },
+});
+await act(async () => { entwurf = await quellenausfall.api().addFilmMitPrognose(filmEntwurf); });
+check(entwurf.status === "bereit" && entwurf.prognose === belegtePrognose && entwurf.filmwissen === null
+  && quellenausfall.rufe.prognose === 1 && quellenausfall.rufe.recherche === 0,
+  "Eine ausgefallene optionale Quellenanzeige verwirft weder die fertige Prognose noch ihre Herkunft");
+await quellenausfall.cleanup();
+
+let gebePrognoseFrei;
+const kontoWechsel = await mountePrognoseController({
+  antwort: new Promise((resolve) => { gebePrognoseFrei = resolve; }),
+});
+let offenerEntwurf;
+let doppelstart;
+await act(async () => {
+  offenerEntwurf = kontoWechsel.api().addFilmMitPrognose(filmEntwurf);
+  doppelstart = await kontoWechsel.api().addFilmMitPrognose(filmEntwurf);
+});
+check(doppelstart.status === "beschaeftigt" && kontoWechsel.rufe.prognose === 1,
+  "Ein Doppelklick startet weiterhin nur eine Prognose");
+globalThis.__kdRatingSession = { mode: "guest", state: "ready", account: null };
+await act(async () => {
+  gebePrognoseFrei({ prognose });
+  entwurf = await offenerEntwurf;
+});
+check(entwurf.status === "veraltet" && !entwurf.prognose && kontoWechsel.rufe.schreiben === 0,
+  "Nach einem Kontowechsel wird eine verspätete Prognose verworfen");
+await kontoWechsel.cleanup();
 
 check(
   istSichererFilmwissenQuellenstopp({
@@ -291,9 +413,8 @@ const draftBlock = controllerQuelltext.slice(
 check(!/mutiereMaster|schreibeArtikel/.test(draftBlock)
   && /status: "bereit"/.test(draftBlock)
   && /kontoIstAktuell\(startKonto\)/.test(draftBlock)
-  && (draftBlock.match(/filmwissenDienst\.recherchiere/g) || []).length === 1
-  && (draftBlock.match(/vorbewertungDienst\(kandidat/g) || []).length === 1
-  && /istSichererFilmwissenQuellenstopp/.test(draftBlock),
-"Der neue Draft prüft den Kontokontext, besitzt keinen Persistenzpfad und erlaubt höchstens einen Quellen- und Prognoseaufruf");
+  && !/filmwissenDienst\.recherchiere/.test(draftBlock)
+  && (draftBlock.match(/vorbewertungDienst\(kandidat/g) || []).length === 1,
+"Der Draft prüft den Kontokontext, besitzt keinen Persistenzpfad und startet ausschließlich die Prognose");
 
 console.log(`\n${checks}/${checks} KI-Bewertungs-Follow-up-Checks bestanden.`);
