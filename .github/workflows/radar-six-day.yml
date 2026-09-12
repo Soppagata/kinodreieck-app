@@ -12,20 +12,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
-      - name: Harte Wirkungssperre ausweisen
+      - name: Freigegebenen natürlichen Zeitplan ausweisen
+        env:
+          SCHEDULE_ENABLED: ${{ vars.KD_RADAR_SCHEDULE_ENABLED == 'true' && 'true' || 'false' }}
         run: |
+          if [ "$SCHEDULE_ENABLED" = "true" ]; then
+            state="aktiviert"
+            detail="Der freigegebene Radar-Pilot darf beim natürlichen Zeitplan fällige Ziele prüfen."
+          else
+            state="wirkungsgesperrt"
+            detail="KD_RADAR_SCHEDULE_ENABLED ist nicht exakt true; es wurde kein Anbieterrequest gestartet."
+          fi
           {
-            echo "## Radar: wirkungsgesperrt"
+            echo "## Radar: ${state}"
             echo
-            echo "Der Radar-Job ist im Workflow hart mit if: false gesperrt. Zusätzlich muss später die Repository-Variable KD_RADAR_SCHEDULE_ENABLED exakt true sein."
-            echo "Es wurde kein authentifizierter Request und kein Anbieterrequest gestartet."
+            echo "$detail"
           } >> "$GITHUB_STEP_SUMMARY"
 
   radar-six-day-trigger:
     needs: activation
-    if: ${{ false && vars.KD_RADAR_SCHEDULE_ENABLED == 'true' }}
+    if: ${{ vars.KD_RADAR_SCHEDULE_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Staging ist bis zur Backend-Trennung der unbeaufsichtigte gemeinsame Ops-Scope.
+    # Das geschützte production-Environment würde jeden natürlichen Lauf auf Approval stellen.
     environment: staging
     concurrency:
       group: kinodreieck-radar-six-day

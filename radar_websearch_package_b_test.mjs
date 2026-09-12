@@ -1592,7 +1592,7 @@ await check("Bindungs-Migration ist additiv, inhaltsfrei gespeichert und nur ser
   assert.match(automaticRetryBindingMigration, /job\.retry_status = 'claimed'/);
 });
 
-await check("Getrennter Radar-Zeitplan bleibt wirkungsgesperrt; sein begrenzter Transportvertrag bleibt erhalten", () => {
+await check("Getrennter Radar-Zeitplan bleibt opt-in-gesperrt; sein begrenzter Transportvertrag bleibt erhalten", () => {
   assert.deepEqual(
     [...radarSixDayWorkflow.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]),
     ["0 2 * * *"],
@@ -1600,7 +1600,8 @@ await check("Getrennter Radar-Zeitplan bleibt wirkungsgesperrt; sein begrenzter 
   assert.doesNotMatch(radarSixDayWorkflow, /workflow_dispatch|push:|pull_request:|entdecken-six-day-trigger/);
   assert.doesNotMatch(entdeckenWorkflow, /radar-six-day-trigger|SUPABASE_RADAR_SCHEDULER|radar-websearch-task/);
   assert.match(dailyWorkflow, /^  radar-six-day-trigger:/);
-  assert.match(dailyWorkflow, /if: \$\{\{ false && vars\.KD_RADAR_SCHEDULE_ENABLED == 'true' \}\}/);
+  assert.match(dailyWorkflow, /if: \$\{\{ vars\.KD_RADAR_SCHEDULE_ENABLED == 'true' \}\}/);
+  assert.doesNotMatch(dailyWorkflow, /false\s*&&/);
   assert.equal((dailyWorkflow.match(/^\s*curl\b/gm) || []).length, 1);
   assert.match(dailyWorkflow, /for claim_number in \$\(seq 1 10\)/);
   assert.match(dailyWorkflow, /--request POST/);

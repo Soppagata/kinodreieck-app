@@ -82,7 +82,7 @@ test("R-04 verdrahtet höchstens drei serielle Retries ohne Workflow-Retry", () 
   assert.match(workflow, /GITHUB_STEP_SUMMARY/);
 });
 
-test("Radar besitzt einen getrennten, hart und per Repository-Opt-in gesperrten Zeitplan", () => {
+test("Radar besitzt einen getrennten, freigegebenen und fail-closed natürlichen Zeitplan", () => {
   const radar = read(".github/workflows/radar-six-day.yml");
   const combined = read(".github/workflows/entdecken-six-day.yml");
   const targetStart = radar.indexOf("  radar-six-day-trigger:");
@@ -91,14 +91,18 @@ test("Radar besitzt einen getrennten, hart und per Repository-Opt-in gesperrten 
   assert.match(radar, /^name: Radar – fällige Ziele prüfen$/m);
   assert.match(radar, /cron:\s*"0 2 \* \* \*"/);
   assert.doesNotMatch(radar, /workflow_dispatch|push:|pull_request:/);
-  assert.match(radar, /if:\s*\$\{\{\s*false\s*&&\s*vars\.KD_RADAR_SCHEDULE_ENABLED\s*==\s*'true'\s*\}\}/);
+  assert.match(targetJob, /if:\s*\$\{\{\s*vars\.KD_RADAR_SCHEDULE_ENABLED\s*==\s*'true'\s*\}\}/);
+  assert.doesNotMatch(targetJob, /false\s*&&/);
   assert.match(radar, /radar-six-day-trigger:[\s\S]*?environment:\s*staging/);
+  assert.doesNotMatch(radar, /environment:\s*production/);
+  assert.match(radar, /geschützte production-Environment würde jeden natürlichen Lauf auf Approval stellen/);
   assert.match(radar, /GITHUB_STEP_SUMMARY/);
   assert.doesNotMatch(combined, /radar-six-day-trigger|radar-websearch-task|SUPABASE_RADAR_SCHEDULER/);
   assert.match(combined, /^name: Entdecken – täglicher Quellenabgleich$/m);
   assert.equal((targetJob.match(/\bcurl\b/g) || []).length, 1);
   assert.match(targetJob, /for claim_number in \$\(seq 1 10\)/);
   assert.doesNotMatch(targetJob, /--retry|SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(targetJob, /SUPABASE_RADAR_SCHEDULER nicht gesetzt/);
 });
 
 test("Run-Audit deckt alle fünf Workflows und die vier Zustandsklassen ab", () => {

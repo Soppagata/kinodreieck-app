@@ -10,6 +10,8 @@ permissions:
 jobs:
   entdecken-six-day-trigger:
     runs-on: ubuntu-latest
+    # Staging ist bis zur Backend-Trennung der unbeaufsichtigte gemeinsame Ops-Scope.
+    # Das geschützte production-Environment würde jeden natürlichen Lauf auf Approval stellen.
     environment: staging
     timeout-minutes: 3
     concurrency:

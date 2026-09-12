@@ -38,6 +38,8 @@ jobs:
     if: ${{ vars.KD_AUTOMATIC_AI_SCHEDULE_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Staging ist bis zur Backend-Trennung der unbeaufsichtigte gemeinsame Ops-Scope.
+    # Das geschützte production-Environment würde jeden natürlichen Lauf auf Approval stellen.
     environment: staging
     steps:
       - name: Bis zu drei faellige automatische KI-Jobs seriell pruefen
