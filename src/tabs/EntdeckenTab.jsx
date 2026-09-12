@@ -17,11 +17,18 @@ import {
   VERSIONED_DISCOVERY_FEED_FORMAT,
 } from "../lib/webDiscoveryFeed.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
-import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "../lib/radarNews.js";
+import {
+  projectRadarNews,
+  radarEpisodeIdentity,
+  radarOperationalStatusVisible,
+  radarSearchStatusLabel,
+  radarViennaDay,
+} from "../lib/radarNews.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { entdeckenDailyFeedNotice } from "../services/entdeckenDailyFeed.js";
 import { formatTitleFactsDate } from "../lib/titleFacts.js";
+import { runtimeConfig } from "../config/runtime.js";
 import "../styles/ui-copy-disclosures.css";
 
 const ANSICHTEN = Object.freeze([
@@ -398,7 +405,9 @@ function RadarView({
         subscription.targetType === "text" && subscription.status === "active"
       ))
   )), [accountMode, events, subscriptions]);
-  const searchStatuses = accountMode ? radarState?.pilot?.searchStatuses : undefined;
+  const showSearchStatuses = accountMode
+    && radarOperationalStatusVisible(runtimeConfig.appEnvironment);
+  const searchStatuses = showSearchStatuses ? radarState?.pilot?.searchStatuses : undefined;
 
   const addTarget = async (event) => {
     event.preventDefault();
@@ -448,11 +457,11 @@ function RadarView({
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
           <span>{entry.status === "active" ? "Im Radar" : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
-          {accountMode ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, entry.targetId)}</span> : null}
+          {showSearchStatuses ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, entry.targetId)}</span> : null}
         </li>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
           <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Im Radar" : "Pausiert"}</span>
-          {accountMode ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, createPersonRadarTargetId(entry.personExternalId, entry.role))}</span> : null}
+          {showSearchStatuses ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, createPersonRadarTargetId(entry.personExternalId, entry.role))}</span> : null}
         </li>)}</ul> : null}
         <RadarRejectedChanges radarState={radarState} onDismiss={onRadarRejectedDismiss} />
         {syncProblem ? <RadarSyncProblem problem={syncProblem} onRetry={onRadarPilotSync} /> : null}

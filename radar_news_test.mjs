@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { projectRadarNews, radarEpisodeIdentity, radarSearchStatusLabel, radarViennaDay } from "./src/lib/radarNews.js";
+import fs from "node:fs";
+import {
+  projectRadarNews,
+  radarEpisodeIdentity,
+  radarOperationalStatusVisible,
+  radarSearchStatusLabel,
+  radarViennaDay,
+} from "./src/lib/radarNews.js";
 import { radarSubscriptionForEvent } from "./src/lib/entdeckenUi.js";
 import { validateRadarPilotFeed, RADAR_PILOT_FEED_FORMAT } from "./src/lib/radarPilotContracts.js";
 import { createEmptyLocalRadar, createLocalTextRadarTargetId, reconcileAccountRadarPilotFeed,
@@ -188,5 +195,12 @@ check("Suche, Leerfund und abgelaufene Suche sind unterscheidbar, Cache behaupte
   assert.match(radarSearchStatusLabel([status("searching")],targetId),/Suche gestartet/);
   assert.doesNotMatch(radarSearchStatusLabel([status("searching")],targetId),/läuft/);
   assert.match(radarSearchStatusLabel([status("timeout")],targetId),/nicht abgeschlossen/);
+});
+check("Production verbirgt zielbezogene Betriebsstände, Staging behält sie", () => {
+  assert.equal(radarOperationalStatusVisible("production"), false);
+  assert.equal(radarOperationalStatusVisible("staging"), true);
+  const ui = fs.readFileSync("./src/tabs/EntdeckenTab.jsx", "utf8");
+  assert.match(ui, /radarOperationalStatusVisible\(runtimeConfig\.appEnvironment\)/);
+  assert.equal((ui.match(/showSearchStatuses \? <span className="kd-radar-suchstatus">/g) || []).length, 2);
 });
 console.log(`RADAR_NEWS: ${checks}/${checks} checks passed`);

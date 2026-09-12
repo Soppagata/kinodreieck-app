@@ -13,6 +13,10 @@ export function radarViennaDay(now = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+export function radarOperationalStatusVisible(appEnvironment) {
+  return appEnvironment !== "production";
+}
+
 export function radarEpisodeIdentity(entry) {
   if (!SERIES_CATEGORIES.has(entry.category)
       || entry.targetType === "work" || entry.eventType === "kinostart_at") return null;
