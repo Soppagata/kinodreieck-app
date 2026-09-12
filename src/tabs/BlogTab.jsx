@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { persoenlicherAutorName } from "../services/auth.js";
+import { sharedArticlesService } from "../services/sharedArticles.js";
+import { errorText } from "../services/errors.js";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
 import { SHARED_PUBLICATION_STATUS, publicationState } from "../lib/sharedPublication.js";
@@ -191,15 +193,15 @@ function AbgleichPopup({ artikel, master, onSetzeRef, onFreigeben, onLoeschen, o
 }
 
 /* ---------- Lese-Ansicht ---------- */
-function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm, onAddFilm, onSetzeRef }) {
+function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm, onAddFilm, onSetzeRef, nurLesen = false }) {
   const [rotFuer, setRotFuer] = useState(null);
   const [rotTyp, setRotTyp] = useState("film");
   const proId = useMemo(() => new Map(master.map((f) => [f.id, f])), [master]);
   return (
     <div className="kd-blog kd-blog-leseansicht" style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "24px", maxWidth: 760, margin: "0 auto" }}>
       <div style={{ display: "flex", gap: 8, justifyContent: "space-between", flexWrap: "wrap", marginBottom: 6 }}>
-        <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, padding: "6px 12px" }} onClick={onZurueck}>← Blog</button>
-        <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, padding: "6px 12px" }} onClick={() => onBearbeiten(artikel.id)}>✎ Bearbeiten</button>
+        <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, padding: "6px 12px" }} onClick={onZurueck}>{nurLesen ? "← Veröffentlicht" : "← Blog"}</button>
+        {!nurLesen && <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, padding: "6px 12px" }} onClick={() => onBearbeiten(artikel.id)}>✎ Bearbeiten</button>}
       </div>
       <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0, margin: "6px 0 4px" }}>
         {artikel.titel}
@@ -221,7 +223,9 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
               return (
                 <div key={i} style={{ fontSize: 15 }}>
                   {artikel.geordnet && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, marginRight: 8 }}>{i + 1}.</span>}
-                  {f ? (
+                  {nurLesen ? (
+                    <span>{le.eingabe}{le.jahr ? " (" + le.jahr + ")" : ""}</span>
+                  ) : f ? (
                     <a href="#" onClick={(e) => { e.preventDefault(); onSpringeZuFilm(f.id); }}
                       style={{ color: T.tinte, textDecorationColor: T.wolfram, textUnderlineOffset: 3, fontWeight: 600 }}>
                       {f.titel}{f.jahr ? " (" + f.jahr + ")" : ""}
@@ -269,7 +273,7 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
 }
 
 /* ---------- Haupt-Tab ---------- */
-export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
+function EigeneArtikel({ artikel, master, fokusId, onFokusVerbraucht,
   onErstellen, onAktualisieren, onSetzeRef, onFreigeben, onLoeschen, onAddFilm, onSpringeZuFilm }) {
   const [ansicht, setAnsicht] = useState({ typ: "liste" });
   const [offenId, setOffenId] = useState(null); // aufgeklappte Karte in der Hub-Liste
@@ -452,4 +456,90 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
 function needsPublicRemoval(article, publikation = publicationState(article)) {
   return article?.herkunft !== "gezogen"
     && (!!article?.geteilt || publikation.status !== SHARED_PUBLICATION_STATUS.LOCAL);
+}
+
+/* Die veröffentlichte Kopie wird nur gelesen. Weder private Artikel-IDs noch
+   deren Bearbeitungs-/Übernahmecallbacks werden mit dieser Ansicht verbunden. */
+function lesbarePublikation(blog) {
+  const artikel = blog.artikel || {};
+  return {
+    id: blog.publication_id,
+    titel: String(artikel.titel || ""),
+    autor: String(blog.author || artikel.autor || ""),
+    text: String(artikel.text || ""),
+    erstellt_am: artikel.erstellt_am || blog.updated_at || null,
+    geordnet: artikel.geordnet === true,
+    liste: (Array.isArray(artikel.liste) ? artikel.liste : [])
+      .filter((entry) => entry && typeof entry.eingabe === "string")
+      .map((entry) => ({ eingabe: entry.eingabe, jahr: Number.isInteger(entry.jahr) ? entry.jahr : null })),
+  };
+}
+
+function VeroeffentlichteArtikel({ service }) {
+  const [zustand, setZustand] = useState({ loading: true, artikel: [], fehler: null });
+  const [ladeVersion, setLadeVersion] = useState(0);
+  const [suche, setSuche] = useState("");
+  const [offenId, setOffenId] = useState(null);
+  useEffect(() => {
+    let aktiv = true;
+    setZustand({ loading: true, artikel: [], fehler: null });
+    Promise.resolve().then(() => aktiv ? service.list() : null).then((result) => {
+      if (!aktiv) return;
+      setZustand(result.ok
+        ? { loading: false, artikel: result.blogs.map(lesbarePublikation), fehler: null }
+        : { loading: false, artikel: [], fehler: "Veröffentlichte Blogs sind derzeit nicht verfügbar." });
+    }).catch((error) => {
+      if (aktiv) setZustand({ loading: false, artikel: [], fehler: errorText(error) });
+    });
+    return () => { aktiv = false; };
+  }, [service, ladeVersion]);
+  const filter = suche.trim().toLocaleLowerCase("de-AT");
+  const sichtbar = zustand.artikel.filter((artikel) =>
+    `${artikel.titel} ${artikel.autor}`.toLocaleLowerCase("de-AT").includes(filter));
+  const offen = zustand.artikel.find((artikel) => artikel.id === offenId);
+  if (offen) return <LeseAnsicht artikel={offen} master={[]} nurLesen onZurueck={() => setOffenId(null)} />;
+  return <section className="kd-blog kd-blog-veroeffentlicht" aria-labelledby="kd-blog-veroeffentlicht-titel">
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+      <h2 id="kd-blog-veroeffentlicht-titel" style={{ ...h2, margin: 0 }}>Veröffentlichte Blogs</h2>
+      <button type="button" style={btnStyle(false)} disabled={zustand.loading}
+        onClick={() => setLadeVersion((version) => version + 1)}>Neu laden</button>
+    </div>
+    <label style={{ display: "grid", gap: 6, marginBottom: 14, fontSize: 13, color: T.rauch }}>
+      Nach Titel oder Autor suchen
+      <input type="search" value={suche} onChange={(event) => setSuche(event.target.value)}
+        style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+    </label>
+    {zustand.loading ? <p role="status">Veröffentlichte Blogs werden geladen …</p> : null}
+    {zustand.fehler ? <p role="alert" style={{ color: T.gefahr }}>Blogs konnten nicht geladen werden: {zustand.fehler}</p> : null}
+    {!zustand.loading && !zustand.fehler && !sichtbar.length
+      ? <p style={{ color: T.rauch }}>{filter ? "Kein veröffentlichter Blog passt zu deiner Suche." : "Noch keine veröffentlichten Blogs."}</p> : null}
+    <div style={{ display: "grid", gap: 10 }}>
+      {sichtbar.map((artikel) => <article key={artikel.id} className="kd-blog-karte"
+        style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: 16, minWidth: 0 }}>
+        <h3 style={{ ...h2, marginBottom: 4 }}>{artikel.titel}</h3>
+        <div style={mono}>{artikel.autor}{artikel.erstellt_am ? ` · ${formatPresentationDate(artikel.erstellt_am)}` : ""}</div>
+        <p style={{ color: T.leinwandTief, fontSize: 14, lineHeight: 1.6, overflowWrap: "anywhere" }}>
+          {artikel.text.length > 280 ? artikel.text.slice(0, 280).replace(/\s+\S*$/, "") + " …" : artikel.text}
+        </p>
+        <button type="button" style={btnStyle(true)} aria-label={`${artikel.titel} lesen`}
+          onClick={() => setOffenId(artikel.id)}>Lesen</button>
+      </article>)}
+    </div>
+  </section>;
+}
+
+export function BlogTab({ sharedService = sharedArticlesService, ...props }) {
+  const [bereich, setBereich] = useState("eigene");
+  useEffect(() => { if (props.fokusId) setBereich("eigene"); }, [props.fokusId]);
+  return <div>
+    {props.angemeldet && <nav aria-label="Blog-Bereiche"
+      style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+      <button type="button" style={btnStyle(bereich === "eigene")} aria-current={bereich === "eigene" ? "page" : undefined}
+        onClick={() => setBereich("eigene")}>Meine Artikel</button>
+      <button type="button" style={btnStyle(bereich === "veroeffentlicht")} aria-current={bereich === "veroeffentlicht" ? "page" : undefined}
+        onClick={() => setBereich("veroeffentlicht")}>Veröffentlicht</button>
+    </nav>}
+    <div hidden={bereich === "veroeffentlicht" && props.angemeldet}><EigeneArtikel {...props} /></div>
+    {bereich === "veroeffentlicht" && props.angemeldet && <VeroeffentlichteArtikel service={sharedService} />}
+  </div>;
 }

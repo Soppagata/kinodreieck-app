@@ -799,14 +799,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         </>
       )}
 
-      {(master || []).length === 0 && (
-        <div style={{ background: "rgba(217,106,90,0.10)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: T.leinwandTief, lineHeight: 1.6 }}>
-          <strong style={{ color: T.gefahr }}>Bevor du loslegst:</strong> Deine Einträge werden in diesem
-          Browser gespeichert. Ein aktives Konto führt davon getrennt seinen eigenen Geräte-Sync.
-          Halte den persönlichen Stand dieses Geräts trotzdem regelmäßig über
-          <strong> Settings → Sicherheitskopie dieses Geräts</strong> als JSON-Datei fest.
-        </div>
-      )}
       {/* Im Normalbetrieb bleibt weiterhin nur der aktive Tab gemountet. Ein
           beim Auswahlstart vorhandener Neu-Draft behält zusätzlich exakt seine
           Instanz, bis sein Ursprungstab nach Auswahlende wieder sichtbar war. */}

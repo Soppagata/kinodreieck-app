@@ -1,5 +1,5 @@
 /* Shared-Articles-Test: komplett gemockt, kein echter Datenbankzugriff.
-   Prüft den öffentlichen Read, accountgebundene Writes, Accountwechsel,
+   Prüft den accountgebundenen Read und Writes, Accountwechsel,
    idempotente URLs, die persistierte Statusmaschine und die SQL-Leitplanken. */
 import fs from "node:fs";
 
@@ -96,16 +96,24 @@ nextResponses = [response(200, [{
 calls = [];
 const listed = await service.list();
 const listCall = calls[0];
-check("Öffentlicher Read verwendet ausschließlich die schmale Listen-RPC",
+check("Aktive Konten lesen veröffentlichte Blogs über die schmale Listen-RPC",
   listed.ok && listed.blogs[0].artikel.titel === article.titel
   && listCall.url.endsWith("/rest/v1/rpc/kd_list_shared_articles"));
-check("Öffentlicher Read sendet niemals ein Sitzungstoken",
+check("Die Liste verwendet das aktuelle Sitzungstoken wie die bestehende Servergrenze",
   listCall.options.headers.apikey === config.supabasePublishableKey
-  && !listCall.options.headers.Authorization);
+  && listCall.options.headers.Authorization === "Bearer token-alt");
 check("Öffentliche Herkunft enthält keine Account-ID",
   listed.blogs[0].db_key === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
   && listed.blogs[0].share_token === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
   && listed.blogs[0].db_owner === "public");
+
+nextResponses = [response(401, {}), response(200, [])];
+calls = []; tokenCalls = [];
+await service.list();
+check("Auch das Lesen erneuert ein abgelaufenes Token genau einmal",
+  calls.length === 2 && tokenCalls.length === 2
+  && tokenCalls[1].erzwingeErneuerung === true
+  && calls[1].options.headers.Authorization === "Bearer token-neu");
 
 nextResponses = [response(201, [{
   publication_id: "22222222-2222-4222-8222-222222222222",
@@ -182,6 +190,11 @@ let guestError = null;
 try { await service.publish(article); } catch (error) { guestError = error; }
 check("Gast kann keine öffentliche Projektion schreiben",
   guestError?.code === "unauthenticated" && calls.length === 0);
+let guestListError = null;
+tokenCalls = [];
+try { await service.list(); } catch (error) { guestListError = error; }
+check("Gast kann veröffentlichte Blogs weder anonym noch mit fremdem Token auflisten",
+  guestListError?.code === "unauthenticated" && calls.length === 0 && tokenCalls.length === 0);
 
 snapshot = aktiveSession();
 calls = []; tokenCalls = [];
@@ -194,6 +207,10 @@ try { await service.publish(article); } catch (error) { inactiveError = error; }
 check("Inaktives Konto kann keine öffentliche Projektion schreiben und holt kein Token",
   inactiveError?.code === "forbidden" && inactiveError?.reason === "remoteStorage"
   && calls.length === 0 && tokenCalls.length === 0);
+let inactiveListError = null;
+try { await service.list(); } catch (error) { inactiveListError = error; }
+check("Inaktives Konto bleibt auch vor dem ersten Listenrequest gesperrt",
+  inactiveListError?.code === "forbidden" && calls.length === 0 && tokenCalls.length === 0);
 
 calls = []; tokenCalls = [];
 snapshot = { mode: "account", state: "ready", account: { id: "konto-a" }, capabilities: {} };
@@ -206,12 +223,11 @@ snapshot = {
   mode: "account", state: "degraded", account: { id: "konto-a" },
   capabilities: { remoteStorage: true, personalAi: false },
 };
-nextResponses = [response(200, [])];
 calls = []; tokenCalls = [];
-const publicWhileBlocked = await service.list();
-check("Öffentliche Shared-Liste bleibt bei unbekannter Freigabe tokenfrei lesbar",
-  publicWhileBlocked.ok && calls.length === 1 && tokenCalls.length === 0
-  && !calls[0].options.headers.Authorization);
+let unknownAccessError = null;
+try { await service.list(); } catch (error) { unknownAccessError = error; }
+check("Unbekannte Kontofreigabe erlaubt keinen Listenrequest",
+  unknownAccessError?.code === "forbidden" && calls.length === 0 && tokenCalls.length === 0);
 
 snapshot = aktiveSession();
 const wechselService = createSharedArticlesService({
@@ -227,6 +243,11 @@ let wechselError = null;
 try { await wechselService.unpublish(article.id); } catch (error) { wechselError = error; }
 check("Verspätete Antwort eines anderen Kontos wird verworfen",
   wechselError?.code === "unauthenticated");
+snapshot = aktiveSession();
+let wechselListError = null;
+try { await wechselService.list(); } catch (error) { wechselListError = error; }
+check("Auch eine verspätete Liste wird nach einem Kontowechsel verworfen",
+  wechselListError?.code === "unauthenticated");
 snapshot = aktiveSession();
 
 const widerrufService = createSharedArticlesService({
@@ -281,9 +302,13 @@ check("Migration bindet alle Schreibwege per RLS an auth.uid()",
 check("Öffentliche RPC gibt account_id nicht zurück",
   /returns table \([\s\S]*publication_id uuid[\s\S]*payload jsonb/.test(schema)
   && !/returns table \([\s\S]*account_id/.test(schema));
-check("anon besitzt kein Tabellenrecht, nur RPC-Ausführung",
+const accessSchema = fs.readFileSync("supabase/migrations/20260901193000_private_release_access_boundary.sql", "utf8");
+check("Die aktuelle RPC ist nur für aktive, authentifizierte Konten zugänglich",
   /revoke all on table public\.kd_shared_articles from public, anon/.test(schema)
-  && /grant execute on function public\.kd_list_shared_articles\(\) to anon, authenticated/.test(schema));
+  && /revoke all on function public\.kd_list_shared_articles\(\)\s+from public, anon, authenticated/.test(accessSchema)
+  && /grant execute on function public\.kd_list_shared_articles\(\)\s+to authenticated, service_role/.test(accessSchema)
+  && /if auth\.uid\(\) is null/.test(accessSchema)
+  && /if not public\.kd_account_active\(\)/.test(accessSchema));
 
 const claimSchema = fs.readFileSync("supabase/migrations/20260802220000_shared_article_claim_tokens.sql", "utf8");
 check("Jeder veröffentlichte Blog besitzt einen eindeutigen, unveränderlichen Upload-Token",

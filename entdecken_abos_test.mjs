@@ -30,6 +30,10 @@ check("ausgewählte Dienste gelten in Für mich und Beliebte Titel; Apple TV ble
     || selected.some((service) => serviceAllowedDiscoveryEntry(entry, [service]))));
   assert.ok(rows.every((entry) => !/^Apple TV/u.test(entry.availability?.service || "")));
 });
+check("Ohne Profil oder positive Bewertungen gibt es beliebte Titel, aber keine vorgetäuschte persönliche Auswahl", () => {
+  assert.deepEqual(allowed.personal, []);
+  assert.ok(allowed.popularPool.length > 0);
+});
 
 check("Dienste-Aliasse normalisieren Plus-, Premium- und Amazon-Channel-Schreibweisen", () => {
   assert.equal(serviceAllowedDiscoveryEntry({ services: ["Apple TV+"] }, ["AppleTV+"]), true);
@@ -71,6 +75,7 @@ const filled = createEntdeckenRecommendations({
 });
 check("weggefilterte Streamingplätze werden bis 50 mit echten künftigen Kinotiteln aufgefüllt", () => {
   assert.equal(filled.popularPool.length, 50);
+  assert.deepEqual(filled.personal, []);
   assert.ok(filled.popularPool.some((entry) => entry.targetId === "film-at:91002"));
   assert.ok(!filled.popularPool.some((entry) => entry.title === "Schon vorbei"));
   assert.ok(!filled.popularPool.some((entry) => /^Doppelte ID/u.test(entry.title)));
@@ -90,10 +95,26 @@ const cinemaPersonal = createEntdeckenRecommendations({
     z: ["Do 10.9. 23:30 · Testkino"], g: ["Drama"], b: "Ein sicherer Programmtext.",
   }] }, programInfo: { abgelaufen: false }, selectionDay: "2026-09-10", now: NOW,
 });
-check("derselbe finale Pool speist Für mich; ein positiver Programmfüller kann vor neutralen Feedtiteln ranken", () => {
+check("Für mich zeigt einen belegten Treffer und füllt freie Plätze nicht mit neutralen Titeln auf", () => {
+  assert.equal(cinemaPersonal.personal.length, 1);
   assert.equal(cinemaPersonal.personal[0]?.targetId, "film-at:92001");
   assert.ok(cinemaPersonal.personal[0]?.reasons.includes("Profil: Drama"));
   assert.ok(cinemaPersonal.popularPool.some((entry) => entry.targetId === "film-at:92001"));
+});
+
+const contentPersonal = createEntdeckenRecommendations({
+  streamingEntdecken: { region: "AT", titel: [] }, master: [],
+  profile: { signale: [{ art: "genre", wert: "Science-Fiction", richtung: "zieht_an", staerke: 4 }] },
+  selectedServices: [], webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50, factsSnapshot: {},
+  program: { status: { archiviert: false }, filme: [{
+    film_at_id: "92002", t: "Forschungsstation", j: 2026, g: [],
+    z: ["Do 10.9. 23:30 · Testkino"], b: "A science fiction film about a distant research station.",
+  }] }, programInfo: { abgelaufen: false }, selectionDay: "2026-09-10", now: NOW,
+});
+check("Konkrete Profilgründe aus Handlungsbeschreibungen bleiben in Für mich erhalten", () => {
+  const match = contentPersonal.personal.find((entry) => entry.targetId === "film-at:92002");
+  assert.ok(match?.reasons.includes("Inhalt: Science-Fiction aus deinem bestätigten Profil"));
+  assert.ok(contentPersonal.personal.every((entry) => entry.reasons.length > 0));
 });
 
 check("Kino-Engpass bleibt ehrlich kleiner; abgelaufene und archivierte Programme liefern keine Füller", () => {
@@ -232,9 +253,9 @@ check("beschädigtes Profil wird nicht durch neutrale Vorschläge als gesund beh
 
 const uiSource = await readFile(new URL("./src/tabs/EntdeckenTab.jsx", import.meta.url), "utf8");
 const appSource = await readFile(new URL("./src/App.jsx", import.meta.url), "utf8");
-check("UI kennzeichnet neutrale Vorschläge, zeigt den kompakten Stand und Mediathek erhält Rohmaster", () => {
-  assert.match(uiSource, /Zum Entdecken/);
-  assert.match(uiSource, /Noch ohne persönliche Passung/);
+check("UI behauptet nur belegte persönliche Passung, zeigt den Stand und Mediathek erhält Rohmaster", () => {
+  assert.match(uiSource, /Persönliche Passung/);
+  assert.doesNotMatch(uiSource, /Noch ohne persönliche Passung/);
   assert.match(uiSource, /`Stand: \$\{formatPresentationDate\(webDiscoveryFeed\.refreshedOn\)\}`/);
   assert.doesNotMatch(uiSource, /Titel deiner ausgewählten Streamingdienste|Popularitätsaussage/);
   assert.match(appSource, /master=\{master \?\? LEERER_MEDIATHEK_MASTER\}/);

@@ -20,8 +20,8 @@ function check(name, callback) {
   console.log("✓ " + name);
 }
 
-check("Der Privatrelease entfernt öffentliche Blog-Einstiege aus dem ausgelieferten Tab", () => {
-  assert.doesNotMatch(source, /MasterImport|sharedArticlesService|EntdeckenAnsicht|Blogs entdecken/);
+check("Der Lesepfad führt keine Veröffentlichung, Übernahme oder Rohimporte ein", () => {
+  assert.doesNotMatch(source, /MasterImport|EntdeckenAnsicht|Blogs entdecken|service\.claim\(|service\.publish\(/);
   assert.doesNotMatch(source, /onRetryPublication|Erneut versuchen/);
   assert.doesNotMatch(source, /Artikel importieren|Artikel exportieren/);
 });
@@ -187,7 +187,7 @@ async function mount(artikel, overrides = {}) {
 }
 
 const hub = await mount([privat, altPubliziert]);
-check("Im echten Hub sind Share, öffentliche Suche, Retry und Rohimport nicht sichtbar", () => {
+check("Der private Hub lädt keine veröffentlichten Blogs und behält seine Schreibgrenzen", () => {
   assert.equal(buttonContains(hub.host, "Blogs entdecken"), undefined);
   assert.equal(buttonContains(hub.host, "Erneut versuchen"), undefined);
   assert.doesNotMatch(hub.host.textContent, /Shared —|Artikel importieren|Artikel exportieren/);
@@ -287,6 +287,77 @@ check("Der private Freigabeschritt bleibt an den vorhandenen Artikel-Callback ge
   assert.equal(netzAufrufe, 0);
 });
 await match.cleanup();
+
+let listCalls = 0;
+const sharedService = { list: async () => {
+  listCalls++;
+  return { ok: true, blogs: [
+    { publication_id: "publication-max", author: "Max", updated_at: "2026-08-02T21:20:58Z",
+      artikel: { id: privat.id, titel: "Test Blog-Sharing", autor: "Max", text: "Ein veröffentlichter Absatz.\n\nZum Lesen für andere Konten.",
+        erstellt_am: "2026-08-02T21:20:23Z", liste: [{ eingabe: "Alien", jahr: 1979, ref: MASTER[0].id }] } },
+    { publication_id: "publication-eva", author: "Eva", artikel: { titel: "Ein anderer Blog", text: "Evas Text." } },
+  ] };
+} };
+const reading = await mount([privat], { sharedService });
+check("Veröffentlichte Inhalte werden erst beim Öffnen des Bereichs angefragt", () => {
+  assert.equal(listCalls, 0);
+  assert.ok(button(reading.host, "Veröffentlicht"));
+});
+await click(button(reading.host, "+ Neuer Artikel"));
+await setValue(reading.host.querySelector('input[placeholder="Titel *"]'), "Mein noch ungespeicherter Entwurf");
+await click(button(reading.host, "Veröffentlicht"));
+const publicView = reading.host.querySelector(".kd-blog-veroeffentlicht");
+check("Die veröffentlichte Liste zeigt Titel, Autor und beide öffentlichen Kopien", () => {
+  assert.equal(listCalls, 1);
+  assert.match(publicView.textContent, /Test Blog-Sharing/);
+  assert.match(publicView.textContent, /Max/);
+  assert.equal(publicView.querySelectorAll("article").length, 2);
+});
+await setValue(publicView.querySelector('input[type="search"]'), "max");
+check("Die Suche findet den veröffentlichten Blog über seinen Autor", () => {
+  assert.equal(publicView.querySelectorAll("article").length, 1);
+  assert.match(publicView.textContent, /Test Blog-Sharing/);
+});
+await setValue(publicView.querySelector('input[type="search"]'), "test blog-sharing");
+await click(button(publicView, "Lesen"));
+const reader = reading.host.querySelector(".kd-blog-leseansicht");
+check("Die vollständige veröffentlichte Kopie ist lesbar, ohne private Bearbeitungsrechte oder Referenzsprünge", () => {
+  assert.match(reader.textContent, /Zum Lesen für andere Konten/);
+  assert.match(reader.textContent, /Alien \(1979\)/);
+  assert.equal(reader.querySelectorAll("button").length, 1);
+  assert.equal(reader.querySelectorAll("a,input,textarea").length, 0);
+  assert.equal(buttonContains(reader, "Bearbeiten"), undefined);
+  assert.ok(button(reader, "← Veröffentlicht"));
+  assert.deepEqual(Object.values(reading.calls).filter(Array.isArray).flat(), []);
+});
+await click(button(reader, "← Veröffentlicht"));
+check("Zurück erhält die Suche", () => {
+  assert.equal(reading.host.querySelector('input[type="search"]').value, "test blog-sharing");
+});
+await click(button(reading.host, "Meine Artikel"));
+check("Der Wechsel zum Lesen bewahrt einen ungespeicherten privaten Entwurf", () => {
+  assert.equal(reading.host.querySelector('input[placeholder="Titel *"]').value, "Mein noch ungespeicherter Entwurf");
+  assert.equal(netzAufrufe, 0);
+});
+await reading.cleanup();
+
+let attempts = 0;
+const retry = await mount([], { sharedService: { list: async () => {
+  if (++attempts === 1) throw new Error("offline");
+  return { ok: true, blogs: [] };
+} } });
+await click(button(retry.host, "Veröffentlicht"));
+check("Ein Lesefehler bleibt sichtbar und wird nicht als leere Liste ausgegeben", () => {
+  assert.ok(retry.host.querySelector('[role="alert"]'));
+  assert.doesNotMatch(retry.host.querySelector(".kd-blog-veroeffentlicht").textContent, /Noch keine veröffentlichten Blogs/);
+});
+await click(button(retry.host, "Neu laden"));
+check("Bewusstes Neuladen kann einen Lesefehler beheben", () => {
+  assert.equal(attempts, 2);
+  assert.equal(retry.host.querySelector('[role="alert"]'), null);
+  assert.match(retry.host.textContent, /Noch keine veröffentlichten Blogs/);
+});
+await retry.cleanup();
 
 dom.window.close();
 esbuild.stop?.();

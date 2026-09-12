@@ -39,10 +39,10 @@ for (const [name, quelle] of Object.entries(sichtbar)) {
     && !quelle.includes("lokales Gesamt-Backup"));
 }
 
-check("Leere Mediathek verweist präzise auf getrennten Geräte-Sync und Gerätesicherheitskopie",
-  sichtbar.mediathek.includes("Ein aktives Konto führt davon getrennt seinen eigenen Geräte-Sync")
-  && sichtbar.mediathek.includes("Settings → Sicherheitskopie dieses Geräts")
-  && sichtbar.mediathek.includes("als JSON-Datei fest"));
+check("Der lokale Sicherungshinweis bleibt an den Gastmodus gebunden und warnt nicht pauschal in leeren Konten",
+  /session\.mode === "guest"[\s\S]*?<LocalDataSafety/.test(sichtbar.app)
+  && !sichtbar.mediathek.includes("Deine Einträge werden in diesem Browser gespeichert")
+  && !sichtbar.mediathek.includes("Halte den persönlichen Stand dieses Geräts trotzdem regelmäßig"));
 
 check("Sync-Größenhinweis und Kontoübernahme versprechen keinen vollständigen Kontoexport",
   sichtbar.konto.includes("lade die Sicherheitskopie dieses Geräts herunter")

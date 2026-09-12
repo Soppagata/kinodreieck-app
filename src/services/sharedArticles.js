@@ -1,9 +1,9 @@
-/* Öffentliche Blog-Projektionen.
+/* Veröffentlichte Blog-Projektionen für aktive KD-Konten.
    --------------------------------
    Ein privater Artikel lebt weiterhin ausschließlich im persönlichen
    `kd:artikel`-Topf. Dieser Dienst verwaltet nur seine veröffentlichte Kopie:
 
-   - list(): öffentlich und immer OHNE Sitzungstoken
+   - list(): die schmale veröffentlichte Projektion mit aktiver Account-Sitzung
    - publish()/unpublish()/claim(): nur mit bereiter, fachlich aktiver
      Account-Sitzung (`remoteStorage === true`)
    - die Account-ID wird nie gesendet; die Datenbank setzt sie aus auth.uid()
@@ -14,7 +14,7 @@
 import { runtimeConfig } from "../config/runtime.js";
 import { authDriver, authService } from "./auth.js";
 import { BoundaryError, ERROR_CODES, errorFromStatus, normalizeBoundaryError } from "./errors.js";
-import { istSupabaseProjektUrl, publicSupabaseHeaders } from "../lib/supabasePublic.js";
+import { istSupabaseProjektUrl } from "../lib/supabasePublic.js";
 
 const TABLE = "kd_shared_articles";
 const LIST_RPC = "kd_list_shared_articles";
@@ -143,29 +143,6 @@ export function createSharedArticlesService({
     return f;
   }
 
-  async function publicRequest() {
-    const operation = "article.list";
-    const f = konfigurationVerlangen(operation);
-    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : null;
-    try {
-      const res = await f(`${basis}/rest/v1/rpc/${LIST_RPC}`, {
-        method: "POST",
-        headers: { ...publicSupabaseHeaders(publishableKey), "Content-Type": "application/json" },
-        body: "{}",
-        signal: ctrl?.signal,
-      });
-      let data = null;
-      try { data = await res.json(); } catch { /* wird unten validiert */ }
-      if (!res.ok) throw errorFromStatus(res.status, { source: "shared-articles", operation });
-      return parsePublicRows(data);
-    } catch (error) {
-      throw normalizeBoundaryError(error, { source: "shared-articles", operation });
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
-
   /* Accountwechsel-/Widerrufsschutz wie beim persönlichen Treiber: Vor Token,
      nach Token und nach Request müssen dieselbe Konto-ID UND die aktive
      Remote-Capability gelten. Eine verspätete Antwort von Konto A oder aus der
@@ -234,7 +211,10 @@ export function createSharedArticlesService({
     configured: konfiguriert,
     async list() {
       if (!konfiguriert()) return { ok: false, blogs: [], reason: "unconfigured" };
-      return { ok: true, blogs: await publicRequest() };
+      const result = await accountRequest("POST", `rpc/${LIST_RPC}`, {
+        body: {}, operation: "article.list",
+      });
+      return { ok: true, blogs: parsePublicRows(result.data) };
     },
     async publish(article) {
       const payload = sharedArticlePayload(article);

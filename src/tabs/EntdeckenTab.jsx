@@ -283,8 +283,8 @@ function RecommendationsView({
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
     {feedNotice ? <p className="kd-entdecken-pending" role="status">{feedNotice}</p> : null}
     <div className="kd-entdecken-sektionskopf">
-      <div><span>Dein lokaler Abgleich</span><h2 id="kd-entdecken-empfehlungen">Für mich</h2></div>
-      <p>Verfügbar und noch nicht gesehen. Beste Passung zuerst.</p>
+      <div><span>Dein Geschmack</span><h2 id="kd-entdecken-empfehlungen">Für mich</h2></div>
+      <p>{useLibrary ? "Aus deinem Geschmacksprofil und deinen positiven Bewertungen." : "Aus deinem Geschmacksprofil."} Verfügbar und noch nicht gesehen.</p>
     </div>
     {profile?.beschaedigt ? <p className="kd-entdecken-warnung" role="status">Das Geschmacksprofil ist nicht lesbar. Empfehlungen bleiben vorsichtshalber leer.</p> : null}
     {personal.length ? <div className="kd-entdecken-karten kd-entdecken-auswahlkarten">{personal.map((entry, index) => {
@@ -293,13 +293,13 @@ function RecommendationsView({
       const beschreibungId = `kd-entdecken-empfehlung-beschreibung-${index}`;
       return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-auswahlkarte">
         {pinButton(entry)}
-        <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Zum Entdecken"}</span>
+        <span className="kd-entdecken-kicker">Persönliche Passung</span>
         {hatBeschreibung ? <h3><button type="button" className="kd-entdecken-beschreibung-toggle"
           aria-expanded={istBeschreibungOffen} aria-controls={beschreibungId}
           onClick={() => setOffeneEmpfehlungBeschreibung(istBeschreibungOffen ? null : entry.targetId)}>
           <span>{entry.title}</span><span className="kd-entdecken-aufklappzeichen" aria-hidden="true"><IconChevronDown /></span>
         </button></h3> : titleHeading(entry)}
-        <p className="kd-entdecken-grund">{entry.reasons[0] || "Noch ohne persönliche Passung."}</p>
+        <p className="kd-entdecken-grund">{entry.reasons[0]}</p>
         {istBeschreibungOffen ? <div id={beschreibungId} className="kd-entdecken-beschreibung">
           <p>{entry.description}</p>
           {descriptionEvidenceLabel(entry) ? <small>{descriptionEvidenceLabel(entry)}</small> : null}
@@ -310,7 +310,7 @@ function RecommendationsView({
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
           rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
       </article>;
-    })}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
+    })}</div> : <p className="kd-entdecken-leer gross">Noch keine persönliche Passung im aktuellen Angebot. Dein Geschmacksprofil und positive Bewertungen helfen bei der Auswahl. Beliebte Titel findest du darunter.</p>}
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
@@ -558,7 +558,7 @@ export function EntdeckenTab({
       onRadarTextAdd={onRadarTextAdd}
       onRadarRejectedDismiss={onRadarRejectedDismiss}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd} /> : null}
-    {ansicht === "meinungen" ? <div data-entdecken-ansicht="blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
+    {ansicht === "meinungen" ? <div data-entdecken-ansicht="blog"><BlogTab key={datenKontextKey} {...blogProps} fokusId={fokusId} /></div> : null}
     {manageOffen ? <ManageDialog radarState={radarState}
       master={master} useLibrary={useLibrary} accountMode={accountMode} radarAvailable={radarAvailable} onUseLibrary={setUseLibrary}
       onRadarChange={onRadarChange} onPersonRadarChange={onPersonRadarChange}

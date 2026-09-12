@@ -802,7 +802,10 @@ export function createEntdeckenRecommendations({
       library: rankingLibrary, useLibrary, excludedTargetIds: [], includeNeutral: mixed,
     });
     const poolById = new Map(popularPool.map((candidate) => [candidate.targetId, candidate]));
-    const ranked = Object.freeze(rankedRaw.map((entry) => Object.freeze({
+    /* Neutrale Kandidaten bleiben im Quellenpool. "Für mich" benötigt einen
+       konkreten Profil-/Bewertungsgrund, auch wenn weniger als sechs passen.
+       Der Inhaltsabgleich des gemischten Rankings bleibt dabei erhalten. */
+    const ranked = Object.freeze(rankedRaw.filter((entry) => entry.reasons.length > 0).map((entry) => Object.freeze({
       ...entry,
       description: poolById.get(entry.targetId)?.description || null,
       descriptionEvidence: poolById.get(entry.targetId)?.descriptionEvidence || null,
