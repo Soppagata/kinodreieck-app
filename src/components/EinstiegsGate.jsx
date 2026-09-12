@@ -22,7 +22,7 @@ function ProduktionsRechtliches() {
     <p><strong>Stand: privater Release.</strong> Hier findest du die wichtigsten Informationen zu den Datenwegen von Kinodreieck.</p>
 
     <LegalAbschnitt titel="Kontakt und Geltungsbereich">
-      <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen nutze den privaten Kontaktweg, über den du deinen Zugang erhalten hast. Nach der Anmeldung kannst du dein Anliegen außerdem über den privaten Feedbackweg unter Settings → Datenschutz &amp; Rechtliches senden, sofern dieser Weg dort verfügbar ist.</p>
+      <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen nutze den privaten Kontaktweg, über den du deinen Zugang erhalten hast. Nach der Anmeldung kannst du dein Anliegen außerdem über den privaten Feedbackweg in der App senden, sofern dieser Weg verfügbar ist.</p>
     </LegalAbschnitt>
 
     <LegalAbschnitt titel="Deine Daten im Browser und im Konto">
@@ -166,7 +166,7 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
           <p><strong>Stand: privater Release.</strong> Dieser ENTWURF beschreibt die derzeitigen Datenwege der Staging-Fassung. Eine formelle rechtliche Endprüfung und noch fehlende gesetzlich erforderliche Betreiberangaben werden dadurch nicht ersetzt.</p>
 
           <LegalAbschnitt titel="Kontakt und Geltungsbereich">
-            <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen nutze den privaten Kontaktweg, über den du deinen Zugang erhalten hast. Nach der Anmeldung kannst du dein Anliegen außerdem über den privaten Feedbackweg unter Settings → Datenschutz &amp; Rechtliches senden, sofern dieser Weg dort verfügbar ist.</p>
+            <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen nutze den privaten Kontaktweg, über den du deinen Zugang erhalten hast. Nach der Anmeldung kannst du dein Anliegen außerdem über den privaten Feedbackweg in der App senden, sofern dieser Weg verfügbar ist.</p>
           </LegalAbschnitt>
 
           <LegalAbschnitt titel="Daten im Browser und auf diesem Gerät">
