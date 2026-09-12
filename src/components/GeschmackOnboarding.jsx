@@ -181,7 +181,8 @@ export function GeschmackOnboarding({
               </div>
             </div>
           ))}
-          <Fussleiste zurueck={zurueck} weiter={weiter}
+          <Fussleiste zurueck={bereitsEinverstanden ? () => onAbbruch?.() : zurueck}
+            zurueckText={bereitsEinverstanden ? "Abbrechen" : "Zurück"} weiter={weiter}
             stand={gewaehlteChips === 0 ? "noch nichts gewählt" : gewaehlteChips + " gewählt"} />
         </div>
       )}
@@ -307,10 +308,10 @@ export function GeschmackOnboarding({
   );
 }
 
-function Fussleiste({ zurueck, weiter, weiterText = "Weiter", stand }) {
+function Fussleiste({ zurueck, zurueckText = "Zurück", weiter, weiterText = "Weiter", stand }) {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
-      <button style={btnStyle(false)} onClick={zurueck}>Zurück</button>
+      <button style={btnStyle(false)} onClick={zurueck}>{zurueckText}</button>
       <button style={btnStyle(true)} onClick={weiter}>{weiterText}</button>
       {/* aria-live, weil der Stand die einzige Rückmeldung auf das Antippen
           ist — ohne Ansage bekommt ein Screenreader-Nutzer nie mit, dass

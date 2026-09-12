@@ -748,12 +748,16 @@ check("B", "…der Einwilligungstext wird nicht erneut vorgelegt",
   () => !text().includes("Ohne deine Zustimmung entsteht kein Profil.") && !knopfTeil("Einverstanden"));
 check("B", "…und trotz Abkürzung ist bis hierhin NICHTS geschrieben  [gemessen: "
   + sp.schreibOps().length + "]", () => sp.schreibOps().length === 0);
-await klick(knopf("Zurück"), "Zurück (Abkürzung)");
-check("B", "…„Zurück\" bleibt auf Schritt 2, statt in die Einwilligung zu führen  [gemessen: "
-  + JSON.stringify(alles("[role=\"group\"]")[0]?.getAttribute("aria-label")) + "]",
-  () => alles("[role=\"group\"]")[0]?.getAttribute("aria-label")
-    === "Geschmacksprofil anlegen — Schritt 2 von 5"
+const profilVorAbbruch = JSON.stringify(sp.topf);
+await klick(chipMit("Komödie"), "Komödie vor Abbruch");
+await klick(knopf("Abbrechen"), "Abbrechen (Weitere Angaben)");
+check("B", "…„Abbrechen\" kehrt ohne Speicherung zum unveränderten Profil zurück",
+  () => !!knopf("Ändern") && sp.schreibOps().length === 0
+    && JSON.stringify(sp.topf) === profilVorAbbruch
     && !text().includes("Ohne deine Zustimmung entsteht kein Profil."));
+await klickT("Weitere Angaben");
+check("B", "…die abgebrochene Auswahl ist beim erneuten Öffnen verworfen",
+  () => chipMit("Komödie")?.getAttribute("aria-pressed") === "false");
 await klick(chipMit("Komödie"), "Komödie");
 await klick(knopf("Weiter"), "Weiter"); await klick(knopf("Weiter"), "Weiter");
 await klick(knopf("Zur Übersicht"), "Zur Übersicht");
@@ -2432,7 +2436,7 @@ console.log("\n--- F: Auffälligkeiten (heute offen, nicht exit-relevant) ---");
      F4  Ein zustimmender Nutzer bekam den Einwilligungstext erneut vorgelegt.
          → B, und dort an der GEFÄHRLICHEN Stelle: nicht nur „der Schritt ist
            weg", sondern auch, dass der Schreibzähler trotz Abkürzung bei null
-           bleibt, dass „Zurück" nicht unter den Einstiegsschritt führt, und —
+           bleibt, dass „Abbrechen" das bestehende Profil unverändert lässt, und —
            die eigentliche Falle — dass ein WIDERRUFENES Profil (Vermerk
            vorhanden, `erteilt: false`) sehr wohl wieder gefragt wird. Läse die
            Abkürzung nur „es gibt einen Vermerk", käme genau der Nutzer ohne
