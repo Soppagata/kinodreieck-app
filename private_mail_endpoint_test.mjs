@@ -8,6 +8,7 @@ import {
 } from "./supabase/functions/private-mail-request/core.js";
 
 const origin = "https://staging.kinodreieck.at";
+const productionOrigin = "https://kinodreieck.at";
 const operationId = "80a8b9b9-2c52-42d5-8e0e-08fecee9ca43";
 const accountId = "3c0b70fd-0b50-41c4-8b23-959532495476";
 const otherAccountId = "42745d70-3fd1-4f69-ab70-f391ccfa2bec";
@@ -105,24 +106,35 @@ async function body(response) {
   return JSON.parse(await response.text());
 }
 
-test("CORS erlaubt vor E6 ausschließlich den exakten Staging-Origin", async () => {
-  assert.deepEqual(PRIVATE_MAIL_ALLOWED_ORIGINS, [origin]);
+test("CORS erlaubt ausschließlich die exakten Staging- und Production-Origins", async () => {
+  assert.deepEqual(PRIVATE_MAIL_ALLOWED_ORIGINS, [origin, productionOrigin]);
 
-  const { handler } = fixture();
-  const response = await handler(new Request("https://example.invalid", {
-    method: "OPTIONS",
-    headers: {
-      Origin: origin,
-      "Access-Control-Request-Method": "POST",
-      "Access-Control-Request-Headers": "authorization, content-type",
-    },
-  }));
-  assert.equal(response.status, 204);
-  assert.equal(response.headers.get("Access-Control-Allow-Origin"), origin);
-  assert.equal(response.headers.get("Access-Control-Allow-Methods"), "POST, OPTIONS");
+  for (const allowedOrigin of PRIVATE_MAIL_ALLOWED_ORIGINS) {
+    const { handler } = fixture();
+    const response = await handler(new Request("https://example.invalid", {
+      method: "OPTIONS",
+      headers: {
+        Origin: allowedOrigin,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "authorization, content-type",
+      },
+    }));
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), allowedOrigin);
+    assert.equal(response.headers.get("Access-Control-Allow-Methods"), "POST, OPTIONS");
+  }
+
+  for (const requestBody of [feedback(), deletion()]) {
+    const fixtureResult = fixture();
+    const accepted = await fixtureResult.handler(post(requestBody, { origin: productionOrigin }));
+    assert.equal(accepted.status, 200);
+    assert.equal(accepted.headers.get("Access-Control-Allow-Origin"), productionOrigin);
+    assert.equal(fixtureResult.calls.transport.length, 1);
+  }
 
   for (const rejectedOrigin of [
-    "https://kinodreieck.at",
+    "https://www.kinodreieck.at",
+    "https://kinodreieck.at.evil.invalid",
     "http://localhost:5173",
     "https://evil.invalid",
   ]) {

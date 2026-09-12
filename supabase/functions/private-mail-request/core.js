@@ -17,6 +17,7 @@ import {
 
 export const PRIVATE_MAIL_ALLOWED_ORIGINS = Object.freeze([
   "https://staging.kinodreieck.at",
+  "https://kinodreieck.at",
 ]);
 
 export const PRIVATE_MAIL_RATE_LIMITS = Object.freeze({
