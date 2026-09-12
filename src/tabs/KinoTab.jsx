@@ -137,7 +137,10 @@ export function KinoTab({
   }, [alleProg]);
   const fassungenDa = useMemo(() => alleProg.some((pf) => pf.f), [alleProg]);
 
-  /* Bei aktivem Tag-/Kino-Filter nur die passenden Termine zeigen */
+  /* Alle terminbezogenen Filter schneiden dieselbe Vorstellungsliste. Das
+     ✓Abo-Suffix bewahrt beim normalisierten film.at-Format das urspruengliche
+     vorstellungsbezogene im_abo; bei Altformaten bleibt der Filmwert der
+     sichere Fallback. */
   const zeitenGefiltert = (pf) => {
     let z = pf.z || [];
     if (tagF) z = z.filter((s) => tagKey(s) === tagF);
@@ -148,6 +151,28 @@ export function KinoTab({
       // ohne Kino im Terminstring bleibt der bisherige sichere Fallback aktiv.
       if (nurKino.length || hatExpliziteKinoangabe) z = nurKino;
     }
+    if (fassungF) {
+      const hatExpliziteFassungen = (pf.z || []).some((s) => /\((?:OmU|OV|DF)\)/.test(String(s)));
+      if (hatExpliziteFassungen) z = z.filter((s) => String(s).includes(`(${fassungF})`));
+      else if (!String(pf.f || "").includes(fassungF)) z = [];
+    }
+    if (aboFilter !== "alle") {
+      const hatAboMarker = (pf.z || []).some((s) => String(s).includes("✓Abo"));
+      z = z.filter((s) => {
+        const imAbo = hatAboMarker ? String(s).includes("✓Abo")
+          : typeof pf.im_abo === "boolean" ? pf.im_abo
+            : (pf.k || []).filter((kino) => String(s).includes(kino)).some(istImAbo);
+        return aboFilter === "nonstop" ? imAbo : !imAbo;
+      });
+    }
+    if (!zeigeAlles) {
+      const grenze = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(zeitgrenze || "");
+      const grenzMinuten = grenze ? Number(grenze[1]) * 60 + Number(grenze[2]) : 14 * 60;
+      z = z.filter((s) => {
+        const uhrzeit = /(\d{1,2}):(\d{2})/.exec(String(s));
+        return !!uhrzeit && Number(uhrzeit[1]) * 60 + Number(uhrzeit[2]) >= grenzMinuten;
+      });
+    }
     return z;
   };
   /* Ein Programm-Film gegen alle aktiven Filter (Suche separat pro Sektion).
@@ -155,14 +180,7 @@ export function KinoTab({
      Vorstellung zeigen; zwei unabhängig passende Metadaten reichen nicht. */
   const passtFilter = (pf) => {
     if (kinoF && !(pf.k || []).includes(kinoF)) return false;
-    if (tagF && !(pf.z || []).some((z) => tagKey(z) === tagF)) return false;
-    if ((kinoF || tagF) && zeitenGefiltert(pf).length === 0) return false;
-    if (aboFilter !== "alle") {
-      const abo = pf.im_abo ?? (pf.k || []).some(istImAbo);
-      if (aboFilter === "nonstop" && !abo) return false;
-      if (aboFilter === "kein" && abo) return false;
-    }
-    if (fassungF && !(String(pf.f || "").includes(fassungF) || (pf.z || []).some((z) => z.includes("(" + fassungF)))) return false;
+    if ((kinoF || tagF || aboFilter !== "alle" || fassungF || !zeigeAlles) && zeitenGefiltert(pf).length === 0) return false;
     if (!kinoGenreMatches(pf, genreF, genreFactsIndex)) return false;
     return true;
   };
@@ -190,7 +208,7 @@ export function KinoTab({
       passtFilter(prog) && (!nq || norm(prog.t).includes(nq) || norm(film.titel).includes(nq) || norm(film.originaltitel || "").includes(nq)))
       .sort((a, b) => nachTermin(zeitenGefiltert(a.prog), zeitenGefiltert(b.prog))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [kinoMatches, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq]);
+    [kinoMatches, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq, zeigeAlles, zeitgrenze]);
   const kinoEmpfehlungen = useMemo(() => rankKinoProgramRecommendations({
     programEntries: restSichtbar.map((pf) => ({
       ...pf,
@@ -213,13 +231,13 @@ export function KinoTab({
     passtFilter(pf) && (!nq || norm(pf.t).includes(nq))
   )).sort((a, b) => nachTermin(zeitenGefiltert(a.program), zeitenGefiltert(b.program))),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [kinoEmpfehlungen, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq]);
+  [kinoEmpfehlungen, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq, zeigeAlles, zeitgrenze]);
   const restGefiltert = useMemo(() =>
     restSichtbar.filter((pf) => !kinoEmpfehlungsIds.has(String(pf.film_at_id))
       && passtFilter(pf) && (!nq || norm(pf.t).includes(nq)))
       .sort((a, b) => nachTermin(zeitenGefiltert(a), zeitenGefiltert(b))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [restSichtbar, kinoEmpfehlungsIds, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq]);
+    [restSichtbar, kinoEmpfehlungsIds, kinoF, tagF, aboFilter, fassungF, genreF, genreFactsIndex, nq, zeigeAlles, zeitgrenze]);
 
   const programmFilterAktiv = Boolean(kinoF || tagF || aboFilter !== "alle" || fassungF || genreF);
   const filterAktiv = Boolean(sucheK || programmFilterAktiv);
@@ -235,8 +253,8 @@ export function KinoTab({
   const resetProgrammfilter = () => {
     setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null); setGenreF("");
   };
-  // Die Zeitgrenze wirkt bereits im Elternteil auf „Läuft auch“. Beim Reset
-  // bleibt die gespeicherte Uhrzeit erhalten, ihre Einschränkung wird gelöst.
+  // Beim Reset bleibt die gespeicherte Uhrzeit erhalten, ihre Einschränkung
+  // wird fuer das gesamte Kinoprogramm geloest.
   const aktiveFilterAnzahl = [kinoF, tagF, aboFilter !== "alle", fassungF, genreF, sucheK, !zeigeAlles].filter(Boolean).length;
   const resetAlleFilter = () => {
     resetProgrammfilter();
@@ -349,7 +367,7 @@ export function KinoTab({
             </div>
             {(sucheK || !zeigeAlles) && (
               <p className="kd-kino-filterhinweis" role="status">
-                {[sucheK ? `Suchfokus: ${sucheK}` : "", !zeigeAlles ? `Läuft auch: Rest ab ${zeitgrenze}` : ""].filter(Boolean).join(" · ")}
+                {[sucheK ? `Suchfokus: ${sucheK}` : "", !zeigeAlles ? `Kinoprogramm: ab ${zeitgrenze}` : ""].filter(Boolean).join(" · ")}
               </p>
             )}
             <div id={filterPanelId} hidden={!filterMenueOffen} className="kd-kino-filterpanel">
@@ -369,7 +387,7 @@ export function KinoTab({
               </label>
               <div className="kd-kino-filteroptionen">
                 <label className="kd-kino-zeitgrenze"
-                  title='Zeitgrenze für „Läuft auch": Filme ohne Vorstellung ab dieser Uhrzeit werden ausgeblendet. Deine Treffer sind nie betroffen.'>
+                  title="Vorstellungen vor dieser Uhrzeit werden im gesamten Kinoprogramm ausgeblendet.">
                   Rest ab
                   <input value={zeitgrenze} onChange={(e) => saveZeitgrenze(e.target.value)} placeholder="14:00" />
                 </label>
@@ -518,7 +536,7 @@ export function KinoTab({
               </h2>
               {restSichtbar.length < kinoMatches.rest.length && !zeigeAlles && (
                 <div style={{ marginBottom: 8, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>
-                  Filme ohne Vorstellung ab {zeitgrenze} sind ausgeblendet — „Ganzes Tagesprogramm" hebt das auf.
+                  Vorstellungen vor {zeitgrenze} sind ausgeblendet — „Ganzes Tagesprogramm" hebt das auf.
                 </div>
               )}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

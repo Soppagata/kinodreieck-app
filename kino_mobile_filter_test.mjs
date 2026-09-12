@@ -22,6 +22,7 @@ export async function buildKinoFixture() {
         { film_at_id:1002, t:'Filterzwei', j:2026, g:['Drama'], f:'OV', im_abo:false, k:['Apollo'], z:['Montag 31.8. 20:00 · Apollo (OV)'] },
         { film_at_id:1003, t:'Filterdrei', j:2026, g:['Comedy'], f:'DF', im_abo:true, k:['Gartenbaukino'], z:['Dienstag 1.9. 10:00 · Gartenbaukino (DF)'] },
         { film_at_id:1004, t:'Kreuzfall', j:2026, g:[], f:'DF', im_abo:false, k:['Gartenbaukino','Apollo'], z:['Montag 31.8. 21:00 · Apollo (DF)', 'Dienstag 1.9. 22:00 · Gartenbaukino (DF)'] },
+        { film_at_id:1005, t:'Terminmix', j:2026, g:['Action'], f:'OmU/OV', im_abo:true, k:['Gartenbaukino','Apollo'], z:['Montag 31.8. 12:00 · Gartenbaukino (OmU) ✓Abo', 'Montag 31.8. 20:00 · Apollo (OV)', 'Montag 31.8. 22:00 · Gartenbaukino (OmU) ✓Abo'] },
       ];
       const film = { id:9, titel:'Listentreffer', jahr:2026, typ:'film' };
       const matched = [{ film, prog:{ film_at_id:2001, t:film.titel, j:2026, g:['Action'], f:'OmU', im_abo:true, k:['Gartenbaukino'], z:['Montag 31.8. 10:00 · Gartenbaukino (OmU)'] } }];
@@ -81,8 +82,23 @@ async function runDomChecks() {
       el.dispatchEvent(new window.Event("change", { bubbles: true }));
     });
   };
+  const fill = async (selector, value) => {
+    await api.act(async () => {
+      const el = doc.querySelector(selector);
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      setter.call(el, value);
+      el.dispatchEvent(new window.Event("input", { bubbles: true }));
+    });
+  };
   const titles = () => [...doc.querySelectorAll('[data-kino-suchtreffer^="programm:"] .kd-kompakt-eintrag-titel')]
     .map(el => el.childNodes[0]?.textContent.trim()).sort();
+  const termineFuer = (ref) => [...doc.querySelectorAll(`[data-kino-suchtreffer="${ref}"] button`)]
+    .map(el => el.textContent.trim()).filter(text => /\d{1,2}:\d{2}/.test(text));
+  const oeffneTermineFuer = async (ref) => {
+    if (!termineFuer(ref).length) await click(doc.querySelector(`[data-kino-suchtreffer="${ref}"] .kd-kompakt-eintrag > div`));
+  };
+  const sichtbareTermine = () => [...doc.querySelectorAll('[data-kino-suchtreffer] button')]
+    .map(el => el.textContent.trim()).filter(text => /\d{1,2}:\d{2}/.test(text));
   let checks = 0;
   const check = (name, fn) => { fn(); checks++; console.log(`✓ ${name}`); };
   try {
@@ -97,21 +113,32 @@ async function runDomChecks() {
     await select("Datum im Kinoprogramm", "31.8.");
     await select("Kino im Kinoprogramm", "Gartenbaukino");
     check("Kino und Datum schneiden dieselbe Vorstellung; Anzahl zwei", () => {
-      assert.deepEqual(titles(), ["Filtereins"]);
+      assert.deepEqual(titles(), ["Filtereins", "Terminmix"]);
       assert.match(toggle().textContent, /Filter · 2/);
     });
     await click(button("Filter zurücksetzen"));
     await click(toggle());
     await click(button("Abo: alle"));
-    check("Nur NonStop greift", () => assert.deepEqual(titles(), ["Filterdrei", "Filtereins"]));
+    await oeffneTermineFuer("programm:1005");
+    check("Nur NonStop greift auf einzelne Termine", () => {
+      assert.deepEqual(titles(), ["Filterdrei", "Filtereins", "Terminmix"]);
+      assert.deepEqual(termineFuer("programm:1005"), [
+        "◇ Montag 31.8. 12:00 · Gartenbaukino (OmU) ✓Abo",
+        "◇ Montag 31.8. 22:00 · Gartenbaukino (OmU) ✓Abo",
+      ]);
+    });
     await click(button("Nur NonStop"));
-    check("Kein NonStop greift", () => assert.deepEqual(titles(), ["Filterzwei", "Kreuzfall"]));
+    check("Kein NonStop greift auf einzelne Termine", () => {
+      assert.deepEqual(titles(), ["Filterzwei", "Kreuzfall", "Terminmix"]);
+      assert.deepEqual(termineFuer("programm:1005"), ["◇ Montag 31.8. 20:00 · Apollo (OV)"]);
+    });
     await click(button("Kein NonStop"));
-    for (const [fassung, expected] of [["OmU", ["Filtereins"]], ["OV", ["Filterzwei"]], ["DF", ["Filterdrei", "Kreuzfall"]]]) {
+    for (const [fassung, expected] of [["OmU", ["Filtereins", "Terminmix"]], ["OV", ["Filterzwei", "Terminmix"]], ["DF", ["Filterdrei", "Kreuzfall"]]]) {
       await click(button(fassung));
       check(`${fassung} filtert und zeigt aktiven Zustand`, () => {
         assert.deepEqual(titles(), expected);
         assert.equal(button(fassung).getAttribute("aria-pressed"), "true");
+        if (fassung === "OV") assert.deepEqual(termineFuer("programm:1005"), ["◇ Montag 31.8. 20:00 · Apollo (OV)"]);
       });
       await click(button(fassung));
     }
@@ -126,15 +153,42 @@ async function runDomChecks() {
     await select("Genre im Kinoprogramm", "horror");
     check("Exakte film.at-ID-Ergänzung ist filterbar", () => assert.deepEqual(titles(), ["Kreuzfall"]));
     await click(button("Filter zurücksetzen"));
+    await fill('.kd-kino-zeitgrenze input', '19:00');
+    await select("Datum im Kinoprogramm", "31.8.");
+    await select("Kino im Kinoprogramm", "Gartenbaukino");
+    await select("Genre im Kinoprogramm", "action");
+    await click(button("Abo: alle"));
+    await click(button("OmU"));
     await click(button("Zeitfilter an"));
-    check("Rest ab wirkt nur auf Rest, Listentreffer bleibt", () => {
-      assert.deepEqual(titles(), ["Filtereins", "Filterzwei", "Kreuzfall"]);
-      assert.ok(doc.querySelector('[data-kino-suchtreffer="film:9"]'));
+    await oeffneTermineFuer("programm:1005");
+    check("Datum, Kino, Fassung, Genre, Abo und Zeit schneiden denselben Termin", () => {
+      assert.deepEqual(titles(), ["Terminmix"]);
+      assert.deepEqual(termineFuer("programm:1005"), ["◇ Montag 31.8. 22:00 · Gartenbaukino (OmU) ✓Abo"]);
+    });
+    await click(button("Filter zurücksetzen"));
+    await fill('.kd-kino-zeitgrenze input', '14:00');
+    await click(button("Zeitfilter an"));
+    await oeffneTermineFuer("programm:1005");
+    check("Rest ab wirkt auf alle Karten und entfernt fruehe Termine", () => {
+      assert.deepEqual(titles(), ["Filtereins", "Filterzwei", "Kreuzfall", "Terminmix"]);
+      assert.equal(doc.querySelector('[data-kino-suchtreffer="film:9"]'), null);
+      assert.ok(sichtbareTermine().every((termin) => !termin.includes("10:00") && !termin.includes("12:00")));
+      assert.deepEqual(termineFuer("programm:1005"), [
+        "◇ Montag 31.8. 20:00 · Apollo (OV)",
+        "◇ Montag 31.8. 22:00 · Gartenbaukino (OmU) ✓Abo",
+      ]);
       assert.match(toggle().textContent, /Filter · 1/);
-      assert.match(doc.querySelector('.kd-kino-filterhinweis').textContent, /Rest ab 14:00/);
+      assert.match(doc.querySelector('.kd-kino-filterhinweis').textContent, /Kinoprogramm: ab 14:00/);
     });
     await click(button("Ganzes Tagesprogramm"));
-    check("Ganzes Tagesprogramm löst die Zeitgrenze", () => assert.equal(titles().length, 4));
+    check("Ganzes Tagesprogramm löst die Zeitgrenze", () => {
+      assert.equal(titles().length, 5);
+      assert.deepEqual(termineFuer("programm:1005"), [
+        "◇ Montag 31.8. 12:00 · Gartenbaukino (OmU) ✓Abo",
+        "◇ Montag 31.8. 20:00 · Apollo (OV)",
+        "◇ Montag 31.8. 22:00 · Gartenbaukino (OmU) ✓Abo",
+      ]);
+    });
     await api.act(async () => api.focus({ art: "programm", ref: "1001", titel: "Filtereins" }));
     await new Promise(resolve => window.setTimeout(resolve, 70));
     check("Globaler Suchauftrag fokussiert ohne lokale Suche", () => {
@@ -146,7 +200,7 @@ async function runDomChecks() {
     await click(button("Zeitfilter an"));
     await click(button("Filter zurücksetzen"));
     check("Reset löst Fokus und Zeitgrenze, behält Uhrzeit, verschwindet", () => {
-      assert.equal(titles().length, 4);
+      assert.equal(titles().length, 5);
       assert.equal(doc.querySelector('.kd-kino-zeitgrenze input').value, '14:00');
       assert.equal(button("Filter zurücksetzen"), undefined);
       assert.equal(requests, 0);
