@@ -1834,14 +1834,14 @@ await montiereTabNeu(tabProps(
   { kiProfilFaehig: false },
 ));
 check("M", "Gast/fehlende KI-Fähigkeit: das persönliche Freitextformular öffnet gar nicht",
-  () => !text().includes("Mit drei Fragen anlegen"));
+  () => !text().includes("Geschmacksprofil mit KI erstellen"));
 
 await montiereTabNeu(tabProps(
   { global: true, funktionen: { profil: true } },
   { kiProfilFaehig: true },
 ));
 check("M", "Konto + Schalter + echte Master-Genres: der Drei-Fragen-Weg ist erreichbar",
-  () => text().includes("Mit drei Fragen anlegen"));
+  () => text().includes("Geschmacksprofil mit KI erstellen"));
 
 /* Und vollständig bedienbar bei KI=aus — mit dem ECHTEN Speicher, also ohne
    die `speicher`-Prop. Das ist der Weg, den DatenTab tatsächlich einhängt. */

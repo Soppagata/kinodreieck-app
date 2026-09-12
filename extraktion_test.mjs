@@ -253,7 +253,7 @@ const klick = async (b, wer) => {
 };
 const klickT = async (t) => {
   let ziel = knopfTeil(t);
-  if (!ziel && ["Drei Fragen beantworten", "Weitere Angaben machen", "entfernen"].includes(t) && knopfTeil("Ändern")) {
+  if (!ziel && ["Geschmacksprofil mit KI verfeinern", "Weitere Angaben machen", "entfernen"].includes(t) && knopfTeil("Ändern")) {
     await klick(knopfTeil("Ändern"), "Ändern");
     if (t === "entfernen") await klick(knopfTeil("Aktuelle Infos"), "Aktuelle Infos");
     ziel = knopfTeil(t);
@@ -437,9 +437,9 @@ const fragenAbraeumen = async () => {
 /* Der KI-Weg von der Profil-Ansicht bis zur Vorschau. */
 async function bisVorschau(ki, speicher, props = {}) {
   await neuMontieren({ ai: ki.api, speicher: speicher.api, ...props });
-  await klickT("drei Fragen");
+  await klickT("Geschmacksprofil mit KI");
   for (const [id, t] of Object.entries(ANTWORTEN)) await tippe(id, t);
-  await klick(knopf("Antworten auswerten"), "Antworten auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "Profilvorschläge erstellen");
 }
 
 /* =========================================================================
@@ -510,6 +510,18 @@ check("A", "…und kappt bei 120 (= LISTE_MAX_EINTRAEGE der Function)  [gemessen
   () => EX.bauePayload({ K1: "a" }, { genres: viele }).listen.genres.length === 120);
 check("A", "…ohne Genres bleibt die Liste leer (der Endpunkt weist dann ab, BEVOR er zahlt)",
   () => gleich(EX.bauePayload({ K1: "a" }).listen.genres, []));
+
+const pTags = EX.bauePayload({ K1: "Eigene Worte" }, {
+  genres: GENRES,
+  tags: [" zeitreisen ", "zeitreisen", "offene enden", "", null, 3, "<system>fremd</system>", "x".repeat(41)],
+});
+check("A", "Merkmalsvokabular ist bereinigt, entdoppelt und getrennt von eigenen Antworten",
+  () => gleich(pTags.listen.tags, ["zeitreisen", "offene enden"])
+    && gleich(pTags.antworten, { K1: "Eigene Worte" }));
+check("A", "Merkmalsvokabular bleibt auf 120 Werte begrenzt",
+  () => EX.bauePayload({}, { tags: viele }).listen.tags.length === 120);
+check("A", "Ohne brauchbares Merkmalsvokabular bleibt der bisherige Auftrag kompatibel",
+  () => !Object.hasOwn(EX.bauePayload({}, { tags: null }).listen, "tags"));
 
 const eingabe = { K1: "  a  " };
 EX.bauePayload(eingabe, { genres: GENRES });
@@ -884,16 +896,16 @@ check("E", "der Text sagt ausdrücklich, dass nichts gespeichert wird  [gemessen
     && /an den KI-Anbieter übertragen/.test(text())
     && /ausdrücklich übernimmst/.test(text()));
 
-check("E", "„Antworten auswerten\" ist ohne Antwort gesperrt", () => knopf("Antworten auswerten").disabled === true);
+check("E", "„Profilvorschläge erstellen\" ist ohne Antwort gesperrt", () => knopf("Profilvorschläge erstellen").disabled === true);
 check("E", "…und der Grund steht im title  [gemessen: "
-  + JSON.stringify(knopf("Antworten auswerten").getAttribute("title")) + "]",
-  () => /mindestens eine Frage/.test(knopf("Antworten auswerten").getAttribute("title") || ""));
+  + JSON.stringify(knopf("Profilvorschläge erstellen").getAttribute("title")) + "]",
+  () => /mindestens eine Frage/.test(knopf("Profilvorschläge erstellen").getAttribute("title") || ""));
 check("E", "…die Live-Region meldet „noch keine Antwort\"  [gemessen: "
   + JSON.stringify(alles("[aria-live]").map((e) => e.textContent.trim())) + "]",
   () => alles("[aria-live]").some((e) => e.textContent.trim() === "noch keine Antwort"));
 
 await tippe("K2", "Alien, bestimmt zwanzig Mal.");
-check("E", "eine Antwort genügt: der Knopf wird frei", () => knopf("Antworten auswerten").disabled === false);
+check("E", "eine Antwort genügt: der Knopf wird frei", () => knopf("Profilvorschläge erstellen").disabled === false);
 check("E", "…und die Live-Region meldet „bereit\"",
   () => alles("[aria-live]").some((e) => e.textContent.trim() === "bereit"));
 
@@ -909,7 +921,7 @@ check("E", "…über der Grenze steht die Warnung  [gemessen: "
   () => /2100 von 2000 Zeichen/.test(text()) && /abgeschnitten und nicht ausgewertet/.test(text()));
 
 await tippe("K2", "Alien, bestimmt zwanzig Mal.");
-await klick(knopf("Antworten auswerten"), "Antworten auswerten");
+await klick(knopf("Profilvorschläge erstellen"), "Profilvorschläge erstellen");
 check("E", "onExtrahieren bekommt die rohen Antworten  [gemessen: " + kurz(gerufen.extrahieren[0]) + "]",
   () => gerufen.extrahieren.length === 1 && gerufen.extrahieren[0].K2 === "Alien, bestimmt zwanzig Mal.");
 
@@ -921,8 +933,8 @@ await zeigeFragen({ laeuft: true, antworten: { K1: "etwas" }, onExtrahieren: () 
 check("E", "während des Laufs sind die Textfelder gesperrt  [gemessen: "
   + JSON.stringify(alles("textarea").map((t) => t.disabled)) + "]",
   () => alles("textarea").every((t) => t.disabled === true));
-check("E", "…der Knopf heisst „Wird gelesen …\" und ist gesperrt",
-  () => !!knopf("Wird gelesen …") && knopf("Wird gelesen …").disabled === true);
+check("E", "…der Knopf heisst „Profilvorschläge entstehen …\" und ist gesperrt",
+  () => !!knopf("Profilvorschläge entstehen …") && knopf("Profilvorschläge entstehen …").disabled === true);
 check("E", "…„Abbrechen\" ist während des Laufs ebenfalls gesperrt",
   () => knopf("Abbrechen").disabled === true);
 check("E", "…und die Live-Region meldet „läuft\"",
@@ -1167,7 +1179,7 @@ const zaehle = (wann) => check("H", "kein Schreibversuch " + wann + "  [gemessen
   + JSON.stringify(s.schreibOps().map((o) => o.op)) + "]", () => s.schreibOps().length === 0);
 
 zaehle("nach der Montage");
-await klickT("drei Fragen");
+await klickT("Geschmacksprofil mit KI");
 zaehle("nach dem Öffnen der drei Fragen");
 for (const [id, t] of Object.entries(ANTWORTEN)) await tippe(id, t);
 zaehle("nach dem Ausfüllen aller drei Felder");
@@ -1175,9 +1187,9 @@ zaehle("nach dem Ausfüllen aller drei Felder");
 /* Während des Laufs — der Aufruf hängt, die Oberfläche steht im Zustand
    „läuft". Genau hier wäre ein vorschnelles Speichern am unauffälligsten. */
 ki.haengt = true;
-await klick(knopf("Antworten auswerten"), "auswerten");
+await klick(knopf("Profilvorschläge erstellen"), "auswerten");
 check("H", "…der Aufruf läuft  [gemessen: " + JSON.stringify(text().slice(-40)) + "]",
-  () => !!knopf("Wird gelesen …"));
+  () => !!knopf("Profilvorschläge entstehen …"));
 zaehle("WÄHREND des laufenden Aufrufs");
 ki.haengt = false;
 await act(async () => { ki.aufloesen(); });
@@ -1199,10 +1211,10 @@ check("H", "…und die Vorschau ist weg  [gemessen: " + JSON.stringify(text().sl
   () => zeilen().length === 0 && !!knopfTeil("Profil anlegen"));
 
 /* Auch der Fehlerweg schreibt nichts. */
-await klickT("drei Fragen");
+await klickT("Geschmacksprofil mit KI");
 await tippe("K1", A_K1);
 ki.wirft = new BoundaryError(ERROR_CODES.LIMIT, {});
-await klick(knopf("Antworten auswerten"), "auswerten");
+await klick(knopf("Profilvorschläge erstellen"), "auswerten");
 zaehle("nach einem gescheiterten Aufruf");
 
 /* Und der ganze Abschnitt in einer Zahl. */
@@ -1424,15 +1436,15 @@ ki3.antwort = () => HUELLE({ ...DATEN(), signale: [SIG({ art: "epoche", wert: "7
   achsen_tendenz: { wie: null, was: null, warum: 2 } });
 await neuMontieren({ ai: ki2.api, speicher: s2.api });
 s2.leeren();
-await klickT("Drei Fragen beantworten");
+await klickT("Geschmacksprofil mit KI verfeinern");
 await tippe("K1", A_K1);
-await klick(knopf("Antworten auswerten"), "auswerten");
+await klick(knopf("Profilvorschläge erstellen"), "auswerten");
 /* Der Bereich hält seinen eigenen Dienst; für den zweiten Lauf wird er
    ausgetauscht, indem neu montiert wird — sonst antwortete das alte Doppel. */
 await neuMontieren({ ai: ki3.api, speicher: s2.api });
-await klickT("Drei Fragen beantworten");
+await klickT("Geschmacksprofil mit KI verfeinern");
 await tippe("K1", A_K1);
-await klick(knopf("Antworten auswerten"), "auswerten");
+await klick(knopf("Profilvorschläge erstellen"), "auswerten");
 await klick(knopf("Ausgewähltes übernehmen"), "übernehmen");
 const p3 = s2.letzteNutzlast();
 check("I", "zweiter Durchlauf: Fassung p3 (p1 → p2 aus dem ersten, dann p3)  [gemessen: "
@@ -1464,9 +1476,9 @@ for (const name of CODES) {
   const fehlerRufe = [];
   ki.wirft = new BoundaryError(code, { message: "ROHTEXT-" + name + "-NICHT-ZEIGEN" });
   await neuMontieren({ ai: ki.api, speicher: s.api, onFehler: (e) => fehlerRufe.push(e?.code) });
-  await klickT("drei Fragen");
+  await klickT("Geschmacksprofil mit KI");
   await tippe("K1", A_K1);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   const t = text();
   check("J", name + ": der Nutzer sieht den Text aus errorText  [gemessen: "
     + JSON.stringify(t.slice(t.indexOf(errorText({ code })), t.indexOf(errorText({ code })) + 50)) + "]",
@@ -1489,9 +1501,9 @@ for (const name of CODES) {
   const ki = neueKi();
   ki.wirft = new Error("TypeError: cannot read property 'x' of undefined");
   await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv: true });
-  await klickT("drei Fragen");
+  await klickT("Geschmacksprofil mit KI");
   await tippe("K1", A_K1);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   check("J", "eine nackte Ausnahme wird auf den Serverfehler-Text abgebildet  [gemessen: "
     + JSON.stringify(text().slice(-90)) + "]",
     () => text().includes(errorText({ code: "server" })) && !text().includes("cannot read property"));
@@ -1510,9 +1522,9 @@ for (const [was, antwort, sollFormfehler] of [
   const ki = neueKi();
   ki.antwort = () => antwort;
   await neuMontieren({ ai: ki.api, speicher: s.api });
-  await klickT("drei Fragen");
+  await klickT("Geschmacksprofil mit KI");
   await tippe("K1", A_K1);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   check("J", was + " → ehrliche Formmeldung  [gemessen: " + JSON.stringify(text().slice(-80)) + "]",
     () => text().includes("nicht die erwartete Form") === sollFormfehler);
   check("J", "…keine Vorschau, kein Schreibversuch (" + was + ")",
@@ -1525,9 +1537,9 @@ for (const [was, antwort, sollFormfehler] of [
   const ki = neueKi();
   ki.antwort = () => HUELLE({ signale: "keine Liste", filme: null, achsen_tendenz: 7, nicht_deutbar: "x" });
   await neuMontieren({ ai: ki.api, speicher: s.api });
-  await klickT("drei Fragen");
+  await klickT("Geschmacksprofil mit KI");
   await tippe("K1", A_K1);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   check("J", "`signale: \"keine Liste\"` → Vorschau ohne Signale statt Absturz  [gemessen: "
     + JSON.stringify(text().slice(0, 70)) + "]",
     () => /nichts Belegbares/.test(text()) && zeilen().length === 0);
@@ -1544,10 +1556,10 @@ for (const [was, antwort, sollFormfehler] of [
   const s = neuerSpeicher(null);
   const ki = neueKi();
   ki.antwort = () => HUELLE(DATEN());
-  await neuMontieren({ ai: ki.api, speicher: s.api, bekannteGenres: GENRES });
-  await klickT("drei Fragen");
+  await neuMontieren({ ai: ki.api, speicher: s.api, bekannteGenres: GENRES, bekannteTags: ["zeitreisen", "offene enden"] });
+  await klickT("Geschmacksprofil mit KI");
   for (const [id, t] of Object.entries(ANTWORTEN)) await tippe(id, t);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   const ruf = ki.rufe[0];
   check("J", "die Aufgabe heisst \"profile-extract\"  [gemessen: " + JSON.stringify(ruf?.task) + "]",
     () => ruf.task === "profile-extract");
@@ -1556,6 +1568,8 @@ for (const [was, antwort, sollFormfehler] of [
     () => gleich(Object.keys(ruf.payload.antworten), ["K1", "K2", "K4"]));
   check("J", "…und die Genre-Werteliste (ohne sie weist der Endpunkt ab, BEVOR er zahlt)  [gemessen: "
     + kurz(ruf.payload.listen) + "]", () => gleich(ruf.payload.listen.genres, GENRES));
+  check("J", "…und vorhandene Merkmalsbegriffe fuer andere Profilnutzer",
+    () => gleich(ruf.payload.listen.tags, ["zeitreisen", "offene enden"]));
   check("J", "…und sonst nichts (kein Profil, kein Konto, keine Titel)  [gemessen: "
     + JSON.stringify(Object.keys(ruf.payload)) + "]",
     () => gleich(Object.keys(ruf.payload).sort(), ["antworten", "listen"]));
@@ -1577,9 +1591,9 @@ for (const [was, antwort, sollFormfehler] of [
   const ki = neueKi();
   ki.antwort = () => HUELLE(DATEN());
   await neuMontieren({ ai: ki.api, speicher: s.api, bekannteGenres: GENRES });
-  await klickT("Drei Fragen beantworten");
+  await klickT("Geschmacksprofil mit KI verfeinern");
   await tippe("K1", A_K1);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   check("J", "ein bestehendes Profil reist als `profilVersion` ins KI-Protokoll  [gemessen: "
     + JSON.stringify(ki.rufe[0]?.optionen) + "]",
     () => ki.rufe[0]?.optionen?.profilVersion === "p3");
@@ -1601,9 +1615,9 @@ const ki = neueKi();
 ki.antwort = () => HUELLE(DATEN());
 const fehlerRufe = [];
 await neuMontieren({ ai: ki.api, speicher: s.api, onFehler: (e) => fehlerRufe.push(String(e?.message || e)) });
-await klickT("drei Fragen");
+await klickT("Geschmacksprofil mit KI");
 for (const [id, t] of Object.entries(ANTWORTEN)) await tippe(id, t);
-await klick(knopf("Antworten auswerten"), "auswerten");
+await klick(knopf("Profilvorschläge erstellen"), "auswerten");
 await klick(zeilen()[1].knopf, "weglassen");
 const vorher = zeilen().map((z) => ({ beleg: z.beleg, weg: z.weg }));
 
@@ -1654,9 +1668,9 @@ for (const [was, kiAktiv, sollKnopf] of [["true", true, true], ["false", false, 
   const s = neuerSpeicher(null);
   const ki = neueKi();
   await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv });
-  check("L", "kiAktiv=" + was + ": Einstieg „Mit drei Fragen anlegen\" " + (sollKnopf ? "da" : "weg")
+  check("L", "kiAktiv=" + was + ": Einstieg „Geschmacksprofil mit KI erstellen\" " + (sollKnopf ? "da" : "weg")
     + "  [gemessen: " + JSON.stringify(knoepfe().map((b) => b.textContent.trim())) + "]",
-    () => !!knopfTeil("Mit drei Fragen anlegen") === sollKnopf);
+    () => !!knopfTeil("Geschmacksprofil mit KI erstellen") === sollKnopf);
   check("L", "…der deterministische Einstieg ist in beiden Fällen da",
     () => !!knopfTeil("Profil anlegen"));
   check("L", "…und ohne Einstieg gibt es auch keine Textfelder  [gemessen: "
@@ -1678,10 +1692,10 @@ for (const [was, kiAktiv, sollKnopf] of [["true", true, true], ["false", false, 
   const ki = neueKi();
   await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv });
   await klickT("Ändern");
-  check("L", "bestehendes Profil, kiAktiv=" + was + ": „Drei Fragen beantworten\" "
+  check("L", "bestehendes Profil, kiAktiv=" + was + ": „Geschmacksprofil mit KI verfeinern\" "
     + (sollKnopf ? "da" : "weg") + "  [gemessen: "
     + JSON.stringify(knoepfe().map((b) => b.textContent.trim())) + "]",
-    () => !!knopfTeil("Drei Fragen beantworten") === sollKnopf);
+    () => !!knopfTeil("Geschmacksprofil mit KI verfeinern") === sollKnopf);
   check("L", "…„Weitere Angaben machen\" bleibt in beiden Fällen",
     () => !!knopfTeil("Weitere Angaben machen"));
   check("L", "…und „Einwilligung widerrufen\" ebenso", () => !!knopfTeil("Einwilligung widerrufen"));
@@ -1696,7 +1710,7 @@ for (const [was, kiAktiv, sollKnopf] of [["true", true, true], ["false", false, 
   await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv: undefined });
   check("L", "auch ohne jede KI-Prop ist der Einstieg fail-closed weg  [gemessen: "
     + JSON.stringify(knoepfe().map((b) => b.textContent.trim())) + "]",
-    () => !knopfTeil("Mit drei Fragen anlegen"));
+    () => !knopfTeil("Geschmacksprofil mit KI erstellen"));
   check("L", "…und `ai.runTask` wurde nie gerufen  [gemessen: " + ki.rufe.length + "]",
     () => ki.rufe.length === 0);
 }
@@ -1752,7 +1766,7 @@ check("L", "…der Film aus dem eigenen Bestand trägt sicher: TRUE  [gemessen: 
   () => pDet.filme.every((f) => f.sicher === true));
 check("L", "…die Profil-Ansicht zeigt danach das Profil  [gemessen: "
   + JSON.stringify(text().slice(0, 60)) + "]", () => /Fassung p1/.test(text()));
-check("L", "…der KI-Einstieg fehlt weiterhin", () => !knopfTeil("Drei Fragen beantworten"));
+check("L", "…der KI-Einstieg fehlt weiterhin", () => !knopfTeil("Geschmacksprofil mit KI verfeinern"));
 check("L", "DER ANKER: im ganzen KI-losen Durchlauf NULL Rufe an ai.runTask  [gemessen: "
   + ki.rufe.length + "]", () => ki.rufe.length === 0);
 
@@ -1841,9 +1855,9 @@ console.log("\n--- F: Nachgezogene frühere Auffälligkeiten ---");
   const ki = neueKi();
   ki.antwort = () => HUELLE_ECHT(DATEN());
   await neuMontieren({ ai: ki.api, speicher: s.api });
-  await klickT("drei Fragen");
+  await klickT("Geschmacksprofil mit KI");
   await tippe("K1", A_K1);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   check("F", "F1: die ECHTE Hülle des Endpunkts (`data`) wird gelesen  [gemessen: "
     + JSON.stringify(zeilen().length + " Zeilen, Text: " + text().slice(-60)) + "]",
     () => zeilen().length === 3);
@@ -1955,9 +1969,9 @@ console.log("\n--- F: Nachgezogene frühere Auffälligkeiten ---");
   const ki = neueKi();
   ki.antwort = () => HUELLE({ ...DATEN(), filme: [], nicht_deutbar: [], achsen_tendenz: {} });
   await neuMontieren({ ai: ki.api, speicher: s.api });
-  await klickT("Drei Fragen beantworten");
+  await klickT("Geschmacksprofil mit KI verfeinern");
   await tippe("K1", A_K1);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   const gezeigt = zeilen().length;
   await klick(knopf("Ausgewähltes übernehmen"), "übernehmen");
   const p = s.letzteNutzlast();
@@ -1977,9 +1991,9 @@ console.log("\n--- F: Nachgezogene frühere Auffälligkeiten ---");
   const ki = neueKi();
   ki.antwort = () => ({ ok: true, daten: [] });
   await neuMontieren({ ai: ki.api, speicher: s.api });
-  await klickT("drei Fragen");
+  await klickT("Geschmacksprofil mit KI");
   await tippe("K1", A_K1);
-  await klick(knopf("Antworten auswerten"), "auswerten");
+  await klick(knopf("Profilvorschläge erstellen"), "auswerten");
   check("F", "F7: `daten: []` wird als Formfehler gemeldet, nicht als leere Extraktion  [gemessen: "
     + JSON.stringify(text().slice(-70)) + "]", () => /nicht die erwartete Form/.test(text()));
   await abraeumen();

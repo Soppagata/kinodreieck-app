@@ -40,20 +40,20 @@ export const FRAGEN = Object.freeze([
   {
     id: "K1",
     kurz: "Der Frame",
-    frage: "Welcher einzelne Moment aus einem Film ist für dich der beste der Kinogeschichte?",
-    hilfe: "Eine Szene, eine Einstellung, ein Bild. Beschreib sie so, wie sie dir im Kopf ist — es muss nichts Berühmtes sein.",
+    frage: "Welche Filmszene oder welcher Moment begeistert dich besonders — und warum?",
+    hilfe: "Beschreib, was auf dich wirkt: etwa Bilder, Musik, Spannung, Humor oder ein bestimmtes Gefühl. Ein alltägliches Beispiel reicht.",
   },
   {
     id: "K2",
     kurz: "Der Wiedergänger",
-    frage: "Welchen Film hast du am häufigsten gesehen, und was zieht dich immer wieder rein?",
-    hilfe: "Auch mehrere sind in Ordnung. Interessant ist vor allem der zweite Teil der Frage.",
+    frage: "Welche Filme schaust du gern wieder — und was zieht dich immer wieder rein?",
+    hilfe: "Nenne ein oder zwei Beispiele und deine Gründe. Ein Gegenbeispiel hilft ebenso: Was langweilt oder stört dich bei anderen Filmen?",
   },
   {
     id: "K4",
     kurz: "Der Pflichtfilm",
-    frage: "Welchen Film müsste jemand gesehen haben, den du gerade erst kennenlernst?",
-    hilfe: "Und warum ausgerechnet den? Der Grund sagt mehr als der Titel.",
+    frage: "Welchen Film würdest du unbedingt weiterempfehlen — und was macht ihn für dich besonders?",
+    hilfe: "Was zählt für dich: wie er gemacht ist, was er erzählt oder was er in dir auslöst? Beschreib auch Grenzen: Was muss passen, damit du so einen Film magst?",
   },
 ]);
 
@@ -74,15 +74,24 @@ export function antwortenBrauchbar(antworten) {
 /* Der Payload für `aiService.runTask`. `listen.genres` ist Pflicht — ohne
    Wertelisten weist der Endpunkt ab, bevor er zahlt, weil jedes Genre-Signal
    sonst zwangsläufig erfunden wäre. */
-export function bauePayload(antworten, { genres = [] } = {}) {
+export function bauePayload(antworten, { genres = [], tags = [] } = {}) {
   const aus = {};
   for (const f of FRAGEN) {
     const t = typeof antworten?.[f.id] === "string" ? antworten[f.id].trim() : "";
     if (t) aus[f.id] = t.slice(0, ANTWORT_MAX_ZEICHEN);
   }
+  const merkmale = Array.isArray(tags) ? [...new Set(tags
+    .filter((t) => typeof t === "string")
+    .map((t) => t.trim())
+    .filter((t) => /^[\p{L}\p{N} \-_/&.+'’]{1,40}$/u.test(t)))].slice(0, 120) : [];
   return {
     antworten: aus,
-    listen: { genres: [...new Set(genres.filter((g) => typeof g === "string" && g.trim()))].slice(0, 120) },
+    listen: {
+      genres: [...new Set(genres.filter((g) => typeof g === "string" && g.trim()))].slice(0, 120),
+      /* Vorhandene Schreibweisen helfen auch den Filtern ohne KI. Sie sind
+         Vokabular, keine Vorlieben und niemals ein Beleg fuer ein Signal. */
+      ...(merkmale.length ? { tags: merkmale } : {}),
+    },
   };
 }
 

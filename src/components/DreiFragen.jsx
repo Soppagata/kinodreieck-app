@@ -31,6 +31,7 @@ import { FRAGEN, ANTWORT_MAX_ZEICHEN, antwortenBrauchbar, frageZu } from "../lib
 
 export function DreiFragen({
   antworten: startAntworten = null,
+  profilVorhanden = false,
   laeuft = false,
   fehler = null,
   ergebnis = null,
@@ -108,7 +109,7 @@ export function DreiFragen({
       <div className="kd-drei-fragen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
         <h3 style={h}>{istDegraded
           ? "Die Antwort ließ sich nicht sicher auswerten"
-          : "Das habe ich aus deinen Antworten gelesen"}</h3>
+          : "Deine Profilvorschläge"}</h3>
         {!istDegraded && <p style={klein}>
           Nichts davon ist schon gespeichert. Nimm weg, was nicht stimmt — und schau
           dir die Belege an: Das ist die Stelle in deinem Text, aus der der Zug stammen soll.
@@ -275,7 +276,12 @@ export function DreiFragen({
   /* ---------- Die Fragen ---------- */
   return (
     <div className="kd-drei-fragen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
-      <h3 style={h}>Drei Fragen</h3>
+      <h3 style={h}>Geschmacksprofil mit KI {profilVorhanden ? "verfeinern" : "erstellen"}</h3>
+      <p style={p}>
+        Erzähl, was dich an Filmen begeistert und was dich stört. Die KI übersetzt deine
+        Beispiele in konkrete Geschmackszüge für deine Empfehlungen und KI-Prognosen.
+        {profilVorhanden && " Deine bisherigen Angaben bleiben erhalten; du wählst aus, was dazukommt."}
+      </p>
       <p style={p}>
         Antworte so, wie du es einem Menschen erzählen würdest — Halbsätze sind in Ordnung.
         Du musst nicht alle drei beantworten. Kinodreieck speichert deine Antworten nicht.
@@ -317,7 +323,7 @@ export function DreiFragen({
         <button style={btnStyle(true)} disabled={!brauchbar || laeuft}
           title={!brauchbar ? "Beantworte mindestens eine Frage" : undefined}
           onClick={() => onExtrahieren?.(antworten)}>
-          {laeuft ? "Wird gelesen …" : "Antworten auswerten"}
+          {laeuft ? "Profilvorschläge entstehen …" : "Profilvorschläge erstellen"}
         </button>
         <button style={btnStyle(false)} disabled={laeuft} onClick={() => onAbbruch?.()}>Abbrechen</button>
         <span aria-live="polite" style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.rauch }}>

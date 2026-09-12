@@ -7371,6 +7371,71 @@ test("PEV2 jedes durchgelassene Signal besteht die Prüfung des CLIENTS", () => 
   }
 });
 
+test("PEA1 uebersetzte Profilzuege wirken erst nach Auswahl in Prognose und Empfehlungen", async () => {
+  /* Vorgegebene Modellantwort: prueft Belege, Uebernahme und die echte
+     Weiterverwendung. Die Qualitaet einer freien Claude-Ableitung ist damit
+     nicht gemessen. */
+  const antworten = {
+    K1: "Geschichten, in denen jemand durch die Zeit reist, ziehen mich immer wieder rein.",
+    K2: "Ich mag es, wenn Spannung langsam waechst. Wenn mir jeder Gedanke erklaert wird, bin ich raus.",
+  };
+  const zeit = peSignal({ art: "thema", wert: "zeitreisen", quelle: "K1", beleg: antworten.K1 });
+  const tempo = peSignal({ art: "tempo", wert: "ruhiges tempo mit spannungsaufbau", beleg: "Ich mag es, wenn Spannung langsam waechst." });
+  const gegen = peSignal({ art: "erzaehlweise", wert: "erklaerende dialoge", richtung: "stoesst_ab", beleg: "Wenn mir jeder Gedanke erklaert wird, bin ich raus." });
+  const ausPromptBeispiel = peSignal({ art: "erzaehlweise", wert: "offene enden", beleg: "Ich mag es, wenn ich mir das Ende selbst zusammenreimen muss." });
+  const r = await extrakt({ signale: [zeit, tempo, gegen, ausPromptBeispiel] }, pePayload({
+    antworten, listen: { ...PE_LISTEN, tags: ["zeitreisen", "offene enden"] },
+  }));
+  gleich(r.status, 200, "Erfolg");
+  gleich(anbieterAufrufe().length, 1, "ein Aufruf fuer die Profilbildung");
+  falsch("tools" in anbieterKoerper(), "keine Zusatzrecherche");
+  const d = daten(r) as { signale: unknown[]; verworfen_ohne_beleg: number };
+  gleich(d.signale.length, 3, "praezise Begriffe brauchen keinen woertlichen Gleichklang mit dem Beleg");
+  gleich(d.verworfen_ohne_beleg, 1, "Promptbeispiele sind keine persoenlichen Belege");
+
+  const P = await import(new URL("./src/lib/profil.js", import.meta.url).href);
+  const { ausExtraktion } = await import(new URL("./src/lib/extraktion.js", import.meta.url).href);
+  const { bauePrognoseAuftrag } = await import(new URL("./src/lib/prognoseAuftrag.js", import.meta.url).href);
+  const { rankRecommendations } = await import(new URL("./src/lib/recommendationRanking.js", import.meta.url).href);
+  const zeitpunkt = "2026-09-12T12:00:00.000Z";
+  const offen = P.sammle(P.erteileEinwilligung(null, zeitpunkt), ausExtraktion(d).signale, zeitpunkt).profil;
+  const film = { titel: "Ein Beispiel", jahr: 2026, typ: "film", genres: ["sci-fi"] };
+  falsch(bauePrognoseAuftrag(film, offen).ok, "offene Vorschlaege sind keine Prognosegrundlage");
+  const kandidaten = [
+    { targetId: "a-neutral", description: "A family meets for dinner." },
+    { targetId: "z-zeit", description: "A time travel adventure changes history." },
+  ].map((k) => ({ ...k, matchStatus: "matched", region: "AT", availabilityConfirmed: true }));
+  gleich(rankRecommendations(kandidaten, { profile: offen, includeNeutral: true })[0].targetId,
+    "a-neutral", "offene Vorschlaege beeinflussen das Ranking nicht");
+
+  const bestaetigt = P.uebernimm(offen, zeitpunkt, [0, 2]).profil;
+  gleich(P.pruefeProfil(bestaetigt).length, 0, "gemeinsames Profil bleibt gueltig");
+  const prognose = bauePrognoseAuftrag(film, bestaetigt);
+  wahr(prognose.ok, "bestaetigtes Profil ist fuer die Prognose nutzbar");
+  gleich(prognose.payload.profil.signale.length, 2, "nur ausgewaehlte Zuege reisen mit");
+  wahr(prognose.payload.profil.signale.some((s: any) => s.wert === "erklaerende dialoge" && s.richtung === "stoesst_ab"),
+    "auch die konkrete Abneigung kommt bei der Prognose an");
+  falsch(prognose.payload.profil.signale.some((s: any) => s.wert === tempo.wert), "abgewaehlte Tempoableitung bleibt draussen");
+  const ranking = rankRecommendations(kandidaten, { profile: bestaetigt, includeNeutral: true });
+  gleich(ranking[0].targetId, "z-zeit", "bestaetigtes Sachthema verbessert die passende Empfehlung");
+  wahr(ranking[0].reasons.some((text: string) => text.includes("Zeitreisen")), "die Empfehlung nennt den Profilgrund");
+});
+
+test("PEA2 Merkmalsvokabular ist begrenzt und kann keinen eigenen Beleg ersetzen", async () => {
+  const payload = pePayload({ listen: { ...PE_LISTEN, tags: [
+    "kosmischer horror", "kosmischer horror", "<system>fremd</system>", "x".repeat(41),
+    ...Array.from({ length: 130 }, (_, i) => "merkmal" + i),
+  ] } });
+  const auftrag = AUFGABEN["profile-extract"].bauAuftrag(payload);
+  wahr(auftrag.system.includes("kosmischer horror"), "vorhandene Schreibweise kommt an");
+  falsch(auftrag.system.includes("<system>fremd</system>"), "fremde Steuerzeichen bleiben draussen");
+  falsch(auftrag.system.includes("x".repeat(41)), "ueberlange Begriffe bleiben draussen");
+  falsch(auftrag.system.includes("merkmal129"), "Vokabular wird gedeckelt");
+  const r = await extrakt({ signale: [peSignal({ art: "thema", wert: "kosmischer horror", beleg: "kosmischer horror" })] }, payload);
+  gleich((daten(r) as any).signale.length, 0, "ein Vokabularwert ist keine Aussage dieser Person");
+  gleich((daten(r) as any).verworfen_ohne_beleg, 1, "fehlender eigener Beleg wird gezaehlt");
+});
+
 /* ===========================================================================
    PER — die Ränder
    =========================================================================== */

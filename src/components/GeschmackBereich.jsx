@@ -215,7 +215,7 @@ export function GeschmackBereich({
     try {
       const antwort = await ai.runTask(
         "profile-extract",
-        bauePayload(antworten, { genres: bekannteGenres }),
+        bauePayload(antworten, { genres: bekannteGenres, tags: bekannteTags }),
         { profilVersion: profil?.version || null },
       );
       /* `daten` ist die Hülle des Endpunkts. Fehlt sie, ist die Antwort
@@ -366,6 +366,7 @@ export function GeschmackBereich({
     <div className="kd-geschmack-bereich">
       {frage ? (
         <DreiFragen
+          profilVorhanden={profil?.einwilligung?.erteilt === true}
           laeuft={extraktLaeuft}
           fehler={extraktFehler}
           ergebnis={extrakt}

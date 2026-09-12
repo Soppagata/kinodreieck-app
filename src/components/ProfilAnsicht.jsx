@@ -109,7 +109,7 @@ function AendernPopup({
         </header>
         <div className="kd-profil-wege">
           <button style={btnStyle(true)} onClick={() => { onClose(); onNeuErheben?.(); }}>Weitere Angaben machen</button>
-          {kiWegOffen && <button style={btnStyle(false)} onClick={() => { onClose(); onKiErheben?.(); }}>Drei Fragen beantworten</button>}
+          {kiWegOffen && <button style={btnStyle(false)} onClick={() => { onClose(); onKiErheben?.(); }}>Geschmacksprofil mit KI verfeinern</button>}
           <button style={btnStyle(false)} aria-expanded={infosOffen} onClick={() => setInfosOffen((v) => !v)}>Aktuelle Infos</button>
         </div>
         {infosOffen && (
@@ -159,7 +159,7 @@ export function ProfilAnsicht({
       <p style={p}>Du hast noch kein Geschmacksprofil. Kinodreieck merkt sich dann nichts über deinen Geschmack — Suche, Sammlung und Bewertungen funktionieren unverändert.</p>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button style={btnStyle(true)} onClick={() => onNeuErheben?.()}>Profil anlegen</button>
-        {kiWegOffen && <button style={btnStyle(false)} onClick={() => onKiErheben?.()}>Mit drei Fragen anlegen</button>}
+        {kiWegOffen && <button style={btnStyle(false)} onClick={() => onKiErheben?.()}>Geschmacksprofil mit KI erstellen</button>}
       </div>
     </div>
   );
