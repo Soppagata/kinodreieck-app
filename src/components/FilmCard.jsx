@@ -192,7 +192,8 @@ export function FilmCard({
           )}
           <QuellenTagZeile film={film} streamBadge={streamBadge} />
           {kinoInfo && !kinoInfoIstGespeicherteQuelle && (
-            <div style={{ marginTop: 8, fontFamily: "'Space Mono', monospace", fontSize: 13, lineHeight: 1.6 }}>{kinoInfo}</div>
+            <div className="kd-film-verfuegbarkeit" data-kd-source-kind="aktuelle-verfuegbarkeit"
+              style={{ marginTop: 8, fontFamily: "'Space Mono', monospace", fontSize: 13, lineHeight: 1.6 }}>{kinoInfo}</div>
           )}
           {expanded && !editing && !auswahlmodus && (
             <div style={{ marginTop: 10, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 400, fontSize: 14, lineHeight: 1.55 }}>
@@ -227,7 +228,7 @@ export function FilmCard({
               )}
               {(onSave || onDelete) && (
                 <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {onSave && (
+                  {onSave && (!dreieck || !unbewertet) && (
                   <button style={{ ...btnStyle(false), padding: "6px 12px", color: T.tinte, borderColor: T.tinteWeich }}
                     onClick={(e) => { e.stopPropagation(); setSpeicherFehler(""); setPrognoseEntwurf(false); setEditing(true); }}>
                     ✎ {dreieck ? "Bewertung bearbeiten" : "Beschreibung bearbeiten"}
