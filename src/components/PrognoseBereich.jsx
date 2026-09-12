@@ -4,6 +4,7 @@ import {
   lesePrognose, passungsBand, prognoseIstVeraltet,
 } from "../lib/prognose.js";
 import { FilmwissenBereich } from "./FilmwissenBereich.jsx";
+import { runtimeConfig } from "../config/runtime.js";
 
 const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", color: T.rauch };
 const SICHERHEIT_LABEL = {
@@ -57,6 +58,7 @@ export function PrognoseBereich({
   onVerwerfen,
   uebernehmenLabel = "Als Bewertung übernehmen",
   filmwissen = null,
+  config = runtimeConfig,
 }) {
   const gelesen = lesePrognose(film);
   if (!gelesen.ok) {
@@ -155,11 +157,15 @@ export function PrognoseBereich({
         </div>
       )}
 
-      <div style={{ ...mono, opacity: 0.8 }}>
-        Profil {prognose.profilVersion} · Modell {prognose.modell}
-        {prognose.warumHerkunft === "filmwissen" ? ` · Filmwissen ${prognose.filmwissenVersionId}` : ""}
-        {veraltet ? " · mit älterem Profil erstellt" : ""}
-      </div>
+      {config.appEnvironment !== "production" ? (
+        <div style={{ ...mono, opacity: 0.8 }}>
+          Profil {prognose.profilVersion} · Modell {prognose.modell}
+          {prognose.warumHerkunft === "filmwissen" ? ` · Filmwissen ${prognose.filmwissenVersionId}` : ""}
+          {veraltet ? " · mit älterem Profil erstellt" : ""}
+        </div>
+      ) : veraltet ? (
+        <div style={{ ...mono, opacity: 0.8 }}>Mit einem älteren Geschmacksprofil erstellt.</div>
+      ) : null}
       <PrognoseMeldung meldung={fehler} />
 
       {(prognose.status === "offen" || prognose.status === "angenommen") && (

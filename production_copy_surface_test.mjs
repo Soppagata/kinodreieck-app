@@ -6,6 +6,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { JSDOM } from "jsdom";
+import { erstellePrognose, PROGNOSE_FORMAT } from "./src/lib/prognose.js";
 
 const rootDir = process.cwd();
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "kd-production-copy-"));
@@ -27,6 +28,8 @@ try {
         'export { PrivateMailPrivacyNote } from "./src/components/PrivateMailRequests.jsx";',
         'export { RadarSubscriptionPreview } from "./src/components/RadarSubscriptionPreview.jsx";',
         'export { ErklaerHero } from "./src/components/Erklaerstuecke.jsx";',
+        'export { PrognoseBereich } from "./src/components/PrognoseBereich.jsx";',
+        'export { StapelImport } from "./src/components/StapelImport.jsx";',
       ].join("\n"),
       loader: "js",
       resolveDir: rootDir,
@@ -168,6 +171,81 @@ try {
     assert.match(hero.text(), /über dein Konto zwischen Geräten synchronisiert/);
   });
   await hero.close();
+
+  const gebaut = erstellePrognose({
+    ergebnis: {
+      format: PROGNOSE_FORMAT, achsen: { wie: 4, was: 3, warum: 2 }, passung: 74,
+      kategorie_vorschlag: "sehenswert", sicherheit: "mittel",
+      begruendung: "Die ruhige Spannung passt zu deinem Profil.", verwendete_signale: [],
+    },
+    profilVersion: "profil-intern-3", modell: "modell-intern-2026", modellAlias: "gross",
+    vorgangId: "production-copy-test",
+    warumHerkunft: "filmwissen", filmwissenVersionId: "11111111-1111-4111-8111-111111111111",
+    verbrauch: { inputTokens: 800, outputTokens: 220, kostenUsdCent: 0.42, dauerMs: 2300 },
+    jetzt: "2026-09-12T09:00:00.000Z",
+  });
+  assert.equal(gebaut.ok, true, gebaut.fehler?.join(", "));
+  const prognoseProps = {
+    film: { id: "film-1", titel: "Testfilm", prognose: gebaut.prognose },
+    aktuelleProfilVersion: "profil-intern-3",
+  };
+  const prodPrognose = await render(components.PrognoseBereich, { ...prognoseProps, config: production });
+  check("Production-Prognose zeigt keine Profil- oder Modellversion", () => {
+    assert.doesNotMatch(prodPrognose.text(), /profil-intern-3|modell-intern-2026|Filmwissen [0-9a-f-]{36}/i);
+  });
+  await prodPrognose.close();
+
+  const stagePrognose = await render(components.PrognoseBereich, { ...prognoseProps, config: staging });
+  check("Staging-Prognose behält Profil- und Modellversion", () => {
+    assert.match(stagePrognose.text(), /Profil profil-intern-3 · Modell modell-intern-2026/);
+    assert.match(stagePrognose.text(), /Filmwissen 11111111-1111-4111-8111-111111111111/);
+  });
+  await stagePrognose.close();
+
+  const prodStapel = await render(components.StapelImport, { config: production, kiAktiv: false });
+  check("Production-Stapelimport zeigt keine Kontingent-, Kosten- oder externe Workflowdiagnose", () => {
+    assert.match(prodStapel.text(), /App-KI ist ausgeschaltet/);
+    assert.doesNotMatch(prodStapel.text(), /kleines Modell|KI-Kontingent|US-Cent|GPT|Claude|Workflow|kostenlose KI-Zugänge/i);
+  });
+  await prodStapel.close();
+
+  const prodStapelRun = await render(components.StapelImport, {
+    config: production,
+    kiAktiv: true,
+    flixpatrolFacts: { async load() { return []; } },
+    ai: { async runTask() {
+      return {
+        ok: true, data: null, responseMode: "degraded",
+        displayText: "Die Liste konnte nicht sicher geordnet werden.", warnings: [],
+        verbrauch: { kostenUsdCent: 1.2345 },
+      };
+    } },
+  });
+  const liste = prodStapelRun.host.querySelector(".kd-stapelimport > textarea");
+  const valueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(liste), "value").set;
+  await act(async () => {
+    valueSetter.call(liste, "Alien");
+    liste.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    liste.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  });
+  await act(async () => {
+    [...prodStapelRun.host.querySelectorAll("button")]
+      .find((button) => button.textContent.includes("Liste mit KI ordnen"))?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  check("Production-Stapelimport verschweigt exakte Kosten auch nach einem KI-Lauf", () => {
+    assert.match(prodStapelRun.text(), /konnte nicht sicher/);
+    assert.doesNotMatch(prodStapelRun.text(), /1[,.]2345|US-Cent/);
+  });
+  await prodStapelRun.close();
+
+  const stageStapel = await render(components.StapelImport, { config: staging, kiAktiv: false });
+  check("Staging-Stapelimport behält Kontingent- und externe Workflowdiagnose", () => {
+    assert.match(stageStapel.text(), /kleines Modell/);
+    assert.match(stageStapel.text(), /KI-Kontingent/);
+    assert.match(stageStapel.text(), /Regalfotos extern mit GPT, Claude/);
+  });
+  await stageStapel.close();
 
   console.log(`\n${checks}/${checks} Production-Copy-Checks bestanden.`);
 } finally {

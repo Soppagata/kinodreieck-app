@@ -4,6 +4,7 @@ import { aiService } from "../services/ai.js";
 import { flixpatrolFactsService } from "../services/flixpatrolFacts.js";
 import { baueFlixpatrolVorschlaege, beschreibeFlixpatrolErgaenzungen } from "../lib/flixpatrolFacts.js";
 import { errorText } from "../services/errors.js";
+import { runtimeConfig } from "../config/runtime.js";
 import {
   EXTERNER_STAPEL_WORKFLOW_DATEINAME, STAPEL_MAX_ZEILEN, STAPEL_QUELLEN, STAPEL_STANDARD_QUELLEN, STAPEL_TYPEN,
   baueStapelPayload, externerStapelPrompt, persistiereStapelAuswahl,
@@ -21,7 +22,7 @@ function parseExterneAntwort(text) {
 
 const LEER = { wie: "", was: "", warum: "" };
 
-export function StapelImport({ master = [], addFilm, addFilme, autorName = "", kiAktiv = false, setErr = () => {}, ai = aiService, flixpatrolFacts = flixpatrolFactsService, datenKontextKey = "gast" }) {
+export function StapelImport({ master = [], addFilm, addFilme, autorName = "", kiAktiv = false, setErr = () => {}, ai = aiService, flixpatrolFacts = flixpatrolFactsService, datenKontextKey = "gast", config = runtimeConfig }) {
   const [liste, setListe] = useState("");
   const [standardQuelle, setStandardQuelle] = useState("unklar");
   const [modus, setModus] = useState("nur");
@@ -173,10 +174,10 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
 
     {kiAktiv && !vorschau ? <button style={btnStyle(true)} disabled={laeuft || !liste.trim() || !!listenStand.fehler || (modus === "vorbeurteilung" && kompletteBewertungen.length < 5)} onClick={internAuswerten}>
       {laeuft ? "KI ordnet die Liste …" : modus === "vorbeurteilung" ? "Liste ordnen & vorbeurteilen" : "Liste mit KI ordnen"}
-    </button> : !kiAktiv ? <p className="kd-stapel-hinweis">Die App-KI ist ausgeschaltet oder dein Konto ist nicht KI-fähig. Der externe Fotoweg darunter bleibt verfügbar.</p> : null}
-    <p className="kd-stapel-kosten">Text statt Bilder: kleines Modell, keine automatische Wiederholung. Der Aufruf zählt zu deinem KI-Kontingent.</p>
+    </button> : !kiAktiv ? <p className="kd-stapel-hinweis">Die App-KI ist ausgeschaltet oder dein Konto ist nicht KI-fähig.</p> : null}
+    {config.appEnvironment !== "production" && <p className="kd-stapel-kosten">Text statt Bilder: kleines Modell, keine automatische Wiederholung. Der Aufruf zählt zu deinem KI-Kontingent.</p>}
 
-    <details className="kd-stapel-extern">
+    {config.appEnvironment !== "production" && <details className="kd-stapel-extern">
       <summary>Regalfotos extern mit GPT, Claude oder einer anderen KI lesen</summary>
       <p>Dieser Weg verursacht im Kinodreieck keine KI-Kosten. Der Workflow ist für bis zu drei hochauflösende Regalfotos mit je etwa 40–50 lesbaren Rücken gedacht. Die KI meldet bearbeitete Bereiche und Lücken; Fehlendes ergänzt du vor dem JSON-Export kurz als Text. Bei kostenlosen KI-Zugängen den Workflow besser kopieren statt als Datei hochladen, damit die Datei-Uploads für deine Fotos frei bleiben.</p>
       <textarea ref={promptRef} readOnly value={externerWorkflow} rows={9} onFocus={(e) => e.target.select()} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
@@ -189,11 +190,11 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
       <input ref={jsonRef} hidden type="file" accept=".json,application/json" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(ladeExtern); e.target.value = ""; }} />
       <textarea value={externText} disabled={!!vorschau} onChange={(e) => setExternText(e.target.value)} rows={4} placeholder="JSON-Antwort hier einfügen …" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
       <button style={btnStyle(false)} disabled={!!vorschau || !externText.trim()} onClick={() => ladeExtern(externText)}>Antwort prüfen</button>
-    </details>
+    </details>}
 
     {vorschau && <section className="kd-stapel-vorschau">
       <h3>Vorschau – noch ist nichts gespeichert</h3>
-      {Number.isFinite(vorschau.kostenUsdCent) && <p className="kd-stapel-kosten">Dieser Lauf hat {Number(vorschau.kostenUsdCent).toLocaleString("de-AT", { maximumFractionDigits: 4 })} US-Cent verbraucht.</p>}
+      {config.appEnvironment !== "production" && Number.isFinite(vorschau.kostenUsdCent) && <p className="kd-stapel-kosten">Dieser Lauf hat {Number(vorschau.kostenUsdCent).toLocaleString("de-AT", { maximumFractionDigits: 4 })} US-Cent verbraucht.</p>}
       {vorschau.displayText && <p className="kd-stapel-warnung" role="status">{vorschau.displayText}</p>}
       {vorschau.warnungen.map((w, i) => <p className="kd-stapel-warnung" key={i}>{w}</p>)}
       {!!vorschau.fehlmenge?.length && <div className="kd-stapel-fehlmenge" aria-label="Offene Medieneinträge">
