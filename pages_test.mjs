@@ -164,7 +164,7 @@ check("Feste Domains werden gegen den erwarteten Commit geprüft",
   && (workflow.match(/SMOKE_RETRY_BUILD_META:\s*"1"/g) || []).length === 2
   && remoteSmoke.includes("buildMetaFehler(meta, erwarteteVersion)"));
 check("Feste Domains erhalten ein ausreichendes Propagationsfenster",
-  remoteSmoke.includes("const metaVersuche = domainRetry ? 12 : 1;")
+  remoteSmoke.includes("const metaVersuche = domainRetry ? 24 : 1;")
   && remoteSmoke.includes("setTimeout(resolve, 5000)"));
 check("Custom-Domain-Retry koppelt Build, Service Worker und Login je Versuch",
   remoteRetryStart >= 0

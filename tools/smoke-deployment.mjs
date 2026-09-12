@@ -39,9 +39,9 @@ await hole("/manifest.webmanifest", "application/manifest+json");
 await hole("/download/", "text/html");
 
 // Eine feste Cloudflare-Custom-Domain kann dem bereits grünen atomaren
-// Deployment deutlich später folgen. Elf Pausen à fünf Sekunden halten den
-// Smoke streng, vermeiden aber einen Fehlalarm während dieser Propagation.
-const metaVersuche = domainRetry ? 12 : 1;
+// Deployment deutlich später folgen. 23 Pausen à fünf Sekunden decken die
+// belegte Latenz von mehr als 55 Sekunden ab, ohne eine Prüfung abzuschwächen.
+const metaVersuche = domainRetry ? 24 : 1;
 let metaFehler = "nicht geprüft";
 for (let versuch = 1; versuch <= metaVersuche; versuch++) {
   try {
