@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 import { RADAR_NORMAL_ACTIVE_LIMIT } from "../lib/radarContracts.js";
+import { runtimeConfig } from "../config/runtime.js";
 
 function focusableElements(root) {
   return [...(root?.querySelectorAll(
@@ -12,7 +13,7 @@ function focusableElements(root) {
 /* Bestätigungsgrenze für „Ins Radar aufnehmen“: Bis zum Klick wird
    weder der persönliche Radar-Topf verändert noch ein Outbox-Eintrag erzeugt. */
 export function RadarSubscriptionPreview({
-  target, radarState, accountMode = false, onConfirm, onClose,
+  target, radarState, accountMode = false, onConfirm, onClose, config = runtimeConfig,
 }) {
   const dialogRef = useRef(null);
   const [speichert, setSpeichert] = useState(false);
@@ -88,7 +89,7 @@ export function RadarSubscriptionPreview({
         <dl className="kd-entdecken-fakten">
           <div><dt>Status</dt><dd>{alreadyActive ? "Im Radar; Bestätigung aktualisiert den Eintrag" : "Wird erst nach deiner Bestätigung ins Radar aufgenommen"}</dd></div>
           <div><dt>Kapazität</dt><dd>{quotaText}</dd></div>
-          <div><dt>Kosten</dt><dd>Diese lokale Phase startet keinen Provider-Aufruf und keine Routine.</dd></div>
+          {config.appEnvironment !== "production" && <div><dt>Kosten</dt><dd>Diese lokale Phase startet keinen Provider-Aufruf und keine Routine.</dd></div>}
           <div><dt>Privatsphäre</dt><dd>Das Ziel bleibt privat. Bewertungen und Profilsignale werden nicht geteilt.</dd></div>
         </dl>
         {fehler ? <p className="kd-entdecken-fehler" role="alert">{fehler}</p> : null}

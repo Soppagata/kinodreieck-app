@@ -524,7 +524,7 @@ export function StreamingTab({
   if (datenGesperrt) return (
     <section ref={bereichRef} className="kd-streaming-tab">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "18px 20px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
-        <strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings ein. Die App selbst ruft Watchmode nie live auf.
+        <strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Melde dich an und öffne Settings → Verbindung wiederherstellen. Die App selbst ruft Watchmode nie live auf.
       </div>
     </section>
   );
@@ -547,22 +547,19 @@ export function StreamingTab({
             <><strong style={{ color: T.wolfram }}>Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.</strong> Der
               laufende Streamingkatalog steht nach der Anmeldung unter Settings → Konto bereit.</>
           ) : katalogInfo?.code === ERROR_CODES.INVALID_KEY ? (
-            <><strong style={{ color: T.wolfram }}>Der Zugangsschlüssel wird nicht akzeptiert.</strong> Die Datenbank weist den
-              hinterlegten Leseschlüssel ab — prüfe ihn unter Settings → Datenmodus &amp; Verbindung.
-              Eine Anmeldung hilft hier nicht.</>
+            <><strong style={{ color: T.wolfram }}>Der Datenbankzugang wird nicht akzeptiert.</strong> Öffne
+              Settings → Verbindung wiederherstellen. Eine erneute Anmeldung allein behebt diesen Fehler nicht.</>
           ) : katalogInfo?.anmeldungNoetig ? (
             <><strong style={{ color: T.wolfram }}>Für den aktuellen Streamingkatalog ist eine Anmeldung nötig.</strong> Melde
               dich unter Settings → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss —
               der steht für diesen Zugang gerade nicht bereit.</>
           ) : katalogInfo?.fehler ? (
             <><strong style={{ color: T.wolfram }}>Streamingkatalog konnte nicht geladen werden.</strong> {katalogInfo.fehler}
-              {" "}Der Katalog wird nicht live abgefragt, sondern vorbereitet ausgeliefert; du kannst ihn unter
-              Settings → Datenmodus &amp; Verbindung erneut anfordern.
+              {" "}Der Katalog wird vorbereitet ausgeliefert; unter Settings → Verbindung wiederherstellen kannst du ihn neu laden.
               {!angemeldet && " Als Gast siehst du ohnehin nur den Demo-Schnappschuss; angemeldet käme der laufende Katalog."}</>
           ) : (
-            <><strong style={{ color: T.wolfram }}>Streaming-Tab leer.</strong> Die App liest ausschließlich den
-              vorbereiteten Datenbank-Katalog und ruft Watchmode nie live auf. Für diesen Zugang ist noch
-              kein Katalog hinterlegt. Prüfe unter Settings → Datenmodus &amp; Verbindung den Status.</>
+            <><strong style={{ color: T.wolfram }}>Streaming-Tab leer.</strong> Für diesen Zugang ist noch
+              kein Katalog hinterlegt. Öffne Settings → Verbindung wiederherstellen und lade den Katalog neu.</>
           )}
         </div>
       )}

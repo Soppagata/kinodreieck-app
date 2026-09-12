@@ -292,13 +292,13 @@ export function KinoTab({
       {!programm && loading !== "programm" && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.6 }}>
           {datenGesperrt ? (
-            <><strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings → Datenmodus &amp; Verbindung ein.</>
+            <><strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Melde dich an und öffne Settings → Verbindung wiederherstellen.</>
           ) : programmInfo?.code === ERROR_CODES.NO_DEMO_DATA ? (
             /* Kein Fehler, sondern ein ehrlicher Zwischenstand: die Demo-Zeile
                ist in der Datenbank noch nicht veröffentlicht. */
             <><strong style={{ color: T.wolfram }}>Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.</strong> Das laufende Kinoprogramm siehst du nach der Anmeldung unter Settings → Konto.</>
           ) : programmInfo?.code === ERROR_CODES.INVALID_KEY ? (
-            <><strong style={{ color: T.wolfram }}>Der Zugangsschlüssel wird nicht akzeptiert.</strong> Die Datenbank weist den hinterlegten Leseschlüssel ab — prüfe ihn unter Settings → Datenmodus &amp; Verbindung. Eine Anmeldung hilft hier nicht.</>
+            <><strong style={{ color: T.wolfram }}>Der Datenbankzugang wird nicht akzeptiert.</strong> Öffne Settings → Verbindung wiederherstellen. Eine erneute Anmeldung allein behebt diesen Fehler nicht.</>
           ) : programmInfo?.anmeldungNoetig ? (
             <><strong style={{ color: T.wolfram }}>Für das laufende Kinoprogramm ist eine Anmeldung nötig.</strong> Melde dich unter Settings → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss — der steht für diesen Zugang gerade nicht bereit.</>
           ) : programmInfo?.fehler ? (
@@ -307,7 +307,7 @@ export function KinoTab({
               {!angemeldet && " Als Gast siehst du ohnehin nur den Demo-Schnappschuss; angemeldet käme das laufende Programm."}
             </>
           ) : (
-            <>Noch kein Kinoprogramm geladen. Prüfe unter Settings → Datenmodus &amp; Verbindung, ob Zugangsdaten für den gemeinsamen Katalog hinterlegt sind.</>
+            <>Noch kein Kinoprogramm geladen. Öffne Settings → Verbindung wiederherstellen.</>
           )}
         </div>
       )}

@@ -4,7 +4,7 @@ import { DreieckRegler } from "./DreieckRegler.jsx";
 import { HILFE_BEREICHE } from "../lib/hilfeInhalte.js";
 
 /* ================= Erklärstücke =================
-   Hero („LOKALE FILM-PLATTFORM"), Dreieck-Erklärung (eine Karte pro Ecke)
+   Hero („PERSÖNLICHE FILM-PLATTFORM"), Dreieck-Erklärung (eine Karte pro Ecke)
    und die eingebaute Anleitung (DokuAnsicht). Sie bilden gemeinsam die
    zentrale Hilfe in den Einstellungen; das Start-Dashboard trägt keinen
    zweiten Hilfe-Einstieg.
@@ -39,7 +39,7 @@ export function ErklaerHero() {
       <div style={{ display: "inline-block", margin: "8px 0 30px", filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.45))" }}>
         <Logo size={132} />
       </div>
-      <div style={{ ...mono, letterSpacing: "0.3em", color: T.rauch, marginBottom: 8 }}>LOKALE FILM-PLATTFORM</div>
+      <div style={{ ...mono, letterSpacing: "0.3em", color: T.rauch, marginBottom: 8 }}>PERSÖNLICHE FILM-PLATTFORM</div>
       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "clamp(38px, 8vw, 46px)", letterSpacing: "0.14em", textTransform: "uppercase", lineHeight: 1 }}>
         Kinodreieck
       </div>

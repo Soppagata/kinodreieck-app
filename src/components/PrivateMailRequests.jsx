@@ -26,7 +26,8 @@ export function PrivateMailPrivacyNote({ config = runtimeConfig }) {
   if (!privateMailRuntimeEnabled(config)) return null;
   return (
     <p data-private-mail-privacy="resend" style={{ margin: 0, color: T.rauch, fontSize: 11, lineHeight: 1.5 }}>
-      Für diesen Versand verarbeitet Resend in den USA technische Zustellmetadaten und bewahrt sie standardmäßig 30 Tage auf. Feedback wird nicht mit Konto-, Profil-, Diagnose- oder Browserdaten ergänzt. Das ist eine verständliche Produktinformation, keine juristische Endfreigabe.
+      Für diesen Versand verarbeitet Resend in den USA technische Zustellmetadaten und bewahrt sie standardmäßig 30 Tage auf. Feedback wird nicht mit Konto-, Profil-, Diagnose- oder Browserdaten ergänzt.
+      {config.appEnvironment !== "production" && " Das ist eine verständliche Produktinformation, keine juristische Endfreigabe."}
     </p>
   );
 }

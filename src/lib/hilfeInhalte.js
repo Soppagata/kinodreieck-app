@@ -182,7 +182,7 @@ const AKTIONEN = [
   {
     id: "datenrechte-anfragen",
     titel: "Datenrechte anfragen",
-    text: "Öffne Settings → Datenschutz & Rechtliches. Der Kontoexport ist in diesem Release kein Self-Service. Für Auskunft, Berichtigung, Übertragbarkeit oder Kontolöschung nutzt du den privaten Kontaktweg, über den du deinen Zugang von Max erhalten hast; die App veröffentlicht keine private Adresse und versendet nichts automatisch.",
+    text: "Öffne Settings → Datenschutz & Rechtliches. Der Kontoexport ist in diesem Release kein Self-Service. Für Auskunft, Berichtigung, Übertragbarkeit oder Kontolöschung nutzt du den dort angegebenen Kontaktweg; die App versendet nichts automatisch.",
     suchwoerter: ["datenrechte", "betroffenenrechte", "kontoexport", "auskunft anfragen", "daten übertragen", "kontodaten löschen", "kontoloeschung anfragen"],
     direkteSuchwoerter: ["datenrechte", "betroffenenrechte", "kontoexport"],
     bereichId: "daten",

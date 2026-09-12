@@ -47,8 +47,23 @@ export function DatenschutzUebersicht({
     accountExportContract,
     exportAccountData,
   });
+  const production = config.appEnvironment === "production";
   return (
     <div style={{ display: "grid", gap: 14 }}>
+      {production ? <>
+        <p style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
+          Persönliche Inhalte liegen {accountActive ? "in diesem Browser und bei aktiviertem Kontospeicher zusätzlich in deinem Konto" : "in diesem Browser"}. Gemeinsame Kino- und Streamingdaten werden getrennt davon gepflegt.
+        </p>
+        <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.6 }}>
+          FlixPatrol erhält keine persönlichen Profile, Bewertungen, Notizen oder deine Streaming-Auswahl. Wenn du eine freigeschaltete KI-Funktion bewusst startest, erhält Anthropic nur die für diese Aufgabe benötigten Eingaben und begrenzten Kontextdaten.
+        </p>
+        <details>
+          <summary style={{ cursor: "pointer", color: T.rauch, fontSize: 13 }}>Speicherung und Aufbewahrung</summary>
+          <p style={{ margin: "10px 0 0", color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
+            Persönliche Inhalte sind zweckgebunden. Kurzzeitige lokale Sicherheits- und Übergangskopien sind auf höchstens sieben Tage angelegt; inhaltsfreie Betriebsnachweise auf höchstens 90 Tage.
+          </p>
+        </details>
+      </> : <>
       <p style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
         {PRIVATE_DATA_INVENTORY.length} feste Datenklassen sind im Register. Persönliche Inhalte liegen lokal{accountActive ? " und bei aktiviertem Kontospeicher zusätzlich im eigenen Supabase-Konto" : " im Browser"}. Gemeinsame Katalogquellen werden serverseitig gepflegt; Anthropic erhält nur den begrenzten Inhalt einer bewusst gestarteten und freigeschalteten KI-Aufgabe.
       </p>
@@ -81,6 +96,7 @@ export function DatenschutzUebersicht({
           ))}
         </ul>
       </details>
+      </>}
       <ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />
       <PrivateMailPrivacyNote config={config} />
       <FeedbackOhneNamensangabe accountActive={accountActive} config={config} />
@@ -97,8 +113,8 @@ export function ManuellerDatenrechteWeg({ kontoExportFreigegeben = false }) {
           ? "Der vollständige Kontoexport ist unten separat verfügbar. Für weitere Auskunft, "
           : "Der Kontoexport ist in diesem Release nicht als Self-Service freigeschaltet. Für Auskunft, "}
         Berichtigung, Übertragbarkeit oder die Löschung deines Kontos nutzt du, falls du einen Kontozugang
-        von Max erhalten hast, denselben privaten Kontaktweg. Die App veröffentlicht dafür keine private
-        Adresse und versendet keine Anfrage automatisch. Die Sicherheitskopie dieses Geräts ist kein Kontoexport.
+        von Max erhalten hast, denselben privaten Kontaktweg. Die App versendet keine Anfrage automatisch.
+        Die Sicherheitskopie dieses Geräts ist kein Kontoexport.
       </p>
     </section>
   );
@@ -176,8 +192,8 @@ function BestaetigteSupportDaten({ ownerBestaetigt }) {
   );
 }
 
-export function SupportDaten({ ownerBestaetigt = false }) {
-  if (ownerBestaetigt !== true) return null;
+export function SupportDaten({ ownerBestaetigt = false, config = runtimeConfig }) {
+  if (ownerBestaetigt !== true || config.appEnvironment === "production") return null;
   return <BestaetigteSupportDaten ownerBestaetigt={ownerBestaetigt} />;
 }
 

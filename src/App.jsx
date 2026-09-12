@@ -550,7 +550,7 @@ export default function App() {
         reportError(ERROR_SCOPE.PROGRAMM, r.anmeldungNoetig
           ? "Kinoprogramm aus dem letzten Browser-Stand — für das aktuelle Programm ist eine Anmeldung nötig."
           : r.code === ERROR_CODES.INVALID_KEY
-            ? "Kinoprogramm aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Settings → Datenmodus & Verbindung)."
+            ? "Kinoprogramm aus dem letzten Browser-Stand — der Datenbankzugang wird gerade abgelehnt (Settings → Verbindung wiederherstellen)."
             : "Kinoprogramm aus dem letzten Browser-Stand geladen (Datenbank derzeit nicht erreichbar).");
       } else if (r.abgelaufen) {
         reportError(ERROR_SCOPE.PROGRAMM, "Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
@@ -595,7 +595,7 @@ export default function App() {
         : code === ERROR_CODES.NO_DEMO_DATA
           ? "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung siehst du das laufende Kinoprogramm."
           : code === ERROR_CODES.INVALID_KEY
-            ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Settings → Datenmodus & Verbindung."
+            ? "Der Datenbankzugang wird nicht akzeptiert — öffne Settings → Verbindung wiederherstellen."
             : (manuell ? "Programmdaten nicht aktualisierbar: " : "Kinoprogramm nicht ladbar: ") + errorText(e);
       reportError(ERROR_SCOPE.PROGRAMM, text);
       /* Dieser Zweig räumt `programm`, `programmArt` und `progStand` NICHT weg —
@@ -1319,7 +1319,7 @@ export default function App() {
         ausCache, anmeldungNoetig: !!r.anmeldungNoetig, fehler: null,
         code: ausCache ? (r.code || null) : null,
       });
-      if (ausCache && r.code === ERROR_CODES.INVALID_KEY) reportError(scope, "Streamingkatalog aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Settings → Datenmodus & Verbindung).");
+      if (ausCache && r.code === ERROR_CODES.INVALID_KEY) reportError(scope, "Streamingkatalog aus dem letzten Browser-Stand — der Datenbankzugang wird gerade abgelehnt (Settings → Verbindung wiederherstellen).");
       else if (ausCache && r.warnung) reportError(scope, "Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
       else if (r.abgelaufen) reportError(scope, "Dieser Streaming-Schnappschuss ist abgelaufen und zeigt nicht mehr die aktuelle Verfügbarkeit.");
       else resolveError(scope);
@@ -1332,7 +1332,7 @@ export default function App() {
         : code === ERROR_CODES.NO_DEMO_DATA
           ? "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung siehst du den laufenden Streamingkatalog."
           : code === ERROR_CODES.INVALID_KEY
-            ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Settings → Datenmodus & Verbindung."
+            ? "Der Datenbankzugang wird nicht akzeptiert — öffne Settings → Verbindung wiederherstellen."
             : (entdeckenTeil ? "Entdecken-Katalog" : "Streamingkatalog") + " nicht ladbar: " + errorText(e);
       reportError(scope, text);
       setStreamingInfo((vorher) => (vorher && vorher.art

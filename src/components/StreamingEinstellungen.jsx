@@ -62,7 +62,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
     <div className="kd-streaming-einstellungen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
       <h2 style={h2}>Streaming gesperrt</h2>
       <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
-        Für den zentralen Katalog sind noch keine Zugangsdaten eingerichtet. Gib den mitgeschickten Leseschlüssel unter „Datenmodus & Verbindung“ ein. Die PWA selbst lädt nie live von Watchmode.
+        Für den zentralen Katalog ist noch kein Datenbankzugang eingerichtet. Melde dich an und öffne „Verbindung wiederherstellen“. Die PWA selbst lädt nie live von Watchmode.
       </p>
     </div>
   );

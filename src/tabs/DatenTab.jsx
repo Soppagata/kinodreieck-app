@@ -93,6 +93,7 @@ export function DatenTab({
   const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", color: T.rauch };
   const kasten = { background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" };
   const showKatalogbestand = runtimeConfig.appEnvironment !== "production";
+  const showKatalogzugang = runtimeConfig.appEnvironment !== "production";
   const [eggOffen, setEggOffen] = useState(false);
   const eggBereichId = useId();
 
@@ -200,7 +201,7 @@ export function DatenTab({
             Das Kinoprogramm ist derzeit <strong style={{ color: T.gefahr }}>{programmStatus.text}</strong>. Deine persönlichen Inhalte bleiben davon unberührt.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>Datenbankzugang prüfen</button>}
+            {showKatalogzugang && onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>Datenbankzugang prüfen</button>}
             {onKatalogRefresh && <button style={btnStyle(false)} onClick={onKatalogRefresh}>Katalog neu laden</button>}
           </div>
         </div>

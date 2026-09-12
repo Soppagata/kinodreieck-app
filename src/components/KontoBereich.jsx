@@ -14,6 +14,7 @@ import { ladeKontostandNachDemo } from "../services/demoAccountWechsel.js";
 import { fordereEinstiegNachAbmeldung } from "../controllers/onboardingController.js";
 import { hatBestaetigteOwnerRolle } from "../lib/accountAccess.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
+import { runtimeConfig } from "../config/runtime.js";
 
 /* Konto & Geräte-Sync. Der Kern der Etappe aus Nutzersicht:
    anmelden, Bestand übernehmen, auf mehreren Geräten weiterarbeiten.
@@ -356,7 +357,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           Etappe 7: hinter dem KI-Schalter. Eine reine KI-Diagnose hat bei
           KI=aus kein deterministisches Gegenstueck -- es gaebe sie nur als
           Luege. Deshalb ausblenden, nicht ersetzen. */}
-      {ownerTechnikBestaetigt && personalAiFreigegeben && kiAn("diagnose") && (
+      {runtimeConfig.appEnvironment !== "production" && ownerTechnikBestaetigt && personalAiFreigegeben && kiAn("diagnose") && (
       <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid " + T.saalHoch }}>
         <button style={btnStyle(false)} disabled={laeuft} onClick={async () => {
           setLaeuft(true); setKiMeldung(null);

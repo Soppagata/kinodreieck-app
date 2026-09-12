@@ -9,12 +9,42 @@ import {
   einstiegNoetig,
   schliesseEinstieg,
 } from "../controllers/onboardingController.js";
+import { runtimeConfig } from "../config/runtime.js";
 
 const EINSTIEGS_LOGIN_OEFFNEN = "kd:einstieg:login-oeffnen";
 const RECHTLICHER_KONTAKT = "max.rinke@hotmail.com";
 
 function LegalAbschnitt({ titel, children }) {
   return <section aria-label={titel}><h3>{titel}</h3>{children}</section>;
+}
+
+function ProduktionsRechtliches() {
+  return <>
+    <p><strong>Stand: privater Release.</strong> Hier findest du die wichtigsten Informationen zu den Datenwegen von Kinodreieck.</p>
+
+    <LegalAbschnitt titel="Kontakt und Geltungsbereich">
+      <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen erreichst du Max Rinke unter <strong>{RECHTLICHER_KONTAKT}</strong>.</p>
+    </LegalAbschnitt>
+
+    <LegalAbschnitt titel="Deine Daten im Browser und im Konto">
+      <p>Ohne Konto bleiben deine Einträge, Listen, Bewertungen und Einstellungen in diesem Browser. Mit einem freigegebenen Konto wird eine geschützte Offline-Arbeitskopie mit deinem persönlichen Kontostand synchronisiert. Bei Abmeldung oder fehlender Freigabe wird dieser Kontocache nicht als Gastbestand angezeigt.</p>
+      <p>Benutzername und Passwort werden zur Anmeldung an Supabase Auth übertragen. Zum Kontostand können insbesondere Mediathek und Bewertungen, eigene Artikel, Kino-Pins, Wochenplan, Radarziele, Listen, Streaming-Auswahl, Einstellungen, KI-Vokabular und Geschmacksprofil gehören.</p>
+    </LegalAbschnitt>
+
+    <LegalAbschnitt titel="Quellen und optionale KI-Funktionen">
+      <p>Spielzeiten stammen von film.at und nonstopkino.at, Streaming-Verfügbarkeiten von Watchmode. Entdecken nutzt Quellen des Österreichischen Filminstituts und von Netflix sowie österreichische Charts und neutrale Titelfakten von FlixPatrol. Ein Chartplatz ist weder ein Qualitätsurteil noch ein Beleg für die Verfügbarkeit in deinem Abo.</p>
+      <p>Persönliche Profile, Bewertungen, Notizen und deine Streaming-Auswahl werden nicht an FlixPatrol gesendet. Wenn du eine freigeschaltete KI-Funktion bewusst startest, erhält Anthropic nur die für diese Aufgabe benötigten Eingaben und begrenzten Kontextdaten. Passwörter und deine übrige Mediathek gehören nicht zu diesen Aufträgen.</p>
+    </LegalAbschnitt>
+
+    <LegalAbschnitt titel="Feedback, Rechte und Löschung">
+      <p>Beim Feedback wird nur dein eingegebener Text übertragen; Name, Kontaktadresse, Konto-, Profil-, Diagnose- oder sonstige Browserdaten werden nicht ergänzt. Resend verarbeitet dafür in den USA den Nachrichteninhalt und technische Zustellmetadaten; diese Metadaten werden standardmäßig 30 Tage aufbewahrt.</p>
+      <p>Die Sicherheitskopie dieses Geräts ist kein vollständiger Kontoexport. Eine Kontolöschung beginnt in der App mit einer authentifizierten Anfrage und erfolgt nicht sofort automatisch. Für Auskunft, Berichtigung, Übertragbarkeit oder eine manuelle Löschanfrage nutze den Kontakt oben.</p>
+    </LegalAbschnitt>
+
+    <LegalAbschnitt titel="Technisch notwendige Speicherung">
+      <p>Web-Analytics, Werbetracking und Profiling zu Analysezwecken sind ausgeschaltet. Vorgesehen sind nur technisch notwendige Speicherungen für Anmeldung, Sicherheit, lokale Nutzung, Synchronisation und die installierbare App. Deshalb wird derzeit kein Cookie-Banner eingesetzt.</p>
+    </LegalAbschnitt>
+  </>;
 }
 
 export function oeffneEinstiegsLogin() {
@@ -25,7 +55,7 @@ export function oeffneEinstiegsLogin() {
 
 /* Gastdaten sind nie ein vorläufiger Kontostand und werden nie hochgeladen.
    Erst die bestätigte Kontobindung hängt die persönliche App wieder ein. */
-export function EinstiegsGate({ children }) {
+export function EinstiegsGate({ children, config = runtimeConfig }) {
   const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
   const [offen, setOffen] = useState(() => einstiegNoetig(session));
   const [storageState, setStorageState] = useState(() => sessionCoordinator.getStorageState());
@@ -133,6 +163,7 @@ export function EinstiegsGate({ children }) {
         </section>
         <section id="datenschutz-rechtliches" ref={legalRef} className="kd-entry-panel" hidden={!legalOffen} tabIndex={-1} aria-labelledby="legal-titel">
           <h2 id="legal-titel">Datenschutz &amp; Rechtliches</h2>
+          {config.appEnvironment === "production" ? <ProduktionsRechtliches /> : <>
           <p><strong>Stand: privater Release.</strong> Dieser ENTWURF beschreibt die derzeitigen Datenwege der Staging-Fassung. Eine formelle rechtliche Endprüfung und noch fehlende gesetzlich erforderliche Betreiberangaben werden dadurch nicht ersetzt.</p>
 
           <LegalAbschnitt titel="Kontakt und Geltungsbereich">
@@ -181,6 +212,7 @@ export function EinstiegsGate({ children }) {
           <LegalAbschnitt titel="Technisch notwendige Speicherung">
             <p>Web-Analytics, Werbetracking und Profiling zu Analysezwecken sind für diesen Release ausgeschaltet. Vorgesehen sind nur technisch notwendige Speicherungen für Anmeldung, Sicherheit, lokale Nutzung, Synchronisation und die installierbare App. Deshalb wird derzeit kein Cookie-Banner eingesetzt. Eine spätere Analyse-, Tracking- oder Werbefunktion wäre eine neue Entscheidung und ist von diesem Stand nicht umfasst.</p>
           </LegalAbschnitt>
+          </>}
 
           <button className="kd-secondary" onClick={() => { setLegalOffen(false); requestAnimationFrame(() => legalLinkRef.current?.focus()); }}>Zurück zum Login</button>
         </section>
