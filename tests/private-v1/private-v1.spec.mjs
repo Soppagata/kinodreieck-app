@@ -173,7 +173,7 @@ test("Mobile Haupttabs merken Scrollpositionen und Same-tab-Schließen springt n
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(settingsY - 12);
 });
 
-test("Entdecken-Verwaltung startet ohne verdeckten ersten Abschnitt", async ({ privateApp }) => {
+test("Entdecken-Verwaltung reserviert oben sichtbaren Raum für Kopf und Schließen", async ({ privateApp }) => {
   const { page } = privateApp;
   const viewport = { width: 393, height: 568 };
   await page.setViewportSize(viewport);
@@ -193,6 +193,7 @@ test("Entdecken-Verwaltung startet ohne verdeckten ersten Abschnitt", async ({ p
 
   const ausloeser = page.getByRole("button", { name: "Entdecken verwalten" });
   await ausloeser.click();
+  const layer = page.getByTestId("entdecken-manage-layer");
   const dialog = page.getByRole("dialog", { name: "Entdecken verwalten" });
   const schliessen = dialog.getByRole("button", { name: "Entdecken verwalten schließen und zurück" });
   const kopf = dialog.locator(".kd-entdecken-dialog-kopf");
@@ -202,12 +203,25 @@ test("Entdecken-Verwaltung startet ohne verdeckten ersten Abschnitt", async ({ p
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect.poll(() => dialog.evaluate((element) => element.scrollTop)).toBe(0);
 
+  const standardFreiraum = await layer.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop));
+  expect(standardFreiraum).toBeGreaterThanOrEqual(24);
+  // Desktop-Playwright liefert keine iPhone-Safe-Area. Die Testvariable
+  // bildet die nicht scrollbare sichtbare Oberkante des Geräts nach.
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty("--kd-entdecken-manage-top-gap", "52px");
+  });
+  await expect.poll(() => layer.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))).toBe(52);
+  const obererFreiraum = await layer.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop));
+  const dialogBox = await dialog.boundingBox();
   const kopfBox = await kopf.boundingBox();
   const abschnittBox = await ersterAbschnitt.boundingBox();
   const schliessenBox = await schliessen.boundingBox();
-  expect(kopfBox.y).toBeGreaterThanOrEqual(-1);
+  expect(obererFreiraum).toBe(52);
+  expect(dialogBox.y).toBeGreaterThanOrEqual(obererFreiraum - 1);
+  expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height + 1);
+  expect(kopfBox.y).toBeGreaterThanOrEqual(dialogBox.y + 13);
   expect(abschnittBox.y).toBeGreaterThanOrEqual(kopfBox.y + kopfBox.height - 1);
-  expect(schliessenBox.y).toBeGreaterThanOrEqual(-1);
+  expect(schliessenBox.y).toBeGreaterThanOrEqual(dialogBox.y + 13);
   expect(schliessenBox.y + schliessenBox.height).toBeLessThanOrEqual(viewport.height + 1);
 
   await schliessen.click();

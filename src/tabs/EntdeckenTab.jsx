@@ -124,7 +124,7 @@ function ManageDialog({
   }, [onClose, returnFocusRef]);
 
   return createPortal(
-    <div className="kd-entdecken-layer" data-testid="entdecken-manage-layer">
+    <div className="kd-entdecken-layer kd-entdecken-manage-layer" data-testid="entdecken-manage-layer">
       <button type="button" className="kd-sheet-scrim" aria-label="Entdecken verwalten schließen" onClick={onClose} />
       <section ref={dialogRef} className="kd-entdecken-dialog kd-entdecken-manage" role="dialog" aria-modal="true" aria-labelledby="kd-entdecken-manage-title" tabIndex={-1}>
         <header className="kd-entdecken-dialog-kopf">

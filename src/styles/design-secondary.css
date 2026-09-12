@@ -258,3 +258,13 @@
   .kd-finder-eingabe { flex-wrap: wrap; }
   .kd-finder-eingabe input { flex-basis: 100%; }
 }
+
+@media (max-width: 760px) {
+  .kd-entdecken-layer.kd-entdecken-manage-layer {
+    padding: var(--kd-entdecken-manage-top-gap, max(24px, env(safe-area-inset-top, 0px))) 0 0;
+  }
+  .kd-entdecken-layer.kd-entdecken-manage-layer > .kd-entdecken-manage {
+    height: calc(100dvh - var(--kd-entdecken-manage-top-gap, max(24px, env(safe-area-inset-top, 0px))));
+    max-height: calc(100dvh - var(--kd-entdecken-manage-top-gap, max(24px, env(safe-area-inset-top, 0px))));
+  }
+}
