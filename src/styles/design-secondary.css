@@ -260,6 +260,12 @@
 }
 
 @media (max-width: 760px) {
+  .kd-profil-dialog-layer {
+    padding-top: var(--kd-profil-dialog-top-gap, max(24px, env(safe-area-inset-top, 0px)));
+  }
+  .kd-profil-dialog-layer > .kd-profil-dialog {
+    max-height: calc(100dvh - var(--kd-profil-dialog-top-gap, max(24px, env(safe-area-inset-top, 0px))) - max(16px, env(safe-area-inset-bottom, 0px)));
+  }
   .kd-entdecken-layer.kd-entdecken-manage-layer {
     padding: var(--kd-entdecken-manage-top-gap, max(24px, env(safe-area-inset-top, 0px))) 0 0;
   }

@@ -86,7 +86,8 @@ function AendernPopup({
   useEffect(() => {
     if (!offen) return undefined;
     const entsperren = sperreDokumentScroll();
-    ref.current?.querySelector("button")?.focus();
+    ref.current?.querySelector("button")?.focus({ preventScroll: true });
+    if (ref.current) ref.current.scrollTop = 0;
     const taste = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", taste);
     return () => { entsperren(); document.removeEventListener("keydown", taste); };
