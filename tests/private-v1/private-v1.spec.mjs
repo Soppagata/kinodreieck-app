@@ -173,6 +173,35 @@ test("Mobile Haupttabs merken Scrollpositionen und Same-tab-Schließen springt n
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(settingsY - 12);
 });
 
+test("Entdecken-Verwaltung hält Kopf und Schließen beim internen Scrollen im Viewport", async ({ privateApp }) => {
+  const { page } = privateApp;
+  const viewport = { width: 393, height: 568 };
+  await page.setViewportSize(viewport);
+  await navigateMobile(page, "Entdecken");
+
+  const ausloeser = page.getByRole("button", { name: "Entdecken verwalten" });
+  await ausloeser.click();
+  const dialog = page.getByRole("dialog", { name: "Entdecken verwalten" });
+  const schliessen = dialog.getByRole("button", { name: "Entdecken verwalten schließen und zurück" });
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => dialog.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+
+  const start = await schliessen.boundingBox();
+  expect(start.y).toBeGreaterThanOrEqual(-1);
+  expect(start.y + start.height).toBeLessThanOrEqual(viewport.height + 1);
+
+  await dialog.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect.poll(() => dialog.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  const gescrollt = await schliessen.boundingBox();
+  expect(gescrollt.y).toBeGreaterThanOrEqual(-1);
+  expect(gescrollt.y + gescrollt.height).toBeLessThanOrEqual(viewport.height + 1);
+
+  await schliessen.click();
+  await expect(dialog).toBeHidden();
+  await expect(ausloeser).toBeFocused();
+  await expect.poll(() => page.evaluate(() => document.body.classList.contains("kd-scroll-gesperrt"))).toBe(false);
+});
+
 test("Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag", async ({ privateApp }, testInfo) => {
   const { page } = privateApp;
   await navigateMobile(page, "Entdecken");
