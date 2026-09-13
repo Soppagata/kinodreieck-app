@@ -21,12 +21,15 @@ export function createMotnHandler({ serviceKeys = [], apiKey = "", fetchImpl = f
       return json({ ok: false, code: "FORBIDDEN" }, 403);
     }
     const operation = request.headers.get("x-kd-motn");
-    if (operation !== "scheduled-at-v1") {
+    if (!["scheduled-at-v1", "usage-at-v1"].includes(operation)) {
       return json({ ok: false, code: "INVALID_OPERATION" }, 400);
     }
     if ((await request.text()) !== "") return json({ ok: false, code: "UNEXPECTED_BODY" }, 400);
     if (typeof rpc !== "function") return json({ ok: false, code: "MOTN_STORAGE_UNAVAILABLE" }, 503);
     try {
+      if (operation === "usage-at-v1") {
+        return json({ ok: true, status: "read", providerRequests: 0, usage: await rpc("kd_motn_usage_status") });
+      }
       const result = await runMotnSync({ apiKey, fetchImpl, now, rpc });
       return json(result, result.ok ? 200 : 502);
     } catch { return json({ ok: false, code: "MOTN_STORAGE_FAILED" }, 502); }

@@ -53,3 +53,16 @@ test("The retired comparison and authenticated browser calls cannot bypass the s
   headers.origin = "https://example.test";
   assert.equal((await handler(new Request("https://example.test", { method: "POST", headers }))).status, 403);
 });
+
+test("The usage ticker is provider-free even without a MotN key and remains server-only",async()=>{
+  const rpcs=[];
+  const handler=createMotnHandler({serviceKeys:["fixture-admin"],rpc:async(name)=>{rpcs.push(name);return {format:1,source:"kinodreieck-reservations"};},
+    fetchImpl:async()=>{throw new Error("must not fetch");}});
+  const headers={apikey:"fixture-admin",authorization:"Bearer fixture-admin","x-kd-motn":"usage-at-v1"};
+  const response=await handler(new Request("https://example.test",{method:"POST",headers}));
+  assert.equal(response.status,200);assert.equal((await response.json()).providerRequests,0);
+  assert.deepEqual(rpcs,["kd_motn_usage_status"]);
+  assert.equal((await handler(new Request("https://example.test",{method:"POST",headers:{...headers,origin:"https://example.test"}}))).status,403);
+  assert.equal((await handler(new Request("https://example.test",{method:"POST",headers:{"x-kd-motn":"usage-at-v1"}}))).status,403);
+  assert.deepEqual(rpcs,["kd_motn_usage_status"]);
+});

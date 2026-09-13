@@ -5,13 +5,6 @@ import { streamingQuellenstaende } from "../lib/streamingNeu.js";
 import "./KatalogAuditStatus.css";
 
 const ZAHL = new Intl.NumberFormat("de-AT");
-const SCHNELLE_QUELLEN = new Set([
-  "Netflix",
-  "Disney+",
-  "Prime Video",
-  "Crunchyroll Premium (Via Amazon Prime)",
-  "Paramount+ (Via Amazon Prime)",
-]);
 
 const datum = (value) => value
   ? formatPresentationDate(new Date(value), { includeTime: true })
@@ -57,9 +50,7 @@ export function KatalogAuditStatus({
         <dl>
           <div><dt>Letzter Abruf</dt><dd>{datum(quelle.stand)}</dd></div>
           <div><dt>Vorhervergleich</dt><dd>{datum(quelle.vergleichStand)}</dd></div>
-          <div><dt>Takt</dt><dd>{SCHNELLE_QUELLEN.has(quelle.dienst)
-            ? "alle 48 Stunden"
-            : "im Gesamtlauf alle 12 Tage"}</dd></div>
+          <div><dt>Watchmode-Takt</dt><dd>wöchentlich</dd></div>
         </dl>
       </article>)}</div>
     </section>}

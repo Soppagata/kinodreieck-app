@@ -204,7 +204,7 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
   await expect(audit).toContainText("4 Titel im geladenen Stand");
   await expect(audit).toContainText("Mein Programm");
   await expect(audit).toContainText("Netflix · Paramount+ (Via Amazon Prime) · Crunchyroll Premium (Via Prime) · 4 Titel");
-  await expect(audit).toContainText("alle 48 Stunden");
+  await expect(audit).toContainText("wöchentlich");
   await expect(audit).toContainText("15.09.2026");
   for (const width of [393, 320]) {
     await page.setViewportSize({ width, height: 852 });

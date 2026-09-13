@@ -52,6 +52,8 @@ try {
   sql(migration);
   sql(readFileSync("supabase/migrations/20260913170000_motn_initial_backfill.sql","utf8"));
   sql(readFileSync("supabase/migrations/20260913173000_motn_watchmode_identity.sql","utf8"));
+  sql(readFileSync("supabase/migrations/20260913180000_motn_change_checks.sql","utf8"));
+  sql(readFileSync("supabase/migrations/20260913190000_motn_usage_ticker.sql","utf8"));
   const call = (name,args='') => JSON.parse(session(`select public.${name}(${args})`));
   check('A missing lease cannot reserve provider requests',()=>{
     assert.equal(call('kd_motn_reserve',"null,'new'").reserved,false);
@@ -117,6 +119,69 @@ try {
     assert.equal(sql("select checkpoints->'new'->>'cursor' from public.kd_motn_sync"),'cursor-next');
     assert.equal(call('kd_motn_claim',`'${id(3)}'::uuid`).status,'not_due');
     assert.equal(sql('select count(*) from public.kd_motn_offers'),'1');
+  });
+  sql(`update public.kd_motn_sync set run_mode='sync',lease_token=null,lease_until=null,last_run_at=null,
+    bootstrap_completed_at=now(),last_full_sync_at=now()-interval '24 hours',
+    checkpoints=jsonb_build_object('new',jsonb_build_object('from',floor(extract(epoch from now()))::bigint-2*86400,'to',floor(extract(epoch from now()))::bigint-86400,'cursor',null,'done',true),
+      'removed',jsonb_build_object('from',floor(extract(epoch from now()))::bigint-2*86400,'to',floor(extract(epoch from now()))::bigint-86400,'cursor',null,'done',true));`);
+  const beforeProbe=sql('select checkpoints from public.kd_motn_sync');
+  check('Daily changes during the 48h cooldown remain pending without changing the import cursor',()=>{
+    assert.equal(call('kd_motn_claim',`'${token}'`).mode,'probe');
+    assert.equal(call('kd_motn_commit_page',`'${token}','new',null,null,'[]',0`).status,'probe_only');
+    assert.equal(call('kd_motn_probe_result',`'${token}',true`).status,'cooldown');
+    assert.equal(sql('select checkpoints from public.kd_motn_sync'),beforeProbe);
+    assert.equal(sql('select pending_changes from public.kd_motn_sync'),'t');
+    assert.equal(call('kd_motn_finish',`'${token}','cooldown'`).ok,true);
+    assert.equal(call('kd_motn_claim',`'${token}'`).status,'not_due');
+  });
+  check('At the exact 48h boundary the pending window is promoted with no gap',()=>{
+    sql("update public.kd_motn_sync set last_run_at=now()-interval '1 day'");
+    const claimed=call('kd_motn_claim',`'${token}'`);
+    assert.equal(claimed.mode,'probe');
+    assert.equal(claimed.checkpoints.new.from,JSON.parse(beforeProbe).new.to+1);
+    const decision=JSON.parse(session(`update public.kd_motn_sync set last_full_sync_at=now()-interval '48 hours'; select public.kd_motn_probe_result('${token}',true)`));
+    assert.equal(decision.status,'sync');
+    assert.equal(call('kd_motn_commit_page',`'${token}','new',null,'saved-new','[]',0`).ok,true);
+    assert.equal(call('kd_motn_commit_page',`'${token}','removed',null,null,'[]',0`).ok,true);
+    assert.equal(call('kd_motn_finish',`'${token}','succeeded'`).ok,false);
+    assert.equal(call('kd_motn_finish',`'${token}','limited'`).ok,true);
+  });
+  check('A partial full sync retains completed kinds and resumes its exact cursor',()=>{
+    sql("update public.kd_motn_sync set last_run_at=now()-interval '1 day',last_full_sync_at=now()-interval '1 hour'");
+    const resumed=call('kd_motn_claim',`'${token}'`);
+    assert.equal(resumed.mode,'sync');assert.equal(resumed.checkpoints.new.cursor,'saved-new');
+    assert.equal(resumed.checkpoints.removed.done,true);
+    assert.equal(call('kd_motn_commit_page',`'${token}','new','saved-new',null,'[]',0`).ok,true);
+    assert.equal(call('kd_motn_finish',`'${token}','succeeded'`).ok,true);
+    assert.equal(sql("select not pending_changes and last_full_sync_at>now()-interval '10 seconds' from public.kd_motn_sync"),'t');
+  });
+  check('Empty daily windows advance independently without restarting the 48h cooldown',()=>{
+    sql("update public.kd_motn_sync set last_run_at=now()-interval '1 day'");
+    const lastFull=sql('select last_full_sync_at from public.kd_motn_sync');
+    call('kd_motn_claim',`'${token}'`);
+    assert.equal(call('kd_motn_probe_result',`'${token}',false`).status,'unchanged');
+    assert.equal(call('kd_motn_finish',`'${token}','unchanged'`).ok,true);
+    assert.equal(sql('select last_full_sync_at from public.kd_motn_sync'),lastFull);
+    assert.equal(sql("select checkpoints->'new'->>'done' from public.kd_motn_sync"),'true');
+  });
+  check('The 900-request rolling guard includes daily checks, and browser roles cannot report checks',()=>{
+    sql("update public.kd_motn_sync set last_run_at=now()-interval '1 day'; insert into public.kd_motn_requests(kind,started_at) select 'new',now()-interval '2 days' from generate_series(1,900)");
+    call('kd_motn_claim',`'${token}'`);
+    assert.equal(call('kd_motn_reserve',`'${token}','new'`).status,'quota_limit');
+    assert.match(runFailure('psql',args,sessionSql(`select public.kd_motn_probe_result('${token}',true)`,'authenticated')),/permission denied/);
+    assert.match(runFailure('psql',args,sessionSql(`select public.kd_motn_commit_sync_page('${token}','new',null,null,'[]',0)`)),/permission denied/);
+  });
+  check('The reusable usage ticker counts every kind without starting a request or exposing provider quota as known',()=>{
+    const before=sql('select count(*) from public.kd_motn_requests');
+    const result=call('kd_motn_usage_status');
+    assert.equal(result.format,1);assert.equal(result.source,'kinodreieck-reservations');
+    assert.equal(result.sinceSetup.attemptedRequests,Number(before));
+    assert.equal(Object.values(result.sinceSetup.byKind).reduce((a,b)=>a+b,0),Number(before));
+    assert.equal(result.sinceSetup.byKind.comparison,4);
+    assert.equal(result.rolling32Days.remaining,0);assert.equal(result.rolling32Days.limit,900);
+    assert.equal(result.planLimit,1000);assert.equal(result.providerQuota,null);
+    assert.equal(sql('select count(*) from public.kd_motn_requests'),before);
+    assert.match(runFailure('psql',args,sessionSql('select public.kd_motn_usage_status()','authenticated')),/permission denied/);
   });
   console.log(`${checks} MotN PostgreSQL checks passed.`);
 } finally {

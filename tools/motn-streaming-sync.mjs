@@ -9,7 +9,7 @@ try {
     headers: { apikey: key, Authorization: `Bearer ${key}`, "x-kd-motn": "scheduled-at-v1" },
   });
   const body = await response.json();
-  if (!response.ok || body?.ok !== true || !["succeeded","limited","not_due","busy"].includes(body.status)
+  if (!response.ok || body?.ok !== true || !["succeeded","limited","not_due","busy","unchanged","cooldown"].includes(body.status)
       || !Number.isSafeInteger(body.providerRequests) || body.providerRequests < 0 || body.providerRequests > 24) {
     console.error(`MotN: sync failed (HTTP ${response.status}); no retry.`); process.exitCode = 1;
   } else {

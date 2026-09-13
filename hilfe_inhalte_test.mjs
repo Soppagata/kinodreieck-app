@@ -244,8 +244,8 @@ check("Streaming-Hilfe erklärt Neu als 14-mal-24-Stunden-Abrufdifferenz", !!STR
     && text.includes("neu in „Alles“")
     && text.includes("14 × 24 Stunden")
     && text.includes("kein Plattform-Premierendatum"))
-  && STREAMING_DETAILS.some((text) => text.includes("48-Stunden-Takt")
-    && text.includes("alle 12 Tage"))
+  && STREAMING_DETAILS.some((text) => text.includes("wöchentlich")
+    && text.includes("prüft täglich") && text.includes("Sperre von 48 Stunden"))
   && STREAMING_DETAILS.every((text) => !text.includes("volle Kalendertage")
     && !text.includes("12 bis 14 Tage")));
 
@@ -535,8 +535,8 @@ check(
     const details = (BEREICHE_BY_ID.get("streaming")?.details || []).join(" ").toLowerCase();
     return containsAllWords(details, ["alles", "gesamtmenge", "mein programm", "teilmenge"])
       && containsAllWords(details, ["neu", "letzten erfolgreichen katalogabruf", "14 × 24 stunden", "kein plattform-premierendatum"])
-      && containsAllWords(details, ["fünf", "48-stunden", "gesamtkatalog", "alle 12 tage"])
-      && /(?:keine allgemeine 48-stunden-garantie|allgemeine 48-stunden-garantie[^.]*gibt es nicht)/.test(details);
+      && containsAllWords(details, ["wöchentlich", "prüft täglich", "sperre von 48 stunden", "nächsten freigegebenen tageslauf"])
+      && details.includes("der angezeigte quellenstand bleibt maßgeblich");
   })(),
 );
 check(

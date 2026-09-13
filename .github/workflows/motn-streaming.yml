@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Österreichische Neuzugänge und Entfernungen abrufen
+      - name: Tägliche AT-Prüfung und Änderungen nach 48h-Sperre übernehmen
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

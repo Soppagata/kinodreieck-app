@@ -36,12 +36,52 @@ erzeugt keine Überziehungsgebühren. Jede erfolgreich geladene Seite wird mit
 ihrem Cursor atomar gespeichert. Fehler werden im Lauf nicht wiederholt;
 der nächste tägliche Lauf setzt am offenen Cursor fort. Die Startbefüllung darf nach erfolgreich gespeicherten Seiten am selben Tag weiterlaufen; Fehler geben keinen sofortigen Wiederholungsweg frei. Ein über 31 Tage
 alter unvollständiger Abruf wird als veraltet gestoppt und nicht still als
-vollständig behandelt. Eine abgeschlossene Abfrage überlappt beim nächsten
-Lauf um fünf Minuten; Duplikate verändern das ursprüngliche Neu-Datum nicht.
+vollständig behandelt. Abgeschlossene Sekundenfenster schließen unmittelbar
+aneinander an; Duplikate verändern das ursprüngliche Neu-Datum nicht.
+
+Seit dem anschließenden Owner-Entscheid gilt: Watchmode erneuert alle 39 Quellen
+wöchentlich. MotN prüft täglich um 05:27 UTC mit höchstens zwei ersten Seiten
+(neue und entfernte Angebote). Leere Fenster werden abgeschlossen. Bei Änderungen
+wird nur dann weitergeblättert und importiert, wenn der letzte vollständige Abgleich
+mindestens 48 Stunden zurückliegt. Die beiden Prüfseiten werden dabei direkt
+wiederverwendet. Während der Sperre bleibt der Importcursor unverändert und der
+Änderungsbedarf gespeichert. Der nächste freigegebene Tageslauf holt das Fenster
+nach; die 48 Stunden sind deshalb keine maximale Ende-zu-Ende-Latenz. Bereits
+begonnene, begrenzte Importe setzen ihren exakten Cursor fort, bis beide Arten
+fertig sind; erst dann beginnt die neue Sperre. Eine tägliche Prüfung ohne
+Änderungen verlängert die Sperre nicht.
+
+Die gemessenen 54 Anfragen für 14 Tage entsprechen hochgerechnet rund 120 für
+31 Tage. Mit maximal 62 täglichen Prüfseiten und Rundungsreserve sind etwa
+150–200 Anfragen pro Monat plausibel, keine garantierte Verbrauchsmenge.
+Prüfungen und Importe zählen gemeinsam gegen 900 in 32 Tagen. Andere manuelle
+Nutzung desselben MotN-Abos liegt außerhalb dieses App-Zählers.
 
 Der tägliche Workflow verwendet die bestehende Supabase-Konfiguration des
 staging-Environments; staging und Produktion lesen denselben neutralen
 Backendbestand. Kein Browserbesuch erzeugt einen MotN-Request.
+
+## Verbrauchsticker für die spätere Staging-Sandbox
+
+`POST /functions/v1/streaming-motn` mit `x-kd-motn: usage-at-v1`, leerem
+Body und denselben serverseitigen Zugangsdaten wie der Scheduler liefert
+`{ok:true,status:"read",providerRequests:0,usage:{...}}`. Alternativ kann der
+Server direkt `kd_motn_usage_status()` aufrufen. Lokal liest
+`node tools/motn-usage.mjs` mit `SUPABASE_URL` und
+`SUPABASE_SERVICE_ROLE_KEY` denselben JSON-Vertrag.
+
+`usage` Format 1 enthält seit Einrichtung und für den UTC-Monat/Tag gebuchte
+Anfragen, die Aufteilung neue/entfernte/Vergleich, den 900er-Deckel mit
+32-Tage-Rest, letzte Prüfung und vollständigen Abgleich, Ende der 48-Stunden-Sperre
+und vorgemerkte Änderungen. `source: "kinodreieck-reservations"` kennzeichnet
+den konservativen eigenen Zähler. `providerQuota: null` bedeutet: offizielle
+MotN-Nutzung, fremde Abfragen desselben Abos und dessen Abrechnungsreset werden
+nicht als bekannt ausgegeben. Das Planlimit 1.000 bleibt ein getrennter Wert.
+
+Der Ticker liest ausschließlich vorhandene Daten, bucht keine Anfrage und
+funktioniert auch ohne MotN-Key. Wie der bestehende FlixPatrol-Ticker ist er
+nur serverseitig zugänglich. Das spätere Sandbox-Element bindet seinen
+authentifizierten Backend-Leseweg an; ein Service-Key gehört nicht ins UI.
 
 Primärverträge, geprüft am 13.09.2026:
 
@@ -80,3 +120,24 @@ schreiben noch Import oder Anfragelog aufrufen. Der ältere allgemeine
 `npm run test:rls` stoppte schon vor Testwrites, weil die hinterlegten
 Zugangsdaten für `testa` nicht mehr anmelden können; dieser ältere Gesamttest
 wird nicht als bestanden ausgewiesen.
+
+## Nachtrag: Intervalle und Ticker
+
+Die anschließende Intervallumstellung besteht 26 gezielte JavaScript-Fälle,
+16 lokale PostgreSQL-Prüfungen, die vollständige lokale npm-Suite und sechs
+mobile Chromium-/WebKit-Fälle. Supabase-Funktion v4 ist ACTIVE; alle sechs
+bereitgestellten Quelldateien wurden bytegleich rückgelesen. Der Ticker meldet
+58 gebuchte Anfragen (32 neue, 22 entfernte, vier Vergleiche), 842 verbleibende
+im 32-Tage-App-Deckel. Ticker und erneuter Tagesaufruf erzeugten jeweils keine
+Anbieteranfrage; der Tagesaufruf antwortete `not_due`.
+
+Der aktive Watchmode-Lieferant und seine beiden bisherigen Datenbranches
+stehen auf `2262d7e` (Wochenrhythmus; 35 plus elf Mockprüfungen). Seine drei
+vorher vorhandenen generierten Änderungen wurden bytegleich erhalten.
+Der letzte Abruf war lokal fertig, die morgendliche Supabase-Übertragung
+jedoch an einem Statement-Timeout gescheitert. Ausschließlich die bereits
+fertige Streaming-Lieferung und ihr Manifest wurden fortgesetzt: erfolgreich
+in 9,4 Sekunden, alle drei Serverzeilen mit demselben Exporthash rückgelesen,
+kein erneuter Anbieterabruf und keine Kino-Änderung. Der passende Pending-Lauf
+ist abgeschlossen. Nächste Wochenfälligkeit: 14.09.2026, 11:05 UTC; der
+bestehende stündliche Mac-Ticker führt sie bei laufendem Rechner aus.
