@@ -1,4 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const port = process.env.KD_STREAMING_FINAL_PORT || "4399";
 
@@ -11,7 +13,7 @@ export default defineConfig({
   timeout: 180_000,
   expect: { timeout: 30_000 },
   reporter: "line",
-  outputDir: "/private/tmp/kd-streaming-progressive-final-results",
+  outputDir: join(tmpdir(), "kd-streaming-progressive-final-results"),
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     viewport: { width: 393, height: 852 },

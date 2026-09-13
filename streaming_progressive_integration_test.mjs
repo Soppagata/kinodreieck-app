@@ -46,6 +46,8 @@ const sharedCache = cacheStorage();
 let activeFetches = 0;
 let maxFetches = 0;
 let delayedRelease = null;
+const FILTER_TARGET_TITLE = "xXx: Return of Xander Cage";
+let initialTitles = [];
 
 function service(cache = sharedCache) {
   return createStreamingPagesService({
@@ -125,15 +127,16 @@ try {
     assert.equal(first.items.length, 20);
     assert.equal(first.total, first.counts.all);
     assert.equal(first.hasMore, true);
+    initialTitles = first.items.map((item) => item.titel);
     assert.equal(pg.calls.at(-1).limit, 20);
     assert.equal(pg.calls.length, 1);
 
     controller.setActive(true);
-    await waitFor(controller.getSnapshot, (snapshot) => snapshot.items.length >= 220, "erste Folgeseite");
+    await waitFor(controller.getSnapshot, (snapshot) => snapshot.items.length >= 40, "erste Folgeseite");
     controller.setActive(false);
     await tick();
-    assert.equal(controller.getSnapshot().items.length, 220);
-    assert.equal(pg.calls[1].limit, 200);
+    assert.equal(controller.getSnapshot().items.length, 40);
+    assert.equal(pg.calls[1].limit, 20);
     assert.equal(maxFetches, 1);
     unsubscribe();
     controller.destroy();
@@ -147,7 +150,8 @@ try {
     controller.query({ view: "all", filters: { suche: "xXx", sort: "jahr", richtung: "ab" } });
     const result = await waitFor(controller.getSnapshot,
       (snapshot) => snapshot.status === "ready" && snapshot.total === 1, "serverseitiger xXx-Filter");
-    assert.equal(result.items[0].titel, "xXx");
+    assert.equal(initialTitles.includes(FILTER_TARGET_TITLE), false);
+    assert.equal(result.items[0].titel, FILTER_TARGET_TITLE);
     assert.equal(result.items.length, 1);
     assert.equal(pg.calls.length, before + 1);
     controller.destroy();
@@ -176,7 +180,7 @@ try {
     controller.setActive(true);
     controller.query({ view: "all", filters: { suche: "xXx", sort: "jahr", richtung: "ab" } });
     await waitFor(() => cached, Boolean, "Cacheanzeige");
-    assert.equal(cached.items[0].titel, "xXx");
+    assert.equal(cached.items[0].titel, FILTER_TARGET_TITLE);
     await waitFor(controller.getSnapshot,
       (snapshot) => snapshot.status === "ready" && snapshot.fromCache === false, "Hintergrundfrische");
     assert.equal(pg.calls.length, before + 1);

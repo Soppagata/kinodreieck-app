@@ -1,14 +1,86 @@
 import { performance } from "node:perf_hooks";
 import { test, expect } from "@playwright/test";
-import {
-  installNetworkFence,
-  navigateMobile,
-  seedAccount,
-} from "../private-v1/fixtures.mjs";
+import { navigateMobile } from "../private-v1/fixtures.mjs";
 import {
   loadSyntheticMaster,
   startStreamingProgressivePgHarness,
 } from "../../tools/streaming-progressive-pg-harness.mjs";
+
+const PROJECT_URL = "https://abcdefghijklmnopqrst.supabase.co";
+
+async function seedAccount(page) {
+  await page.addInitScript(({ projectUrl, now }) => {
+    const accountId = "00000000-0000-4000-8000-0000000000d3";
+    localStorage.setItem("kd:auth:session", JSON.stringify({
+      v: 1,
+      access_token: "synthetic-progressive-final-access",
+      refresh_token: "synthetic-progressive-final-refresh",
+      gueltigBis: Date.parse("2099-01-01T00:00:00.000Z"),
+      kontoId: accountId,
+      mail: "progressive-final@login.kinodreieck.test",
+      benutzername: "progressive-final",
+    }));
+    localStorage.setItem("kd:acct:owner", accountId);
+    localStorage.setItem("kd:acct:epoch", JSON.stringify({ accountId, token: "synthetic-progressive-final-epoch" }));
+    localStorage.setItem("kd:acct:binding-schema", JSON.stringify({ v: 1, accountId }));
+    localStorage.setItem("kd:acct:uebernommen", JSON.stringify({ accountId, t: now }));
+    localStorage.setItem("kd:artikel", JSON.stringify({ artikel: [], gespeichertAm: Date.parse(now) }));
+    localStorage.setItem("kd:entdecken-status", "{}");
+    localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [], gespeichertAm: Date.parse(now) }));
+    localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "streaming", schrift: "normal", modus: "" }));
+    localStorage.setItem("kd:katalog:url", projectUrl);
+    localStorage.setItem("kd:katalog:key", "sb_publishable_synthetic_progressive_final");
+    localStorage.setItem("kd:start", "clean");
+    localStorage.setItem("kd:start-version", "local-v1");
+    localStorage.setItem("kd:einstieg", JSON.stringify({ version: "private-v1", abgeschlossen: true, weg: "konto" }));
+  }, { projectUrl: PROJECT_URL, now: "2026-09-13T12:00:00.000Z" });
+}
+
+async function installNetworkFence(page, traffic) {
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (["127.0.0.1", "localhost"].includes(url.hostname)) return route.continue();
+    const record = (kind, detail = url.pathname) => traffic.nonLocal.push({
+      method: request.method(), origin: url.origin, path: url.pathname, kind, detail,
+    });
+    if (url.origin !== PROJECT_URL) {
+      record("aborted", "non-fixture-origin");
+      return route.abort("blockedbyclient");
+    }
+    if (url.pathname === "/rest/v1/kd_account_access") {
+      record("mocked", "account-access");
+      traffic.contracts.push("account-access");
+      return route.fulfill({ status: 200, contentType: "application/json", body: "[{\"role\":\"member\",\"active\":true,\"personal_ai\":true}]" });
+    }
+    if (url.pathname === "/rest/v1/kd_personal") {
+      record("mocked", "personal-store");
+      traffic.contracts.push(`personal-${request.method().toLowerCase()}`);
+      const rows = request.method() === "GET" ? [{
+        key: "kd:einstellungen",
+        value: JSON.stringify({ theme: "dunkel", startTab: "streaming", schrift: "normal", modus: "" }),
+        revision: 1,
+      }] : [];
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(rows) });
+    }
+    if (url.pathname === "/rest/v1/rpc/kd_radar_pilot_feed") {
+      record("mocked", "radar-feed");
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        format: "kd-radar-pilot-feed-v2", revision: 1, checksum: "a".repeat(64),
+        reconciledAt: "2026-09-13T12:00:00.000Z", subscriptions: [], events: [], receipts: [],
+        operationAcks: [], radarReview: true, personResults: [], searchStatuses: [],
+        automation: { contractVersion: "radar-auto-v1", schedulerActive: false, intervalHours: 144 },
+      }) });
+    }
+    if (["/rest/v1/rpc/kd_flixpatrol_chart_read", "/rest/v1/rpc/kd_flixpatrol_titles_read"].includes(url.pathname)) {
+      record("mocked", "neutral-facts");
+      return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+    }
+    record("aborted", "unknown-fixture-path");
+    traffic.unknownFixturePaths.push(`${request.method()} ${url.pathname}`);
+    return route.abort("blockedbyclient");
+  });
+}
 
 let pg;
 test.beforeAll(async () => { pg = await startStreamingProgressivePgHarness(); });
@@ -20,6 +92,7 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   const results = [];
   const master = loadSyntheticMaster();
   const catalogBodies = new Map([
+    ["programm", "[]"],
     ["streaming_bekannt", JSON.stringify(pg.catalogRow("streaming_bekannt"))],
     ["streaming_entdecken", JSON.stringify(pg.catalogRow("streaming_entdecken"))],
   ]);
@@ -28,6 +101,9 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   const activeByQuery = new Map();
   let maxRpcPerQuery = 0;
   let delayNextRpcMs = 0;
+  let automaticPortionCount = null;
+  let returnedAllCount = null;
+  let filteredXCount = null;
 
   await page.setViewportSize({ width: 393, height: 852 });
   await seedAccount(page);
@@ -54,7 +130,7 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     maxRpcPerQuery = Math.max(maxRpcPerQuery, activeByQuery.get(querySignature));
     events.push({ kind: "rpc-start", view: request.view, limit: request.limit, at: started });
     try {
-      const response = pg.call(request, pg.accountId);
+      const response = await pg.callAsync(request, pg.accountId);
       const delay = delayNextRpcMs;
       delayNextRpcMs = 0;
       if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
@@ -66,7 +142,7 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
       activeByQuery.set(querySignature, activeByQuery.get(querySignature) - 1);
     }
   });
-  await page.route(/\/rest\/v1\/(?:kd_catalog|rpc\/kd_streaming_catalog)\?/, async (route) => {
+  await page.route(/\/rest\/v1\/(?:kd_catalog|rpc\/kd_streaming_catalog)(?:\?|$)/, async (route) => {
     const url = new URL(route.request().url());
     const name = String(url.searchParams.get("p_name") || url.searchParams.get("name") || "").replace(/^eq\./u, "");
     if (!catalogBodies.has(name)) return route.fallback();
@@ -120,7 +196,6 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   await step("cold shell to first 20 Alles cards", async () => {
     await page.goto("/");
     await expect(page.locator(".kd-app")).toBeVisible();
-    await navigateMobile(page, "Streaming");
     await page.getByRole("button", { name: /^Alles/u }).click();
     await expect(page.locator(".kd-entdecken-karte")).toHaveCount(20);
     await expect(page.locator(".kd-streaming-page-summary strong")).toContainText("Treffer");
@@ -133,32 +208,51 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   expect(firstAll?.limit).toBe(20);
   expect(firstPageResponse).toBeTruthy();
   expect(fullKnown, "vollständiger Known-Read folgt bewusst nach der ersten Seite").toBeTruthy();
-  expect(fullKnown.at).toBeGreaterThanOrEqual(firstPageResponse.at);
+  const fullKnownAfterFirstPage = fullKnown.at >= firstPageResponse.at;
   const allCount = Number((await page.getByRole("button", { name: /^Alles/u }).textContent()).match(/\((\d+)\)/)?.[1]);
   expect(allCount).toBeGreaterThan(20);
 
-  await step("serial preload stays behind a 20-card DOM window", async () => {
+  await step("serial 20-title fetch stays behind a 20-card DOM window", async () => {
     await expect.poll(() => pg.calls.filter((entry) => entry.view === "all" && entry.cursor === "set").length).toBeGreaterThan(0);
     expect(maxRpcPerQuery).toBe(1);
-    expect(pg.calls.filter((entry) => entry.cursor === "set").every((entry) => entry.limit <= 200)).toBe(true);
+    expect(pg.calls.filter((entry) => entry.cursor === "set").every((entry) => entry.limit === 20)).toBe(true);
     await expect(page.locator(".kd-entdecken-karte")).toHaveCount(20);
-    await page.getByRole("button", { name: "Weitere 20 anzeigen", exact: true }).click();
+    await page.getByTestId("streaming-page-more").scrollIntoViewIfNeeded();
     await expect(page.locator(".kd-entdecken-karte")).toHaveCount(40);
+    automaticPortionCount = await page.locator(".kd-entdecken-karte").count();
+  });
+
+  await step("warm Alles to Neu keeps a 20-card portion", async () => {
+    await page.getByRole("button", { name: /^Neu(?:\s|$)/u }).click();
+    await expect(page.locator(".kd-streaming-neu-karte").first()).toBeVisible();
+    expect(await page.locator(".kd-entdecken-karte").count()).toBeLessThanOrEqual(20);
+  });
+
+  await step("warm Neu to Alles restores its query-bound portion", async () => {
+    await page.getByRole("button", { name: /^Alles/u }).click();
+    await expect(page.locator(".kd-entdecken-karte").first()).toBeVisible();
+    returnedAllCount = await page.locator(".kd-entdecken-karte").count();
   });
 
   await step("server filter reaches a title beyond the first page", async () => {
-    await page.getByPlaceholder("Titel suchen …").fill("xXx");
-    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(1);
-    await expect(page.locator(".kd-entdecken-karte")).toContainText("xXx");
-    await expect(page.locator(".kd-streaming-page-summary strong")).toHaveText("1 Treffer");
+    const alphabet = page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" });
+    await alphabet.fill("24");
+    await expect(alphabet).toHaveAttribute("aria-valuetext", "Buchstabe X");
+    const summary = page.locator(".kd-streaming-page-summary strong");
+    await expect(summary).not.toHaveText(`${allCount} Treffer`);
+    filteredXCount = Number((await summary.textContent()).match(/(\d+)/u)?.[1]);
+    expect(filteredXCount).toBeGreaterThan(0);
+    expect(filteredXCount).toBeLessThan(allCount);
+    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(Math.min(20, filteredXCount));
+    await expect(page.locator(".kd-entdecken-karte").filter({ hasText: "xXx" })).toHaveCount(1);
   });
 
   await step("warm leave and return retains the filtered result", async () => {
     const before = pg.calls.length;
     await navigateMobile(page, "Mediathek");
     await navigateMobile(page, "Streaming");
-    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(1);
-    await expect(page.locator(".kd-entdecken-karte")).toContainText("xXx");
+    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(Math.min(20, filteredXCount));
+    await expect(page.locator(".kd-streaming-page-summary strong")).toHaveText(`${filteredXCount} Treffer`);
     await page.waitForTimeout(250);
     expect(pg.calls.length).toBe(before);
   });
@@ -167,7 +261,6 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     delayNextRpcMs = 900;
     await page.reload();
     await expect(page.locator(".kd-app")).toBeVisible();
-    await navigateMobile(page, "Streaming");
     await expect(page.locator('[data-streaming-suchtreffer^="programm:"]')).toHaveCount(20);
     expect(activeRpc, "Cachekarten sind sichtbar, während die echte Hintergrundantwort aussteht").toBe(1);
     await expect.poll(() => activeRpc).toBe(0);
@@ -177,14 +270,14 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     await navigateMobile(page, "Entdecken");
     await expect(page.getByTestId("entdecken-tab")).toBeVisible();
     const popularBefore = await page.locator(".kd-entdecken-neutral").count();
-    const more = page.locator(".kd-entdecken-mehr");
-    await expect(more).toBeVisible();
-    await more.click();
-    await expect.poll(() => page.locator(".kd-entdecken-neutral").count()).toBeGreaterThan(popularBefore);
+    expect(popularBefore).toBe(20);
+    const sentinel = page.locator(".kd-entdecken-weitere").getByTestId("streaming-page-more");
+    await sentinel.scrollIntoViewIfNeeded();
+    await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(40);
     await navigateMobile(page, "Streaming");
     await expect(page.locator('[data-streaming-suchtreffer^="programm:"]')).toHaveCount(20);
     await navigateMobile(page, "Entdecken");
-    await expect(page.locator(".kd-entdecken-neutral").count()).toBeGreaterThan(popularBefore);
+    await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(40);
   });
 
   const streamingText = await page.getByTestId("entdecken-tab").innerText();
@@ -195,7 +288,7 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   expect(traffic.unknownFixturePaths).toEqual([]);
   expect(traffic.nonLocal.every((entry) => ["mocked", "aborted"].includes(entry.kind))).toBe(true);
   console.log(`[PWA_FINAL] ${JSON.stringify({
-    conditions: "production build, Chromium 393x852, CPU x4, service worker blocked, HTTP no-store, synthetic account, sanitized local catalog",
+    conditions: "production build, direct Streaming start, Chromium 393x852, CPU x4, service worker blocked, HTTP no-store, synthetic account, sanitized local catalog",
     projectionItems: pg.projectionCount,
     projectionMs: pg.projectionMs,
     totalRpcCalls: pg.calls.length,
@@ -203,7 +296,16 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     maxConcurrentRpcCallsPerQuery: maxRpcPerQuery,
     firstAllItems: firstAll.items,
     firstAllCount: allCount,
-    fullKnownAfterFirstPage: fullKnown.at >= firstPageResponse.at,
+    automaticPortionCount,
+    returnedAllCount,
+    filteredXCount,
+    fullKnownAfterFirstPage,
+    knownDelayAfterFirstPageMs: Math.round(fullKnown.at - firstPageResponse.at),
     results,
   })}`);
+  expect(automaticPortionCount, "Scrollen erweitert die 20er-DOM-Portion automatisch genau auf 40").toBe(40);
+  expect(returnedAllCount, "querygebundene Alles-Rückkehr bewahrt genau die gewählte DOM-Portion")
+    .toBe(automaticPortionCount);
+  expect(fullKnownAfterFirstPage,
+    "vollständiger Known-Read mit MotN-Anhang muss nach der ersten Seitenantwort beginnen").toBe(true);
 });

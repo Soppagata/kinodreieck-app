@@ -1,9 +1,11 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 
 const LAB_ROOT = "/private/tmp/kd-streaming-performance-20260913";
+const USE_LAB_FIXTURE = process.env.KD_STREAMING_FINAL_USE_LAB_FIXTURE === "1";
 const ACCOUNT_ID = "00000000-0000-4000-8000-0000000000d3";
 const TITLE_FIELDS = Object.freeze([
   "watchmode_id", "streaming_id", "streaming_aliases", "imdb_id", "tmdb_id",
@@ -34,6 +36,42 @@ function neutralPayload(row) {
 }
 
 function loadFixture() {
+  if (!USE_LAB_FIXTURE) {
+    const now = "2026-09-13T12:00:00.000Z";
+    const titles = Array.from({ length: 260 }, (_, index) => ({
+      watchmode_id: 900001 + index,
+      imdb_id: `tt${String(9_000_001 + index)}`,
+      tmdb_id: 800001 + index,
+      titel: index === 259 ? "xXx: Return of Xander Cage" : `Fixture Film ${String(index + 1).padStart(3, "0")}`,
+      jahr: 1980 + index % 45,
+      typ: index % 7 === 0 ? "tv_series" : "movie",
+      genres: index % 2 === 0 ? ["Drama"] : ["Action"],
+      dienste: [["Netflix"], ["Disney+"], ["Prime Video"]][index % 3],
+      ...(index >= 220 && index < 244 ? { motn_zugaenge: [{
+        dienst: [["Netflix"], ["Disney+"], ["Prime Video"]][index % 3][0],
+        erkannt_am: "2026-09-12T12:00:00.000Z",
+      }] } : {}),
+    }));
+    const payload = (items) => ({
+      stand: now,
+      katalog_stand: now,
+      region: "AT",
+      dienste: ["Netflix", "Disney+", "Prime Video"],
+      stand_pro_quelle: { Netflix: now, "Disney+": now, "Prime Video": now },
+      vergleich_stand_pro_quelle: { Netflix: now, "Disney+": now, "Prime Video": now },
+      titel: items,
+    });
+    return {
+      known: payload(titles.slice(0, 220)),
+      discover: payload(titles.slice(220)),
+      offers: [],
+      stand: now,
+      updatedAt: now,
+    };
+  }
+  for (const name of ["streaming_bekannt.json", "streaming_entdecken.json", "synthetic-master.json"]) {
+    if (!existsSync(join(LAB_ROOT, name))) throw new Error(`Explizite Lab-Fixture fehlt: ${join(LAB_ROOT, name)}`);
+  }
   const knownRow = JSON.parse(readFileSync(join(LAB_ROOT, "streaming_bekannt.json"), "utf8"))[0];
   const discoverRow = JSON.parse(readFileSync(join(LAB_ROOT, "streaming_entdecken.json"), "utf8"))[0];
   const offers = discoverRow?.payload?.motn?.offers || knownRow?.payload?.motn?.offers || [];
@@ -72,14 +110,23 @@ function findPg() {
 }
 
 export function loadSyntheticMaster() {
-  return JSON.parse(readFileSync(join(LAB_ROOT, "synthetic-master.json"), "utf8"));
+  if (USE_LAB_FIXTURE) return JSON.parse(readFileSync(join(LAB_ROOT, "synthetic-master.json"), "utf8"));
+  return Array.from({ length: 226 }, (_, index) => ({
+    id: `fixture-library-${index + 1}`,
+    watchmode_id: 900001 + index,
+    imdb_id: `tt${String(9_000_001 + index)}`,
+    tmdb_id: 800001 + index,
+    titel: `Fixture Film ${String(index + 1).padStart(3, "0")}`,
+    jahr: 1980 + index % 45,
+    typ: index % 7 === 0 ? "serie" : "film",
+  }));
 }
 
 export async function startStreamingProgressivePgHarness() {
   const pg = findPg();
-  const root = mkdtempSync("/private/tmp/kd-streaming-progressive-final-pg-");
+  const root = mkdtempSync(join(tmpdir(), "kd-pg-"));
   const data = join(root, "data");
-  const socket = join(root, "socket");
+  const socket = join(root, "s");
   const port = String(50000 + process.pid % 10000);
   const env = { PATH: `${pg}:/usr/bin:/bin`, LANG: "C", LC_ALL: "C" };
   const psqlArgs = ["-h", socket, "-p", port, "-U", "postgres", "-d", "postgres", "-X", "-qAt",
@@ -94,6 +141,34 @@ export async function startStreamingProgressivePgHarness() {
     return result.stdout.trim();
   };
   const sql = (query) => run("psql", psqlArgs, query);
+  const sqlAsync = (query, maxBuffer = 64_000_000) => new Promise((resolve, reject) => {
+    const child = spawn(join(pg, "psql"), psqlArgs, { env, stdio: ["pipe", "pipe", "pipe"] });
+    const stdout = [];
+    const stderr = [];
+    let size = 0;
+    let finished = false;
+    const timeout = setTimeout(() => child.kill("SIGKILL"), 120_000);
+    child.stdout.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > maxBuffer) child.kill("SIGKILL");
+      else stdout.push(chunk);
+    });
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", (error) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code, signal) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      if (code === 0) resolve(Buffer.concat(stdout).toString("utf8").trim());
+      else reject(new Error(`psql: ${Buffer.concat(stderr).toString("utf8") || signal || code}`));
+    });
+    child.stdin.end(query);
+  });
   const fixture = loadFixture();
   const migration = readFileSync("supabase/migrations/20260913200000_streaming_pages_backend.sql", "utf8");
 
@@ -150,12 +225,34 @@ export async function startStreamingProgressivePgHarness() {
       return response;
     };
 
+    const callAsync = async (request, accountId = ACCOUNT_ID) => {
+      const started = performance.now();
+      const escaped = JSON.stringify(request).replaceAll("'", "''");
+      const query = `begin; set local role authenticated;
+        select set_config('request.jwt.claim.role','authenticated',true);
+        select set_config('request.jwt.claim.sub','${String(accountId).replaceAll("'", "''")}',true);
+        select set_config('fixture.active','true',true);
+        select public.kd_streaming_page('${escaped}'::jsonb); rollback;`;
+      const lines = (await sqlAsync(query)).split("\n").map((line) => line.trim()).filter(Boolean);
+      const response = JSON.parse(lines.at(-1));
+      calls.push(Object.freeze({
+        view: request.view,
+        limit: request.limit,
+        cursor: request.cursor ? "set" : "initial",
+        status: response.status,
+        items: response.items?.length || 0,
+        durationMs: Number((performance.now() - started).toFixed(1)),
+      }));
+      return response;
+    };
+
     return Object.freeze({
       accountId: ACCOUNT_ID,
       projectionMs: Number(projectionMs.toFixed(1)),
       projectionCount,
       calls,
       call,
+      callAsync,
       catalogRow(name) {
         const payload = name === "streaming_bekannt" ? fixture.known : fixture.discover;
         return [{
