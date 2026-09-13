@@ -16,15 +16,15 @@ Nutzerweg: Seite/Zähler/20 Titel → weitere Daten bei offenem Bereich → Zwis
 
 ## Welle
 
-Modus: PARALLEL_WAVE mit eingefrorenem Dokumentvertrag. Keine veränderliche Foundation. Alle Paketbranches starten vom selben Plancommit auf einem Nicht-main-Branch.
+Modus: PARALLEL_WAVE mit eingefrorenem Dokumentvertrag. Keine veränderliche Foundation. Alle Paketbranches starten vom selben Plancommit `75fdcd97ec7c7098d2eafcbbdd657e8fbe60de0d` auf einem Nicht-main-Branch.
 
 Integration: `/private/tmp/kd-pwa-progressive-integrate-20260913`, `codex/pwa-progressive-20260913`.
 
 | Paket | Ebene und exklusive Write-Fläche | Worktree / Branch | Status |
 | --- | --- | --- | --- |
-| A | Neue additive `supabase/migrations/*streaming_page*`; neue Backendhelfer `supabase/functions/_shared/streamingPage*`; `streaming_pages_*test.mjs`; `docs/STREAMING_PAGES_BACKEND.md`. Bestehende SQL-Dateien nur lesen. | `/private/tmp/kd-pwa-pages-backend-20260913`, `codex/pwa-pages-backend-20260913` | PLANNED |
-| B | `src/App.jsx`; `src/services/catalog.js`, `src/services/streamingPages.js`; `src/lib/katalog.js`, `src/lib/staffeln.js`, neue `src/lib/streamingPage*`; `src/controllers/useStreamingNeuController.js`, neue `src/controllers/useStreamingPage*`; `streaming_page_cache*test.mjs`, `streaming_page_state*test.mjs`, `streaming_identity_index*test.mjs`; `docs/STREAMING_PAGE_STATE.md`. | `/private/tmp/kd-pwa-pages-state-20260913`, `codex/pwa-pages-state-20260913` | PLANNED |
-| C | `src/tabs/StreamingTab.jsx`, `src/tabs/EntdeckenTab.jsx`; neue `src/components/StreamingPage*`, `src/styles/streaming-progressive.css`; `tests/private-v1/fixtures.mjs`, `tests/private-v1/streaming-ansichten.spec.mjs`, neue `tests/private-v1/streaming-progressive*.spec.mjs`; `streaming_progressive_ui*test.mjs`; `docs/STREAMING_PAGE_UI.md`. | `/private/tmp/kd-pwa-pages-ui-20260913`, `codex/pwa-pages-ui-20260913` | PLANNED |
+| A | Neue additive `supabase/migrations/*streaming_page*`; neue Backendhelfer `supabase/functions/_shared/streamingPage*`; `streaming_pages_*test.mjs`; `docs/STREAMING_PAGES_BACKEND.md`. Bestehende SQL-Dateien nur lesen. | `/private/tmp/kd-pwa-pages-backend-20260913`, `codex/pwa-pages-backend-20260913`; Agent `/root/pages_backend` | RUNNING |
+| B | `src/App.jsx`; `src/services/catalog.js`, `src/services/streamingPages.js`; `src/lib/katalog.js`, `src/lib/staffeln.js`, neue `src/lib/streamingPage*`; `src/controllers/useStreamingNeuController.js`, neue `src/controllers/useStreamingPage*`; `streaming_page_cache*test.mjs`, `streaming_page_state*test.mjs`, `streaming_identity_index*test.mjs`; `docs/STREAMING_PAGE_STATE.md`. | `/private/tmp/kd-pwa-pages-state-20260913`, `codex/pwa-pages-state-20260913`; Agent `/root/pages_state` | RUNNING |
+| C | `src/tabs/StreamingTab.jsx`, `src/tabs/EntdeckenTab.jsx`; neue `src/components/StreamingPage*`, `src/styles/streaming-progressive.css`; `tests/private-v1/fixtures.mjs`, `tests/private-v1/streaming-ansichten.spec.mjs`, neue `tests/private-v1/streaming-progressive*.spec.mjs`; `streaming_progressive_ui*test.mjs`; `docs/STREAMING_PAGE_UI.md`. | `/private/tmp/kd-pwa-pages-ui-20260913`, `codex/pwa-pages-ui-20260913`; Agent `/root/pages_ui` | RUNNING |
 
 Gemeinsamer read-only Vertrag: `docs/PWA_PROGRESSIVE_CONTRACT.md`. Bestehende Matcher-/14-Tage-Funktionen bleiben die fachliche Referenz. Keine Dependencies-/Lockfileänderung. `package.json`, Gesamtlaufskript und Abschlussbericht gehören später ausschließlich dem einen Abschlussbaumeister. Register nur Meister. Keine Paket-Kommunikation untereinander, keine Nebenagenten.
 
