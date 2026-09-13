@@ -50,6 +50,7 @@ try {
     grant select on public.kd_catalog to authenticated,service_role;
     insert into public.kd_catalog values('streaming_entdecken','{"stand":"fixture","titel":[{"watchmode_id":1,"imdb_id":"tt1302011","tmdb_id":49444,"typ":"movie","dienste":["Disney+"]}]}',now(),'watchmode',now(),null);`);
   sql(migration);
+  sql(readFileSync("supabase/migrations/20260913170000_motn_initial_backfill.sql","utf8"));
   const call = (name,args='') => JSON.parse(session(`select public.${name}(${args})`));
   check('A missing lease cannot reserve provider requests',()=>{
     assert.equal(call('kd_motn_reserve',"null,'new'").reserved,false);
@@ -85,10 +86,20 @@ try {
     assert.equal(call('kd_motn_reconcile_watchmode').acknowledged,1);
     assert.equal(sql('select watchmode_seen_at is not null from public.kd_motn_offers'),'t');
   });
+  sql('update public.kd_motn_sync set bootstrap_completed_at=now()');
   check('The daily 24-call cap cannot be exceeded by repeated reservations',()=>{
     for(let i=0;i<19;i++) assert.equal(call('kd_motn_reserve',`'${token}','removed'`).reserved,true);
     assert.equal(call('kd_motn_reserve',`'${token}','removed'`).reserved,false);
     assert.equal(sql('select count(*) from public.kd_motn_requests'),'24');
+  });
+  check('Initial backfill is limited to 80 requests and resumes only stored progress',()=>{
+    sql('update public.kd_motn_sync set bootstrap_completed_at=null');
+    for(let i=0;i<56;i++) assert.equal(call('kd_motn_reserve',`'${token}','removed'`).reserved,true);
+    assert.equal(call('kd_motn_reserve',`'${token}','removed'`).reserved,false);
+    call('kd_motn_finish',`'${token}','limited'`);
+    assert.equal(call('kd_motn_claim',`'${token}'`).claimed,true);
+    assert.equal(sql("select checkpoints->'new'->>'cursor' from public.kd_motn_sync"),'cursor-next');
+    sql('update public.kd_motn_sync set bootstrap_completed_at=now()');
   });
   check('An error releases only the lease, retaining the completed page and cursor',()=>{
     assert.equal(call('kd_motn_finish',`'${token}','error'`).ok,true);

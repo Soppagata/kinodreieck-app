@@ -90,7 +90,7 @@ globalThis.fetch = async (url, opts = {}) => {
   if (s.includes("/rest/v1/kd_store")) {
     return merke({ ok: true, status: 200, json: async () => [{ owner: "demo", key: "kd:master", value: "{}" }], text: async () => "" });
   }
-  const name = new URL(s).searchParams.get("name")?.replace(/^eq\./, "");
+  const name = (new URL(s).searchParams.get("p_name") || new URL(s).searchParams.get("name"))?.replace(/^eq\./, "");
   if (name && typeof netz.vorKatalogAntwort === "function") {
     const hook = netz.vorKatalogAntwort;
     netz.vorKatalogAntwort = null;

@@ -97,5 +97,5 @@ export function applyMotnStreaming(titles, envelope, now = Date.now()) {
       strongKeys(title).forEach(key => { if (!index.has(key)) index.set(key,new Set()); index.get(key).add(position); });
     }
   }
-  return result.filter(title => title.dienste.length);
+  return result.filter(title => !title.motn_checked_at || title.dienste.length);
 }

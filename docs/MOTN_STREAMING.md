@@ -25,11 +25,13 @@ unter der bestehenden Konto-RLS. Fehler verwenden den bereits bestehenden
 Cache für die vollständige kombinierte Antwort.
 
 Der gemeinsame Serverlauf reserviert jede Anfrage vor dem Abruf. Grenzen:
-24 Anfragen pro UTC-Tag, 900 innerhalb von 32 Tagen, maximal zwölf Seiten je
+24 Anfragen pro UTC-Tag. Die einmalige Startbefüllung hat stattdessen insgesamt
+höchstens 80 Anfragen einschließlich der vier Vergleichsabfragen. Für beide
+Wege gelten 900 innerhalb von 32 Tagen, maximal zwölf Seiten je
 Änderungsart und Lauf. Das kostenlose Anbieterlimit ist zusätzlich hart und
 erzeugt keine Überziehungsgebühren. Jede erfolgreich geladene Seite wird mit
 ihrem Cursor atomar gespeichert. Fehler werden im Lauf nicht wiederholt;
-der nächste tägliche Lauf setzt am offenen Cursor fort. Ein über 31 Tage
+der nächste tägliche Lauf setzt am offenen Cursor fort. Die Startbefüllung darf nach erfolgreich gespeicherten Seiten am selben Tag weiterlaufen; Fehler geben keinen sofortigen Wiederholungsweg frei. Ein über 31 Tage
 alter unvollständiger Abruf wird als veraltet gestoppt und nicht still als
 vollständig behandelt. Eine abgeschlossene Abfrage überlappt beim nächsten
 Lauf um fünf Minuten; Duplikate verändern das ursprüngliche Neu-Datum nicht.

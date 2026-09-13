@@ -240,7 +240,7 @@ check("Katalog-Verbindungsfehler leakt keine Backenddetails in UI-Texte",
   `asset`-Objekt rendert die Oberfläche (KatalogZugang/Katalog-Status). */
 const fetchVorher = globalThis.fetch;
 globalThis.fetch = async (url) => {
-  const name = new URL(String(url)).searchParams.get("name")?.replace(/^eq\./, "");
+  const name = (new URL(String(url)).searchParams.get("p_name") || new URL(String(url)).searchParams.get("name"))?.replace(/^eq\./, "");
   if (name === "manifest") {
     return {
       ok: true,

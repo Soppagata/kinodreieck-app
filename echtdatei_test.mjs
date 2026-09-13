@@ -91,7 +91,7 @@ const NUR_ANGEMELDET = new Set([
   "programm", "streaming", "streaming_bekannt", "streaming_entdecken",
 ]);
 function katalogAntwort(url, opts = {}) {
-  const name = new URL(String(url)).searchParams.get("name")?.replace(/^eq\./, "");
+  const name = (new URL(String(url)).searchParams.get("p_name") || new URL(String(url)).searchParams.get("name"))?.replace(/^eq\./, "");
   const zeile = KATALOG_ZEILEN[name];
   const mitToken = !!(opts.headers && opts.headers.Authorization);
   const sichtbar = !!zeile && (mitToken || !NUR_ANGEMELDET.has(name));

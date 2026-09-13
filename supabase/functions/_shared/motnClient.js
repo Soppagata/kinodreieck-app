@@ -55,4 +55,3 @@ export function createMotnClient({ apiKey, fetchImpl = fetch, maxRequests = 4, t
     },
   };
 }
-

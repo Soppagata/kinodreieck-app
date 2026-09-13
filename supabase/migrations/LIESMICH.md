@@ -90,6 +90,8 @@ die Statusautorität für den Remote-Lauf.
 | `20260911120000_title_facts_lookup.sql` | `bscjgwcntapobyxsiyce` | 2026-09-11 | Codex über Management-API | erfolgreich in exakt benannter Zweiertransaktion angewandt und rückgelesen; SHA-256 `0f85f63fe0146eefa03ee50240ac97d48ae6492ec597c6d14f6ee280629f7996`; bestehender Feed, Settings und Usage durch Migration unverändert |
 | `20260911123000_entdecken_flixpatrol_batch_format9.sql` | `bscjgwcntapobyxsiyce` | 2026-09-11 | Codex über Management-API | erfolgreich in derselben Zweiertransaktion angewandt und rückgelesen; SHA-256 `94d45f8417acf5d8ec4154babe7ede875a379410c9db57146e60f88be149f23e`; 76 lokale/remote Versionen deckungsgleich, sechs FlixPatrol-Tabellen mit erzwungener RLS; Aktivierungsversuch und Rücknahme separat dokumentiert |
 
+| `20260913160000_motn_streaming.sql` | `bscjgwcntapobyxsiyce` | 2026-09-13 | Codex über verknüpfte Management-API | atomar angewandt und rückgelesen; SHA-256 `13378d51eaa276de528b685996765f5f5f279e6df99ba6e8dab57dd9779ecde0`; neutraler AT-Angebotsspeicher, gezählte Anfragen und Konto-RLS; kein Schreibrecht für Browser. Ein vorheriger Syntaxfehler in der Protokollhülle wurde vollständig zurückgerollt und die Abwesenheit aller neuen Objekte vor dem korrigierten Lauf geprüft. |
+
 ## Entscheidung zum Beta-Tageslimit (08.08.2026)
 
 **Verworfen — nicht wieder aufmachen:**
