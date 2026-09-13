@@ -96,6 +96,7 @@ const BEREICHE = [
       "Alles zeigt die Gesamtmenge der bekannten Angebote deiner gewählten Streamingdienste. Mein Programm ist daraus die Teilmenge, die zu deiner Mediathek und deinen Listen passt.",
       "Neu zeigt Titel, die seit dem letzten erfolgreichen Katalogabruf neu in „Alles“ deiner gewählten Dienste erkannt wurden. Jeder Zugang bleibt ab seiner Erkennung 14 × 24 Stunden sichtbar; das ist kein Plattform-Premierendatum.",
       "Watchmode liefert die Streaming-Verfügbarkeiten. Für fünf aktuell schnell geführte Dienste ist ein Abruf im 48-Stunden-Takt vorgesehen; der Gesamtkatalog wird turnusmäßig alle 12 Tage erneuert. Der angezeigte Quellenstand bleibt maßgeblich, eine allgemeine 48-Stunden-Garantie für alle Dienste gibt es nicht.",
+      "Movie of the Night ergänzt österreichische Abo-Neuzugänge für 14 volle Tage unter Neu. Fehlt ein Titel danach weiterhin bei Watchmode, bleibt er unter Alles und in Entdecken verfügbar, bis Watchmode das Angebot übernimmt oder eine Entfernung bestätigt wird. Bestätigte MotN-Verfügbarkeitskorrekturen haben Vorrang; Prime Channels behalten ihren bisherigen Datenweg.",
       "Welche Streamingdienste berücksichtigt werden, stellst du in Settings unter Streaming-Quellen ein.",
     ],
     suchwoerter: ["streaming", "streamingdienst", "mein programm", "alles", "neu", "streaming entdecken", "gesehen", "merkliste", "watchmode"],

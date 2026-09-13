@@ -1,0 +1,28 @@
+name: MotN – Streaming für Österreich ergänzen
+
+on:
+  schedule:
+    - cron: "27 5 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kinodreieck-motn-streaming
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Österreichische Neuzugänge und Entfernungen abrufen
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node tools/motn-streaming-sync.mjs

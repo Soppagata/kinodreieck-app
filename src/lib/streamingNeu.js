@@ -305,6 +305,21 @@ export function projiziereStreamingNeu({
         || firstSeenAt > zeit || zeit >= firstSeenAt + STREAMING_NEU_DAUER_MS) continue;
     neuSeit[id] = new Date(firstSeenAt).toISOString();
   }
+  // MotN dates are persisted server-side, so their 14-day window also survives
+  // a new browser, a Watchmode ID arriving later, and a missing WM baseline.
+  for (const titel of alleTitel) {
+    const id = streamingTitelKennung(titel);
+    if (!id || !aktuelleAuswahlIds.has(id)) continue;
+    const starts = (titel.motn_zugaenge || []).filter(entry => gewaehlt.includes(entry.dienst)
+      && (titel.dienste || []).includes(entry.dienst)).map(entry => zeitpunkt(entry.erkannt_am))
+      .filter(value => value !== null && value <= zeit);
+    if (!starts.length) continue;
+    const start = Math.min(...starts);
+    const prior = zeitpunkt(neuSeit[id]);
+    const first = prior === null ? start : Math.min(prior,start);
+    if (zeit < first + STREAMING_NEU_DAUER_MS) neuSeit[id] = new Date(first).toISOString();
+    else delete neuSeit[id];
+  }
   const antworteMitNeu = (extra = {}) => {
     let naechsterAblauf = null;
     for (const seit of Object.values(neuSeit)) {

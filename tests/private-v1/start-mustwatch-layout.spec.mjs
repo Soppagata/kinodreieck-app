@@ -25,8 +25,8 @@ async function boot(page, { theme, schrift }) {
     if (url.origin === PROJECT_URL) {
       if (url.pathname === "/rest/v1/kd_account_access") return json([{ role: "member", active: true, personal_ai: false }]);
       if (url.pathname === "/rest/v1/kd_personal") return json([]);
-      if (url.pathname === "/rest/v1/kd_catalog") {
-        const name = url.searchParams.get("name");
+      if (["/rest/v1/kd_catalog", "/rest/v1/rpc/kd_streaming_catalog"].includes(url.pathname)) {
+        const name = url.searchParams.has("p_name") ? `eq.${url.searchParams.get("p_name")}` : url.searchParams.get("name");
         let payload;
         if (name === "eq.programm") payload = { stand: NOW, filme: [] };
         if (name === "eq.streaming_bekannt") payload = {

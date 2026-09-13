@@ -1,3 +1,4 @@
+import { streamingTitelKennung, streamingStatus } from "./streamingProjection.js";
 /* Reine UI-Projektionen für Entdecken (Phase 3).
    ---------------------------------------------------------------
    - Suchaktionen bleiben typisiert und benutzen getrennte Verträge
@@ -179,21 +180,22 @@ export function localRecommendationCandidates(streamingEntdecken, {
   const services = selectedServiceSet(selectedServices);
   const rows = new Map();
   for (const entry of [...list(streamingEntdecken?.titel), ...list(streamingKnown?.titel)]) {
-    const watchmodeId = positiveInteger(entry?.watchmode_id);
-    if (watchmodeId == null) continue;
-    rows.set(watchmodeId, { ...(rows.get(watchmodeId) || {}), ...entry });
+    const id = streamingTitelKennung(entry);
+    if (id == null || (positiveInteger(entry?.watchmode_id) === null && !/^motn:[1-9][0-9]*$/.test(id))) continue;
+    rows.set(id, { ...(rows.get(id) || {}), ...entry });
   }
   return Object.freeze([...rows.values()]
     .map((entry) => {
       const watchmodeId = positiveInteger(entry?.watchmode_id);
-      if (watchmodeId == null || !text(entry?.titel)) return null;
-      if (!includeSeenForMatching && statusIsSeen(entdeckenStatus?.[watchmodeId])) return null;
+      const id = streamingTitelKennung(entry);
+      if (id == null || !text(entry?.titel)) return null;
+      if (!includeSeenForMatching && statusIsSeen(streamingStatus(entdeckenStatus,entry))) return null;
       const availableServices = list(entry.dienste);
       if (!availableServices.length) return null;
       if (services.size && !matchingServices({ services: availableServices }, services).length) return null;
       const attributes = structuredCatalogAttributes(entry);
       return Object.freeze({
-        targetId: `watchmode:${watchmodeId}`,
+        targetId: watchmodeId == null ? id : `watchmode:${watchmodeId}`,
         watchmodeId,
         title: text(entry.titel),
         matchStatus: "matched",
@@ -217,7 +219,7 @@ export function localRecommendationCandidates(streamingEntdecken, {
         chartEvidence: Object.freeze([...list(entry.chartEvidence)]),
         keywords: Object.freeze([...list(entry.keywords)]),
         externalIds: discoveryExternalIdsFromCatalog(entry),
-        seenStatus: entdeckenStatus?.[watchmodeId] ?? null,
+        seenStatus: streamingStatus(entdeckenStatus,entry) ?? null,
       });
     })
     .filter(Boolean));
@@ -937,13 +939,13 @@ export function localRadarTargetLabel(targetOrId, {
   const normalized = text(typeof targetOrId === "object" ? targetOrId?.targetId : targetOrId);
   const fixture = fixtures?.catalog?.find((entry) => entry.targetId === normalized);
   if (fixture?.title) return fixture.title;
-  if (normalized.startsWith("watchmode:")) {
-    const watchmodeId = normalized.slice("watchmode:".length);
+  if (normalized.startsWith("watchmode:") || normalized.startsWith("motn:")) {
+    const watchmodeId = normalized.startsWith("motn:") ? normalized : normalized.slice("watchmode:".length);
     const catalogs = [
       ...(streamingKnown?.titel || []),
       ...(streamingDiscover?.titel || []),
     ];
-    const found = catalogs.find((entry) => String(entry.watchmode_id) === watchmodeId);
+    const found = catalogs.find((entry) => streamingTitelKennung(entry) === watchmodeId);
     if (found?.titel) return found.titel;
   }
   if (normalized.startsWith("catalog:")) {

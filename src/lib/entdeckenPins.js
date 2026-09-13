@@ -227,12 +227,13 @@ function recommendationDestination(pin, entry) {
 }
 function streamingDestination(pin, entry) {
   const watchmodeId = positiveInteger(entry?.watchmode_id ?? entry?.watchmodeId);
-  if (!watchmodeId) return null;
+  const ref = watchmodeId ?? (/^motn:\d{1,12}$/.test(entry?.streaming_id || "") ? entry.streaming_id : null);
+  if (!ref) return null;
   const services = Array.isArray(entry?.dienste) ? entry.dienste.filter(Boolean) : [];
   return Object.freeze({
     pinId: pin.pinId, title: entry.titel ?? entry.title ?? pin.title, year: entry.jahr ?? entry.year ?? pin.year, type: pin.type,
     destination: "streaming", label: services[0] ? `${services[0]} · Streaming` : "Streaming",
-    target: Object.freeze({ art: entry?.wochen_bereich || "entdecken", ref: watchmodeId, titel: entry.titel ?? entry.title ?? pin.title }),
+    target: Object.freeze({ art: entry?.wochen_bereich || "entdecken", ref, titel: entry.titel ?? entry.title ?? pin.title }),
   });
 }
 function cinemaDestination(pin, entry) {

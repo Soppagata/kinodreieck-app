@@ -1,3 +1,4 @@
+import { streamingTitelKennung as streamingId, gleicheStreamingTitel } from "./lib/streamingProjection.js";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 /* ============================================================
    KINODREIECK · WIEN — v4 (Webapp, Vite)
@@ -494,13 +495,16 @@ export default function App() {
     catch { setErr("Die Streaming-Merkliste konnte nicht gespeichert werden. Die sichtbare Änderung gilt nur bis zum Neuladen."); }
   }, [setErr]);
   const toggleMerk = useCallback((t) => {
-    const drin = merkliste.some((m) => m.watchmode_id === t.watchmode_id);
+    const drin = merkliste.some((m) => gleicheStreamingTitel(m,t));
     const next = drin
-      ? merkliste.filter((m) => m.watchmode_id !== t.watchmode_id)
+      ? merkliste.filter((m) => !gleicheStreamingTitel(m,t))
       : [
         ...merkliste,
         {
           watchmode_id: t.watchmode_id,
+          streaming_id: t.streaming_id,
+          motn_id: t.motn_id,
+          streaming_aliases: t.streaming_aliases,
           titel: t.titel,
           jahr: t.jahr ?? null,
           hinzugefuegt_am: new Date().toISOString().slice(0, 10),
@@ -1060,7 +1064,7 @@ export default function App() {
     streaming: streamingInfo?.abgelaufen ? [] : [
       ...((streamingBekannt && streamingBekannt.titel) || []),
       ...((streamingEntdecken && streamingEntdecken.titel) || []),
-    ].map((t) => ({ ...t, id: t.watchmode_id, titel: t.titel, jahr: t.jahr })),
+    ].map((t) => ({ ...t, id: streamingId(t), titel: t.titel, jahr: t.jahr })),
   }), [master, programm, programmInfo?.abgelaufen, streamingBekannt, streamingEntdecken, streamingInfo?.abgelaufen]);
 
   /* ---- Navigation zwischen Blog und Mediathek ---- */

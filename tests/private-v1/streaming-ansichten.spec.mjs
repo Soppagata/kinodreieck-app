@@ -53,9 +53,9 @@ test("Beliebte Titel klappt eine vorhandene Beschreibung per Titel auf", async (
     watchmode_id: 92020, titel: "Outer Banks", jahr: 2020, typ: "tv_series",
     genres: ["Drama"], dienste: ["Netflix"], description,
   };
-  await page.route("**/rest/v1/kd_catalog?*", async (route) => {
+  await page.route(/\/rest\/v1\/(?:kd_catalog|rpc\/kd_streaming_catalog)\?/, async (route) => {
     const url = new URL(route.request().url());
-    const name = String(url.searchParams.get("name") || "").replace(/^eq\./u, "");
+    const name = String(url.searchParams.get("p_name") || url.searchParams.get("name") || "").replace(/^eq\./u, "");
     if (!["streaming_bekannt", "streaming_entdecken"].includes(name)) return route.fallback();
     return route.fulfill({
       status: 200, contentType: "application/json",
@@ -91,9 +91,9 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
   const { page } = privateApp;
   await page.setViewportSize({ width: 393, height: 852 });
   let knownReads = 0;
-  await page.route("**/rest/v1/kd_catalog?*", async (route) => {
+  await page.route(/\/rest\/v1\/(?:kd_catalog|rpc\/kd_streaming_catalog)\?/, async (route) => {
     const url = new URL(route.request().url());
-    const name = String(url.searchParams.get("name") || "").replace(/^eq\./u, "");
+    const name = String(url.searchParams.get("p_name") || url.searchParams.get("name") || "").replace(/^eq\./u, "");
     if (name === "streaming_bekannt") {
       knownReads += 1;
       const stand = knownReads === 1 ? "2026-09-14T12:00:00.000Z" : fixture.stand;
@@ -219,4 +219,52 @@ test("Streaming zeigt vollständige Auswahlunion, producerbelegtes Neu und ehrli
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }
   await audit.screenshot({ path: testInfo.outputPath("ui-quellenstaende-mobile.png") });
+});
+
+
+test("MotN-only titles retain normal mobile actions and leave Neu after 14 days", async ({ privateApp }, testInfo) => {
+  const { page } = privateApp;
+  const show = { motn_id: "1364", imdb_id: "tt1302011", tmdb_id: 49444,
+    titel: "Kung Fu Panda 2", jahr: 2011, typ: "film", genres: ["Animation"],
+    at_subscription_services: ["disney"], beschreibung: "Po findet seinen Weg." };
+  const motn = { format: 1, country: "AT", offers: [{
+    show_id: "1364", service_id: "disney", country: "AT", available: true,
+    event_at: "2026-09-03T10:00:00.000Z", added_at: "2026-09-03T10:00:00.000Z",
+    checked_at: "2026-09-04T09:00:00.000Z", link: "https://www.disneyplus.com/browse/fixture", show_data: show,
+  }] };
+  await page.route("**/rest/v1/rpc/kd_streaming_catalog?*", async route => route.fulfill({
+    status: 200, contentType: "application/json", body: row({ stand: "2026-09-04T09:00:00.000Z",
+      katalog_stand: "2026-09-04T09:00:00.000Z", region: "AT", dienste: ["Disney+"], titel: [], motn }),
+  }));
+  await page.addInitScript(() => localStorage.setItem("kd:streaming-dienste",
+    JSON.stringify({ quellen: ["Disney+"], heuristik: true })));
+  await page.reload();
+  await navigateMobile(page, "Streaming");
+  const views = page.locator(".kd-streaming-tab .kd-seg-control");
+  await views.filter({ hasText: /^Neu/u }).click();
+  const card = page.locator(".kd-streaming-neu-karte").filter({ hasText: "Kung Fu Panda 2" });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("Disney+");
+  await expect(card).not.toContainText("Netflix");
+  await card.locator(".kd-entdecken-pin").click();
+  await expect(card.locator(".kd-entdecken-pin")).toHaveAttribute("aria-pressed", "true");
+  await card.getByRole("button", { name: "Auf die Merkliste" }).click();
+  await expect(card.getByRole("button", { name: "Von der Merkliste nehmen" })).toBeVisible();
+  await card.getByRole("button", { name: "Als gesehen markieren" }).click();
+  await page.getByRole("button", { name: "Nur als gesehen markieren", exact: true }).click();
+  await expect(card.getByRole("button", { name: "Gesehen-Markierung entfernen" })).toBeVisible();
+  await card.click();
+  await expect(card.getByRole("button", { name: "In Mediathek übernehmen", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await card.screenshot({ path: testInfo.outputPath("motn-mobile-card.png") });
+  await expect(page.getByRole("link", { name: "Movie of the Night", exact: true })).toBeVisible();
+  await page.clock.setFixedTime(new Date("2026-09-17T10:00:00.000Z"));
+  await page.reload();
+  await navigateMobile(page, "Streaming");
+  await views.filter({ hasText: /^Neu/u }).click();
+  await expect(card).toHaveCount(0);
+  await views.filter({ hasText: /^Alles/u }).click();
+  const retained = page.locator(".kd-entdecken-karte").filter({ hasText: "Kung Fu Panda 2" });
+  await expect(retained).toBeVisible();
+  await expect(retained.getByRole("button", { name: "Von der Merkliste nehmen" })).toBeVisible();
 });

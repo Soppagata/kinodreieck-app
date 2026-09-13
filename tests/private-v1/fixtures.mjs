@@ -175,8 +175,8 @@ async function installNetworkFence(page, traffic) {
       traffic.contracts.push(`personal-${request.method().toLowerCase()}`);
       return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
     }
-    if (url.pathname === "/rest/v1/kd_catalog") {
-      const name = String(url.searchParams.get("name") || "").replace(/^eq\./u, "");
+    if (["/rest/v1/kd_catalog", "/rest/v1/rpc/kd_streaming_catalog"].includes(url.pathname)) {
+      const name = String(url.searchParams.get("p_name") || url.searchParams.get("name") || "").replace(/^eq\./u, "");
       record("mocked", `catalog:${name}`);
       traffic.contracts.push(`catalog:${name}`);
       if (name === "streaming_bekannt") {

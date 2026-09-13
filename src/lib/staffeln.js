@@ -1,5 +1,7 @@
 /* Lokaler Gesehen- und Mediathekstatus für Streamingtitel. Alte String-Status
    bleiben lesbar; historische Zusatzfelder werden beim Umschalten bewahrt. */
+import { streamingTitelKennung, streamingStatus } from "./streamingProjection.js";
+import { ordneExternenTitelZu } from "./externalTitleIdentity.js";
 
 export function statusVon(wert) {
   if (typeof wert === "string") return wert;
@@ -43,20 +45,30 @@ export function ohneMediathekEintrag(rohStatus) {
 export function gleicheMediathekStatusAb(statusMap, titel, master) {
   const filme = Array.isArray(master) ? master : [];
   let next = statusMap || {};
-  const findeFilm = (t) => filme.find((film) => (
-    t.watchmode_id != null && film.watchmode_id != null
-    && String(film.watchmode_id) === String(t.watchmode_id)
-  ) || (
-    t.imdb_id && film.imdb_id && String(film.imdb_id) === String(t.imdb_id)
-  ) || (
-    t.tmdb_id && film.tmdb_id && String(film.tmdb_id) === String(t.tmdb_id)
-  ));
+  const findeFilm = (t) => {
+    if (t.motn_id) {
+      const match = ordneExternenTitelZu(t,filme);
+      return match.status === "matched" && match.matchedBy === "strong-id" ? match.match : null;
+    }
+    return filme.find((film) => (
+      t.watchmode_id != null && film.watchmode_id != null
+      && String(film.watchmode_id) === String(t.watchmode_id)
+    ) || (t.imdb_id && film.imdb_id && String(film.imdb_id) === String(t.imdb_id))
+      || (t.tmdb_id && film.tmdb_id && String(film.tmdb_id) === String(t.tmdb_id)));
+  };
 
   for (const t of Array.isArray(titel) ? titel : []) {
+    const key = streamingTitelKennung(t);
+    if (!key) continue;
+    const prior = streamingStatus(next,t);
+    if (prior !== undefined && next[key] === undefined) {
+      if (next === statusMap) next = { ...(statusMap || {}) };
+      next[key] = prior;
+    }
     const film = findeFilm(t);
-    if (!film || mediathekIdVon(next[t.watchmode_id]) === film.id) continue;
+    if (!film || mediathekIdVon(next[key]) === film.id) continue;
     if (next === statusMap) next = { ...(statusMap || {}) };
-    next[t.watchmode_id] = mitMediathekEintrag(next[t.watchmode_id], t, film.id);
+    next[key] = mitMediathekEintrag(next[key], t, film.id);
   }
 
   for (const [watchmodeId, roh] of Object.entries(next)) {
@@ -91,12 +103,13 @@ export function neuerGesehenEintrag(t, jetzt = new Date()) {
    Render-Snapshot darf nur entscheiden, ob statt des Toggles zuerst das Modal
    gezeigt wird; unbekannte historische Zusatzfelder bleiben erhalten. */
 export function toggleGesehenInStatus(statusMap, t, jetzt = new Date()) {
-  const id = t?.watchmode_id;
+  const id = streamingTitelKennung(t);
   if (id == null) return statusMap;
-  const roh = statusMap?.[id];
+  const roh = streamingStatus(statusMap,t);
   const next = { ...(statusMap || {}) };
   const basis = statusObjekt(roh);
   if (statusVon(roh) === "gesehen") {
+    for (const alias of t?.streaming_aliases || []) delete next[alias];
     const { status: _status, gesehen_am: _gesehenAm, ...rest } = basis;
     if (Object.keys(rest).length) next[id] = rest;
     else delete next[id];

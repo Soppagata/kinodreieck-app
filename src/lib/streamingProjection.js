@@ -1,8 +1,22 @@
 const text = (value) => String(value == null ? "" : value).trim();
 
 export function streamingTitelKennung(titel) {
-  const id = titel?.watchmode_id ?? titel?.watchmodeId;
+  const id = titel?.watchmode_id ?? titel?.watchmodeId ?? titel?.streaming_id;
   return id == null || !text(id) ? null : text(id);
+}
+
+export function gleicheStreamingTitel(a, b) {
+  const ids = new Set([streamingTitelKennung(a), ...(a?.streaming_aliases || [])].filter(Boolean));
+  return [streamingTitelKennung(b), ...(b?.streaming_aliases || [])].some(id => id && ids.has(id));
+}
+
+export function streamingStatus(statusMap, titel) {
+  const id = streamingTitelKennung(titel);
+  if (id && Object.hasOwn(statusMap || {},id)) return statusMap[id];
+  for (const alias of titel?.streaming_aliases || []) {
+    if (Object.hasOwn(statusMap || {},alias)) return statusMap[alias];
+  }
+  return undefined;
 }
 
 export function streamingKatalogstaendePassen(bekannt, entdecken) {

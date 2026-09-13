@@ -62,6 +62,8 @@ import {
   ordneExternenTitelZu,
 } from "./externalTitleIdentity.js";
 import { createTitleFactsProjector, projectTitleFacts } from "./titleFacts.js";
+import { streamingTitelKennung } from "./streamingProjection.js";
+import { applyMotnStreaming, motnEnvelope } from "./streamingMotn.js";
 
 const TABLE = "kd_catalog";
 const CACHE = "kinodreieck-katalog-v1";
@@ -251,8 +253,11 @@ async function direktLesen(name, signal, erwarteteKontoId = null) {
   if (!ERLAUBT.has(name)) throw new Error("Unbekanntes Katalog-Asset: " + name);
   const c = getKatalogZugang();
   if (!hatKatalogZugang()) throw new Error("Datenbank-Zugang noch nicht eingerichtet");
-  const url = c.url + "/rest/v1/" + TABLE + "?name=eq." + encodeURIComponent(name)
-    + "&select=payload,updated_at,quelle,stand,gueltig_bis&limit=1";
+  const streamingAsset = ["streaming", "streaming_bekannt", "streaming_entdecken"].includes(name);
+  const url = streamingAsset
+    ? c.url + "/rest/v1/rpc/kd_streaming_catalog?p_name=" + encodeURIComponent(name)
+    : c.url + "/rest/v1/" + TABLE + "?name=eq." + encodeURIComponent(name)
+      + "&select=payload,updated_at,quelle,stand,gueltig_bis&limit=1";
 
   /* Die Katalog-URL geht an den Token-Provider mit: nur er weiß, zu welcher
      Projekt-URL die Sitzung gehört, und hält das Token bei Abweichung zurück
@@ -486,10 +491,10 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
   const map = new Map();
   for (const t of entdeckenAlt.titel || []) {
     const projected = projectFacts(t);
-    map.set(String(projected.watchmode_id), { ...projected });
+    map.set(streamingTitelKennung(projected), { ...projected });
   }
   for (const t of bekanntAlt.titel || []) {
-    const key = String(t.watchmode_id);
+    const key = streamingTitelKennung(t);
     const entdeckenTitel = map.get(key) || {};
     const katalogGenres = vereinigeListen(
       entdeckenTitel.genres ?? entdeckenTitel.genre,
@@ -497,6 +502,9 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
     );
     const neutral = {
       watchmode_id: t.watchmode_id,
+      streaming_id: t.streaming_id ?? entdeckenTitel.streaming_id,
+      motn_id: t.motn_id ?? entdeckenTitel.motn_id,
+      streaming_aliases: t.streaming_aliases ?? entdeckenTitel.streaming_aliases,
       titel: t.titel ?? entdeckenTitel.titel,
       jahr: t.jahr ?? entdeckenTitel.jahr,
       /* Der neutrale Entdecken-Datensatz traegt den Werktyp explizit. Ein
@@ -534,7 +542,8 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
   }
 
   const meine = [], entdecken = [];
-  for (const t of map.values()) {
+  const motn = motnEnvelope(streaming?.motn, bekanntAlt.motn, entdeckenAlt.motn);
+  for (const t of applyMotnStreaming([...map.values()], motn)) {
     const zuordnung = ordneExternenTitelZu(t, kandidatenFuer(t));
     if (zuordnung.status === "matched") {
       const film = ergaenzeFehlendeExterneKennungen(zuordnung.match, t);
@@ -550,6 +559,12 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
       }
       meine.push({
         ...filmMitFakten,
+        streaming_id: t.streaming_id,
+        streaming_aliases: t.streaming_aliases,
+        motn_id: t.motn_id,
+        motn_zugaenge: t.motn_zugaenge,
+        motn_checked_at: t.motn_checked_at,
+        motn_source_url: t.motn_source_url,
         genres: [...genreMap.values()],
         beschreibung: filmMitFakten.beschreibung || filmMitFakten.description || t.beschreibung || t.description || null,
         laufzeit_minuten: filmMitFakten.laufzeit_minuten ?? filmMitFakten.runtimeMinutes ?? t.laufzeit_minuten ?? t.runtimeMinutes ?? null,
@@ -583,6 +598,7 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
     katalog_stand_entdecken: entdeckenAlt.katalog_stand ?? null,
     katalog_stand_konsistent: !!bekanntAlt.katalog_stand
       && bekanntAlt.katalog_stand === entdeckenAlt.katalog_stand,
+    motn,
   };
   /* Der geladene Rohkatalog, der erkannte Mediathekbestand und die daraus
      gebildete Entdecken-Ansicht sind verschiedene Mengen. `entdeckenUmfang`

@@ -55,3 +55,7 @@ verify_jwt = false
 # apikey und Bearer-Header selbst bytegenau gegen die vorhandenen
 # SUPABASE_SECRET_KEYS beziehungsweise den Legacy-Service-Role-Key.
 verify_jwt = false
+
+[functions.streaming-motn]
+# Internal job: both headers must match an existing server service key.
+verify_jwt = false

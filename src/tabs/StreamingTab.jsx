@@ -21,7 +21,7 @@ import {
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
-import { projiziereStreamingAnsichten } from "../lib/streamingProjection.js";
+import { projiziereStreamingAnsichten, streamingTitelKennung as streamingId, gleicheStreamingTitel, streamingStatus } from "../lib/streamingProjection.js";
 import { formatTitleFactsDate } from "../lib/titleFacts.js";
 import "../styles/library-followup.css";
 
@@ -58,7 +58,7 @@ export function bestaetigteMediathekNavigationId({ titel, master, statusMap, bek
   /* Der bestehende Resolver bleibt die Wahrheit für starke Watchmode-/IMDb-/
      TMDb-Identitäten. Eine bloß gespeicherte, inzwischen fremde ID genügt nie. */
   const abgeglichen = gleicheMediathekStatusAb(statusMap, [titel], filme);
-  const kandidat = findeId(mediathekIdVon(abgeglichen?.[titel?.watchmode_id]));
+  const kandidat = findeId(mediathekIdVon(abgeglichen?.[streamingId(titel)]));
   if (!kandidat) return null;
   const gleicheKennung = [
     [titel?.watchmode_id, kandidat.watchmode_id],
@@ -192,14 +192,14 @@ export function StreamingTab({
      External-ID-Abgleich und steht deshalb auch ohne ursprüngliche externe
      Kennung des Masterwerks sofort für Alles und Neu bereit. */
   const bekannteMediathekIds = useMemo(() => new Map((bekannt?.titel || [])
-    .filter((titel) => titel?.watchmode_id != null && (typeof titel?.id === "string" || typeof titel?.id === "number"))
-    .map((titel) => [String(titel.watchmode_id), titel.id])), [bekannt]);
+    .filter((titel) => streamingId(titel) != null && (typeof titel?.id === "string" || typeof titel?.id === "number"))
+    .map((titel) => [String(streamingId(titel)), titel.id])), [bekannt]);
   const bekannteMediathekIdFuer = useCallback(
-    (titel) => titel?.watchmode_id == null ? null : bekannteMediathekIds.get(String(titel.watchmode_id)) ?? null,
+    (titel) => streamingId(titel) == null ? null : bekannteMediathekIds.get(String(streamingId(titel))) ?? null,
     [bekannteMediathekIds],
   );
   const mediathekIdFuer = useCallback((titel) => (
-    mediathekIdVon(entdeckenStatus[titel?.watchmode_id]) ?? bekannteMediathekIdFuer(titel)
+    mediathekIdVon(streamingStatus(entdeckenStatus, titel)) ?? bekannteMediathekIdFuer(titel)
   ), [entdeckenStatus, bekannteMediathekIdFuer]);
   const bestaetigteMediathekIdFuer = useCallback((titel) => {
     return bestaetigteMediathekNavigationId({
@@ -216,7 +216,7 @@ export function StreamingTab({
     if (typeof id !== "string" || !id) return null;
     const gespeichert = await schreibeEntdeckenStatus((prev) => ({
       ...prev,
-      [t.watchmode_id]: mitMediathekEintrag(prev[t.watchmode_id], t, id),
+      [streamingId(t)]: mitMediathekEintrag(prev[streamingId(t)], t, id),
     }));
     return gespeichert === false || gespeichert == null ? null : id;
   }, [schreibeEntdeckenStatus]);
@@ -269,13 +269,13 @@ export function StreamingTab({
   const setzeStatus = async (t, wert) => {
     const gespeichert = await schreibeEntdeckenStatus((prev) => {
       const next = { ...prev };
-      const roh = next[t.watchmode_id];
+      const roh = next[streamingId(t)];
       const basis = roh && typeof roh === "object" ? roh : {};
       if (statusVon(roh) === wert) {
         const { status: _status, gesehen_am: _gesehenAm, ...rest } = basis;
-        if (Object.keys(rest).length) next[t.watchmode_id] = rest;
-        else delete next[t.watchmode_id];
-      } else next[t.watchmode_id] = wert === "gesehen"
+        if (Object.keys(rest).length) next[streamingId(t)] = rest;
+        else delete next[streamingId(t)];
+      } else next[streamingId(t)] = wert === "gesehen"
         ? { ...basis, ...neuerGesehenEintrag(t) }
         : { ...basis, status: wert };
       return next;
@@ -283,38 +283,38 @@ export function StreamingTab({
     return gespeichert !== false && gespeichert != null;
   };
   const toggleGesehen = async (t) => {
-    const roh = entdeckenStatusRef.current[t.watchmode_id];
+    const roh = streamingStatus(entdeckenStatusRef.current, t);
     const bekannteId = bekannteMediathekIdFuer(t);
     if (statusVon(roh) === "gesehen" || mediathekIdVon(roh) || bekannteId) {
       return await schreibeEntdeckenStatus((prev) => {
-        const aktuell = prev?.[t.watchmode_id];
+        const aktuell = prev?.[streamingId(t)];
         const mediathekId = mediathekIdVon(aktuell) ?? bekannteId;
         const mitSichererZuordnung = mediathekIdVon(aktuell) != null || mediathekId == null
           ? prev
-          : { ...(prev || {}), [t.watchmode_id]: mitMediathekEintrag(aktuell, t, mediathekId) };
+          : { ...(prev || {}), [streamingId(t)]: mitMediathekEintrag(aktuell, t, mediathekId) };
         return toggleGesehenInStatus(mitSichererZuordnung, t);
       });
     }
-    setExpandedId("e" + t.watchmode_id);
-    setGesehenFrage(t.watchmode_id);
+    setExpandedId("e" + streamingId(t));
+    setGesehenFrage(streamingId(t));
   };
 
   const uebernehmeGesehen = async (t) => {
     if (gesehenSpeichertRef.current) return false;
     gesehenSpeichertRef.current = true;
-    setGesehenSpeichert(t.watchmode_id);
+    setGesehenSpeichert(streamingId(t));
     try {
       const id = await mitBestaetigterStringId(() => addFilm?.({
         titel: t.titel, originaltitel: t.titel, jahr: t.jahr ?? null, jahr_bis: null,
         typ: istStreamingSerie(t) ? "serie" : "film", quelle: "must_watch",
         kategorie: null, bewertet_von: null, bewertung: null, genre: t.genres || [], tags: [],
-        begruendung: "", notiz: "", status: "gesetzt", watchmode_id: t.watchmode_id,
+        begruendung: "", notiz: "", status: "gesetzt", watchmode_id: t.watchmode_id, streaming_id: t.streaming_id, motn_id: t.motn_id,
         ...(t.imdb_id ? { imdb_id: t.imdb_id } : {}),
         ...(t.tmdb_id ? { tmdb_id: t.tmdb_id } : {}),
       }), async (bestaetigteId) => {
         const gespeichert = await schreibeEntdeckenStatus((prev) => ({
           ...prev,
-          [t.watchmode_id]: mitMediathekEintrag({ ...(prev[t.watchmode_id] && typeof prev[t.watchmode_id] === "object" ? prev[t.watchmode_id] : {}), ...neuerGesehenEintrag(t) }, t, bestaetigteId),
+          [streamingId(t)]: mitMediathekEintrag({ ...(prev[streamingId(t)] && typeof prev[streamingId(t)] === "object" ? prev[streamingId(t)] : {}), ...neuerGesehenEintrag(t) }, t, bestaetigteId),
         }));
         return gespeichert !== false && gespeichert != null;
       });
@@ -327,7 +327,7 @@ export function StreamingTab({
   const markiereNurGesehen = async (t) => {
     if (gesehenSpeichertRef.current) return false;
     gesehenSpeichertRef.current = true;
-    setGesehenSpeichert(t.watchmode_id);
+    setGesehenSpeichert(streamingId(t));
     try {
       const ok = await setzeStatus(t, "gesehen");
       if (ok) setGesehenFrage(null);
@@ -387,7 +387,7 @@ export function StreamingTab({
   const vollKatalogTitel = projektion.alleTitel;
   const neuIdSet = useMemo(() => new Set((streamingNeu?.neueIds || []).map(String)), [streamingNeu]);
   const neuTitel = useMemo(() => streamingNeu?.status === "ready"
-    ? projektion.ausgewaehlt.filter((titel) => neuIdSet.has(String(titel.watchmode_id)))
+    ? projektion.ausgewaehlt.filter((titel) => neuIdSet.has(String(streamingId(titel))))
     : [], [projektion.ausgewaehlt, neuIdSet, streamingNeu?.status]);
   const filterQuelleE = ansicht === "neu" ? neuTitel : projektion.ausgewaehlt;
 
@@ -410,7 +410,7 @@ export function StreamingTab({
 
   const statusAnzahlenE = useMemo(() => {
     return filterQuelleE.reduce((anzahl, titel) => {
-      const status = entdeckenStatus[titel.watchmode_id];
+      const status = streamingStatus(entdeckenStatus, titel);
       return anzahl + (statusVon(status) === "gesehen" ? 1 : 0);
     }, 0);
   }, [filterQuelleE, entdeckenStatus]);
@@ -427,9 +427,9 @@ export function StreamingTab({
     if (ansicht === "entdecken" && !entdeckenDa) return [];
     if (ansicht === "neu" && streamingNeu?.status !== "ready") return [];
     let l = filterQuelleE.filter((t) => (
-      ansicht === "entdecken" && fokusOverride?.art === "entdecken" && String(t.watchmode_id) === fokusOverride.ref
+      ansicht === "entdecken" && fokusOverride?.art === "entdecken" && String(streamingId(t)) === fokusOverride.ref
     ) || (dienstOk(t) && plattformOkE(t)));
-    if (statusFilterE === "gesehen") l = l.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen");
+    if (statusFilterE === "gesehen") l = l.filter((t) => statusVon(streamingStatus(entdeckenStatus, t)) === "gesehen");
     if (buchstabeE) l = l.filter((t) => streamingAnfangsbuchstabe(t.titel) === buchstabeE);
     if (genreFilterSichtbarE && genreE) l = l.filter((t) => (t.genres || []).some((genre) => norm(genre) === genreE));
     if (streamingJahrzehntBereich(dekadeE)) l = l.filter((t) => passtInJahrzehntMitKulanz(t.jahr, dekadeE));
@@ -444,8 +444,8 @@ export function StreamingTab({
   const sichtbareKatalogTitel = useMemo(() => {
     const basis = katalogListe.slice(0, sichtbarE);
     if (ansicht !== "entdecken" || fokusOverride?.art !== "entdecken") return basis;
-    const ziel = katalogListe.find((titel) => String(titel.watchmode_id) === fokusOverride.ref);
-    if (!ziel || basis.some((titel) => String(titel.watchmode_id) === fokusOverride.ref)) return basis;
+    const ziel = katalogListe.find((titel) => String(streamingId(titel)) === fokusOverride.ref);
+    if (!ziel || basis.some((titel) => String(streamingId(titel)) === fokusOverride.ref)) return basis;
     /* Der konkrete Navigationsauftrag muss auch dann ein DOM-Ziel erhalten,
        wenn seine sortierte Position hinter der 200er-Paginierungsgrenze liegt.
        Nur diese eine Karte wird ergänzt; der übrige Vollkatalog bleibt billig. */
@@ -455,7 +455,7 @@ export function StreamingTab({
   const dekadenP = useMemo(() => streamingJahrzehnte(bekannt?.titel || []), [bekannt]);
   const dekadenE = useMemo(() => streamingJahrzehnte(filterQuelleE), [filterQuelleE]);
 
-  const gemerkt = (t) => merkliste.some((m) => m.watchmode_id === t.watchmode_id);
+  const gemerkt = (t) => merkliste.some((m) => gleicheStreamingTitel(m,t));
   const pinButton = (t) => {
     const gepinnt = isEntdeckenPinned(recommendationPins, t);
     const titel = t.titel || t.title || "Titel";
@@ -472,7 +472,7 @@ export function StreamingTab({
   const katalogAktionen = (t) => {
     const gepinnt = isEntdeckenPinned(recommendationPins, t);
     const titel = t.titel || t.title || "Titel";
-    const gesehen = statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen";
+    const gesehen = statusVon(streamingStatus(entdeckenStatus, t)) === "gesehen";
     return <TitelKartenAktionen
       pinAktiv={gepinnt}
       pinLabel={gepinnt ? `${titel} vom Pinboard lösen` : `${titel} am Pinboard anpinnen`}
@@ -538,6 +538,12 @@ export function StreamingTab({
           { id: "entdecken", label: "Alles", badge: entdeckenVollstaendig && auswahlGeladen ? (ansicht === "entdecken" ? katalogListe.length : allesAnzahlFuerAuswahl) : undefined },
           { id: "neu", label: "Neu", badge: streamingNeu?.status === "ready" ? (ansicht === "neu" ? katalogListe.length : neuAnzahlFuerAuswahl) : undefined },
         ]} />
+
+      {(bekannt?.motn?.offers?.length || entdecken?.motn?.offers?.length) > 0 && (
+        <p style={{ color: T.rauch, fontSize: 12, margin: "12px 0" }}>
+          Streamingdaten ergänzt durch <a href="https://www.movieofthenight.com/about/api" target="_blank" rel="noopener noreferrer">Movie of the Night</a>.
+        </p>
+      )}
 
       {!datenDa && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
@@ -773,17 +779,17 @@ export function StreamingTab({
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sichtbareKatalogTitel.map((t) => (
-              <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus kd-streaming-neu-karte kd-titelaktionskarte" tabIndex={-1}
-                data-streaming-suchtreffer={ansicht === "entdecken" ? `entdecken:${t.watchmode_id}` : undefined}
-                onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
+              <div key={streamingId(t)} className="kd-entdecken-karte kd-suchfokus kd-streaming-neu-karte kd-titelaktionskarte" tabIndex={-1}
+                data-streaming-suchtreffer={ansicht === "entdecken" ? `entdecken:${streamingId(t)}` : undefined}
+                onClick={() => setExpandedId(expandedId === "e" + streamingId(t) ? null : "e" + streamingId(t))}
                 style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "16px", cursor: "pointer" }}>
                 <div className="kd-entdecken-kopf">
                   <div className="kd-entdecken-inhalt">
                     <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2 }}>
                       {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
-                      {(entdeckenStatus[t.watchmode_id] || bekannteMediathekIdFuer(t)) && (
+                      {(streamingStatus(entdeckenStatus, t) || bekannteMediathekIdFuer(t)) && (
                         <span style={{ ...mono, color: T.kartenTextWeich, marginLeft: 8 }}>
-                          {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
+                          {statusVon(streamingStatus(entdeckenStatus, t)) === "gesehen" ? "gesehen" : ""}
                           {bestaetigteMediathekIdFuer(t) && typeof onEintragKlick === "function" ? (
                             <button type="button" className="kd-streaming-mediathek-link"
                               onClick={(event) => {
@@ -791,10 +797,10 @@ export function StreamingTab({
                                 const zielId = bestaetigteMediathekIdFuer(t);
                                 if (zielId != null) onEintragKlick(zielId);
                               }}>
-                              {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek · Zum Eintrag
+                              {statusVon(streamingStatus(entdeckenStatus, t)) === "gesehen" ? " · " : ""}in deiner Mediathek · Zum Eintrag
                             </button>
                           ) : bestaetigteMediathekIdFuer(t)
-                            ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek`
+                            ? `${statusVon(streamingStatus(entdeckenStatus, t)) === "gesehen" ? " · " : ""}in deiner Mediathek`
                             : ""}
                         </span>
                       )}
@@ -805,35 +811,35 @@ export function StreamingTab({
                   <DienstBadges className="kd-entdecken-dienste" dienste={t.dienste} webUrls={t.web_urls}
                     auswahl={auswahl} kompakt={false} />
                 </div>
-                {gesehenFrage === t.watchmode_id && (
+                {gesehenFrage === streamingId(t) && (
                   <div className="kd-entdecken-frage" onClick={(e) => e.stopPropagation()}>
                     <strong>Auch als unbewerteten Eintrag in die Mediathek übernehmen?</strong>
                     <div>
                       <button style={btnStyle(true)} disabled={gesehenSpeichert != null} onClick={() => void uebernehmeGesehen(t)}>
-                        {gesehenSpeichert === t.watchmode_id ? "Speichert …" : "Ja, in die Mediathek"}
+                        {gesehenSpeichert === streamingId(t) ? "Speichert …" : "Ja, in die Mediathek"}
                       </button>
                       <button style={btnStyle(false)} disabled={gesehenSpeichert != null} onClick={() => void markiereNurGesehen(t)}>Nur als gesehen markieren</button>
                       <button style={btnStyle(false)} disabled={gesehenSpeichert != null} onClick={() => setGesehenFrage(null)}>Abbrechen</button>
                     </div>
                   </div>
                 )}
-                {expandedId === "e" + t.watchmode_id && (
+                {expandedId === "e" + streamingId(t) && (
                   <div style={{ marginTop: 6, fontSize: 12, color: T.kartenTextWeich }} onClick={(e) => e.stopPropagation()}>
                     <TitleFactsDetails titel={t} />
-                    {addFilm && formFuer !== t.watchmode_id && !mediathekIdFuer(t) && (
+                    {addFilm && formFuer !== streamingId(t) && !mediathekIdFuer(t) && (
                       <button style={{ ...btnStyle(true), padding: "6px 11px", marginTop: 8 }}
-                        onClick={() => setFormFuer(t.watchmode_id)}>
-                        {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "In Mediathek übernehmen" : "Eintrag erstellen"}
+                        onClick={() => setFormFuer(streamingId(t))}>
+                        {statusVon(streamingStatus(entdeckenStatus, t)) === "gesehen" ? "In Mediathek übernehmen" : "Eintrag erstellen"}
                       </button>
                     )}
-                    {formFuer === t.watchmode_id && (
+                    {formFuer === streamingId(t) && (
                       <div style={{ marginTop: 8 }}>
                         <FilmForm startOffen
                           kennungenBearbeitbar={false}
                           typOptionen={istStreamingSerie(t) ? ["serie"] : ["film"]}
                           initial={{
                             titel: t.titel, jahr: t.jahr, quelle: "must_watch",
-                            genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id,
+                            genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id, streaming_id: t.streaming_id, motn_id: t.motn_id,
                             imdb_id: t.imdb_id, tmdb_id: t.tmdb_id,
                           }}
                           onAdd={async (f) => markiereAlsErstellt(t, await addFilm(f))}
