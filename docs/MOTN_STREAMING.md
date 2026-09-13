@@ -55,3 +55,28 @@ Die Preis-FAQ erlaubt dauerhafte lokale Zwischenspeicherung und kommerzielle
 Nutzung auch im kostenlosen Tarif. Die Quellenattribution erscheint im
 Streamingbereich; es werden keine persönlichen Bewertungen oder Nutzerprofile
 an MotN übertragen.
+
+## Betriebsnachweis vom 13.09.2026
+
+Der erste 14-Tage-Zeitraum bis 14:51 UTC ist vollständig verarbeitet:
+1.338 Angebotsänderungen, beide Cursor abgeschlossen, null übersprungene
+Datensätze. Die Serverfunktion v2 benötigte dafür 54 MotN-Anfragen; zusammen
+mit den vier vorherigen Vergleichsabfragen sind 58 im gemeinsamen Ledger
+gebucht. Weitere Browserbesuche erzeugen keine Anbieteranfrage.
+
+Der tatsächliche kombinierte REST-Leseweg lieferte beide Kataloge erfolgreich
+(ca. 1,4 MB / 8,0 MB; bei dieser Messung 1,3 / 1,9 Sekunden). Die reine
+Produktprojektion bestätigt je genau einen Eintrag für Kung Fu Panda 2 und
+The Road to El Dorado, beide bei Disney+ und innerhalb ihrer Neu-Frist.
+Netflix ist bei Kung Fu Panda 2 entfernt. Der zweite Titel wird über seinen
+eindeutigen Originaltitel mit Jahr und Filmtyp verbunden.
+
+Die vollständige lokale npm-Testsuite, die gezielten MotN-Tests, zehn lokale
+PostgreSQL-Prüfungen und sechs mobile Browserfälle in Chromium/WebKit sind
+geprüft. Neue Rollenrechte wurden zusätzlich direkt auf Supabase positiv
+und negativ gelesen: aktives Konto sieht den kombinierten Katalog; ohne
+aktive Kontofreigabe sind beide Mengen leer. Browser dürfen weder Angebote
+schreiben noch Import oder Anfragelog aufrufen. Der ältere allgemeine
+`npm run test:rls` stoppte schon vor Testwrites, weil die hinterlegten
+Zugangsdaten für `testa` nicht mehr anmelden können; dieser ältere Gesamttest
+wird nicht als bestanden ausgewiesen.
