@@ -50,6 +50,20 @@ export function useStreamingNeuController({
     fristenbuch: aktivesFristenbuch,
     now: jetzt,
   }), [aktiverBeleg, aktiverUebergang, aktivesFristenbuch, auswahl, auswahlGeladen, jetzt]);
+  /* Der Seiten-RPC erhaelt ausschliesslich die bereits bestehenden
+     Fristanker. Cachetreffer und Seitenwechsel erzeugen hier keine neue Zeit
+     und koennen das 14-Tage-Fenster deshalb nicht verlaengern. */
+  const streamingPagePersonal = useMemo(() => Object.freeze({
+    newEntries: Object.freeze((aktivesFristenbuch?.eintraege || []).map((entry) => Object.freeze({
+      id: entry.id,
+      fensterBeginn: entry.fensterBeginn,
+      verbrauchtBis: entry.verbrauchtBis,
+    }))),
+    legacyNew: Object.freeze((aktiverUebergang?.neu || []).map((entry) => Object.freeze({
+      id: entry.id,
+      firstSeenAt: entry.firstSeenAt,
+    }))),
+  }), [aktiverUebergang, aktivesFristenbuch]);
 
   useEffect(() => {
     setBeleg(null);
@@ -125,5 +139,5 @@ export function useStreamingNeuController({
     return () => window.clearTimeout(timer);
   }, [streamingNeu.naechsterAblauf]);
 
-  return { streamingNeu, uebernehmeVollkatalog };
+  return { streamingNeu, streamingPagePersonal, uebernehmeVollkatalog };
 }

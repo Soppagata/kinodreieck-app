@@ -1,7 +1,68 @@
 /* Lokaler Gesehen- und Mediathekstatus für Streamingtitel. Alte String-Status
    bleiben lesbar; historische Zusatzfelder werden beim Umschalten bewahrt. */
 import { streamingTitelKennung, streamingStatus } from "./streamingProjection.js";
-import { ordneExternenTitelZu } from "./externalTitleIdentity.js";
+import {
+  externeTitelKennungen,
+  normalisiereExternenTitel,
+  ordneExternenTitelZu,
+} from "./externalTitleIdentity.js";
+
+const mediathekIndexCache = new WeakMap();
+
+/* Der Index veraendert die Matchentscheidung nicht. Er begrenzt lediglich die
+   Kandidaten auf Eintraege, die ueber einen normalisierten Titel oder eine
+   starke ID ueberhaupt matchen beziehungsweise einen Konflikt belegen koennen. */
+export function erstelleMediathekIdentitaetsIndex(master = []) {
+  const filme = Array.isArray(master) ? master : [];
+  if (mediathekIndexCache.has(filme)) return mediathekIndexCache.get(filme);
+  const byTitle = new Map(), byStrongId = new Map(), byMasterId = new Map(), order = new Map();
+  const add = (map, key, film) => {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(film);
+  };
+  filme.forEach((film, index) => {
+    order.set(film, index);
+    if (film?.id != null) byMasterId.set(String(film.id), film);
+    for (const title of [film?.titel, film?.title, film?.originaltitel, film?.originalTitle]) {
+      add(byTitle, normalisiereExternenTitel(title), film);
+    }
+    for (const [namespace, value] of Object.entries(externeTitelKennungen(film))) {
+      add(byStrongId, `${namespace}:${value}`, film);
+    }
+  });
+  const candidates = (title) => {
+    const found = new Set();
+    for (const value of [title?.titel, title?.title, title?.originaltitel, title?.originalTitle]) {
+      for (const film of byTitle.get(normalisiereExternenTitel(value)) || []) found.add(film);
+    }
+    for (const [namespace, value] of Object.entries(externeTitelKennungen(title))) {
+      for (const film of byStrongId.get(`${namespace}:${value}`) || []) found.add(film);
+    }
+    return [...found].sort((a, b) => order.get(a) - order.get(b));
+  };
+  const index = Object.freeze({ filme, byMasterId, candidates });
+  mediathekIndexCache.set(filme, index);
+  return index;
+}
+
+export function ordneStreamingPageTitelZu(title, indexOrMaster = []) {
+  const index = indexOrMaster?.candidates
+    ? indexOrMaster : erstelleMediathekIdentitaetsIndex(indexOrMaster);
+  const result = ordneExternenTitelZu(title, index.candidates(title));
+  return result.status === "matched" ? result.match : null;
+}
+
+export function verknuepfeStreamingPageMitMediathek(items, master = []) {
+  const index = erstelleMediathekIdentitaetsIndex(master);
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const film = ordneStreamingPageTitelZu(item, index);
+    if (film?.id != null) return { ...item, library_id: film.id };
+    if (!Object.prototype.hasOwnProperty.call(item || {}, "library_id")) return item;
+    const { library_id: _unbestaetigt, ...rest } = item;
+    return rest;
+  });
+}
 
 export function statusVon(wert) {
   if (typeof wert === "string") return wert;
@@ -43,14 +104,15 @@ export function ohneMediathekEintrag(rohStatus) {
    Verbindung ist orthogonal zu „gesehen“: Ein Bibliothekseintrag allein ist
    kein Beleg dafür, dass der Film bereits angesehen wurde. */
 export function gleicheMediathekStatusAb(statusMap, titel, master) {
-  const filme = Array.isArray(master) ? master : [];
+  const index = erstelleMediathekIdentitaetsIndex(master);
+  const filme = index.filme;
   let next = statusMap || {};
   const findeFilm = (t) => {
     if (t.motn_id) {
-      const match = ordneExternenTitelZu(t,filme);
+      const match = ordneExternenTitelZu(t, index.candidates(t));
       return match.status === "matched" && match.matchedBy === "strong-id" ? match.match : null;
     }
-    return filme.find((film) => (
+    return index.candidates(t).find((film) => (
       t.watchmode_id != null && film.watchmode_id != null
       && String(film.watchmode_id) === String(t.watchmode_id)
     ) || (t.imdb_id && film.imdb_id && String(film.imdb_id) === String(t.imdb_id))
@@ -74,9 +136,9 @@ export function gleicheMediathekStatusAb(statusMap, titel, master) {
   for (const [watchmodeId, roh] of Object.entries(next)) {
     const mediathekId = mediathekIdVon(roh);
     if (!mediathekId) continue;
-    const vorhanden = filme.some((film) => (
-      mediathekId !== true && film.id != null && String(film.id) === String(mediathekId)
-    ) || String(film.watchmode_id) === String(watchmodeId));
+    const vorhanden = (mediathekId !== true && index.byMasterId.has(String(mediathekId)))
+      || index.candidates({ watchmode_id: watchmodeId }).some((film) =>
+        String(film.watchmode_id) === String(watchmodeId));
     if (vorhanden) continue;
     if (next === statusMap) next = { ...(statusMap || {}) };
     const bereinigt = ohneMediathekEintrag(roh);

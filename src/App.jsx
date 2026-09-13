@@ -106,8 +106,11 @@ import { RadarSubscriptionPreview } from "./components/RadarSubscriptionPreview.
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { useEntdeckenPins } from "./controllers/useEntdeckenPins.js";
 import { useStreamingNeuController } from "./controllers/useStreamingNeuController.js";
+import { useStreamingPageController } from "./controllers/useStreamingPageController.js";
 import { useVokabularController } from "./controllers/useVokabularController.js";
 import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
+import { verknuepfeStreamingPageMitMediathek } from "./lib/staffeln.js";
+import { buildStreamingPageLibrary, buildStreamingPagePersonal } from "./lib/streamingPageContext.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
@@ -285,7 +288,7 @@ export default function App() {
      Kontos sichtbar. */
   const sichtbareAuswahl = auswahlKontextKey === streamingKontextKey ? auswahl : [];
   const sichtbareAuswahlGeladen = auswahlKontextKey === streamingKontextKey && auswahlGeladen;
-  const { streamingNeu, uebernehmeVollkatalog } = useStreamingNeuController({
+  const { streamingNeu, streamingPagePersonal, uebernehmeVollkatalog } = useStreamingNeuController({
     kontextKey: streamingKontextKey,
     auswahl: sichtbareAuswahl,
     auswahlGeladen: sichtbareAuswahlGeladen,
@@ -322,6 +325,7 @@ export default function App() {
   const streamingRohRef = useRef(null);
   const streamingBekanntLaufRef = useRef(null);
   const streamingEntdeckenLaufRef = useRef(null);
+  const streamingLegacyFallbackRef = useRef(null);
 
   const saveZeitgrenze = useCallback(async (v) => {
     setZeitgrenze(v);
@@ -828,6 +832,31 @@ export default function App() {
     mustwatchMasterIds,
   } = useMustwatchController({ master, masterRef, setErr });
 
+  /* Der Seitenvertrag uebertraegt nur die fuer Identitaet und Filterung
+     benoetigten Felder. Bewertungswerte, Notizen und sonstige persoenliche
+     Inhalte bleiben ausserhalb dieser Kataloganfrage. */
+  const streamingPageLibrary = useMemo(() => buildStreamingPageLibrary(master), [master]);
+  const streamingPagePersonalRequest = useMemo(() => buildStreamingPagePersonal({
+    status: entdeckenStatus,
+    mustWatchIds: mustwatchMasterIds,
+    master,
+    newEntries: streamingPagePersonal.newEntries,
+    legacyNew: streamingPagePersonal.legacyNew,
+  }), [entdeckenStatus, master, mustwatchMasterIds, streamingPagePersonal]);
+  const streamingPageBereit = remoteKontoAktiv && bootDone && snapshotFreigabe
+    && sichtbareAuswahlGeladen;
+  const { streamingPage, onStreamingPageQuery } = useStreamingPageController({
+    tab,
+    enabled: streamingPageBereit,
+    accountKey: streamingKontextKey,
+    services: sichtbareAuswahl,
+    library: streamingPageLibrary,
+    personal: streamingPagePersonalRequest,
+    revision: `${streamingKontextKey}:${storageOwnerKennung()}`,
+    legacyFallback: () => streamingLegacyFallbackRef.current?.(),
+    mapItems: (items, pageContext) => verknuepfeStreamingPageMitMediathek(items, pageContext.library),
+  });
+
   const {
     artikelListe, artikelListeRef, artikelGeladen, artikelGespeichertAm,
     schreibeArtikel, transaktionArtikel,
@@ -1076,11 +1105,14 @@ export default function App() {
   const springeZuFilm = useCallback((ref) => { setMediathekFokus(ref); setExpandedId("b" + ref); navigiere("mediathek"); }, [navigiere]);
   const springeZuStreaming = useCallback(async (fokus) => {
     const lauf = ++streamingSprungLaufRef.current; navigiere("streaming");
-    /* Erst den Vollkatalog übernehmen; sonst verschiebt sein Render die bereits fokussierte Snapshot-Karte. */
-    try { await ladeStreamingDateienRef.current?.(true); } catch { /* Tab bleibt nutzbar */ }
+    /* Der progressive Pfad holt das Ziel ueber seinen gebundenen Query. Nur ein
+       kontrollierter Legacyzustand darf noch den Vollkatalog vorziehen. */
+    if (!streamingPageBereit) {
+      try { await ladeStreamingDateienRef.current?.(true); } catch { /* Tab bleibt nutzbar */ }
+    }
     if (streamingSprungLaufRef.current !== lauf) return;
     setStreamingFokus({ ...fokus, auftrag: lauf });
-  }, [navigiere]);
+  }, [navigiere, streamingPageBereit]);
   const springeZuMustwatchRef = useCallback((verknuepfung, eintrag) => {
     const plan = planeMustwatchSprung(verknuepfung, eintrag, master);
     if (plan?.bereich === "mediathek") return springeZuFilm(plan.fokus);
@@ -1497,14 +1529,15 @@ export default function App() {
   }, [snapshotFreigabe, master, reportError, resolveError, uebernehmeVollkatalog,
     sichtbareAuswahl, sichtbareAuswahlGeladen]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
+  streamingLegacyFallbackRef.current = () => ladeStreamingDateien(true);
   /* Dashboard und „Mein Programm" leben zuerst aus dem leichten Bekannt-
      Katalog. Sobald Streaming selbst offen ist, wird der Vollkatalog geladen:
      bis dahin bleibt die Alles-Zahl verborgen, danach ist sie echt. */
   useEffect(() => {
-    if (remoteKontoAktiv && bootDone && snapshotFreigabe && tab === "streaming") {
+    if (!streamingPageBereit && remoteKontoAktiv && bootDone && snapshotFreigabe && tab === "streaming") {
       void ladeStreamingDateien(true);
     }
-  }, [remoteKontoAktiv, bootDone, snapshotFreigabe, tab, ladeStreamingDateien]);
+  }, [streamingPageBereit, remoteKontoAktiv, bootDone, snapshotFreigabe, tab, ladeStreamingDateien]);
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
@@ -1903,6 +1936,8 @@ export default function App() {
 
         {remoteKontoAktiv && tab === "streaming" && (
           <StreamingTab
+            streamingPage={streamingPage}
+            onStreamingPageQuery={onStreamingPageQuery}
             onEintragKlick={springeZuFilm}
             bekannt={streamingBekannt} entdecken={streamingEntdecken}
             addFilm={addFilm} master={master} updateFilm={updateFilm}
