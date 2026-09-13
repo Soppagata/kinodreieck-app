@@ -6,6 +6,10 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { vereinigeStreamingTitel } from "./src/lib/streamingProjection.js";
 import { applyMotnStreaming, motnEnvelope } from "./src/lib/streamingMotn.js";
+import { aktualisiereStreamingNeuFristenbuch, projiziereStreamingNeu,
+  STREAMING_NEU_DAUER_MS } from "./src/lib/streamingNeu.js";
+import { normalisiereExternenTitel, normalisiereExterneTitelkennung,
+  ordneExternenTitelZu } from "./supabase/functions/_shared/externalTitleIdentity.js";
 
 const configured = spawnSync("pg_config", ["--bindir"], { encoding: "utf8" });
 const candidates = [process.env.KD_TEST_PG_BIN, "/Applications/Postgres.app/Contents/Versions/17/bin",
@@ -59,6 +63,10 @@ function check(name, fn) { fn(); checks += 1; console.log(`✓ ${name}`); }
 const now = Date.now();
 const recent = new Date(now - 24 * 3600_000).toISOString();
 const old = new Date(now - 14 * 24 * 3600_000).toISOString();
+const expiredStart = now - STREAMING_NEU_DAUER_MS - 2 * 3600_000;
+const consumedWithin = expiredStart + 2 * 24 * 3600_000;
+const oldWindow = now - 30 * 24 * 3600_000;
+const recentMillis = now - 24 * 3600_000;
 const stand = new Date(now - 3600_000).toISOString();
 const titles = Array.from({ length: 218 }, (_, index) => ({
   watchmode_id: 1000 + index, titel: `Film ${String(index).padStart(3, "0")}`, originaltitel: `Movie ${index}`,
@@ -80,11 +88,39 @@ titles.push({ watchmode_id: 5005, titel: "Widerspruch", jahr: 2021, typ: "movie"
   imdb_id: "tt8000005", tmdb_id: 8005 });
 titles.push({ watchmode_id: 5006, titel: "Sort 10", jahr: 2022, typ: "movie", dienste: ["Netflix"] });
 titles.push({ watchmode_id: 5007, titel: "Sort 2", jahr: 2022, typ: "movie", dienste: ["Netflix"] });
+titles.push({ watchmode_id: 5008, titel: "Verbrauchter Wiederzugang", jahr: 2022, typ: "movie", dienste: ["Disney+"],
+  dienst_diffs: [{ dienst: "Disney+", vorher: false, nachher: true, erkannt_am: new Date(consumedWithin).toISOString() }] });
+titles.push({ watchmode_id: 5009, titel: "Echter neuer Zugang", jahr: 2022, typ: "movie", dienste: ["Disney+"],
+  dienst_diffs: [{ dienst: "Disney+", vorher: false, nachher: true, erkannt_am: new Date(recentMillis).toISOString() }] });
+titles.push({ watchmode_id: 5010, titel: "Alter MotN Vorrang", jahr: 2022, typ: "movie", dienste: ["Disney+"],
+  motn_zugaenge: [{ dienst: "Disney+", erkannt_am: new Date(expiredStart).toISOString() }] });
+titles.push({ streaming_id: "alias-only", streaming_aliases: ["historic-alias"], titel: "Alias Only", jahr: 2022,
+  typ: "movie", dienste: ["Netflix"] });
+titles.push({ watchmode_id: 5012, titel: "Straße Æon Œuvre", jahr: 2022, typ: "movie", dienste: ["Netflix"] });
+titles.push({ watchmode_id: 5013, titel: "Candidate Target", jahr: 2022, typ: "movie", tmdb_id: 9100,
+  dienste: ["Netflix"] });
 const known = [{ ...titles[0], id: "private-library-id", bewertung: { was: 5 }, must_watch: true,
+  quelle: "private-list-source",
   dienste: [...titles[0].dienste, "MUBI"] }];
 const discoverPayload = { stand, katalog_stand: stand, stand_pro_quelle: { Netflix: stand, "Disney+": stand },
   vergleich_stand_pro_quelle: { Netflix: stand, "Disney+": stand }, titel: titles };
 const knownPayload = { ...discoverPayload, titel: known };
+
+function jsNewState(title, entry = null, legacy = null, services = ["Disney+"]) {
+  const payload = { ...discoverPayload, titel: [title] };
+  const prior = entry ? JSON.stringify({ format: 1, owner: "fixture",
+    auswahl: JSON.stringify([...services].sort()), v2Uebernommen: true, eintraege: [entry] }) : null;
+  const updated = aktualisiereStreamingNeuFristenbuch(prior, {
+    owner: "fixture", auswahl: services, bekannt: { ...knownPayload, titel: [] }, entdecken: payload, now,
+  });
+  const projection = projiziereStreamingNeu({
+    bekannt: { ...knownPayload, titel: [] }, entdecken: payload, auswahl: services,
+    vollstaendig: true, fristenbuch: updated?.fristenbuch,
+    uebergang: legacy ? { neu: [legacy] } : null, now,
+  });
+  const id = String(title.watchmode_id ?? title.streaming_id);
+  return { isNew: projection.neueIds.includes(id), since: projection.neuSeit[id] ?? null };
+}
 
 try {
   run("initdb", ["--no-locale", "--encoding=UTF8", "--auth=trust", "--username=postgres", "--set",
@@ -150,13 +186,50 @@ try {
     assert.equal(call({ ...withLibrary, filters: { ...withLibrary.filters, nurBewertet: true } }).total, 1);
     assert.equal(call({ ...withLibrary, filters: { ...withLibrary.filters, status: "gesehen" } }).total, 1);
   });
+  check("library identity follows the existing JS matcher at missing-evidence, ID-prefix, alias and Unicode edges", () => {
+    const prefixed = { id: "lib-prefixed", watchmode_id: "watchmode:0001001",
+      titel: "Film 001", jahr: 1981, typ: "movie" };
+    const missingEvidence = { id: "lib-missing", watchmode_id: "watchmode:0001001", titel: "Film 001" };
+    const aliasOnly = { id: "lib-alias", streaming_id: "historic-alias",
+      titel: "Different", jahr: 2022, typ: "movie" };
+    const transliterated = { id: "lib-transliterated", titel: "Strasse Aeon Oeuvre", jahr: 2022, typ: "movie" };
+    const typeConflict = { id: "lib-type-conflict", titel: "Other", jahr: 2022,
+      typ: "tv_series", tmdb_id: "tmdb:0009100" };
+    const titleCandidate = { id: "lib-title-candidate", titel: "Candidate Target", jahr: 2022, typ: "movie" };
+    assert.equal(ordneExternenTitelZu(titles[1], [missingEvidence]).status, "unmatched");
+    assert.equal(call(request({ view: "library", library: [missingEvidence] })).counts.library, 0);
+    const jsPrefixed = ordneExternenTitelZu(titles[1], [prefixed, missingEvidence]);
+    assert.equal(jsPrefixed.status, "matched"); assert.equal(jsPrefixed.match.id, "lib-prefixed");
+    const serverPrefixed = call(request({ view: "library", library: [prefixed, missingEvidence],
+      filters: { ...request().filters, suche: "Film 001" } }));
+    assert.equal(serverPrefixed.total, 1); assert.equal(serverPrefixed.items[0].library_id, "lib-prefixed");
+    assert.equal(ordneExternenTitelZu(titles.find((x) => x.streaming_id === "alias-only"), [aliasOnly]).status, "unmatched");
+    assert.equal(call(request({ view: "library", library: [aliasOnly] })).counts.library, 0);
+    assert.equal(ordneExternenTitelZu(titles.find((x) => x.watchmode_id === 5012), [transliterated]).status, "unmatched");
+    assert.equal(call(request({ view: "library", library: [transliterated] })).counts.library, 0);
+    assert.equal(ordneExternenTitelZu(titles.find((x) => x.watchmode_id === 5013),
+      [typeConflict, titleCandidate]).status, "conflict");
+    assert.equal(call(request({ view: "library", library: [typeConflict, titleCandidate] })).counts.library, 0);
+
+    const titleSamples = ["Straße", "Cæsar", "Cœur", "smørrebrød", "Amélie"];
+    const sqlTitles = JSON.parse(sql(`select jsonb_agg(public.kd_streaming_page_title_norm(value) order by ord)
+      from jsonb_array_elements_text('${JSON.stringify(titleSamples)}'::jsonb) with ordinality x(value,ord)`));
+    assert.deepEqual(sqlTitles, titleSamples.map(normalisiereExternenTitel));
+    const idSamples = [["watchmode", "watchmode:0001001"], ["tmdb", "tmdb:0000049444"],
+      ["imdb", "imdb:tt001302011"], ["imdb", "00000"]];
+    const sqlIds = JSON.parse(sql(`select jsonb_agg(public.kd_streaming_page_id_norm(namespace,value) order by ord)
+      from jsonb_to_recordset('${JSON.stringify(idSamples.map(([namespace,value], index) => ({ namespace,value,ord:index })))}'::jsonb)
+      as x(namespace text,value text,ord integer)`));
+    assert.deepEqual(sqlIds, idSamples.map(([namespace, value]) => normalisiereExterneTitelkennung(namespace, value)));
+  });
   check("MotN availability wins, title fallback stays unique, and private known fields are stripped", () => {
     const kfp = call(request({ filters: { ...request().filters, suche: "Kung Fu Panda 2" } })).items[0];
     assert.deepEqual(kfp.dienste, ["Disney+"]); assert.equal(kfp.motn_match, "strong-id");
     const road = call(request({ filters: { ...request().filters, suche: "The Road to El Dorado" } })).items[0];
     assert.equal(road.motn_match, "title-year-type");
     const knownResult = call(request({ services: ["MUBI"], filters: { ...request().filters, suche: "Film 000" } })).items[0];
-    assert.equal(knownResult.id, undefined); assert.equal(knownResult.bewertung, undefined); assert.equal(knownResult.must_watch, undefined);
+    assert.equal(knownResult.id, undefined); assert.equal(knownResult.bewertung, undefined);
+    assert.equal(knownResult.must_watch, undefined); assert.equal(knownResult.quelle, undefined);
   });
   check("14 times 24 hours is exact and Watchmode catch-up does not restart the MotN anchor", () => {
     const newResult = call(request({ view: "new", limit: 200 }));
@@ -164,6 +237,43 @@ try {
     assert.ok(names.has("Neu innerhalb")); assert.ok(names.has("Kung Fu Panda 2"));
     assert.ok(!names.has("Genau abgelaufen")); assert.equal(newResult.counts.new, newResult.total);
     assert.equal(Date.parse(newResult.items.find((x) => x.titel === "Kung Fu Panda 2").neu_seit), Date.parse(recent));
+  });
+  check("numeric deadline payloads reproduce consumed reaccess, true reaccess, MotN priority and legacy behavior", () => {
+    const cases = [
+      { title: titles.find((x) => x.watchmode_id === 5008),
+        entry: { id: "5008", fensterBeginn: expiredStart, verbrauchtBis: consumedWithin } },
+      { title: titles.find((x) => x.watchmode_id === 5009),
+        entry: { id: "5009", fensterBeginn: oldWindow, verbrauchtBis: oldWindow } },
+      { title: titles.find((x) => x.watchmode_id === 5010),
+        entry: { id: "5010", fensterBeginn: recentMillis, verbrauchtBis: recentMillis } },
+    ];
+    for (const { title, entry } of cases) {
+      const expected = jsNewState(title, entry);
+      const result = call(request({ services: ["Disney+"], view: "new",
+        filters: { ...request().filters, suche: title.titel },
+        personal: { ...request().personal, newEntries: [entry] } }));
+      assert.equal(result.total > 0, expected.isNew, title.titel);
+      assert.equal(result.items[0]?.neu_seit == null ? null : Date.parse(result.items[0].neu_seit),
+        expected.since == null ? null : Date.parse(expected.since), title.titel);
+    }
+    const legacyTitle = titles.find((x) => x.watchmode_id === 5006);
+    const legacy = { id: "5006", firstSeenAt: recentMillis };
+    const expectedLegacy = jsNewState(legacyTitle, null, legacy, ["Netflix"]);
+    const legacyResult = call(request({ services: ["Netflix"], view: "new",
+      filters: { ...request().filters, suche: legacyTitle.titel },
+      personal: { ...request().personal, legacyNew: [legacy] } }));
+    assert.equal(legacyResult.total > 0, expectedLegacy.isNew);
+    assert.equal(Date.parse(legacyResult.items[0].neu_seit), Date.parse(expectedLegacy.since));
+  });
+  check("the 14x24-hour boundary stays absolute across the Europe/Vienna DST jump", () => {
+    const result = sql(`set timezone='Europe/Vienna'; select concat(
+      (public.kd_streaming_page_new_since('{"dienste":["Disney+"]}'::jsonb,array['Disney+'],'{}','{}',
+        '2026-04-03 12:30:00 Europe/Vienna','2026-03-20 12:00:00 Europe/Vienna',
+        '2026-03-20 12:00:00 Europe/Vienna',true,null) is not null)::integer,',',
+      (public.kd_streaming_page_new_since('{"dienste":["Disney+"]}'::jsonb,array['Disney+'],'{}','{}',
+        '2026-04-03 13:00:00 Europe/Vienna','2026-03-20 12:00:00 Europe/Vienna',
+        '2026-03-20 12:00:00 Europe/Vienna',true,null) is null)::integer)`);
+    assert.equal(result.split("\n").at(-1), "1,1");
   });
   check("removals rebuild incrementally and old cursors report version_changed", () => {
     sql("update public.kd_motn_offers set available=false,link=null where show_id='only'");

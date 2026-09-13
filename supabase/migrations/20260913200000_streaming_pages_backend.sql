@@ -91,9 +91,38 @@ $$;
 create function public.kd_streaming_page_title_norm(p_value text) returns text
 language sql immutable set search_path = pg_catalog as $$
   select nullif(btrim(regexp_replace(translate(lower(coalesce(p_value,'')),
-    'áàâäãåāăąçćčďđéèêëēėęěíìîïīłľńňñóòôöõøōřŕśšťúùûüūůýÿžźżæœß',
-    'aaaaaaaaacccddeeeeeeeeiiiiillnnnooooooorrsstuuuuuuyyzzzaos'),
+    'áàâäãåāăąçćčďéèêëēėęěíìîïīľńňñóòôöõōřŕśšťúùûüūůýÿžźż',
+    'aaaaaaaaacccdeeeeeeeeiiiiilnnnoooooorrsstuuuuuuyyzzz'),
     '[^a-z0-9]+',' ','g')),'')
+$$;
+
+create function public.kd_streaming_page_id_norm(p_namespace text,p_value text) returns text
+language plpgsql immutable set search_path = pg_catalog as $$
+declare v_raw text:=lower(btrim(coalesce(p_value,''))); v_match text[]; v_digits text;
+begin
+  if p_namespace='imdb' then
+    v_match:=regexp_match(v_raw,'^(?:imdb:)?(?:tt)?([0-9]{5,12})$');
+    if v_match is null or v_match[1]!~'[1-9]' then return null; end if;
+    return 'tt'||v_match[1];
+  elsif p_namespace in ('tmdb','watchmode') then
+    v_match:=regexp_match(v_raw,'^(?:'||p_namespace||':)?([0-9]+)$');
+    if v_match is null or v_match[1]!~'[1-9]' then return null; end if;
+    v_digits:=ltrim(v_match[1],'0'); return coalesce(nullif(v_digits,''),'0');
+  end if;
+  return null;
+end
+$$;
+
+create function public.kd_streaming_page_year(p_value text) returns integer
+language plpgsql immutable set search_path = pg_catalog as $$
+declare v numeric;
+begin
+  if p_value is null or length(p_value)>32 then return null; end if;
+  v:=btrim(p_value)::numeric;
+  if v=trunc(v) and v between 1870 and 2999 then return v::integer; end if;
+  return null;
+exception when others then return null;
+end
 $$;
 
 -- Portable numeric title order ("Film 2" before "Film 10") on the same
@@ -112,8 +141,14 @@ $$;
 
 create function public.kd_streaming_page_timestamp(p_value text) returns timestamptz
 language plpgsql immutable set search_path = pg_catalog as $$
+declare v_millis numeric;
 begin
   if p_value is null or length(p_value) > 64 then return null; end if;
+  if btrim(p_value)~'^-?[0-9]+(?:\.[0-9]+)?$' then
+    v_millis:=btrim(p_value)::numeric;
+    if v_millis not between -62135596800000 and 253402300799999 then return null; end if;
+    return to_timestamp(v_millis/1000);
+  end if;
   return p_value::timestamptz;
 exception when others then return null;
 end
@@ -123,7 +158,7 @@ create function public.kd_streaming_page_neutralize(p_item jsonb) returns jsonb
 language sql immutable set search_path = pg_catalog as $$
   select coalesce(p_item,'{}'::jsonb)
     - array['id','bewertung','bewertet_von','begruendung','kategorie','must_watch',
-      'notiz','status','gesehen','eigene_stimmungen','prognose','prognose_freigabe']
+      'notiz','status','gesehen','quelle','eigene_stimmungen','prognose','prognose_freigabe']
 $$;
 
 create function public.kd_streaming_page_stream_key(p_item jsonb) returns text
@@ -150,16 +185,14 @@ create function public.kd_streaming_page_identity_keys(p_item jsonb) returns tex
 language sql immutable set search_path = pg_catalog, public as $$
   with v as (
     select public.kd_streaming_page_type(coalesce(p_item->>'typ',p_item->>'type')) typ,
-      public.kd_streaming_page_text(coalesce(p_item->'watchmode_id',p_item->'watchmodeId')) watchmode,
-      lower(public.kd_streaming_page_text(coalesce(p_item->'imdb_id',p_item->'imdbId'))) imdb,
-      public.kd_streaming_page_text(coalesce(p_item->'tmdb_id',p_item->'tmdbId')) tmdb,
-      public.kd_streaming_page_aliases(p_item) aliases
+      public.kd_streaming_page_id_norm('watchmode',coalesce(p_item->>'watchmode_id',p_item->>'watchmodeId')) watchmode,
+      public.kd_streaming_page_id_norm('imdb',coalesce(p_item->>'imdb_id',p_item->>'imdbId')) imdb,
+      public.kd_streaming_page_id_norm('tmdb',coalesce(p_item->>'tmdb_id',p_item->>'tmdbId')) tmdb
   )
   select coalesce(array(select distinct key from (
-    select case when watchmode ~ '^[1-9][0-9]*$' then 'watchmode:'||watchmode end key from v
-    union all select case when imdb ~ '^tt[0-9]{5,12}$' then 'imdb:'||imdb end from v
-    union all select case when typ is not null and tmdb ~ '^[1-9][0-9]*$' then 'tmdb:'||typ||':'||tmdb end from v
-    union all select 'streaming:'||a from v cross join unnest(aliases) a where a is not null
+    select case when watchmode is not null then 'watchmode:'||watchmode end key from v
+    union all select case when imdb is not null then 'imdb:'||imdb end from v
+    union all select case when tmdb is not null then 'tmdb:'||tmdb end from v
   ) q where key is not null order by key),'{}'::text[])
 $$;
 
@@ -175,8 +208,7 @@ create function public.kd_streaming_page_title_keys(p_item jsonb) returns text[]
 language sql immutable set search_path = pg_catalog, public as $$
   with v as (
     select public.kd_streaming_page_type(coalesce(p_item->>'typ',p_item->>'type')) typ,
-      case when coalesce(p_item->>'jahr',p_item->>'year') ~ '^[0-9]{4}$'
-        then coalesce(p_item->>'jahr',p_item->>'year')::integer end jahr,
+      public.kd_streaming_page_year(coalesce(p_item->>'jahr',p_item->>'year')) jahr,
       public.kd_streaming_page_title_norms(p_item) titles
   )
   select coalesce(array(select typ||':'||jahr::text||':'||title
@@ -221,9 +253,9 @@ begin
     where show_id=p_show_id order by checked_at desc,service_id limit 1;
   if not found then if p_bump then perform public.kd_streaming_page_bump(); end if; return; end if;
   v_type := public.kd_streaming_page_type(v_data->>'typ');
-  v_year := case when v_data->>'jahr' ~ '^[0-9]{4}$' then (v_data->>'jahr')::integer end;
-  v_imdb := case when lower(v_data->>'imdb_id') ~ '^tt[0-9]{5,12}$' then lower(v_data->>'imdb_id') end;
-  v_tmdb := case when v_data->>'tmdb_id' ~ '^[1-9][0-9]*$' then v_data->>'tmdb_id' end;
+  v_year := public.kd_streaming_page_year(v_data->>'jahr');
+  v_imdb := public.kd_streaming_page_id_norm('imdb',v_data->>'imdb_id');
+  v_tmdb := public.kd_streaming_page_id_norm('tmdb',v_data->>'tmdb_id');
   if v_imdb is null and (v_type is null or v_tmdb is null) then
     if p_bump then perform public.kd_streaming_page_bump(); end if; return;
   end if;
@@ -330,10 +362,10 @@ begin
     public.kd_streaming_page_title_norms(v_payload),public.kd_streaming_page_title_norm(v_payload->>'titel'),
     public.kd_streaming_page_natural_key(v_payload->>'titel'),
     (select min(x) from unnest(v_services)x),public.kd_streaming_page_type(v_payload->>'typ'),
-    case when v_payload->>'jahr'~'^[0-9]{4}$' then (v_payload->>'jahr')::integer end,
-    case when v_payload->>'watchmode_id'~'^[1-9][0-9]*$' then v_payload->>'watchmode_id' end,
-    case when lower(v_payload->>'imdb_id')~'^tt[0-9]{5,12}$' then lower(v_payload->>'imdb_id') end,
-    case when v_payload->>'tmdb_id'~'^[1-9][0-9]*$' then v_payload->>'tmdb_id' end,
+    public.kd_streaming_page_year(v_payload->>'jahr'),
+    public.kd_streaming_page_id_norm('watchmode',v_payload->>'watchmode_id'),
+    public.kd_streaming_page_id_norm('imdb',v_payload->>'imdb_id'),
+    public.kd_streaming_page_id_norm('tmdb',v_payload->>'tmdb_id'),
     coalesce((select known from public.kd_streaming_page_base where source_key=v_base_key),false),v_hidden,v_match
   on conflict(output_key) do nothing;
   if p_bump then perform public.kd_streaming_page_bump(); end if;
@@ -398,10 +430,10 @@ begin
     public.kd_streaming_page_natural_key(payload->>'titel'),
     (select min(x) from unnest(public.kd_streaming_page_services(payload)) x),
     public.kd_streaming_page_type(payload->>'typ'),
-    case when payload->>'jahr'~'^[0-9]{4}$' then (payload->>'jahr')::integer end,
-    case when payload->>'watchmode_id'~'^[1-9][0-9]*$' then payload->>'watchmode_id' end,
-    case when lower(payload->>'imdb_id')~'^tt[0-9]{5,12}$' then lower(payload->>'imdb_id') end,
-    case when payload->>'tmdb_id'~'^[1-9][0-9]*$' then payload->>'tmdb_id' end,known from projected;
+    public.kd_streaming_page_year(payload->>'jahr'),
+    public.kd_streaming_page_id_norm('watchmode',payload->>'watchmode_id'),
+    public.kd_streaming_page_id_norm('imdb',payload->>'imdb_id'),
+    public.kd_streaming_page_id_norm('tmdb',payload->>'tmdb_id'),known from projected;
   for r in select distinct show_id from public.kd_motn_offers order by show_id loop
     perform public.kd_streaming_page_rebuild_motn(r.show_id,false);
   end loop;
@@ -457,11 +489,13 @@ create trigger kd_streaming_page_motn_row after insert or update or delete on pu
   for each row execute function public.kd_streaming_page_motn_changed();
 
 create function public.kd_streaming_page_new_since(p_payload jsonb,p_services text[],p_stands jsonb,
-  p_comparisons jsonb,p_now timestamptz) returns timestamptz
+  p_comparisons jsonb,p_now timestamptz,p_anchor_start timestamptz,p_consumed_until timestamptz,
+  p_has_anchor boolean,p_legacy_start timestamptz) returns timestamptz
 language plpgsql stable set search_path = pg_catalog, public as $$
 declare current_services text[]:=public.kd_streaming_page_services(p_payload); selected text;
   grp record; v_diff record; before_union boolean; after_union boolean; valid_add boolean;
-  access_times timestamptz[]:='{}'; begin_at timestamptz; access_at timestamptz;
+  access_times timestamptz[]:='{}'; begin_at timestamptz; consumed_until timestamptz; access_at timestamptz;
+  motn_at timestamptz; duration_seconds constant bigint:=1209600;
 begin
   if not current_services && p_services then return null; end if;
   if jsonb_typeof(p_payload->'dienst_diffs')='array' then
@@ -489,15 +523,25 @@ begin
       if not before_union and after_union and valid_add then access_times:=array_prepend(grp.at,access_times); end if;
     end loop;
   end if;
+  if p_has_anchor and p_anchor_start<=p_now and p_consumed_until<=p_now then
+    begin_at:=p_anchor_start; consumed_until:=p_consumed_until;
+  end if;
   foreach access_at in array access_times loop
-    if begin_at is null or access_at>=begin_at+interval '14 days' then begin_at:=access_at; end if;
+    if consumed_until is not null and access_at<=consumed_until then continue; end if;
+    if begin_at is null or extract(epoch from access_at)>=extract(epoch from begin_at)+duration_seconds
+      then begin_at:=access_at; end if;
+    consumed_until:=access_at;
   end loop;
-  select least(begin_at,min(public.kd_streaming_page_timestamp(x->>'erkannt_am'))) into begin_at
+  if begin_at is null and p_legacy_start<=p_now
+    and extract(epoch from p_now)<extract(epoch from p_legacy_start)+duration_seconds then begin_at:=p_legacy_start; end if;
+  select min(public.kd_streaming_page_timestamp(x->>'erkannt_am')) into motn_at
     from jsonb_array_elements(case when jsonb_typeof(p_payload->'motn_zugaenge')='array'
       then p_payload->'motn_zugaenge' else '[]'::jsonb end)x
    where x->>'dienst'=any(p_services) and x->>'dienst'=any(public.kd_streaming_page_services(p_payload))
      and public.kd_streaming_page_timestamp(x->>'erkannt_am')<=p_now;
-  return case when begin_at is not null and p_now<begin_at+interval '14 days' then begin_at end;
+  begin_at:=least(begin_at,motn_at);
+  return case when begin_at is not null
+    and extract(epoch from p_now)<extract(epoch from begin_at)+duration_seconds then begin_at end;
 end
 $$;
 
@@ -626,42 +670,58 @@ begin
     select public.kd_streaming_page_text(x->'id') library_id,x,
       public.kd_streaming_page_identity_keys(x) identity_keys,public.kd_streaming_page_title_keys(x) title_keys,
       public.kd_streaming_page_type(x->>'typ') work_type,
-      case when x->>'jahr'~'^[0-9]{4}$' then (x->>'jahr')::integer end release_year,
-      case when x->>'watchmode_id'~'^[1-9][0-9]*$' then x->>'watchmode_id' end watchmode_id,
-      case when lower(x->>'imdb_id')~'^tt[0-9]{5,12}$' then lower(x->>'imdb_id') end imdb_id,
-      case when x->>'tmdb_id'~'^[1-9][0-9]*$' then x->>'tmdb_id' end tmdb_id
+      public.kd_streaming_page_year(x->>'jahr') release_year,
+      public.kd_streaming_page_id_norm('watchmode',x->>'watchmode_id') watchmode_id,
+      public.kd_streaming_page_id_norm('imdb',x->>'imdb_id') imdb_id,
+      public.kd_streaming_page_id_norm('tmdb',x->>'tmdb_id') tmdb_id
       from jsonb_array_elements(v_library)x
-  ), pairs as (
+  ), pair_evidence as (
     select e.output_key,l.library_id,
       e.identity_keys&&l.identity_keys same_id,e.title_keys&&l.title_keys same_title,
-      (e.work_type is distinct from l.work_type or e.release_year is distinct from l.release_year
-       or (e.watchmode_id is not null and l.watchmode_id is not null and e.watchmode_id<>l.watchmode_id)
+      (e.work_type is not null and l.work_type is not null
+        and e.release_year is not null and l.release_year is not null) evidence_complete,
+      (e.work_type=l.work_type and e.release_year=l.release_year) evidence_equal,
+      ((e.watchmode_id is not null and l.watchmode_id is not null and e.watchmode_id<>l.watchmode_id)
        or (e.imdb_id is not null and l.imdb_id is not null and e.imdb_id<>l.imdb_id)
-       or (e.tmdb_id is not null and l.tmdb_id is not null and e.tmdb_id<>l.tmdb_id)) conflict
+       or (e.tmdb_id is not null and l.tmdb_id is not null and e.tmdb_id<>l.tmdb_id)) id_conflict
       from effective e join library l on e.identity_keys&&l.identity_keys or e.title_keys&&l.title_keys
+  ), pairs as (
+    select *,same_id and evidence_complete and evidence_equal and not id_conflict strong_valid,
+      same_title and evidence_complete and evidence_equal and not id_conflict title_valid,
+      (same_id and evidence_complete and (not evidence_equal or id_conflict))
+        or (same_title and evidence_complete and evidence_equal and id_conflict) conflict
+      from pair_evidence
   ), decisions as (
     select output_key,case
-      when count(*)filter(where same_id and not conflict)=1 and not bool_or(same_id and conflict)
-        then min(library_id)filter(where same_id and not conflict)
-      when count(*)filter(where same_id and not conflict)=0
-        and count(*)filter(where same_title and not conflict)=1 and not bool_or(same_title and conflict)
-        then min(library_id)filter(where same_title and not conflict) end library_id
+      when count(*)filter(where strong_valid)=1 and not bool_or(same_id and conflict)
+        then min(library_id)filter(where strong_valid)
+      when count(*)filter(where strong_valid)=0
+        and count(*)filter(where title_valid)=1 and not bool_or(conflict)
+        then min(library_id)filter(where title_valid) end library_id
       from pairs group by output_key
-  ), anchors as (
-    select public.kd_streaming_page_text(x->'id') id,public.kd_streaming_page_timestamp(x->>'fensterBeginn') since
+  ), book_entries as (
+    select public.kd_streaming_page_text(x->'id') id,
+      public.kd_streaming_page_timestamp(x->>'fensterBeginn') since,
+      public.kd_streaming_page_timestamp(x->>'verbrauchtBis') consumed
       from jsonb_array_elements(v_personal->'newEntries')x
-    union all
-    select public.kd_streaming_page_text(x->'id'),public.kd_streaming_page_timestamp(x->>'firstSeenAt')
+  ), legacy_entries as (
+    select public.kd_streaming_page_text(x->'id') id,public.kd_streaming_page_timestamp(x->>'firstSeenAt') since
       from jsonb_array_elements(v_personal->'legacyNew')x
+  ), prepared as (
+    select e.*,d.library_id,b.since anchor_start,b.consumed,
+      b.since is not null and b.since<=v_now and b.consumed<=v_now has_anchor,l.since legacy_start
+      from effective e left join decisions d using(output_key)
+      left join lateral (select since,consumed from book_entries
+        where id=any(e.aliases) order by consumed desc,since desc limit 1)b on true
+      left join lateral (select min(since) since from legacy_entries where id=any(e.aliases))l on true
+     where e.services&&v_services
   ), labeled as (
-    select e.*,d.library_id,
+    select e.*,
       exists(select 1 from jsonb_array_elements(v_personal->'seenIds')s
         where public.kd_streaming_page_text(s)=any(e.aliases)) seen,
-      coalesce((select min(a.since) from anchors a where a.id=any(e.aliases)
-        and a.since<=v_now and v_now<a.since+interval '14 days'),
-        public.kd_streaming_page_new_since(e.payload,v_services,v_meta->'stand_pro_quelle',
-          v_meta->'vergleich_stand_pro_quelle',v_now)) new_since
-      from effective e left join decisions d using(output_key) where e.services&&v_services
+      public.kd_streaming_page_new_since(e.payload,v_services,v_meta->'stand_pro_quelle',
+        v_meta->'vergleich_stand_pro_quelle',v_now,e.anchor_start,e.consumed,e.has_anchor,e.legacy_start) new_since
+      from prepared e
   ), viewed as (
     select * from labeled where (v_view='all' or v_view='new' and new_since is not null
       or v_view='library' and library_id is not null)
@@ -701,7 +761,7 @@ begin
       ||case when library_id is null then '{}'::jsonb else jsonb_build_object('library_id',library_id) end
       ||case when new_since is null then '{}'::jsonb else jsonb_build_object('neu_seit',new_since) end order by page_order)
       from page),'[]'::jsonb),
-    min(new_since+interval '14 days') filter(where new_since is not null)
+    min(to_timestamp(extract(epoch from new_since)+1209600)) filter(where new_since is not null)
     into v_counts,v_total,v_items,v_expiry from labeled;
   v_version:='sp1-'||to_hex(v_source)||'-e'||coalesce(extract(epoch from v_expiry)::bigint::text,'stable');
   if v_cursor is not null and v_cursor->>'v' is distinct from v_version then
@@ -717,7 +777,8 @@ end
 $$;
 
 revoke all on function public.kd_streaming_page_text(jsonb),public.kd_streaming_page_type(text),
-  public.kd_streaming_page_title_norm(text),public.kd_streaming_page_natural_key(text),public.kd_streaming_page_timestamp(text),
+  public.kd_streaming_page_title_norm(text),public.kd_streaming_page_id_norm(text,text),
+  public.kd_streaming_page_year(text),public.kd_streaming_page_natural_key(text),public.kd_streaming_page_timestamp(text),
   public.kd_streaming_page_neutralize(jsonb),public.kd_streaming_page_stream_key(jsonb),
   public.kd_streaming_page_aliases(jsonb),public.kd_streaming_page_identity_keys(jsonb),
   public.kd_streaming_page_title_norms(jsonb),public.kd_streaming_page_title_keys(jsonb),
@@ -725,7 +786,7 @@ revoke all on function public.kd_streaming_page_text(jsonb),public.kd_streaming_
   public.kd_streaming_page_bump(jsonb),public.kd_streaming_page_rebuild_motn(text,boolean),
   public.kd_streaming_page_refresh(),public.kd_streaming_page_catalog_changed(),
   public.kd_streaming_page_catalog_deleted(),public.kd_streaming_page_motn_changed(),
-  public.kd_streaming_page_new_since(jsonb,text[],jsonb,jsonb,timestamptz),
+  public.kd_streaming_page_new_since(jsonb,text[],jsonb,jsonb,timestamptz,timestamptz,timestamptz,boolean,timestamptz),
   public.kd_streaming_page_cursor_encode(jsonb),public.kd_streaming_page_cursor_decode(text),
   public.kd_streaming_page(jsonb) from public,anon,authenticated;
 grant execute on function public.kd_streaming_page(jsonb) to authenticated;
