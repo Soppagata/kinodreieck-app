@@ -9,10 +9,10 @@ Nutzerweg: Seite/Zähler/20 Titel → weitere Daten bei offenem Bereich → Zwis
 | ID | Nutzbares Ergebnis | Zustand | Owner |
 | --- | --- | --- | --- |
 | P1 | Kleine erste Katalogantwort und korrekte vollständige Zähler | GEBAUT / INTEGRIERT | A |
-| P2 | Schneller Wiederaufruf aus Sitzung/Gerät, kontrollierte Hintergrundfrische | GEBAUT / INTEGRIERT | B |
+| P2 | Schneller Wiederaufruf aus Sitzung/Gerät, kontrollierte Hintergrundfrische | RESTAUFTRAG STARTREIHENFOLGE | B |
 | P3 | Erste 20 Karten, portionsweises Nachladen, bedienbarer Bereichswechsel; Produktion ohne technische Quellen-/Standangaben | GEBAUT / INTEGRIERT | C |
 | P4 | Fristen, Identität, Konto-/Seen-/Pin-/Merkliste bleiben korrekt | GEBAUT / PAKETPRÜFUNGEN GRÜN | A/B/C je Scope |
-| P5 | Integrierter Nutzerweg einmal kontrolliert geprüft | OFFEN | ein Abschlussbaumeister |
+| P5 | Integrierter Nutzerweg einmal kontrolliert geprüft | RUNNING | `/root/pages_final` |
 
 ## Welle
 
@@ -48,6 +48,26 @@ INTEGRATED am 13.09.2026: A `4aba0731` + `ec3dc4b3` als `7a33b29` + `e0879a1`; B
 Die gezielten Restaufträge sind erledigt: A belegt 15 lokale PostgreSQL-Prüfungen einschließlich Epoch-Millis/DST/MotN/Identität. B belegt State 19/19, Cache 9/9, Identitätsindex 6/6 und erhaltene MotN-Überlagerung. C belegt die fokussierten DOM-/Produktions-/Legacy-Prüfungen einschließlich sichtbarer, löschbarer Fokusabfrage und korrektem Neu-Filterleerzustand. Der Known-Katalog mit MotN-Anhang bleibt für andere Verbraucher vollständig und wird beim direkten Streamingstart bis zur ersten Seite zurückgestellt; diese nachgelagerte Übertragung wird nicht als eingesparte Datenmenge dargestellt.
 
 Der eine Abschlussbaumeister erhält den integrierten Produktkandidaten `74659f7` samt diesem Register. Sein kontrollierter Lauf verbindet die vorhandene Mocksuite/Buildprüfung mit einem lokalen mobilen Nutzerweg und mindestens einer echten lokalen PostgreSQL-RPC-Verbindung durch Service/Controller: Erstantwort höchstens 20 Titel plus vollständige Zähler; Filtertreffer jenseits der ersten Seite; serielles Nachladen nur im offenen Bereich; schneller Rücksprung ohne erneuten Vollkatalogaufbau; Gerätecache mit Hintergrundfrische; veraltete Cursor/Antworten und Kontowechsel; Neu-Ablauf an der exakten 14-Tage-Grenze; Produktion ohne sichtbare technische Lieferanten-/Standangaben außerhalb der Datenschutztexte. Messungen werden ausdrücklich als lokales Labor, nicht als physische iPhone-Abnahme dokumentiert. Kein zusätzlicher Gesamtlauf durch den Meister.
+
+Abschlussdispatch: `/root/pages_final`, Sol/high wegen tatsächlicher SQL-/Account-/Cache-Nähte, isolierter Worktree `/private/tmp/kd-pwa-pages-final-20260913`, Basis `547ba28`. Sein einziger kontrollierter Befehl `npm run test:streaming-progressive:final` ist gestartet: vollständige Mocksuite mit integrierter lokaler PG17-Prüfung, danach der mobile Produktionsfluss. Produktkorrekturen bleiben bei A/B/C; Abschlussdateien und Testverdrahtung beim Abschlussbaumeister.
+
+Konkreter Abschlussfund: `pretest` stoppte an der veralteten statischen Gesehen-Zahl-Assertion in `kartenlayout_test.mjs`. C erhält genau diese zusätzliche Datei für die Assertion beider Anzeigewege (progressiv ohne Teilbestandszahl, Legacy mit Zahl). Die Oberfläche entspricht bereits dem vereinbarten Vertrag. Der Abschlussbaumeister setzt nur die noch nicht gelaufenen Pretest-/Hauptsuite-/Browserabschnitte fort; bereits grüne Abschnitte werden nicht vorsorglich wiederholt.
+
+Der Testdelta `91cecd7` wurde statisch geprüft, im Integrationsbranch als `d810231` und beim Abschlussbaumeister als `e22a0d1` übernommen. C belegt `kartenlayout_test.mjs` mit 14/14; die übrigen noch offenen Pretestteile sind beim Abschlussbaumeister grün. Die lokale PostgreSQL-Laufzeit benötigte für Shared Memory die normale Sandbox-Eskalation; der Stopp erfolgte vor den Assertions und hatte keine Remote-Wirkung. Die Hauptsuite läuft anschließend unter der passenden lokalen Berechtigung weiter.
+
+Echter Performanceblocker aus dem Gesamtlauf: Die reale lokale SQL→Service→Controller-Verbindung mit 226 reduzierten synthetischen Mediathekbezügen überschreitet die 30-Sekunden-Harnessgrenze. Die frühere Backendmessung von rund 0,3 Sekunden nutzte eine leere Library und belegt diesen Nutzerfall nicht. A erhält einen gezielten RESTAUFTRAG zur semantikerhaltenden Optimierung der wiederholten Library-/Fristnormalisierung und des Identitätsjoins; keine schwächeren Identitätsregeln oder höheren Timeouts als Produktlösung. Der eine Abschlussbaumeister bestätigt einmal den konkreten Messwert, setzt unabhängige noch offene Tests fort und wartet für den Browserfluss auf den korrigierten Kandidaten. Der Kandidat ist bis zur Korrektur nicht abschlussreif.
+
+Bestätigung: Der gezielte 226er-Lauf erreichte ohne Antwort den 120.000-ms-psql-Hardtimeout; die leere Library lieferte auf derselben Projektion in 297 ms. Weitere unveränderte langsame Versuche sind eingestellt. Der Browserlauf hat noch nicht begonnen.
+
+Performanceblocker korrigiert: A `13fce4a` als `0305886` integriert. Deduplizierte Schlüsseljoins ersetzen den Katalog×Library-Vollvergleich; Library und Marker werden einmal je Request normalisiert. Statische Meisterprüfung bestätigt unveränderte Konflikt-/Eindeutigkeits-/Fristlogik. A belegt 15 PostgreSQL-Prüfungen sowie die echte App-Nutzlast mit 226 Referenzen: 8.806 ausgewählte Titel, erste 20 in 324,2 ms, folgende 200 in 327,2 ms. Der Abschlussbaumeister übernimmt den Delta und setzt ausschließlich die betroffene Datenwegprüfung sowie den bislang nicht gestarteten Browserfluss fort.
+
+Fortgesetzte Abschlussprüfung: Reale SQL→Service→Controller-Kette 5/5 grün, 332,3/319,8 ms für erste/Folgeseite; synthetische CI-Variante ohne lokale Messdateien ebenfalls 5/5 grün. Noch offene Hauptsuite-/Buildabschnitte sind vollständig grün. Zwei reine Testumgebungsstopps (uncommittete Package-Datei im historischen Clean-Guard sowie versehentliches Online-Environment für den lokalen Einzeldateibuild) wurden ohne Produkt-/Guardänderung gezielt aufgelöst.
+
+Echter mobiler Startbefund an B: Trotz kontogebundener Startpräferenz Streaming beginnt der Known-Read im App-Boot vor der ersten Seitenantwort (rund 383 ms früher). Die reine Helperprüfung erfasste diesen Ablauf nicht. B korrigiert die Boot-/Kontobereitschafts-/Autoload-Naht, ohne Known für andere Bereiche oder seine vollständige MotN-Korrektur abzuschalten. Der eine Abschlussbaumeister prüft die übrigen mobilen Schritte unabhängig weiter und übernimmt danach diesen gezielten Delta.
+
+Mobiler UI-Befund an C: Der erneut registrierte IntersectionObserver kann bei dauerhaft sichtbarem Sentinel eine Renderkette von 20 bis auf hunderte Karten auslösen. C erhält die konkrete Korrektur für eine stabile, begrenzte automatische Sichtbarkeitserweiterung.
+
+Verbindliches Nutzerdelta während dieses RESTs: Die restlichen Titel werden automatisch in **20er-Paketen** geladen, ohne Button. B setzt die normale App-Folgeseite von 200 auf 20; die serielle automatische Datenkette und Pause bei verborgenem Bereich bleiben erhalten. C entfernt den Nachlade-Button vollständig und erweitert sichtbare Karten automatisch beim Scrollen in 20er-Portionen ohne Observer-Selbstlauf. Datenvorladen hängt weder von Scrollen noch von Klicks ab. Die technische RPC-Obergrenze 200 bleibt kompatibel. Der eingefrorene Dokumentvertrag ist für genau dieses autorisierte Delta aktualisiert. Der Abschlussbaumeister passt nur die betroffenen Datenweg-/Mobilprüfungen an und führt keinen erneuten pauschalen Gesamtlauf durch.
 
 Diagnosebasis: `/private/tmp/kd-streaming-performance-20260913/ANALYSE.md`, neutraler Testkatalog und synthetische Referenzen im selben Verzeichnis. Labor: Chromium 393×852, CPU×4; warmes Alles↔Neu 3,27/3,58 s bei null Katalogreads. Echte Provider- oder persönliche Live-Testdaten sind nicht erforderlich.
 

@@ -13,7 +13,7 @@ Request:
   format: 1,
   services: ["Netflix", "Disney+"], // exakte bestehende Dienstnamen
   view: "all", // all | new | library
-  limit: 20, // initial 20, Vorladen maximal 200, seriell
+  limit: 20, // initial und automatisch folgende App-Seiten jeweils 20, seriell
   cursor: null, // opaque string der vorherigen Antwort
   filters: {
     suche: "", plattform: null, typ: null, genre: null,
@@ -31,7 +31,7 @@ Request:
 }
 ```
 
-`mustWatchIds` und `ratedIds` sind Mediathek-IDs; `seenIds` Streamingkennungen inklusive bestehender Aliasse. `newEntries`/`legacyNew` transportieren nur die bereits vorhandenen lokalen Fristanker. Server-Neu folgt demselben belegten Auswahl-/Fristvertrag wie die bestehenden reinen Projektionen. Ungültige Requests werden begrenzt abgelehnt. Limit nie mehr als 200; keine ungeprüften SQL-/Sortierausdrücke.
+`mustWatchIds` und `ratedIds` sind Mediathek-IDs; `seenIds` Streamingkennungen inklusive bestehender Aliasse. `newEntries`/`legacyNew` transportieren nur die bereits vorhandenen lokalen Fristanker. Server-Neu folgt demselben belegten Auswahl-/Fristvertrag wie die bestehenden reinen Projektionen. Ungültige Requests werden begrenzt abgelehnt. Die technische RPC-Obergrenze bleibt 200; die App fordert nach der Nutzervorgabe vom 13.09.2026 erste und folgende Seiten ausschließlich mit 20 an. Keine ungeprüften SQL-/Sortierausdrücke.
 
 Erfolgsantwort:
 
@@ -76,7 +76,7 @@ streamingPage = {
 onStreamingPageQuery({ view, filters });
 ```
 
-Die Callback-Identität bleibt stabil. StreamingTab sendet den initialen/aktiven Query über einen an primitiven Werten gebundenen Effekt. Der Controller kennt zusätzlich `tab === "streaming"`, pausiert beim Verlassen und hält den Zwischenstand für die Sitzung. Bereits geladene Seiten werden beim Wiederöffnen sofort benutzt. Erst 20, danach maximal 200 je Request, seriell und mit freiem Hauptthread zwischen Paketen. Sichtbare Inhalte bleiben bei einem späteren Fehler erhalten. Fehler, Logout und Filterwechsel starten keine Schleife. Kein neuer Full-Catalog-Read bei jedem Unterbereichswechsel.
+Die Callback-Identität bleibt stabil. StreamingTab sendet den initialen/aktiven Query über einen an primitiven Werten gebundenen Effekt. Der Controller kennt zusätzlich `tab === "streaming"`, pausiert beim Verlassen und hält den Zwischenstand für die Sitzung. Bereits geladene Seiten werden beim Wiederöffnen sofort benutzt. Erst 20, danach automatisch weitere 20 je Request, seriell und mit freiem Hauptthread zwischen Paketen, solange der Bereich sichtbar offen bleibt. Datenladen benötigt keinen Klick und keinen Scrollimpuls. Sichtbare Inhalte bleiben bei einem späteren Fehler erhalten. Fehler, Logout und Filterwechsel starten keine Schleife. Kein neuer Full-Catalog-Read bei jedem Unterbereichswechsel.
 
 Rohdaten, Ergebnisansichten und Identitätsindizes werden nach tatsächlichem Datenstand wiederverwendet. Die langsame Mediathekzuordnung wird mit gleichbleibender Identitätsprüfung indexiert. Kontobindung, Capabilitywechsel, Logout und veraltete Antworten bleiben gesichert. Neu wird mit unveränderten ursprünglichen Zeitstempeln beim Ablauf bzw. Wiederkehren geprüft; ungültige Zähler werden nicht als aktuell angezeigt.
 
@@ -88,7 +88,7 @@ Andere vorhandene Katalognutzer, Suche, Pins, Kino-Badges und Einzeldateibuild b
 
 - Aktive Ansichten werden abgebildet: programm→library, entdecken→all, neu→new.
 - Vollständige Tabzahlen kommen aus `counts`; gefilterte Ergebniszahl aus `total`, nicht aus `items.length`.
-- Rahmen/Navigation zuerst, erste 20 Karten anzeigen. Weitere Daten dürfen bereits vorgeladen sein; weitere DOM-Karten in 20er-Portionen beim Scrollen/Weiterladen.
+- Rahmen/Navigation zuerst, erste 20 Karten anzeigen. Weitere Daten werden unabhängig automatisch vorgeladen; weitere DOM-Karten erscheinen in 20er-Portionen beim Scrollen. Kein manueller Nachlade-Button. Ein dauerhaft sichtbarer Sentinel darf durch Render-/Datenänderungen keine selbsttätige Kette bis zum gesamten vorgeladenen Bestand auslösen.
 - Erneutes Anzeigen behält Ansicht, Filter, sichtbare Portion und Scrollposition je gültigem Query/Konto. Persistierung kleiner Ansichtsparameter ist erlaubt; keine Katalogdaten in Web Storage.
 - Im Servermodus filtert/sortiert die UI keinen unvollständigen Bestand als wäre er vollständig. Queryänderungen gehen über den Callback; keine eigene Netzwerk-/Authlogik.
 - Gleiche Kartenaktionen, sichere Navigation, Pins, Merkliste und Seen-Status. Keine vollständigen Mediathekabgleiche über 25.000 Titel während jedes UI-Wechsels.
