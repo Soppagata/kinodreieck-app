@@ -18,6 +18,12 @@ import {
 import { rankRecommendations } from "./recommendationRanking.js";
 import { profileCompatibleGenres } from "./profileGenreVocabulary.js";
 import {
+  externeTitelKennungen,
+  externesReferenzjahr,
+  normalisiereExterneWerkart,
+  normalisiereExternenTitel,
+} from "./externalTitleIdentity.js";
+import {
   currentCinemaDiscoveryCandidates,
   fillPopularWithCinema,
   projectTransientDescriptions,
@@ -34,6 +40,8 @@ import {
   FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
   matchWebDiscoveryFeed,
   MIXED_DISCOVERY_FEED_FORMAT,
+  normalizeDiscoveryExternalIds,
+  normalizeDiscoveryMediaType,
   normalizeDiscoveryTitle,
   PUBLIC_DISCOVERY_FEED_FORMAT,
   VERSIONED_DISCOVERY_FEED_FORMAT,
@@ -49,6 +57,9 @@ export const ENTDECKEN_PERSONAL_LIMIT = 6;
 export const ENTDECKEN_TOP_POOL = 20;
 export const ENTDECKEN_VISIBLE_LIMIT = 7;
 export const ENTDECKEN_POPULAR_LIMIT = 6;
+
+const EMPTY_CATALOG_SNAPSHOT = Object.freeze({ titel: Object.freeze([]) });
+const preparedCatalogSnapshots = new WeakMap();
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function normalized(value) { return text(value).toLocaleLowerCase("de-AT"); }
@@ -223,6 +234,205 @@ export function localRecommendationCandidates(streamingEntdecken, {
       });
     })
     .filter(Boolean));
+}
+
+function addIndexValue(index, key, value) {
+  if (!key) return;
+  const current = index.get(key);
+  if (current) current.push(value);
+  else index.set(key, [value]);
+}
+
+function webIdentityKeys(candidate) {
+  const mediaType = normalizeDiscoveryMediaType(candidate?.type);
+  const releaseYear = Number(candidate?.year);
+  const titles = [candidate?.title, candidate?.originalTitle]
+    .map(normalizeDiscoveryTitle).filter(Boolean);
+  return mediaType && Number.isInteger(releaseYear)
+    ? [...new Set(titles)].map((title) => `${title}|${releaseYear}|${mediaType}`)
+    : [];
+}
+
+function webMatcherCandidateEligible(candidate) {
+  const releaseYear = candidate?.year;
+  return !!text(candidate?.targetId) && !!normalizeDiscoveryMediaType(candidate?.type)
+    && Number.isInteger(releaseYear) && releaseYear >= 1888
+    && releaseYear <= new Date().getUTCFullYear() + 10;
+}
+
+function descriptionComparableIdentity(entry) {
+  const external = entry?.externalIds || {};
+  const projected = {
+    ...entry,
+    watchmode_id: entry?.watchmode_id ?? entry?.watchmodeId ?? external.watchmode,
+    imdb_id: entry?.imdb_id ?? entry?.imdbId ?? external.imdb,
+    tmdb_id: entry?.tmdb_id ?? entry?.tmdbId ?? external.tmdb,
+    flixpatrol_id: entry?.flixpatrol_id ?? entry?.flixpatrolId ?? external.flixpatrol,
+  };
+  const target = text(entry?.targetId).match(/^(watchmode|imdb|tmdb|flixpatrol):(.+)$/u);
+  if (target && projected[`${target[1]}_id`] == null) projected[`${target[1]}_id`] = target[2];
+  return projected;
+}
+
+function descriptionIdentityKeys(entry) {
+  const comparable = descriptionComparableIdentity(entry);
+  const mediaType = normalisiereExterneWerkart(comparable);
+  const releaseYear = externesReferenzjahr(comparable);
+  const titles = [comparable?.titel, comparable?.title, comparable?.originaltitel, comparable?.originalTitle]
+    .map(normalisiereExternenTitel).filter(Boolean);
+  return mediaType && releaseYear != null
+    ? [...new Set(titles)].map((title) => `${title}|${releaseYear}|${mediaType}`)
+    : [];
+}
+
+function projectPreparedCandidate(entry, region, sourceId, fallbackFreshness) {
+  const watchmodeId = positiveInteger(entry?.watchmode_id);
+  const id = streamingTitelKennung(entry);
+  if (id == null || !text(entry?.titel)) return null;
+  const availableServices = list(entry.dienste);
+  if (!availableServices.length) return null;
+  const attributes = structuredCatalogAttributes(entry);
+  return Object.freeze({
+    targetId: watchmodeId == null ? id : `watchmode:${watchmodeId}`,
+    watchmodeId,
+    title: text(entry.titel),
+    matchStatus: "matched",
+    region,
+    availabilityConfirmed: true,
+    eligible: true,
+    genres: Object.freeze(attributes.genres),
+    tags: Object.freeze(attributes.tags),
+    franchiseId: attributes.franchiseId,
+    freshnessAt: entry.available_from || fallbackFreshness || null,
+    sourceId,
+    sourceRank: Number.isInteger(entry.rang) ? entry.rang : null,
+    services: Object.freeze([...availableServices]),
+    year: Number.isInteger(entry.jahr) ? entry.jahr : null,
+    type: entry.typ || null,
+    originalTitle: text(entry.originaltitel || entry.original_title) || null,
+    description: text(entry.beschreibung ?? entry.description) || null,
+    title_facts: entry.title_facts ?? null,
+    titleFacts: entry.titleFacts ?? null,
+    descriptionEvidence: entry.descriptionEvidence ?? null,
+    chartEvidence: Object.freeze([...list(entry.chartEvidence)]),
+    keywords: Object.freeze([...list(entry.keywords)]),
+    externalIds: discoveryExternalIdsFromCatalog(entry),
+    statusKeys: Object.freeze(uniqueText([id, ...list(entry.streaming_aliases)])),
+  });
+}
+
+function buildPreparedCatalog(streamingEntdecken, streamingKnown) {
+  const region = streamingEntdecken?.region || streamingKnown?.region;
+  const rows = new Map();
+  for (const entry of [...list(streamingEntdecken?.titel), ...list(streamingKnown?.titel)]) {
+    const id = streamingTitelKennung(entry);
+    if (id == null || (positiveInteger(entry?.watchmode_id) === null && !/^motn:[1-9][0-9]*$/.test(id))) continue;
+    rows.set(id, { ...(rows.get(id) || {}), ...entry });
+  }
+  const candidates = region === "AT"
+    ? [...rows.values()].map((entry) => projectPreparedCandidate(
+      entry, region, "local:streaming-catalog-at", streamingEntdecken?.stand || streamingKnown?.stand,
+    )).filter(Boolean)
+    : [];
+  const webIds = new Map();
+  const webTitles = new Map();
+  const namespaceCandidates = new Map();
+  for (const candidate of candidates) {
+    const ids = normalizeDiscoveryExternalIds(candidate.externalIds || {}) || {};
+    for (const [namespace, id] of Object.entries(ids)) {
+      addIndexValue(webIds, `${namespace}:${id}`, candidate);
+      addIndexValue(namespaceCandidates, namespace, candidate);
+    }
+    for (const key of webIdentityKeys(candidate)) addIndexValue(webTitles, key, candidate);
+  }
+  const descriptionIds = new Map();
+  const descriptionTitles = new Map();
+  const descriptionSources = list(streamingKnown?.titel).filter((entry) => text(entry?.beschreibung ?? entry?.description));
+  for (const entry of descriptionSources) {
+    for (const [namespace, id] of Object.entries(externeTitelKennungen(descriptionComparableIdentity(entry)))) {
+      addIndexValue(descriptionIds, `${namespace}:${id}`, entry);
+    }
+    for (const key of descriptionIdentityKeys(entry)) addIndexValue(descriptionTitles, key, entry);
+  }
+  return Object.freeze({
+    candidates: Object.freeze(candidates), webIds, webTitles, namespaceCandidates,
+    descriptionIds, descriptionTitles,
+  });
+}
+
+function preparedCatalog(streamingEntdecken, streamingKnown) {
+  const discoverKey = streamingEntdecken && typeof streamingEntdecken === "object"
+    ? streamingEntdecken : EMPTY_CATALOG_SNAPSHOT;
+  const knownKey = streamingKnown && typeof streamingKnown === "object"
+    ? streamingKnown : EMPTY_CATALOG_SNAPSHOT;
+  let byKnown = preparedCatalogSnapshots.get(discoverKey);
+  if (!byKnown) {
+    byKnown = new WeakMap();
+    preparedCatalogSnapshots.set(discoverKey, byKnown);
+  }
+  let prepared = byKnown.get(knownKey);
+  if (!prepared) {
+    prepared = buildPreparedCatalog(streamingEntdecken, streamingKnown);
+    byKnown.set(knownKey, prepared);
+  }
+  return prepared;
+}
+
+function statusForPreparedCandidate(statusMap, candidate) {
+  for (const key of candidate.statusKeys || []) {
+    if (Object.hasOwn(statusMap || {}, key)) return statusMap[key];
+  }
+  return undefined;
+}
+
+function withCurrentSeenStatus(candidate, statusMap) {
+  return Object.freeze({ ...candidate, seenStatus: statusForPreparedCandidate(statusMap, candidate) ?? null });
+}
+
+function narrowedCatalogForFeed(checkedFeed, prepared, statusMap) {
+  const records = matchWebDiscoveryFeed(checkedFeed, []).map((decision) => decision.record);
+  const selected = new Set();
+  for (const record of records) {
+    const ids = normalizeDiscoveryExternalIds(record.externalIds || {}) || {};
+    for (const [namespace, id] of Object.entries(ids)) {
+      for (const candidate of prepared.webIds.get(`${namespace}:${id}`) || []) {
+        if (webMatcherCandidateEligible(candidate)) selected.add(candidate);
+      }
+      const representative = (prepared.namespaceCandidates.get(namespace) || [])
+        .find(webMatcherCandidateEligible);
+      if (representative) selected.add(representative);
+    }
+    const mediaType = normalizeDiscoveryMediaType(record.mediaType);
+    const releaseYear = Number(record.releaseYear);
+    const title = normalizeDiscoveryTitle(record.title);
+    if (title && mediaType && Number.isInteger(releaseYear)) {
+      for (const candidate of prepared.webTitles.get(`${title}|${releaseYear}|${mediaType}`) || []) {
+        if (webMatcherCandidateEligible(candidate)) selected.add(candidate);
+      }
+    }
+  }
+  return Object.freeze([...selected].map((candidate) => withCurrentSeenStatus(candidate, statusMap)));
+}
+
+function narrowedDescriptionSources(entries, prepared) {
+  const selected = new Set();
+  for (const entry of list(entries)) {
+    for (const [namespace, id] of Object.entries(externeTitelKennungen(descriptionComparableIdentity(entry)))) {
+      for (const candidate of prepared.descriptionIds.get(`${namespace}:${id}`) || []) selected.add(candidate);
+    }
+    for (const key of descriptionIdentityKeys(entry)) {
+      for (const candidate of prepared.descriptionTitles.get(key) || []) selected.add(candidate);
+    }
+  }
+  return Object.freeze([...selected]);
+}
+
+function preparedSeenCandidates(prepared, statusMap, selectedServices = null) {
+  const services = selectedServices === null ? null : selectedServiceSet(selectedServices);
+  return Object.freeze(prepared.candidates
+    .filter((candidate) => statusIsSeen(statusForPreparedCandidate(statusMap, candidate)))
+    .filter((candidate) => services === null || !services.size || matchingServices(candidate, services).length > 0)
+    .map((candidate) => withCurrentSeenStatus(candidate, statusMap)));
 }
 
 export function localLibraryProjection(master) {
@@ -413,16 +623,20 @@ function strongIds(entry) {
     filmAt: text(entry?.film_at_id ?? entry?.filmAtId ?? external.film_at) || null,
   });
 }
-function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wikidata) {
-  const itemIds = strongIds({ ...item, externalIds: annotation?.externalIds || {} });
-  const itemType = radarTargetTypeForCatalogType(item?.mediaType ?? item?.type) === "series" ? "series" : "film";
-  const itemTitle = normalizeDiscoveryTitle(item?.title);
-  const seenEntries = [
+function prepareSeenEntries(master, catalogCandidates) {
+  return Object.freeze([
     ...list(master).filter((entry) => (
       hasCompleteRating(entry) || entry?.gesehen === true || entry?.status === "gesehen"
     )),
     ...list(catalogCandidates).filter((entry) => statusIsSeen(entry?.seenStatus)),
-  ];
+  ]);
+}
+
+function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wikidata, preparedSeen = null) {
+  const itemIds = strongIds({ ...item, externalIds: annotation?.externalIds || {} });
+  const itemType = radarTargetTypeForCatalogType(item?.mediaType ?? item?.type) === "series" ? "series" : "film";
+  const itemTitle = normalizeDiscoveryTitle(item?.title);
+  const seenEntries = preparedSeen || prepareSeenEntries(master, catalogCandidates);
   return seenEntries.some((entry) => {
     const entryIds = strongIds(entry);
     const comparable = ["joyn", "qid", "imdb", "tmdb", "flixpatrol", "filmAt"].filter((namespace) => (
@@ -447,7 +661,7 @@ function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wiki
 export function publicDiscoveryCandidates({
   webDiscoveryFeed, master = [], catalogCandidates = [], selectedServices = [],
   includeSeen = false, requireMetadata = true, factsSnapshot = entdeckenFactsSnapshot,
-  flixpatrolFacts = [],
+  flixpatrolFacts = [], preparedSeenEntries = null,
 } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok || ![
@@ -467,6 +681,7 @@ export function publicDiscoveryCandidates({
     }) : null;
   const decisions = new Map(matchWebDiscoveryFeed(checked.value, catalogCandidates)
     .map((decision) => [decision.record.sourceItemId, decision]));
+  const seenEntries = preparedSeenEntries || prepareSeenEntries(master, catalogCandidates);
   const projected = checked.value.items.map((item) => {
     const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
     const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
@@ -483,7 +698,7 @@ export function publicDiscoveryCandidates({
     ]));
     const tags = uniqueText([...list(enriched?.tags), ...list(local?.tags)]);
     const franchiseId = enriched?.franchiseId || local?.franchiseId || null;
-    const seen = sourceItemSeen(item, master, catalogCandidates, facts);
+    const seen = sourceItemSeen(item, master, catalogCandidates, facts, seenEntries);
     const availability = mixed ? item.availability : Object.freeze({
       region: "AT", market: "streaming", service: "Joyn", licenseTypes: [...item.licenseTypes],
     });
@@ -754,40 +969,53 @@ export function createEntdeckenRecommendations({
     webDiscoveryFeed,
     excludedTargetIds,
   );
-  const catalogCandidates = localRecommendationCandidates(streamingEntdecken, {
-    streamingKnown, selectedServices, entdeckenStatus, includeSeenForMatching: true,
-  });
   const checkedFeed = validateWebDiscoveryFeed(webDiscoveryFeed);
-  if (checkedFeed.ok && [
+  const publicFeed = checkedFeed.ok && [
     PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
     FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
-  ]
-    .includes(checkedFeed.value.format)) {
+  ].includes(checkedFeed.value.format);
+  const mixed = publicFeed && [
+    MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
+    FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT,
+  ].includes(checkedFeed.value.format);
+  const prepared = mixed ? preparedCatalog(streamingEntdecken, streamingKnown) : null;
+  const catalogCandidates = mixed ? null : localRecommendationCandidates(streamingEntdecken, {
+    streamingKnown, selectedServices, entdeckenStatus, includeSeenForMatching: true,
+  });
+  if (publicFeed) {
     /* Das Matching darf den breiten lokalen Katalog als reine Identitaetshilfe
        sehen. Erst die explizite Entdecken-Projektion filtert den sichtbaren
        Feed auf Kino plus die ausgewaehlten Streamingdienste. */
-    const broadCatalog = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
-      .includes(checkedFeed.value.format)
-      ? localRecommendationCandidates(streamingEntdecken, {
-        streamingKnown, selectedServices: [], entdeckenStatus, includeSeenForMatching: true,
-      }) : catalogCandidates;
+    const broadCatalog = mixed
+      ? narrowedCatalogForFeed(checkedFeed.value, prepared, entdeckenStatus)
+      : catalogCandidates;
+    const publicSeenEntries = mixed
+      ? prepareSeenEntries(master, preparedSeenCandidates(prepared, entdeckenStatus))
+      : prepareSeenEntries(master, broadCatalog);
     const allDirect = publicDiscoveryCandidates({
       webDiscoveryFeed: checkedFeed.value, master, catalogCandidates: broadCatalog, selectedServices,
       includeSeen: true, requireMetadata: false, factsSnapshot, flixpatrolFacts,
+      preparedSeenEntries: publicSeenEntries,
     });
     const direct = allDirect.filter((candidate) => !candidate.seen);
-    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
-      .includes(checkedFeed.value.format);
     const rankingMaster = projectTransientDescriptions(master, {
-      catalogEntries: streamingKnown?.titel || [], facts: flixpatrolFacts,
+      catalogEntries: mixed
+        ? narrowedDescriptionSources(master, prepared)
+        : streamingKnown?.titel || [],
+      facts: flixpatrolFacts,
     });
     const rankingLibrary = localLibraryProjection(rankingMaster);
     /* Die Quellenliste darf Popularität zeigen, ohne daraus Verfügbarkeit zu
        behaupten. Erst die persönliche Rankinglane verlangt weiterhin den
        echten Watchmode-/Kinoprogrammbeleg über availabilityConfirmed. */
     const feedPopular = direct;
+    const cinemaSeenEntries = mixed
+      ? prepareSeenEntries(master, preparedSeenCandidates(prepared, entdeckenStatus, selectedServices))
+      : prepareSeenEntries(master, catalogCandidates);
     const cinemaCandidates = currentCinemaDiscoveryCandidates({ program, programInfo, now })
-      .filter((candidate) => !sourceItemSeen(candidate, master, catalogCandidates));
+      .filter((candidate) => !sourceItemSeen(
+        candidate, master, catalogCandidates || [], candidate?.wikidata, cinemaSeenEntries,
+      ));
     const cinemaAllowedIds = profile?.beschaedigt === true
       ? new Set(cinemaCandidates.map((candidate) => candidate.targetId))
       : new Set(rankRecommendations(cinemaCandidates, {
