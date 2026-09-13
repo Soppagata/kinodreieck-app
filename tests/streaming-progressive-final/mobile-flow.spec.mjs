@@ -162,6 +162,21 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   });
 
   const cdp = await context.newCDPSession(page);
+  const knownInitiators = [];
+  await cdp.send("Network.enable");
+  cdp.on("Network.requestWillBeSent", (event) => {
+    if (!event.request.url.includes("p_name=streaming_bekannt")) return;
+    const frames = [];
+    for (let stack = event.initiator?.stack; stack; stack = stack.parent) {
+      for (const frame of stack.callFrames || []) frames.push({
+        functionName: frame.functionName || "(anonymous)",
+        url: new URL(frame.url).pathname,
+        lineNumber: frame.lineNumber,
+        columnNumber: frame.columnNumber,
+      });
+    }
+    knownInitiators.push({ type: event.initiator?.type || "unknown", frames });
+  });
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
   await cdp.send("Performance.enable");
   const metrics = async () => Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics
@@ -193,6 +208,39 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     console.log(`[PWA_FINAL_STEP] ${JSON.stringify(result)}`);
   }
 
+  if (process.env.KD_STREAMING_FINAL_DISCOVER_ONLY === "1") {
+    await page.goto("/");
+    await expect(page.locator(".kd-app")).toBeVisible();
+    await expect.poll(() => events.some((entry) => (
+      entry.kind === "full-catalog" && entry.name === "streaming_entdecken"
+    )), { timeout: 30_000 }).toBe(true);
+    await frame();
+
+    await step("Entdecken first visit reveals 20 then 40", async () => {
+      await navigateMobile(page, "Entdecken");
+      await expect(page.getByTestId("entdecken-tab")).toBeVisible();
+      await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(20);
+      const sentinel = page.locator(".kd-entdecken-weitere").getByTestId("streaming-page-more");
+      await sentinel.scrollIntoViewIfNeeded();
+      await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(40);
+    });
+    await step("Entdecken leave to Streaming", async () => {
+      await navigateMobile(page, "Streaming");
+      await expect(page.locator(".kd-streaming-tab")).toBeVisible();
+    });
+    await step("Entdecken session return keeps 40", async () => {
+      await navigateMobile(page, "Entdecken");
+      await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(40);
+    });
+    console.log(`[PWA_FINAL_DISCOVER] ${JSON.stringify({
+      conditions: "production build, Chromium 393x852, CPU x4, full local catalog ready before measured first visit",
+      projectionItems: pg.projectionCount,
+      results,
+    })}`);
+    await expect.poll(() => activeRpc, { timeout: 30_000 }).toBe(0);
+    return;
+  }
+
   await step("cold shell to first 20 Alles cards", async () => {
     await page.goto("/");
     await expect(page.locator(".kd-app")).toBeVisible();
@@ -211,6 +259,18 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   const fullKnownAfterFirstPage = fullKnown.at >= firstPageResponse.at;
   const allCount = Number((await page.getByRole("button", { name: /^Alles/u }).textContent()).match(/\((\d+)\)/)?.[1]);
   expect(allCount).toBeGreaterThan(20);
+  if (process.env.KD_STREAMING_FINAL_START_GATE_ONLY === "1") {
+    console.log(`[PWA_FINAL_START_GATE] ${JSON.stringify({
+      firstAllItems: firstAll.items,
+      firstAllCount: allCount,
+      fullKnownAfterFirstPage,
+      knownDelayAfterFirstPageMs: Math.round(fullKnown.at - firstPageResponse.at),
+      knownInitiators,
+    })}`);
+    expect(fullKnownAfterFirstPage,
+      "vollständiger Known-Read mit MotN-Anhang muss nach der ersten Seitenantwort beginnen").toBe(true);
+    return;
+  }
 
   await step("serial 20-title fetch stays behind a 20-card DOM window", async () => {
     await expect.poll(() => pg.calls.filter((entry) => entry.view === "all" && entry.cursor === "set").length).toBeGreaterThan(0);

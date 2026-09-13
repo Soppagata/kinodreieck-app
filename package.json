@@ -113,7 +113,7 @@
     "test:ai:live": "node tools/keychain_runner.mjs ai-live",
     "test:ai:contract": "node tools/keychain_runner.mjs profile-contract",
     "test:ai:eval": "node tools/keychain_runner.mjs ai-eval --confirm-paid",
-    "test:streaming-progressive": "node streaming_pages_pg_test.mjs && node streaming_page_cache_test.mjs && node streaming_page_state_test.mjs && node streaming_identity_index_test.mjs && node streaming_progressive_ui_test.mjs && node streaming_progressive_ui_prod_test.mjs && node streaming_progressive_integration_test.mjs",
+    "test:streaming-progressive": "node streaming_pages_pg_test.mjs && node streaming_page_cache_test.mjs && node streaming_page_state_test.mjs && node streaming_identity_index_test.mjs && node entdecken_projection_index_test.mjs && node streaming_progressive_ui_test.mjs && node streaming_progressive_ui_prod_test.mjs && node streaming_progressive_integration_test.mjs",
     "test:streaming-progressive:integration": "node streaming_progressive_integration_test.mjs",
     "test:streaming-progressive:browser": "VITE_APP_ENV=production VITE_APP_URL=https://kinodreieck.test VITE_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_synthetic_progressive_final vite build && KD_STREAMING_FINAL_USE_LAB_FIXTURE=1 playwright test --config=playwright.streaming-progressive-final.config.mjs",
     "test:streaming-progressive:final": "KD_STREAMING_FINAL_USE_LAB_FIXTURE=1 npm test && npm run test:streaming-progressive:browser",
