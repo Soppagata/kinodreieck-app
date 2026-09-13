@@ -651,7 +651,7 @@ begin
       raise exception 'invalid streaming page cursor' using errcode='22023'; end if;
     v_offset:=(v_cursor->>'o')::integer;
   end if;
-  with effective as (
+  with effective as materialized (
     select b.source_key output_key,coalesce(m.payload,b.payload)payload,coalesce(m.services,b.services)services,
       coalesce(m.genres,b.genres)genres,coalesce(m.aliases,b.aliases)aliases,
       coalesce(m.identity_keys,b.identity_keys)identity_keys,coalesce(m.title_keys,b.title_keys)title_keys,
@@ -666,7 +666,9 @@ begin
     select output_key,payload,services,genres,aliases,identity_keys,title_keys,title_norms,title_sort,title_order,provider_sort,
       work_type,release_year,watchmode_id,imdb_id,tmdb_id,known from public.kd_streaming_page_motn
       where base_key is null and not hidden
-  ), library as (
+  ), selected as materialized (
+    select * from effective where services&&v_services
+  ), library as materialized (
     select public.kd_streaming_page_text(x->'id') library_id,x,
       public.kd_streaming_page_identity_keys(x) identity_keys,public.kd_streaming_page_title_keys(x) title_keys,
       public.kd_streaming_page_type(x->>'typ') work_type,
@@ -675,16 +677,30 @@ begin
       public.kd_streaming_page_id_norm('imdb',x->>'imdb_id') imdb_id,
       public.kd_streaming_page_id_norm('tmdb',x->>'tmdb_id') tmdb_id
       from jsonb_array_elements(v_library)x
+  ), selected_identity as materialized (
+    select s.output_key,k.key from selected s cross join lateral unnest(s.identity_keys) k(key)
+  ), library_identity as materialized (
+    select l.library_id,k.key from library l cross join lateral unnest(l.identity_keys) k(key)
+  ), selected_titles as materialized (
+    select s.output_key,k.key from selected s cross join lateral unnest(s.title_keys) k(key)
+  ), library_titles as materialized (
+    select l.library_id,k.key from library l cross join lateral unnest(l.title_keys) k(key)
+  ), candidate_matches as materialized (
+    select e.output_key,l.library_id,'id' kind from selected_identity e join library_identity l using(key)
+    union all
+    select e.output_key,l.library_id,'title' kind from selected_titles e join library_titles l using(key)
+  ), candidate_pairs as materialized (
+    select output_key,library_id,bool_or(kind='id') same_id,bool_or(kind='title') same_title
+      from candidate_matches group by output_key,library_id
   ), pair_evidence as (
-    select e.output_key,l.library_id,
-      e.identity_keys&&l.identity_keys same_id,e.title_keys&&l.title_keys same_title,
+    select c.output_key,c.library_id,c.same_id,c.same_title,
       (e.work_type is not null and l.work_type is not null
         and e.release_year is not null and l.release_year is not null) evidence_complete,
       (e.work_type=l.work_type and e.release_year=l.release_year) evidence_equal,
       ((e.watchmode_id is not null and l.watchmode_id is not null and e.watchmode_id<>l.watchmode_id)
        or (e.imdb_id is not null and l.imdb_id is not null and e.imdb_id<>l.imdb_id)
        or (e.tmdb_id is not null and l.tmdb_id is not null and e.tmdb_id<>l.tmdb_id)) id_conflict
-      from effective e join library l on e.identity_keys&&l.identity_keys or e.title_keys&&l.title_keys
+      from candidate_pairs c join selected e using(output_key) join library l using(library_id)
   ), pairs as (
     select *,same_id and evidence_complete and evidence_equal and not id_conflict strong_valid,
       same_title and evidence_complete and evidence_equal and not id_conflict title_valid,
@@ -699,26 +715,41 @@ begin
         and count(*)filter(where title_valid)=1 and not bool_or(conflict)
         then min(library_id)filter(where title_valid) end library_id
       from pairs group by output_key
-  ), book_entries as (
+  ), selected_aliases as materialized (
+    select s.output_key,a.id from selected s cross join lateral unnest(s.aliases) a(id)
+  ), book_entries as materialized (
     select public.kd_streaming_page_text(x->'id') id,
       public.kd_streaming_page_timestamp(x->>'fensterBeginn') since,
       public.kd_streaming_page_timestamp(x->>'verbrauchtBis') consumed
       from jsonb_array_elements(v_personal->'newEntries')x
-  ), legacy_entries as (
+  ), legacy_entries as materialized (
     select public.kd_streaming_page_text(x->'id') id,public.kd_streaming_page_timestamp(x->>'firstSeenAt') since
       from jsonb_array_elements(v_personal->'legacyNew')x
+  ), seen_entries as materialized (
+    select distinct public.kd_streaming_page_text(x) id from jsonb_array_elements(v_personal->'seenIds')x
+  ), must_watch_entries as materialized (
+    select distinct public.kd_streaming_page_text(x) id from jsonb_array_elements(v_personal->'mustWatchIds')x
+  ), rated_entries as materialized (
+    select distinct public.kd_streaming_page_text(x) id from jsonb_array_elements(v_personal->'ratedIds')x
+  ), book_decisions as materialized (
+    select distinct on (a.output_key) a.output_key,b.since,b.consumed
+      from selected_aliases a join book_entries b using(id)
+      order by a.output_key,b.consumed desc,b.since desc
+  ), legacy_decisions as materialized (
+    select a.output_key,min(l.since) since from selected_aliases a join legacy_entries l using(id)
+      group by a.output_key
+  ), seen_decisions as materialized (
+    select distinct a.output_key from selected_aliases a join seen_entries s using(id)
   ), prepared as (
     select e.*,d.library_id,b.since anchor_start,b.consumed,
-      b.since is not null and b.since<=v_now and b.consumed<=v_now has_anchor,l.since legacy_start
-      from effective e left join decisions d using(output_key)
-      left join lateral (select since,consumed from book_entries
-        where id=any(e.aliases) order by consumed desc,since desc limit 1)b on true
-      left join lateral (select min(since) since from legacy_entries where id=any(e.aliases))l on true
-     where e.services&&v_services
+      b.since is not null and b.since<=v_now and b.consumed<=v_now has_anchor,l.since legacy_start,
+      sd.output_key is not null seen,m.id is not null must_watch,r.id is not null rated
+      from selected e left join decisions d using(output_key)
+      left join book_decisions b using(output_key) left join legacy_decisions l using(output_key)
+      left join seen_decisions sd using(output_key) left join must_watch_entries m on m.id=d.library_id
+      left join rated_entries r on r.id=d.library_id
   ), labeled as (
     select e.*,
-      exists(select 1 from jsonb_array_elements(v_personal->'seenIds')s
-        where public.kd_streaming_page_text(s)=any(e.aliases)) seen,
       public.kd_streaming_page_new_since(e.payload,v_services,v_meta->'stand_pro_quelle',
         v_meta->'vergleich_stand_pro_quelle',v_now,e.anchor_start,e.consumed,e.has_anchor,e.legacy_start) new_since
       from prepared e
@@ -737,10 +768,8 @@ begin
         or release_year between (v_filters->>'dekade')::integer-2 and (v_filters->>'dekade')::integer+12)
       and (nullif(v_filters->>'buchstabe','') is null or upper(left(title_sort,1))=upper(v_filters->>'buchstabe'))
       and (nullif(v_filters->>'status','') is null or (v_filters->>'status'='gesehen')=seen)
-      and (coalesce((v_filters->>'nurWunsch')::boolean,false)=false or library_id is not null and exists(
-        select 1 from jsonb_array_elements(v_personal->'mustWatchIds')x where public.kd_streaming_page_text(x)=library_id))
-      and (coalesce((v_filters->>'nurBewertet')::boolean,false)=false or library_id is not null and exists(
-        select 1 from jsonb_array_elements(v_personal->'ratedIds')x where public.kd_streaming_page_text(x)=library_id))
+      and (coalesce((v_filters->>'nurWunsch')::boolean,false)=false or must_watch)
+      and (coalesce((v_filters->>'nurBewertet')::boolean,false)=false or rated)
   ), ordered as (
     select *,row_number() over(order by
       case when coalesce(v_filters->>'sort','titel')='titel' and coalesce(v_filters->>'richtung','auf')='auf' then title_order end asc nulls last,

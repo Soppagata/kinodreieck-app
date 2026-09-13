@@ -23,7 +23,10 @@ Diff-Beleg, übernimmt aber das ursprüngliche MotN-Zugangsdatum. Mehrdeutige
 Titel sowie widersprüchliche IMDb-/TMDb-IDs werden nicht verbunden. Die
 Library-Zuordnung verwendet dieselben vollständigen Jahr-/Typbelege,
 ID-Präfixe und Titelregeln wie `ordneExternenTitelZu`; Streaming-Aliase bleiben
-auf Gesehen-/Neu-Status begrenzt.
+auf Gesehen-/Neu-Status begrenzt. Pro Request werden die reduzierte Library und
+die Status-/Fristanker einmal materialisiert. Kandidaten entstehen aus
+deduplizierten Gleichheitsjoins der expandierten ID- und Titelkeys; es gibt
+keinen Katalog×Library-Vollvergleich.
 
 Jede Quellenänderung erhöht `source_revision`. Cursor binden Revision, Konto,
 Dienstauswahl, Ansicht, Filter und die übergebenen Identitäts-/Fristparameter.
@@ -57,8 +60,10 @@ Felder aus der alten Known-Lane, einschließlich des persönlichen Besitzfelds
 Cluster und prüft synthetische Fixtures sowie die neutralen Dateien unter
 `/private/tmp/kd-streaming-performance-20260913`. Der belegte Lauf umfasste 15
 Checks. Auf 25.023 vereinigten realen Titeln dauerte der einmalige lokale
-Projektionsaufbau rund 11,2 Sekunden; die erste 20er-Seite für Netflix, Disney+
-und Prime Video dauerte rund 0,3 Sekunden. Ihr vollständiger Zähler von 8.806
+Projektionsaufbau rund 11,3 Sekunden. Mit 226 durch den App-Kontext reduzierten
+Library-Identitäten dauerte die erste 20er-Seite für Netflix, Disney+ und Prime
+Video 0,34 Sekunden, die folgende 200er-Seite ebenfalls 0,34 Sekunden. Ihr
+vollständiger Zähler von 8.806
 stimmte mit der bestehenden JavaScript-Projektion überein. Die Messung ist
 lokal und rechnerabhängig; Seitenaufrufe bauen den Katalog nicht erneut auf.
 

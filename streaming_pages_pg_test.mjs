@@ -318,18 +318,36 @@ try {
       where name in ('streaming_bekannt','streaming_entdecken');`);
   const rebuildMs = performance.now() - realBefore;
   const realServices = ["Netflix", "Disney+", "Prime Video"];
+  const realisticLibrary = JSON.parse(readFileSync(join(realRoot, "synthetic-master.json"), "utf8"))
+    .map((film) => ({ id: film?.id ?? null, watchmode_id: film?.watchmode_id ?? null,
+      streaming_id: film?.streaming_id ?? null, imdb_id: film?.imdb_id ?? null,
+      tmdb_id: film?.tmdb_id ?? null, titel: film?.titel ?? null,
+      originaltitel: film?.originaltitel ?? null, jahr: film?.jahr ?? null, typ: film?.typ ?? null }));
+  const realisticPersonal = { ...request().personal,
+    seenIds: [String(realisticLibrary[0].watchmode_id)],
+    mustWatchIds: [String(realisticLibrary[2].id)], ratedIds: [String(realisticLibrary[5].id)],
+    newEntries: [{ id: String(realisticLibrary[3].watchmode_id),
+      fensterBeginn: Date.parse("2026-08-01T00:00:00.000Z"),
+      verbrauchtBis: Date.parse("2026-08-01T00:00:00.000Z") }] };
   const jsCombined = applyMotnStreaming(vereinigeStreamingTitel(realKnown, realDiscover),
     motnEnvelope(realDiscoverRow.payload.motn, realKnownRow.payload.motn));
   const expected = jsCombined.filter((title) => title.dienste?.some((service) => realServices.includes(service))).length;
   const pageBefore = performance.now();
-  const realPage = call(request({ services: realServices }));
+  const realRequest = request({ services: realServices, library: realisticLibrary, personal: realisticPersonal });
+  const realPage = call(realRequest);
   const pageMs = performance.now() - pageBefore;
-  check("real neutral catalogs keep selected-service count parity and a 20-item first page", () => {
+  const followupBefore = performance.now();
+  const realFollowup = call({ ...realRequest, limit: 200, cursor: realPage.nextCursor });
+  const followupMs = performance.now() - followupBefore;
+  check("real catalogs with 226 reduced app identities keep count parity and subsecond pages", () => {
     assert.equal(realPage.counts.all, expected); assert.equal(realPage.items.length, 20);
+    assert.equal(realFollowup.items.length, 200); assert.equal(realFollowup.counts.library, realPage.counts.library);
+    assert.ok(pageMs < 1000, `first page took ${pageMs.toFixed(0)} ms`);
+    assert.ok(followupMs < 1000, `follow-up page took ${followupMs.toFixed(0)} ms`);
     assert.equal(Number(sql("select count(*) from public.kd_streaming_page_base")),
       new Set(vereinigeStreamingTitel(realKnown, realDiscover).map((x) => String(x.watchmode_id ?? x.streaming_id))).size);
   });
-  console.log(`real fixture: ${realPage.counts.all}/${jsCombined.length} selected/all, projection ${rebuildMs.toFixed(0)} ms, page ${pageMs.toFixed(0)} ms`);
+  console.log(`real fixture: ${realPage.counts.all}/${jsCombined.length} selected/all, 226 library, projection ${rebuildMs.toFixed(0)} ms, pages ${pageMs.toFixed(0)}/${followupMs.toFixed(0)} ms`);
   console.log(`${checks} Streaming-pages PostgreSQL checks passed.`);
 } finally {
   if (running) run("pg_ctl", ["--pgdata", data, "--wait", "stop"]);
