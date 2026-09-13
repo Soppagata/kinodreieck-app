@@ -39,6 +39,5 @@
 }
 
 @media (max-width: 430px) {
-  .kd-streaming-page-more button { min-height: 44px; }
   .kd-streaming-page-more span { overflow-wrap: anywhere; }
 }

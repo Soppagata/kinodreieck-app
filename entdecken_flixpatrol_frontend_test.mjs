@@ -225,10 +225,11 @@ try {
     }));
     const dom = new JSDOM(html);
     try {
-      dailyCheck(`Echter Tab zeigt Format ${current.format} mit Tagesstand und sechs Karten`, () => {
+      dailyCheck(`Echter Tab zeigt Format ${current.format} mit Tagesstand und erster 20er-Portion`, () => {
         const section = dom.window.document.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
         assert.ok(section);
-        assert.equal(section.querySelectorAll(".kd-entdecken-neutral").length, 6);
+        assert.equal(section.querySelectorAll(".kd-entdecken-neutral").length, 20);
+        assert.equal([...section.querySelectorAll("button")].some((entry) => /Weitere .* Titel anzeigen/u.test(entry.textContent)), false);
         assert.match(section.textContent, /Stand: 09\.09\.2026/);
         assert.doesNotMatch(section.textContent, /KW 37/);
         assert.equal(section.querySelectorAll(".kd-entdecken-quellenlink").length, 0);

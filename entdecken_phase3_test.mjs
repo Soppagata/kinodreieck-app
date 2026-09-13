@@ -450,6 +450,13 @@ try {
   dom.window.requestAnimationFrame = globalThis.requestAnimationFrame;
   dom.window.cancelAnimationFrame = globalThis.cancelAnimationFrame;
   dom.window.scrollTo = () => {};
+  const intersectionObservers = [];
+  globalThis.IntersectionObserver = class {
+    constructor(callback) { this.callback = callback; this.target = null; intersectionObservers.push(this); }
+    observe(target) { this.target = target; }
+    disconnect() { this.target = null; }
+    emit(isIntersecting) { this.callback([{ isIntersecting, target: this.target }]); }
+  };
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const React = await import("react");
   const { act: reactAct, createElement: h } = React;
@@ -459,6 +466,10 @@ try {
 
   const button = (root, label) => [...root.querySelectorAll("button")]
     .find((entry) => entry.textContent.trim() === label);
+  const intersect = async (observer, isIntersecting) => act(async () => {
+    observer.emit(isIntersecting);
+    await tick();
+  });
   const setControl = async (control, value) => {
     const prototype = control instanceof dom.window.HTMLSelectElement
       ? dom.window.HTMLSelectElement.prototype : dom.window.HTMLInputElement.prototype;
@@ -660,7 +671,6 @@ try {
   const versionedUi = await mount(EntdeckenTab, versionedProps);
   await act(async () => { await tick(); await tick(); });
   const versionedSection = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
-  const expandVersioned = button(versionedSection, "Weitere 9 Titel anzeigen");
   check("Unbestätigte Chartverfügbarkeit erzeugt keine persönliche Passung", () => {
     const personal = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-empfehlungen"]');
     assert.match(personal.textContent, /Noch keine persönliche Passung im aktuellen Angebot/u);
@@ -668,9 +678,10 @@ try {
     assert.doesNotMatch(personal.textContent, /Zum Entdecken|Persönliche Passung|Profil:/u);
   });
   check("Format 7 benennt den datierten Fünf-Quellen-Snapshot ohne Aktualitätsversprechen", () => {
-    assert.equal(versionedSection.querySelectorAll(".kd-entdecken-neutral").length, 6);
+    assert.equal(versionedSection.querySelectorAll(".kd-entdecken-neutral").length, 15);
     assert.equal(versionedSection.querySelector("ol"), null);
-    assert.equal(expandVersioned?.getAttribute("aria-expanded"), "false");
+    assert.equal([...versionedSection.querySelectorAll("button")]
+      .some((entry) => /Weitere .* Titel anzeigen|Weniger Titel anzeigen/u.test(entry.textContent)), false);
     assert.match(versionedSection.textContent, /Österreichische Quellenliste/u);
     assert.match(versionedSection.textContent, /Beliebte Titel/u);
     assert.match(versionedSection.textContent, /Stand: 29\.08\.2026/u);
@@ -740,12 +751,10 @@ try {
     assert.equal(pinboardSprung?.pinId, gesetztePins[0].pinId);
   });
   await startUi.cleanup();
-  await act(async () => { expandVersioned.click(); await tick(); });
-  check("Ohne Streamingauswahl sind ausgeklappt nur die 15 Kinokarten mit HTTPS-Quelllink sichtbar", () => {
+  check("Ohne Streamingauswahl sind alle 15 Kinokarten ohne Aufklappschritt sichtbar", () => {
     const cards = [...versionedSection.querySelectorAll(".kd-entdecken-neutral")];
     assert.equal(cards.length, 15);
     assert.equal(cards.filter((card) => card.querySelector('h3 > a[href^="https://"]')).length, 15);
-    assert.equal(expandVersioned.textContent.trim(), "Weniger Titel anzeigen");
   });
   await versionedUi.cleanup();
 
@@ -756,23 +765,24 @@ try {
   });
   await act(async () => { await tick(); await tick(); });
   const mixedPopularSection = mixedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
-  const expandPopular = button(mixedPopularSection, "Weitere 19 Titel anzeigen");
-  check("Format 6 zeigt nur den kompakten Stand und verlinkt jede sichtbare Titelüberschrift neutral", () => {
+  const mixedObserver = intersectionObservers.at(-1);
+  check("Format 6 zeigt die erste 20er-Portion und verlinkt jede sichtbare Titelüberschrift neutral", () => {
     const cards = [...mixedPopularSection.querySelectorAll(".kd-entdecken-neutral")];
     const links = cards.map((card) => card.querySelector("h3 > a.kd-entdecken-titellink"));
-    assert.equal(cards.length, 6);
-    assert.equal(links.filter(Boolean).length, 6);
+    assert.equal(cards.length, 20);
+    assert.equal(links.filter(Boolean).length, 20);
     assert.ok(links.every((link) => link.target === "_blank"
       && link.getAttribute("rel") === "noopener noreferrer"
       && /Referenz bei/.test(link.getAttribute("aria-label") || "")));
-    assert.equal(expandPopular?.getAttribute("aria-expanded"), "false");
+    assert.equal([...mixedPopularSection.querySelectorAll("button")]
+      .some((entry) => /Weitere .* Titel anzeigen|Weniger Titel anzeigen/u.test(entry.textContent)), false);
     assert.match(mixedPopularSection.textContent, /Stand: 27\.08\.2026/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /ausgewählten Streamingdienste|Kinocharts des Österreichischen Filminstituts|persönlicher Passungsgrund/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /Joyn|Prime Video|Disney\+|Apple TV\+/u);
     assert.doesNotMatch(mixedPopularSection.textContent, /Quelle ansehen|Bei Joyn ansehen/);
   });
-  await act(async () => { expandPopular.click(); await tick(); });
-  check("Restlicher 25er-Pool klappt vollständig auf und belegt den 15/10-Quellenvertrag", () => {
+  await intersect(mixedObserver, true);
+  check("Die nächste Viewport-Begegnung ergänzt automatisch die restlichen fünf Karten", () => {
     const cards = [...mixedPopularSection.querySelectorAll(".kd-entdecken-neutral")];
     const links = cards.map((card) => card.querySelector("h3 > a.kd-entdecken-titellink"));
     const hosts = links.map((link) => new URL(link.href).hostname);
@@ -780,8 +790,6 @@ try {
     assert.equal(links.filter(Boolean).length, 25);
     assert.equal(hosts.filter((host) => host === "filminstitut.at").length, 15);
     assert.equal(hosts.filter((host) => host === "www.netflix.com").length, 10);
-    assert.equal(expandPopular.getAttribute("aria-expanded"), "true");
-    assert.equal(expandPopular.textContent.trim(), "Weniger Titel anzeigen");
   });
   await mixedUi.cleanup();
 

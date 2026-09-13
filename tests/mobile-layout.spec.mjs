@@ -666,12 +666,10 @@ test("Entdecken zeigt den eingebetteten providerfreien Pool ohne Fremdnetz kompa
   await expect(persoenlich).not.toContainText("Aktuelle Treffermenge");
   const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
   await expect(weitere.getByRole("heading", { name: "Beliebte Titel" })).toBeVisible();
-  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
-  const mehrTitel = weitere.getByRole("button", { name: "Weitere 44 Titel anzeigen" });
-  await expect(mehrTitel).toBeVisible();
-  await expect(mehrTitel).toHaveAttribute("aria-expanded", "false");
+  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(20);
+  await expect(weitere.getByRole("button", { name: /Weitere .* Titel anzeigen|Weniger Titel anzeigen/ })).toHaveCount(0);
   const quellenlinks = weitere.locator(".kd-entdecken-neutral h3 > a.kd-entdecken-titellink");
-  await expect(quellenlinks).toHaveCount(6);
+  await expect(quellenlinks).toHaveCount(20);
   for (const link of await quellenlinks.all()) await expect(link).toHaveAttribute("href", /^https:\/\//);
   await expect.poll(() => entdeckenRequests).toBe(1);
   await keineDokumentUeberbreite(page);

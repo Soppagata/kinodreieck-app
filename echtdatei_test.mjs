@@ -558,8 +558,8 @@ check("No-Config-file:// zeigt den eingebetteten, providerfreien 50er-Pool kompa
   !!dateiEntdeckenBereich
   && /Für mich/.test(dateiText())
   && /Beliebte Titel/.test(dateiText())
-  && dateiDoc.querySelectorAll(".kd-entdecken-neutral").length === 6
-  && !!dateiKnopf(/^Weitere 44 Titel anzeigen$/)
+  && dateiDoc.querySelectorAll(".kd-entdecken-neutral").length === 20
+  && !dateiKnopf(/^(?:Weitere .* Titel anzeigen|Weniger Titel anzeigen)$/)
   && [...dateiDoc.querySelectorAll(".kd-entdecken-neutral h3 > a")]
     .every((link) => link.href.startsWith("https://"))
   && !/Kataloggröße|Aktuelle Treffermenge/.test(dateiText()));

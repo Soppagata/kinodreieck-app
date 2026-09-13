@@ -529,13 +529,14 @@ await checkAsync("ÖFI-Ausfall behält den letzten guten Pool und startet keinen
   assert.equal(failures, 1);
 });
 
-check("UI verlinkt Titel neutral und klappt den restlichen Pool zugänglich auf", () => {
+check("UI verlinkt Titel neutral und gibt den Pool automatisch in 20er-Portionen frei", () => {
   const source = fs.readFileSync("./src/tabs/EntdeckenTab.jsx", "utf8");
   assert.doesNotMatch(source, /Bei Joyn ansehen|Listenplatz|Listenposition/);
   assert.match(source, /Quelle: \{sourceLabel\(entry\)\}/);
   assert.match(source, /kd-entdecken-titellink/);
-  assert.match(source, /aria-expanded=\{showAllPopular\}/);
-  assert.match(source, /Weitere \$\{popularPool\.length - popular\.length\} Titel anzeigen/);
+  assert.match(source, /popularPool\.slice\(0, visiblePopularCount\)/);
+  assert.match(source, /StreamingPageWindow items=\{popularPool\} visible=\{visiblePopularCount\}/);
+  assert.doesNotMatch(source, /showAllPopular|Weitere \$\{popularPool\.length - popular\.length\} Titel anzeigen/);
 });
 
 console.log(`\n${checks}/${checks} marktuebergreifende Entdecken-E2E-Checks bestanden.`);

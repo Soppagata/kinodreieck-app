@@ -19,8 +19,10 @@ Kartenverhalten des bisherigen Vollkatalogs erhalten.
 Die drei Ansichten erscheinen sofort. Ihre Badges verwenden `counts.library`,
 `counts.all` und `counts.new`; `total` bezeichnet separat die Treffer der
 aktiven Filter. Die UI rendert zunächst 20 Karten. Bereits vorgeladene Titel
-werden über den Weiterladen-Knopf oder den Scroll-Sentinel in Portionen zu 20
-in den DOM übernommen.
+werden über den Scroll-Sentinel automatisch in Portionen zu 20
+in den DOM übernommen. Der Sentinel gibt pro echter Viewport-Begegnung nur
+eine Portion frei. Nachrendern, Scroll-Anchoring und neu eintreffende
+Vorladepakete starten innerhalb derselben Begegnung keinen Selbstlauf.
 
 Bei `refreshing` oder einem Fehler nach einer erfolgreichen Seite bleiben die
 vorhandenen Karten und alle Kartenaktionen bedienbar. `library_id` wird nur als

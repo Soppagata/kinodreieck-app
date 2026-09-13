@@ -30,8 +30,12 @@ for (const name of [
   value: name === "window" ? dom.window : dom.window[name], configurable: true, writable: true,
 });
 window.scrollTo = ({ top = 0 } = {}) => Object.defineProperty(window, "scrollY", { value: top, configurable: true });
+const intersectionObservers = [];
 globalThis.IntersectionObserver = class {
-  observe() {} disconnect() {}
+  constructor(callback) { this.callback = callback; this.target = null; intersectionObservers.push(this); }
+  observe(target) { this.target = target; }
+  disconnect() { this.target = null; }
+  emit(isIntersecting) { this.callback([{ isIntersecting, target: this.target }]); }
 };
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,8 +54,19 @@ async function mount(props) {
 }
 const button = (container, text) => [...container.querySelectorAll("button")]
   .find((node) => node.textContent.trim().startsWith(text));
+const intersect = async (observer, isIntersecting) => act(async () => {
+  observer.emit(isIntersecting);
+  await tick();
+});
 
 const items = Array.from({ length: 55 }, (_, index) => ({
+  watchmode_id: 90000 + index,
+  ...(index === 0 ? { library_id: "library-0" } : {}),
+  titel: `Progressiver Titel ${String(index + 1).padStart(2, "0")}`,
+  jahr: 2000 + (index % 20), typ: index % 2 ? "tv_series" : "movie",
+  genres: [index % 2 ? "Drama" : "Komödie"], dienste: ["Netflix"],
+}));
+const manyItems = Array.from({ length: 380 }, (_, index) => ({
   watchmode_id: 90000 + index,
   ...(index === 0 ? { library_id: "library-0" } : {}),
   titel: `Progressiver Titel ${String(index + 1).padStart(2, "0")}`,
@@ -87,16 +102,32 @@ assert.doesNotMatch(ui.container.textContent, /Neu sichtbar bis|18\.09\.2026/u);
 assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 20);
 assert.equal(queries.length, 1);
 assert.equal(queries[0].view, "all");
+assert.equal([...ui.container.querySelectorAll("button")].some((entry) => /Weitere .* anzeigen/u.test(entry.textContent)), false);
 
-await act(async () => { button(ui.container, "Weitere 20 anzeigen").click(); await tick(); });
+const firstObserver = intersectionObservers.at(-1);
+const observerCount = intersectionObservers.length;
+await intersect(firstObserver, true);
 assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 40);
+await intersect(firstObserver, true);
+await intersect(firstObserver, true);
+assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 40,
+  "mehrere persistente Intersection-Callbacks starten keinen Selbstlauf");
+await ui.render({ ...baseProps, streamingPage: { ...basePage, items: manyItems, loaded: manyItems.length } });
+assert.equal(intersectionObservers.length, observerCount, "Vorladepakete bauen den Observer nicht neu auf");
+await intersect(firstObserver, true);
+assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 40,
+  "mehrseitige Datenankunft gibt in derselben Begegnung keine weitere Portion frei");
+await intersect(firstObserver, false);
+await intersect(firstObserver, true);
+assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 60,
+  "erst eine neue Viewport-Begegnung gibt weitere 20 Karten frei");
 
 await act(async () => { button(ui.container, "▸ Filter & Sortierung").click(); await tick(); });
 const typeButton = button(ui.container, "Filme");
 await act(async () => { typeButton.click(); await tick(); });
 assert.equal(queries.at(-1).filters.typ, "movie");
 const queryCount = queries.length;
-await ui.render({ ...baseProps, streamingPage: { ...basePage } });
+await ui.render({ ...baseProps, streamingPage: { ...basePage, items: manyItems, loaded: manyItems.length } });
 assert.equal(queries.length, queryCount, "gleiche primitive Query wird nicht erneut gesendet");
 
 const firstCard = ui.container.querySelector(".kd-entdecken-karte");
@@ -105,8 +136,10 @@ await act(async () => { firstCard.querySelector('[aria-label="Auf die Merkliste"
 await act(async () => { firstCard.querySelector(".kd-streaming-mediathek-link").click(); await tick(); });
 assert.deepEqual(actions, [["pin", 90000], ["merk", 90000], ["open", "library-0"]]);
 
-await ui.render({ ...baseProps, streamingPage: { ...basePage, status: "error", error: "späte Seite fehlt" } });
-assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 40);
+await ui.render({ ...baseProps, streamingPage: {
+  ...basePage, items: manyItems, loaded: manyItems.length, status: "error", error: "späte Seite fehlt",
+} });
+assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 60);
 assert.match(ui.container.textContent, /vorhandenen Karten bleiben verfügbar/u);
 await ui.cleanup();
 sessionStorage.clear();
@@ -140,7 +173,8 @@ sessionStorage.clear();
 
 const sessionQueries = [];
 const sessionUi = await mount({ ...baseProps, onStreamingPageQuery: (query) => sessionQueries.push(query) });
-await act(async () => { button(sessionUi.container, "Weitere 20 anzeigen").click(); await tick(); });
+const sessionObserver = intersectionObservers.at(-1);
+await intersect(sessionObserver, true);
 Object.defineProperty(window, "scrollY", { value: 427, configurable: true });
 await act(async () => { button(sessionUi.container, "Neu").click(); await tick(); });
 assert.equal(sessionQueries.at(-1).view, "new");
@@ -150,7 +184,8 @@ await sessionUi.render({ ...baseProps, onStreamingPageQuery: (query) => sessionQ
 } });
 assert.equal(sessionUi.container.querySelectorAll(".kd-entdecken-karte").length, 20);
 Object.defineProperty(window, "scrollY", { value: 91, configurable: true });
-await act(async () => { button(sessionUi.container, "Weitere 5 anzeigen").click(); await tick(); });
+await intersect(sessionObserver, false);
+await intersect(sessionObserver, true);
 assert.equal(sessionUi.container.querySelectorAll(".kd-entdecken-karte").length, 25);
 await act(async () => { button(sessionUi.container, "Alles").click(); await tick(); });
 await sessionUi.render({ ...baseProps, onStreamingPageQuery: (query) => sessionQueries.push(query) });

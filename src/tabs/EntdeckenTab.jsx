@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlogTab } from "./BlogTab.jsx";
 import { IconChevronDown } from "../components/ui.jsx";
+import { StreamingPageWindow, STREAMING_PAGE_PORTION } from "../components/StreamingPageWindow.jsx";
 import { ladeProfil } from "../lib/profil.js";
 import {
   createEntdeckenRecommendations,
@@ -30,6 +31,7 @@ import { formatTitleFactsDate } from "../lib/titleFacts.js";
 import { entdeckenDailyFeedNotice } from "../services/entdeckenDailyFeed.js";
 import { runtimeConfig } from "../config/runtime.js";
 import "../styles/ui-copy-disclosures.css";
+import "../styles/streaming-progressive.css";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -230,7 +232,7 @@ function RecommendationsView({
   entdeckenStatus, webDiscoveryFeed, webDiscoveryStatus, dailyVariety, selectionDay,
   recommendationPins, onRecommendationPinToggle, programm, programmInfo, flixpatrolFacts,
 }) {
-  const [showAllPopular, setShowAllPopular] = useState(false);
+  const [visiblePopularCount, setVisiblePopularCount] = useState(STREAMING_PAGE_PORTION);
   const [offeneEmpfehlungBeschreibung, setOffeneEmpfehlungBeschreibung] = useState(null);
   const [offeneBeliebtBeschreibung, setOffeneBeliebtBeschreibung] = useState(null);
   const selection = useMemo(() => createEntdeckenRecommendations({
@@ -241,7 +243,7 @@ function RecommendationsView({
     streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed, programm, programmInfo, flixpatrolFacts]);
   const { personal, popular } = selection;
   const popularPool = selection.popularPool || popular;
-  const visiblePopular = showAllPopular ? popularPool : popular;
+  const visiblePopular = popularPool.slice(0, visiblePopularCount);
   const source = (entry) => entry.externalEvidence?.[0] || null;
   const mediaLabel = (entry) => ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase())
     ? "Serie" : "Film";
@@ -350,11 +352,10 @@ function RecommendationsView({
           </div>
         </article>;
       })}</div> : <p className="kd-entdecken-leer gross">Noch keine aktuelle beliebte Liste geladen.</p>}
-      {popularPool.length > popular.length ? <button type="button" className="kd-entdecken-mehr"
-        aria-expanded={showAllPopular} aria-controls="kd-entdecken-beliebt-karten"
-        onClick={() => setShowAllPopular((value) => !value)}>
-        {showAllPopular ? "Weniger Titel anzeigen" : `Weitere ${popularPool.length - popular.length} Titel anzeigen`}
-      </button> : null}
+      <StreamingPageWindow items={popularPool} visible={visiblePopularCount}
+        onVisibleChange={setVisiblePopularCount} total={popularPool.length}>
+        {() => null}
+      </StreamingPageWindow>
     </section>
   </section>;
 }
