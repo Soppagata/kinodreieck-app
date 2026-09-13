@@ -102,7 +102,9 @@ Der vorhandene große MotN-Anhang wird anschließend weiterhin übertragen und
 verarbeitet; Paket B spart an dieser Stelle keine Bytes ein. Ausdrücklich
 angeforderte Vollkatalognutzer bleiben bestehen. Nur wenn der neue RPC
 eindeutig fehlt, lädt der Controller einmal den kompatiblen Vollkatalog und
-deaktiviert den Seitenzustand.
+deaktiviert den Seitenzustand. Eine noch ladende Dienstauswahl gilt weder beim
+Boot noch beim gezielten Streaming-Sprung als Legacyzustand und startet keinen
+Vollkatalog.
 
 Master, Must-Watch, Entdecken-Status und Streaming-Dienste werden heute bereits
 als persönliche Töpfe über `ACCOUNT_SYNC_KEYS` in `kd_personal` desselben

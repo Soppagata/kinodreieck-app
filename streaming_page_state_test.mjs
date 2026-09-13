@@ -121,6 +121,8 @@ await check("App-Boot-Naht bindet asynchrones Konto-Startziel vor Known und schu
   assert.match(app, /tab: knownEntscheidungsTab,[\s\S]*?accountBootPending:/u);
   assert.match(app, /!streamingKnownBisErstseiteZurueckgestellt\) ladeStreamingDateien\(\)/u);
   assert.match(app, /streamingKnownBisErstseiteZurueckgestellt \? Promise\.resolve\(null\) : ladeStreamingDateien\(false\)/u);
+  assert.doesNotMatch(app, /!streamingPageBereit[\s\S]{0,180}ladeStreamingDateien(?:Ref\.current)?[^\n]*\(true\)/u);
+  assert.match(app, /streamingLegacyFallbackRef\.current = \(\) => ladeStreamingDateien\(true\)/u);
 });
 
 await check("Cache erscheint vor unabhaengiger Hintergrundfrische", async () => {

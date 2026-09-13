@@ -1151,16 +1151,11 @@ export default function App() {
   const [streamingFokus, setStreamingFokus] = useState(null);
   const ladeStreamingDateienRef = useRef(null), streamingSprungLaufRef = useRef(0);
   const springeZuFilm = useCallback((ref) => { setMediathekFokus(ref); setExpandedId("b" + ref); navigiere("mediathek"); }, [navigiere]);
-  const springeZuStreaming = useCallback(async (fokus) => {
+  const springeZuStreaming = useCallback((fokus) => {
     const lauf = ++streamingSprungLaufRef.current; navigiere("streaming");
-    /* Der progressive Pfad holt das Ziel ueber seinen gebundenen Query. Nur ein
-       kontrollierter Legacyzustand darf noch den Vollkatalog vorziehen. */
-    if (!streamingPageBereit) {
-      try { await ladeStreamingDateienRef.current?.(true); } catch { /* Tab bleibt nutzbar */ }
-    }
     if (streamingSprungLaufRef.current !== lauf) return;
     setStreamingFokus({ ...fokus, auftrag: lauf });
-  }, [navigiere, streamingPageBereit]);
+  }, [navigiere]);
   const springeZuMustwatchRef = useCallback((verknuepfung, eintrag) => {
     const plan = planeMustwatchSprung(verknuepfung, eintrag, master);
     if (plan?.bereich === "mediathek") return springeZuFilm(plan.fokus);
@@ -1578,14 +1573,6 @@ export default function App() {
     sichtbareAuswahl, sichtbareAuswahlGeladen]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
   streamingLegacyFallbackRef.current = () => ladeStreamingDateien(true);
-  /* Dashboard und „Mein Programm" leben zuerst aus dem leichten Bekannt-
-     Katalog. Sobald Streaming selbst offen ist, wird der Vollkatalog geladen:
-     bis dahin bleibt die Alles-Zahl verborgen, danach ist sie echt. */
-  useEffect(() => {
-    if (!streamingPageBereit && remoteKontoAktiv && bootDone && snapshotFreigabe && tab === "streaming") {
-      void ladeStreamingDateien(true);
-    }
-  }, [streamingPageBereit, remoteKontoAktiv, bootDone, snapshotFreigabe, tab, ladeStreamingDateien]);
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
