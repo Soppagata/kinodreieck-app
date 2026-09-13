@@ -95,7 +95,14 @@ asynchrone Kontoboot hält dafür den gespeicherten Startbereich fest, bis die
 Remote-Capability bereit ist; der vorläufige Mediathek-Tab kann den Read nicht
 mehr vorzeitig öffnen. Eine inzwischen erfolgte Navigation erhöht ihre
 Revision und wird von einer später eintreffenden Einstellung nicht
-überschrieben. Der
+überschrieben. Der Known-Lader prüft diese aktuelle Freigabe nochmals direkt
+vor dem Request, sodass eine bereits eingeplante Boot- oder
+Betriebsart-Closure keine veraltete Renderentscheidung ausführen kann. Auch ein
+sofortiger Klick auf `Alles`, solange `StreamingTab` vor seinem ersten Effect
+noch den Legacy-Zustand sieht, startet im vorgesehenen Seitenmodus keinen
+Known- oder Vollkatalog-Read; die Seitenquery übernimmt anschließend die
+gewählte Ansicht. Der kontrollierte Missing-RPC-Fallback bleibt davon getrennt
+und darf weiterhin genau einmal den Vollweg laden. Der
 Known-Read behält seine vollständige MotN-Überlagerung, damit entfernte
 Watchmode-Angebote weder in Badges noch in Entdecken-Kandidaten zurückkehren.
 Der vorhandene große MotN-Anhang wird anschließend weiterhin übertragen und

@@ -345,6 +345,11 @@ export default function App() {
   const streamingBekanntLaufRef = useRef(null);
   const streamingEntdeckenLaufRef = useRef(null);
   const streamingLegacyFallbackRef = useRef(null);
+  /* Render-Closures aus Konto-Boot und Betriebsartwechsel koennen noch mit
+     einem inzwischen ueberholten Gate weiterlaufen. Die Loader pruefen daher
+     die aktuelle Freigabe unmittelbar vor einem neuen Known-Read. */
+  const streamingKnownZurueckgestelltRef = useRef(false);
+  const streamingPagingVorgesehenRef = useRef(false);
 
   const saveZeitgrenze = useCallback(async (v) => {
     setZeitgrenze(v);
@@ -904,6 +909,9 @@ export default function App() {
     pageEnabled: streamingPageBereit,
     pageStatus: streamingPage.status,
   });
+  const streamingPagingVorgesehen = remoteKontoAktiv && bootDone && snapshotFreigabe;
+  streamingKnownZurueckgestelltRef.current = streamingKnownBisErstseiteZurueckgestellt;
+  streamingPagingVorgesehenRef.current = streamingPagingVorgesehen;
 
   const {
     artikelListe, artikelListeRef, artikelGeladen, artikelGespeichertAm,
@@ -1403,6 +1411,11 @@ export default function App() {
      (Streaming-Tab offen): der volle 3,8-MB-Entdecken-Katalog wird gefetcht/geparst. */
   const ladeStreamingDateien = useCallback(async (vollKatalog = false) => {
     if (!snapshotFreigabe) return;
+    /* Ein bereits eingeplanter Effekt darf den priorisierten Seitenstart nicht
+       mit seiner spaeter ausgefuehrten, veralteten Renderentscheidung
+       ueberholen. Der eindeutige Missing-RPC-Fallback ruft den Vollweg auf und
+       bleibt von diesem Known-only-Guard unberuehrt. */
+    if (!vollKatalog && streamingKnownZurueckgestelltRef.current) return;
     /* Wie beim Programm: eine Antwort, die zu einer inzwischen überholten
        Betriebsart gehört, darf die Anzeige nicht mehr anfassen. */
     const gen = betriebsartGen.current;
@@ -1573,6 +1586,15 @@ export default function App() {
     sichtbareAuswahl, sichtbareAuswahlGeladen]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
   streamingLegacyFallbackRef.current = () => ladeStreamingDateien(true);
+  const ladeStreamingVollkatalogWennLegacy = useCallback(() => {
+    /* StreamingTab kann waehrend seines ersten Effects noch kurz den
+       Legacy-Zustand sehen. Ein sofortiger Klick auf "Alles" darf dann weder
+       Known noch den Vollkatalog vor der ersten Seite starten. Sobald der
+       Seitenmodus aktiv ist, uebernimmt seine Query die bereits gesetzte
+       Ansicht. Ein explizit erkannter Missing-RPC-Fallback laeuft separat. */
+    if (streamingPagingVorgesehenRef.current) return;
+    return ladeStreamingDateienRef.current?.(true);
+  }, []);
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
@@ -1995,7 +2017,7 @@ export default function App() {
             onFilmwissenLaden={ladeFilmwissen}
             onFilmwissenRecherchieren={recherchiereFilmwissen}
             mustwatchIds={mustwatchMasterIds}
-            onAllesKatalogLaden={() => ladeStreamingDateien(true)}
+            onAllesKatalogLaden={ladeStreamingVollkatalogWennLegacy}
             auswahl={sichtbareAuswahl} auswahlGeladen={sichtbareAuswahlGeladen} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
             recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
