@@ -36,6 +36,8 @@ AUFGELÖSTER BLOCKER an B: Die automatische Freigabeprüfung lehnte zunächst di
 
 Integrationsreihenfolge: A → B → C. Meister prüft Paketbasis, statischen Diff, Scope, fokussierte Belege und kleine Nähte; keine wiederholten Pakettests. Größere Korrekturen gehen an den zuständigen Owner.
 
+Der eine Abschlussbaumeister erhält nach vollständiger Integration den konkreten Kandidaten. Sein kontrollierter Lauf verbindet die vorhandene Mocksuite/Buildprüfung mit einem lokalen mobilen Nutzerweg: Erstantwort höchstens 20 Titel plus vollständige Zähler; Filtertreffer jenseits der ersten Seite; serielles Nachladen nur im offenen Bereich; schneller Rücksprung ohne erneuten Vollkatalogaufbau; Gerätecache mit Hintergrundfrische; veraltete Cursor/Antworten und Kontowechsel; Neu-Ablauf an der exakten 14-Tage-Grenze; Produktion ohne sichtbare technische Lieferanten-/Standangaben außerhalb der Datenschutztexte. Messungen werden ausdrücklich als lokales Labor, nicht als physische iPhone-Abnahme dokumentiert. Kein zusätzlicher Gesamtlauf durch den Meister.
+
 Diagnosebasis: `/private/tmp/kd-streaming-performance-20260913/ANALYSE.md`, neutraler Testkatalog und synthetische Referenzen im selben Verzeichnis. Labor: Chromium 393×852, CPU×4; warmes Alles↔Neu 3,27/3,58 s bei null Katalogreads. Echte Provider- oder persönliche Live-Testdaten sind nicht erforderlich.
 
 Lieferumfang dieser Bauwelle: lokaler implementierter, integrierter, committed und einmal geprüfter Kandidat. Baumeister starten keinerlei Remote-, Migration-, Provider- oder Deploywirkung. Eine spätere Live-Lieferung wird anhand des konkreten Kandidaten und der bestehenden Autorisierung behandelt.
