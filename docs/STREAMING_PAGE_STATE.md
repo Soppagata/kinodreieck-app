@@ -99,8 +99,10 @@ Revision und wird von einer später eintreffenden Einstellung nicht
 vor dem Request, sodass eine bereits eingeplante Boot- oder
 Betriebsart-Closure keine veraltete Renderentscheidung ausführen kann. Auch ein
 sofortiger Klick auf `Alles`, solange `StreamingTab` vor seinem ersten Effect
-noch den Legacy-Zustand sieht, startet im vorgesehenen Seitenmodus keinen
-Known- oder Vollkatalog-Read; die Seitenquery übernimmt anschließend die
+noch den Legacy-Zustand sieht, startet im vorgesehenen Account-Seitenmodus
+keinen Known- oder Vollkatalog-Read. Diese Routenentscheidung gilt bereits vor
+`bootDone`; die eigentliche Seitenaktivierung wartet weiterhin auf Boot,
+Snapshotfreigabe und Dienstauswahl. Die Seitenquery übernimmt anschließend die
 gewählte Ansicht. Der kontrollierte Missing-RPC-Fallback bleibt davon getrennt
 und darf weiterhin genau einmal den Vollweg laden. Der
 Known-Read behält seine vollständige MotN-Überlagerung, damit entfernte

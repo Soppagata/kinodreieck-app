@@ -119,6 +119,8 @@ await check("App-Boot-Naht bindet asynchrones Konto-Startziel vor Known und schu
   assert.match(app, /setAusstehenderKontoStartTab\(\{[\s\S]*?tab: startTabEntscheidung\.pendingTab/u);
   assert.match(app, /navigationRevisionRef\.current \+= 1;[\s\S]*?setTab\(id\)/u);
   assert.match(app, /tab: knownEntscheidungsTab,[\s\S]*?accountBootPending:/u);
+  assert.match(app, /const streamingPagingVorgesehen = session\.mode === "account"\s*\|\| !!ausstehenderStartTabIstAktuell/u);
+  assert.doesNotMatch(app, /const streamingPagingVorgesehen =[^;]*(?:bootDone|snapshotFreigabe)/u);
   assert.match(app, /!streamingKnownBisErstseiteZurueckgestellt\) ladeStreamingDateien\(\)/u);
   assert.match(app, /streamingKnownBisErstseiteZurueckgestellt \? Promise\.resolve\(null\) : ladeStreamingDateien\(false\)/u);
   assert.match(app, /if \(!vollKatalog && streamingKnownZurueckgestelltRef\.current\) return/u);

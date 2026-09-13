@@ -909,7 +909,11 @@ export default function App() {
     pageEnabled: streamingPageBereit,
     pageStatus: streamingPage.status,
   });
-  const streamingPagingVorgesehen = remoteKontoAktiv && bootDone && snapshotFreigabe;
+  /* Die Route steht bereits mit dem Account-Boot fest. Der Streaming-Tab ist
+     bei bereiter Remote-Capability schon vor `bootDone` bedienbar; diese kurze
+     Phase darf deshalb nicht als Erlaubnis fuer den Legacy-Vollweg gelten. */
+  const streamingPagingVorgesehen = session.mode === "account"
+    || !!ausstehenderStartTabIstAktuell;
   streamingKnownZurueckgestelltRef.current = streamingKnownBisErstseiteZurueckgestellt;
   streamingPagingVorgesehenRef.current = streamingPagingVorgesehen;
 
