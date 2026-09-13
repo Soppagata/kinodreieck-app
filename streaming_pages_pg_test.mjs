@@ -1,7 +1,8 @@
-/* Disposable PostgreSQL contract test. Synthetic fixtures only; no network or shared writes. */
+/* Disposable PostgreSQL contract test. Synthetic by default; optional local lab data is opt-in. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { vereinigeStreamingTitel } from "./src/lib/streamingProjection.js";
@@ -18,9 +19,9 @@ const required = ["initdb", "pg_ctl", "psql"];
 const PG = [...new Set(candidates)].find((dir) => required.every((name) => existsSync(join(dir, name))));
 assert.ok(PG, `PostgreSQL server binaries are required (${required.join(", ")})`);
 
-const root = mkdtempSync("/private/tmp/kd-streaming-pages-pg-");
+const root = mkdtempSync(join(tmpdir(), "kd-pg-"));
 const data = join(root, "data");
-const socket = join(root, "socket");
+const socket = join(root, "s");
 const port = String(57000 + process.pid % 7000);
 const migration = readFileSync("supabase/migrations/20260913200000_streaming_pages_backend.sql", "utf8");
 const env = { PATH: `${PG}:/usr/bin:/bin`, LANG: "C", LC_ALL: "C" };
@@ -297,28 +298,57 @@ try {
     assert.match(failure(sessionSql(`select public.kd_streaming_page('${JSON.stringify({ ...request(), note: "no" })}'::jsonb)`)), /invalid streaming page request fields/);
     assert.match(failure(sessionSql(`select public.kd_streaming_page('${JSON.stringify(request({ cursor: "tampered" }))}'::jsonb)`)), /invalid streaming page cursor/);
   });
-  const realRoot = "/private/tmp/kd-streaming-performance-20260913";
-  const realKnownRow = JSON.parse(readFileSync(join(realRoot, "streaming_bekannt.json"), "utf8"))[0];
-  const realDiscoverRow = JSON.parse(readFileSync(join(realRoot, "streaming_entdecken.json"), "utf8"))[0];
-  const realOffers = realDiscoverRow.payload.motn?.offers || realKnownRow.payload.motn?.offers || [];
-  const realKnown = { ...realKnownRow.payload }; delete realKnown.motn;
-  const realDiscover = { ...realDiscoverRow.payload }; delete realDiscover.motn;
+  const useLabFixture = process.env.KD_STREAMING_PAGES_USE_LAB_FIXTURE === "1";
+  const labRoot = "/private/tmp/kd-streaming-performance-20260913";
+  let fixtureKnownRow;
+  let fixtureDiscoverRow;
+  let fixtureLibrary;
+  let fixtureServices;
+  let fixtureLabel;
+  if (useLabFixture) {
+    for (const name of ["streaming_bekannt.json", "streaming_entdecken.json", "synthetic-master.json"]) {
+      assert.ok(existsSync(join(labRoot, name)), `explicit lab fixture is missing: ${join(labRoot, name)}`);
+    }
+    fixtureKnownRow = JSON.parse(readFileSync(join(labRoot, "streaming_bekannt.json"), "utf8"))[0];
+    fixtureDiscoverRow = JSON.parse(readFileSync(join(labRoot, "streaming_entdecken.json"), "utf8"))[0];
+    fixtureLibrary = JSON.parse(readFileSync(join(labRoot, "synthetic-master.json"), "utf8"));
+    fixtureServices = ["Netflix", "Disney+", "Prime Video"];
+    fixtureLabel = "explicit lab fixture";
+  } else {
+    fixtureKnownRow = { payload: structuredClone(knownPayload), stand, updated_at: stand };
+    fixtureDiscoverRow = { payload: structuredClone(discoverPayload), stand, updated_at: stand };
+    fixtureLibrary = titles.slice(0, 226).map((film, index) => ({
+      id: `synthetic-library-${index}`,
+      watchmode_id: film.watchmode_id ?? null,
+      streaming_id: film.streaming_id ?? null,
+      imdb_id: film.imdb_id ?? null,
+      tmdb_id: film.tmdb_id ?? null,
+      titel: film.titel ?? null,
+      originaltitel: film.originaltitel ?? null,
+      jahr: film.jahr ?? null,
+      typ: film.typ ?? null,
+    }));
+    fixtureServices = ["Netflix", "Disney+"];
+    fixtureLabel = "synthetic fixture";
+  }
+  const fixtureOffers = fixtureDiscoverRow.payload.motn?.offers || fixtureKnownRow.payload.motn?.offers || [];
+  const fixtureKnown = { ...fixtureKnownRow.payload }; delete fixtureKnown.motn;
+  const fixtureDiscover = { ...fixtureDiscoverRow.payload }; delete fixtureDiscover.motn;
   const realBefore = performance.now();
   sql(`alter table public.kd_motn_offers disable trigger kd_streaming_page_motn_row;
     truncate public.kd_motn_offers;
     insert into public.kd_motn_offers(show_id,service_id,country,available,event_at,added_at,checked_at,watchmode_seen_at,link,show_data)
-    select * from jsonb_to_recordset('${JSON.stringify(realOffers).replaceAll("'", "''")}'::jsonb)
+    select * from jsonb_to_recordset('${JSON.stringify(fixtureOffers).replaceAll("'", "''")}'::jsonb)
       as x(show_id text,service_id text,country text,available boolean,event_at timestamptz,added_at timestamptz,
         checked_at timestamptz,watchmode_seen_at timestamptz,link text,show_data jsonb);
     alter table public.kd_motn_offers enable trigger kd_streaming_page_motn_row;
     update public.kd_catalog set payload=case name
-      when 'streaming_bekannt' then '${JSON.stringify(realKnown).replaceAll("'", "''")}'::jsonb
-      else '${JSON.stringify(realDiscover).replaceAll("'", "''")}'::jsonb end,
-      stand='${realDiscoverRow.stand}'::timestamptz,updated_at='${realDiscoverRow.updated_at}'::timestamptz
+      when 'streaming_bekannt' then '${JSON.stringify(fixtureKnown).replaceAll("'", "''")}'::jsonb
+      else '${JSON.stringify(fixtureDiscover).replaceAll("'", "''")}'::jsonb end,
+      stand='${fixtureDiscoverRow.stand}'::timestamptz,updated_at='${fixtureDiscoverRow.updated_at}'::timestamptz
       where name in ('streaming_bekannt','streaming_entdecken');`);
   const rebuildMs = performance.now() - realBefore;
-  const realServices = ["Netflix", "Disney+", "Prime Video"];
-  const realisticLibrary = JSON.parse(readFileSync(join(realRoot, "synthetic-master.json"), "utf8"))
+  const realisticLibrary = fixtureLibrary
     .map((film) => ({ id: film?.id ?? null, watchmode_id: film?.watchmode_id ?? null,
       streaming_id: film?.streaming_id ?? null, imdb_id: film?.imdb_id ?? null,
       tmdb_id: film?.tmdb_id ?? null, titel: film?.titel ?? null,
@@ -329,25 +359,26 @@ try {
     newEntries: [{ id: String(realisticLibrary[3].watchmode_id),
       fensterBeginn: Date.parse("2026-08-01T00:00:00.000Z"),
       verbrauchtBis: Date.parse("2026-08-01T00:00:00.000Z") }] };
-  const jsCombined = applyMotnStreaming(vereinigeStreamingTitel(realKnown, realDiscover),
-    motnEnvelope(realDiscoverRow.payload.motn, realKnownRow.payload.motn));
-  const expected = jsCombined.filter((title) => title.dienste?.some((service) => realServices.includes(service))).length;
+  const jsCombined = applyMotnStreaming(vereinigeStreamingTitel(fixtureKnown, fixtureDiscover),
+    motnEnvelope(fixtureDiscoverRow.payload.motn, fixtureKnownRow.payload.motn));
+  const expected = jsCombined.filter((title) => title.dienste?.some((service) => fixtureServices.includes(service))).length;
   const pageBefore = performance.now();
-  const realRequest = request({ services: realServices, library: realisticLibrary, personal: realisticPersonal });
+  const realRequest = request({ services: fixtureServices, library: realisticLibrary, personal: realisticPersonal });
   const realPage = call(realRequest);
   const pageMs = performance.now() - pageBefore;
   const followupBefore = performance.now();
   const realFollowup = call({ ...realRequest, limit: 200, cursor: realPage.nextCursor });
   const followupMs = performance.now() - followupBefore;
-  check("real catalogs with 226 reduced app identities keep count parity and subsecond pages", () => {
+  check(`${fixtureLabel} with 226 reduced app identities keeps count parity and subsecond pages`, () => {
     assert.equal(realPage.counts.all, expected); assert.equal(realPage.items.length, 20);
     assert.equal(realFollowup.items.length, 200); assert.equal(realFollowup.counts.library, realPage.counts.library);
     assert.ok(pageMs < 1000, `first page took ${pageMs.toFixed(0)} ms`);
     assert.ok(followupMs < 1000, `follow-up page took ${followupMs.toFixed(0)} ms`);
     assert.equal(Number(sql("select count(*) from public.kd_streaming_page_base")),
-      new Set(vereinigeStreamingTitel(realKnown, realDiscover).map((x) => String(x.watchmode_id ?? x.streaming_id))).size);
+      new Set(vereinigeStreamingTitel(fixtureKnown, fixtureDiscover)
+        .map((x) => String(x.watchmode_id ?? x.streaming_id))).size);
   });
-  console.log(`real fixture: ${realPage.counts.all}/${jsCombined.length} selected/all, 226 library, projection ${rebuildMs.toFixed(0)} ms, pages ${pageMs.toFixed(0)}/${followupMs.toFixed(0)} ms`);
+  console.log(`${fixtureLabel}: ${realPage.counts.all}/${jsCombined.length} selected/all, 226 library, projection ${rebuildMs.toFixed(0)} ms, pages ${pageMs.toFixed(0)}/${followupMs.toFixed(0)} ms`);
   console.log(`${checks} Streaming-pages PostgreSQL checks passed.`);
 } finally {
   if (running) run("pg_ctl", ["--pgdata", data, "--wait", "stop"]);
