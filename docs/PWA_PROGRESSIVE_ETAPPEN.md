@@ -36,6 +36,11 @@ AUFGELÖSTER BLOCKER an B: Die automatische Freigabeprüfung lehnte zunächst di
 
 Integrationsreihenfolge: A → B → C. Meister prüft Paketbasis, statischen Diff, Scope, fokussierte Belege und kleine Nähte; keine wiederholten Pakettests. Größere Korrekturen gehen an den zuständigen Owner.
 
+DELIVERED und gezielte Korrekturaufträge:
+
+- B lieferte `a817b13578403d06b884df8e8ff29b8ca38f4d9b`, Cache 6/6, State 10/10, Identitätsindex 6/6 plus bestehende Statusparität 7/7. Statische Meisterprüfung gab konkrete Korrekturen zurück: bestehende Art-/Anbietersortierung, Neu-Ablauf und Frische bei Rückkehr, Pause bei versteckter PWA, nicht blockierender Cachewrite mit Accountprüfung und kurzer opaker Query-Key. Kein erneuter Gesamtaudit.
+- C lieferte `12ccf19de3922883f0e354e2a525af0873bdfde1`, UI 13/13 und Produktionsdarstellung 18/18 samt fokussierten Bestandsprüfungen. Statische Meisterprüfung gab konkrete Korrekturen zurück: sichere Error-Darstellung, keine neue technische Ablaufanzeige auf Prod, stabile Filter ohne Teilseiten-Gesamtzahlen, gezielter Suchsprung, korrekt gebundener Rückkehrzustand und bestätigte Leerzustände. Kein Gesamtlauf.
+
 Der eine Abschlussbaumeister erhält nach vollständiger Integration den konkreten Kandidaten. Sein kontrollierter Lauf verbindet die vorhandene Mocksuite/Buildprüfung mit einem lokalen mobilen Nutzerweg: Erstantwort höchstens 20 Titel plus vollständige Zähler; Filtertreffer jenseits der ersten Seite; serielles Nachladen nur im offenen Bereich; schneller Rücksprung ohne erneuten Vollkatalogaufbau; Gerätecache mit Hintergrundfrische; veraltete Cursor/Antworten und Kontowechsel; Neu-Ablauf an der exakten 14-Tage-Grenze; Produktion ohne sichtbare technische Lieferanten-/Standangaben außerhalb der Datenschutztexte. Messungen werden ausdrücklich als lokales Labor, nicht als physische iPhone-Abnahme dokumentiert. Kein zusätzlicher Gesamtlauf durch den Meister.
 
 Diagnosebasis: `/private/tmp/kd-streaming-performance-20260913/ANALYSE.md`, neutraler Testkatalog und synthetische Referenzen im selben Verzeichnis. Labor: Chromium 393×852, CPU×4; warmes Alles↔Neu 3,27/3,58 s bei null Katalogreads. Echte Provider- oder persönliche Live-Testdaten sind nicht erforderlich.
