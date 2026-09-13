@@ -237,6 +237,20 @@ async function oeffneAppMitMockkonto(page, { filme = [], katalog = null } = {}) 
           getStorageState: () => "account-ready", subscribe: () => () => {},
           initialize: async () => session, refresh: async () => session });
       ` });
+    } else if (katalog && url.pathname === "/src/services/streamingPages.js") {
+      await route.fulfill({ contentType: "application/javascript", body: `
+        export const STREAMING_PAGE_RPC_MISSING = "streaming-page-rpc-missing";
+        export const isStreamingPageRpcMissing = error => error?.reason === STREAMING_PAGE_RPC_MISSING;
+        const fehlend = async () => {
+          const error = new Error("Synthetische Fixture ohne Streaming-Seiten-RPC");
+          error.reason = STREAMING_PAGE_RPC_MISSING;
+          throw error;
+        };
+        export const streamingPagesService = Object.freeze({
+          loadPage: fehlend,
+          loadCachedPage: async () => null,
+        });
+      ` });
     } else if (katalog && url.pathname === "/src/services/catalog.js") {
       await route.fulfill({ contentType: "application/javascript", body: `
         import { baueStreamingAnsichten } from "/src/lib/katalog.js";
@@ -244,6 +258,12 @@ async function oeffneAppMitMockkonto(page, { filme = [], katalog = null } = {}) 
         let freigeben;
         const warten = new Promise(resolve => { freigeben = resolve; });
         window.cageCatalog = { calls: {}, release: freigeben };
+        export function katalogTokenErlaubt(katalogUrl, projektUrl = "") {
+          const normalisiert = wert => String(wert == null ? "" : wert).trim().toLowerCase().replace(/\\/+$/, "");
+          const projekt = normalisiert(projektUrl);
+          const katalog = normalisiert(katalogUrl);
+          return !projekt || !katalog || projekt === katalog;
+        }
         export const catalogService = {
           storedVariant: () => "live", hasConnection: () => true,
           buildStreamingViews: baueStreamingAnsichten,
