@@ -83,7 +83,7 @@ assert.equal(button(ui.container, "Neu").textContent.trim(), "Neu (205)");
 assert.equal(button(ui.container, "Mein Programm").textContent.trim(), "Mein Programm (123)");
 assert.match(ui.container.textContent, /314 Treffer.*für diese Ansicht und Filter/u);
 assert.match(ui.container.textContent, /aus dem Browser-Speicher/u);
-assert.match(ui.container.textContent, /Neu sichtbar bis 18\.09\.2026/u);
+assert.doesNotMatch(ui.container.textContent, /Neu sichtbar bis|18\.09\.2026/u);
 assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 20);
 assert.equal(queries.length, 1);
 assert.equal(queries[0].view, "all");
@@ -108,17 +108,112 @@ assert.deepEqual(actions, [["pin", 90000], ["merk", 90000], ["open", "library-0"
 await ui.render({ ...baseProps, streamingPage: { ...basePage, status: "error", error: "späte Seite fehlt" } });
 assert.equal(ui.container.querySelectorAll(".kd-entdecken-karte").length, 40);
 assert.match(ui.container.textContent, /vorhandenen Karten bleiben verfügbar/u);
-Object.defineProperty(window, "scrollY", { value: 427, configurable: true });
 await ui.cleanup();
+sessionStorage.clear();
 
-const returnQueries = [];
-const returned = await mount({ ...baseProps, onStreamingPageQuery: (query) => returnQueries.push(query) });
-assert.equal(ui.container.isConnected, false);
-assert.equal(returned.container.querySelectorAll(".kd-entdecken-karte").length, 40);
-assert.equal(returnQueries[0].view, "all");
-assert.equal(returnQueries[0].filters.typ, "movie");
+const errorUi = await mount({ ...baseProps, streamingPage: {
+  ...basePage, queryKey: "account-a:all:error", items: [], total: null,
+  loaded: 0, hasMore: false, backgroundLoading: false, status: "error", error: new Error("Boundary intern"),
+} });
+assert.match(errorUi.container.textContent, /Titel konnten nicht geladen werden/u);
+assert.doesNotMatch(errorUi.container.textContent, /Boundary intern/u);
+await errorUi.cleanup();
+sessionStorage.clear();
+
+const genreUi = await mount(baseProps);
+await act(async () => { button(genreUi.container, "▸ Filter & Sortierung").click(); await tick(); });
+const decadeRange = genreUi.container.querySelector('[aria-label="Entdecken: Jahrzehnt filtern"]');
+const stableDecadeMax = decadeRange.max;
+await act(async () => { button(genreUi.container, "Komödie").click(); await tick(); });
+assert.equal(queries.at(-1).filters.genre, "komodie");
+await genreUi.render({ ...baseProps, streamingPage: {
+  ...basePage, queryKey: "account-a:all:genre-komodie", items: [], total: null,
+  loaded: 0, status: "loading", backgroundLoading: true,
+} });
+const selectedGenre = button(genreUi.container, "Komödie");
+assert.notEqual(selectedGenre.style.background, "transparent");
+assert.equal(selectedGenre.textContent.trim(), "Komödie", "Teilseitenzahlen werden nicht als Gesamtzahl gezeigt");
+assert.equal(genreUi.container.querySelector('[aria-label="Entdecken: Jahrzehnt filtern"]').max, stableDecadeMax);
+assert.equal(queries.at(-1).filters.genre, "komodie", "leere Ladephase setzt den aktiven Genrequery nicht zurück");
+await genreUi.cleanup();
+sessionStorage.clear();
+
+const sessionQueries = [];
+const sessionUi = await mount({ ...baseProps, onStreamingPageQuery: (query) => sessionQueries.push(query) });
+await act(async () => { button(sessionUi.container, "Weitere 20 anzeigen").click(); await tick(); });
+Object.defineProperty(window, "scrollY", { value: 427, configurable: true });
+await act(async () => { button(sessionUi.container, "Neu").click(); await tick(); });
+assert.equal(sessionQueries.at(-1).view, "new");
+await sessionUi.render({ ...baseProps, onStreamingPageQuery: (query) => sessionQueries.push(query), streamingPage: {
+  ...basePage, view: "new", queryKey: "account-a:new:default", items: items.slice(0, 25), total: 25,
+  loaded: 25, hasMore: false, backgroundLoading: false,
+} });
+assert.equal(sessionUi.container.querySelectorAll(".kd-entdecken-karte").length, 20);
+Object.defineProperty(window, "scrollY", { value: 91, configurable: true });
+await act(async () => { button(sessionUi.container, "Weitere 5 anzeigen").click(); await tick(); });
+assert.equal(sessionUi.container.querySelectorAll(".kd-entdecken-karte").length, 25);
+await act(async () => { button(sessionUi.container, "Alles").click(); await tick(); });
+await sessionUi.render({ ...baseProps, onStreamingPageQuery: (query) => sessionQueries.push(query) });
 await act(async () => { await tick(); });
+assert.equal(sessionUi.container.querySelectorAll(".kd-entdecken-karte").length, 40);
 assert.equal(window.scrollY, 427);
-await returned.cleanup();
+const savedNew = JSON.parse(sessionStorage.getItem("kd:streaming-ui:account-a:new:default"));
+assert.equal(savedNew.ansicht, "neu");
+assert.equal(savedNew.visible, 25);
+assert.equal(savedNew.scrollY, 91);
+await sessionUi.cleanup();
+sessionStorage.clear();
 
-console.log("streaming_progressive_ui_test: 13 checks passed");
+let focusConsumed = false;
+const focusQueries = [];
+const focusUi = await mount({
+  ...baseProps,
+  fokusTreffer: { art: "entdecken", ref: "90030", titel: "Progressiver Titel 31" },
+  onFokusVerbraucht: () => { focusConsumed = true; },
+  onStreamingPageQuery: (query) => focusQueries.push(query),
+});
+await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
+const focusTarget = focusUi.container.querySelector('[data-streaming-suchtreffer="entdecken:90030"]');
+assert.ok(focusTarget, "ein geladenes Ziel hinter Karte 20 bleibt als sichere Zielkarte im DOM");
+assert.equal(focusQueries.at(-1).filters.suche, "Progressiver Titel 31");
+assert.equal(document.activeElement, focusTarget);
+assert.equal(focusConsumed, true);
+await focusUi.cleanup();
+sessionStorage.clear();
+
+const libraryLoading = await mount({ ...baseProps, streamingPage: {
+  ...basePage, view: "library", queryKey: "account-a:library:loading", items: [], total: null,
+  loaded: 0, status: "loading", backgroundLoading: true,
+} });
+assert.doesNotMatch(libraryLoading.container.textContent, /Kein Titel deiner Liste/u);
+assert.match(libraryLoading.container.textContent, /Erste Titel werden geladen/u);
+await libraryLoading.render({ ...baseProps, streamingPage: {
+  ...basePage, view: "library", queryKey: "account-a:library:empty", items: [], total: 0,
+  loaded: 0, status: "ready", hasMore: false, backgroundLoading: false,
+} });
+assert.match(libraryLoading.container.textContent, /Kein Titel deiner Liste/u);
+await libraryLoading.cleanup();
+sessionStorage.clear();
+
+const newEmpty = await mount({ ...baseProps, streamingPage: {
+  ...basePage, view: "new", queryKey: "account-a:new:empty", items: [], total: 0,
+  loaded: 0, status: "ready", hasMore: false, backgroundLoading: false,
+} });
+assert.match(newEmpty.container.textContent, /In den letzten 14 Tagen sind keine neuen Titel/u);
+await newEmpty.cleanup();
+sessionStorage.clear();
+
+const storagePrototype = Object.getPrototypeOf(sessionStorage);
+const originalGetItem = storagePrototype.getItem;
+Object.defineProperty(storagePrototype, "getItem", {
+  configurable: true,
+  value() { throw new Error("Safari storage blocked"); },
+});
+const blockedStorageUi = await mount({ ...baseProps, streamingPage: {
+  ...basePage, queryKey: "account-a:all:storage-blocked",
+} });
+assert.match(blockedStorageUi.container.textContent, /314 Treffer/u);
+await blockedStorageUi.cleanup();
+Object.defineProperty(storagePrototype, "getItem", { configurable: true, value: originalGetItem });
+
+console.log("streaming_progressive_ui_test: progressive error/filter/focus/session/empty contracts passed");

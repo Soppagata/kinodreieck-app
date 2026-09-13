@@ -19,6 +19,7 @@ await esbuild.build({
   stdin: {
     contents: [
       'export { TitleFactsDetails } from "./src/tabs/StreamingTab.jsx";',
+      'export { StreamingTab } from "./src/tabs/StreamingTab.jsx";',
       'export { FilmwissenBereich } from "./src/components/FilmwissenBereich.jsx";',
       'export { KatalogAuditStatus } from "./src/components/KatalogAuditStatus.jsx";',
       'export { DreiFragen } from "./src/components/DreiFragen.jsx";',
@@ -33,7 +34,7 @@ await esbuild.build({
   external: ["react", "react-dom", "react/jsx-runtime", "react-dom/server"], logLevel: "warning",
 });
 const {
-  TitleFactsDetails, FilmwissenBereich, KatalogAuditStatus, DreiFragen,
+  TitleFactsDetails, StreamingTab, FilmwissenBereich, KatalogAuditStatus, DreiFragen,
   StreamingEinstellungen, entdeckenDailyFeedNotice, HILFE_BEREICHE,
 } = await import(pathToFileURL(bundle).href);
 const h = React.createElement;
@@ -45,6 +46,20 @@ const facts = renderToStaticMarkup(h(TitleFactsDetails, { titel: {
 } }));
 assert.match(facts, /Neutrale Beschreibung/u);
 assert.doesNotMatch(facts, /Watchmode|FlixPatrol|geprüft 13\.09\.2026/u);
+
+const progressiveStreaming = renderToStaticMarkup(h(StreamingTab, {
+  bekannt: null, entdecken: null, auswahl: ["Netflix"], auswahlGeladen: true,
+  master: [], merkliste: [], mustwatchIds: new Set(), recommendationPins: [],
+  entdeckenStatus: {}, katalogInfo: { ausCache: true }, streamingPage: {
+    enabled: true, status: "ready", view: "all", queryKey: "prod:all", version: "v1",
+    items: [{ watchmode_id: 1, titel: "Sichtbarer Titel", jahr: 2026, dienste: ["Netflix"] }],
+    counts: { all: 100, new: 3, library: 4 }, total: 1, loaded: 1,
+    hasMore: false, backgroundLoading: false, fromCache: true,
+    nextExpiryAt: "2026-09-18T10:00:00.000Z",
+  },
+}));
+assert.match(progressiveStreaming, /1 Treffer|Sichtbarer Titel/u);
+assert.doesNotMatch(progressiveStreaming, /Browser-Speicher|Gespeicherte Titel|zuletzt verfügbare Titel|Neu sichtbar bis|18\.09\.2026/u);
 
 const filmwissen = renderToStaticMarkup(h(FilmwissenBereich, { config: prod, phase: "ready", daten: {
   status: "belegt", warum: { wert: 4, sicherheit: "hoch", kurztext: "Belegte Einordnung" },
@@ -95,4 +110,4 @@ const profilSource = fs.readFileSync(path.join(rootDir, "src/components/ProfilAn
 assert.match(profilSource, /!produktiv && kandidat\.checkedAt/u);
 assert.match(profilSource, /!produktiv && kandidat\.sourceUrl/u);
 
-console.log("streaming_progressive_ui_prod_test: 18 checks passed");
+console.log("streaming_progressive_ui_prod_test: production display contracts passed");

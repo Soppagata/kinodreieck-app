@@ -19,7 +19,6 @@ import {
   passtInJahrzehntMitKulanz,
 } from "../lib/streamingSort.js";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
-import { formatPresentationDate } from "../lib/presentationDate.js";
 import { formatTitleFactsDate } from "../lib/titleFacts.js";
 import { runtimeConfig } from "../config/runtime.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
@@ -46,6 +45,11 @@ function download(dateiname, obj) {
 
 const istStreamingSerie = (titel) => ["tv_series", "serie", "series"]
   .includes(String(titel?.typ || titel?.type || "").toLowerCase());
+const AKTUELLES_JAHRZEHNT = Math.floor(new Date().getFullYear() / 10) * 10;
+const PROGRESSIVE_JAHRZEHNTE = Object.freeze(Array.from(
+  { length: ((AKTUELLES_JAHRZEHNT - 1880) / 10) + 1 },
+  (_, index) => 1880 + (index * 10),
+));
 
 export function bestaetigteMediathekNavigationId({ titel, master, statusMap, bekannteId = null }) {
   const filme = Array.isArray(master) ? master : [];
@@ -250,14 +254,14 @@ export function StreamingTab({
     if (!fokusTreffer) return undefined;
     setFokusOverride({ art: fokusTreffer.art, ref: String(fokusTreffer.ref) });
     setAnsicht(fokusTreffer.art === "entdecken" ? "entdecken" : "programm");
-    setSuche(fokusTreffer.art === "programm" ? (fokusTreffer.titel || "") : "");
+    setSuche(fokusTreffer.art === "programm" || progressiveEnabled ? (fokusTreffer.titel || "") : "");
     setPlattformP(null); setNurBewertet(false); setBuchstabeP(null); setDekadeP(null); setNurWunsch(false);
     setPlattformE(null); setStatusFilterE(null); setBuchstabeE(null);
     setGenreE(null); setDekadeE(null); setTypE(null);
     setSichtbarE(progressiveEnabled ? STREAMING_PAGE_PORTION : 200);
     setExpandedId((fokusTreffer.art === "entdecken" ? "e" : "s") + fokusTreffer.ref);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fokusTreffer]);
+  }, [fokusTreffer, progressiveEnabled]);
   /* Erst NACH dem durch den Auftrag ausgelösten Ansichts-/Filter-Render
      fokussieren. Der Auftrag wird nur verbraucht, wenn sein DOM-Ziel wirklich
      existiert; ein langsamer Katalog-Render kann ihn daher nicht verlieren. */
@@ -287,7 +291,7 @@ export function StreamingTab({
     });
     return () => { cancelAnimationFrame(frame); window.clearTimeout(bestaetigung); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fokusTreffer, ansicht, expandedId, suche, fokusOverride, bekannt, entdecken]);
+  }, [fokusTreffer, ansicht, expandedId, suche, fokusOverride, bekannt, entdecken, progressivePageItems]);
   /* Filter-Panel startet bewusst immer zu. Persönliche Filterwerte bleiben
      stehen; der Sichtzustand lebt ausschließlich pro Tab-Instanz. */
   const [streamFilterOffen, setStreamFilterOffen] = useState(false);
@@ -420,6 +424,7 @@ export function StreamingTab({
     : [], [projektion.ausgewaehlt, neuIdSet, streamingNeu?.status]);
   const filterQuelleE = progressiveEnabled ? pageItems : (ansicht === "neu" ? neuTitel : projektion.ausgewaehlt);
 
+  const progressiveGenreOptionenRef = useRef(new Map());
   const genresE = useMemo(() => {
     const gruppen = new Map();
     filterQuelleE.forEach((titel) => (titel.genres || []).forEach((genre) => {
@@ -430,12 +435,23 @@ export function StreamingTab({
       bisher.anzahl += 1;
       gruppen.set(key, bisher);
     }));
+    if (progressiveEnabled) {
+      for (const [key, genre] of gruppen) {
+        if (!progressiveGenreOptionenRef.current.has(key)) {
+          progressiveGenreOptionenRef.current.set(key, { key, label: genre.label });
+        }
+      }
+      return [...progressiveGenreOptionenRef.current.values()]
+        .sort((a, b) => a.label.localeCompare(b.label, "de"));
+    }
     return [...gruppen.values()].sort((a, b) => b.anzahl - a.anzahl || a.label.localeCompare(b.label, "de"));
-  }, [filterQuelleE]);
-  const genreFilterSichtbarE = useMemo(() => streamingGenreFilterSichtbar(filterQuelleE), [filterQuelleE]);
+  }, [progressiveEnabled, filterQuelleE]);
+  const genreFilterSichtbarE = useMemo(() => progressiveEnabled
+    ? genresE.length > 0 || !!genreE
+    : streamingGenreFilterSichtbar(filterQuelleE), [progressiveEnabled, genresE, genreE, filterQuelleE]);
   useEffect(() => {
-    if (!genreFilterSichtbarE && genreE) setGenreE(null);
-  }, [genreFilterSichtbarE, genreE]);
+    if (!progressiveEnabled && !genreFilterSichtbarE && genreE) setGenreE(null);
+  }, [progressiveEnabled, genreFilterSichtbarE, genreE]);
 
   const statusAnzahlenE = useMemo(() => {
     return filterQuelleE.reduce((anzahl, titel) => {
@@ -489,8 +505,8 @@ export function StreamingTab({
     return [...basis, ziel];
   }, [ansicht, katalogListe, sichtbarE, fokusOverride]);
 
-  const dekadenP = useMemo(() => streamingJahrzehnte(progressiveEnabled ? pageItems : (bekannt?.titel || [])), [progressiveEnabled, pageItems, bekannt]);
-  const dekadenE = useMemo(() => streamingJahrzehnte(filterQuelleE), [filterQuelleE]);
+  const dekadenP = useMemo(() => progressiveEnabled ? PROGRESSIVE_JAHRZEHNTE : streamingJahrzehnte(bekannt?.titel || []), [progressiveEnabled, bekannt]);
+  const dekadenE = useMemo(() => progressiveEnabled ? PROGRESSIVE_JAHRZEHNTE : streamingJahrzehnte(filterQuelleE), [progressiveEnabled, filterQuelleE]);
 
   const gemerkt = (t) => merkliste.some((m) => gleicheStreamingTitel(m,t));
   const pinButton = (t) => {
@@ -560,7 +576,7 @@ export function StreamingTab({
 
   const progressiveView = ansicht === "entdecken" ? "all" : ansicht === "neu" ? "new" : "library";
   const progressiveFilters = {
-    suche: ansicht === "programm" ? suche : "",
+    suche: ansicht === "programm" || (progressiveEnabled && fokusOverride?.art === "entdecken") ? suche : "",
     plattform: ansicht === "programm" ? plattformP : plattformE,
     typ: ansicht === "programm" ? null : typE,
     genre: ansicht === "programm" ? null : genreE,
@@ -581,17 +597,29 @@ export function StreamingTab({
     onStreamingPageQuery({ view: progressiveView, filters: progressiveFilters });
   }, [progressiveEnabled, onStreamingPageQuery, progressiveQuerySignature]);
 
-  const progressiveUiSnapshotRef = useRef(null);
-  progressiveUiSnapshotRef.current = {
+  const progressiveUiSnapshot = {
     ansicht, sichtbarP, sichtbarE, suche, sortP, sortRichtungP, sortE, sortRichtungE,
     genreE, dekadeE, typE, plattformP, nurBewertet, nurWunsch, buchstabeP,
     dekadeP, plattformE, statusFilterE, buchstabeE,
   };
+  const progressiveUiByKeyRef = useRef(new Map());
+  const progressiveQueryByKeyRef = useRef(new Map());
+  const activeProgressiveKey = streamingPage?.queryKey || "";
+  if (progressiveEnabled && activeProgressiveKey) {
+    if (!progressiveQueryByKeyRef.current.has(activeProgressiveKey)) {
+      progressiveQueryByKeyRef.current.set(activeProgressiveKey, progressiveQuerySignature);
+    }
+    if (progressiveQueryByKeyRef.current.get(activeProgressiveKey) === progressiveQuerySignature) {
+      progressiveUiByKeyRef.current.set(activeProgressiveKey, progressiveUiSnapshot);
+    }
+  }
 
   useEffect(() => {
     if (!progressiveEnabled || !streamingPage?.queryKey || typeof sessionStorage === "undefined") return undefined;
     const storageKey = `kd:streaming-ui:${streamingPage.queryKey}`;
-    const raw = sessionStorage.getItem(storageKey);
+    let raw = null;
+    try { raw = sessionStorage.getItem(storageKey); }
+    catch { raw = null; }
     if (raw) {
       try {
         const saved = JSON.parse(raw);
@@ -604,7 +632,7 @@ export function StreamingTab({
       } catch { /* ungültigen kleinen UI-Zustand ignorieren */ }
     }
     return () => {
-      const state = progressiveUiSnapshotRef.current || {};
+      const state = progressiveUiByKeyRef.current.get(streamingPage.queryKey) || {};
       const visible = state.ansicht === "programm" ? state.sichtbarP : state.sichtbarE;
       try { sessionStorage.setItem(storageKey, JSON.stringify({ ...state, visible, scrollY: window.scrollY })); }
       catch { /* Sitzungszustand ist Komfort; Karten und Query bleiben nutzbar. */ }
@@ -631,8 +659,7 @@ export function StreamingTab({
 
       {progressiveEnabled && typeof streamingPage?.total === "number" ? <div className="kd-streaming-page-summary" aria-live="polite">
         <strong>{streamingPage.total} Treffer</strong><span>für diese Ansicht und Filter</span>
-        {streamingPage.fromCache ? <span>· {runtimeConfig.appEnvironment === "production" ? "zuletzt verfügbare Titel" : "aus dem Browser-Speicher"}</span> : null}
-        {streamingPage.nextExpiryAt ? <span>· Neu sichtbar bis {formatPresentationDate(streamingPage.nextExpiryAt)}</span> : null}
+        {runtimeConfig.appEnvironment !== "production" && streamingPage.fromCache ? <span>· aus dem Browser-Speicher</span> : null}
       </div> : null}
 
       {!datenDa && (
@@ -673,7 +700,7 @@ export function StreamingTab({
           {katalogInfo.variante === "demo" ? " Mit einer Anmeldung siehst du den laufenden Katalog." : ""}
         </div>
       )}
-      {datenDa && katalogInfo?.ausCache && (
+      {runtimeConfig.appEnvironment !== "production" && datenDa && katalogInfo?.ausCache && (
         <div style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
           <strong style={{ color: T.wolfram }}>Gespeicherte Titel</strong> — die Verbindung ist gerade nicht erreichbar. Die vorhandenen Karten bleiben verfügbar.
         </div>
@@ -707,7 +734,8 @@ export function StreamingTab({
           <KatalogRegler name="Mein Programm" buchstabe={buchstabeP}
             onBuchstabe={(wert) => aendereFilter(setBuchstabeP, wert)}
             jahrzehnt={dekadeP} jahrzehnte={dekadenP} onJahrzehnt={aendereDekadeP} />
-          {programm.length === 0 && <p style={{ color: T.rauch, fontSize: 14 }}>Kein Titel deiner Liste auf den gewählten Diensten.</p>}
+          {(!progressiveEnabled && programm.length === 0) || (progressiveEnabled && streamingPage?.status === "ready" && streamingPage?.total === 0)
+            ? <p style={{ color: T.rauch, fontSize: 14 }}>Kein Titel deiner Liste auf den gewählten Diensten.</p> : null}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {(progressiveEnabled ? programm.slice(0, sichtbarP) : programm).map((f) => {
               /* Editierbar: den Master-Eintrag überlagern (frische Begründung/Bewertung),
@@ -849,7 +877,7 @@ export function StreamingTab({
                   {genresE.map((genre) => (
                     <Chip key={genre.key} active={genreE === genre.key}
                       onClick={() => aendereFilter(setGenreE, genreE === genre.key ? null : genre.key)}>
-                      {genre.label} ({genre.anzahl})
+                      {genre.label}{progressiveEnabled ? "" : ` (${genre.anzahl})`}
                     </Chip>
                   ))}
                 </ChipReihe>
@@ -862,11 +890,12 @@ export function StreamingTab({
           {auswahlGeladen && auswahl.length === 0 && (
             <p style={{ color: T.rauch, fontSize: 14 }}>Keine Streaming-Dienste ausgewählt.</p>
           )}
-          {ansicht === "neu" && auswahl.length > 0 && katalogListe.length === 0 && streamingNeu?.vergleich === "verifiziert-leer" && (
+          {ansicht === "neu" && auswahl.length > 0 && katalogListe.length === 0
+            && (progressiveEnabled ? streamingPage?.status === "ready" && streamingPage?.total === 0 : streamingNeu?.vergleich === "verifiziert-leer") && (
             <p style={{ color: T.rauch, fontSize: 14 }}>In den letzten 14 Tagen sind keine neuen Titel für diese Auswahl hinzugekommen.</p>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {(progressiveEnabled ? katalogListe.slice(0, sichtbarE) : sichtbareKatalogTitel).map((t) => (
+            {sichtbareKatalogTitel.map((t) => (
               <div key={streamingId(t)} className="kd-entdecken-karte kd-suchfokus kd-streaming-neu-karte kd-titelaktionskarte" tabIndex={-1}
                 data-streaming-suchtreffer={ansicht === "entdecken" ? `entdecken:${streamingId(t)}` : undefined}
                 onClick={() => setExpandedId(expandedId === "e" + streamingId(t) ? null : "e" + streamingId(t))}
