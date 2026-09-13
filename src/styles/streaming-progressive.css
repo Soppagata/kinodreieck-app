@@ -27,6 +27,17 @@
   color: var(--kd-farbe-gefahr, #d96a5a);
 }
 
+.kd-streaming-page-focus {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  color: var(--kd-farbe-rauch, #8d8d92);
+  font-size: 12px;
+}
+
 @media (max-width: 430px) {
   .kd-streaming-page-more button { min-height: 44px; }
   .kd-streaming-page-more span { overflow-wrap: anywhere; }

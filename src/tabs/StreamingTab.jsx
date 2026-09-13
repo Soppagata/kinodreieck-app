@@ -826,6 +826,15 @@ export function StreamingTab({
               ? "Neu im Katalog deiner ausgewählten Dienste erkannt. Jeder Titel bleibt ab seiner Erkennung 14 Tage sichtbar."
               : "Alle Werke im aktuellen Angebot deiner ausgewählten Dienste, einschließlich deiner Titel aus Mein Programm."}
           </div>
+          {progressiveEnabled && ansicht === "entdecken" && fokusOverride?.art === "entdecken" && suche.trim() ? (
+            <div className="kd-streaming-page-focus" role="status">
+              <span>Fokussiert: <strong>{suche.trim()}</strong></span>
+              <button type="button" style={{ ...btnStyle(false), padding: "6px 10px" }}
+                onClick={() => { setFokusOverride(null); setSuche(""); }}>
+                Alle Titel anzeigen
+              </button>
+            </div>
+          ) : null}
           {!katalogAnsichtBereit ? (
             <p style={{ color: T.rauch, fontSize: 14 }} role="status">
               {!auswahlGeladen
@@ -892,7 +901,9 @@ export function StreamingTab({
           )}
           {ansicht === "neu" && auswahl.length > 0 && katalogListe.length === 0
             && (progressiveEnabled ? streamingPage?.status === "ready" && streamingPage?.total === 0 : streamingNeu?.vergleich === "verifiziert-leer") && (
-            <p style={{ color: T.rauch, fontSize: 14 }}>In den letzten 14 Tagen sind keine neuen Titel für diese Auswahl hinzugekommen.</p>
+            <p style={{ color: T.rauch, fontSize: 14 }}>{aktiveFilterE > 0
+              ? "Keine neuen Titel für diese Filter."
+              : "In den letzten 14 Tagen sind keine neuen Titel für diese Auswahl hinzugekommen."}</p>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sichtbareKatalogTitel.map((t) => (

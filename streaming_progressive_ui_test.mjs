@@ -178,6 +178,11 @@ assert.ok(focusTarget, "ein geladenes Ziel hinter Karte 20 bleibt als sichere Zi
 assert.equal(focusQueries.at(-1).filters.suche, "Progressiver Titel 31");
 assert.equal(document.activeElement, focusTarget);
 assert.equal(focusConsumed, true);
+assert.match(focusUi.container.textContent, /Fokussiert: Progressiver Titel 31/u);
+await act(async () => { button(focusUi.container, "Alle Titel anzeigen").click(); await tick(); });
+assert.equal(focusQueries.at(-1).view, "all");
+assert.equal(focusQueries.at(-1).filters.suche, "");
+assert.doesNotMatch(focusUi.container.textContent, /Fokussiert:/u);
 await focusUi.cleanup();
 sessionStorage.clear();
 
@@ -200,6 +205,14 @@ const newEmpty = await mount({ ...baseProps, streamingPage: {
   loaded: 0, status: "ready", hasMore: false, backgroundLoading: false,
 } });
 assert.match(newEmpty.container.textContent, /In den letzten 14 Tagen sind keine neuen Titel/u);
+await act(async () => { button(newEmpty.container, "▸ Filter & Sortierung").click(); await tick(); });
+await act(async () => { button(newEmpty.container, "Filme").click(); await tick(); });
+await newEmpty.render({ ...baseProps, streamingPage: {
+  ...basePage, view: "new", queryKey: "account-a:new:empty-movies", items: [], total: 0,
+  loaded: 0, status: "ready", hasMore: false, backgroundLoading: false,
+} });
+assert.match(newEmpty.container.textContent, /Keine neuen Titel für diese Filter/u);
+assert.doesNotMatch(newEmpty.container.textContent, /für diese Auswahl hinzugekommen/u);
 await newEmpty.cleanup();
 sessionStorage.clear();
 
