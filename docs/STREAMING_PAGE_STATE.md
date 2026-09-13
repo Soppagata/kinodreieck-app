@@ -103,7 +103,11 @@ noch den Legacy-Zustand sieht, startet im vorgesehenen Account-Seitenmodus
 keinen Known- oder Vollkatalog-Read. Diese Routenentscheidung gilt bereits vor
 `bootDone`; die eigentliche Seitenaktivierung wartet weiterhin auf Boot,
 Snapshotfreigabe und Dienstauswahl. Die Seitenquery übernimmt anschließend die
-gewählte Ansicht. Der kontrollierte Missing-RPC-Fallback bleibt davon getrennt
+gewählte Ansicht. Ein automatisch freigeschaltetes Cage-Alphabet behält seinen
+Vollkatalogbedarf während dieser Erstantwort als offenen Versuch, startet ihn
+aber noch nicht und würfelt auch keinen vorläufigen Pool. Nach der ersten
+sichtbaren Seite wird genau der bisherige geteilte Cage-Katalogversuch
+fortgesetzt. Der kontrollierte Missing-RPC-Fallback bleibt davon getrennt
 und darf weiterhin genau einmal den Vollweg laden. Der
 Known-Read behält seine vollständige MotN-Überlagerung, damit entfernte
 Watchmode-Angebote weder in Badges noch in Entdecken-Kandidaten zurückkehren.

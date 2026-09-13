@@ -1752,6 +1752,7 @@ export default function App() {
     streamingRoh: remoteKontoAktiv && snapshotFreigabe ? streamingRohRef.current : null,
     ladeCageKatalog,
     katalogFreigegeben: remoteKontoAktiv && snapshotFreigabe,
+    katalogLadenPausiert: streamingKnownBisErstseiteZurueckgestellt,
     katalogKontext: `${session.mode}:${session.state}:${session.account?.id || ""}:${snapshotFreigabe}:${betriebsartGen.current}`,
     auswahl: sichtbareAuswahl,
     bootDone,

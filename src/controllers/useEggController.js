@@ -30,6 +30,7 @@ export function useEggController({
   streamingRoh,
   ladeCageKatalog,
   katalogFreigegeben = false,
+  katalogLadenPausiert = false,
   katalogKontext = "lokal",
   kinoLaedt = false,
   auswahl,
@@ -111,7 +112,8 @@ export function useEggController({
      Sitzungskontext. StrictMode/Rerender teilen das Promise; ein Fehler lässt
      bewiesene andere Quellen zu. Niemals vor seinem Abschluss würfeln. */
   useEffect(() => {
-    if (!cageStartBereit || cageOffen || !katalogNoetig || katalogFertig === katalogKontext) return undefined;
+    if (katalogLadenPausiert || !cageStartBereit || cageOffen
+        || !katalogNoetig || katalogFertig === katalogKontext) return undefined;
     let aktiv = true;
     const vorbereiten = () => {
       if (document.hidden) return;
@@ -127,7 +129,8 @@ export function useEggController({
     vorbereiten();
     document.addEventListener("visibilitychange", vorbereiten);
     return () => { aktiv = false; document.removeEventListener("visibilitychange", vorbereiten); };
-  }, [cageStartBereit, cageOffen, katalogNoetig, katalogFertig, katalogKontext, ladeCageKatalog]);
+  }, [katalogLadenPausiert, cageStartBereit, cageOffen, katalogNoetig,
+    katalogFertig, katalogKontext, ladeCageKatalog]);
 
   const zeigeCage = useCallback(() => {
     if (!cageBereit || document.hidden) return false;

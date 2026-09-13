@@ -124,6 +124,7 @@ await check("App-Boot-Naht bindet asynchrones Konto-Startziel vor Known und schu
   assert.match(app, /!streamingKnownBisErstseiteZurueckgestellt\) ladeStreamingDateien\(\)/u);
   assert.match(app, /streamingKnownBisErstseiteZurueckgestellt \? Promise\.resolve\(null\) : ladeStreamingDateien\(false\)/u);
   assert.match(app, /if \(!vollKatalog && streamingKnownZurueckgestelltRef\.current\) return/u);
+  assert.match(app, /katalogLadenPausiert: streamingKnownBisErstseiteZurueckgestellt/u);
   assert.match(app, /if \(streamingPagingVorgesehenRef\.current\) return;[\s\S]*?ladeStreamingDateienRef\.current\?\.\(true\)/u);
   assert.match(app, /onAllesKatalogLaden=\{ladeStreamingVollkatalogWennLegacy\}/u);
   assert.doesNotMatch(app, /onAllesKatalogLaden=\{\(\) => ladeStreamingDateien\(true\)\}/u);

@@ -109,13 +109,15 @@ export async function runEggControllerChecks() {
     now=new NativeDate(2026,8,12);let loads=0,release;
     api.load=()=>{loads++;return new Promise(resolve=>{release=resolve;});};
     await visible(false);
-    await render({master:[film],streamingBekannt:null,streamingRoh:null,katalogFreigegeben:true,bootDone:false});
+    await render({master:[film],streamingBekannt:null,streamingRoh:null,katalogFreigegeben:true,katalogLadenPausiert:true,bootDone:false});
     await render({bootDone:true,setupWarnung:true});await visible(true);
     check("Vollkatalog wird vor Boot/Setup weder geladen noch vorzeitig gewürfelt",()=>{assert.equal(loads,0);assert.equal(draws,3);});
     await visible(false);await render({setupWarnung:false});
     check("unsichtbare PWA beginnt kein Katalog-Nachladen",()=>assert.equal(loads,0));
     await visible(true);await render({master:[{...film}]});await render({master:[film]});
-    check("StrictMode und Rerender teilen einen laufenden Katalogversuch; kleiner Pool feuert nicht",()=>{assert.equal(loads,1);assert.equal(draws,3);assert.equal(state().cageOffen,false);assert.equal(storage.getItem("kd:eggroll:cage"),null);});
+    check("priorisierte Erstantwort pausiert den offenen Katalogbedarf und würfelt nicht",()=>{assert.equal(loads,0);assert.equal(draws,3);assert.equal(state().cageOffen,false);assert.equal(storage.getItem("kd:eggroll:cage"),null);});
+    await render({katalogLadenPausiert:false});await render({master:[{...film}]});await render({master:[film]});
+    check("nach der Erstantwort teilen StrictMode und Rerender genau einen Katalogversuch",()=>{assert.equal(loads,1);assert.equal(draws,3);assert.equal(state().cageOffen,false);assert.equal(storage.getItem("kd:eggroll:cage"),null);});
     const extern={watchmode_id:42,titel:"Mandy",jahr:2018,dienste:["Netflix"]};
     await render({startModalOffen:true,streamingRoh:{entdecken:{gueltigBis:"2026-09-13T10:00:00Z",titel:[extern]}},streamingEntdecken:{titel:[extern]}});
     await api.act(async()=>release());
