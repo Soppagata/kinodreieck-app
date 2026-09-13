@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   createStreamingPageController,
   STREAMING_PAGE_SESSION_FRESH_MS,
@@ -8,6 +9,8 @@ import { STREAMING_PAGE_RPC_MISSING } from "./src/services/streamingPages.js";
 import { buildStreamingPageLibrary, buildStreamingPagePersonal } from "./src/lib/streamingPageContext.js";
 import {
   normalizeStreamingPageFilters,
+  normalizeStreamingPageRequest,
+  resolveAccountBootStartTab,
   shouldDeferStreamingKnownLoad,
   streamingPageQueryKey,
 } from "./src/lib/streamingPage.js";
@@ -78,7 +81,8 @@ await check("PWA-Sichtbarkeit aktiviert Vorladen nur im sichtbaren Streaming-Tab
 
 await check("direkter Streamingstart verschiebt Known nur bis zur ersten Seitenantwort", async () => {
   assert.equal(shouldDeferStreamingKnownLoad({
-    tab: "streaming", accountReady: true, servicesReady: false, pageEnabled: false, pageStatus: "idle",
+    tab: "streaming", accountReady: false, accountBootPending: true,
+    servicesReady: false, pageEnabled: false, pageStatus: "idle",
   }), true);
   assert.equal(shouldDeferStreamingKnownLoad({
     tab: "streaming", accountReady: true, servicesReady: true, pageEnabled: true, pageStatus: "loading",
@@ -91,6 +95,32 @@ await check("direkter Streamingstart verschiebt Known nur bis zur ersten Seitena
   assert.equal(shouldDeferStreamingKnownLoad({
     tab: "kino", accountReady: true, servicesReady: false, pageEnabled: false, pageStatus: "idle",
   }), false);
+});
+
+await check("App-Boot-Naht bindet asynchrones Konto-Startziel vor Known und schuetzt spaete Navigation", async () => {
+  const pending = resolveAccountBootStartTab({
+    startTab: "streaming", supportedTabs: ["start", "mediathek", "streaming"],
+    accountMode: "account", accountReady: false,
+    navigationRevisionAtBoot: 0, currentNavigationRevision: 0,
+  });
+  assert.deepEqual(pending, { applyTab: null, pendingTab: "streaming" });
+  assert.deepEqual(resolveAccountBootStartTab({
+    startTab: "streaming", supportedTabs: ["start", "mediathek", "streaming"],
+    accountMode: "account", accountReady: true,
+    navigationRevisionAtBoot: 0, currentNavigationRevision: 0,
+  }), { applyTab: "streaming", pendingTab: null });
+  assert.deepEqual(resolveAccountBootStartTab({
+    startTab: "streaming", supportedTabs: ["start", "mediathek", "streaming"],
+    accountMode: "account", accountReady: true,
+    navigationRevisionAtBoot: 0, currentNavigationRevision: 1,
+  }), { applyTab: null, pendingTab: null });
+  const app = readFileSync(new URL("./src/App.jsx", import.meta.url), "utf8");
+  assert.match(app, /resolveAccountBootStartTab\(\{[\s\S]*?currentNavigationRevision: navigationRevisionRef\.current/u);
+  assert.match(app, /setAusstehenderKontoStartTab\(\{[\s\S]*?tab: startTabEntscheidung\.pendingTab/u);
+  assert.match(app, /navigationRevisionRef\.current \+= 1;[\s\S]*?setTab\(id\)/u);
+  assert.match(app, /tab: knownEntscheidungsTab,[\s\S]*?accountBootPending:/u);
+  assert.match(app, /!streamingKnownBisErstseiteZurueckgestellt\) ladeStreamingDateien\(\)/u);
+  assert.match(app, /streamingKnownBisErstseiteZurueckgestellt \? Promise\.resolve\(null\) : ladeStreamingDateien\(false\)/u);
 });
 
 await check("Cache erscheint vor unabhaengiger Hintergrundfrische", async () => {
@@ -331,7 +361,7 @@ await check("Hintergrundseiten laufen seriell und pausieren ohne Zwischenstandve
   controller.setActive(true);
   controller.query({ view: "all", filters: {} });
   await flush();
-  assert.deepEqual(calls, [{ cursor: null, limit: 20 }, { cursor: "c1", limit: 200 }]);
+  assert.deepEqual(calls, [{ cursor: null, limit: 20 }, { cursor: "c1", limit: 20 }]);
   controller.setActive(false);
   second.resolve(page({ ids: [2], cursor: "c2", complete: false }));
   await flush();
@@ -339,9 +369,13 @@ await check("Hintergrundseiten laufen seriell und pausieren ohne Zwischenstandve
   assert.equal(calls.length, 2);
   controller.setActive(true);
   await flush();
-  assert.deepEqual(calls.at(-1), { cursor: "c2", limit: 200 });
+  assert.deepEqual(calls.at(-1), { cursor: "c2", limit: 20 });
   assert.deepEqual(controller.getSnapshot().items.map((item) => item.watchmode_id), [1, 2, 3]);
   controller.destroy();
+});
+
+await check("normale App-Seiten bleiben 20, waehrend der Vertrag bis 200 akzeptiert", async () => {
+  assert.equal(normalizeStreamingPageRequest({ ...context(), limit: 500 }).limit, 200);
 });
 
 await check("spaetere Seiten verlaengern den fruehesten Neu-Ablauf nicht", async () => {

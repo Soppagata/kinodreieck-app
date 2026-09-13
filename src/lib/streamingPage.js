@@ -2,7 +2,8 @@ import { streamingTitelKennung } from "./streamingProjection.js";
 
 export const STREAMING_PAGE_FORMAT = 1;
 export const STREAMING_PAGE_INITIAL_LIMIT = 20;
-export const STREAMING_PAGE_BACKGROUND_LIMIT = 200;
+export const STREAMING_PAGE_BACKGROUND_LIMIT = 20;
+export const STREAMING_PAGE_MAX_LIMIT = 200;
 export const STREAMING_PAGE_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 const VIEWS = new Set(["all", "new", "library"]);
@@ -83,7 +84,7 @@ export function normalizeStreamingPageRequest(request = {}) {
   const view = VIEWS.has(request?.view) ? request.view : "library";
   const rawLimit = Number(request?.limit);
   const limit = Number.isInteger(rawLimit) && rawLimit > 0
-    ? Math.min(STREAMING_PAGE_BACKGROUND_LIMIT, rawLimit)
+    ? Math.min(STREAMING_PAGE_MAX_LIMIT, rawLimit)
     : STREAMING_PAGE_INITIAL_LIMIT;
   const personal = request?.personal || {};
   const normalized = {
@@ -128,13 +129,36 @@ export function streamingPageQueryKey(request = {}, accountScope = "") {
 export function shouldDeferStreamingKnownLoad({
   tab,
   accountReady = false,
+  accountBootPending = false,
   servicesReady = false,
   pageEnabled = false,
   pageStatus = "idle",
 } = {}) {
-  if (tab !== "streaming" || accountReady !== true) return false;
+  if (tab !== "streaming") return false;
+  if (accountBootPending === true) return true;
+  if (accountReady !== true) return false;
   if (!servicesReady) return true;
   return pageEnabled === true && ["idle", "loading"].includes(pageStatus);
+}
+
+export function resolveAccountBootStartTab({
+  startTab,
+  supportedTabs = [],
+  accountMode,
+  accountReady = false,
+  navigationRevisionAtBoot = 0,
+  currentNavigationRevision = 0,
+} = {}) {
+  const tab = String(startTab || "");
+  if (!supportedTabs.includes(tab) || navigationRevisionAtBoot !== currentNavigationRevision) {
+    return Object.freeze({ applyTab: null, pendingTab: null });
+  }
+  if (accountReady || tab === "mediathek") {
+    return Object.freeze({ applyTab: tab, pendingTab: null });
+  }
+  return accountMode === "account"
+    ? Object.freeze({ applyTab: null, pendingTab: tab })
+    : Object.freeze({ applyTab: null, pendingTab: null });
 }
 
 const finiteCount = (value) => Number.isInteger(value) && value >= 0 ? value : null;

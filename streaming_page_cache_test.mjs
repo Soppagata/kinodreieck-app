@@ -67,6 +67,17 @@ await check("Netzantwort wird accountgebunden persistiert und aus CacheStorage g
   assert.equal(second.calls(), 0);
 });
 
+await check("automatische Folgeseiten erzeugen keine ungenutzten persistenten Cacheeintraege", async () => {
+  const shared = cacheStorage();
+  const h = harness({ cache: shared });
+  await h.service.loadPage(request);
+  await flush();
+  assert.equal(shared.values.size, 1);
+  await h.service.loadPage({ ...request, cursor: "c1", limit: 20 });
+  await flush();
+  assert.equal(shared.values.size, 1);
+});
+
 await check("gleicher Request laeuft serviceintern nur einmal", async () => {
   const h = harness();
   h.delay();

@@ -17,15 +17,19 @@ eine fehlende Funktion traegt die Marke `streaming-page-rpc-missing`.
 
 Der Gerätecache liegt in CacheStorage. Seine Hülle bindet Account,
 normalisierten Request, Quellenversion, Cachezeit und die unveränderte
-Serverantwort. Sie speichert weder HTML noch einen Vollkatalog in
+Serverantwort der ersten Seite. Automatische Cursor-Folgeseiten werden nicht
+zusätzlich persistent abgelegt, weil der Reload nur Cursor `null` liest. Der
+Cache speichert weder HTML noch einen Vollkatalog in
 localStorage/sessionStorage. Ein Eintrag verfällt spätestens sechs Stunden
 nach dem Read oder am früheren `nextExpiryAt`. Der Cachezeitpunkt ersetzt und
 verlängert keinen fachlichen Neu-Zeitstempel.
 
 `createStreamingPageController` hält Seiten über Tabwechsel in einem
 Sitzungszustand. Er zeigt eine gültige erste Cache-Seite sofort, aktualisiert
-sie unabhängig im Hintergrund, lädt zuerst 20 und danach seriell höchstens 200
-Titel pro Request. Beim Verlassen des Streaming-Tabs endet die Kette nach dem
+sie unabhängig im Hintergrund und lädt anschließend automatisch serielle
+20er-Datenpakete. Der RPC-Vertrag akzeptiert weiterhin ausdrücklich angeforderte
+Limits bis 200; der normale App-Lauf nutzt sie nicht. Beim Verlassen des
+Streaming-Tabs endet die Kette nach dem
 bereits laufenden Request; Items und Cursor bleiben erhalten und werden beim
 Zurückkehren fortgesetzt. Filter-, Account-, Capability- und Logoutwechsel
 wechseln die Generation. Antworten der alten Generation dürfen dann weder
@@ -87,6 +91,11 @@ Auch die gezielte Navigation zu einem Streamingtitel zieht dort nicht vorab
 den Vollkatalog. Bei einem direkten Streamingstart wartet der automatische
 Known-Read bis zur ersten sichtbaren Cache- oder Netzseite; bei Seitenfehlern
 und beim Wechsel zu Start, Kino, Mediathek oder Entdecken läuft er sofort. Der
+asynchrone Kontoboot hält dafür den gespeicherten Startbereich fest, bis die
+Remote-Capability bereit ist; der vorläufige Mediathek-Tab kann den Read nicht
+mehr vorzeitig öffnen. Eine inzwischen erfolgte Navigation erhöht ihre
+Revision und wird von einer später eintreffenden Einstellung nicht
+überschrieben. Der
 Known-Read behält seine vollständige MotN-Überlagerung, damit entfernte
 Watchmode-Angebote weder in Badges noch in Entdecken-Kandidaten zurückkehren.
 Der vorhandene große MotN-Anhang wird anschließend weiterhin übertragen und

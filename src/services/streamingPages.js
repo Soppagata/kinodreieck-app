@@ -184,7 +184,7 @@ export function createStreamingPagesService({
       }
       const page = normalizeStreamingPageResponse(body);
       accountStillCurrent(account.id, "page.load.before-cache");
-      if (page.status === "ready") void writeCache(account, request, page).catch(() => {});
+      if (page.status === "ready" && !request.cursor) void writeCache(account, request, page).catch(() => {});
       return page;
     } catch (error) {
       if (error instanceof BoundaryError) throw error;

@@ -111,7 +111,7 @@ import { useVokabularController } from "./controllers/useVokabularController.js"
 import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
 import { verknuepfeStreamingPageMitMediathek } from "./lib/staffeln.js";
 import { buildStreamingPageLibrary, buildStreamingPagePersonal } from "./lib/streamingPageContext.js";
-import { shouldDeferStreamingKnownLoad } from "./lib/streamingPage.js";
+import { resolveAccountBootStartTab, shouldDeferStreamingKnownLoad } from "./lib/streamingPage.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
@@ -139,6 +139,8 @@ export default function App() {
   const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
     frischerStartWarnung ? [{ scope: ERROR_SCOPE.FRISCHER_START, text: frischerStartWarnung }] : []);
   const [tab, setTab] = useState(() => remoteKontoAktiv ? "start" : "mediathek");
+  const navigationRevisionRef = useRef(0);
+  const [ausstehenderKontoStartTab, setAusstehenderKontoStartTab] = useState(null);
   const sichtbareNavigation = remoteKontoAktiv ? NAVIGATION : LOCAL_NAVIGATION;
   /* Der offene Tab als Ref: Effekte, die nicht bei jedem Tabwechsel neu laufen
      sollen, dürfen ihn trotzdem lesen (z. B. „ist der Streaming-Tab offen?"). */
@@ -208,6 +210,7 @@ export default function App() {
       return;
     }
     scrollProBereichRef.current.set(tabRef.current, aktuelleScrolltiefe());
+    navigationRevisionRef.current += 1;
     setTab(id);
     setMehrOffen(false);
   }, [aktuelleScrolltiefe, remoteKontoAktiv]);
@@ -224,6 +227,21 @@ export default function App() {
   useEffect(() => {
     if (!remoteKontoAktiv && tab !== "mediathek") setTab("mediathek");
   }, [remoteKontoAktiv, tab]);
+  useEffect(() => {
+    if (!remoteKontoAktiv || !ausstehenderKontoStartTab) return;
+    if (ausstehenderKontoStartTab.navigationRevision !== navigationRevisionRef.current) {
+      setAusstehenderKontoStartTab(null);
+      return;
+    }
+    /* Pending erst nach dem sichtbaren Tabwechsel lösen. So gibt es auch ohne
+       Annahme über React-Batching keinen Zwischenrender, in dem der vorläufige
+       Mediathek-Tab den Known-Read öffnet. */
+    if (tab !== ausstehenderKontoStartTab.tab) {
+      setTab(ausstehenderKontoStartTab.tab);
+      return;
+    }
+    setAusstehenderKontoStartTab(null);
+  }, [remoteKontoAktiv, ausstehenderKontoStartTab, tab]);
   const nachObenAusMenu = useCallback(() => {
     scrollProBereichRef.current.set(tabRef.current, 0);
     setMehrOffen(false);
@@ -657,6 +675,7 @@ export default function App() {
   useEffect(() => {
     if (storageBootGestartet.current) return undefined;
     storageBootGestartet.current = true;
+    const navigationRevisionBeimBoot = navigationRevisionRef.current;
     (async () => {
       let m = null, meta = null, herkunft = null, cachedProg = null;
       try {
@@ -730,9 +749,25 @@ export default function App() {
           if (e.modus === "nerv") e.modus = "neon-noir";        // veröffentlichbarer Ersatz bewahrt die dunkle Egg-Wahl
           setEinstellungenState(e);
           setzeTheme(e.modus || e.theme);                        // Spezialmodus überschreibt die Basis-Palette
-          if (e.startTab && e.startTab !== "start"
-            && (remoteKontoAktiv || e.startTab === "mediathek")
-            && NAVIGATION.some((n) => n.id === e.startTab)) setTab(e.startTab);
+          const startTabEntscheidung = resolveAccountBootStartTab({
+            startTab: e.startTab,
+            supportedTabs: NAVIGATION.map((eintrag) => eintrag.id),
+            accountMode: session.mode,
+            accountReady: remoteKontoAktiv,
+            navigationRevisionAtBoot: navigationRevisionBeimBoot,
+            currentNavigationRevision: navigationRevisionRef.current,
+          });
+          if (startTabEntscheidung.applyTab) setTab(startTabEntscheidung.applyTab);
+          else if (startTabEntscheidung.pendingTab) {
+            /* Beim asynchronen Kontoboot kann die Capability nach dem
+               lokalen Settings-Read bereit werden. Das Ziel bleibt bis
+               dahin explizit, damit Known nicht am vorläufigen
+               Mediathek-Tab vorbeistartet. */
+            setAusstehenderKontoStartTab({
+              tab: startTabEntscheidung.pendingTab,
+              navigationRevision: navigationRevisionBeimBoot,
+            });
+          }
           if (hatteVeralteteEinstellung) {
             try { await store.set(K.einstellungen, JSON.stringify(e)); }
             catch { setErr("Die bereinigten Einstellungen konnten nicht gespeichert werden. Bitte prüfe sie vor dem nächsten Neuladen erneut."); }
@@ -857,9 +892,14 @@ export default function App() {
     legacyFallback: () => streamingLegacyFallbackRef.current?.(),
     mapItems: (items, pageContext) => verknuepfeStreamingPageMitMediathek(items, pageContext.library),
   });
+  const ausstehenderStartTabIstAktuell = ausstehenderKontoStartTab
+    && ausstehenderKontoStartTab.navigationRevision === navigationRevisionRef.current;
+  const knownEntscheidungsTab = ausstehenderStartTabIstAktuell
+    ? ausstehenderKontoStartTab.tab : tab;
   const streamingKnownBisErstseiteZurueckgestellt = shouldDeferStreamingKnownLoad({
-    tab,
+    tab: knownEntscheidungsTab,
     accountReady: remoteKontoAktiv,
+    accountBootPending: !!ausstehenderStartTabIstAktuell && !remoteKontoAktiv,
     servicesReady: sichtbareAuswahlGeladen,
     pageEnabled: streamingPageBereit,
     pageStatus: streamingPage.status,
