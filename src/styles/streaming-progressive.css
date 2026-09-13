@@ -14,6 +14,7 @@
 
 .kd-streaming-page-more {
   display: flex;
+  overflow-anchor: none;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;

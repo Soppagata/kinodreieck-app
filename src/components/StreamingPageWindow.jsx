@@ -11,6 +11,8 @@ export function StreamingPageWindow({
   const hiddenLoadedRef = useRef(0);
   const onVisibleChangeRef = useRef(onVisibleChange);
   const sentinelInViewRef = useRef(false);
+  const encounterConsumedRef = useRef(false);
+  const revealForEncounterRef = useRef(() => {});
   const shown = items.slice(0, visible);
   const hiddenLoaded = Math.max(0, items.length - shown.length);
   const emptyErrorText = typeof error === "string" && error.trim()
@@ -18,22 +20,32 @@ export function StreamingPageWindow({
   itemsLengthRef.current = items.length;
   hiddenLoadedRef.current = hiddenLoaded;
   onVisibleChangeRef.current = onVisibleChange;
+  revealForEncounterRef.current = () => {
+    if (!sentinelInViewRef.current || encounterConsumedRef.current || hiddenLoadedRef.current <= 0) return;
+    encounterConsumedRef.current = true;
+    onVisibleChangeRef.current((count) => Math.min(itemsLengthRef.current, count + PORTION));
+  };
 
   useEffect(() => {
     const node = sentinelRef.current;
     if (!node || typeof IntersectionObserver !== "function") return undefined;
     const observer = new IntersectionObserver((entries) => {
       const inView = entries.some((entry) => entry.isIntersecting);
-      if (!inView) { sentinelInViewRef.current = false; return; }
-      if (sentinelInViewRef.current) return;
-      sentinelInViewRef.current = true;
-      if (hiddenLoadedRef.current > 0) {
-        onVisibleChangeRef.current((count) => Math.min(itemsLengthRef.current, count + PORTION));
+      if (!inView) {
+        sentinelInViewRef.current = false;
+        encounterConsumedRef.current = false;
+        return;
       }
+      sentinelInViewRef.current = true;
+      revealForEncounterRef.current();
     }, { rootMargin: "240px 0px" });
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
+
+  /* Eine bereits sichtbare Begegnung darf auf das nächste vorab geladene
+     Paket warten. Seine Ankunft verbraucht diese Begegnung genau einmal. */
+  useEffect(() => { revealForEncounterRef.current(); }, [hiddenLoaded]);
 
   return <>
     {children(shown)}

@@ -144,6 +144,36 @@ assert.match(ui.container.textContent, /vorhandenen Karten bleiben verfügbar/u)
 await ui.cleanup();
 sessionStorage.clear();
 
+const waitingPage = {
+  ...basePage, queryKey: "account-a:all:waiting", items: items.slice(0, 20), loaded: 20,
+  hasMore: true, backgroundLoading: true,
+};
+const waitingUi = await mount({ ...baseProps, streamingPage: waitingPage });
+const waitingObserver = intersectionObservers.at(-1);
+const waitingObserverCount = intersectionObservers.length;
+await intersect(waitingObserver, true);
+assert.equal(waitingUi.container.querySelectorAll(".kd-entdecken-karte").length, 20,
+  "eine sichtbare Begegnung darf auf das nächste Datenpaket warten");
+await waitingUi.render({ ...baseProps, streamingPage: {
+  ...waitingPage, items: manyItems.slice(0, 40), loaded: 40,
+} });
+assert.equal(waitingUi.container.querySelectorAll(".kd-entdecken-karte").length, 40,
+  "das erste eintreffende 20er-Paket wird in der wartenden Begegnung genau einmal sichtbar");
+assert.equal(intersectionObservers.length, waitingObserverCount);
+await waitingUi.render({ ...baseProps, streamingPage: {
+  ...waitingPage, items: manyItems.slice(0, 60), loaded: 60,
+} });
+await intersect(waitingObserver, true);
+assert.equal(waitingUi.container.querySelectorAll(".kd-entdecken-karte").length, 40,
+  "weitere Daten und persistentes true erzeugen in derselben Begegnung keine Kette");
+await intersect(waitingObserver, false);
+await intersect(waitingObserver, true);
+assert.equal(waitingUi.container.querySelectorAll(".kd-entdecken-karte").length, 60);
+assert.match(fs.readFileSync(path.join(rootDir, "src/styles/streaming-progressive.css"), "utf8"),
+  /\.kd-streaming-page-more[\s\S]*overflow-anchor: none/u);
+await waitingUi.cleanup();
+sessionStorage.clear();
+
 const errorUi = await mount({ ...baseProps, streamingPage: {
   ...basePage, queryKey: "account-a:all:error", items: [], total: null,
   loaded: 0, hasMore: false, backgroundLoading: false, status: "error", error: new Error("Boundary intern"),

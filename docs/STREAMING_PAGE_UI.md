@@ -22,7 +22,10 @@ aktiven Filter. Die UI rendert zunächst 20 Karten. Bereits vorgeladene Titel
 werden über den Scroll-Sentinel automatisch in Portionen zu 20
 in den DOM übernommen. Der Sentinel gibt pro echter Viewport-Begegnung nur
 eine Portion frei. Nachrendern, Scroll-Anchoring und neu eintreffende
-Vorladepakete starten innerhalb derselben Begegnung keinen Selbstlauf.
+Vorladepakete starten innerhalb derselben Begegnung keinen Selbstlauf. Trifft
+das erste Vorladepaket erst bei bereits sichtbarem Sentinel ein, gibt diese
+Begegnung genau dieses eine Paket frei und bleibt danach bis zum Verlassen des
+Viewports verbraucht.
 
 Bei `refreshing` oder einem Fehler nach einer erfolgreichen Seite bleiben die
 vorhandenen Karten und alle Kartenaktionen bedienbar. `library_id` wird nur als
