@@ -1504,7 +1504,10 @@ export default function App() {
         services: sichtbareAuswahl,
       });
     }
-    const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
+    const progressiveTeilansicht = streamingPageBereit && anzeigeRoh.entdeckenUmfang !== "voll";
+    const a = catalogService.buildStreamingViews(anzeigeRoh, master || [], {
+      includeMotn: !progressiveTeilansicht,
+    });
     setStreamingBekannt(a.bekannt);
     setStreamingEntdecken(a.entdecken);
     if (anzeigeRoh.entdeckenUmfang === "voll") {
@@ -1515,11 +1518,14 @@ export default function App() {
         if (!Array.isArray(fakten) || !fakten.length || veraltet() || !snapshotFreigabeRef.current) return;
         const aktuell = streamingRohRef.current;
         if (!aktuell?.bekannt) return;
+        const aktuellerUmfang = aktuell.entdeckenUmfang || "begrenzt";
         const mitFakten = catalogService.buildStreamingViews({
           bekannt: aktuell.bekannt,
           entdecken: aktuell.entdecken || (EINZELDATEI_BUILD ? streamingEntdeckenSnapshot : { titel: [] }),
-          entdeckenUmfang: aktuell.entdeckenUmfang || "begrenzt",
-        }, masterRef.current || []);
+          entdeckenUmfang: aktuellerUmfang,
+        }, masterRef.current || [], {
+          includeMotn: !(streamingPageBereit && aktuellerUmfang !== "voll"),
+        });
         if (veraltet() || !snapshotFreigabeRef.current) return;
         setStreamingBekannt(mitFakten.bekannt);
         setStreamingEntdecken(mitFakten.entdecken);
@@ -1527,7 +1533,7 @@ export default function App() {
     }
     return a;
   }, [snapshotFreigabe, master, reportError, resolveError, uebernehmeVollkatalog,
-    sichtbareAuswahl, sichtbareAuswahlGeladen]);
+    sichtbareAuswahl, sichtbareAuswahlGeladen, streamingPageBereit]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
   streamingLegacyFallbackRef.current = () => ladeStreamingDateien(true);
   /* Dashboard und „Mein Programm" leben zuerst aus dem leichten Bekannt-

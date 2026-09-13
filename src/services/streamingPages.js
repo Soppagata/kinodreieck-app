@@ -102,9 +102,13 @@ export function createStreamingPagesService({
 
   const writeCache = async (account, request, page) => {
     if (!cacheStorage || !responseFactory) return;
+    let cache = null;
+    const url = cacheUrl(account.id, request);
+    let written = false;
     try {
       accountStillCurrent(account.id, "cache.write.before");
-      const cache = await cacheStorage.open(CACHE_NAME);
+      cache = await cacheStorage.open(CACHE_NAME);
+      accountStillCurrent(account.id, "cache.write.after-open");
       const envelope = {
         mark: CACHE_MARK,
         accountId: account.id,
@@ -112,10 +116,15 @@ export function createStreamingPagesService({
         cachedAt: now(),
         page,
       };
-      await cache.put(cacheUrl(account.id, request), new responseFactory(JSON.stringify(envelope), {
+      await cache.put(url, new responseFactory(JSON.stringify(envelope), {
         headers: { "Content-Type": "application/json" },
       }));
+      written = true;
+      accountStillCurrent(account.id, "cache.write.after-put");
     } catch (error) {
+      if (written && cache) {
+        try { await cache.delete(url); } catch { /* Kontoabgrenzung bleibt best effort. */ }
+      }
       if (error instanceof BoundaryError) throw error;
       /* Der Gerätecache ist Komfort und blockiert eine gültige Antwort nie. */
     }
@@ -175,8 +184,7 @@ export function createStreamingPagesService({
       }
       const page = normalizeStreamingPageResponse(body);
       accountStillCurrent(account.id, "page.load.before-cache");
-      if (page.status === "ready") await writeCache(account, request, page);
-      accountStillCurrent(account.id, "page.load.after-cache");
+      if (page.status === "ready") void writeCache(account, request, page).catch(() => {});
       return page;
     } catch (error) {
       if (error instanceof BoundaryError) throw error;

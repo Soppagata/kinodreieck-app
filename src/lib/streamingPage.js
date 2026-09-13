@@ -6,7 +6,7 @@ export const STREAMING_PAGE_BACKGROUND_LIMIT = 200;
 export const STREAMING_PAGE_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 const VIEWS = new Set(["all", "new", "library"]);
-const SORTS = new Set(["titel", "jahr", "bewertung", "relevanz"]);
+const SORTS = new Set(["titel", "jahr", "art", "anbieter"]);
 const DIRECTIONS = new Set(["auf", "ab"]);
 
 const text = (value) => String(value == null ? "" : value).trim();
@@ -105,9 +105,24 @@ export function normalizeStreamingPageRequest(request = {}) {
   return Object.freeze(normalized);
 }
 
-export function streamingPageQueryKey(request = {}) {
+function streamingPageQuerySignature(request = {}) {
   const normalized = normalizeStreamingPageRequest({ ...request, cursor: null, limit: STREAMING_PAGE_INITIAL_LIMIT });
   return stableStreamingPageString(normalized);
+}
+
+function opaqueHash(value) {
+  let hash = 14695981039346656037n;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= BigInt(value.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  return hash.toString(36).padStart(13, "0");
+}
+
+/* Öffentliche UI-/Sessionkennung ohne persönliche Requestdaten. Die volle
+   Signatur bleibt für Kollisions- und Kontextprüfungen ausschließlich intern. */
+export function streamingPageQueryKey(request = {}, accountScope = "") {
+  return `sp1-${opaqueHash(`${String(accountScope || "")}\n${streamingPageQuerySignature(request)}`)}`;
 }
 
 const finiteCount = (value) => Number.isInteger(value) && value >= 0 ? value : null;

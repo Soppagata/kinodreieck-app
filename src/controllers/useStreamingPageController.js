@@ -9,6 +9,12 @@ import {
   STREAMING_PAGE_INITIAL_LIMIT,
 } from "../lib/streamingPage.js";
 
+export const STREAMING_PAGE_SESSION_FRESH_MS = 5 * 60 * 1000;
+
+export function streamingPageShouldBeActive(tab, visibilityState = "visible") {
+  return tab === "streaming" && visibilityState !== "hidden";
+}
+
 function initialState(enabled = false) {
   return Object.freeze({
     enabled,
@@ -47,6 +53,7 @@ export function createStreamingPageController({
   let generation = 0;
   let active = false;
   let currentKey = "";
+  let lastQuery = null;
   let snapshot = initialState(false);
   let expiryTimer = null;
   let legacyAttempted = false;
@@ -58,6 +65,7 @@ export function createStreamingPageController({
     for (const listener of listeners) listener();
   };
   const isCurrent = (record) => record.generation === generation && currentKey === record.key;
+  const isAttemptCurrent = (record, epoch) => isCurrent(record) && record.epoch === epoch;
   const clearExpiry = () => {
     if (expiryTimer != null) clearTimer(expiryTimer);
     expiryTimer = null;
@@ -66,7 +74,7 @@ export function createStreamingPageController({
     enabled: context.enabled === true,
     status: record.status,
     view: record.request.view,
-    queryKey: record.key,
+    queryKey: record.publicKey,
     version: record.version,
     items: Object.freeze(record.items),
     counts: record.counts,
@@ -80,33 +88,52 @@ export function createStreamingPageController({
   });
   const publish = (record) => { if (isCurrent(record)) emit(publicState(record)); };
 
+  const resetForRefresh = (record, { expired = false, preserveItems = true } = {}) => {
+    record.epoch += 1;
+    record.initialEpoch = null;
+    record.pumpingEpoch = null;
+    record.version = null;
+    record.nextCursor = null;
+    record.complete = false;
+    record.refreshStarted = false;
+    record.nextExpiryAt = null;
+    record.fromCache = false;
+    record.error = null;
+    record.backgroundLoading = false;
+    record.lastValidatedAt = 0;
+    if (!preserveItems || expired && record.request.view === "new") record.items = [];
+    if (expired) {
+      record.counts = null;
+      record.total = null;
+    }
+    record.status = record.items.length ? "refreshing" : "idle";
+  };
+
+  const hasExpired = (record) => {
+    const expiry = Date.parse(record.nextExpiryAt || "");
+    return Number.isFinite(expiry) && expiry <= now();
+  };
+
   const scheduleExpiry = (record) => {
     clearExpiry();
     if (!isCurrent(record) || !record.nextExpiryAt) return;
     const expiry = Date.parse(record.nextExpiryAt);
     if (!Number.isFinite(expiry)) return;
+    const epoch = record.epoch;
     const expire = () => {
       expiryTimer = null;
-      if (!isCurrent(record)) return;
-      record.counts = null;
-      record.total = null;
-      record.nextCursor = null;
-      record.complete = false;
-      record.refreshStarted = false;
-      record.nextExpiryAt = null;
-      record.fromCache = false;
-      if (record.request.view === "new") record.items = [];
-      record.status = active ? "refreshing" : "ready";
+      if (!isAttemptCurrent(record, epoch)) return;
+      resetForRefresh(record, { expired: true });
       publish(record);
-      if (active) void loadInitial(record, false);
+      if (active) void loadInitial(record, { allowVersionRestart: false, skipCache: true });
     };
     const delay = expiry - now();
     if (delay <= 0) expire();
     else expiryTimer = setTimer(expire, Math.min(delay + 5, 2147483647));
   };
 
-  const applyPage = (record, page, { append = false, fromCache = false } = {}) => {
-    if (!isCurrent(record) || page.status !== "ready") return false;
+  const applyPage = (record, page, { append = false, fromCache = false, epoch = record.epoch } = {}) => {
+    if (!isAttemptCurrent(record, epoch) || page.status !== "ready") return false;
     if (append && record.version && record.version !== page.version) return false;
     const mapped = mapItems(page.items, context);
     record.items = append ? mergeStreamingPageItems(record.items, mapped) : [...mapped];
@@ -120,6 +147,7 @@ export function createStreamingPageController({
         ? record.nextExpiryAt : page.nextExpiryAt;
     } else if (!append || !record.nextExpiryAt) record.nextExpiryAt = page.nextExpiryAt;
     record.fromCache = fromCache;
+    if (!fromCache) record.lastValidatedAt = now();
     record.error = null;
     record.status = fromCache ? "refreshing" : "ready";
     record.backgroundLoading = false;
@@ -141,10 +169,12 @@ export function createStreamingPageController({
   };
 
   const loadBackground = async (record) => {
-    if (record.pumping || !active || !isCurrent(record) || !record.nextCursor || record.complete) return;
-    record.pumping = true;
+    const epoch = record.epoch;
+    if (record.pumpingEpoch === epoch || !active || !isAttemptCurrent(record, epoch)
+        || !record.nextCursor || record.complete) return;
+    record.pumpingEpoch = epoch;
     try {
-      while (active && isCurrent(record) && record.nextCursor && !record.complete) {
+      while (active && isAttemptCurrent(record, epoch) && record.nextCursor && !record.complete) {
         const cursor = record.nextCursor;
         record.status = "refreshing";
         record.backgroundLoading = true;
@@ -157,7 +187,7 @@ export function createStreamingPageController({
             cursor,
           });
         } catch (error) {
-          if (!isCurrent(record)) return;
+          if (!isAttemptCurrent(record, epoch)) return;
           if (isStreamingPageRpcMissing(error)) { await disableForLegacy(record); return; }
           record.error = error;
           record.status = "error";
@@ -165,17 +195,11 @@ export function createStreamingPageController({
           publish(record);
           return;
         }
-        if (!isCurrent(record)) return;
+        if (!isAttemptCurrent(record, epoch)) return;
         if (page.status === "version_changed") {
-          record.items = [];
-          record.counts = null;
-          record.total = null;
-          record.version = null;
-          record.nextCursor = null;
-          record.complete = false;
-          record.backgroundLoading = false;
-          record.refreshStarted = false;
-          await loadInitial(record, false);
+          resetForRefresh(record, { preserveItems: false });
+          publish(record);
+          void loadInitial(record, { allowVersionRestart: false, skipCache: true });
           return;
         }
         if (record.version && page.version !== record.version) {
@@ -185,25 +209,26 @@ export function createStreamingPageController({
           publish(record);
           return;
         }
-        if (!applyPage(record, page, { append: true })) return;
-        if (active && isCurrent(record) && record.nextCursor && !record.complete) await yieldMainThread();
+        if (!applyPage(record, page, { append: true, epoch })) return;
+        if (active && isAttemptCurrent(record, epoch) && record.nextCursor && !record.complete) await yieldMainThread();
       }
     } finally {
-      record.pumping = false;
-      if (isCurrent(record) && record.status === "refreshing") {
+      if (record.pumpingEpoch === epoch) record.pumpingEpoch = null;
+      if (isAttemptCurrent(record, epoch) && record.status === "refreshing") {
         record.status = "ready";
         record.backgroundLoading = false;
         publish(record);
       }
-      if (active && isCurrent(record) && record.nextCursor && !record.complete && !record.error) {
+      if (active && isAttemptCurrent(record, epoch) && record.nextCursor && !record.complete && !record.error) {
         void loadBackground(record);
       }
     }
   };
 
-  async function loadInitial(record, allowVersionRestart = true) {
-    if (record.initialLoading || !isCurrent(record) || !context.enabled) return;
-    record.initialLoading = true;
+  async function loadInitial(record, { allowVersionRestart = true, skipCache = false } = {}) {
+    const epoch = record.epoch;
+    if (record.initialEpoch === epoch || !active || !isAttemptCurrent(record, epoch) || !context.enabled) return;
+    record.initialEpoch = epoch;
     record.refreshStarted = true;
     record.status = record.items.length ? "refreshing" : "loading";
     record.backgroundLoading = false;
@@ -211,29 +236,29 @@ export function createStreamingPageController({
     publish(record);
     const request = { ...record.request, limit: STREAMING_PAGE_INITIAL_LIMIT, cursor: null };
     try {
-      const cached = await service.loadCachedPage?.(request);
-      if (cached && isCurrent(record)) applyPage(record, cached, { fromCache: true });
+      const cached = skipCache ? null : await service.loadCachedPage?.(request);
+      if (cached && isAttemptCurrent(record, epoch)) applyPage(record, cached, { fromCache: true, epoch });
     } catch {
       /* Cachefehler sperren die unabhängige Aktualisierung nicht. */
     }
-    if (!isCurrent(record)) { record.initialLoading = false; return; }
+    if (!isAttemptCurrent(record, epoch)) return;
     try {
       const page = await service.loadPage(request);
-      if (!isCurrent(record)) return;
+      if (!isAttemptCurrent(record, epoch)) return;
       if (page.status === "version_changed") {
         if (allowVersionRestart) {
-          record.initialLoading = false;
-          record.refreshStarted = false;
-          Promise.resolve().then(() => loadInitial(record, false));
+          resetForRefresh(record, { preserveItems: false });
+          publish(record);
+          Promise.resolve().then(() => loadInitial(record, { allowVersionRestart: false, skipCache: true }));
           return;
         }
         throw new Error("Streaming-Katalog änderte sich während des Neustarts");
       }
-      applyPage(record, page);
+      applyPage(record, page, { epoch });
       record.status = "ready";
       publish(record);
     } catch (error) {
-      if (!isCurrent(record)) return;
+      if (!isAttemptCurrent(record, epoch)) return;
       if (isStreamingPageRpcMissing(error)) { await disableForLegacy(record); return; }
       record.error = error;
       record.status = record.items.length ? "error" : "error";
@@ -241,11 +266,31 @@ export function createStreamingPageController({
       publish(record);
       return;
     } finally {
-      record.initialLoading = false;
-      if (!record.version || record.fromCache) record.refreshStarted = false;
+      if (record.initialEpoch === epoch) record.initialEpoch = null;
+      if (isAttemptCurrent(record, epoch) && (!record.version || record.fromCache)) record.refreshStarted = false;
     }
-    if (active && isCurrent(record)) void loadBackground(record);
+    if (active && isAttemptCurrent(record, epoch)) void loadBackground(record);
   }
+
+  const resumeRecord = (record) => {
+    if (!isCurrent(record)) return;
+    if (hasExpired(record)) {
+      resetForRefresh(record, { expired: true });
+      publish(record);
+      if (active) void loadInitial(record, { allowVersionRestart: false, skipCache: true });
+      return;
+    }
+    if (record.lastValidatedAt > 0 && now() - record.lastValidatedAt >= STREAMING_PAGE_SESSION_FRESH_MS) {
+      resetForRefresh(record, { preserveItems: true });
+      publish(record);
+      if (active) void loadInitial(record, { skipCache: true });
+      return;
+    }
+    scheduleExpiry(record);
+    if (!active) return;
+    if (!record.refreshStarted) void loadInitial(record);
+    else if (record.nextCursor && !record.complete && !record.error) void loadBackground(record);
+  };
 
   const query = ({ view = "library", filters = {} } = {}) => {
     if (!context.enabled) return snapshot;
@@ -259,21 +304,23 @@ export function createStreamingPageController({
       library: context.library,
       personal: context.personal,
     });
-    const key = `${context.accountKey}:${streamingPageQueryKey(request)}`;
+    lastQuery = { view: request.view, filters: request.filters };
+    const signature = `${context.accountKey}\n${stableStreamingPageString(request)}`;
+    const key = signature;
     currentKey = key;
     let record = records.get(key);
     if (!record) {
       record = {
-        key, request, generation, status: "idle", items: [], counts: null, total: null,
+        key, publicKey: streamingPageQueryKey(request, context.accountKey), request, generation,
+        epoch: 0, status: "idle", items: [], counts: null, total: null,
         version: null, nextCursor: null, complete: false, nextExpiryAt: null,
         fromCache: false, error: null, backgroundLoading: false,
-        initialLoading: false, refreshStarted: false, pumping: false,
+        initialEpoch: null, refreshStarted: false, pumpingEpoch: null, lastValidatedAt: 0,
       };
       records.set(key, record);
     }
     publish(record);
-    if (!record.refreshStarted) void loadInitial(record);
-    else if (active && record.nextCursor && !record.complete && !record.error) void loadBackground(record);
+    resumeRecord(record);
     return snapshot;
   };
 
@@ -288,7 +335,7 @@ export function createStreamingPageController({
     };
     const signature = stableStreamingPageString(normalized);
     if (signature === contextSignature) return;
-    const previousRequest = records.get(currentKey)?.request || null;
+    const previousQuery = lastQuery;
     context = normalized;
     contextSignature = signature;
     generation += 1;
@@ -297,25 +344,27 @@ export function createStreamingPageController({
     legacyAttempted = false;
     clearExpiry();
     emit(initialState(normalized.enabled));
-    if (normalized.enabled && active && previousRequest) {
-      query({ view: previousRequest.view, filters: previousRequest.filters });
+    if (normalized.enabled && active && previousQuery) {
+      query(previousQuery);
     }
   };
 
   const setActive = (value) => {
     active = value === true;
     const record = records.get(currentKey);
-    if (!record || !isCurrent(record)) return;
+    if (!record || !isCurrent(record)) {
+      if (active && context.enabled && lastQuery) query(lastQuery);
+      return;
+    }
     if (!active) {
-      if (!record.initialLoading) {
+      if (record.initialEpoch == null) {
         record.backgroundLoading = false;
         if (record.status === "refreshing") record.status = "ready";
         publish(record);
       }
       return;
     }
-    if (!record.refreshStarted) void loadInitial(record);
-    else if (record.nextCursor && !record.complete && !record.error) void loadBackground(record);
+    resumeRecord(record);
   };
 
   return Object.freeze({
@@ -324,7 +373,7 @@ export function createStreamingPageController({
     query,
     setContext,
     setActive,
-    destroy() { generation += 1; clearExpiry(); records.clear(); listeners.clear(); },
+    destroy() { generation += 1; lastQuery = null; clearExpiry(); records.clear(); listeners.clear(); },
   });
 }
 
@@ -355,7 +404,22 @@ export function useStreamingPageController({
   useEffect(() => {
     controller.setContext({ enabled, accountKey, services, library, personal, revision });
   }, [controller, enabled, accountKey, services, library, personal, revision]);
-  useEffect(() => { controller.setActive(tab === "streaming"); }, [controller, tab]);
+  useEffect(() => {
+    const doc = typeof document !== "undefined" ? document : null;
+    const win = typeof window !== "undefined" ? window : null;
+    const update = () => controller.setActive(streamingPageShouldBeActive(tab, doc?.visibilityState));
+    const pause = () => controller.setActive(false);
+    update();
+    doc?.addEventListener?.("visibilitychange", update);
+    win?.addEventListener?.("pageshow", update);
+    win?.addEventListener?.("pagehide", pause);
+    return () => {
+      doc?.removeEventListener?.("visibilitychange", update);
+      win?.removeEventListener?.("pageshow", update);
+      win?.removeEventListener?.("pagehide", pause);
+      pause();
+    };
+  }, [controller, tab]);
   useEffect(() => () => controller.destroy(), [controller]);
   const onStreamingPageQuery = useCallback((query) => controller.query(query), [controller]);
   return { streamingPage, onStreamingPageQuery };

@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
-import { createStreamingPageController } from "./src/controllers/useStreamingPageController.js";
+import {
+  createStreamingPageController,
+  STREAMING_PAGE_SESSION_FRESH_MS,
+  streamingPageShouldBeActive,
+} from "./src/controllers/useStreamingPageController.js";
 import { STREAMING_PAGE_RPC_MISSING } from "./src/services/streamingPages.js";
 import { buildStreamingPageLibrary, buildStreamingPagePersonal } from "./src/lib/streamingPageContext.js";
+import {
+  normalizeStreamingPageFilters,
+  streamingPageQueryKey,
+} from "./src/lib/streamingPage.js";
+import { baueStreamingAnsichten } from "./src/lib/katalog.js";
 
 const page = ({ version = "v1", ids = [1], cursor = null, complete = cursor == null, expiry = null } = {}) => ({
   format: 1, status: "ready", version,
@@ -41,6 +50,28 @@ await check("App-Kontext reduziert Identitaet und Markierungen ohne Werte oder N
   assert.deepEqual(personal.ratedIds, ["heat"]);
   assert.equal(JSON.stringify({ library, personal }).includes("privat"), false);
   assert.equal(JSON.stringify({ library, personal }).includes('"wie"'), false);
+});
+
+await check("UI-Sortierungen und kurze accountgebundene Query-Kennung bleiben exakt", async () => {
+  for (const sort of ["titel", "jahr", "art", "anbieter"]) {
+    assert.equal(normalizeStreamingPageFilters({ sort }).sort, sort);
+  }
+  const privateRequest = {
+    ...context(), view: "library", filters: { suche: "Privater Titel", sort: "anbieter" },
+    library: [{ id: "privat-1", titel: "Privater Titel", jahr: 2020 }],
+  };
+  const key = streamingPageQueryKey(privateRequest, "account:privat");
+  assert.match(key, /^sp1-[0-9a-z]{13}$/);
+  assert.equal(key.includes("Privater"), false);
+  assert.equal(key.includes("account:privat"), false);
+  assert.equal(key, streamingPageQueryKey(privateRequest, "account:privat"));
+  assert.notEqual(key, streamingPageQueryKey(privateRequest, "account:anders"));
+});
+
+await check("PWA-Sichtbarkeit aktiviert Vorladen nur im sichtbaren Streaming-Tab", async () => {
+  assert.equal(streamingPageShouldBeActive("streaming", "visible"), true);
+  assert.equal(streamingPageShouldBeActive("streaming", "hidden"), false);
+  assert.equal(streamingPageShouldBeActive("start", "visible"), false);
 });
 
 await check("Cache erscheint vor unabhaengiger Hintergrundfrische", async () => {
@@ -83,6 +114,136 @@ await check("gleicher Query-Key baut fertige Seiten und Zuordnungen nicht neu", 
   assert.equal(calls, 1);
   assert.equal(mapped, 1);
   controller.destroy();
+});
+
+await check("fertiger Sitzungsrecord bleibt bei schnellem Wechsel warm und prueft nach fuenf Minuten neu", async () => {
+  let zeit = 1_000, calls = 0;
+  const controller = createStreamingPageController({
+    now: () => zeit,
+    service: { loadCachedPage: async () => null, loadPage: async () => { calls += 1; return page({ ids: [calls] }); } },
+  });
+  controller.setContext(context());
+  controller.setActive(true);
+  controller.query({ view: "all", filters: {} });
+  await flush();
+  assert.equal(calls, 1);
+  controller.setActive(false);
+  zeit += STREAMING_PAGE_SESSION_FRESH_MS - 1;
+  controller.setActive(true);
+  await flush();
+  assert.equal(calls, 1);
+  controller.setActive(false);
+  zeit += 1;
+  controller.setActive(true);
+  await flush();
+  assert.equal(calls, 2);
+  assert.deepEqual(controller.getSnapshot().items.map((item) => item.watchmode_id), [2]);
+  controller.destroy();
+});
+
+await check("Rueckkehr zu abgelaufenem Neu-Record verwirft Items und Zaehler vor Wiederverwendung", async () => {
+  let zeit = Date.parse("2026-09-13T12:00:00Z"), newCalls = 0;
+  const controller = createStreamingPageController({
+    now: () => zeit,
+    service: {
+      loadCachedPage: async () => null,
+      async loadPage(request) {
+        if (request.view === "new") {
+          newCalls += 1;
+          return page({
+            ids: [newCalls],
+            expiry: newCalls === 1 ? "2026-09-13T12:00:01.000Z" : "2026-09-14T12:00:00.000Z",
+          });
+        }
+        return page({ ids: [9] });
+      },
+    },
+  });
+  controller.setContext(context());
+  controller.setActive(true);
+  controller.query({ view: "new", filters: {} });
+  await flush();
+  controller.query({ view: "all", filters: {} });
+  await flush();
+  zeit += 2_000;
+  controller.query({ view: "new", filters: {} });
+  assert.deepEqual(controller.getSnapshot().items, []);
+  assert.equal(controller.getSnapshot().counts, null);
+  await flush();
+  assert.equal(newCalls, 2);
+  controller.destroy();
+});
+
+await check("Sichtbarwerden prueft Neu-Ablauf sofort und laedt ohne Cache neu", async () => {
+  let zeit = Date.parse("2026-09-13T12:00:00Z"), calls = 0, cacheCalls = 0;
+  const controller = createStreamingPageController({
+    now: () => zeit,
+    service: {
+      loadCachedPage: async () => { cacheCalls += 1; return null; },
+      loadPage: async () => {
+        calls += 1;
+        return page({
+          ids: [calls],
+          expiry: calls === 1 ? "2026-09-13T12:00:01.000Z" : "2026-09-14T12:00:00.000Z",
+        });
+      },
+    },
+  });
+  controller.setContext(context());
+  controller.setActive(true);
+  controller.query({ view: "new", filters: {} });
+  await flush();
+  controller.setActive(false);
+  zeit += 2_000;
+  controller.setActive(true);
+  assert.deepEqual(controller.getSnapshot().items, []);
+  assert.equal(controller.getSnapshot().counts, null);
+  await flush();
+  assert.equal(calls, 2);
+  assert.equal(cacheCalls, 1);
+  controller.destroy();
+});
+
+await check("Ablauf-Epoch blockiert eine alte laufende Hintergrundseite", async () => {
+  const oldPage = deferred();
+  let zeit = Date.parse("2026-09-13T12:00:00Z"), initialCalls = 0, expiryCallback = null;
+  const controller = createStreamingPageController({
+    now: () => zeit,
+    setTimer(callback) { expiryCallback = callback; return 1; },
+    clearTimer() {},
+    yieldMainThread: async () => {},
+    service: {
+      loadCachedPage: async () => null,
+      async loadPage(request) {
+        if (request.cursor) return oldPage.promise;
+        initialCalls += 1;
+        return initialCalls === 1
+          ? page({ ids: [1], cursor: "c1", complete: false, expiry: "2026-09-13T12:00:01.000Z" })
+          : page({ ids: [3], expiry: "2026-09-14T12:00:00.000Z" });
+      },
+    },
+  });
+  controller.setContext(context());
+  controller.setActive(true);
+  controller.query({ view: "new", filters: {} });
+  await flush();
+  assert.equal(typeof expiryCallback, "function");
+  zeit += 2_000;
+  expiryCallback();
+  await flush();
+  oldPage.resolve(page({ ids: [2], expiry: "2026-09-14T12:00:00.000Z" }));
+  await flush();
+  assert.deepEqual(controller.getSnapshot().items.map((item) => item.watchmode_id), [3]);
+  controller.destroy();
+});
+
+await check("progressive Known-Projektion verarbeitet den grossen MotN-Anhang nicht", async () => {
+  const motn = { format: 1, country: "AT", offers: [{ title: "Nur MotN", year: 2020, type: "movie" }] };
+  const result = baueStreamingAnsichten({ bekannt: { titel: [] }, entdecken: { titel: [] }, motn }, [], [], {
+    includeMotn: false,
+  });
+  assert.deepEqual(result.bekannt.motn.offers, []);
+  assert.deepEqual(result.entdecken.motn.offers, []);
 });
 
 await check("wirkliche Kontextrevision baut denselben sichtbaren Query genau einmal neu", async () => {
@@ -188,6 +349,32 @@ await check("Accountwechsel und Logout leeren State und blockieren alte Antworte
   await flush();
   assert.equal(controller.getSnapshot().enabled, false);
   assert.deepEqual(controller.getSnapshot().items, []);
+  controller.destroy();
+});
+
+await check("Accountwechsel im versteckten PWA-Zustand startet erst beim Sichtbarwerden neu", async () => {
+  const old = deferred();
+  let calls = 0;
+  const controller = createStreamingPageController({
+    service: {
+      loadCachedPage: async () => null,
+      loadPage: async () => (++calls === 1 ? old.promise : page({ ids: [2] })),
+    },
+  });
+  controller.setContext(context("account:a"));
+  controller.setActive(true);
+  controller.query({ view: "library", filters: {} });
+  await flush();
+  controller.setActive(false);
+  controller.setContext({ ...context("account:b"), revision: "r2" });
+  old.resolve(page({ ids: [1] }));
+  await flush();
+  assert.equal(calls, 1);
+  assert.deepEqual(controller.getSnapshot().items, []);
+  controller.setActive(true);
+  await flush();
+  assert.equal(calls, 2);
+  assert.deepEqual(controller.getSnapshot().items.map((item) => item.watchmode_id), [2]);
   controller.destroy();
 });
 

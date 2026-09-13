@@ -270,7 +270,7 @@ export function createCatalogService({ auth = authService, driver = authDriver, 
       throw normalizeBoundaryError(error, { source: "catalog", operation: "connection.test" });
     }
   },
-  buildStreamingViews: (streaming, master) => baueStreamingAnsichten(streaming, master, facts.peek()),
+  buildStreamingViews: (streaming, master, options) => baueStreamingAnsichten(streaming, master, facts.peek(), options),
   async loadFactsForTitles(titles, options = {}) {
     const konto = aktuelleFreigabe();
     if (!konto) return [];

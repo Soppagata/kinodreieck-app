@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { createStreamingPagesService, STREAMING_PAGE_RPC_MISSING } from "./src/services/streamingPages.js";
 
+const deferred = () => {
+  let resolve, reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+};
+
 const ready = (extra = {}) => ({
   format: 1, status: "ready", region: "AT", version: "v1",
   generatedAt: "2026-09-13T12:00:00.000Z",
@@ -45,6 +51,7 @@ function harness({ response = ready(), current = null, cache = cacheStorage(), n
 }
 
 const request = { services: ["Netflix"], view: "all", filters: {}, library: [], personal: {} };
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 let checks = 0;
 const check = async (name, fn) => { await fn(); checks += 1; console.log("✓ " + name); };
 
@@ -52,6 +59,7 @@ await check("Netzantwort wird accountgebunden persistiert und aus CacheStorage g
   const shared = cacheStorage();
   const first = harness({ cache: shared });
   const network = await first.service.loadPage(request);
+  await flush();
   const second = harness({ cache: shared });
   const cached = await second.service.loadCachedPage(request);
   assert.equal(network.version, "v1");
@@ -81,6 +89,70 @@ await check("Kontowechsel verwirft eine verspaetete Antwort vor Cache und Ergebn
   assert.equal(h.cache.values.size, 0);
 });
 
+await check("Cache-Schreiben blockiert die erste Netzantwort nicht", async () => {
+  const put = deferred();
+  let putStarted = false;
+  const cache = {
+    async open() {
+      return {
+        async match() { return null; },
+        async put() { putStarted = true; await put.promise; },
+        async delete() { return true; },
+      };
+    },
+  };
+  const h = harness({ cache });
+  const result = await h.service.loadPage(request);
+  assert.equal(result.version, "v1");
+  await flush();
+  assert.equal(putStarted, true);
+  put.resolve();
+});
+
+await check("Kontowechsel waehrend caches.open verhindert den alten Cache-Write", async () => {
+  const opened = deferred();
+  let puts = 0;
+  const cache = {
+    async open() {
+      await opened.promise;
+      return {
+        async match() { return null; },
+        async put() { puts += 1; },
+        async delete() { return true; },
+      };
+    },
+  };
+  const h = harness({ cache });
+  await h.service.loadPage(request);
+  h.session.value = { mode: "account", state: "ready", account: { id: "b" }, capabilities: { remoteStorage: true } };
+  opened.resolve();
+  await flush();
+  assert.equal(puts, 0);
+});
+
+await check("Kontowechsel waehrend cache.put entfernt den gerade geschriebenen alten Eintrag", async () => {
+  const releasePut = deferred();
+  let stored = false, deletes = 0;
+  const cache = {
+    async open() {
+      return {
+        async match() { return null; },
+        async put() { stored = true; await releasePut.promise; },
+        async delete() { stored = false; deletes += 1; return true; },
+      };
+    },
+  };
+  const h = harness({ cache });
+  await h.service.loadPage(request);
+  await flush();
+  assert.equal(stored, true);
+  h.session.value = { mode: "account", state: "ready", account: { id: "b" }, capabilities: { remoteStorage: true } };
+  releasePut.resolve();
+  await flush();
+  assert.equal(stored, false);
+  assert.equal(deletes, 1);
+});
+
 await check("Logout sperrt selbst einen vorhandenen accountgebundenen Cache", async () => {
   const h = harness();
   await h.service.loadPage(request);
@@ -92,6 +164,7 @@ await check("abgelaufene Neu-Frist wird nicht durch den Cachezeitpunkt verlaenge
   const expiry = "2026-09-13T12:30:00.000Z";
   const h = harness({ response: ready({ nextExpiryAt: expiry }) });
   const page = await h.service.loadPage(request);
+  await flush();
   assert.equal(page.nextExpiryAt, expiry);
   assert.equal(await h.service.loadCachedPage(request), null);
   assert.equal(h.cache.values.size, 0);
