@@ -1,3 +1,4 @@
+import { normalisiereExternenTitel, ordneExternenTitelZu } from "./externalTitleIdentity.js";
 import { MOTN_SERVICES } from "../../supabase/functions/_shared/motnData.js";
 
 const list = value => Array.isArray(value) ? value : [];
@@ -11,6 +12,37 @@ const strongKeys = title => [imdb(title?.imdb_id) && `imdb:${title.imdb_id}`,
 const conflicts = (a,b) => (type(a.typ) && type(b.typ) && type(a.typ) !== type(b.typ))
   || (imdb(a.imdb_id) && imdb(b.imdb_id) && a.imdb_id !== b.imdb_id)
   || (tmdb(a.tmdb_id) && tmdb(b.tmdb_id) && tmdb(a.tmdb_id) !== tmdb(b.tmdb_id));
+
+const titleKeys = title => {
+  const year = Number(title?.jahr), kind = type(title?.typ);
+  if (!Number.isInteger(year) || year < 1888 || !kind) return [];
+  return [...new Set([title.titel,title.originaltitel].map(normalisiereExternenTitel).filter(Boolean))]
+    .map(name => `${kind}:${year}:${name}`);
+};
+
+export function createMotnMatcher(titles) {
+  const strong = new Map(), names = new Map();
+  const register = (title,index) => {
+    for (const [map,keys] of [[strong,strongKeys(title)],[names,titleKeys(title)]]) {
+      for (const key of keys) { if (!map.has(key)) map.set(key,new Set()); map.get(key).add(index); }
+    }
+  };
+  titles.forEach(register);
+  return { register, match(data) {
+    const candidates = new Set(strongKeys(data).flatMap(key => [...(strong.get(key) || [])]));
+    if (candidates.size > 1) return { status: "ambiguous" };
+    if (candidates.size === 1) {
+      const index = [...candidates][0];
+      return conflicts(titles[index],data) ? { status: "conflict" }
+        : { status: "matched", index, matchedBy: "strong-id" };
+    }
+    const indices = [...new Set(titleKeys(data).flatMap(key => [...(names.get(key) || [])]))];
+    const decision = ordneExternenTitelZu(data,indices.map(index => titles[index]));
+    return decision.status === "matched"
+      ? { status: "matched", index: indices.find(index => titles[index] === decision.match), matchedBy: decision.matchedBy }
+      : { status: decision.status };
+  } };
+}
 
 export function motnEnvelope(...values) {
   const offers = new Map();
@@ -28,13 +60,10 @@ export function motnEnvelope(...values) {
   return { format: 1, country: "AT", offers: [...offers.values()] };
 }
 
-// Strong IDs only. A matching title string never establishes availability.
+// Prefer strong IDs. A fallback also requires exact reference year and media type.
 export function applyMotnStreaming(titles, envelope, now = Date.now()) {
   const result = titles.map(title => ({ ...title, dienste: [...list(title.dienste)], web_urls: { ...(title.web_urls || {}) } }));
-  const index = new Map();
-  result.forEach((title,i) => strongKeys(title).forEach(key => {
-    if (!index.has(key)) index.set(key,new Set()); index.get(key).add(i);
-  }));
+  const matcher = createMotnMatcher(result);
   const groups = new Map();
   for (const offer of motnEnvelope(envelope).offers) {
     if (time(offer.checked_at) > now) continue;
@@ -44,14 +73,16 @@ export function applyMotnStreaming(titles, envelope, now = Date.now()) {
   for (const [id,offers] of groups) {
     const newest = [...offers].sort((a,b) => time(b.checked_at)-time(a.checked_at))[0];
     const data = newest.show_data;
-    const candidates = new Set(strongKeys(data).flatMap(key => [...(index.get(key) || [])]));
-    if (candidates.size > 1) continue;
-    const match = [...candidates][0];
-    if (match !== undefined && conflicts(result[match],data)) continue;
+    const decision = matcher.match(data);
+    if (["ambiguous","conflict"].includes(decision.status)) continue;
+    const match = decision.index;
     if (match === undefined && !offers.some(offer => offer.available && !offer.watchmode_seen_at)) continue;
     const title = match === undefined ? { ...data, watchmode_id: null, streaming_id: `motn:${id}`,
       dienste: [], web_urls: {}, relevanz: 0, relevanz_signale: [] } : result[match];
     title.motn_id = id;
+    title.motn_match = decision.status === "matched" ? decision.matchedBy : "unmatched";
+    title.imdb_id ??= data.imdb_id;
+    title.tmdb_id ??= data.tmdb_id;
     title.streaming_aliases = [...new Set([...(title.streaming_aliases || []), `motn:${id}`,
       ...(title.watchmode_id != null ? [String(title.watchmode_id)] : [])])];
     title.motn_zugaenge = [];
@@ -92,9 +123,10 @@ export function applyMotnStreaming(titles, envelope, now = Date.now()) {
     const motnServices = new Set(offers.map(offer => MOTN_SERVICES[offer.service_id]));
     // Watchmode catching up is not a second addition and cannot restart Neu.
     if (Array.isArray(title.dienst_diffs)) title.dienst_diffs = title.dienst_diffs.filter(diff => !motnServices.has(diff.dienst));
+    if (match !== undefined) matcher.register(title,match);
     if (match === undefined) {
       const position = result.length; result.push(title);
-      strongKeys(title).forEach(key => { if (!index.has(key)) index.set(key,new Set()); index.get(key).add(position); });
+      matcher.register(title,position);
     }
   }
   return result.filter(title => !title.motn_checked_at || title.dienste.length);

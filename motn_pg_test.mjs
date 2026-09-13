@@ -51,6 +51,7 @@ try {
     insert into public.kd_catalog values('streaming_entdecken','{"stand":"fixture","titel":[{"watchmode_id":1,"imdb_id":"tt1302011","tmdb_id":49444,"typ":"movie","dienste":["Disney+"]}]}',now(),'watchmode',now(),null);`);
   sql(migration);
   sql(readFileSync("supabase/migrations/20260913170000_motn_initial_backfill.sql","utf8"));
+  sql(readFileSync("supabase/migrations/20260913173000_motn_watchmode_identity.sql","utf8"));
   const call = (name,args='') => JSON.parse(session(`select public.${name}(${args})`));
   check('A missing lease cannot reserve provider requests',()=>{
     assert.equal(call('kd_motn_reserve',"null,'new'").reserved,false);
@@ -86,6 +87,14 @@ try {
     assert.equal(call('kd_motn_reconcile_watchmode').acknowledged,1);
     assert.equal(sql('select watchmode_seen_at is not null from public.kd_motn_offers'),'t');
   });
+  check('Exact title-year-type can acknowledge missing IDs; duplicate works remain blocked',()=>{
+    sql(`update public.kd_catalog set payload='{"titel":[{"watchmode_id":1,"titel":"Kung Fu Panda 2","jahr":2011,"typ":"movie","dienste":["Disney+"]}]}';
+      update public.kd_motn_offers set watchmode_seen_at=null,show_data=show_data || '{"jahr":2011}'::jsonb;`);
+    assert.equal(call('kd_motn_reconcile_watchmode').acknowledged,1);
+    sql(`update public.kd_catalog set payload=jsonb_set(payload,'{titel}',(payload->'titel') || '[{"watchmode_id":2,"titel":"Kung Fu Panda 2","jahr":2011,"typ":"movie","dienste":["Disney+"]}]');
+      update public.kd_motn_offers set watchmode_seen_at=null;`);
+    assert.equal(call('kd_motn_reconcile_watchmode').acknowledged,0);
+  });
   sql('update public.kd_motn_sync set bootstrap_completed_at=now()');
   check('The daily 24-call cap cannot be exceeded by repeated reservations',()=>{
     for(let i=0;i<19;i++) assert.equal(call('kd_motn_reserve',`'${token}','removed'`).reserved,true);
@@ -97,9 +106,11 @@ try {
     for(let i=0;i<56;i++) assert.equal(call('kd_motn_reserve',`'${token}','removed'`).reserved,true);
     assert.equal(call('kd_motn_reserve',`'${token}','removed'`).reserved,false);
     call('kd_motn_finish',`'${token}','limited'`);
-    assert.equal(call('kd_motn_claim',`'${token}'`).claimed,true);
+    assert.equal(call('kd_motn_claim',`'${token}'`).status,'not_due');
     assert.equal(sql("select checkpoints->'new'->>'cursor' from public.kd_motn_sync"),'cursor-next');
-    sql('update public.kd_motn_sync set bootstrap_completed_at=now()');
+    sql("update public.kd_motn_sync set last_run_at=now()-interval '1 day'; update public.kd_motn_requests set started_at=now()-interval '1 day'");
+    assert.equal(call('kd_motn_claim',`'${token}'`).claimed,true);
+    assert.equal(call('kd_motn_reserve',`'${token}','new'`).reserved,true);
   });
   check('An error releases only the lease, retaining the completed page and cursor',()=>{
     assert.equal(call('kd_motn_finish',`'${token}','error'`).ok,true);

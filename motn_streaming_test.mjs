@@ -1,7 +1,7 @@
 import { toggleGesehenInStatus } from "./src/lib/staffeln.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyMotnStreaming } from "./src/lib/streamingMotn.js";
+import { applyMotnStreaming, createMotnMatcher } from "./src/lib/streamingMotn.js";
 import { projiziereStreamingNeu, STREAMING_NEU_DAUER_MS } from "./src/lib/streamingNeu.js";
 import { streamingTitelKennung, gleicheStreamingTitel, streamingStatus } from "./src/lib/streamingProjection.js";
 import { normalizeMotnPage } from "./supabase/functions/_shared/motnData.js";
@@ -117,4 +117,16 @@ test("Watchmode catch-up keeps bookmarks and seen-state, including removing that
   const cleared = toggleGesehenInStatus(status,current);
   assert.equal(streamingStatus(cleared,current), undefined);
   assert.equal(gleicheStreamingTitel({}, {}), false);
+});
+
+test("Missing IMDb/TMDb IDs use exact title-year-type while ambiguous matches stay blocked",()=>{
+  const data={...show,motn_id:"4650",imdb_id:"tt0138749",tmdb_id:10501,titel:"Der Weg nach El Dorado",originaltitel:"The Road to El Dorado",jahr:2000};
+  const base={watchmode_id:1416339,titel:"The Road to El Dorado",jahr:2000,typ:"movie",dienste:["Disney+"]};
+  const resolved=applyMotnStreaming([base],envelope(offer({show_id:"4650",show_data:data})),at);
+  assert.equal(resolved.length,1);assert.equal(resolved[0].watchmode_id,1416339);
+  assert.equal(resolved[0].motn_match,"title-year-type");
+  assert.equal(createMotnMatcher([base]).match({...data,jahr:2001}).status,"unmatched");
+  assert.equal(createMotnMatcher([base]).match({...data,typ:"serie"}).status,"unmatched");
+  assert.equal(createMotnMatcher([base,{...base,watchmode_id:999}]).match(data).status,"ambiguous");
+  assert.equal(createMotnMatcher([{...base,imdb_id:"tt9999999"}]).match(data).status,"conflict");
 });

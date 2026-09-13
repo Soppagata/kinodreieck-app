@@ -18,7 +18,9 @@ abweichend von der Dokumentation keinen Link enthalten. Ein entfernter Link
 allein entfernt kein weiterhin bestehendes Abo-Angebot desselben Dienstes.
 
 `kd_motn_offers` enthält nur neutrale Anbieterinformationen und dauerhafte
-Entfernungen. Starke IMDb-/TMDb-IDs und der Werktyp verbinden die Bestände;
+Entfernungen. Starke IMDb-/TMDb-IDs und der Werktyp verbinden die Bestände. Fehlen gemeinsame
+IDs im Watchmode-Bestand, gilt nur ein eindeutiger exakter Titel oder
+Originaltitel mit gleichem Bezugsjahr und Film-/Serientyp;
 mehrdeutige oder widersprüchliche Identitäten bleiben unverbunden.
 `kd_streaming_catalog` liest Watchmode und MotN in derselben Datenbankabfrage
 unter der bestehenden Konto-RLS. Fehler verwenden den bereits bestehenden
@@ -27,7 +29,8 @@ Cache für die vollständige kombinierte Antwort.
 Der gemeinsame Serverlauf reserviert jede Anfrage vor dem Abruf. Grenzen:
 24 Anfragen pro UTC-Tag. Die einmalige Startbefüllung hat stattdessen insgesamt
 höchstens 80 Anfragen einschließlich der vier Vergleichsabfragen. Für beide
-Wege gelten 900 innerhalb von 32 Tagen, maximal zwölf Seiten je
+Wege gelten 900 innerhalb von 32 Tagen. Ist die Startbefüllung nach 80 Anfragen
+noch unvollständig, setzt der nächste reguläre Tag mit maximal 24 fort; maximal zwölf Seiten je
 Änderungsart und Lauf. Das kostenlose Anbieterlimit ist zusätzlich hart und
 erzeugt keine Überziehungsgebühren. Jede erfolgreich geladene Seite wird mit
 ihrem Cursor atomar gespeichert. Fehler werden im Lauf nicht wiederholt;
