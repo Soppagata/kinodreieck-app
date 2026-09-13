@@ -161,7 +161,8 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler"
   assert.match(streaming, /const katalogAnsicht = ansicht === "neu" \? "Neu" : "Entdecken"/);
   assert.match(streaming, /className="kd-nur-desktop"[\s\S]*Merkliste \(\{merkliste\.length\}\) exportieren/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*nurBewertet/);
-  assert.match(streaming, /Gesehen \(\{statusAnzahlenE\}\)/);
+  assert.match(streaming, /progressiveEnabled \? "Gesehen"/, "Progressive Seiten zeigen keine irreführende Teilseitenzahl");
+  assert.match(streaming, /`Gesehen \(\$\{statusAnzahlenE\}\)`/, "Der Legacy-Vollbestand behält seine Statuszahl");
   assert.doesNotMatch(streaming, /Beobachtet \(\{statusAnzahlenE/);
   const regler = lies("./src/components/KatalogRegler.jsx");
   assert.match(regler, /type="range"[\s\S]*Anfangsbuchstaben filtern/);
