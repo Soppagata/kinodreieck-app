@@ -8,9 +8,11 @@ import { STREAMING_PAGE_RPC_MISSING } from "./src/services/streamingPages.js";
 import { buildStreamingPageLibrary, buildStreamingPagePersonal } from "./src/lib/streamingPageContext.js";
 import {
   normalizeStreamingPageFilters,
+  shouldDeferStreamingKnownLoad,
   streamingPageQueryKey,
 } from "./src/lib/streamingPage.js";
 import { baueStreamingAnsichten } from "./src/lib/katalog.js";
+import { localRecommendationCandidates } from "./src/lib/entdeckenUi.js";
 
 const page = ({ version = "v1", ids = [1], cursor = null, complete = cursor == null, expiry = null } = {}) => ({
   format: 1, status: "ready", version,
@@ -72,6 +74,23 @@ await check("PWA-Sichtbarkeit aktiviert Vorladen nur im sichtbaren Streaming-Tab
   assert.equal(streamingPageShouldBeActive("streaming", "visible"), true);
   assert.equal(streamingPageShouldBeActive("streaming", "hidden"), false);
   assert.equal(streamingPageShouldBeActive("start", "visible"), false);
+});
+
+await check("direkter Streamingstart verschiebt Known nur bis zur ersten Seitenantwort", async () => {
+  assert.equal(shouldDeferStreamingKnownLoad({
+    tab: "streaming", accountReady: true, servicesReady: false, pageEnabled: false, pageStatus: "idle",
+  }), true);
+  assert.equal(shouldDeferStreamingKnownLoad({
+    tab: "streaming", accountReady: true, servicesReady: true, pageEnabled: true, pageStatus: "loading",
+  }), true);
+  for (const pageStatus of ["refreshing", "ready", "error"]) {
+    assert.equal(shouldDeferStreamingKnownLoad({
+      tab: "streaming", accountReady: true, servicesReady: true, pageEnabled: true, pageStatus,
+    }), false);
+  }
+  assert.equal(shouldDeferStreamingKnownLoad({
+    tab: "kino", accountReady: true, servicesReady: false, pageEnabled: false, pageStatus: "idle",
+  }), false);
 });
 
 await check("Cache erscheint vor unabhaengiger Hintergrundfrische", async () => {
@@ -237,13 +256,44 @@ await check("Ablauf-Epoch blockiert eine alte laufende Hintergrundseite", async 
   controller.destroy();
 });
 
-await check("progressive Known-Projektion verarbeitet den grossen MotN-Anhang nicht", async () => {
-  const motn = { format: 1, country: "AT", offers: [{ title: "Nur MotN", year: 2020, type: "movie" }] };
-  const result = baueStreamingAnsichten({ bekannt: { titel: [] }, entdecken: { titel: [] }, motn }, [], [], {
-    includeMotn: false,
+await check("Paging behaelt MotN-Removals fuer Known-Badges und Entdecken-Kandidaten", async () => {
+  const showData = {
+    motn_id: "1364", imdb_id: "tt1302011", tmdb_id: 49444,
+    titel: "Kung Fu Panda 2", jahr: 2011, typ: "film",
+    at_subscription_services: ["disney"],
+  };
+  const offer = (service_id, available, link) => ({
+    show_id: "1364", service_id, country: "AT", available,
+    added_at: available ? "2020-01-01T00:00:00.000Z" : null,
+    checked_at: "2020-01-02T00:00:00.000Z", link, show_data: showData,
   });
-  assert.deepEqual(result.bekannt.motn.offers, []);
-  assert.deepEqual(result.entdecken.motn.offers, []);
+  const motn = { format: 1, country: "AT", offers: [
+    offer("netflix", false, null),
+    offer("disney", true, "https://www.disneyplus.com/browse/fixture"),
+  ] };
+  const watchmode = {
+    watchmode_id: 1209560, imdb_id: "tt1302011", tmdb_id: 49444,
+    titel: "Kung Fu Panda 2", jahr: 2011, typ: "movie",
+    dienste: ["Netflix"], web_urls: { Netflix: "https://netflix.com/old" },
+  };
+  const raw = {
+    bekannt: { stand: "2020-01-02T00:00:00.000Z", region: "AT", titel: [watchmode], motn },
+    entdecken: { stand: "2020-01-02T00:00:00.000Z", region: "AT", titel: [] },
+    entdeckenUmfang: "begrenzt",
+  };
+  const master = [{ id: "badge-film", ...watchmode, typ: "film", dienste: undefined, web_urls: undefined }];
+  const badgeProjection = baueStreamingAnsichten(raw, master);
+  assert.deepEqual(badgeProjection.bekannt.titel[0].dienste, ["Disney+"]);
+  assert.equal(badgeProjection.bekannt.titel[0].web_urls.Netflix, undefined);
+
+  const discoverProjection = baueStreamingAnsichten(raw, []);
+  assert.deepEqual(discoverProjection.entdecken.titel[0].dienste, ["Disney+"]);
+  assert.equal(localRecommendationCandidates(discoverProjection.entdecken, {
+    selectedServices: ["Disney+"],
+  }).length, 1);
+  assert.equal(localRecommendationCandidates(discoverProjection.entdecken, {
+    selectedServices: ["Netflix"],
+  }).length, 0);
 });
 
 await check("wirkliche Kontextrevision baut denselben sichtbaren Query genau einmal neu", async () => {

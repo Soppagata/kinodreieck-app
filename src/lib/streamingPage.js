@@ -125,6 +125,18 @@ export function streamingPageQueryKey(request = {}, accountScope = "") {
   return `sp1-${opaqueHash(`${String(accountScope || "")}\n${streamingPageQuerySignature(request)}`)}`;
 }
 
+export function shouldDeferStreamingKnownLoad({
+  tab,
+  accountReady = false,
+  servicesReady = false,
+  pageEnabled = false,
+  pageStatus = "idle",
+} = {}) {
+  if (tab !== "streaming" || accountReady !== true) return false;
+  if (!servicesReady) return true;
+  return pageEnabled === true && ["idle", "loading"].includes(pageStatus);
+}
+
 const finiteCount = (value) => Number.isInteger(value) && value >= 0 ? value : null;
 const timestamp = (value) => {
   if (value == null || value === "") return null;

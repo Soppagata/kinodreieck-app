@@ -111,6 +111,7 @@ import { useVokabularController } from "./controllers/useVokabularController.js"
 import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
 import { verknuepfeStreamingPageMitMediathek } from "./lib/staffeln.js";
 import { buildStreamingPageLibrary, buildStreamingPagePersonal } from "./lib/streamingPageContext.js";
+import { shouldDeferStreamingKnownLoad } from "./lib/streamingPage.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
@@ -856,6 +857,13 @@ export default function App() {
     legacyFallback: () => streamingLegacyFallbackRef.current?.(),
     mapItems: (items, pageContext) => verknuepfeStreamingPageMitMediathek(items, pageContext.library),
   });
+  const streamingKnownBisErstseiteZurueckgestellt = shouldDeferStreamingKnownLoad({
+    tab,
+    accountReady: remoteKontoAktiv,
+    servicesReady: sichtbareAuswahlGeladen,
+    pageEnabled: streamingPageBereit,
+    pageStatus: streamingPage.status,
+  });
 
   const {
     artikelListe, artikelListeRef, artikelGeladen, artikelGespeichertAm,
@@ -1504,10 +1512,7 @@ export default function App() {
         services: sichtbareAuswahl,
       });
     }
-    const progressiveTeilansicht = streamingPageBereit && anzeigeRoh.entdeckenUmfang !== "voll";
-    const a = catalogService.buildStreamingViews(anzeigeRoh, master || [], {
-      includeMotn: !progressiveTeilansicht,
-    });
+    const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
     setStreamingBekannt(a.bekannt);
     setStreamingEntdecken(a.entdecken);
     if (anzeigeRoh.entdeckenUmfang === "voll") {
@@ -1518,14 +1523,11 @@ export default function App() {
         if (!Array.isArray(fakten) || !fakten.length || veraltet() || !snapshotFreigabeRef.current) return;
         const aktuell = streamingRohRef.current;
         if (!aktuell?.bekannt) return;
-        const aktuellerUmfang = aktuell.entdeckenUmfang || "begrenzt";
         const mitFakten = catalogService.buildStreamingViews({
           bekannt: aktuell.bekannt,
           entdecken: aktuell.entdecken || (EINZELDATEI_BUILD ? streamingEntdeckenSnapshot : { titel: [] }),
-          entdeckenUmfang: aktuellerUmfang,
-        }, masterRef.current || [], {
-          includeMotn: !(streamingPageBereit && aktuellerUmfang !== "voll"),
-        });
+          entdeckenUmfang: aktuell.entdeckenUmfang || "begrenzt",
+        }, masterRef.current || []);
         if (veraltet() || !snapshotFreigabeRef.current) return;
         setStreamingBekannt(mitFakten.bekannt);
         setStreamingEntdecken(mitFakten.entdecken);
@@ -1533,7 +1535,7 @@ export default function App() {
     }
     return a;
   }, [snapshotFreigabe, master, reportError, resolveError, uebernehmeVollkatalog,
-    sichtbareAuswahl, sichtbareAuswahlGeladen, streamingPageBereit]);
+    sichtbareAuswahl, sichtbareAuswahlGeladen]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
   streamingLegacyFallbackRef.current = () => ladeStreamingDateien(true);
   /* Dashboard und „Mein Programm" leben zuerst aus dem leichten Bekannt-
@@ -1587,8 +1589,11 @@ export default function App() {
     );
   }, [streamingMap, sichtbareAuswahl, sichtbareAuswahlGeladen]);
   /* Badges/Mein-Programm/Katalog-Zähler brauchen die LEICHTE bekannt-Datei auch
-     außerhalb des Streaming-Tabs -> am Boot nachladen (KD-031: ohne Voll-Katalog). */
-  useEffect(() => { if (bootDone && snapshotFreigabe) ladeStreamingDateien(); }, [bootDone, snapshotFreigabe, ladeStreamingDateien]);
+     außerhalb des Streaming-Tabs. Nur ein direkter Streamingstart priorisiert
+     seine erste Seite; danach läuft Known mit vollständiger MotN-Korrektur. */
+  useEffect(() => {
+    if (bootDone && snapshotFreigabe && !streamingKnownBisErstseiteZurueckgestellt) ladeStreamingDateien();
+  }, [bootDone, snapshotFreigabe, streamingKnownBisErstseiteZurueckgestellt, ladeStreamingDateien]);
 
   /* ---- Betriebsart-Wechsel (gesperrt ↔ fachlich aktives Konto): Katalog neu laden ----
      An-/Abmelden, Freischaltung und Widerruf ändern, ob der private
@@ -1650,7 +1655,7 @@ export default function App() {
          Sitzung tot. Der Programm-Lauf zählt allein für die Freigabe. */
       const [programmErgebnis] = await Promise.allSettled([
         ladeProgrammDatei(false),
-        ladeStreamingDateien(false),
+        streamingKnownBisErstseiteZurueckgestellt ? Promise.resolve(null) : ladeStreamingDateien(false),
       ]);
       const programmOk = programmErgebnis.status === "fulfilled" && programmErgebnis.value;
       /* Ein weiterer Wechsel ist dazwischengekommen — dessen Effekt führt. */
@@ -1665,7 +1670,8 @@ export default function App() {
       if (!programmOk) autoFetched.current = false;
     })();
     return undefined;
-  }, [remoteKontoAktiv, bootDone, snapshotFreigabe, ladeProgrammDatei, ladeStreamingDateien]);
+  }, [remoteKontoAktiv, bootDone, snapshotFreigabe, ladeProgrammDatei, ladeStreamingDateien,
+    streamingKnownBisErstseiteZurueckgestellt]);
 
   const ladeCageKatalog = useCallback(() => ladeStreamingDateienRef.current?.(true), []);
   const springeZuCageKino = useCallback((fokus) => {

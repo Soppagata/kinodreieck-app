@@ -428,7 +428,7 @@ export async function testeKatalogZugang({
 /* Aus den bisher getrennt gelieferten Ansichten entsteht ein neutraler Katalog.
    Danach wird „Mein Programm“ immer im Browser gegen die AKTIVE Masterliste
    gebildet. Damit funktionieren Demo- und Clean-Modus mit derselben DB-Payload. */
-export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten = [], options = {}) {
+export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten = []) {
   const projectFacts = createTitleFactsProjector(flixpatrolFakten);
   const masterMitFakten = (Array.isArray(master) ? master : []).map((entry) => ({ ...entry }));
   /* Ein Vollkatalog enthaelt derzeit rund 25.000 Titel. Jeden davon gegen
@@ -542,12 +542,7 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
   }
 
   const meine = [], entdecken = [];
-  /* Der progressive Seitenweg braucht fuer den kleinen Known-Rahmen keine
-     Auswertung des grossen MotN-Anhangs. Explizite Vollkatalog-Consumer
-     behalten den bisherigen Default und damit dieselbe Angebotsprojektion. */
-  const motn = options.includeMotn === false
-    ? { format: 1, country: "AT", offers: [] }
-    : motnEnvelope(streaming?.motn, bekanntAlt.motn, entdeckenAlt.motn);
+  const motn = motnEnvelope(streaming?.motn, bekanntAlt.motn, entdeckenAlt.motn);
   for (const t of applyMotnStreaming([...map.values()], motn)) {
     const zuordnung = ordneExternenTitelZu(t, kandidatenFuer(t));
     if (zuordnung.status === "matched") {

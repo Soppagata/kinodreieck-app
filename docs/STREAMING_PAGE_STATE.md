@@ -84,18 +84,16 @@ für vollständige Zähler und Filter an das bestehende Supabase-Backend zu
 Der Effekt, der allein beim Öffnen von Streaming sofort
 `ladeStreamingDateien(true)` startete, ist im aktiven Seitenmodus gesperrt.
 Auch die gezielte Navigation zu einem Streamingtitel zieht dort nicht vorab
-den Vollkatalog. Der leichte Known-Read für Start, Kino-Badges und andere
-bestehende Consumer sowie ausdrücklich angeforderte Vollkatalognutzer bleiben
-bestehen. Nur wenn der neue RPC eindeutig fehlt, lädt der Controller einmal
-den kompatiblen Vollkatalog und deaktiviert den Seitenzustand.
-
-Beim leichten Known-Rahmen im aktiven Seitenmodus überspringt die lokale
-Projektion die MotN-Angebotsauswertung. Ein ausdrücklicher Vollkatalogweg behält
-die bisherige MotN-Projektion. Der heute vom Backend an Known angehängte große
-MotN-Block wird dadurch nicht mehr vor der Seitendarstellung verarbeitet; um
-auch dessen Übertragungsbytes einzusparen, muss der parallele Backendvertrag
-den Block aus der kleinen Known-Antwort weglassen. Diese Antwortform liegt
-außerhalb von Paket B.
+den Vollkatalog. Bei einem direkten Streamingstart wartet der automatische
+Known-Read bis zur ersten sichtbaren Cache- oder Netzseite; bei Seitenfehlern
+und beim Wechsel zu Start, Kino, Mediathek oder Entdecken läuft er sofort. Der
+Known-Read behält seine vollständige MotN-Überlagerung, damit entfernte
+Watchmode-Angebote weder in Badges noch in Entdecken-Kandidaten zurückkehren.
+Der vorhandene große MotN-Anhang wird anschließend weiterhin übertragen und
+verarbeitet; Paket B spart an dieser Stelle keine Bytes ein. Ausdrücklich
+angeforderte Vollkatalognutzer bleiben bestehen. Nur wenn der neue RPC
+eindeutig fehlt, lädt der Controller einmal den kompatiblen Vollkatalog und
+deaktiviert den Seitenzustand.
 
 Master, Must-Watch, Entdecken-Status und Streaming-Dienste werden heute bereits
 als persönliche Töpfe über `ACCOUNT_SYNC_KEYS` in `kd_personal` desselben
