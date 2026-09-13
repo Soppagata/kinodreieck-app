@@ -19,7 +19,7 @@ function LegalAbschnitt({ titel, children }) {
 
 function ProduktionsRechtliches() {
   return <>
-    <p><strong>Stand: privater Release.</strong> Hier findest du die wichtigsten Informationen zu den Datenwegen von Kinodreieck.</p>
+    <p>Hier findest du die wichtigsten Informationen zu den Datenwegen von Kinodreieck.</p>
 
     <LegalAbschnitt titel="Kontakt und Geltungsbereich">
       <p>Kinodreieck ist ein privates, nicht-kommerzielles Filmprojekt ohne öffentliche Registrierung. Für Datenschutzfragen, Auskunft, Berichtigung, Einschränkung, Übertragbarkeit, Löschung oder andere rechtliche Anliegen nutze den privaten Kontaktweg, über den du deinen Zugang erhalten hast. Nach der Anmeldung kannst du dein Anliegen außerdem über den privaten Feedbackweg in der App senden, sofern dieser Weg verfügbar ist.</p>
@@ -31,7 +31,7 @@ function ProduktionsRechtliches() {
     </LegalAbschnitt>
 
     <LegalAbschnitt titel="Quellen und optionale KI-Funktionen">
-      <p>Spielzeiten stammen von film.at und nonstopkino.at, Streaming-Verfügbarkeiten von Watchmode. Entdecken nutzt Quellen des Österreichischen Filminstituts und von Netflix sowie österreichische Charts und neutrale Titelfakten von FlixPatrol. Ein Chartplatz ist weder ein Qualitätsurteil noch ein Beleg für die Verfügbarkeit in deinem Abo.</p>
+      <p>Spielzeiten stammen von film.at und nonstopkino.at, Streaming-Verfügbarkeiten von Watchmode und Movie of the Night. Entdecken nutzt Quellen des Österreichischen Filminstituts und von Netflix sowie österreichische Charts und neutrale Titelfakten von FlixPatrol. <a href="https://www.movieofthenight.com/about/api" target="_blank" rel="noopener noreferrer">Informationen zu Movie of the Night</a>. Ein Chartplatz ist weder ein Qualitätsurteil noch ein Beleg für die Verfügbarkeit in deinem Abo.</p>
       <p>Persönliche Profile, Bewertungen, Notizen und deine Streaming-Auswahl werden nicht an FlixPatrol gesendet. Wenn du eine freigeschaltete KI-Funktion bewusst startest, erhält Anthropic nur die für diese Aufgabe benötigten Eingaben und begrenzten Kontextdaten. Passwörter und deine übrige Mediathek gehören nicht zu diesen Aufträgen.</p>
     </LegalAbschnitt>
 

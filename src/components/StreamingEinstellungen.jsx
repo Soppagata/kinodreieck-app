@@ -4,6 +4,7 @@ import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { TYP_KURZ, baueStreamingQuellenGruppen } from "../lib/streamingQuellen.js";
+import { runtimeConfig } from "../config/runtime.js";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================
    Aus dem Streaming-Tab in die Einstellungen verschoben — ein Ort für alle
@@ -16,6 +17,7 @@ function kurzQuelle(n) {
 }
 
 export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null, auswahl = [], auswahlGeladen = true, toggleQuelle, teil = "alle", datenGesperrt = false }) {
+  const produktiv = runtimeConfig.appEnvironment === "production";
   const datenDa = !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
   const stand = datenDa ? new Date(bekannt.stand) : null;
@@ -62,7 +64,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
     <div className="kd-streaming-einstellungen" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
       <h2 style={h2}>Streaming gesperrt</h2>
       <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
-        Für den zentralen Katalog ist noch kein Datenbankzugang eingerichtet. Melde dich an und öffne „Verbindung wiederherstellen“. Die PWA selbst lädt nie live von Watchmode.
+        Für den zentralen Katalog ist noch kein Datenbankzugang eingerichtet. Melde dich an und öffne „Verbindung wiederherstellen“.
       </p>
     </div>
   );
@@ -75,8 +77,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
       <div style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
           Wähle die Dienste, die du tatsächlich nutzt. Die Auswahl filtert den gemeinsamen
-          Katalog sofort. Die Filterung bezieht sich nur auf den bereits geladenen
-          gemeinsamen Katalog; es wird kein neuer Anbieterimport gestartet.
+          Katalog sofort.
         </p>
         {/* Suchfeld: einzige Tür zu den nicht angehakten Quellen (~40 Namen). */}
         <input value={quellenSuche} onChange={(e) => setQuellenSuche(e.target.value)} disabled={!auswahlGeladen}
@@ -125,7 +126,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
       </div>
       </Klappe>}
 
-      {(teil === "alle" || teil === "status") && <Klappe titel="Katalog-Status" tour="streaming-status">
+      {!produktiv && (teil === "alle" || teil === "status") && <Klappe titel="Katalog-Status" tour="streaming-status">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         {datenDa ? (
           <>

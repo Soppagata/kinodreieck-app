@@ -5,6 +5,7 @@ import { ausSchlagwort } from "../lib/geschmack.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { IconClose, IconDelete } from "./ui.jsx";
+import { runtimeConfig } from "../config/runtime.js";
 
 const RICHTUNG_WORT = { zieht_an: "mag", stoesst_ab: "meidet", ambivalent: "zwiespältig zu" };
 const RICHTUNG_FARBE = { zieht_an: "ok", stoesst_ab: "gefahr", ambivalent: "rauch" };
@@ -62,15 +63,15 @@ function InfoGruppe({ titel, offen = false, children, leer }) {
   );
 }
 
-function FilmFaktenHinweis({ hinweis }) {
+function FilmFaktenHinweis({ hinweis, produktiv = false }) {
   if (!hinweis?.candidates?.length) return null;
   return (
     <small data-film-fakten-hinweis={hinweis.filmTitel} style={{ display: "block", color: T.rauch, marginTop: 3 }}>
       Mögliche Werke im Faktenbestand, nicht als Profilfakt bestätigt: {hinweis.candidates.map((kandidat, index) => (
         <span key={kandidat.flixpatrolId}>
           {index > 0 ? "; " : ""}{kandidat.title} ({kandidat.year}, {kandidat.mediaType === "serie" ? "Serie" : "Film"})
-          {kandidat.checkedAt ? " · Stand " + kandidat.checkedAt.slice(0, 10) : ""}
-          {kandidat.sourceUrl ? <> · <a href={kandidat.sourceUrl} target="_blank" rel="noreferrer">Quelle</a></> : ""}
+          {!produktiv && kandidat.checkedAt ? " · Stand " + kandidat.checkedAt.slice(0, 10) : ""}
+          {!produktiv && kandidat.sourceUrl ? <> · <a href={kandidat.sourceUrl} target="_blank" rel="noreferrer">Quelle</a></> : ""}
         </span>
       ))}
     </small>
@@ -79,7 +80,7 @@ function FilmFaktenHinweis({ hinweis }) {
 
 function AendernPopup({
   signale, filme, filmFaktenHinweise, nichtDeutbar, achsText, offen, kiWegOffen,
-  onClose, onNeuErheben, onKiErheben, onRichtungAendern, onEntfernen, onNichtDeutbarEntfernen,
+  onClose, onNeuErheben, onKiErheben, onRichtungAendern, onEntfernen, onNichtDeutbarEntfernen, produktiv,
 }) {
   const ref = useRef(null);
   const [infosOffen, setInfosOffen] = useState(false);
@@ -126,7 +127,7 @@ function AendernPopup({
             <InfoGruppe titel={`Filme (${filme.length})`} leer={!filme.length}>
               <ul>{filme.map((f, i) => <li key={(f.masterId || f.titel) + i}>
                 {f.richtung === "stoesst_ab" ? "− " : f.richtung === "zieht_an" ? "+ " : ""}{f.titel}
-                <FilmFaktenHinweis hinweis={filmFaktenHinweise.find((item) => (
+                <FilmFaktenHinweis produktiv={produktiv} hinweis={filmFaktenHinweise.find((item) => (
                   item.filmTitel === f.titel && item.filmJahr === (f.jahr ?? null)
                 ))} />
               </li>)}</ul>
@@ -141,6 +142,7 @@ function AendernPopup({
 export function ProfilAnsicht({
   profil, filmFaktenHinweise = [], kiGeraeteweiseAus = false, onRichtungAendern, onEntfernen,
   onNichtDeutbarEntfernen, onWiderrufen, onNeuErheben, kiWegOffen = false, onKiErheben,
+  config = runtimeConfig,
 }) {
   const [widerrufOffen, setWiderrufOffen] = useState(false);
   const [aendernOffen, setAendernOffen] = useState(false);
@@ -188,6 +190,7 @@ export function ProfilAnsicht({
       </div>}
       <AendernPopup offen={aendernOffen} onClose={() => setAendernOffen(false)} signale={signale} filme={filme} nichtDeutbar={nichtDeutbar} achsText={achsText}
         filmFaktenHinweise={Array.isArray(filmFaktenHinweise) ? filmFaktenHinweise : []}
+        produktiv={config.appEnvironment === "production"}
         kiWegOffen={kiWegOffen} onNeuErheben={onNeuErheben} onKiErheben={onKiErheben}
         onRichtungAendern={onRichtungAendern} onEntfernen={onEntfernen} onNichtDeutbarEntfernen={onNichtDeutbarEntfernen} />
     </div>

@@ -44,9 +44,10 @@ check("KI-Hinweise begrenzen FlixPatrol auf Forecast, strukturiertes Radar und n
   assert.match(source, /FlixPatrol-Nachprüfung bei Import und Kataloganreicherung[\s\S]*keine zusätzlichen FlixPatrol- oder KI-Anfragen/);
 });
 
-check("Resend- und Kontaktinformation ist eng und ohne private Adresse", () => {
+check("Resend-, Kontakt- und MotN-Attribution sind eng und ohne private Adresse", () => {
   assert.doesNotMatch(source, /@hotmail\.com/i);
-  assert.equal((source.match(/<a\b/g) || []).length, 1);
+  assert.equal((source.match(/<a\b/g) || []).length, 2);
+  assert.match(source, /href="https:\/\/www\.movieofthenight\.com\/about\/api"/);
   assert.match(source, /privaten Kontaktweg, über den du deinen Zugang erhalten hast/);
   assert.match(source, /privaten Feedbackweg in der App senden, sofern dieser Weg verfügbar ist/);
   assert.match(source, /Resend in den USA/);

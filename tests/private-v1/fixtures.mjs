@@ -175,6 +175,27 @@ async function installNetworkFence(page, traffic) {
       traffic.contracts.push(`personal-${request.method().toLowerCase()}`);
       return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
     }
+    if (url.pathname === "/rest/v1/rpc/kd_streaming_page") {
+      record("mocked", "streaming-page");
+      traffic.contracts.push("streaming-page");
+      const posted = request.postDataJSON?.() || {};
+      const pageRequest = posted.p_request || posted;
+      const view = ["all", "new", "library"].includes(pageRequest.view) ? pageRequest.view : "all";
+      const source = view === "library" ? KNOWN_TITLES.map((entry) => ({
+        ...entry, library_id: entry.watchmode_id === 81001 ? "obsession-2024" : `master-${entry.watchmode_id}`,
+      })) : view === "new" ? DISCOVER_TITLES.slice(0, 2) : [...KNOWN_TITLES, ...DISCOVER_TITLES];
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          format: 1, status: "ready", region: "AT", version: "private-v1-page",
+          generatedAt: NOW, counts: { all: 5417, new: 205, library: 123 },
+          total: source.length, items: source, nextCursor: null, complete: true,
+          nextExpiryAt: view === "new" ? "2026-09-18T10:00:00.000Z" : null,
+          meta: { stand: NOW, katalog_stand: "private-v1-page", gueltig_bis: null },
+        }),
+      });
+    }
     if (["/rest/v1/kd_catalog", "/rest/v1/rpc/kd_streaming_catalog"].includes(url.pathname)) {
       const name = String(url.searchParams.get("p_name") || url.searchParams.get("name") || "").replace(/^eq\./u, "");
       record("mocked", `catalog:${name}`);

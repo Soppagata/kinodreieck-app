@@ -20,10 +20,13 @@ import {
 } from "../lib/streamingSort.js";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
+import { formatTitleFactsDate } from "../lib/titleFacts.js";
+import { runtimeConfig } from "../config/runtime.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { projiziereStreamingAnsichten, streamingTitelKennung as streamingId, gleicheStreamingTitel, streamingStatus } from "../lib/streamingProjection.js";
-import { formatTitleFactsDate } from "../lib/titleFacts.js";
+import { StreamingPageWindow, STREAMING_PAGE_PORTION } from "../components/StreamingPageWindow.jsx";
 import "../styles/library-followup.css";
+import "../styles/streaming-progressive.css";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -94,10 +97,10 @@ export function TitleFactsDetails({ titel, includeDescription = true }) {
   const description = String(titel?.beschreibung ?? titel?.description ?? "").trim();
   const runtime = Number(titel?.laufzeit_minuten ?? titel?.runtimeMinutes);
   const hasRuntime = Number.isInteger(runtime) && runtime > 0;
+  const genres = Array.isArray(titel?.genres) ? titel.genres : [];
   const evidence = titel?.descriptionEvidence;
   const source = evidence?.source === "watchmode" ? "Watchmode" : evidence?.source === "flixpatrol" ? "FlixPatrol" : null;
   const checked = formatTitleFactsDate(evidence?.checkedAt ?? evidence?.fetchedAt);
-  const genres = Array.isArray(titel?.genres) ? titel.genres : [];
   if (!description && !hasRuntime && !genres.length && !source) return null;
   return <div data-title-facts="title-facts-projection-v1" style={{ marginTop: 8, lineHeight: 1.55 }}>
     {includeDescription && description ? <div>{description}</div> : null}
@@ -106,7 +109,8 @@ export function TitleFactsDetails({ titel, includeDescription = true }) {
       {hasRuntime && genres.length ? <span> · </span> : null}
       {genres.length ? <span>{genres.join(", ")}</span> : null}
     </div>
-    {source ? <small>Beschreibung: {source}{checked ? ` · geprüft ${checked}` : ""}</small> : null}
+    {runtimeConfig.appEnvironment !== "production" && source
+      ? <small>Beschreibung: {source}{checked ? ` · geprüft ${checked}` : ""}</small> : null}
   </div>;
 }
 
@@ -163,26 +167,36 @@ export function StreamingTab({
   streamingNeu = { status: "idle", neueIds: [] },
   entdeckenStatus = {}, schreibeEntdeckenStatus = async () => false,
   onEintragKlick,
+  streamingPage = null, onStreamingPageQuery,
 }) {
+  const progressiveEnabled = streamingPage?.enabled === true;
+  const initialProgressiveView = streamingPage?.view === "all" ? "entdecken"
+    : streamingPage?.view === "new" ? "neu" : "programm";
+  const initialProgressiveState = useMemo(() => {
+    if (!progressiveEnabled || !streamingPage?.queryKey || typeof sessionStorage === "undefined") return {};
+    try { return JSON.parse(sessionStorage.getItem(`kd:streaming-ui:${streamingPage.queryKey}`) || "{}"); }
+    catch { return {}; }
+  }, []);
   const bereichRef = useRef(null);
-  const [ansicht, setAnsicht] = useState("programm");
+  const [ansicht, setAnsicht] = useState(() => progressiveEnabled
+    ? (initialProgressiveState.ansicht || initialProgressiveView) : "programm");
   const [expandedId, setExpandedId] = useState(null);
-  const [nurWunsch, setNurWunsch] = useState(false);
-  const [suche, setSuche] = useState("");
-  const [sortP, setSortP] = useState("titel");
-  const [sortRichtungP, setSortRichtungP] = useState("auf");
-  const [sortE, setSortE] = useState("titel");
-  const [sortRichtungE, setSortRichtungE] = useState("auf");
-  const [genreE, setGenreE] = useState(null);
-  const [dekadeE, setDekadeE] = useState(null);
-  const [typE, setTypE] = useState(null);
-  const [plattformP, setPlattformP] = useState(null);
-  const [nurBewertet, setNurBewertet] = useState(false);
-  const [buchstabeP, setBuchstabeP] = useState(null);
-  const [dekadeP, setDekadeP] = useState(null);
-  const [plattformE, setPlattformE] = useState(null);
-  const [statusFilterE, setStatusFilterE] = useState(null);
-  const [buchstabeE, setBuchstabeE] = useState(null);
+  const [nurWunsch, setNurWunsch] = useState(initialProgressiveState.nurWunsch === true);
+  const [suche, setSuche] = useState(initialProgressiveState.suche || "");
+  const [sortP, setSortP] = useState(initialProgressiveState.sortP || "titel");
+  const [sortRichtungP, setSortRichtungP] = useState(initialProgressiveState.sortRichtungP || "auf");
+  const [sortE, setSortE] = useState(initialProgressiveState.sortE || "titel");
+  const [sortRichtungE, setSortRichtungE] = useState(initialProgressiveState.sortRichtungE || "auf");
+  const [genreE, setGenreE] = useState(initialProgressiveState.genreE || null);
+  const [dekadeE, setDekadeE] = useState(initialProgressiveState.dekadeE || null);
+  const [typE, setTypE] = useState(initialProgressiveState.typE || null);
+  const [plattformP, setPlattformP] = useState(initialProgressiveState.plattformP || null);
+  const [nurBewertet, setNurBewertet] = useState(initialProgressiveState.nurBewertet === true);
+  const [buchstabeP, setBuchstabeP] = useState(initialProgressiveState.buchstabeP || null);
+  const [dekadeP, setDekadeP] = useState(initialProgressiveState.dekadeP || null);
+  const [plattformE, setPlattformE] = useState(initialProgressiveState.plattformE || null);
+  const [statusFilterE, setStatusFilterE] = useState(initialProgressiveState.statusFilterE || null);
+  const [buchstabeE, setBuchstabeE] = useState(initialProgressiveState.buchstabeE || null);
   /* Merkliste bleibt der separate Exportpfad; Dashboard-Pins laufen ausschliesslich
      ueber recommendationPins und den bestehenden Entdecken-Pinboardvertrag. */
   const entdeckenStatusRef = useRef(entdeckenStatus);
@@ -191,9 +205,13 @@ export function StreamingTab({
      zugeordnete Titel. Diese Zuordnung ist stärker als der spätere reine
      External-ID-Abgleich und steht deshalb auch ohne ursprüngliche externe
      Kennung des Masterwerks sofort für Alles und Neu bereit. */
-  const bekannteMediathekIds = useMemo(() => new Map((bekannt?.titel || [])
-    .filter((titel) => streamingId(titel) != null && (typeof titel?.id === "string" || typeof titel?.id === "number"))
-    .map((titel) => [String(streamingId(titel)), titel.id])), [bekannt]);
+  const progressivePageItems = progressiveEnabled && Array.isArray(streamingPage?.items) ? streamingPage.items : [];
+  const bekannteMediathekIds = useMemo(() => new Map((progressiveEnabled ? progressivePageItems : (bekannt?.titel || []))
+    .filter((titel) => streamingId(titel) != null && (progressiveEnabled
+      ? (typeof titel?.library_id === "string" || typeof titel?.library_id === "number")
+      : (typeof titel?.id === "string" || typeof titel?.id === "number")))
+    .map((titel) => [String(streamingId(titel)), progressiveEnabled ? titel.library_id : titel.id])),
+  [progressiveEnabled, progressivePageItems, bekannt]);
   const bekannteMediathekIdFuer = useCallback(
     (titel) => streamingId(titel) == null ? null : bekannteMediathekIds.get(String(streamingId(titel))) ?? null,
     [bekannteMediathekIds],
@@ -201,12 +219,20 @@ export function StreamingTab({
   const mediathekIdFuer = useCallback((titel) => (
     mediathekIdVon(streamingStatus(entdeckenStatus, titel)) ?? bekannteMediathekIdFuer(titel)
   ), [entdeckenStatus, bekannteMediathekIdFuer]);
+  const masterIndex = useMemo(() => new Map((Array.isArray(master) ? master : [])
+    .filter((film) => film?.id != null).map((film) => [String(film.id), film])), [master]);
   const bestaetigteMediathekIdFuer = useCallback((titel) => {
+    if (progressiveEnabled) {
+      const id = bekannteMediathekIdFuer(titel);
+      return id != null && masterIndex.has(String(id)) ? id : null;
+    }
     return bestaetigteMediathekNavigationId({
       titel, master, statusMap: entdeckenStatus, bekannteId: bekannteMediathekIdFuer(titel),
     });
-  }, [master, entdeckenStatus, bekannteMediathekIdFuer]);
-  const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
+  }, [progressiveEnabled, masterIndex, master, entdeckenStatus, bekannteMediathekIdFuer]);
+  const [sichtbarP, setSichtbarP] = useState(Math.max(STREAMING_PAGE_PORTION, Number(initialProgressiveState.visible) || STREAMING_PAGE_PORTION));
+  const [sichtbarE, setSichtbarE] = useState(progressiveEnabled
+    ? Math.max(STREAMING_PAGE_PORTION, Number(initialProgressiveState.visible) || STREAMING_PAGE_PORTION) : 200);
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
   const [gesehenFrage, setGesehenFrage] = useState(null);
   const [gesehenSpeichert, setGesehenSpeichert] = useState(null);
@@ -228,7 +254,7 @@ export function StreamingTab({
     setPlattformP(null); setNurBewertet(false); setBuchstabeP(null); setDekadeP(null); setNurWunsch(false);
     setPlattformE(null); setStatusFilterE(null); setBuchstabeE(null);
     setGenreE(null); setDekadeE(null); setTypE(null);
-    setSichtbarE(200);
+    setSichtbarE(progressiveEnabled ? STREAMING_PAGE_PORTION : 200);
     setExpandedId((fokusTreffer.art === "entdecken" ? "e" : "s") + fokusTreffer.ref);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fokusTreffer]);
@@ -335,17 +361,15 @@ export function StreamingTab({
     } finally { gesehenSpeichertRef.current = false; setGesehenSpeichert(null); }
   };
 
-  const datenDa = !!(bekannt && bekannt.stand);
+  const pageItems = progressivePageItems;
+  const datenDa = progressiveEnabled || !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
-  const projektion = useMemo(() => projiziereStreamingAnsichten({
+  const projektion = useMemo(() => progressiveEnabled ? {
+    meinProgramm: [], alleTitel: [], ausgewaehlt: [], vollstaendig: true,
+  } : projiziereStreamingAnsichten({
     bekannt, entdecken, auswahl, auswahlGeladen,
-  }), [bekannt, entdecken, auswahl, auswahlGeladen]);
+  }), [progressiveEnabled, bekannt, entdecken, auswahl, auswahlGeladen]);
   const entdeckenVollstaendig = projektion.vollstaendig;
-  /* Die fachliche Katalogfrische stammt vom letzten echten Providerlauf. Ein
-     Skip darf durch einen neuen Publikations-`stand` nicht frisch aussehen. */
-  const stand = datenDa ? new Date(bekannt.katalog_stand || bekannt.stand) : null;
-  const alterTage = stand ? (Date.now() - stand.getTime()) / 86400000 : null;
-
   /* Eine leere, bereits geladene Auswahl bedeutet ausdrücklich: keine
      Dienste. Während des Ladens wird ebenfalls kein alter Kontostand gezeigt. */
   const dienstOk = useCallback((t) => auswahlGeladen && auswahl.length > 0
@@ -355,23 +379,28 @@ export function StreamingTab({
      bekannt.dienste gegatet; das ist aber unzuverlässig (führt z. B. Joyn NICHT, obwohl Titel
      Joyn getaggt sind, und listet umgekehrt titel-lose Dienste). Ohne Auswahl: die Katalog-Dienste. */
   const plattformOptionenP = useMemo(() => {
+    if (progressiveEnabled) return [...(auswahl || [])].sort((a, b) => a.localeCompare(b, "de"));
     if (auswahl && auswahl.length) return [...auswahl].sort((a, b) => a.localeCompare(b, "de"));
     const dienste = new Set([...(bekannt?.dienste || [])]);
     for (const titel of bekannt?.titel || []) for (const dienst of titel.dienste || []) dienste.add(dienst);
     return [...dienste].sort((a, b) => a.localeCompare(b, "de"));
-  }, [auswahl, bekannt]);
+  }, [progressiveEnabled, auswahl, bekannt]);
   const plattformOptionenE = useMemo(() => {
+    if (progressiveEnabled) return [...(auswahl || [])].sort((a, b) => a.localeCompare(b, "de"));
     if (auswahl && auswahl.length) return [...auswahl].sort((a, b) => a.localeCompare(b, "de"));
     const dienste = new Set([...(entdecken?.dienste || []), ...(bekannt?.dienste || [])]);
     for (const titel of [...(bekannt?.titel || []), ...(entdecken?.titel || [])]) {
       for (const dienst of titel.dienste || []) dienste.add(dienst);
     }
     return [...dienste].sort((a, b) => a.localeCompare(b, "de"));
-  }, [auswahl, bekannt, entdecken]);
+  }, [progressiveEnabled, auswahl, bekannt, entdecken]);
   const plattformOkP = useCallback((t) => !plattformP || (t.dienste || []).includes(plattformP), [plattformP]);
   const plattformOkE = useCallback((t) => !plattformE || (t.dienste || []).includes(plattformE), [plattformE]);
 
   const programm = useMemo(() => {
+    if (progressiveEnabled) return pageItems.map((titel) => ({
+      ...titel, id: titel.library_id ?? titel.id,
+    }));
     if (!datenDa || !auswahlGeladen) return [];
     let l = projektion.meinProgramm.filter((t) => plattformOkP(t));
     /* Must-Watch-Filter liest die LISTE (Verknüpfung auf Master-ID) — nicht mehr
@@ -382,14 +411,14 @@ export function StreamingTab({
     if (streamingJahrzehntBereich(dekadeP)) l = l.filter((f) => passtInJahrzehntMitKulanz(f.jahr, dekadeP));
     if (suche.trim()) { const nq = norm(suche); l = l.filter((f) => norm(f.titel || "").includes(nq)); }
     return sortiereStreamingTitel(l, sortP, sortRichtungP);
-  }, [datenDa, auswahlGeladen, projektion.meinProgramm, plattformOkP, nurWunsch, nurBewertet, buchstabeP, dekadeP, mustwatchIds, suche, sortP, sortRichtungP]);
+  }, [progressiveEnabled, pageItems, datenDa, auswahlGeladen, projektion.meinProgramm, plattformOkP, nurWunsch, nurBewertet, buchstabeP, dekadeP, mustwatchIds, suche, sortP, sortRichtungP]);
 
   const vollKatalogTitel = projektion.alleTitel;
   const neuIdSet = useMemo(() => new Set((streamingNeu?.neueIds || []).map(String)), [streamingNeu]);
   const neuTitel = useMemo(() => streamingNeu?.status === "ready"
     ? projektion.ausgewaehlt.filter((titel) => neuIdSet.has(String(streamingId(titel))))
     : [], [projektion.ausgewaehlt, neuIdSet, streamingNeu?.status]);
-  const filterQuelleE = ansicht === "neu" ? neuTitel : projektion.ausgewaehlt;
+  const filterQuelleE = progressiveEnabled ? pageItems : (ansicht === "neu" ? neuTitel : projektion.ausgewaehlt);
 
   const genresE = useMemo(() => {
     const gruppen = new Map();
@@ -419,11 +448,12 @@ export function StreamingTab({
      ab. Vorhanden bedeutet ausdrücklich NICHT automatisch gesehen: Eine
      Mediathek kann auch ungesehene und Must-Watch-Einträge enthalten. */
   useEffect(() => {
-    if (!Array.isArray(master)) return;
+    if (progressiveEnabled || !Array.isArray(master)) return;
     void schreibeEntdeckenStatus((prev) => gleicheMediathekStatusAb(prev, vollKatalogTitel, master));
-  }, [master, vollKatalogTitel, schreibeEntdeckenStatus]);
+  }, [progressiveEnabled, master, vollKatalogTitel, schreibeEntdeckenStatus]);
 
   const katalogListe = useMemo(() => {
+    if (progressiveEnabled) return pageItems;
     if (ansicht === "entdecken" && !entdeckenDa) return [];
     if (ansicht === "neu" && streamingNeu?.status !== "ready") return [];
     let l = filterQuelleE.filter((t) => (
@@ -436,11 +466,18 @@ export function StreamingTab({
     if (typE === "movie") l = l.filter((t) => !istStreamingSerie(t));
     if (typE === "tv_series") l = l.filter(istStreamingSerie);
     return sortiereStreamingTitel(l, sortE, sortRichtungE);
-  }, [ansicht, entdeckenDa, streamingNeu?.status, filterQuelleE, dienstOk, plattformOkE,
+  }, [progressiveEnabled, pageItems, ansicht, entdeckenDa, streamingNeu?.status, filterQuelleE, dienstOk, plattformOkE,
     statusFilterE, buchstabeE, genreE, genreFilterSichtbarE, dekadeE, typE,
     sortE, sortRichtungE, entdeckenStatus, fokusOverride]);
   // Bei Filterwechsel wieder bei 200 anfangen (sonst würden Tausende gerendert).
-  useEffect(() => { setSichtbarE(200); }, [katalogListe]);
+  const windowQueryKeyRef = useRef(streamingPage?.queryKey || "");
+  useEffect(() => {
+    const nextKey = streamingPage?.queryKey || "";
+    if (windowQueryKeyRef.current === nextKey) return;
+    windowQueryKeyRef.current = nextKey;
+    setSichtbarP(STREAMING_PAGE_PORTION);
+    setSichtbarE(progressiveEnabled ? STREAMING_PAGE_PORTION : 200);
+  }, [progressiveEnabled, streamingPage?.queryKey]);
   const sichtbareKatalogTitel = useMemo(() => {
     const basis = katalogListe.slice(0, sichtbarE);
     if (ansicht !== "entdecken" || fokusOverride?.art !== "entdecken") return basis;
@@ -452,7 +489,7 @@ export function StreamingTab({
     return [...basis, ziel];
   }, [ansicht, katalogListe, sichtbarE, fokusOverride]);
 
-  const dekadenP = useMemo(() => streamingJahrzehnte(bekannt?.titel || []), [bekannt]);
+  const dekadenP = useMemo(() => streamingJahrzehnte(progressiveEnabled ? pageItems : (bekannt?.titel || [])), [progressiveEnabled, pageItems, bekannt]);
   const dekadenE = useMemo(() => streamingJahrzehnte(filterQuelleE), [filterQuelleE]);
 
   const gemerkt = (t) => merkliste.some((m) => gleicheStreamingTitel(m,t));
@@ -500,7 +537,7 @@ export function StreamingTab({
   };
   const aendereAnsicht = (naechsteAnsicht) => {
     setAnsicht(naechsteAnsicht);
-    if (naechsteAnsicht === "entdecken" || naechsteAnsicht === "neu") void onAllesKatalogLaden?.();
+    if (!progressiveEnabled && (naechsteAnsicht === "entdecken" || naechsteAnsicht === "neu")) void onAllesKatalogLaden?.();
   };
   const aktiveFilterP = Number(!!plattformP) + Number(nurBewertet) + Number(nurWunsch)
     + Number(!!buchstabeP) + Number(!!streamingJahrzehntBereich(dekadeP));
@@ -509,9 +546,9 @@ export function StreamingTab({
   /* Die bestehende zugängliche Filterkennung bleibt für gespeicherte
      Bedienhilfen stabil; der sichtbare Ansichtsname lautet weiterhin Alles. */
   const katalogAnsicht = ansicht === "neu" ? "Neu" : "Entdecken";
-  const katalogAnsichtBereit = ansicht === "neu"
+  const katalogAnsichtBereit = progressiveEnabled || (ansicht === "neu"
     ? streamingNeu?.status === "ready"
-    : entdeckenDa && entdeckenVollstaendig && auswahlGeladen;
+    : entdeckenDa && entdeckenVollstaendig && auswahlGeladen);
   const allesAnzahlFuerAuswahl = projektion.ausgewaehlt.length;
   const neuAnzahlFuerAuswahl = useMemo(
     () => neuTitel.filter(dienstOk).length,
@@ -521,10 +558,63 @@ export function StreamingTab({
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
 
+  const progressiveView = ansicht === "entdecken" ? "all" : ansicht === "neu" ? "new" : "library";
+  const progressiveFilters = {
+    suche: ansicht === "programm" ? suche : "",
+    plattform: ansicht === "programm" ? plattformP : plattformE,
+    typ: ansicht === "programm" ? null : typE,
+    genre: ansicht === "programm" ? null : genreE,
+    dekade: ansicht === "programm" ? dekadeP : dekadeE,
+    buchstabe: ansicht === "programm" ? buchstabeP : buchstabeE,
+    sort: ansicht === "programm" ? sortP : sortE,
+    richtung: ansicht === "programm" ? sortRichtungP : sortRichtungE,
+    status: ansicht === "programm" ? null : statusFilterE,
+    nurWunsch: ansicht === "programm" && nurWunsch,
+    nurBewertet: ansicht === "programm" && nurBewertet,
+  };
+  const progressiveQuerySignature = progressiveEnabled ? JSON.stringify([progressiveView, progressiveFilters]) : "";
+  const lastProgressiveQueryRef = useRef("");
+  useEffect(() => {
+    if (!progressiveEnabled || typeof onStreamingPageQuery !== "function") return;
+    if (lastProgressiveQueryRef.current === progressiveQuerySignature) return;
+    lastProgressiveQueryRef.current = progressiveQuerySignature;
+    onStreamingPageQuery({ view: progressiveView, filters: progressiveFilters });
+  }, [progressiveEnabled, onStreamingPageQuery, progressiveQuerySignature]);
+
+  const progressiveUiSnapshotRef = useRef(null);
+  progressiveUiSnapshotRef.current = {
+    ansicht, sichtbarP, sichtbarE, suche, sortP, sortRichtungP, sortE, sortRichtungE,
+    genreE, dekadeE, typE, plattformP, nurBewertet, nurWunsch, buchstabeP,
+    dekadeP, plattformE, statusFilterE, buchstabeE,
+  };
+
+  useEffect(() => {
+    if (!progressiveEnabled || !streamingPage?.queryKey || typeof sessionStorage === "undefined") return undefined;
+    const storageKey = `kd:streaming-ui:${streamingPage.queryKey}`;
+    const raw = sessionStorage.getItem(storageKey);
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw);
+        const savedView = saved.ansicht === "entdecken" ? "all" : saved.ansicht === "neu" ? "new" : "library";
+        if (savedView === progressiveView) {
+          setSichtbarP(Math.max(STREAMING_PAGE_PORTION, Number(saved.visible) || STREAMING_PAGE_PORTION));
+          setSichtbarE(Math.max(STREAMING_PAGE_PORTION, Number(saved.visible) || STREAMING_PAGE_PORTION));
+          requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, Number(saved.scrollY) || 0), behavior: "auto" }));
+        }
+      } catch { /* ungültigen kleinen UI-Zustand ignorieren */ }
+    }
+    return () => {
+      const state = progressiveUiSnapshotRef.current || {};
+      const visible = state.ansicht === "programm" ? state.sichtbarP : state.sichtbarE;
+      try { sessionStorage.setItem(storageKey, JSON.stringify({ ...state, visible, scrollY: window.scrollY })); }
+      catch { /* Sitzungszustand ist Komfort; Karten und Query bleiben nutzbar. */ }
+    };
+  }, [progressiveEnabled, streamingPage?.queryKey]);
+
   if (datenGesperrt) return (
     <section ref={bereichRef} className="kd-streaming-tab">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "18px 20px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
-        <strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Melde dich an und öffne Settings → Verbindung wiederherstellen. Die App selbst ruft Watchmode nie live auf.
+        <strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Melde dich an und öffne Settings → Verbindung wiederherstellen.
       </div>
     </section>
   );
@@ -534,16 +624,16 @@ export function StreamingTab({
       {/* dataTour="streaming-views" bleibt am SegmentedControl-Container — Tour-Anker. */}
       <SegmentedControl className="kd-streaming-ansichten" dataTour="streaming-views" value={ansicht} onChange={aendereAnsicht}
         options={[
-          { id: "programm", label: "Mein Programm", badge: datenDa && auswahlGeladen ? programm.length : undefined },
-          { id: "entdecken", label: "Alles", badge: entdeckenVollstaendig && auswahlGeladen ? (ansicht === "entdecken" ? katalogListe.length : allesAnzahlFuerAuswahl) : undefined },
-          { id: "neu", label: "Neu", badge: streamingNeu?.status === "ready" ? (ansicht === "neu" ? katalogListe.length : neuAnzahlFuerAuswahl) : undefined },
+          { id: "programm", label: "Mein Programm", badge: progressiveEnabled ? streamingPage?.counts?.library : (datenDa && auswahlGeladen ? programm.length : undefined) },
+          { id: "entdecken", label: "Alles", badge: progressiveEnabled ? streamingPage?.counts?.all : (entdeckenVollstaendig && auswahlGeladen ? (ansicht === "entdecken" ? katalogListe.length : allesAnzahlFuerAuswahl) : undefined) },
+          { id: "neu", label: "Neu", badge: progressiveEnabled ? streamingPage?.counts?.new : (streamingNeu?.status === "ready" ? (ansicht === "neu" ? katalogListe.length : neuAnzahlFuerAuswahl) : undefined) },
         ]} />
 
-      {(bekannt?.motn?.offers?.length || entdecken?.motn?.offers?.length) > 0 && (
-        <p style={{ color: T.rauch, fontSize: 12, margin: "12px 0" }}>
-          Streamingdaten ergänzt durch <a href="https://www.movieofthenight.com/about/api" target="_blank" rel="noopener noreferrer">Movie of the Night</a>.
-        </p>
-      )}
+      {progressiveEnabled && typeof streamingPage?.total === "number" ? <div className="kd-streaming-page-summary" aria-live="polite">
+        <strong>{streamingPage.total} Treffer</strong><span>für diese Ansicht und Filter</span>
+        {streamingPage.fromCache ? <span>· {runtimeConfig.appEnvironment === "production" ? "zuletzt verfügbare Titel" : "aus dem Browser-Speicher"}</span> : null}
+        {streamingPage.nextExpiryAt ? <span>· Neu sichtbar bis {formatPresentationDate(streamingPage.nextExpiryAt)}</span> : null}
+      </div> : null}
 
       {!datenDa && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
@@ -570,29 +660,22 @@ export function StreamingTab({
         </div>
       )}
 
-      {datenDa && alterTage > 35 && (
-        <div style={{ background: "rgba(217,106,90,0.12)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>
-          Katalog ist {Math.floor(alterTage)} Tage alt — Refresh fällig (Settings).
-        </div>
-      )}
-
-      {datenDa && bekannt.demo && katalogInfo?.variante !== "live" && (
+      {datenDa && bekannt?.demo && katalogInfo?.variante !== "live" && (
         <div style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
-          <strong style={{ color: T.wolfram }}>Demo-Beispieldaten</strong> — die Titel hier sind Platzhalter. Der echte Katalog kommt mit dem ersten Watchmode-Lauf.
+          <strong style={{ color: T.wolfram }}>Demo-Beispieldaten</strong> — die Titel hier sind Platzhalter. Echte Inhalte erscheinen, sobald ein Katalog verfügbar ist.
         </div>
       )}
 
       {/* Ein abgelaufener Schnappschuss ist kein aktueller Katalog — sagen statt zeigen. */}
       {datenDa && katalogInfo?.abgelaufen && (
         <div style={{ background: "rgba(217,106,90,0.12)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
-          <strong style={{ color: T.gefahr }}>Abgelaufener Schnappschuss</strong> — diese Verfügbarkeiten galten bis
-          {" "}{formatPresentationDate(katalogInfo.gueltigBis)} und stimmen heute nicht mehr zwingend.
+          <strong style={{ color: T.gefahr }}>Verfügbarkeiten nicht mehr aktuell.</strong>
           {katalogInfo.variante === "demo" ? " Mit einer Anmeldung siehst du den laufenden Katalog." : ""}
         </div>
       )}
       {datenDa && katalogInfo?.ausCache && (
         <div style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
-          <strong style={{ color: T.wolfram }}>Aus dem Browser-Speicher</strong> — die Datenbank war beim letzten Versuch nicht erreichbar. Angezeigt wird der zuletzt geladene Stand.
+          <strong style={{ color: T.wolfram }}>Gespeicherte Titel</strong> — die Verbindung ist gerade nicht erreichbar. Die vorhandenen Karten bleiben verfügbar.
         </div>
       )}
 
@@ -626,10 +709,10 @@ export function StreamingTab({
             jahrzehnt={dekadeP} jahrzehnte={dekadenP} onJahrzehnt={aendereDekadeP} />
           {programm.length === 0 && <p style={{ color: T.rauch, fontSize: 14 }}>Kein Titel deiner Liste auf den gewählten Diensten.</p>}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {programm.map((f) => {
+            {(progressiveEnabled ? programm.slice(0, sichtbarP) : programm).map((f) => {
               /* Editierbar: den Master-Eintrag überlagern (frische Begründung/Bewertung),
                  Streaming-Felder behalten. onSave schreibt in die Masterliste. */
-              const mf = master && master.find((m) => m.id === f.id);
+              const mf = masterIndex.get(String(f.id));
               const persoenlicheGenres = Array.isArray(mf?.genres) ? mf.genres
                 : Array.isArray(mf?.genre) ? mf.genre : [];
               const kartenGenres = [...new Map([
@@ -699,6 +782,11 @@ export function StreamingTab({
               );
             })}
           </div>
+          {progressiveEnabled ? <StreamingPageWindow items={programm} visible={sichtbarP} onVisibleChange={setSichtbarP}
+            hasMore={streamingPage?.hasMore} backgroundLoading={streamingPage?.backgroundLoading}
+            status={streamingPage?.status} error={streamingPage?.error} total={streamingPage?.total}>
+            {() => null}
+          </StreamingPageWindow> : null}
         </>
       )}
 
@@ -744,7 +832,7 @@ export function StreamingTab({
                 <ChipReihe style={{ gap: 6, marginBottom: 0 }}>
                   <Chip active={statusFilterE === "gesehen"}
                     onClick={() => aendereFilter(setStatusFilterE, statusFilterE === "gesehen" ? null : "gesehen")}>
-                    Gesehen ({statusAnzahlenE})
+                    {progressiveEnabled ? "Gesehen" : `Gesehen (${statusAnzahlenE})`}
                   </Chip>
                 </ChipReihe>
               </div>
@@ -778,7 +866,7 @@ export function StreamingTab({
             <p style={{ color: T.rauch, fontSize: 14 }}>In den letzten 14 Tagen sind keine neuen Titel für diese Auswahl hinzugekommen.</p>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {sichtbareKatalogTitel.map((t) => (
+            {(progressiveEnabled ? katalogListe.slice(0, sichtbarE) : sichtbareKatalogTitel).map((t) => (
               <div key={streamingId(t)} className="kd-entdecken-karte kd-suchfokus kd-streaming-neu-karte kd-titelaktionskarte" tabIndex={-1}
                 data-streaming-suchtreffer={ansicht === "entdecken" ? `entdecken:${streamingId(t)}` : undefined}
                 onClick={() => setExpandedId(expandedId === "e" + streamingId(t) ? null : "e" + streamingId(t))}
@@ -854,7 +942,7 @@ export function StreamingTab({
                 {katalogAktionen(t)}
               </div>
             ))}
-            {katalogListe.length > sichtbarE && (
+            {!progressiveEnabled && katalogListe.length > sichtbarE && (
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
                 <button style={{ ...btnStyle(true), padding: "8px 14px" }}
                   onClick={() => setSichtbarE((n) => n + 100)}>
@@ -863,6 +951,11 @@ export function StreamingTab({
                 <span style={mono}>{sichtbarE} von {katalogListe.length} · noch {katalogListe.length - sichtbarE}</span>
               </div>
             )}
+            {progressiveEnabled ? <StreamingPageWindow items={katalogListe} visible={sichtbarE} onVisibleChange={setSichtbarE}
+              hasMore={streamingPage?.hasMore} backgroundLoading={streamingPage?.backgroundLoading}
+              status={streamingPage?.status} error={streamingPage?.error} total={streamingPage?.total}>
+              {() => null}
+            </StreamingPageWindow> : null}
           </div>
           </>}
         </>

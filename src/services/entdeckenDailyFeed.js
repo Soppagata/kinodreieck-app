@@ -27,6 +27,7 @@ function noticeDate(value) {
 }
 
 export function entdeckenDailyFeedNotice(value) {
+  const produktiv = runtimeConfig.appEnvironment === "production";
   const date = noticeDate(value);
   if (value?.feedOrigin === "embedded_fallback") {
     const retrieval = ({
@@ -35,11 +36,15 @@ export function entdeckenDailyFeedNotice(value) {
       server_feed_rejected: "Serverstand unvollständig.",
       server_feed_older: "Serverstand älter.",
     })[value?.retrievalStatus] || null;
+    if (produktiv) return [retrieval, "Vorhandene Empfehlungen bleiben sichtbar."].filter(Boolean).join(" ");
     const stand = `${ENTDECKEN_DAILY_FALLBACK_NOTICE}${date ? `: ${date}` : ""}`;
     const stale = value?.status === "stale" ? " · Aktualisierung ausstehend." : ".";
     return [retrieval, `${stand}${stale}`].filter(Boolean).join(" ");
   }
   if (value?.status === "stale") {
+    if (produktiv) return value?.responseMode === "degraded"
+      ? "Aktueller Abruf fehlgeschlagen. Vorhandene Empfehlungen bleiben sichtbar."
+      : "Empfehlungen können gerade nicht erneuert werden.";
     const stand = date ? `Stand: ${date} · ` : "";
     return value?.responseMode === "degraded"
       ? `Aktueller Abruf fehlgeschlagen. ${stand}${ENTDECKEN_DAILY_STALE_NOTICE}`

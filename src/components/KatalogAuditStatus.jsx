@@ -2,6 +2,7 @@ import { T } from "../lib/tokens.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 import { projiziereStreamingAnsichten } from "../lib/streamingProjection.js";
 import { streamingQuellenstaende } from "../lib/streamingNeu.js";
+import { runtimeConfig } from "../config/runtime.js";
 import "./KatalogAuditStatus.css";
 
 const ZAHL = new Intl.NumberFormat("de-AT");
@@ -16,7 +17,9 @@ export function KatalogAuditStatus({
   auswahl = [],
   auswahlGeladen = true,
   streamingNeu = { status: "idle", neueIds: [] },
+  config = runtimeConfig,
 }) {
+  if (config.appEnvironment === "production") return null;
   const projektion = projiziereStreamingAnsichten({ bekannt, entdecken, auswahl, auswahlGeladen });
   const quellen = streamingQuellenstaende({ bekannt, entdecken, auswahl, auswahlGeladen });
   const neuText = !auswahlGeladen

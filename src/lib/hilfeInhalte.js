@@ -1,3 +1,5 @@
+import { runtimeConfig } from "../config/runtime.js";
+
 /**
  * @typedef {"start"|"kino"|"mediathek"|"streaming"|"finder"|"blog"|"daten"} HilfeZiel
  * @typedef {{
@@ -32,6 +34,7 @@ const AKTION_SCHLUESSEL = Object.freeze([
 const FALLBACK_SCHLUESSEL = Object.freeze([
   "id", "titel", "text", "bereichId", "ziel",
 ]);
+const PRODUKTION = runtimeConfig.appEnvironment === "production";
 
 export function normalisiereHilfeText(wert) {
   return String(wert ?? "")
@@ -95,8 +98,12 @@ const BEREICHE = [
     details: [
       "Alles zeigt die Gesamtmenge der bekannten Angebote deiner gewählten Streamingdienste. Mein Programm ist daraus die Teilmenge, die zu deiner Mediathek und deinen Listen passt.",
       "Neu zeigt Titel, die seit dem letzten erfolgreichen Katalogabruf neu in „Alles“ deiner gewählten Dienste erkannt wurden. Jeder Zugang bleibt ab seiner Erkennung 14 × 24 Stunden sichtbar; das ist kein Plattform-Premierendatum.",
-      "Watchmode erneuert den österreichischen Grundbestand wöchentlich. Movie of the Night prüft täglich auf neue und entfernte Abo-Angebote. Bei Änderungen folgt ein Abgleich; nach einem abgeschlossenen Abgleich gilt eine Sperre von 48 Stunden. In dieser Zeit erkannte Änderungen werden beim nächsten freigegebenen Tageslauf übernommen. Der angezeigte Quellenstand bleibt maßgeblich.",
-      "Movie of the Night ergänzt österreichische Abo-Neuzugänge für 14 volle Tage unter Neu. Fehlt ein Titel danach weiterhin bei Watchmode, bleibt er unter Alles und in Entdecken verfügbar, bis Watchmode das Angebot übernimmt oder eine Entfernung bestätigt wird. Bestätigte MotN-Verfügbarkeitskorrekturen haben Vorrang; Prime Channels behalten ihren bisherigen Datenweg.",
+      PRODUKTION
+        ? "Der Katalog wird regelmäßig ergänzt. Bereits sichtbare Titel bleiben während einer vorübergehenden Aktualisierung bedienbar."
+        : "Watchmode erneuert den österreichischen Grundbestand wöchentlich. Movie of the Night prüft täglich auf neue und entfernte Abo-Angebote. Bei Änderungen folgt ein Abgleich; nach einem abgeschlossenen Abgleich gilt eine Sperre von 48 Stunden. In dieser Zeit erkannte Änderungen werden beim nächsten freigegebenen Tageslauf übernommen. Der angezeigte Quellenstand bleibt maßgeblich.",
+      PRODUKTION
+        ? "Neue Abo-Zugänge bleiben 14 volle Tage unter Neu. Danach richtet sich die Anzeige weiterhin nach der bestätigten Verfügbarkeit bei deinen gewählten Diensten."
+        : "Movie of the Night ergänzt österreichische Abo-Neuzugänge für 14 volle Tage unter Neu. Fehlt ein Titel danach weiterhin bei Watchmode, bleibt er unter Alles und in Entdecken verfügbar, bis Watchmode das Angebot übernimmt oder eine Entfernung bestätigt wird. Bestätigte MotN-Verfügbarkeitskorrekturen haben Vorrang; Prime Channels behalten ihren bisherigen Datenweg.",
       "Welche Streamingdienste berücksichtigt werden, stellst du in Settings unter Streaming-Quellen ein.",
     ],
     suchwoerter: ["streaming", "streamingdienst", "mein programm", "alles", "neu", "streaming entdecken", "gesehen", "merkliste", "watchmode"],
@@ -120,8 +127,12 @@ const BEREICHE = [
     kurztext: "Empfehlungen, Radar-Einträge und den eigenen Blog getrennt verwalten.",
     details: [
       "Entdecken trennt Empfehlungen, Radar und Blog in eigene Ansichten.",
-      "Die gemeinsame Österreich-Auswahl verbindet Kinocharts des Österreichischen Filminstituts, Netflix-Daten aus dessen eigener Quelle sowie Prime-Video-, Disney+- und Apple-TV-Charts von FlixPatrol. Quellenstand und Abrufzeit bleiben getrennt sichtbar.",
-      "FlixPatrol-Chartplätze sind neutrale Beliebtheitssignale. Sie sind weder persönliche Empfehlung noch Qualitätsurteil oder Beleg, dass ein Titel in deinem Abo verfügbar ist.",
+      PRODUKTION
+        ? "Die gemeinsame Österreich-Auswahl verbindet aktuelle Kinotitel und beliebte Streamingtitel."
+        : "Die gemeinsame Österreich-Auswahl verbindet Kinocharts des Österreichischen Filminstituts, Netflix-Daten aus dessen eigener Quelle sowie Prime-Video-, Disney+- und Apple-TV-Charts von FlixPatrol. Quellenstand und Abrufzeit bleiben getrennt sichtbar.",
+      PRODUKTION
+        ? "Beliebtheitslisten sind weder persönliche Empfehlung noch Qualitätsurteil oder Beleg, dass ein Titel in deinem Abo verfügbar ist."
+        : "FlixPatrol-Chartplätze sind neutrale Beliebtheitssignale. Sie sind weder persönliche Empfehlung noch Qualitätsurteil oder Beleg, dass ein Titel in deinem Abo verfügbar ist.",
       "Im Blog schreibst und verwaltest du eigene Artikel. Verweise können mit Einträgen aus Mediathek oder Must-Watch verbunden sein.",
       "Wird eine solche Verbindung gelöst, bleibt der Artikel bestehen und der offene Verweis kann später erneut zugeordnet werden.",
     ],

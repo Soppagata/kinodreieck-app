@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { FRAGEN, ANTWORT_MAX_ZEICHEN, antwortenBrauchbar, frageZu } from "../lib/extraktion.js";
+import { runtimeConfig } from "../config/runtime.js";
 
 /* ---------- Der KI-Weg: drei offene Fragen (Etappe 7, Phase 3) ----------
 
@@ -38,7 +39,9 @@ export function DreiFragen({
   onExtrahieren,
   onUebernehmen,
   onAbbruch,
+  config = runtimeConfig,
 }) {
+  const produktiv = config.appEnvironment === "production";
   const [antworten, setAntworten] = useState(() => ({ ...(startAntworten || {}) }));
   /* Diese Vorschau ist während ihrer Lebensdauer unveränderlich. Deshalb
      sind die Array-Indizes hier die ehrlichsten lokalen Auswahl-IDs: Zwei
@@ -213,8 +216,8 @@ export function DreiFragen({
                         Mögliche Werke im Faktenbestand, noch nicht bestätigt: {hinweis.candidates.map((kandidat) => (
                           <span key={kandidat.flixpatrolId}>
                             {kandidat.title} ({kandidat.year}, {kandidat.mediaType === "serie" ? "Serie" : "Film"})
-                            {kandidat.checkedAt ? " · Stand " + kandidat.checkedAt.slice(0, 10) : ""}
-                            {kandidat.sourceUrl ? <> · <a href={kandidat.sourceUrl} target="_blank" rel="noreferrer">Quelle</a></> : ""}
+                            {!produktiv && kandidat.checkedAt ? " · Stand " + kandidat.checkedAt.slice(0, 10) : ""}
+                            {!produktiv && kandidat.sourceUrl ? <> · <a href={kandidat.sourceUrl} target="_blank" rel="noreferrer">Quelle</a></> : ""}
                           </span>
                         )).reduce((teile, eintrag, i) => i ? [...teile, "; ", eintrag] : [eintrag], [])}
                       </p>

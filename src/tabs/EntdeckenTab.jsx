@@ -26,8 +26,8 @@ import {
 } from "../lib/radarNews.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
-import { entdeckenDailyFeedNotice } from "../services/entdeckenDailyFeed.js";
 import { formatTitleFactsDate } from "../lib/titleFacts.js";
+import { entdeckenDailyFeedNotice } from "../services/entdeckenDailyFeed.js";
 import { runtimeConfig } from "../config/runtime.js";
 import "../styles/ui-copy-disclosures.css";
 
@@ -40,6 +40,7 @@ const ANSICHTEN = Object.freeze([
 const ROLLEN_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
 const RADAR_TEXT_FINDING_ID = /^release:v1:[a-f0-9]{16}$/;
 function descriptionEvidenceLabel(entry) {
+  if (runtimeConfig.appEnvironment === "production") return null;
   const evidence = entry?.descriptionEvidence;
   const source = evidence?.source === "watchmode" ? "Watchmode"
     : evidence?.source === "flixpatrol" ? "FlixPatrol" : null;
@@ -249,6 +250,7 @@ function RecommendationsView({
     : entry.availability?.service ? `${entry.availability.service} · Streaming`
       : "Streaming Österreich";
   const meta = (entry) => [availabilityLabel(entry), entry.year, mediaLabel(entry)].filter(Boolean).join(" · ");
+  const produktiv = runtimeConfig.appEnvironment === "production";
   const sourceLabel = (entry) => entry.sourceLabel || source(entry)?.sourceLabel || source(entry)?.domain || "Aktuelle Liste";
   const sourceStand = (entry) => {
     const day = entry.popularity?.measuredOn || source(entry)?.retrievedOn;
@@ -257,17 +259,17 @@ function RecommendationsView({
   };
   const titleHeading = (entry) => <h3>{source(entry) ? <a className="kd-entdecken-titellink"
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
-    aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
+    aria-label={produktiv ? `${entry.title}: Hintergrund öffnen` : `${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
     .includes(webDiscoveryFeed?.format);
   /* Abrufstatus und Quellenstand werden getrennt knapp benannt. */
   const feedNotice = entdeckenDailyFeedNotice({ ...webDiscoveryStatus, feed: webDiscoveryFeed });
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
-  const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
+  const weekLabel = !produktiv && [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
     .includes(webDiscoveryFeed?.format)
     && webDiscoveryFeed?.refreshedOn
     ? `Stand: ${formatPresentationDate(webDiscoveryFeed.refreshedOn)}`
-    : weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
+    : !produktiv && weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   const pinButton = (entry) => {
     const pinned = isEntdeckenPinned(recommendationPins, entry);
     return <button type="button" className={`kd-entdecken-pin${pinned ? " aktiv" : ""}`}
@@ -306,14 +308,14 @@ function RecommendationsView({
           {source(entry) && publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
             rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
         </div> : null}
-        <small>{meta(entry)} · Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
+        <small>{meta(entry)}{!produktiv ? ` · Quelle: ${sourceLabel(entry)}${sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}` : ""}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
           rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
       </article>;
     })}</div> : <p className="kd-entdecken-leer gross">Noch keine persönliche Passung im aktuellen Angebot. Dein Geschmacksprofil und positive Bewertungen helfen bei der Auswahl. Beliebte Titel findest du darunter.</p>}
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
-        <div><span>Österreichische Quellenliste</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
+        <div><span>{produktiv ? "In Österreich beliebt" : "Österreichische Quellenliste"}</span><h2 id="kd-entdecken-weitere">Beliebte Titel</h2></div>
         {weekLabel ? <p>{weekLabel}</p> : null}
       </div>
       {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-beliebtliste">{visiblePopular.map((entry, index) => {
@@ -339,7 +341,7 @@ function RecommendationsView({
                 rel="noopener noreferrer" target="_blank">Beschreibungsquelle ansehen</a> : null}
             </div> : null}
             <p>{meta(entry)}</p>
-            <small>Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
+            {!produktiv ? <small>Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small> : null}
             {!hatBeschreibung && source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
               rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
           </div>

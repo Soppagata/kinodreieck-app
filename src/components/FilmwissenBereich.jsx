@@ -1,6 +1,7 @@
 import { T, btnStyle } from "../lib/tokens.js";
 import { FILMWISSEN_STATUS } from "../lib/filmwissen.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
+import { runtimeConfig } from "../config/runtime.js";
 
 const SICHERHEIT = {
   sehr_niedrig: "sehr unsicher",
@@ -20,6 +21,7 @@ export function FilmwissenBereich({
   onRecherchieren,
   eingebettet = false,
   zeigeRechercheAktion = true,
+  config = runtimeConfig,
 }) {
   const status = daten?.status || null;
   return (
@@ -61,8 +63,9 @@ export function FilmwissenBereich({
             {daten.warum.kurztext}
           </p>
           <p style={{ margin: "0 0 8px", color: T.rauch, fontSize: 11 }}>
-            Gemeinsame Einordnung · Stand {formatPresentationDate(daten.version.stand)}
-            {" · "}Version {daten.version.nr}
+            {config.appEnvironment === "production"
+              ? "Gemeinsame Einordnung"
+              : <>Gemeinsame Einordnung · Stand {formatPresentationDate(daten.version.stand)}{" · "}Version {daten.version.nr}</>}
           </p>
           <details>
             <summary style={{ cursor: "pointer", color: T.wolfram, fontSize: 12 }}>
