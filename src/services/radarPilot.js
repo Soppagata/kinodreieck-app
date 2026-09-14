@@ -27,6 +27,7 @@ export const RADAR_PILOT_RPCS = Object.freeze([
   "kd_radar_pilot_set_receipt",
   "kd_radar_pilot_import_event",
   "kd_radar_pilot_feed",
+  "kd_radar_pilot_feed_search_access",
 ]);
 
 const TERMINAL_SQLSTATES = new Set(["22023", "23505", "23514", "42501"]);
@@ -280,7 +281,8 @@ export function createRadarPilotService({
 
     let current = state;
     let automation = null;
-    let includeSearchStatus = true;
+    let extendedFeedAvailable = true;
+    let searchStatusOverloadAvailable = true;
     const importedEventVersionIds = new Set();
     let rejected = false;
     const runSubscriptionIds = state.outbox.filter((entry) => entry.status === "pending").map((entry) => entry.operationId);
@@ -291,14 +293,26 @@ export function createRadarPilotService({
 
     try {
       const reconcileFeed = async (operationIds = []) => {
-        let response = await callRpc("kd_radar_pilot_feed", {
-          p_operation_ids: operationIds,
-          ...(includeSearchStatus ? { p_include_search_status: true } : {}),
-        }, fence, token);
-        // Only an absent overload permits one legacy read, never a retry for
-        // auth, network or server errors. New servers need no extra request.
-        if (includeSearchStatus && response.kind === "pilot-unavailable") {
-          includeSearchStatus = false;
+        let response = extendedFeedAvailable
+          ? await callRpc("kd_radar_pilot_feed_search_access", {
+            p_operation_ids: operationIds, p_include_search_status: true,
+          }, fence, token)
+          : await callRpc("kd_radar_pilot_feed", {
+            p_operation_ids: operationIds,
+            ...(searchStatusOverloadAvailable ? { p_include_search_status: true } : {}),
+          }, fence, token);
+        // Ein fehlender neuer RPC faellt einmalig auf den unveraenderten
+        // Produktionsvertrag zurueck. Auth-, Netz- und Serverfehler werden
+        // dabei nie als Kompatibilitaetsfall wiederholt.
+        if (extendedFeedAvailable && response.kind === "pilot-unavailable") {
+          extendedFeedAvailable = false;
+          response = await callRpc("kd_radar_pilot_feed", {
+            p_operation_ids: operationIds, p_include_search_status: true,
+          }, fence, token);
+        }
+        if (!extendedFeedAvailable && searchStatusOverloadAvailable
+            && response.kind === "pilot-unavailable") {
+          searchStatusOverloadAvailable = false;
           response = await callRpc("kd_radar_pilot_feed", { p_operation_ids: operationIds }, fence, token);
         }
         if (response.kind === "pilot-unavailable") {

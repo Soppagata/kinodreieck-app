@@ -84,7 +84,7 @@ async function mount({status="confirmed",saveFails=false,held=false,guest=false,
     getAccessToken:async()=>"mock-token",isTokenCurrent:()=>true,captureContext:captureStorageContext};
   context.pilot=createRadarPilotService({...dependencies,fetchImpl:async(url,options)=>{
     const name=url.split("/").at(-1);const body=JSON.parse(options.body);context.calls.push(name);
-    if(name==="kd_radar_pilot_feed")return response({...context.feed,operationAcks:context.feed.operationAcks.filter(x=>body.p_operation_ids.includes(x.operationId))});
+    if(name==="kd_radar_pilot_feed_search_access")return response({...context.feed,operationAcks:context.feed.operationAcks.filter(x=>body.p_operation_ids.includes(x.operationId))});
     assert.equal(name,"kd_radar_pilot_set_text_subscription");
     if(saveFails)return response({code:"unavailable"},503);
     const id=createLocalTextRadarTargetId(body.p_target_text),revision=context.feed.revision+1,checksum=String(revision).repeat(64).slice(0,64);
@@ -135,6 +135,22 @@ try {
   for(const options of [{guest:true},{capability:false},{saveFails:true}]) await check(`Keine unberechtigte Erstsuche: ${Object.keys(options)[0]}`,async()=>{
     const ui=await mount(options);await act(async()=>{await controller.fuegeRadarTextHinzu(query);});
     assert.equal(ui.context.calls.includes("search"),false);await ui.cleanup();
+  });
+  await check("Verweigerter Feed laesst offenes Ziel samt Operation-ID sichtbar",async()=>{
+    const ui=await mount({saveFails:true});let result;
+    await act(async()=>{result=await controller.fuegeRadarTextHinzu(query);});
+    assert.equal(result.status,"pending");
+    const before=JSON.parse(localStorage.getItem(K.radar));
+    assert.equal(before.outbox.length,1);assert.equal(before.outbox[0].title,query);
+    const operationId=before.outbox[0].operationId;
+    await ui.radar();
+    assert.match(ui.container.textContent,new RegExp(query));
+    assert.match(ui.container.textContent,/Bestätigung offen/);
+    await ui.remount();await ui.radar();
+    const after=JSON.parse(localStorage.getItem(K.radar));
+    assert.equal(after.outbox[0].operationId,operationId);
+    assert.match(ui.container.textContent,new RegExp(query));
+    await ui.cleanup();
   });
   for(const status of ["insufficient_evidence","provider_error","throw"])await check(`${status}: gespeichertes Ziel bleibt ohne Wiederholung`,async()=>{
     const ui=await mount({status});let result;await act(async()=>{result=await controller.fuegeRadarTextHinzu(query);});

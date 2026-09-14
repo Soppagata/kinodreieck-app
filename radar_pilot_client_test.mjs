@@ -329,7 +329,7 @@ function harness({
     maxFetches = Math.max(maxFetches, activeFetches);
     activeFetches -= 1;
     if (url.endsWith("kd_radar_pilot_set_subscription")) return response(200, subscriptionAck());
-    if (url.endsWith("kd_radar_pilot_feed")) return response(200, feed());
+    if (url.endsWith("kd_radar_pilot_feed_search_access")) return response(200, feed());
     if (url.endsWith("kd_radar_pilot_set_receipt")) return response(204, undefined);
     if (url.endsWith("kd_radar_pilot_import_event")) return response(200, importResult());
     throw new Error("unexpected rpc");
@@ -410,7 +410,7 @@ await check("Pilot-Sync reicht nur die exakt validierte Feed-Attestation an den 
         const body = JSON.parse(init.body);
         return response(200, subscriptionAck({ operationId: body.p_operation_id }));
       }
-      if (url.endsWith("kd_radar_pilot_feed")) return response(200, v2Feed({ automation }));
+      if (url.endsWith("kd_radar_pilot_feed_search_access")) return response(200, v2Feed({ automation }));
       throw new Error("unexpected rpc");
     },
   });
@@ -419,12 +419,12 @@ await check("Pilot-Sync reicht nur die exakt validierte Feed-Attestation an den 
   assert.deepEqual(result.automation, automation);
 });
 
-await check("Neuer Client fordert eigene Suchstatus in genau einem opt-in Feedread an", async () => {
+await check("Neuer Client fordert Suchstatus und Suchrecht ueber den namentlich getrennten Feed an", async () => {
   const bodies=[];
   const searchStatuses=[{targetId,status:"no_change",checkedAt:instant}];
   const h=harness({state:R.createEmptyLocalRadar({authority:"account-cache"}),
     fetchImpl:async(url,init)=>{
-      assert.ok(url.endsWith("kd_radar_pilot_feed"));bodies.push(JSON.parse(init.body));
+      assert.ok(url.endsWith("kd_radar_pilot_feed_search_access"));bodies.push(JSON.parse(init.body));
       return response(200,v2Feed({searchStatuses}));
     },
   });
@@ -434,18 +434,21 @@ await check("Neuer Client fordert eigene Suchstatus in genau einem opt-in Feedre
   assert.deepEqual(h.state.pilot.searchStatuses,searchStatuses);
 });
 
-await check("Nur fehlende Überladung erlaubt einen Altserver-Read ohne erfundene Suchhistorie", async () => {
-  const bodies=[];
+await check("Fehlender neuer RPC faellt auf den bytegleichen Produktionsfeed zurueck", async () => {
+  const calls=[];
   const h=harness({state:R.createEmptyLocalRadar({authority:"account-cache"}),
-    fetchImpl:async(_url,init)=>{
-      const body=JSON.parse(init.body);bodies.push(body);
-      return body.p_include_search_status===true
+    fetchImpl:async(url,init)=>{
+      const rpc=url.split("/").at(-1);calls.push({rpc,body:JSON.parse(init.body)});
+      return rpc==="kd_radar_pilot_feed_search_access"
         ? response(404,{code:"PGRST202",message:"function not found"}) : response(200,v2Feed());
     },
   });
   const result=await h.service.sync({state:h.state,commit:h.commit});
   assert.equal(result.status,"ready");
-  assert.deepEqual(bodies,[{p_operation_ids:[],p_include_search_status:true},{p_operation_ids:[]}]);
+  assert.deepEqual(calls,[
+    {rpc:"kd_radar_pilot_feed_search_access",body:{p_operation_ids:[],p_include_search_status:true}},
+    {rpc:"kd_radar_pilot_feed",body:{p_operation_ids:[],p_include_search_status:true}},
+  ]);
   assert.equal(h.state.pilot.searchStatuses,undefined);
 });
 
@@ -499,7 +502,7 @@ await check("Freitext-Outbox nutzt ausschließlich die auth-gebundene Text-RPC u
       const rpc = url.split("/").at(-1);
       const body = JSON.parse(init.body);
       rpcCalls.push({ rpc, body });
-      if (rpc === "kd_radar_pilot_feed") {
+      if (rpc === "kd_radar_pilot_feed_search_access") {
         feedCalls += 1;
         return response(200, feedCalls === 1
           ? feed({ subscriptions: [], events: [], revision: 1, checksum: checksumA })
@@ -532,9 +535,9 @@ await check("Freitext-Outbox nutzt ausschließlich die auth-gebundene Text-RPC u
   const result = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(result.status, "ready", JSON.stringify(result));
   assert.deepEqual(rpcCalls.map((entry) => entry.rpc), [
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
     "kd_radar_pilot_set_text_subscription",
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
   ]);
   assert.deepEqual(rpcCalls[1].body, {
     p_target_text: textTarget,
@@ -596,7 +599,7 @@ await check("Freitext-Remove verschwindet nach RPC-Ack und leerem Folge-Feed sam
       const rpc = url.split("/").at(-1);
       const body = JSON.parse(init.body);
       rpcCalls.push({ rpc, body });
-      if (rpc === "kd_radar_pilot_feed") {
+      if (rpc === "kd_radar_pilot_feed_search_access") {
         feedCalls += 1;
         return response(200, feedCalls === 1
           ? feed({ subscriptions: [textSubscription], events: [], revision: 1, checksum: checksumA })
@@ -617,9 +620,9 @@ await check("Freitext-Remove verschwindet nach RPC-Ack und leerem Folge-Feed sam
   const result = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(result.status, "ready", JSON.stringify(result));
   assert.deepEqual(rpcCalls.map((entry) => entry.rpc), [
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
     "kd_radar_pilot_set_text_subscription",
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
   ]);
   assert.deepEqual(rpcCalls[1].body, {
     p_target_text: textTarget,
@@ -690,7 +693,7 @@ await check("Überlappende explizite Syncs senden dieselbe Operation instanzweit
       const body = JSON.parse(init.body);
       if (url.endsWith("kd_radar_pilot_set_subscription")) sentOperationIds.push(body.p_operation_id);
       activeFetches -= 1;
-      return url.endsWith("kd_radar_pilot_feed") ? response(200, feed()) : response(200, subscriptionAck());
+      return url.endsWith("kd_radar_pilot_feed_search_access") ? response(200, feed()) : response(200, subscriptionAck());
     },
   });
   const firstRun = h.service.sync({ state: h.state, commit: h.commit });
@@ -722,7 +725,7 @@ await check("Busy-Sync bewahrt eine während des aktiven Laufs lokal ergänzte O
     fetchImpl: async (url, init) => {
       const body = JSON.parse(init.body);
       rpcCalls.push({ rpc: url.split("/").at(-1), body });
-      if (url.endsWith("kd_radar_pilot_feed")) {
+      if (url.endsWith("kd_radar_pilot_feed_search_access")) {
         markFeedStarted();
         await feedBlocked;
         return response(200, feed());
@@ -766,7 +769,7 @@ await check("Busy-Sync bewahrt eine während des aktiven Laufs lokal ergänzte O
     operationId: entry.operationId, status: entry.status,
   })), [{ operationId: "66666666-6666-4666-8666-666666666666", status: "pending" }]);
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed_search_access",
   ]);
   assert.deepEqual(rpcCalls.filter((call) => call.rpc === "kd_radar_pilot_set_subscription")
     .map((call) => call.body.p_operation_id), [operationId]);
@@ -797,7 +800,7 @@ await check("Busy-Sync während Storage-await landet im Resultat und im dauerhaf
     fetchImpl: async (url, init) => {
       const body = JSON.parse(init.body);
       rpcCalls.push({ rpc: url.split("/").at(-1), body });
-      return url.endsWith("kd_radar_pilot_feed")
+      return url.endsWith("kd_radar_pilot_feed_search_access")
         ? response(200, feed())
         : response(200, subscriptionAck({ operationId: body.p_operation_id }));
     },
@@ -840,7 +843,7 @@ await check("Busy-Sync während Storage-await landet im Resultat und im dauerhaf
     })), [{ operationId: importOperationId, status: "pending" }]);
   }
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed_search_access",
   ]);
 });
 
@@ -861,7 +864,7 @@ await check("NOGA-Busy-Race: Konkurrierender Sync bleibt ohne Doppel-RPC, Folge-
       const rpc = String(url).split("/").at(-1);
       const body = JSON.parse(init.body);
       calls.push({ rpc, body });
-      if (rpc === "kd_radar_pilot_feed") {
+      if (rpc === "kd_radar_pilot_feed_search_access") {
         feedCalls += 1;
         if (feedCalls === 1) markFirstFeed();
         await firstFeedBlocked;
@@ -898,13 +901,13 @@ await check("NOGA-Busy-Race: Konkurrierender Sync bleibt ohne Doppel-RPC, Folge-
 
   const followUp = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(followUp.status, "ready");
-  assert.equal(calls.filter((entry) => entry.rpc === "kd_radar_pilot_feed").length, 3);
+  assert.equal(calls.filter((entry) => entry.rpc === "kd_radar_pilot_feed_search_access").length, 3);
   assert.equal(calls.filter((entry) => entry.rpc === "kd_radar_pilot_import_event").length, 1);
   assert.deepEqual(calls.map((entry) => entry.rpc), [
-    "kd_radar_pilot_feed",
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
+    "kd_radar_pilot_feed_search_access",
     "kd_radar_pilot_import_event",
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
   ]);
   assert.equal(h.state.pilot.importOutbox.length, 0);
   assert.equal(feedCalls, 3);
@@ -921,7 +924,7 @@ await check("Späterer Busy-Sync mit Basisstate entfernt keinen zuvor gemerkten 
     fetchImpl: async (url, init) => {
       const body = JSON.parse(init.body);
       rpcCalls.push({ rpc: url.split("/").at(-1), body });
-      if (url.endsWith("kd_radar_pilot_feed")) {
+      if (url.endsWith("kd_radar_pilot_feed_search_access")) {
         markFeedStarted();
         await feedBlocked;
         return response(200, feed());
@@ -948,7 +951,7 @@ await check("Späterer Busy-Sync mit Basisstate entfernt keinen zuvor gemerkten 
     operationId: entry.operationId, status: entry.status,
   })), [{ operationId: operationId2, status: "pending" }]);
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed_search_access",
   ]);
 });
 
@@ -993,7 +996,7 @@ for (const [name, mutate, stage] of [
       fetchImpl: async (url, init) => {
         h.calls.push({ url, init, rpc: url.split("/").at(-1), body: JSON.parse(init.body) });
         if (stage === "fetch") await hook();
-        return response(200, url.endsWith("kd_radar_pilot_feed") ? feed() : subscriptionAck(), {
+        return response(200, url.endsWith("kd_radar_pilot_feed_search_access") ? feed() : subscriptionAck(), {
           bodyHook: stage === "body" ? hook : null,
         });
       },
@@ -1005,7 +1008,7 @@ for (const [name, mutate, stage] of [
 }
 
 await check("Terminale Fachablehnung markiert nur die Operation rejected", async () => {
-  const h = harness({ fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed")
+  const h = harness({ fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed_search_access")
     ? response(200, feed())
     : response(400, { code: "23514", message: "radar_quota_exceeded" }) });
   const result = await h.service.sync({ state: h.state, commit: h.commit });
@@ -1020,7 +1023,7 @@ for (const [name, reply] of [
   ["Netzfehler", async () => { throw new TypeError("offline"); }],
 ]) {
   await check(`${name} erhält pending und stoppt den Lauf`, async () => {
-    const h = harness({ fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed")
+    const h = harness({ fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed_search_access")
       ? response(200, feed())
       : reply() });
     const result = await h.service.sync({ state: h.state, commit: h.commit });
@@ -1090,7 +1093,7 @@ await check("Receipt bleibt pending unsichtbar und wird erst nach HTTP-Ack sicht
   }).state;
   const nullAck = harness({
     state: nullState,
-    fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed")
+    fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed_search_access")
       ? response(200, feed())
       : response(200, null),
   });
@@ -1107,7 +1110,7 @@ await check("Receipt-void-Ack akzeptiert nur leeren oder JSON-null Body", async 
     }).state;
     const h = harness({
       state,
-      fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed")
+      fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed_search_access")
         ? response(200, feed())
         : response(200, payload),
     });
@@ -1165,7 +1168,7 @@ await check("Import-Ack darf keinen quellenlosen Event-Zustand nachrüsten", asy
     fetchImpl: async (url) => {
       const rpc = String(url).split("/").at(-1);
       rpcCalls.push(rpc);
-      if (url.endsWith("kd_radar_pilot_feed")) return response(200, feed({ events: [], radarReview: true }));
+      if (url.endsWith("kd_radar_pilot_feed_search_access")) return response(200, feed({ events: [], radarReview: true }));
       if (url.endsWith("kd_radar_pilot_import_event")) return response(200, importResult());
       throw new Error("unexpected rpc");
     },
@@ -1193,7 +1196,7 @@ await check("www-votivkino Rejection bleibt terminal im importOutbox und wird du
       const body = JSON.parse(init.body);
       const rpc = String(url).split("/").at(-1);
       rpcCalls.push({ rpc, body });
-      if (url.endsWith("kd_radar_pilot_feed")) return response(200, feed({ events: [], radarReview: true }));
+      if (url.endsWith("kd_radar_pilot_feed_search_access")) return response(200, feed({ events: [], radarReview: true }));
       if (url.endsWith("kd_radar_pilot_import_event")) {
         assert.equal(body.p_payload.evidence[0].url, "https://www.votivkino.at/film/noga/");
         assert.equal(body.p_payload.evidence[1].sourceId, "filminstitut_at");
@@ -1205,7 +1208,7 @@ await check("www-votivkino Rejection bleibt terminal im importOutbox und wird du
   const first = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(first.status, "rejected");
   assert.deepEqual(rpcCalls.map((entry) => entry.rpc), [
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
     "kd_radar_pilot_import_event",
   ]);
   assert.deepEqual(h.state.pilot.importOutbox.map((entry) => ({
@@ -1219,8 +1222,8 @@ await check("www-votivkino Rejection bleibt terminal im importOutbox und wird du
   const hAfterEmptyFeed = harness({
     state: h.state,
     fetchImpl: async (url) => {
-      hAfterEmptyFeedCalls.push("kd_radar_pilot_feed");
-      if (!url.endsWith("kd_radar_pilot_feed")) throw new Error("unexpected rpc");
+      hAfterEmptyFeedCalls.push("kd_radar_pilot_feed_search_access");
+      if (!url.endsWith("kd_radar_pilot_feed_search_access")) throw new Error("unexpected rpc");
       return response(200, feed({ events: [], radarReview: true }));
     },
   });
@@ -1232,7 +1235,7 @@ await check("www-votivkino Rejection bleibt terminal im importOutbox und wird du
     reason: entry.reason,
   })), [{ operationId: "55555555-5555-4555-8555-555555555555", status: "rejected", reason: "radar_evidence_url_mismatch" }]);
   assert.equal(hAfterEmptyFeed.state.pilot.events.length, 0);
-  assert.deepEqual(hAfterEmptyFeedCalls, ["kd_radar_pilot_feed"]);
+  assert.deepEqual(hAfterEmptyFeedCalls, ["kd_radar_pilot_feed_search_access"]);
 });
 
 await check("Base-Domain-NOGA-Import macht genau einen Import-RPC und genau einen Folge-Feed; Event erscheint dann aus Feed", async () => {
@@ -1254,7 +1257,7 @@ await check("Base-Domain-NOGA-Import macht genau einen Import-RPC und genau eine
       const rpc = String(url).split("/").at(-1);
       const body = JSON.parse(init.body);
       calls.push({ rpc, body });
-      if (rpc === "kd_radar_pilot_feed") {
+      if (rpc === "kd_radar_pilot_feed_search_access") {
         feedCalls += 1;
         return response(200, feedCalls === 1
           ? { ...feed({ radarReview: true }), events: [], operationAcks: [] }
@@ -1272,9 +1275,9 @@ await check("Base-Domain-NOGA-Import macht genau einen Import-RPC und genau eine
   const result = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(result.status, "ready");
   assert.deepEqual(calls.map((entry) => entry.rpc), [
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
     "kd_radar_pilot_import_event",
-    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed_search_access",
   ]);
   assert.deepEqual(calls[0].body.p_operation_ids, []);
   assert.deepEqual(calls[2].body.p_operation_ids, []);

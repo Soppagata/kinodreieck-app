@@ -8,6 +8,7 @@ import {
   createEntdeckenRecommendations,
   localCalendarDay,
   localRadarTargetLabel,
+  projectVisibleRadarGoals,
   radarSubscriptionForEvent,
   radarSyncProblem,
 } from "../lib/entdeckenUi.js";
@@ -89,8 +90,7 @@ function ManageDialog({
   syncStatus, onRadarPilotSync, onBlog, onClose, returnFocusRef,
 }) {
   const dialogRef = useRef(null);
-  const subscriptions = radarState?.subscriptions || [];
-  const people = radarState?.personSubscriptions || [];
+  const { subscriptions, people } = projectVisibleRadarGoals(radarState);
   const pending = radarState?.outbox || [];
   const syncProblem = radarSyncProblem(pending, syncStatus);
 
@@ -139,15 +139,15 @@ function ManageDialog({
             <h3>Mein Radar</h3>
             <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Diese Ziele bleiben auf diesem Gerät."}</p>
             {subscriptions.length ? <ul className="kd-entdecken-verwalten-liste">{subscriptions.map((entry) => <li key={entry.targetId}>
-                <span><strong>{localRadarTargetLabel(entry, { master })}</strong><small>{entry.status === "active" ? "Im Radar" : "Pausiert"} · Österreich</small></span>
+                <span><strong>{localRadarTargetLabel(entry, { master })}</strong><small>{entry.syncPending ? "Bestätigung offen" : entry.status === "active" ? "Im Radar" : "Pausiert"} · Österreich</small></span>
                 <div>
-                  <button type="button" onClick={() => onRadarChange?.(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button>
-                  <button type="button" onClick={() => onRadarChange?.(entry, "remove")}>Aus dem Radar entfernen</button>
+                  {!entry.syncPending ? <button type="button" onClick={() => onRadarChange?.(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button> : null}
+                  {!entry.syncPending ? <button type="button" onClick={() => onRadarChange?.(entry, "remove")}>Aus dem Radar entfernen</button> : null}
                 </div>
               </li>)}</ul> : <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p>}
             {people.length ? <ul className="kd-entdecken-verwalten-liste">{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
-              <span><strong>{entry.name}</strong><small>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Im Radar" : "Pausiert"}</small></span>
-              {onPersonRadarChange ? <div>
+              <span><strong>{entry.name}</strong><small>{ROLLEN_LABEL[entry.role]} · {entry.syncPending ? "Bestätigung offen" : entry.status === "active" ? "Im Radar" : "Pausiert"}</small></span>
+              {onPersonRadarChange && !entry.syncPending ? <div>
                 {entry.authority === "local" ? <button type="button" onClick={() => onPersonRadarChange(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button> : null}
                 <button type="button" onClick={() => onPersonRadarChange(entry, "remove")}>Aus dem Radar entfernen</button>
               </div> : <small>Änderung derzeit nicht verfügbar.</small>}
@@ -418,8 +418,7 @@ function RadarView({
   const activeRef = useRef(true);
   useEffect(() => { activeRef.current = true; return () => { activeRef.current = false; }; }, []);
   const [message, setMessage] = useState(null);
-  const subscriptions = radarState?.subscriptions || [];
-  const people = radarState?.personSubscriptions || [];
+  const { subscriptions, people } = projectVisibleRadarGoals(radarState);
   const syncProblem = radarSyncProblem(radarState?.outbox, syncStatus);
   const radarDay = radarViennaDay();
   const events = useMemo(() => projectRadarNews(radarPilotEvents, radarDay), [radarPilotEvents, radarDay]);
@@ -437,7 +436,9 @@ function RadarView({
   )), [accountMode, events, subscriptions]);
   const showSearchStatuses = accountMode
     && radarOperationalStatusVisible(runtimeConfig.appEnvironment);
-  const searchStatuses = showSearchStatuses ? radarState?.pilot?.searchStatuses : undefined;
+  const searchStatuses = radarState?.pilot?.searchStatuses;
+  const wartetAufErsteSuche = (targetId) => !showSearchStatuses && radarAutomaticAvailable
+    && searchStatuses?.some((entry) => entry.targetId === targetId && entry.status === "never");
 
   const addTarget = async (event) => {
     event.preventDefault();
@@ -486,11 +487,13 @@ function RadarView({
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? "Im Radar" : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
+          <span>{entry.syncPending ? "Bestätigung offen" : entry.status === "active" ? "Im Radar" : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
+          {wartetAufErsteSuche(entry.targetId) ? <span className="kd-radar-suchstatus">Wird bei einem nächsten Radar-Lauf geprüft.</span> : null}
           {showSearchStatuses ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, entry.targetId)}</span> : null}
         </li>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
-          <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Im Radar" : "Pausiert"}</span>
+          <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.syncPending ? "Bestätigung offen" : entry.status === "active" ? "Im Radar" : "Pausiert"}</span>
+          {wartetAufErsteSuche(createPersonRadarTargetId(entry.personExternalId, entry.role)) ? <span className="kd-radar-suchstatus">Wird bei einem nächsten Radar-Lauf geprüft.</span> : null}
           {showSearchStatuses ? <span className="kd-radar-suchstatus">{radarSearchStatusLabel(searchStatuses, createPersonRadarTargetId(entry.personExternalId, entry.role))}</span> : null}
         </li>)}</ul> : null}
         <RadarRejectedChanges radarState={radarState} onDismiss={onRadarRejectedDismiss} />

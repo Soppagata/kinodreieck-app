@@ -1,4 +1,5 @@
 import { streamingTitelKennung, streamingStatus } from "./streamingProjection.js";
+import { createPersonRadarTargetId } from "./personRadarCatalog.js";
 /* Reine UI-Projektionen für Entdecken (Phase 3).
    ---------------------------------------------------------------
    - Suchaktionen bleiben typisiert und benutzen getrennte Verträge
@@ -1192,4 +1193,50 @@ export function localRadarTargetLabel(targetOrId, {
     if (found?.titel) return found.titel;
   }
   return "Radarziel";
+}
+
+/* Ein noch nicht bestaetigtes Upsert ist bereits ein gespeichertes Nutzerziel.
+   Der Serverfeed darf es erst nach seinem Ack zur Subscription machen; die UI
+   zeigt es bis dahin direkt aus der dauerhaften Outbox und verliert weder Text
+   noch Operation-ID aus dem Blick. */
+export function projectVisibleRadarGoals(radarState) {
+  const subscriptions = Array.isArray(radarState?.subscriptions) ? [...radarState.subscriptions] : [];
+  const people = Array.isArray(radarState?.personSubscriptions) ? [...radarState.personSubscriptions] : [];
+  const targetIds = new Set(subscriptions.map((entry) => entry.targetId));
+  const personIds = new Set(people.map((entry) => createPersonRadarTargetId(entry.personExternalId, entry.role)));
+  for (const entry of Array.isArray(radarState?.outbox) ? radarState.outbox : []) {
+    if (entry?.action !== "upsert" || !entry.targetId) continue;
+    if (entry.targetType === "person") {
+      if (personIds.has(entry.targetId)) continue;
+      people.push(Object.freeze({
+        personExternalId: entry.personExternalId,
+        role: entry.personRole,
+        name: entry.title,
+        status: "pending",
+        authority: "local",
+        operationId: entry.operationId,
+        syncPending: true,
+      }));
+      personIds.add(entry.targetId);
+      continue;
+    }
+    if (targetIds.has(entry.targetId)) continue;
+    subscriptions.push(Object.freeze({
+      targetId: entry.targetId,
+      targetType: entry.targetType,
+      title: entry.title,
+      ...(entry.targetType === "text" ? { targetText: entry.title } : {}),
+      region: entry.region,
+      scope: entry.scope,
+      status: "pending",
+      authority: "local",
+      operationId: entry.operationId,
+      syncPending: true,
+    }));
+    targetIds.add(entry.targetId);
+  }
+  return Object.freeze({
+    subscriptions: Object.freeze(subscriptions),
+    people: Object.freeze(people),
+  });
 }

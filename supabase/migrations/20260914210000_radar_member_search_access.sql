@@ -172,9 +172,10 @@ revoke all on function public.kd_radar_automatic_retry_assert(uuid,uuid)
 grant execute on function public.kd_radar_automatic_retry_assert(uuid,uuid)
   to service_role;
 
-/* Nur die neue Opt-in-Ueberladung attestiert radarSearch. Die historische
-   Ein-Argument-Signatur bleibt fuer installierte alte PWAs bytegenau erhalten. */
-create or replace function public.kd_radar_pilot_feed(
+/* Nur der neue, namentlich getrennte RPC attestiert radarSearch. Die bereits
+   produktiven Ein- und Zwei-Argument-Signaturen bleiben fuer installierte
+   alte PWAs bytegenau unveraendert. */
+create function public.kd_radar_pilot_feed_search_access(
   p_operation_ids uuid[], p_include_search_status boolean
 )
 returns jsonb
@@ -187,8 +188,12 @@ declare
   v_feed jsonb;
   v_search_statuses jsonb;
 begin
-  v_feed := public.kd_radar_pilot_feed(p_operation_ids);
-  if p_include_search_status is distinct from true then return v_feed; end if;
+  v_feed := public.kd_radar_pilot_feed(p_operation_ids,p_include_search_status);
+  if p_include_search_status is distinct from true then
+    return v_feed || jsonb_build_object(
+      'radarSearch',public.kd_radar_search_allowed(auth.uid())
+    );
+  end if;
 
   select coalesce(jsonb_agg(jsonb_build_object(
     'targetId',target.target_key,
@@ -223,9 +228,9 @@ begin
 end
 $$;
 
-revoke all on function public.kd_radar_pilot_feed(uuid[],boolean)
+revoke all on function public.kd_radar_pilot_feed_search_access(uuid[],boolean)
   from public, anon, authenticated;
-grant execute on function public.kd_radar_pilot_feed(uuid[],boolean)
+grant execute on function public.kd_radar_pilot_feed_search_access(uuid[],boolean)
   to authenticated, service_role;
 
 notify pgrst, 'reload schema';
