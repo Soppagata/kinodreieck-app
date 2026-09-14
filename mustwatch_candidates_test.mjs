@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { runtimeConfig } from "./src/config/runtime.js";
 import {
   buildMustwatchProgramCandidates, candidateRefreshDelay, collectMustwatchStreamingIds,
-  useMustwatchCandidatesController,
+  istMustwatchDokumentSichtbar, istMustwatchZeitAbgelaufen, useMustwatchCandidatesController,
 } from "./src/controllers/useMustwatchCandidatesController.js";
 import { createMustwatchCandidatesService } from "./src/services/mustwatchCandidates.js";
 
@@ -75,6 +75,10 @@ assert.deepEqual(collectMustwatchStreamingIds([
 ]), ["7"]);
 assert.equal(candidateRefreshDelay({ status: "unavailable", expiresAt: new Date(now - 1).toISOString() }, now), null);
 assert.equal(candidateRefreshDelay({ status: "ready", expiresAt: new Date(now + 123).toISOString() }, now), 123);
+assert.equal(istMustwatchZeitAbgelaufen(null, now), false, "Fehlendes gueltigBis besitzt kein erfundenes Ablaufdatum");
+assert.equal(istMustwatchZeitAbgelaufen(new Date(now - 1).toISOString(), now), true);
+assert.equal(istMustwatchDokumentSichtbar({ visibilityState: "hidden" }), false);
+assert.equal(istMustwatchDokumentSichtbar({ visibilityState: "visible" }), true);
 assert.deepEqual(buildMustwatchProgramCandidates({ filme: [{ t: "Ohne ID", j: 2026 }] }), [{
   t: "Ohne ID", j: 2026, id: null, projection_id: "auto:ohne_id_2026",
   titel: "Ohne ID", originaltitel: undefined, jahr: 2026,
@@ -240,7 +244,7 @@ await altNochmal;
 stubbornService.destroy();
 
 const dom = new JSDOM("<!doctype html><html><body><main id='app'></main></body></html>", {
-  url: "https://kinodreieck.test/",
+  url: "https://kinodreieck.test/", pretendToBeVisual: true,
 });
 for (const name of ["window", "document", "HTMLElement", "Element", "Node"]) {
   Object.defineProperty(globalThis, name, {
@@ -287,6 +291,49 @@ await act(async () => { await new Promise((resolve) => setTimeout(resolve, 45));
 assert.equal(controllerLoads, 2, "Ablauf einer ready-Antwort revalidiert genau einmal");
 await act(async () => { await new Promise((resolve) => setTimeout(resolve, 35)); });
 assert.equal(controllerLoads, 2, "Unavailable mit vergangenem Ablauf startet keine Wiederholschleife");
+
+let visibilityState = "hidden";
+Object.defineProperty(document, "visibilityState", {
+  configurable: true, get: () => visibilityState,
+});
+let visibilityLoads = 0;
+const visibilityService = {
+  async loadByIds() {
+    visibilityLoads += 1;
+    return {
+      status: "ready", expiresAt: new Date(Date.now() + 20).toISOString(),
+      items: [{ id: "sichtbar-id", titel: "Sichtbar", dienste: [] }],
+    };
+  },
+  async search() { return { status: "ready", items: [] }; },
+};
+await act(async () => {
+  root.render(React.createElement(Probe, {
+    entries: [{ verknuepfung: { ziel: "streaming", id: "sichtbar-id" } }],
+    contextKey: "account:hidden", active: true, service: visibilityService,
+  }));
+  document.dispatchEvent(new dom.window.Event("visibilitychange"));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+});
+assert.equal(visibilityLoads, 0, "Verstecktes Dokument startet und revalidiert keinen Kandidaten-RPC");
+visibilityState = "visible";
+await act(async () => {
+  document.dispatchEvent(new dom.window.Event("visibilitychange"));
+  await Promise.resolve();
+});
+assert.equal(visibilityLoads, 1, "Rückkehr in das sichtbare Dokument lädt den aktiven Kontext");
+visibilityState = "hidden";
+await act(async () => {
+  document.dispatchEvent(new dom.window.Event("visibilitychange"));
+  await new Promise((resolve) => setTimeout(resolve, 35));
+});
+assert.equal(visibilityLoads, 1, "Während der Unsichtbarkeit bleibt auch ein Ablauf ohne Hintergrund-RPC");
+visibilityState = "visible";
+await act(async () => {
+  document.dispatchEvent(new dom.window.Event("visibilitychange"));
+  await Promise.resolve();
+});
+assert.equal(visibilityLoads, 2, "Nach sichtbarer Rückkehr wird der inzwischen abgelaufene Kontext neu geprüft");
 
 await act(async () => {
   root.render(React.createElement(Probe, {

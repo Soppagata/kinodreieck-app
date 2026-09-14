@@ -124,7 +124,8 @@
     "test:flixpatrol-data-plan": "npm run test:title-facts && node entdecken_flixpatrol_mix_test.mjs && node entdecken_flixpatrol_batch_format9_test.mjs && node entdecken_flixpatrol_frontend_test.mjs && node entdecken_flixpatrol_function_test.mjs && node flixpatrol_usage_function_test.mjs && npm run test:flixpatrol-data-plan:pg",
     "test:flixpatrol-data-plan:pg": "node data_plan_foundation_pg17_test.mjs && node entdecken_flixpatrol_pg17_test.mjs",
     "test:ui-followup": "node rating_followup_ui_test.mjs && node ui_library_followup_test.mjs && node kino_genre_followup_test.mjs",
-    "test:mustwatch-candidates": "node mustwatch_streaming_pg_test.mjs && node mustwatch_candidates_test.mjs"
+    "test:mustwatch-candidates": "node mustwatch_streaming_pg_test.mjs && node mustwatch_candidates_test.mjs",
+    "test:mustwatch-final:mobile": "playwright test --config=playwright.mustwatch-final.config.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

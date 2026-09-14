@@ -977,19 +977,38 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     deployed.commit === ENTDECKEN_JOYN_FREE_DEPLOYED_COMMIT
       && deployed.releaseSha256 === ENTDECKEN_JOYN_FREE_DEPLOYED_RELEASE_SHA256
       && live.releaseSha256 === ENTDECKEN_JOYN_FREE_SINGLE_LIVE_RELEASE_SHA256);
+  const driftPath = ENTDECKEN_JOYN_FREE_SINGLE_LIVE_FILES[0].path;
+  const readHistoricalWithDrift = (absolutePath) => {
+    const bytes = readHistorical(absolutePath);
+    return String(absolutePath).endsWith(driftPath)
+      ? Buffer.concat([bytes, Buffer.from("\n# test-only provenance drift\n")])
+      : bytes;
+  };
+  const starteModusMitFixtureGuard = Function(
+    "MODI",
+    "pruefeEntdeckenDailyOnceProvenienz",
+    `"use strict"; return (${starteModus.toString()});`,
+  )(
+    MODI,
+    async () => requireEntdeckenJoynFreeSingleLiveReleaseProvenance({
+      readFile: readHistoricalWithDrift,
+    }),
+  );
   let singleRunStop = null;
-  try { await starteModus({
-    modus: "ai-live",
-    ambientEnv: {},
-    lokaleKonfig: PUBLIC,
-    keychainLeser(account) {
-      gelesen.push(account);
-      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
-    },
-    spawnImpl,
-    ownerApprovedServerBudget: true,
-    entdeckenDailyOnce: true,
-  }); } catch (error) { singleRunStop = error; }
+  try {
+    await starteModusMitFixtureGuard({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser(account) {
+        gelesen.push(account);
+        return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+      },
+      spawnImpl,
+      ownerApprovedServerBudget: true,
+      entdeckenDailyOnce: true,
+    });
+  } catch (error) { singleRunStop = error; }
   pruefe("Entdecken-Einmallauf bleibt fest auf seinen einzelnen Client verdrahtet",
     MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
       && !MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));

@@ -42,9 +42,11 @@ function loadFixture() {
       watchmode_id: 900001 + index,
       imdb_id: `tt${String(9_000_001 + index)}`,
       tmdb_id: 800001 + index,
-      titel: index === 1258 ? "Zodiac Fixture Target"
+      titel: index === 1257 ? "Verborgener Katalogtreffer"
+        : index === 1258 ? "Zodiac Fixture Target"
         : index === 1259 ? "xXx: Return of Xander Cage"
           : `Fixture Film ${String(index + 1).padStart(4, "0")}`,
+      ...(index === 1257 ? { originaltitel: "Needle Original Search" } : {}),
       jahr: 1980 + index % 45,
       typ: index % 7 === 0 ? "tv_series" : "movie",
       genres: index % 2 === 0 ? ["Drama"] : ["Action"],
@@ -175,6 +177,7 @@ export async function startStreamingProgressivePgHarness() {
   const migrations = [
     "supabase/migrations/20260913200000_streaming_pages_backend.sql",
     "supabase/migrations/20260914100000_streaming_pages_latency.sql",
+    "supabase/migrations/20260914120000_mustwatch_streaming_candidates.sql",
   ].map((path) => readFileSync(path, "utf8"));
 
   try {
@@ -208,6 +211,7 @@ export async function startStreamingProgressivePgHarness() {
     const projectionMs = performance.now() - buildStarted;
     const projectionCount = Number(sql("select count(*) from public.kd_streaming_page_base"));
     const calls = [];
+    const mustwatchCalls = [];
 
     const call = (request, accountId = ACCOUNT_ID) => {
       const started = performance.now();
@@ -255,13 +259,36 @@ export async function startStreamingProgressivePgHarness() {
       return response;
     };
 
+    const callMustwatchAsync = async (request, accountId = ACCOUNT_ID) => {
+      const started = performance.now();
+      const escaped = JSON.stringify(request).replaceAll("'", "''");
+      const query = `begin; set local role authenticated;
+        select set_config('request.jwt.claim.role','authenticated',true);
+        select set_config('request.jwt.claim.sub','${String(accountId).replaceAll("'", "''")}',true);
+        select set_config('fixture.active','true',true);
+        select public.kd_mustwatch_streaming_candidates('${escaped}'::jsonb); rollback;`;
+      const lines = (await sqlAsync(query)).split("\n").map((line) => line.trim()).filter(Boolean);
+      const response = JSON.parse(lines.at(-1));
+      mustwatchCalls.push(Object.freeze({
+        mode: request.ids?.length ? "ids" : request.query ? "query" : "empty",
+        ids: request.ids?.length || 0,
+        query: request.query || "",
+        status: response.status,
+        items: response.items?.length || 0,
+        durationMs: Number((performance.now() - started).toFixed(1)),
+      }));
+      return response;
+    };
+
     return Object.freeze({
       accountId: ACCOUNT_ID,
       projectionMs: Number(projectionMs.toFixed(1)),
       projectionCount,
       calls,
+      mustwatchCalls,
       call,
       callAsync,
+      callMustwatchAsync,
       catalogRow(name) {
         const payload = name === "streaming_bekannt" ? fixture.known : fixture.discover;
         return [{

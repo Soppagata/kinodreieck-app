@@ -17,6 +17,17 @@ export function candidateRefreshDelay(response, currentTime = Date.now()) {
   return Math.min(2147483647, expiresAt - currentTime);
 }
 
+export function istMustwatchZeitAbgelaufen(value, currentTime = Date.now()) {
+  if (value == null || value === "") return false;
+  const numeric = typeof value === "number" ? value : Number(value);
+  const expiresAt = Number.isFinite(numeric) ? numeric : Date.parse(String(value));
+  return Number.isFinite(expiresAt) && expiresAt <= currentTime;
+}
+
+export function istMustwatchDokumentSichtbar(doc = globalThis.document) {
+  return !doc || doc.visibilityState === "visible";
+}
+
 export function buildMustwatchProgramCandidates(programm, expired = false) {
   if (expired) return [];
   return (programm?.filme || []).map((film) => {
@@ -42,9 +53,23 @@ export function useMustwatchCandidatesController({
   const [reload, setReload] = useState(0);
   const [streamingState, setStreamingState] = useState(() => ({ contextKey, items: [] }));
   const [programmZeitlichAbgelaufen, setProgrammZeitlichAbgelaufen] = useState(false);
+  const [dokumentSichtbar, setDokumentSichtbar] = useState(() => istMustwatchDokumentSichtbar());
 
   useEffect(() => {
-    const expiresAt = Number(programmExpiresAt) || Date.parse(String(programmExpiresAt || ""));
+    if (typeof document === "undefined") return undefined;
+    const aktualisieren = () => setDokumentSichtbar(istMustwatchDokumentSichtbar(document));
+    document.addEventListener("visibilitychange", aktualisieren);
+    aktualisieren();
+    return () => document.removeEventListener("visibilitychange", aktualisieren);
+  }, []);
+
+  useEffect(() => {
+    if (programmExpiresAt == null || programmExpiresAt === "") {
+      setProgrammZeitlichAbgelaufen(false);
+      return undefined;
+    }
+    const numeric = typeof programmExpiresAt === "number" ? programmExpiresAt : Number(programmExpiresAt);
+    const expiresAt = Number.isFinite(numeric) ? numeric : Date.parse(String(programmExpiresAt));
     if (!Number.isFinite(expiresAt)) { setProgrammZeitlichAbgelaufen(false); return undefined; }
     const delay = expiresAt - Date.now();
     if (delay <= 0) { setProgrammZeitlichAbgelaufen(true); return undefined; }
@@ -58,7 +83,7 @@ export function useMustwatchCandidatesController({
     let mounted = true;
     let expiryTimer = null;
     setStreamingState({ contextKey, items: [] });
-    if (!ids.length || !active) return () => { mounted = false; controller?.abort(); };
+    if (!ids.length || !active || !dokumentSichtbar) return () => { mounted = false; controller?.abort(); };
     service.loadByIds(ids, { signal: controller?.signal }).then((response) => {
       if (!mounted || controller?.signal.aborted) return;
       const items = response?.status === "ready" && Array.isArray(response.items) ? response.items : [];
@@ -79,7 +104,7 @@ export function useMustwatchCandidatesController({
       if (expiryTimer) clearTimeout(expiryTimer);
       controller?.abort();
     };
-  }, [active, contextKey, idsKey, reload, service]);
+  }, [active, contextKey, dokumentSichtbar, idsKey, reload, service]);
 
   const kandidaten = useMemo(() => ({
     master: (Array.isArray(master) ? master : []).map((film) => ({
@@ -90,11 +115,12 @@ export function useMustwatchCandidatesController({
   }), [contextKey, master, programm, programmAbgelaufen, programmZeitlichAbgelaufen, streamingState]);
 
   const searchStreaming = useCallback(async (query, options = {}) => {
+    if (!active || !dokumentSichtbar) return [];
     try {
       const response = await service.search(query, options);
       return response?.status === "ready" && Array.isArray(response.items) ? response.items : [];
     } catch { return []; }
-  }, [contextKey, service]);
+  }, [active, contextKey, dokumentSichtbar, service]);
 
   return Object.freeze({ kandidaten, searchStreaming });
 }

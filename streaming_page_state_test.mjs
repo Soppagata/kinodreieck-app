@@ -392,8 +392,8 @@ await check("erste App-Seite bleibt 20 und der Vertrag akzeptiert kompatibel bis
 });
 
 await check("spaetere Seiten verlaengern den fruehesten Neu-Ablauf nicht", async () => {
-  const early = "2026-09-14T10:00:00.000Z";
-  const late = "2026-09-15T10:00:00.000Z";
+  const early = new Date(Date.now() + 60_000).toISOString();
+  const late = new Date(Date.now() + 120_000).toISOString();
   const controller = createStreamingPageController({
     service: {
       loadCachedPage: async () => null,

@@ -42,7 +42,9 @@ import {
 } from "./controllers/catalogController.js";
 import { useIntelligenceController } from "./controllers/useIntelligenceController.js";
 import { useMustwatchController } from "./controllers/useMustwatchController.js";
-import { useMustwatchCandidatesController } from "./controllers/useMustwatchCandidatesController.js";
+import {
+  istMustwatchZeitAbgelaufen, useMustwatchCandidatesController,
+} from "./controllers/useMustwatchCandidatesController.js";
 import { useArticleController, useMasterPersistenceController } from "./controllers/useArticleController.js";
 import { useErrorQueue } from "./controllers/useErrorQueue.js";
 import { useMasterStateController } from "./controllers/useMasterStateController.js";
@@ -887,9 +889,8 @@ export default function App() {
     active: tab === "start" || (tab === "mediathek" && mustwatchBereichSichtbar),
   });
   const fordereMustwatchKandidatenAn = useCallback(() => {
-    const gueltigBis = Number(programmInfo?.gueltigBis);
     const inzwischenAbgelaufen = programmInfo?.abgelaufen === true
-      || (Number.isFinite(gueltigBis) && gueltigBis <= Date.now());
+      || istMustwatchZeitAbgelaufen(programmInfo?.gueltigBis);
     if ((!programm || inzwischenAbgelaufen) && snapshotFreigabe && loading !== "programm") {
       void ladeProgrammDatei(false);
     }
