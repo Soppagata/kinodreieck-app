@@ -6,12 +6,16 @@ und die eingebundenen Dienste mit ihren Datenwegen wieder transparent zeigen.
 Resend ist bereits am Feedbackfeld erläutert; dieser Hinweis bleibt erhalten.
 
 Ausgangscode: `816911b679f53332d484256ba2b2ea3bc7c6c33c`, mit Remote-main
-abgeglichen. Lokale Lieferung; kein Push, Deploy oder Live-Anbieteraufruf beauftragt.
+abgeglichen. Zunächst lokale Lieferung. Max hat anschließend die Veröffentlichung
+nach vollständiger Überarbeitung und belegter Schalterwirkung freigegeben.
+Lieferweg: Staging mit CI/Readback, anschließend main/Produktion mit CI/Readback.
+Keine Live-Anbieterprobe oder Backend-Datenmutation beauftragt.
 Gemeinsame Paketbasis: der Commit, der dieses Register erstmals anlegt.
 
 | ID | Nutzbares Ergebnis | Status | Paket / Kandidat |
 |---|---|---|---|
-| K1 | KI-Schalter benennen und erklären die tatsächlich steuerbaren Funktionen; Profilhinweise stimmen mit der Wirkung überein. | LOKAL GEPRÜFT | KI / `4f9978f` |
+| K1 | KI-Schalter benennen und erklären die tatsächlich steuerbaren Funktionen; Profilhinweise stimmen mit der Wirkung überein. | LOKAL GEPRÜFT | KI / `4f9978f`, `291bfd8` |
+| K2 | Der Schalter für mehrere Titel verweist auf den sichtbaren Mediathek-Einstieg; die wirkungslose Entdecken-Checkbox ist entfernt. | LOKAL GEPRÜFT | KI / `291bfd8`, `0b9a2ba` |
 | D1 | Settings und Login nennen dieselben eingebundenen Dienste, ihren Zweck und die übertragenen Daten. | LOKAL GEPRÜFT | DATENSCHUTZ / `8dadf8e`, `f01378a`, `d5a3c83`, `a16c7e8` |
 | D2 | Der Datenschutztext erklärt die verfügbare Gerätesicherung und den weiterhin gesperrten vollständigen Kontoexport verständlich. | LOKAL GEPRÜFT | DATENSCHUTZ / `8dadf8e`, `f01378a`, `d5a3c83` |
 
@@ -38,9 +42,9 @@ den Build aus und prüft Diff sowie den gemeinsamen mobilen Nutzerweg.
 
 ## Lieferung
 
-Beide Pakete integriert; letzter Produktcommit `a16c7e8`. Die integrierte
-Abschlussprüfung ist vollständig lokal abgeschlossen. Kein Push, CI-Lauf,
-Deploy, Anbieteraufruf oder physischer iPhone-Nachweis wurde durchgeführt.
+Erster lokaler Abschluss: beide Pakete integriert; letzter Produktcommit
+`a16c7e8`, gebündelter Abschluss `2d029a5`. Zu diesem Zeitpunkt kein Push,
+CI-Lauf, Deploy, Anbieteraufruf oder physischer iPhone-Nachweis.
 
 - Alle Befehle der regulären Mocksuite einschließlich `pretest` durchlaufen.
   Der erste Start stoppte an der Sandbox-Sperre für lokale PostgreSQL-Prozesse.
@@ -71,5 +75,42 @@ Deploy, Anbieteraufruf oder physischer iPhone-Nachweis wurde durchgeführt.
 aus einem Pool der 20 besten Passungen, innerhalb eines Tages stabil. Im aktuellen
 gemischten Entdecken-Feed wird diese Option für persönliche Empfehlungen nicht
 angewendet; die tägliche Auswahl populärer Titel arbeitet unabhängig davon.
-Der Schalter startet keinen Katalogabruf oder KI-Auftrag. Er bleibt in diesem
-Paket unverändert; Entfernung ist die Empfehlung aus dem Audit.
+Der Schalter startet keinen Katalogabruf oder KI-Auftrag. Im freigegebenen
+Nachtrag wird sein sichtbarer Einstieg entfernt; der gespeicherte Schlüssel
+und die ältere Selektionslogik bleiben kompatibel erhalten.
+
+## Freigegebener Nachtrag und Veröffentlichung
+
+KI-Baumeister erhält K1/K2 als zusammenhängenden Delta-Auftrag von `2d029a5`:
+Benennung am echten Einstieg „Mehrere Titel erfassen“ ausrichten, Abschaltwirkung
+der vier sichtbaren Funktionen mit Mocks belegen, die wirkungslose Entdecken-
+Checkbox entfernen. Bei belegter Lücke darf er die betroffenen UI-Handler
+minimal korrigieren; Backend, State/Schema und Providergrenzen bleiben unverändert.
+
+Remote-Preflight: main und staging sowie beide Domain-Buildmetadaten stehen
+weiter auf `816911b`. Die letzten Deploy-Läufe für diesen Stand sind grün.
+Der Primärcheckout bleibt unberührt.
+
+Nachtrag integriert: Produktcommit `291bfd8`, Testnaht `0b9a2ba`. Alle vier
+Schalter sperren die beschriebenen neuen KI-Aktionen; zusätzliche Fachlogik war
+nicht nötig. Bestehende Ergebnisse und automatische Radar-Prüfungen bleiben
+wie beschrieben außerhalb dieser gerätelokalen Auswahl. Der sichtbare Import
+heißt „Mehrere Titel mit KI erfassen“ und verweist auf den realen Mediathek-Einstieg.
+
+Finaler lokaler Nachweis: vollständige `npm test`-Befehlsfolge einschließlich
+`pretest`, Singlefile- und Vite-Build abgeschlossen. Eine veraltete positive
+Checkbox-Assertion in `entdecken_phase3_test.mjs` wurde an die Entfernung
+angepasst; anschließend ab diesem Modul fortgesetzt. Protokolle:
+`/private/tmp/kd-settings-release-final-20260914.log` und
+`/private/tmp/kd-settings-release-complete-20260914.log`.
+
+Mobile Integration auf dem finalen Produktstand: Chromium 3/3, WebKit 3/3;
+Settings und Login bei 320/393 Pixeln sowie Theme-Wechsel, 14 Dienste, neuer
+Importname, entfernte Checkbox und tatsächlich gesperrter Import bei KI-Aus.
+Im WebKit-Harness wurde der Import-Einstieg vor dem Klick aus dem Bereich der
+festen unteren Suchleiste in die Mitte gescrollt. Alle externen Anfragen wurden
+abgefangen. Nachweise unter `/private/tmp/kd-settings-mobile-20260914/`:
+`release-final.log` (Chromium) und `release-webkit-final.log` (WebKit).
+
+Freigabebedingungen lokal erfüllt; Push, CI und Auslieferungs-Readback stehen
+als nächster Schritt an. `git diff --check` ist sauber.
