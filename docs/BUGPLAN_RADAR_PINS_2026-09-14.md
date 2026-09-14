@@ -1,8 +1,10 @@
 **Bugplan: Radar für Testkonten und kontogebundene Titel-Pins**
 
-Stand: 14.09.2026, 20:57 Uhr Europe/Vienna. Status: untersucht und geplant;
-keine Produktänderung, Migration, Kontofreigabe oder Anbietersuche ausgeführt.
-Auftrag: Fehler und Ursprung erfassen, betroffene Konten bestimmen, erst planen.
+Erste Diagnose: 14.09.2026, 20:57 Uhr Europe/Vienna. Zunächst wurden die Fehler
+und ihr Ursprung untersucht und geplant. Danach hat Max Umsetzung und
+Freischaltung aller normalen Produktfunktionen für die Tester beauftragt.
+Der aktuelle Bau- und Lieferstand steht im Meilensteinregister und den
+anschließenden Lieferbelegen.
 
 Max bestätigt: Sein Radar funktioniert wie gewünscht. Dieses Verhalten ist die
 Referenz für die Abnahme der normalen Konten.
@@ -175,13 +177,14 @@ Mitgliedsweg anschließend eine freigegebene Kontoprobe und Browser-/PWA-Abnahme
 durchführen; Max' Referenzweg mitprüfen. Echte KI-Proben ausschließlich über die
 erlaubten npm-Laufwege und mit den geltenden Budgets.
 
-Radar vollständig liefern und abnehmen, bevor die Pin-Umsetzung beginnt.
+Radar hat bei der Auslieferung Vorrang. Die unabhängige Pin-Umsetzung darf
+während der Radar-Kompatibilitätsprüfung und CI weiterlaufen.
 Die Pin-Abnahme umfasst insbesondere riccardos beschriebenen Wechsel von
 Browser zu frisch angemeldeter PWA. Eine Neuinstallation ist kein Bestandteil
 des Fixes und soll keine noch lokal vorhandenen Ziele oder Pins beseitigen.
 
-Keine Codeänderung, kein Commit/Push, keine Migration, keine Kontoänderung und
-kein bezahlter Test wurden in diesem Planungsauftrag durchgeführt.
+Die erste Diagnose endete ohne Code- oder Liveänderung. Die anschließend
+beauftragte Umsetzung und ihre tatsächlichen Wirkungen sind unten erfasst.
 
 
 **Umsetzung ab 14.09.2026 – einziges Meilensteinregister**
@@ -194,10 +197,10 @@ vor Baubeginn gegen beide Remote-Refs bestätigt.
 
 | ID | Nutzerergebnis | Stand | Beleg |
 |---|---|---|---|
-| R1 | Normale Mitglieder können eigene Radarziele speichern und suchen | OFFEN | Bauauftrag RP-SOLO |
-| R2 | Radar erklärt Berechtigungssperren und erhält offene Ziele | OFFEN | Bauauftrag RP-SOLO |
+| R1 | Normale Mitglieder können eigene Radarziele speichern und suchen | GEBAUT | Radar 9cf4517 + Kompatibilitätsdelta 0ae2075, integriert bis 31e3159; Servermigration live bestätigt |
+| R2 | Radar erklärt Berechtigungssperren und erhält offene Ziele | GEBAUT | Gleicher Kandidat; offene Ziele sichtbar, IDs erhalten, Fehlerklassen getrennt |
 | P1 | Titel-Pins folgen dem Konto zwischen Browser und PWA | OFFEN | nach Radar |
-| A1 | Weitere kontobedingte Funktionssperren sind erfasst | GEBAUT | Produktionscode plus Live-Berechtigungsinventar 21:10 Uhr |
+| A1 | Weitere kontobedingte Funktionssperren sind erfasst und normale Produktfunktionen freigeschaltet | GEBAUT | Produktionscode plus Live-Berechtigungsinventar; 16 Mitglieder um 21:16:47 Uhr freigeschaltet |
 
 Integrationsworktree: `/private/tmp/kd-radar-pins-integration-20260914`.
 Baumeister: `/private/tmp/kd-radar-pins-build-20260914`.
@@ -292,3 +295,26 @@ Unverändert: Monatsbudget 1000 US-Cent, Tageslimit 200 Aufträge,
 Anbieterrequest-Zaun 500 US-Cent; Radar-Taskreservierung maximal 20 US-Cent.
 Diese Werte sind Konfiguration, kein Nachweis des noch verfügbaren Budgets
 und keine neue Erlaubnis für autonome kostenpflichtige Testläufe.
+
+
+**Radar-Serverkorrektur und Releasekandidat, 21:34 Uhr**
+
+Der Baumeister lieferte Radar mit `9cf4517` und das Kompatibilitätsdelta mit
+`0ae2075`; Integration bis `31e3159`. Die bereits produktiven Ein- und
+Zweiargument-Signaturen von `kd_radar_pilot_feed` bleiben unverändert.
+Ein gesonderter RPC attestiert die normale Suchfreigabe. Offene Ziele sind
+als „Bestätigung offen“ sichtbar; bestätigte Ziele ohne Suchlauf erhalten
+eine ehrliche Statusanzeige, ohne automatisch alle Altziele neu anzufragen.
+
+Fokussierte Belege am Radar-Delta: Client 46/46, Erstsuche 16/16, echter
+PostgreSQL-17-Harness 28/28 einschließlich Legacy-PWA-Vertrag, Mitglied ohne
+Reviewrecht, Own-Row-Isolation, Kosten- und Schedulergrenzen; Entdecken 72/72,
+E9 16/16, Radar-News 19/19 und erfolgreicher Build mit 260 Modulen.
+
+Migration `20260914210000_radar_member_search_access` wurde nach Sicherung und
+exakter Definitionenprüfung atomar ausgeführt und im Migrationsledger erfasst.
+Live-Readback um 21:34:16 Uhr: Suchfreigabe für 16/16 Mitglieder und den Owner;
+Reviewrechte weiterhin 0/16 Mitglieder und 1/1 Owner. Beide alten
+Feed-Definitionen stimmen mit der Sicherung überein. Keine Inhalts-, Limit-
+oder Scheduleränderung und keine Anbietersuche durch diesen Schritt.
+Die Clientauslieferung folgt über die normale CI.
