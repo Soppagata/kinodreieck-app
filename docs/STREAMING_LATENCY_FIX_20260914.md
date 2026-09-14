@@ -85,6 +85,16 @@ oben. Kein zweiter Gesamtprüfer, keine Wiederholung der Pakettests durch Root.
 Unmittelbar vor dem richtigen Produktionsbuild lief einmal versehentlich ein
 Standardbuild; dessen Bundle wurde vor der Prüfung vollständig ersetzt.
 
+Backend veröffentlicht und verifiziert am 14.09., 06:29 UTC:
+Migration `20260914100000`, exakte finale SQL-Bytes im Migrationsledger;
+RPC-Definition-MD5 `dac78ff3228aa388527d3ac5bdb39c56`. Quelle-MD5
+`34eaedb5a181658b98c62b0737aa7329`, Revision1, 24678 Basis- und 1069
+Overlayzeilen unverändert. RLS aktiv, authentifiziertes RPC erlaubt,
+anonymes RPC und direkter Tabellenzugriff weiter gesperrt. Der erste
+Einspielversuch scheiterte vor jeder Änderung an der Escapierung des
+Ledgertexts im lokalen Hilfsskript; der unveränderte Zustand wurde gelesen,
+der Hilfsfehler korrigiert und dieselbe Migration danach erfolgreich angewandt.
+
 Entscheidende Prüfung: realistischer kompletter Katalog, 226 reduzierte
 Library-Identitäten, erste und folgende 20er-Seite sowie direkter Z-Filter.
 Ziel sind serverseitig unter 500 ms je dieser Anfragen. Ein schneller lokaler
