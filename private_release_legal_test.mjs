@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("./src/components/EinstiegsGate.jsx", import.meta.url), "utf8");
+const settingsSource = await readFile(new URL("./src/components/PrivatePilotOps.jsx", import.meta.url), "utf8");
 const registry = await readFile(new URL("./src/lib/privatePilotOps.js", import.meta.url), "utf8");
 const disclosure = await readFile(new URL("./src/components/DatenschutzDienste.jsx", import.meta.url), "utf8");
 const sharedDisclosure = `${registry}\n${disclosure}`;
@@ -76,6 +77,15 @@ check("Zentrales Register nennt alle produktiven Datenwege ohne interne Freigabe
   assert.match(registry, /automatischer Radar-Lauf[\s\S]*unabhängig vom lokalen KI-Schalter/);
   assert.doesNotMatch(disclosure, /serverFlag|enabledByDefault|legalStatus/);
   assert.doesNotMatch(disclosure, /geprüft am/);
+});
+
+check("Kurzfassungen nennen manuelle KI-Aufträge und automatischen Server-Radar getrennt", () => {
+  for (const text of [source, settingsSource]) {
+    assert.match(text, /bewusst gestarteten? KI-(?:Funktion|Funktionen|Aufgaben)/);
+    assert.match(text, /automatische[nr]? Radar-(?:Lauf|Prüfung)/);
+    assert.match(text, /lokale KI-Schalter stoppt diesen Server-Radar nicht/);
+    assert.doesNotMatch(text, /Anthropic erhält nur den begrenzten Inhalt einer bewusst gestarteten/);
+  }
 });
 
 check("Analytics- und Bannerentscheidung bleibt auf den privaten Release begrenzt", () => {

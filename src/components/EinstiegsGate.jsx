@@ -33,7 +33,7 @@ function ProduktionsRechtliches() {
 
     <LegalAbschnitt titel="Quellen und optionale KI-Funktionen">
       <p>Spielzeiten stammen von film.at und nonstopkino.at, Streaming-Verfügbarkeiten von Watchmode und Movie of the Night. Entdecken nutzt Quellen des Österreichischen Filminstituts und von Netflix sowie österreichische Charts und neutrale Titelfakten von FlixPatrol. <a href="https://www.movieofthenight.com/about/api" target="_blank" rel="noopener noreferrer">Informationen zu Movie of the Night</a>. Ein Chartplatz ist weder ein Qualitätsurteil noch ein Beleg für die Verfügbarkeit in deinem Abo.</p>
-      <p>Persönliche Profile, Bewertungen, Notizen und deine Streaming-Auswahl werden nicht an FlixPatrol gesendet. Wenn du eine freigeschaltete KI-Funktion bewusst startest, erhält Anthropic nur die für diese Aufgabe benötigten Eingaben und begrenzten Kontextdaten. Passwörter und deine übrige Mediathek gehören nicht zu diesen Aufträgen.</p>
+      <p>Persönliche Profile, Bewertungen, Notizen und deine Streaming-Auswahl werden nicht an FlixPatrol gesendet. Bei einer bewusst gestarteten KI-Funktion erhält Anthropic die dafür benötigten Eingaben und begrenzten Kontextdaten. Zusätzlich kann ein serverseitig freigegebener automatischer Radar-Lauf aktive Radarziele an Anthropic senden; der lokale KI-Schalter stoppt diesen Server-Radar nicht. Passwörter und deine übrige Mediathek gehören nicht zu diesen Aufträgen.</p>
     </LegalAbschnitt>
 
     <DatenschutzDienste />
@@ -191,13 +191,14 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
           </LegalAbschnitt>
 
           <LegalAbschnitt titel="KI- und Suchanbieter">
-            <p>KI-Funktionen werden nur für angemeldete und serverseitig berechtigte Konten ausgeführt. Der Browser sendet den Sitzungstoken zunächst ausschließlich an die eigene Supabase Function; die Konto-ID wird daraus serverseitig abgeleitet und nicht als frei gesetztes Feld an den KI-Anbieter übertragen. Die Funktion übermittelt an Anthropic nur die Daten der jeweils bewusst gestarteten Aufgabe:</p>
+            <p>KI-Funktionen werden nur für angemeldete und serverseitig berechtigte Konten ausgeführt. Der Browser sendet den Sitzungstoken zunächst ausschließlich an die eigene Supabase Function; die Konto-ID wird daraus serverseitig abgeleitet und nicht als frei gesetztes Feld an den KI-Anbieter übertragen. Bei bewusst gestarteten KI-Funktionen übermittelt die Function an Anthropic die Daten der jeweiligen Aufgabe:</p>
             <ul>
               <li>bei intelligenter Suche den eingegebenen Such- oder Beschreibungstext sowie vorhandene Wertelisten wie Genres, Kategorien, Stimmungen, Quellen und Zeitangaben;</li>
               <li>bei Geschmacksfragen die gegebenen Antworten; bei einer Filmprognose Filmtitel, Originaltitel, Jahr, Typ, Genres und Tags sowie begrenzte bestätigte Profilsignale und Profilachsen. Ein sicher zugeordneter FlixPatrol-Cachetreffer kann zusätzlich neutrale Werkkennung, Kurzbeschreibung, Laufzeit und Premiere enthalten;</li>
               <li>bei Stapel- oder Bloganalyse die eingegebene Titelliste und gegebenenfalls Kurzbewertungen beziehungsweise den ausdrücklich ausgewählten Artikel mit ID, Titel, Text, Genres und Tags;</li>
               <li>bei Filmwissen nur eine starke Werkkennung; bei Radar-Websuche die Zielkennung und bei einem Freitextziel zusätzlich genau diesen Zieltext. FlixPatrol-Fakten werden nur einem autorisierten strukturierten Film- oder Serienziel beigefügt, nicht Personen-, Titelgruppen- oder Freitextzielen.</li>
             </ul>
+            <p>Zusätzlich kann ein serverseitig freigegebener automatischer Radar-Lauf aktive Radarziele an Anthropic senden. Der lokale KI-Schalter stoppt diesen Server-Radar nicht.</p>
             <p>Bei der Profil-Extraktion erhält Anthropic keine FlixPatrol-Daten. Erst nach der Anbieterantwort gleicht die eigene Serverfunktion erkannte Filmerwähnungen mit dem Cache ab und zeigt mögliche Werke getrennt und unbestätigt an. Andere KI-Funktionen erhalten keinen FlixPatrol-Kontext.</p>
             <p>Die übrige Mediathek, Notizen, Passwörter und die öffentliche Kontaktadresse gehören nicht zu diesen Anbieteraufträgen. Ohne Berechtigung oder aktivierte Funktion wird der Anbieterpfad geschlossen abgewiesen.</p>
           </LegalAbschnitt>
