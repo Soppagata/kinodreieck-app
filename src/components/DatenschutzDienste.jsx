@@ -1,8 +1,10 @@
 import { PRIVATE_PROVIDER_REGISTRY } from "../lib/privatePilotOps.js";
+import { T } from "../lib/tokens.js";
 
 const textStyle = { margin: 0, fontSize: 12, lineHeight: 1.55 };
 
 export function DatenschutzDienste({ titel = "Dienste, Empfänger und Datenquellen" }) {
+  const linkStyle = { color: T.wolfram, textDecoration: "underline", textUnderlineOffset: 3 };
   return (
     <section data-datenschutz-dienste="central-registry" aria-label={titel} style={{ display: "grid", gap: 10 }}>
       <h3 style={{ margin: 0, fontSize: 15 }}>{titel}</h3>
@@ -18,9 +20,9 @@ export function DatenschutzDienste({ titel = "Dienste, Empfänger und Datenquell
             <p style={textStyle}><strong>Nutzung:</strong> {entry.usage}</p>
             {entry.retentionNote && <p style={textStyle}>{entry.retentionNote}</p>}
             <p style={textStyle}>
-              <a href={entry.officialSource} target="_blank" rel="noopener noreferrer">{entry.officialSourceLabel}</a>
-              {entry.technicalSource && <> · <a href={entry.technicalSource} target="_blank" rel="noopener noreferrer">Technische Informationen</a></>}
-              {entry.termsSource && <> · <a href={entry.termsSource} target="_blank" rel="noopener noreferrer">Bedingungen</a></>}
+              <a href={entry.officialSource} target="_blank" rel="noopener noreferrer" style={linkStyle}>{entry.officialSourceLabel}</a>
+              {entry.technicalSource && <> · <a href={entry.technicalSource} target="_blank" rel="noopener noreferrer" style={linkStyle}>Technische Informationen</a></>}
+              {entry.termsSource && <> · <a href={entry.termsSource} target="_blank" rel="noopener noreferrer" style={linkStyle}>Bedingungen</a></>}
             </p>
           </article>
         ))}
