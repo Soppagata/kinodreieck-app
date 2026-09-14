@@ -410,6 +410,18 @@ try {
   const realBackground = call({ ...realRequest, limit: 1000, cursor: realPage.nextCursor });
   const backgroundMs = performance.now() - backgroundBefore;
   const backgroundBytes = Buffer.byteLength(JSON.stringify(realBackground));
+  const selectedFixtureTitles = jsCombined.filter((title) =>
+    title.dienste?.some((service) => fixtureServices.includes(service)));
+  const identityOf = (title) => String(title.watchmode_id ?? title.streaming_id);
+  const densePersonal = { ...realisticPersonal,
+    seenIds: selectedFixtureTitles.slice(0, 226).map(identityOf),
+    newEntries: Array.from({ length: 660 }, (_, index) => {
+      const title = selectedFixtureTitles[index % selectedFixtureTitles.length];
+      return { id: identityOf(title), fensterBeginn: oldWindow, verbrauchtBis: oldWindow };
+    }) };
+  const denseBefore = performance.now();
+  const densePage = call({ ...realRequest, personal: densePersonal });
+  const denseMs = performance.now() - denseBefore;
   const directBefore = performance.now();
   const directZ = call({ ...realRequest,
     filters: { ...realRequest.filters, buchstabe: "Z" } });
@@ -431,6 +443,8 @@ try {
     assert.ok(pageMs < 1000, `first page took ${pageMs.toFixed(0)} ms`);
     assert.ok(followupMs < 1000, `follow-up page took ${followupMs.toFixed(0)} ms`);
     assert.ok(backgroundMs < 2000, `1000-title background page took ${backgroundMs.toFixed(0)} ms`);
+    assert.equal(densePage.items.length, 20);
+    assert.ok(denseMs < 2000, `dense personal anchors took ${denseMs.toFixed(0)} ms`);
     assert.ok(directMs < 1000, `direct Z page took ${directMs.toFixed(0)} ms`);
     assert.ok(tempRead < 5000); assert.ok(tempWritten < 5000);
     assert.equal(Number(sql("select count(*) from public.kd_streaming_page_base")),
@@ -439,6 +453,7 @@ try {
   });
   console.log(`${fixtureLabel}: ${realPage.counts.all}/${jsCombined.length} selected/all, 226 library, projection ${rebuildMs.toFixed(0)} ms, pages ${pageMs.toFixed(0)}/${followupMs.toFixed(0)}/${directMs.toFixed(0)} ms (first/follow-up/direct Z)`);
   console.log(`${fixtureLabel}: 1000-title background page ${backgroundMs.toFixed(0)} ms/${backgroundBytes} bytes`);
+  console.log(`${fixtureLabel}: dense 226 seen/660 deadline anchors page ${denseMs.toFixed(0)} ms`);
   console.log(`${checks} Streaming-pages PostgreSQL checks passed.`);
 } finally {
   if (running) run("pg_ctl", ["--pgdata", data, "--wait", "stop"]);

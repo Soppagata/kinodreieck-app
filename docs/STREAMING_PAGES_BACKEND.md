@@ -82,11 +82,12 @@ lokal und rechnerabhängig; Seitenaufrufe bauen den Katalog nicht erneut auf.
 Die Latenzkorrektur wurde zusätzlich mit `work_mem=2184kB`, 25.023 vereinigten
 Titeln, einer 8.806-Titel-Dienstauswahl und 226 reduzierten Library-Identitäten
 gemessen. Erste 20, nächste 20 und direkter Sprung zu Z dauerten lokal
-0,121/0,117/0,113 Sekunden. Die EXPLAIN-Blockzahlen sanken gegenüber derselben
-unveränderten Basis von 7.532/7.326 auf 4.417/2.760 gelesene/geschriebene
+0,085/0,084/0,080 Sekunden. Die EXPLAIN-Blockzahlen sanken gegenüber derselben
+unveränderten Basis von 7.532/7.326 auf 2.055/411 gelesene/geschriebene
 Temp-Blöcke. Ein separates Hintergrundpaket mit 1.000 Titeln benötigte
-0,124 Sekunden und umfasste 305.238 Bytes. Der aktuelle Lauf bestand mit 18
-Checks. Diese Werte sind lokale Vergleichswerte;
+0,100 Sekunden und umfasste 305.239 Bytes. Eine dichte Personenprobe mit 226
+Gesehen-IDs und 660 Fristankern blieb bei 0,094 Sekunden. Der aktuelle Lauf
+bestand mit 18 Checks. Diese Werte sind lokale Vergleichswerte;
 das Ziel von unter 0,5 Sekunden für erste Seite und Direktsprung muss auf dem
 echten Server separat bestätigt werden.
 
