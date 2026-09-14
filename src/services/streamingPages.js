@@ -130,7 +130,7 @@ export function createStreamingPagesService({
     }
   };
 
-  const networkPage = async (account, request, { timeout = 15000 } = {}) => {
+  const networkPage = async (account, request, { timeout = 15000, signal = null } = {}) => {
     const connection = getConnection?.() || {};
     const baseUrl = String(connection.url || "").trim().replace(/\/+$/, "");
     const apiKey = String(connection.key || "").trim();
@@ -148,7 +148,20 @@ export function createStreamingPagesService({
       source: "streaming-pages", operation: "page.load", reason: "token-missing",
     });
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    let abortedByCaller = false;
+    const abortFromCaller = () => {
+      abortedByCaller = true;
+      try { controller?.abort(signal?.reason); } catch { controller?.abort(); }
+    };
+    if (signal?.aborted) abortFromCaller();
+    else signal?.addEventListener?.("abort", abortFromCaller, { once: true });
     const timer = controller ? setTimeout(() => controller.abort(), timeout) : null;
+    const throwIfCallerAborted = () => {
+      if (!signal?.aborted) return;
+      abortedByCaller = true;
+      if (signal.reason instanceof Error) throw signal.reason;
+      throw Object.assign(new Error("Streaming-Seitenrequest abgebrochen"), { name: "AbortError" });
+    };
     const call = (bearer) => f(baseUrl + "/rest/v1/rpc/kd_streaming_page", {
       method: "POST",
       cache: "no-store",
@@ -159,17 +172,22 @@ export function createStreamingPagesService({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ p_request: request }),
-      signal: controller?.signal,
+      signal: controller?.signal || signal || undefined,
     });
     try {
+      throwIfCallerAborted();
       let response = await call(token);
       if (response?.status === 401) {
         token = await driver?.getAccessToken?.({ erwarteteKontoId: account.id, erzwingeErneuerung: true });
         accountStillCurrent(account.id, "page.load.after-refresh");
-        if (token) response = await call(token);
+        if (token) {
+          throwIfCallerAborted();
+          response = await call(token);
+        }
       }
       let body = null;
       try { body = await response?.json?.(); } catch { /* normalize below */ }
+      throwIfCallerAborted();
       accountStillCurrent(account.id, "page.load.after-response");
       if (!response?.ok) {
         if (missingRpc(body, response?.status)) {
@@ -188,9 +206,12 @@ export function createStreamingPagesService({
       return page;
     } catch (error) {
       if (error instanceof BoundaryError) throw error;
-      throw normalizeBoundaryError(error, { source: "streaming-pages", operation: "page.load" });
+      const normalized = normalizeBoundaryError(error, { source: "streaming-pages", operation: "page.load" });
+      if (abortedByCaller && normalized.reason === "timeout") normalized.reason = "cancelled";
+      throw normalized;
     } finally {
       if (timer) clearTimeout(timer);
+      signal?.removeEventListener?.("abort", abortFromCaller);
     }
   };
 
@@ -203,11 +224,15 @@ export function createStreamingPagesService({
       if (cached) return cached;
     }
     const key = `${account.id}\n${stableStreamingPageString(request)}`;
-    if (inFlight.has(key)) return inFlight.get(key);
+    const existing = inFlight.get(key);
+    if (existing && !existing.signal?.aborted) return existing.promise;
+    if (existing) inFlight.delete(key);
+    let entry = null;
     const run = networkPage(account, request, options).finally(() => {
-      if (inFlight.get(key) === run) inFlight.delete(key);
+      if (inFlight.get(key) === entry) inFlight.delete(key);
     });
-    inFlight.set(key, run);
+    entry = { promise: run, signal: options.signal || null };
+    inFlight.set(key, entry);
     return run;
   };
 

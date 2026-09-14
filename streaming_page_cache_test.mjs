@@ -100,6 +100,71 @@ await check("Kontowechsel verwirft eine verspaetete Antwort vor Cache und Ergebn
   assert.equal(h.cache.values.size, 0);
 });
 
+await check("Caller-Abort erreicht fetch und der neueste Account startet unabhaengig", async () => {
+  const session = { value: { mode: "account", state: "ready", account: { id: "a" }, capabilities: { remoteStorage: true } } };
+  const fetches = [];
+  const service = createStreamingPagesService({
+    auth: { getSnapshot: () => session.value },
+    driver: { getAccessToken: async ({ erwarteteKontoId }) => `token-${erwarteteKontoId}` },
+    getConnection: () => ({ url: "https://test.supabase.co", key: "publishable-key-123456789" }),
+    fetchImpl: async (_url, options) => {
+      const body = JSON.parse(options.body);
+      fetches.push({ auth: options.headers.Authorization, filter: body.p_request.filters.buchstabe, signal: options.signal });
+      if (body.p_request.filters.buchstabe === "A") {
+        return await new Promise((resolve, reject) => {
+          options.signal.addEventListener("abort", () => {
+            reject(Object.assign(new Error("abgebrochen"), { name: "AbortError" }));
+          }, { once: true });
+        });
+      }
+      return { ok: true, status: 200, json: async () => ready() };
+    },
+  });
+  const oldController = new AbortController();
+  const old = service.loadPage({ ...request, filters: { buchstabe: "A" } }, { signal: oldController.signal });
+  const oldRejected = assert.rejects(old, (error) => error?.reason === "cancelled");
+  await flush();
+  session.value = { mode: "account", state: "ready", account: { id: "b" }, capabilities: { remoteStorage: true } };
+  oldController.abort();
+  const latest = await service.loadPage({ ...request, filters: { buchstabe: "Z" } }, { signal: new AbortController().signal });
+  await oldRejected;
+  assert.equal(latest.status, "ready");
+  assert.deepEqual(fetches.map(({ auth, filter }) => [auth, filter]), [
+    ["Bearer token-a", "A"], ["Bearer token-b", "Z"],
+  ]);
+  assert.equal(fetches[0].signal.aborted, true);
+  assert.equal(fetches[1].signal.aborted, false);
+});
+
+await check("abgebrochener Singleflight blockiert keinen sofortigen Same-Key-Neustart", async () => {
+  let calls = 0;
+  const service = createStreamingPagesService({
+    auth: { getSnapshot: () => ({ mode: "account", state: "ready", account: { id: "a" }, capabilities: { remoteStorage: true } }) },
+    driver: { getAccessToken: async () => "token-a" },
+    getConnection: () => ({ url: "https://test.supabase.co", key: "publishable-key-123456789" }),
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      if (calls === 1) {
+        return await new Promise((resolve, reject) => {
+          options.signal.addEventListener("abort", () => {
+            reject(Object.assign(new Error("abgebrochen"), { name: "AbortError" }));
+          }, { once: true });
+        });
+      }
+      return { ok: true, status: 200, json: async () => ready() };
+    },
+  });
+  const oldController = new AbortController();
+  const old = service.loadPage(request, { signal: oldController.signal });
+  const oldRejected = assert.rejects(old, (error) => error?.reason === "cancelled");
+  await flush();
+  oldController.abort();
+  const latest = await service.loadPage(request, { signal: new AbortController().signal });
+  await oldRejected;
+  assert.equal(latest.status, "ready");
+  assert.equal(calls, 2);
+});
+
 await check("Cache-Schreiben blockiert die erste Netzantwort nicht", async () => {
   const put = deferred();
   let putStarted = false;

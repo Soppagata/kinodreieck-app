@@ -10,6 +10,7 @@ import {
 } from "../lib/streamingPage.js";
 
 export const STREAMING_PAGE_SESSION_FRESH_MS = 5 * 60 * 1000;
+export const STREAMING_PAGE_QUERY_SETTLE_MS = 80;
 
 export function streamingPageShouldBeActive(tab, visibilityState = "visible") {
   return tab === "streaming" && visibilityState !== "hidden";
@@ -47,6 +48,9 @@ export function createStreamingPageController({
   now = () => Date.now(),
   setTimer = setTimeout,
   clearTimer = clearTimeout,
+  querySettleMs = STREAMING_PAGE_QUERY_SETTLE_MS,
+  setQueryTimer = setTimeout,
+  clearQueryTimer = clearTimeout,
 } = {}) {
   let context = { enabled: false, accountKey: "", services: [], library: [], personal: {} };
   let contextSignature = "";
@@ -56,9 +60,37 @@ export function createStreamingPageController({
   let lastQuery = null;
   let snapshot = initialState(false);
   let expiryTimer = null;
+  let activeRequest = null;
+  let pendingQuery = null;
+  let pendingQueryTimer = null;
   let legacyAttempted = false;
   const records = new Map();
   const listeners = new Set();
+
+  const clearPendingQuery = () => {
+    if (pendingQueryTimer != null) clearQueryTimer(pendingQueryTimer);
+    pendingQueryTimer = null;
+    pendingQuery = null;
+  };
+  const abortActiveRequest = () => {
+    const running = activeRequest;
+    activeRequest = null;
+    try { running?.controller?.abort(); } catch { /* Abort ist best effort. */ }
+  };
+  const requestPage = async (record, epoch, request) => {
+    /* Ein neuer Katalogrequest gewinnt sofort. Der alte Fetch erhaelt vor dem
+       Start des neuen ein echtes AbortSignal und kann weder die Leitung noch
+       die serielle Hintergrundkette weiter belegen. */
+    abortActiveRequest();
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const running = { record, epoch, controller };
+    activeRequest = running;
+    try {
+      return await service.loadPage(request, { signal: controller?.signal });
+    } finally {
+      if (activeRequest === running) activeRequest = null;
+    }
+  };
 
   const emit = (next) => {
     snapshot = Object.freeze(next);
@@ -89,6 +121,7 @@ export function createStreamingPageController({
   const publish = (record) => { if (isCurrent(record)) emit(publicState(record)); };
 
   const resetForRefresh = (record, { expired = false, preserveItems = true } = {}) => {
+    if (activeRequest?.record === record) abortActiveRequest();
     record.epoch += 1;
     record.initialEpoch = null;
     record.pumpingEpoch = null;
@@ -181,7 +214,7 @@ export function createStreamingPageController({
         publish(record);
         let page;
         try {
-          page = await service.loadPage({
+          page = await requestPage(record, epoch, {
             ...record.request,
             limit: STREAMING_PAGE_BACKGROUND_LIMIT,
             cursor,
@@ -243,7 +276,7 @@ export function createStreamingPageController({
     }
     if (!isAttemptCurrent(record, epoch)) return;
     try {
-      const page = await service.loadPage(request);
+      const page = await requestPage(record, epoch, request);
       if (!isAttemptCurrent(record, epoch)) return;
       if (page.status === "version_changed") {
         if (allowVersionRestart) {
@@ -292,6 +325,28 @@ export function createStreamingPageController({
     else if (record.nextCursor && !record.complete && !record.error) void loadBackground(record);
   };
 
+  const invalidateAttempt = (record) => {
+    if (!record) return;
+    record.epoch += 1;
+    record.initialEpoch = null;
+    record.pumpingEpoch = null;
+    record.backgroundLoading = false;
+    if (!record.version || record.fromCache) record.refreshStarted = false;
+    if (["loading", "refreshing"].includes(record.status)) {
+      record.status = record.items.length ? "ready" : "idle";
+    }
+  };
+
+  const settleLatestQuery = (record) => {
+    pendingQuery = record;
+    pendingQueryTimer = setQueryTimer(() => {
+      const latest = pendingQuery;
+      pendingQuery = null;
+      pendingQueryTimer = null;
+      if (latest && active && isCurrent(latest)) resumeRecord(latest);
+    }, querySettleMs);
+  };
+
   const query = ({ view = "library", filters = {} } = {}) => {
     if (!context.enabled) return snapshot;
     const request = normalizeStreamingPageRequest({
@@ -307,6 +362,18 @@ export function createStreamingPageController({
     lastQuery = { view: request.view, filters: request.filters };
     const signature = `${context.accountKey}\n${stableStreamingPageString(request)}`;
     const key = signature;
+    const previousKey = currentKey;
+    const changed = !!previousKey && previousKey !== key;
+    /* Ansichts- und Initialwechsel starten unmittelbar. Nur Filterwechsel
+       innerhalb derselben Ansicht bekommen ein kurzes trailing Fenster, damit
+       Reglergesten keine Zwischenbuchstaben an den Katalog senden. */
+    const shouldSettle = changed
+      && records.get(previousKey)?.request.view === request.view;
+    if (changed) {
+      invalidateAttempt(records.get(previousKey));
+      abortActiveRequest();
+      clearPendingQuery();
+    }
     currentKey = key;
     let record = records.get(key);
     if (!record) {
@@ -319,8 +386,13 @@ export function createStreamingPageController({
       };
       records.set(key, record);
     }
+    /* Auch waehrend des kurzen Filterfensters darf kein abgelaufener
+       Neu-Stand noch einmal sichtbar werden. */
+    if (hasExpired(record)) resetForRefresh(record, { expired: true });
     publish(record);
-    resumeRecord(record);
+    if (pendingQuery === record) return snapshot;
+    if (shouldSettle) settleLatestQuery(record);
+    else resumeRecord(record);
     return snapshot;
   };
 
@@ -336,6 +408,8 @@ export function createStreamingPageController({
     const signature = stableStreamingPageString(normalized);
     if (signature === contextSignature) return;
     const previousQuery = lastQuery;
+    clearPendingQuery();
+    abortActiveRequest();
     context = normalized;
     contextSignature = signature;
     generation += 1;
@@ -373,7 +447,15 @@ export function createStreamingPageController({
     query,
     setContext,
     setActive,
-    destroy() { generation += 1; lastQuery = null; clearExpiry(); records.clear(); listeners.clear(); },
+    destroy() {
+      generation += 1;
+      lastQuery = null;
+      clearExpiry();
+      clearPendingQuery();
+      abortActiveRequest();
+      records.clear();
+      listeners.clear();
+    },
   });
 }
 

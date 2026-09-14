@@ -411,6 +411,9 @@ await check("spaetere Seiten verlaengern den fruehesten Neu-Ablauf nicht", async
 await check("Filterwechsel verwirft eine verspaetete alte Antwort", async () => {
   const old = deferred();
   const controller = createStreamingPageController({
+    querySettleMs: 0,
+    setQueryTimer(callback) { queueMicrotask(callback); return 1; },
+    clearQueryTimer() {},
     service: {
       loadCachedPage: async () => null,
       loadPage: async (request) => request.filters.suche === "alt" ? old.promise : page({ ids: [2] }),
@@ -425,6 +428,68 @@ await check("Filterwechsel verwirft eine verspaetete alte Antwort", async () => 
   old.resolve(page({ ids: [1] }));
   await flush();
   assert.deepEqual(controller.getSnapshot().items.map((item) => item.watchmode_id), [2]);
+  controller.destroy();
+});
+
+await check("langsamer Altrequest wird abgebrochen und A-bis-Z auf den neuesten Filter verdichtet", async () => {
+  const calls = [];
+  const timers = new Map();
+  let timerId = 0, active = 0, maxActive = 0, aborts = 0;
+  const controller = createStreamingPageController({
+    querySettleMs: 80,
+    setQueryTimer(callback) { const id = ++timerId; timers.set(id, callback); return id; },
+    clearQueryTimer(id) { timers.delete(id); },
+    yieldMainThread: async () => {},
+    service: {
+      loadCachedPage: async () => null,
+      async loadPage(request, { signal } = {}) {
+        const marker = request.cursor || request.filters.buchstabe || "initial";
+        calls.push(marker);
+        let occupied = true;
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        const release = () => {
+          if (!occupied) return;
+          occupied = false;
+          active -= 1;
+        };
+        try {
+          if (request.cursor === "alte-folgeseite") {
+            return await new Promise((resolve, reject) => {
+              signal.addEventListener("abort", () => {
+                aborts += 1;
+                release();
+                reject(Object.assign(new Error("abgebrochen"), { name: "AbortError" }));
+              }, { once: true });
+            });
+          }
+          if (!request.filters.buchstabe) {
+            return page({ ids: [1], cursor: "alte-folgeseite", complete: false });
+          }
+          return page({ ids: [26] });
+        } finally { release(); }
+      },
+    },
+  });
+  controller.setContext(context());
+  controller.setActive(true);
+  controller.query({ view: "all", filters: {} });
+  await flush();
+  assert.deepEqual(calls, ["initial", "alte-folgeseite"]);
+  for (const buchstabe of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+    controller.query({ view: "all", filters: { buchstabe } });
+  }
+  await flush();
+  assert.equal(aborts, 1);
+  assert.deepEqual(calls.filter((value) => /^[A-Z]$/.test(value)), []);
+  assert.equal(timers.size, 1);
+  const [startLatest] = timers.values();
+  timers.clear();
+  startLatest();
+  await flush();
+  assert.deepEqual(calls.filter((value) => /^[A-Z]$/.test(value)), ["Z"]);
+  assert.equal(maxActive, 1);
+  assert.deepEqual(controller.getSnapshot().items.map((item) => item.watchmode_id), [26]);
   controller.destroy();
 });
 
