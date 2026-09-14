@@ -370,3 +370,11 @@ Domain-Schritt meldete dagegen für `app-layer-1-Dq5ioLFE.js` vorübergehend
 HTML statt JavaScript. Die konkrete Datei wurde anschließend mit HTTP 200
 und `application/javascript` gelesen. Ausschließlich der fehlgeschlagene
 Deployjob `104128813138` wurde wiederholt; alle grünen Testjobs bleiben erhalten.
+
+Radar ist anschließend mit CI `34888834492`, Versuch 2, vollständig grün
+inklusive Produktionsdomain ausgeliefert. Der erste Pin-CI-Lauf `34890531738`
+bestand Geräte- und Upgradechecks, scheiterte aber am fest codierten Mac-Pfad
+des neuen PostgreSQL-Teststarters unter Linux. Diese reine Test-Integrationsnaht
+wurde auf dieselbe plattformübergreifende Binärsuche wie bestehende Harnesses
+umgestellt; der einzelne korrigierte Test lief 3/3 erfolgreich. Appcode und
+Servermigrationen bleiben dabei unverändert.

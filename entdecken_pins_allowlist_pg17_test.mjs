@@ -1,10 +1,22 @@
-/* Reale lokale PG17-Probe für Allowlist und RLS des neuen persönlichen Topfs. */
+/* Reale lokale PostgreSQL-Probe für Allowlist und RLS des persönlichen Topfs. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-const PG = "/Applications/Postgres.app/Contents/Versions/17/bin";
+const configured = spawnSync("pg_config", ["--bindir"], { encoding: "utf8" });
+const required = ["initdb", "pg_ctl", "postgres", "psql"];
+const candidates = [
+  process.env.KD_TEST_PG_BIN,
+  configured.status === 0 ? configured.stdout.trim() : null,
+  "/Applications/Postgres.app/Contents/Versions/17/bin",
+  "/usr/lib/postgresql/17/bin",
+  "/usr/lib/postgresql/16/bin",
+].filter(Boolean);
+const PG = [...new Set(candidates)].find((directory) => (
+  required.every((binary) => existsSync(join(directory, binary)))
+));
+assert.ok(PG, "Local PostgreSQL server binaries are required; set KD_TEST_PG_BIN if needed");
 const root = mkdtempSync("/private/tmp/kd-pins-pg-");
 const data = join(root, "data");
 const socket = join(root, "socket");
@@ -51,7 +63,7 @@ try {
   console.log("✓ Authentifiziertes Mitglied kann den neuen eigenen Titel-Pin-Topf schreiben und lesen");
   console.log("✓ RLS verbirgt denselben Topf vor einem anderen Mitglied");
   console.log("✓ Die additive Allowlist lehnt unbekannte Töpfe weiterhin mit CHECK ab");
-  console.log("ENTDECKEN_PINS_PG17: 3/3 checks passed");
+  console.log("ENTDECKEN_PINS_POSTGRES: 3/3 checks passed");
 } finally {
   if (running) run("pg_ctl", ["--pgdata", data, "--mode", "fast", "--wait", "stop"], undefined, true);
   rmSync(root, { recursive: true, force: true });
