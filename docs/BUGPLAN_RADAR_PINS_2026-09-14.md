@@ -197,10 +197,10 @@ vor Baubeginn gegen beide Remote-Refs bestätigt.
 
 | ID | Nutzerergebnis | Stand | Beleg |
 |---|---|---|---|
-| R1 | Normale Mitglieder können eigene Radarziele speichern und suchen | GEBAUT | Radar 9cf4517 + Kompatibilitätsdelta 0ae2075, integriert bis 31e3159; Servermigration live bestätigt |
-| R2 | Radar erklärt Berechtigungssperren und erhält offene Ziele | GEBAUT | Gleicher Kandidat; offene Ziele sichtbar, IDs erhalten, Fehlerklassen getrennt |
-| P1 | Titel-Pins folgen dem Konto zwischen Browser und PWA | OFFEN | nach Radar |
-| A1 | Weitere kontobedingte Funktionssperren sind erfasst und normale Produktfunktionen freigeschaltet | GEBAUT | Produktionscode plus Live-Berechtigungsinventar; 16 Mitglieder um 21:16:47 Uhr freigeschaltet |
+| R1 | Normale Mitglieder können eigene Radarziele speichern und suchen | DONE | Release 9214db7 auf main/staging; volle lokale Suite und CI grün, Servermigration bestätigt |
+| R2 | Radar erklärt Berechtigungssperren und erhält offene Ziele | DONE | Gleicher Release; offene Ziele sichtbar, IDs erhalten, Fehlerklassen getrennt |
+| P1 | Titel-Pins folgen dem Konto zwischen Browser und PWA | DONE | e0e78fa + 737d186 + efd2be6 integriert bis 523fbde, Ziel main; neuer Sync und echter Legacy-Upgradeweg geprüft |
+| A1 | Weitere kontobedingte Funktionssperren sind erfasst und normale Produktfunktionen freigeschaltet | DONE | Release 9214db7 und Live-Readback; 16 Mitglieder um 21:16:47 Uhr freigeschaltet |
 
 Integrationsworktree: `/private/tmp/kd-radar-pins-integration-20260914`.
 Baumeister: `/private/tmp/kd-radar-pins-build-20260914`.
@@ -318,3 +318,55 @@ Reviewrechte weiterhin 0/16 Mitglieder und 1/1 Owner. Beide alten
 Feed-Definitionen stimmen mit der Sicherung überein. Keine Inhalts-, Limit-
 oder Scheduleränderung und keine Anbietersuche durch diesen Schritt.
 Die Clientauslieferung folgt über die normale CI.
+
+Die anschließende READ-ONLY-Leseprobe im jeweiligen authenticated-Kontext
+bestätigte um 21:36:41 Uhr bei allen 16 Mitgliedern und Max den neuen Feed mit
+Suchfreigabe. Der jeweilige Legacy-Feed entspricht derselben Antwort ohne das
+neue Suchrechtfeld. Keine Ziele oder Suchaufträge wurden dabei angelegt.
+
+Radar-Staging-CI `34887782110` inklusive Chromium, WebKit und festem
+Domain-Readback erfolgreich. Produktions-CI `34888834492` am identischen
+Commit `9214db7` vollständig grün; die normale Environment-Freigabe wurde
+erteilt, ohne den Produktionsschutz zu ändern.
+
+
+**Pin-Paket und additive Servermigration, 21:48 Uhr**
+
+Der Pin-Sync aus `e0e78fa` und die CI-Verdrahtung aus `737d186` sind bis
+`32ecd0a` integriert. Alle Produktdateien entsprechen dem lokal vollständig
+geprüften Baumeisterstand; nur dieser Fehlerbericht unterscheidet sich.
+Der vollständige lokale Abschlusslauf einschließlich PG17-Harnesses,
+Single-File- und Vite-Build war erfolgreich. Die zusätzlichen Geräte-/Account-
+Tests 15/15 und der PG17-Allowlist-/RLS-Test 3/3 sind Teil des Standardlaufs.
+
+Migration `20260914230000_entdecken_pins_personal` ist nach Sicherung und
+Driftprüfung atomar ausgeführt und im Ledger erfasst. Live-Readback
+21:48:08 Uhr: genau 19 erlaubte Keys, ausschließlich `kd:entdecken-pins`
+ergänzt, Constraint validiert und RLS aktiv. Keine vorhandenen Pins oder
+anderen Kontoinhalte wurden durch die Migration geschrieben.
+
+Der reale Upgradeweg alter lokaler Pins ist mit `efd2be6`, integriert als
+`523fbde`, ergänzt: Der echte AccountDriver erhält den Altbestand vor einem
+überschreibenden Kontorefresh. Nur bestätigter gleicher Owner mit Epoch und
+Binding erlaubt automatische Übernahme. Andernfalls zeigt die Startansicht
+einen separaten lokalen Altbestand und die ausdrückliche Aktion
+„Titel-Pins in dieses Konto übernehmen“. Erst diese Aktion schreibt ihn in
+das gewählte Konto. Der gesicherte Bestand bleibt bis zum erfolgreichen Write
+erhalten. Produktcode und Tests entsprechen vollständig dem gelieferten
+Baumeisterstand; nur dieser Fehlerbericht ist zusätzlich vorhanden.
+
+Die gezielte Upgradeprüfung umfasst den echten AccountDriver 5/5,
+Pin-Sync 15/15, Account-Epoch 14/14, Session 43/43, Entdecken mit sichtbarer
+Übernahmeaktion 73/73 plus E9 16/16 und den PG17-Allowlist-Test 3/3.
+Der Build mit 260 Modulen ist erfolgreich. Ein weiterer vollständiger lokaler
+Prüflauf wurde entsprechend der Nutzersteuerung nicht gestartet.
+
+Für die Pin-Lieferung folgt auf die fokussierte Upgradeprüfung ausschließlich
+die reguläre Produktions-CI und ein abschließender Readback. Es gibt keinen
+weiteren Staging-Rundlauf oder zusätzlichen vollständigen lokalen Prüflauf.
+
+Beim Radar-Produktionsdeploy war das atomare Deployment erfolgreich, der
+Domain-Schritt meldete dagegen für `app-layer-1-Dq5ioLFE.js` vorübergehend
+HTML statt JavaScript. Die konkrete Datei wurde anschließend mit HTTP 200
+und `application/javascript` gelesen. Ausschließlich der fehlgeschlagene
+Deployjob `104128813138` wurde wiederholt; alle grünen Testjobs bleiben erhalten.
