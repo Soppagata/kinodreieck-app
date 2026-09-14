@@ -435,7 +435,12 @@ export default function App() {
 
   /* Persönliche Start-Pins: Kinotermine mit Jahres-Wrap; Entdecken-Titel werden im gebundenen Datenkontext aufgelöst. */
   const [kinoPins, setKinoPins] = useState([]);
-  const { entdeckenPins, toggleRecommendationPin } = useEntdeckenPins({
+  const {
+    entdeckenPins,
+    legacyEntdeckenPins,
+    toggleRecommendationPin,
+    uebernehmeLegacyPins,
+  } = useEntdeckenPins({
     contextKey: streamingKontextKey,
     setErr,
   });
@@ -1896,6 +1901,7 @@ export default function App() {
         {remoteKontoAktiv && tab === "start" && bootDone && (
           <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} onNavigiere={navigiere} zeigeEintrag={springeZuFilm}
             entdeckenPins={entdeckenPins} webDiscoveryFeed={webDiscoveryState.feed} onSpringeZuEntdecken={() => navigiere("blog")}
+            legacyEntdeckenPins={legacyEntdeckenPins} onLegacyEntdeckenPinsUebernehmen={uebernehmeLegacyPins}
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
             entdeckenStatus={entdeckenStatus}
             master={master || []} onSpringeZuStreaming={springeZuStreaming} onFilmAnlegen={addFilm}

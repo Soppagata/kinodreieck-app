@@ -11,6 +11,8 @@ const MEDIA_TYPES = Object.freeze({
 });
 const ID_NAMESPACES = Object.freeze(["watchmode", "wikidata", "imdb", "tmdb", "film_at", "record"]);
 export const ENTDECKEN_PINS_POT_FORMAT = "kd-entdecken-pins-v1";
+export const ENTDECKEN_PINS_LEGACY_KEY = "kd:entdecken-pins:legacy-unbound";
+export const ENTDECKEN_PINS_LEGACY_FORMAT = "kd-entdecken-pins-legacy-v1";
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function positiveInteger(value) {
@@ -172,6 +174,55 @@ export function decodeEntdeckenPinsPot(value) {
     epoch: value.epoch,
     legacy: false,
   });
+}
+
+export function readEntdeckenPinsLegacy(storage = globalThis.localStorage) {
+  try {
+    const value = JSON.parse(storage?.getItem?.(ENTDECKEN_PINS_LEGACY_KEY) || "[]");
+    if (Array.isArray(value)) return Object.freeze({ pins: normalizeEntdeckenPins(value), owner: null });
+    if (!value || value.format !== ENTDECKEN_PINS_LEGACY_FORMAT
+        || !Array.isArray(value.pins) || (value.owner !== null && typeof value.owner !== "string")) {
+      return Object.freeze({ pins: normalizeEntdeckenPins([]), owner: null });
+    }
+    return Object.freeze({
+      pins: normalizeEntdeckenPins(value.pins),
+      owner: text(value.owner) || null,
+    });
+  } catch { return Object.freeze({ pins: normalizeEntdeckenPins([]), owner: null }); }
+}
+
+/* Sichert einen noch nicht eindeutig kontogebundenen Bestand vor jedem
+   Account-Refresh in einem geraetelokalen Topf. Der aktive Konto-Pull darf
+   erst danach denselben Haupttopf ersetzen. */
+export function preserveEntdeckenPinsLegacy(raw, { owner = null } = {}, storage = globalThis.localStorage) {
+  if (raw == null) return true;
+  try {
+    const decoded = decodeEntdeckenPinsPot(JSON.parse(raw));
+    if (!decoded) return false;
+    const current = readEntdeckenPinsLegacy(storage);
+    const merged = normalizeEntdeckenPins([
+      ...current.pins,
+      ...decoded.pins,
+    ]);
+    const ownerHint = text(owner) || null;
+    const gebundenerOwner = current.pins.length === 0
+      ? ownerHint
+      : (current.owner && current.owner === ownerHint ? current.owner : null);
+    const payload = JSON.stringify({
+      format: ENTDECKEN_PINS_LEGACY_FORMAT,
+      owner: gebundenerOwner,
+      pins: merged,
+    });
+    storage.setItem(ENTDECKEN_PINS_LEGACY_KEY, payload);
+    return storage.getItem(ENTDECKEN_PINS_LEGACY_KEY) === payload;
+  } catch { return false; }
+}
+
+export function clearEntdeckenPinsLegacy(storage = globalThis.localStorage) {
+  try {
+    storage?.removeItem?.(ENTDECKEN_PINS_LEGACY_KEY);
+    return storage?.getItem?.(ENTDECKEN_PINS_LEGACY_KEY) == null;
+  } catch { return false; }
 }
 
 function identitiesConflict(left, right) {

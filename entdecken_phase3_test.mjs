@@ -753,6 +753,20 @@ try {
     assert.match(pinboardEintrag.textContent, /Entdecken/);
     assert.equal(pinboardSprung?.pinId, gesetztePins[0].pinId);
   });
+  let legacyUebernahmen = 0;
+  await startUi.render({
+    entdeckenPins: [], legacyEntdeckenPins: gesetztePins,
+    kinoMatches: { matched: [], rest: [] }, wochenplan: { version: 1, eintraege: [] },
+    onWochenplanAendern() {},
+    async onLegacyEntdeckenPinsUebernehmen() { legacyUebernahmen++; return true; },
+  });
+  const legacyButton = [...startUi.container.querySelectorAll("button")]
+    .find((button) => /Titel-Pins in dieses Konto übernehmen/u.test(button.textContent));
+  await act(async () => { legacyButton.click(); await tick(); });
+  check("Gesicherte Alt-Pins besitzen im normalen Start-Pinboard einen bewussten Konto-Übernahmeknopf", () => {
+    assert.match(startUi.container.textContent, /älterer Titel-Pin ist auf diesem Gerät gesichert/u);
+    assert.equal(legacyUebernahmen, 1);
+  });
   await startUi.cleanup();
   check("Ohne Streamingauswahl sind alle 15 Kinokarten ohne Aufklappschritt sichtbar", () => {
     const cards = [...versionedSection.querySelectorAll(".kd-entdecken-neutral")];

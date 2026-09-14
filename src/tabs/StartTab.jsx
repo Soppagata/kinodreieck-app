@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { T } from "../lib/tokens.js";
+import { T, btnStyle } from "../lib/tokens.js";
 import { syncStatusAnzeige } from "../lib/syncStatus.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { formatiereTermin } from "../lib/programm.js";
@@ -109,6 +109,7 @@ function VertrauensZeile({ progStand, streamingBekannt, programmInfo = null, str
 function StartDashboard({
   kinoPins = [], onNavigiere, zeigeEintrag,
   entdeckenPins = [], webDiscoveryFeed = null, onSpringeZuEntdecken,
+  legacyEntdeckenPins = [], onLegacyEntdeckenPinsUebernehmen,
   kinoMatches = { matched: [] }, mustwatch = [], mwKandidaten = null, auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
   programmInfo = null, streamingInfo = null,
@@ -117,6 +118,7 @@ function StartDashboard({
   onStreamingKatalogLaden, pinOwnerKey = null, mustwatchReady = false,
   mustwatchAvailabilityReady = mustwatchReady,
 }) {
+  const [legacyUebernahmeLaeuft, setLegacyUebernahmeLaeuft] = useState(false);
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
   const zuEintrag = (id, fallbackTab) => { if (id && zeigeEintrag) zeigeEintrag(id); else if (onNavigiere) onNavigiere(fallbackTab); };
@@ -269,6 +271,24 @@ function StartDashboard({
       <div className="kd-dash-grid">
         {/* ---- 1 · Gemeinsames Pinboard: Titelpins und Kinotermine ---- */}
         <Modul name="Pinboard" ziel="streaming" linkLabel="Streaming" onNavigiere={onNavigiere} tour="pinboard">
+          {legacyEntdeckenPins.length > 0 && (
+            <div role="status" className="kd-dash-karte" style={{ padding: 12, marginBottom: 10 }}>
+              <p style={{ color: T.rauch, fontSize: 13, margin: "0 0 8px" }}>
+                {legacyEntdeckenPins.length === 1
+                  ? "Ein älterer Titel-Pin ist auf diesem Gerät gesichert."
+                  : `${legacyEntdeckenPins.length} ältere Titel-Pins sind auf diesem Gerät gesichert.`}
+                {" "}Übernimm sie nur, wenn sie zu diesem Konto gehören.
+              </p>
+              <button type="button" style={btnStyle(true)} disabled={legacyUebernahmeLaeuft} onClick={async () => {
+                if (legacyUebernahmeLaeuft) return;
+                setLegacyUebernahmeLaeuft(true);
+                try { await onLegacyEntdeckenPinsUebernehmen?.(); }
+                finally { setLegacyUebernahmeLaeuft(false); }
+              }}>
+                {legacyUebernahmeLaeuft ? "Wird übernommen …" : "Titel-Pins in dieses Konto übernehmen"}
+              </button>
+            </div>
+          )}
           {titelPins.length > 0 || pins.length > 0 ? (
             <div className="kd-dash-karte kd-pinboard-radar">
               {titelPins.map((pin) => (

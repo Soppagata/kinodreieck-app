@@ -78,6 +78,9 @@ export function captureStorageContext() {
     hasConfirmedRemote: (key) => isCurrent()
       && typeof driver?.hasConfirmedRemote === "function"
       && driver.hasConfirmedRemote(key) === true,
+    canAdoptLegacyPins: () => isCurrent()
+      && typeof driver?.canAdoptLegacyPins === "function"
+      && driver.canAdoptLegacyPins() === true,
     /* Auch ein frischer Pull gehört zu demselben gebundenen Auftrag. Ohne
        diese Grenze könnte ein Konto-/Treiberwechsel zwischen Pull und Reads
        zwei persönliche Datenräume in ein Backup mischen. */

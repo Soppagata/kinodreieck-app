@@ -8,7 +8,8 @@ import {
   K, localDriver, notifyRemoteStorage, setStorageDriver,
 } from "./src/lib/storage.js";
 import {
-  createEntdeckenPin, createEntdeckenPinsPot, decodeEntdeckenPinsPot, resolveEntdeckenPins,
+  createEntdeckenPin, createEntdeckenPinsPot, decodeEntdeckenPinsPot,
+  readEntdeckenPinsLegacy, resolveEntdeckenPins,
 } from "./src/lib/entdeckenPins.js";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -152,11 +153,13 @@ try {
   ui = await mount(legacy, accountDriver(legacy, backend, "konto-b"), "account:ready:konto-b");
   check("Ungebundener Altbestand wird dem nächsten Konto nicht zugeschlagen", ui.api().entdeckenPins.length === 0);
   check("Unklarer Altbestand bleibt in der lokalen Quarantäne vollständig erhalten",
-    JSON.parse(legacy.data.get(K.entdeckenPinsLegacy))[0].pinId === legacyPin.pinId);
+    readEntdeckenPinsLegacy(legacy.storage).pins[0]?.pinId === legacyPin.pinId
+    && readEntdeckenPinsLegacy(legacy.storage).owner === null);
   await ui.close();
 
   const adopted = browserStorage({ [K.entdeckenPins]: JSON.stringify([legacyPin]) });
   ui = await mount(adopted, accountDriver(adopted, backend, "konto-b", { confirmed: new Set([K.entdeckenPins]) }), "account:ready:konto-b");
+  await ui.settle();
   check("Eine serverbestätigte bewusste Legacy-Übernahme wird dem Konto zugeordnet", ui.api().entdeckenPins[0]?.pinId === legacyPin.pinId);
   await act(async () => { assert.equal(await ui.api().toggleRecommendationPin(second), true); });
   check("Der nächste bestätigte Write bindet übernommenen Altbestand an Konto und Epoch",

@@ -245,11 +245,12 @@ function leeresKontoStatus() {
   };
 }
 
-function baueAccountDriver(accountId) {
+function baueAccountDriver(accountId, { legacyPinsBelongToOwner = false } = {}) {
   const id = String(accountId || "");
   const generation = ++treiberGeneration;
   const driver = createAccountDriver({
     owner: `account:${id}`,
+    legacyPinsBelongToOwner,
     onRemoteChange: (changes) => {
       if (kontoAktiv && accountDriver === driver && vorbereitetesKonto === id) notifyRemoteStorage(changes);
     },
@@ -328,7 +329,9 @@ export function bereiteKontoTreiberVor(accountId, optionen) {
   kontoAktiv = false;
   accountEpoch = owner === id ? leseEpoch(id) : null;
   vorbereitetesKonto = id;
-  accountDriver = baueAccountDriver(id);
+  accountDriver = baueAccountDriver(id, {
+    legacyPinsBelongToOwner: owner === id && !!accountEpoch && bindungPasst(id),
+  });
   return accountDriver;
 }
 

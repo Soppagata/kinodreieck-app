@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
+  clearEntdeckenPinsLegacy,
   createEntdeckenPinsPot,
   decodeEntdeckenPinsPot,
   normalizeEntdeckenPins,
+  preserveEntdeckenPinsLegacy,
+  readEntdeckenPinsLegacy,
   toggleEntdeckenPin,
 } from "../lib/entdeckenPins.js";
 import {
@@ -17,39 +20,33 @@ function readJson(raw) {
   if (raw == null) return null;
   return decodeEntdeckenPinsPot(JSON.parse(raw));
 }
-function readLegacyPins() {
-  try { return normalizeEntdeckenPins(JSON.parse(localStorage.getItem(K.entdeckenPinsLegacy) || "[]")); }
-  catch { return normalizeEntdeckenPins([]); }
-}
-function preserveUnboundLegacy(raw) {
-  if (raw == null) return true;
-  try {
-    const incoming = readJson(raw)?.pins || [];
-    const merged = normalizeEntdeckenPins([...readLegacyPins(), ...incoming]);
-    localStorage.setItem(K.entdeckenPinsLegacy, JSON.stringify(merged));
-    return true;
-  } catch { return false; }
-}
-function clearLegacyPins() {
-  try { localStorage.removeItem(K.entdeckenPinsLegacy); } catch { /* bleibt sicher lokal erhalten */ }
-}
 function pinsForContext(decoded, context, raw) {
+  const currentLegacy = () => readEntdeckenPinsLegacy();
   if (context.owner === "guest-local") {
     const active = !decoded || decoded.owner === null || decoded.owner === context.owner ? decoded?.pins || [] : [];
-    return normalizeEntdeckenPins([...active, ...readLegacyPins()]);
+    return {
+      pins: normalizeEntdeckenPins([...active, ...currentLegacy().pins]),
+      legacy: Object.freeze({ pins: normalizeEntdeckenPins([]), owner: null }),
+    };
   }
-  if (!decoded) return normalizeEntdeckenPins([]);
-  if (decoded.owner === context.owner) return decoded.pins;
-  /* Eine alte Arrayform oder ein Gasttopf ist erst dann eindeutig diesem
-     Konto zugeordnet, wenn der Account-Treiber bereits eine Serverrevision
-     für genau diesen Topf bestätigt hat (bewusste Übernahme oder Pull). */
-  if (context.hasConfirmedRemote(K.entdeckenPins)) return decoded.pins;
-  preserveUnboundLegacy(raw);
-  return normalizeEntdeckenPins([]);
+  if (!decoded) return { pins: normalizeEntdeckenPins([]), legacy: currentLegacy() };
+  const serverBestaetigt = context.hasConfirmedRemote(K.entdeckenPins);
+  const sicherGebunden = context.canAdoptLegacyPins() || serverBestaetigt;
+  if (decoded.owner !== context.owner) {
+    preserveEntdeckenPinsLegacy(raw, { owner: sicherGebunden ? context.owner : null });
+  }
+  const pins = decoded.owner === context.owner || sicherGebunden
+    ? decoded.pins : normalizeEntdeckenPins([]);
+  return { pins, legacy: currentLegacy() };
 }
 
 export function useEntdeckenPins({ contextKey = "local", setErr = null } = {}) {
-  const [state, setState] = useState(() => ({ contextKey: null, pins: normalizeEntdeckenPins([]), loaded: false }));
+  const [state, setState] = useState(() => ({
+    contextKey: null,
+    pins: normalizeEntdeckenPins([]),
+    legacy: Object.freeze({ pins: normalizeEntdeckenPins([]), owner: null }),
+    loaded: false,
+  }));
   const stateRef = useRef(state);
   stateRef.current = state;
   const contextKeyRef = useRef(contextKey);
@@ -57,21 +54,24 @@ export function useEntdeckenPins({ contextKey = "local", setErr = null } = {}) {
   const setErrRef = useRef(setErr);
   setErrRef.current = setErr;
   const mutationQueueRef = useRef(Promise.resolve(true));
+  const automaticAdoptionRef = useRef("");
   const storageGeneration = useSyncExternalStore(
     subscribeStorageContext,
     storageContextGenerationSnapshot,
     storageContextGenerationSnapshot,
   );
-  const commit = useCallback((key, pins) => {
-    const next = { contextKey: key, pins: normalizeEntdeckenPins(pins), loaded: true };
+  const commit = useCallback((key, pins, legacy = readEntdeckenPinsLegacy()) => {
+    const next = { contextKey: key, pins: normalizeEntdeckenPins(pins), legacy, loaded: true };
     stateRef.current = next;
     setState(next);
     return next.pins;
   }, []);
   const receive = useCallback((raw, context = captureStorageContext()) => {
     const decoded = readJson(raw);
-    const pins = pinsForContext(decoded, context, raw);
-    if (context.isCurrent() && contextKeyRef.current === contextKey) commit(contextKey, pins);
+    const projected = pinsForContext(decoded, context, raw);
+    if (context.isCurrent() && contextKeyRef.current === contextKey) {
+      commit(contextKey, projected.pins, projected.legacy);
+    }
   }, [commit, contextKey]);
 
   useRemoteStorageValue(K.entdeckenPins, (raw) => receive(raw), () => {
@@ -80,7 +80,12 @@ export function useEntdeckenPins({ contextKey = "local", setErr = null } = {}) {
   useEffect(() => {
     let active = true;
     const context = captureStorageContext();
-    setState({ contextKey: null, pins: normalizeEntdeckenPins([]), loaded: false });
+    setState({
+      contextKey: null,
+      pins: normalizeEntdeckenPins([]),
+      legacy: Object.freeze({ pins: normalizeEntdeckenPins([]), owner: null }),
+      loaded: false,
+    });
     context.get(K.entdeckenPins).then((row) => {
       if (!active || !context.isCurrent() || contextKeyRef.current !== contextKey) return;
       receive(row?.value ?? null, context);
@@ -92,7 +97,7 @@ export function useEntdeckenPins({ contextKey = "local", setErr = null } = {}) {
     return () => { active = false; };
   }, [contextKey, receive, storageGeneration]);
 
-  const write = useCallback((calculate) => {
+  const write = useCallback((calculate, { clearLegacy = false } = {}) => {
     const context = captureStorageContext();
     const requestedKey = contextKeyRef.current;
     const task = mutationQueueRef.current.then(async () => {
@@ -106,8 +111,8 @@ export function useEntdeckenPins({ contextKey = "local", setErr = null } = {}) {
       try {
         await context.set(K.entdeckenPins, JSON.stringify(pot));
         if (!context.isCurrent() || contextKeyRef.current !== requestedKey) return false;
-        if (context.owner === "guest-local") clearLegacyPins();
-        commit(requestedKey, next);
+        if (context.owner === "guest-local" || clearLegacy) clearEntdeckenPinsLegacy();
+        commit(requestedKey, next, readEntdeckenPinsLegacy());
         return true;
       } catch {
         if (context.isCurrent() && contextKeyRef.current === requestedKey) {
@@ -128,11 +133,33 @@ export function useEntdeckenPins({ contextKey = "local", setErr = null } = {}) {
     if (!ids.size) return Promise.resolve(false);
     return write((current) => current.filter((pin) => !ids.has(pin.pinId)));
   }, [write]);
+  const uebernehmeLegacyPins = useCallback(() => write(
+    (current) => [...current, ...readEntdeckenPinsLegacy().pins],
+    { clearLegacy: true },
+  ), [write]);
+  useEffect(() => {
+    if (state.contextKey !== contextKey || !state.loaded || !state.legacy.pins.length
+        || state.legacy.owner == null) return;
+    const context = captureStorageContext();
+    if (!context.isCurrent() || state.legacy.owner !== context.owner) return;
+    const adoptionKey = `${context.generation}|${state.legacy.owner}|${state.legacy.pins.map((pin) => pin.pinId).join("|")}`;
+    if (automaticAdoptionRef.current === adoptionKey) return;
+    automaticAdoptionRef.current = adoptionKey;
+    uebernehmeLegacyPins().then((ok) => {
+      if (!ok && context.isCurrent()) {
+        setErrRef.current?.("Ältere Titel-Pins sind auf diesem Gerät gesichert und können hier übernommen werden.");
+      }
+    });
+  }, [contextKey, state, uebernehmeLegacyPins]);
   const visible = state.contextKey === contextKey && state.loaded ? state.pins : normalizeEntdeckenPins([]);
+  const visibleLegacy = state.contextKey === contextKey && state.loaded && state.legacy.owner == null
+    ? state.legacy.pins : normalizeEntdeckenPins([]);
   return {
     entdeckenPins: visible,
+    legacyEntdeckenPins: visibleLegacy,
     entdeckenPinsGeladen: state.contextKey === contextKey && state.loaded,
     toggleRecommendationPin,
     bereinigeEntdeckenPins,
+    uebernehmeLegacyPins,
   };
 }

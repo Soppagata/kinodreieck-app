@@ -28,6 +28,10 @@ import {
   ACCT_KEYS, ACCOUNT_CACHE_METADATA_WITHOUT_OWNER,
 } from "./accountStorageKeys.js";
 import { purgeExpiredLocalData } from "./localRetention.js";
+import {
+  decodeEntdeckenPinsPot,
+  preserveEntdeckenPinsLegacy,
+} from "./entdeckenPins.js";
 
 const TABLE = "kd_personal";
 
@@ -138,6 +142,7 @@ export function createAccountDriver({
   fetchImpl = null,
   isActive = () => true,
   owner = "account:unknown",
+  legacyPinsBelongToOwner = false,
   onRemoteChange = () => {},
 } = {}) {
   const basis = String(config.supabaseUrl || "").trim().replace(/\/+$/, "");
@@ -271,6 +276,18 @@ export function createAccountDriver({
       if (!row) { markStale(key, false); ergebnis.angelegt.push(key); continue; }
       const remoteVal = (row.value == null) ? null : String(row.value);
       const lokal = localStorage.getItem(key);
+      if (key === "kd:entdecken-pins" && lokal != null) {
+        let legacy = false;
+        try { legacy = decodeEntdeckenPinsPot(JSON.parse(lokal))?.legacy === true; }
+        catch { /* formfremde Daten behandelt der normale Pullvertrag */ }
+        if (legacy && lokal !== remoteVal && !preserveEntdeckenPinsLegacy(lokal, {
+          owner: legacyPinsBelongToOwner ? owner : null,
+        })) {
+          markStale(key, true);
+          ergebnis.fehler.push({ key, grund: "legacy-sicherung-fehlgeschlagen" });
+          continue;
+        }
+      }
       const st = getStatus();
       const ungesynct = !!(st.pending?.[key] || st.conflict?.[key]
         || st.zuGross?.[key] || st.schemaVeraltet?.[key]);
@@ -553,6 +570,7 @@ export function createAccountDriver({
   return Object.freeze({
     name: "konto",
     owner,
+    canAdoptLegacyPins: () => legacyPinsBelongToOwner === true,
     hasConfirmedRemote: (key) => SYNC_SET.has(key) && getVer(key) != null,
     status: syncStatus,
     pull: syncPull,

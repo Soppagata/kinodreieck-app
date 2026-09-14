@@ -10,11 +10,17 @@ Storage-Owner und die Aktivierungsgeneration. Ein zweites Gerät übernimmt nur
 einen serverbestätigten Topf desselben Kontos.
 
 Alte Arraybestände besitzen keine Eigentümerbindung. Im Gastmodus bleiben sie
-sichtbar und bearbeitbar. In einem Kontokontext werden sie nur dann übernommen,
-wenn der Account-Treiber für genau diesen Topf bereits eine Serverrevision
-bestätigt hat, etwa nach einer bewussten Kontoübernahme. Andernfalls bleiben sie
-unter `kd:entdecken-pins:legacy-unbound` lokal erhalten und erscheinen nicht als
-Pins des nächsten Kontos.
+sichtbar und bearbeitbar. Vor einem Konto-Refresh sichert der echte
+Account-Treiber diese Pins zuerst unter `kd:entdecken-pins:legacy-unbound`.
+Scheitert diese Sicherung, überschreibt der Refresh den rohen Pin-Topf nicht.
+
+Gehörte der vorhandene Cache bereits nachweislich zum selben bestätigten Konto,
+wird der Altbestand mit dessen Serverpins vereinigt und in den ownergebundenen
+Topf überführt. Bei einem neuen oder nicht eindeutig zuordenbaren Konto bleibt
+er gerätelokal gesichert. Das normale Start-Pinboard zeigt dann Anzahl und den
+Knopf „Titel-Pins in dieses Konto übernehmen“. Erst dieser Klick vereinigt den
+Altbestand mit den vorhandenen Kontopins und stößt den Konto-Sync an. Ein bloßer
+Login oder Refresh lädt ihn nicht still zum nächsten Konto hoch.
 
 Die Startansicht entfernt keine Titelpins mehr aufgrund eines fehlenden oder
 mehrdeutigen Katalogtreffers. Solche Pins bleiben gespeichert und können bei

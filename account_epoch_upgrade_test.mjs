@@ -52,6 +52,7 @@ async function childMain() {
   globalThis.fetch = async () => { throw new Error("Netz im Upgrade-Test verboten"); };
 
   const { createSessionCoordinator } = await import("./src/services/sessionCoordinator.js");
+  const { captureStorageContext } = await import("./src/lib/storage.js");
   const accessSession = Object.freeze({
     mode: "account", state: "ready",
     account: Object.freeze({ id: kontoId, displayName: kontoId, role: "member" }),
@@ -76,6 +77,7 @@ async function childMain() {
     epochRaw: daten.get("kd:acct:epoch") ?? null,
     bindingRaw: daten.get("kd:acct:binding-schema") ?? null,
     transitionRaw: daten.get("kd:acct:transition") ?? null,
+    canAdoptLegacyPins: captureStorageContext().canAdoptLegacyPins(),
     vorher,
     nachher,
   }));
@@ -109,7 +111,7 @@ function check(name, pruefung) {
     !r.error && r.session?.mode === "account" && r.storageState === "account-ready"
       && epoch.accountId === "konto-A" && !!epoch.token
       && bindung.v === 1 && bindung.accountId === "konto-A"
-      && r.transitionRaw === null);
+      && r.transitionRaw === null && r.canAdoptLegacyPins === true);
   check("Legacy-Migration verändert Owner, Bestätigung und persönliche Rohwerte nicht",
     JSON.stringify(r.vorher) === JSON.stringify(r.nachher));
 }
@@ -136,7 +138,8 @@ function check(name, pruefung) {
       && /erneut/.test(r.error.message) && !/Netz im Upgrade-Test/.test(r.error.message)
       && r.auth?.account?.id === "konto-A"
       && r.storageState === "account-awaiting-adoption"
-      && r.epochRaw === null && r.bindingRaw === null && r.transitionRaw === null);
+      && r.epochRaw === null && r.bindingRaw === null && r.transitionRaw === null
+      && r.canAdoptLegacyPins === false);
 }
 
 {
