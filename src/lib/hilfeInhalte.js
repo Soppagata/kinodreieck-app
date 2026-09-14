@@ -211,8 +211,8 @@ const AKTIONEN = [
   },
   {
     id: "ki-funktionen-einstellen",
-    titel: "KI-Funktionen einstellen",
-    text: "Öffne Settings → KI-Funktionen. Dort steuerst du die optionalen KI-Funktionen der App.",
+    titel: "Manuelle KI-Funktionen einstellen",
+    text: "Öffne Settings → Personalisierung & KI → Manuelle KI-Funktionen. Dort steuerst du die KI-Aktionen, die du in diesem Browser selbst startest.",
     suchwoerter: ["ki funktionen", "ki einstellen", "prognose", "prognose einstellen", "filmwissen", "filmwissen einstellen", "deutung", "ki deutung"],
     direkteSuchwoerter: ["ki funktionen", "ki einstellen", "prognose einstellen", "filmwissen einstellen", "ki deutung"],
     bereichId: "daten",

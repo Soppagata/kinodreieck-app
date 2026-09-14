@@ -168,7 +168,7 @@ export function ProfilAnsicht({
 
   return (
     <div>
-      {kiGeraeteweiseAus && <p style={{ ...klein, background: T.saal, borderRadius: 6, padding: "10px 12px" }}>Dein Profil ist angelegt und bleibt erhalten. Auf diesem Gerät steht der KI-Schalter allerdings auf „aus“ — hier wirkt es deshalb gerade nicht. Auf anderen Geräten und sobald du KI einschaltest, wird es verwendet.</p>}
+      {kiGeraeteweiseAus && <p style={{ ...klein, background: T.saal, borderRadius: 6, padding: "10px 12px" }}>Dein Profil ist angelegt, bleibt erhalten und wird weiter für persönliche Vorschläge verwendet. Auf diesem Gerät ist nur das Erstellen und Verfeinern mit KI ausgeschaltet.</p>}
       <div className="kd-profil-eindruck">
         <span>KI-Eindruck aus deinen Angaben</span>
         <p>{profilEindruck(signale, filme, achsText)}</p>

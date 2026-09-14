@@ -1728,14 +1728,13 @@ check("L", "…und die Löschung hebt die Profilfassung", () => sp.topf.version 
 await montiere({ speicher: sp.api, kiGeraeteweiseAus: true });
 check("L", "bei KI=aus steht der Hinweis  [gemessen: "
   + JSON.stringify(text().slice(0, 80)) + "]",
-  () => text().includes("Dein Profil ist angelegt und bleibt erhalten."));
+  () => text().includes("Dein Profil ist angelegt, bleibt erhalten"));
 check("L", "…er sagt, dass das Profil ERHALTEN bleibt (nicht: gelöscht/inaktiv)",
   () => text().includes("bleibt erhalten") && !text().includes("inaktiv"));
-check("L", "…er benennt die Gerätelokalität",
-  () => text().includes("Auf diesem Gerät steht der KI-Schalter allerdings auf „aus“")
-    || text().includes("Auf diesem Gerät steht der KI-Schalter allerdings auf „aus\""));
-check("L", "…und sagt zu, dass es woanders und später wirkt",
-  () => text().includes("Auf anderen Geräten und sobald du KI einschaltest, wird es verwendet."));
+check("L", "…er benennt die tatsächliche Grenze des Geräteschalters",
+  () => text().includes("Auf diesem Gerät ist nur das Erstellen und Verfeinern mit KI ausgeschaltet."));
+check("L", "…und bestätigt die weitere Nutzung für persönliche Vorschläge",
+  () => text().includes("wird weiter für persönliche Vorschläge verwendet."));
 check("L", "…steht aber NICHT in der Warnfarbe (es ist kein Fehler)",
   () => alles("p").filter((x) => x.textContent.includes("bleibt erhalten"))
     .every((x) => x.style.color !== alsRgb(T.gefahr)));
@@ -1743,7 +1742,7 @@ check("L", "…und blockiert nichts: weitere Angaben bleiben möglich", () => !!
 await montiere({ speicher: sp.api, kiGeraeteweiseAus: false });
 check("L", "bei KI=an steht der Hinweis NICHT  [gemessen: "
   + JSON.stringify(text().includes("bleibt erhalten")) + "]",
-  () => !text().includes("Dein Profil ist angelegt und bleibt erhalten."));
+  () => !text().includes("Dein Profil ist angelegt, bleibt erhalten"));
 check("L", "…und die übrige Ansicht ist dieselbe",
   () => text().includes("Fassung " + sp.topf.version));
 
@@ -1873,7 +1872,7 @@ check("M", "…und schreibt ohne die `speicher`-Prop in den ECHTEN Topf  [gemess
     && ausTopf.signale[0].wert === "drama");
 check("M", "…mit erteilter Einwilligung", () => ausTopf.einwilligung?.erteilt === true);
 check("M", "…und der KI=aus-Hinweis steht jetzt da",
-  () => text().includes("Dein Profil ist angelegt und bleibt erhalten."));
+  () => text().includes("Dein Profil ist angelegt, bleibt erhalten"));
 check("M", "…das Ergebnis ist ein gültiges Profil", () => P.pruefeProfil(ausTopf).length === 0);
 dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
 

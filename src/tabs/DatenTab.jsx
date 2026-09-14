@@ -94,6 +94,7 @@ export function DatenTab({
   const kasten = { background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px" };
   const showKatalogbestand = runtimeConfig.appEnvironment !== "production";
   const showKatalogzugang = runtimeConfig.appEnvironment !== "production";
+  const showKiDiagnose = runtimeConfig.appEnvironment !== "production";
   const [eggOffen, setEggOffen] = useState(false);
   const eggBereichId = useId();
 
@@ -226,14 +227,15 @@ export function DatenTab({
       <Klappe titel="Personalisierung & KI">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={kasten}>
-          <h2 style={h2}>KI-Funktionen</h2>
+          <h2 style={h2}>Manuelle KI-Funktionen</h2>
           <p style={{ ...mono, margin: "0 0 10px", lineHeight: 1.6 }}>
-            Ohne KI funktioniert alles — Suche, Sammlung, Bewertungen — vollständig
-            und kostenlos auf diesem Gerät. Mit KI kommen Deutungs- und
-            Profil-Funktionen dazu.
+            Diese Schalter steuern KI-Aktionen, die du selbst startest: Suchtexte
+            und eigene Begriffe deuten, Geschmacksprofile erstellen oder
+            verfeinern, KI-Bewertungen erstellen und Titellisten ordnen. Suche,
+            Sammlung und Bewertungen funktionieren auch ohne diese KI-Aktionen.
           </p>
           <div className="kd-einstellzeile" style={{ marginBottom: 12 }}>
-            <span style={{ ...mono }}>KI insgesamt</span>
+            <span style={{ ...mono }}>Manuelle KI auf diesem Gerät</span>
             <SegmentedControl className="kd-einstelloptionen kd-einstelloptionen--2" style={{ marginBottom: 0 }}
               value={kiStand.global === true ? "an" : "aus"}
               onChange={(id) => onKiGlobal?.(id === "an")}
@@ -245,25 +247,29 @@ export function DatenTab({
               etwas bewirken. */}
           {kiStand.global === true && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingLeft: 4, borderLeft: "2px solid " + T.saalHoch }}>
-              {Object.entries(KI_FUNKTIONEN).filter(([id]) => id !== "filmwissen").map(([id, f]) => (
-                <div key={id} style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <SegmentedControl style={{ marginBottom: 0, minWidth: 0 }}
-                    value={istEinzelfunktionAn(id, kiStand) ? "an" : "aus"}
-                    onChange={(w) => onKiFunktion?.(id, w === "an")}
-                    options={[{ id: "an", label: "An" }, { id: "aus", label: "Aus" }]} />
-                  <div style={{ flex: "1 1 220px" }}>
-                    <div style={{ ...mono, color: T.leinwand }}>{f.label}</div>
-                    <div style={{ ...mono, opacity: 0.75 }}>{f.beschreibung}</div>
+              {Object.entries(KI_FUNKTIONEN)
+                .filter(([id]) => id !== "filmwissen" && (id !== "diagnose" || showKiDiagnose))
+                .map(([id, f]) => (
+                  <div key={id} style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <SegmentedControl style={{ marginBottom: 0, minWidth: 0 }}
+                      value={istEinzelfunktionAn(id, kiStand) ? "an" : "aus"}
+                      onChange={(w) => onKiFunktion?.(id, w === "an")}
+                      options={[{ id: "an", label: "An" }, { id: "aus", label: "Aus" }]} />
+                    <div style={{ flex: "1 1 220px" }}>
+                      <div style={{ ...mono, color: T.leinwand }}>{f.label}</div>
+                      <div style={{ ...mono, opacity: 0.75 }}>{f.beschreibung}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           )}
 
           <p style={{ ...mono, opacity: 0.75, margin: "12px 0 0", lineHeight: 1.6 }}>
-            Diese Wahl gilt nur für dieses Gerät und reist nicht mit dem Konto mit —
-            auf einem zweiten Gerät entscheidest du erneut. KI-Funktionen brauchen
-            außerdem ein Konto.
+            Diese Wahl gilt nur für diesen Browser auf diesem Gerät und wird weder
+            synchronisiert noch gesichert. Sie steuert nicht den Hintergrund-Radar
+            oder die normale Auswahl in Entdecken und Für mich. Bereits gespeicherte
+            eigene Begriffe, Profile sowie KI- und Filmwissen-Ergebnisse bleiben
+            erhalten. Für neue KI-Aktionen brauchst du außerdem ein KI-fähiges Konto.
           </p>
         </div>
 

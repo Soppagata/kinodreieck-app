@@ -544,18 +544,16 @@ check("U", "die Einzelschalter hängen sichtbar an `kiStand.global === true` (Da
 check("U", "die Einzelschalter verwenden dieselbe Defaultregel wie das Laufzeitgate",
   () => /istEinzelfunktionAn\(id, kiStand\) \? "an" : "aus"/.test(block)
     && /import \{ KI_FUNKTIONEN, istEinzelfunktionAn \}/.test(dt));
-/* Die Liste wird aus KI_FUNKTIONEN aufgebaut, nicht abgeschrieben: eine neue
-   Funktion taucht sonst im Modul auf, aber nie in den Einstellungen. */
-/* Die Labels dürfen NICHT im Tab stehen: sonst hat eine neue Funktion im
-   Modul zwar einen Namen, aber keinen Schalter — oder zwei verschiedene. */
-check("U", "die Liste kommt aus KI_FUNKTIONEN, und kein Label ist abgeschrieben"
-  + "  [abgeschrieben: " + JSON.stringify(NAMEN().filter((n) => block.includes(K.KI_FUNKTIONEN[n].label))) + "]",
+/* Die Schalterliste und ihre beiden Textfelder werden zentral aus
+   KI_FUNKTIONEN projiziert. Erklärender Fließtext darf dieselben Produktwörter
+   verwenden, ohne dadurch als zweiter Schalter zu gelten. */
+check("U", "die Liste samt Label und Beschreibung kommt aus KI_FUNKTIONEN",
   () => /Object\.entries\(KI_FUNKTIONEN\)/.test(block)
-    && NAMEN().every((n) => !block.includes(K.KI_FUNKTIONEN[n].label)));
+    && /\{f\.label\}/.test(block) && /\{f\.beschreibung\}/.test(block));
 check("U", "und der Block nennt die Gerätelokalität, damit niemand sie im Konto sucht",
-  () => /nur für dieses Gerät|nicht mit dem Konto/.test(block));
+  () => /nur für diesen Browser auf diesem Gerät|weder\s+synchronisiert noch gesichert/.test(block));
 check("U", "der Block sagt zu, dass ohne KI alles funktioniert — dieselbe Zusage wie die Willkommens-Karte",
-  () => /Ohne KI funktioniert alles/.test(block));
+  () => /Suche,\s+Sammlung und Bewertungen funktionieren auch ohne diese KI-Aktionen/.test(block));
 });
 
 /* =========================================================================

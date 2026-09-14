@@ -64,24 +64,24 @@ function istLaufzeitGesperrt(storage) {
    „aus", ist jede Funktion aus, unabhängig von ihrem eigenen Wert. */
 export const KI_FUNKTIONEN = {
   suche: {
-    label: "Suche deuten",
-    beschreibung: "Schwierige Suchsätze in Filter übersetzen, wenn die normale Suche nicht weiterkommt.",
+    label: "Suchtexte & eigene Begriffe deuten",
+    beschreibung: "Im Finder „Mit KI deuten“ nutzen und neue eigene Begriffe für die Suche interpretieren.",
     /* Die deterministische Suche ist bereits vollständig gelaufen, bevor der
        Knopf überhaupt erscheint — er ersetzt nur das Signalobjekt. Ohne ihn
        bleibt der Finder vollwertig. */
     beiAus: "ausblenden",
   },
   profil: {
-    label: "Profil aus Antworten lesen",
-    beschreibung: "Aus deinen Antworten auf die drei Fragen ein Geschmacksprofil ableiten.",
+    label: "Geschmacksprofil mit KI erstellen/verfeinern",
+    beschreibung: "Aus deinen Antworten auf die drei Fragen ein Geschmacksprofil erstellen oder verfeinern.",
     /* Doktrin-Ausnahmefall: Es gibt kein deterministisches Gegenstück zu
        „Freitext verstehen". Der Ersatz ist ein Formular (Schlagwörter),
        keine simulierte KI. */
     beiAus: "ausblenden",
   },
   vorbewertung: {
-    label: "KI-Prognosen",
-    beschreibung: "Für unbewertete Filme auf Wunsch eine persönliche Vorbewertung erstellen.",
+    label: "KI-Bewertungen erstellen",
+    beschreibung: "Beim Erstellen eines Eintrags und auf unbewerteten Karten eine persönliche KI-Bewertung erstellen.",
     /* Kern-KI-Task: Ein deterministischer Ersatz wäre keine Prognose, sondern
        eine falsch etikettierte Heuristik. */
     beiAus: "ausblenden",
@@ -93,8 +93,8 @@ export const KI_FUNKTIONEN = {
     beiAus: "ausblenden",
   },
   stapelimport: {
-    label: "Titellisten ordnen",
-    beschreibung: "Eigene Filme, Serien und CDs aus einer eingefügten Titelliste strukturieren und auf Wunsch vorsichtig vorbeurteilen.",
+    label: "Titellisten mit KI ordnen",
+    beschreibung: "Eingefügte Filme, Serien und CDs ordnen und auf Wunsch vorsichtig vorbeurteilen.",
     beiAus: "ausblenden",
   },
   diagnose: {
