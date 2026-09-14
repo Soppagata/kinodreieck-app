@@ -109,12 +109,25 @@ check("Anmelden öffnet den bestehenden Minimal-Login",
   !!document.querySelector(".kd-entry-login")
   && !!document.querySelector('input[autocomplete="username"]')
   && !!document.querySelector('input[autocomplete="current-password"]'));
-const loginText = document.querySelector(".kd-entry")?.textContent || "";
+const loginPanel = document.querySelector('[aria-label="Anmeldung"]');
+const loginText = loginPanel?.textContent || "";
 check("Der wieder geöffnete Login legt keine Settings-, Sync- oder Backup-Technik frei",
-  !loginText.includes("Settings")
+  loginPanel?.hidden === false
+  && !loginText.includes("Settings")
   && !loginText.includes("Backup")
   && !loginText.includes("Sicherung")
   && !document.querySelector(".kd-syncchip-head"));
+const rechtliches = document.querySelector("#datenschutz-rechtliches");
+check("Rechtsinformation bleibt bis zum bewussten Öffnen verborgen",
+  rechtliches?.hidden === true
+  && rechtliches.textContent.includes("Settings")
+  && rechtliches.textContent.includes("Sicherung"));
+document.querySelector(".kd-entry-legal-link")?.dispatchEvent(
+  new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }),
+);
+await warte(100);
+check("Der Legal-Link öffnet die zuvor verborgene Rechtsinformation",
+  document.querySelector("#datenschutz-rechtliches")?.hidden === false);
 check("Re-Entry verändert persönliche Localdaten nicht und bleibt requestfrei",
   dom.window.localStorage.getItem("kd:master") === masterVorLogin
   && masterVorLogin === gastMaster
