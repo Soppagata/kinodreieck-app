@@ -23,7 +23,10 @@ const root = mkdtempSync(join(tmpdir(), "kd-pg-"));
 const data = join(root, "data");
 const socket = join(root, "s");
 const port = String(57000 + process.pid % 7000);
-const migration = readFileSync("supabase/migrations/20260913200000_streaming_pages_backend.sql", "utf8");
+const baseMigration = readFileSync(
+  join("supabase/migrations", "20260913200000_streaming_pages_backend.sql"), "utf8");
+const latencyMigration = readFileSync(
+  join("supabase/migrations", "20260914100000_streaming_pages_latency.sql"), "utf8");
 const env = { PATH: `${PG}:/usr/bin:/bin`, LANG: "C", LC_ALL: "C" };
 let running = false;
 let checks = 0;
@@ -127,7 +130,7 @@ try {
   run("initdb", ["--no-locale", "--encoding=UTF8", "--auth=trust", "--username=postgres", "--set",
     "shared_memory_type=mmap", "--pgdata", data]);
   run("pg_ctl", ["--pgdata", data, "--log", join(root, "postgres.log"), "--options",
-    `-c listen_addresses= -c unix_socket_directories=${socket} -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix`,
+    `-c listen_addresses= -c unix_socket_directories=${socket} -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix -c work_mem=2184kB`,
     "--wait", "start"]); running = true;
   sql(`create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth;
@@ -151,7 +154,22 @@ try {
       '{"motn_id":"conflict","typ":"film","jahr":2021,"titel":"Widerspruch","imdb_id":"tt8000005","tmdb_id":9999,"at_subscription_services":["netflix"]}'::jsonb),
     ('only','netflix','AT',true,'${recent}','${recent}',now(),null,'https://netflix.example/only',
       '{"motn_id":"only","typ":"film","jahr":2024,"titel":"Nur MotN","imdb_id":"tt8999999","tmdb_id":8999,"at_subscription_services":["netflix"]}'::jsonb);`);
-  sql(migration);
+  sql(baseMigration);
+  const parityRequests = [
+    request(), request({ view: "new" }),
+    ...["titel", "jahr", "art", "anbieter"].flatMap((sort) => ["auf", "ab"].map((richtung) =>
+      request({ limit: 7, filters: { ...request().filters, sort, richtung } }))),
+    request({ filters: { ...request().filters, suche: "Sort", plattform: "Netflix" } }),
+    request({ filters: { ...request().filters, buchstabe: "N" } }),
+    request({ view: "library", library: [
+      { id: "parity-library", watchmode_id: 1001, titel: "Film 001", jahr: 1981, typ: "movie" }],
+      personal: { ...request().personal, seenIds: ["1001"], mustWatchIds: ["parity-library"] } }),
+  ];
+  const baselineResponses = parityRequests.map((value) => call(value));
+  sql(latencyMigration);
+  check("latency migration preserves representative baseline responses byte-for-byte", () => {
+    assert.deepEqual(parityRequests.map((value) => call(value)), baselineResponses);
+  });
 
   check("initialization preserves original catalog bytes", () => assert.equal(
     sql("select md5(string_agg(name||payload::text,'|' order by name)) from public.kd_catalog"), before));
@@ -164,6 +182,14 @@ try {
     const second = call(request({ limit: 200, cursor: first.nextCursor }));
     assert.equal(second.status, "ready"); assert.equal(second.items.length, 200);
     assert.equal(second.version, first.version); assert.equal(second.counts.all, first.counts.all);
+  });
+  check("background pages accept 1000 while larger requests remain rejected", () => {
+    const background = call(request({ limit: 1000, cursor: first.nextCursor }));
+    assert.equal(background.status, "ready");
+    assert.equal(background.items.length, Math.min(1000, first.total - first.items.length));
+    const tooLarge = request({ limit: 1001 });
+    assert.match(failure(sessionSql(`select public.kd_streaming_page(
+      '${JSON.stringify(tooLarge).replaceAll("'", "''")}'::jsonb)`)), /invalid streaming page request/);
   });
   check("all filters and all sort selectors are server-side", () => {
     const filtered = call(request({ filters: { ...request().filters, suche: "Neu innerhalb", plattform: "Disney+",
@@ -238,6 +264,17 @@ try {
     assert.ok(names.has("Neu innerhalb")); assert.ok(names.has("Kung Fu Panda 2"));
     assert.ok(!names.has("Genau abgelaufen")); assert.equal(newResult.counts.new, newResult.total);
     assert.equal(Date.parse(newResult.items.find((x) => x.titel === "Kung Fu Panda 2").neu_seit), Date.parse(recent));
+  });
+  check("MotN checks today's services after diff history is rewound", () => {
+    const motnEarlier = new Date(now - 2 * 24 * 3600_000).toISOString();
+    const payload = { dienste: ["Disney+"],
+      dienst_diffs: [{ dienst: "Disney+", vorher: false, nachher: true, erkannt_am: recent }],
+      motn_zugaenge: [{ dienst: "Disney+", erkannt_am: motnEarlier }] };
+    const result = sql(`select public.kd_streaming_page_new_since(
+      '${JSON.stringify(payload)}'::jsonb,array['Disney+'],
+      '{"Disney+":"${stand}"}'::jsonb,'{"Disney+":"${stand}"}'::jsonb,
+      now(),null,null,false,null)`);
+    assert.equal(Date.parse(result), Date.parse(motnEarlier));
   });
   check("numeric deadline payloads reproduce consumed reaccess, true reaccess, MotN priority and legacy behavior", () => {
     const cases = [
@@ -367,18 +404,41 @@ try {
   const realPage = call(realRequest);
   const pageMs = performance.now() - pageBefore;
   const followupBefore = performance.now();
-  const realFollowup = call({ ...realRequest, limit: 200, cursor: realPage.nextCursor });
+  const realFollowup = call({ ...realRequest, cursor: realPage.nextCursor });
   const followupMs = performance.now() - followupBefore;
+  const backgroundBefore = performance.now();
+  const realBackground = call({ ...realRequest, limit: 1000, cursor: realPage.nextCursor });
+  const backgroundMs = performance.now() - backgroundBefore;
+  const backgroundBytes = Buffer.byteLength(JSON.stringify(realBackground));
+  const directBefore = performance.now();
+  const directZ = call({ ...realRequest,
+    filters: { ...realRequest.filters, buchstabe: "Z" } });
+  const directMs = performance.now() - directBefore;
+  const explain = JSON.parse(sql(`begin; set local role authenticated;
+    set local "request.jwt.claim.role"='authenticated';
+    set local "request.jwt.claim.sub"='${account}'; set local "fixture.active"='true';
+    explain (analyze,buffers,format json) select public.kd_streaming_page(
+      '${JSON.stringify(realRequest).replaceAll("'", "''")}'::jsonb); rollback;`))[0];
+  const tempRead = Number(explain.Plan["Temp Read Blocks"] || 0);
+  const tempWritten = Number(explain.Plan["Temp Written Blocks"] || 0);
+  console.log(`${fixtureLabel}: page EXPLAIN temp blocks ${tempRead} read/${tempWritten} written at work_mem=2184kB`);
   check(`${fixtureLabel} with 226 reduced app identities keeps count parity and subsecond pages`, () => {
     assert.equal(realPage.counts.all, expected); assert.equal(realPage.items.length, 20);
-    assert.equal(realFollowup.items.length, 200); assert.equal(realFollowup.counts.library, realPage.counts.library);
+    assert.equal(realFollowup.items.length, 20); assert.equal(realFollowup.counts.library, realPage.counts.library);
+    assert.equal(realBackground.items.length, Math.min(1000, realPage.total - realPage.items.length));
+    assert.equal(realBackground.counts.library, realPage.counts.library);
+    assert.ok(directZ.items.length <= 20); assert.equal(directZ.counts.all, realPage.counts.all);
     assert.ok(pageMs < 1000, `first page took ${pageMs.toFixed(0)} ms`);
     assert.ok(followupMs < 1000, `follow-up page took ${followupMs.toFixed(0)} ms`);
+    assert.ok(backgroundMs < 2000, `1000-title background page took ${backgroundMs.toFixed(0)} ms`);
+    assert.ok(directMs < 1000, `direct Z page took ${directMs.toFixed(0)} ms`);
+    assert.ok(tempRead < 5000); assert.ok(tempWritten < 5000);
     assert.equal(Number(sql("select count(*) from public.kd_streaming_page_base")),
       new Set(vereinigeStreamingTitel(fixtureKnown, fixtureDiscover)
         .map((x) => String(x.watchmode_id ?? x.streaming_id))).size);
   });
-  console.log(`${fixtureLabel}: ${realPage.counts.all}/${jsCombined.length} selected/all, 226 library, projection ${rebuildMs.toFixed(0)} ms, pages ${pageMs.toFixed(0)}/${followupMs.toFixed(0)} ms`);
+  console.log(`${fixtureLabel}: ${realPage.counts.all}/${jsCombined.length} selected/all, 226 library, projection ${rebuildMs.toFixed(0)} ms, pages ${pageMs.toFixed(0)}/${followupMs.toFixed(0)}/${directMs.toFixed(0)} ms (first/follow-up/direct Z)`);
+  console.log(`${fixtureLabel}: 1000-title background page ${backgroundMs.toFixed(0)} ms/${backgroundBytes} bytes`);
   console.log(`${checks} Streaming-pages PostgreSQL checks passed.`);
 } finally {
   if (running) run("pg_ctl", ["--pgdata", data, "--wait", "stop"]);

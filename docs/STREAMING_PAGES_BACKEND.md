@@ -2,7 +2,10 @@
 
 Die additive Migration `20260913200000_streaming_pages_backend.sql` stellt das
 authentifizierte RPC `kd_streaming_page(p_request jsonb)` bereit. Die erste
-Anfrage kann 20 Titel liefern, Folgeanfragen höchstens 200. `counts` wird immer
+Anfrage kann 20 Titel liefern. Die additive Latenzkorrektur
+`20260914100000_streaming_pages_latency.sql` erlaubt für das serielle
+Hintergrundladen bis zu 1.000 Titel pro Antwort; bestehende Anfragen bis 200
+bleiben gültig. `counts` wird immer
 aus der vollständigen ausgewählten Dienstunion berechnet; `total` bezieht sich
 auf die konkrete Ansicht und ihre aktiven Filter.
 
@@ -27,6 +30,14 @@ auf Gesehen-/Neu-Status begrenzt. Pro Request werden die reduzierte Library und
 die Status-/Fristanker einmal materialisiert. Kandidaten entstehen aus
 deduplizierten Gleichheitsjoins der expandierten ID- und Titelkeys; es gibt
 keinen Katalog×Library-Vollvergleich.
+
+Die Latenzkorrektur hält vollständige Titel-Payloads aus den materialisierten
+Matching-, Status-, Count- und Sortierpfaden heraus. Erst nach Auswahl der
+Seitenschlüssel lädt das RPC die Payloads für die höchstens 20 sichtbaren oder
+bis zu 1.000 im Hintergrund übertragenen Titel. Die Neu-Fristfunktion läuft nur
+für Titel mit Diff-, MotN- oder persönlichen Fristankern; leere Evidenz endet
+ohne JSON-Schleifen. Die vollständigen Zähler, Neu-Fristen, Filter, Sortierung
+und Cursorbindung bleiben Teil jeder Antwort.
 
 Jede Quellenänderung erhöht `source_revision`. Cursor binden Revision, Konto,
 Dienstauswahl, Ansicht, Filter und die übergebenen Identitäts-/Fristparameter.
@@ -57,8 +68,9 @@ Felder aus der alten Known-Lane, einschließlich des persönlichen Besitzfelds
 ## Lokale Prüfung und Kosten
 
 `node streaming_pages_pg_test.mjs` startet einen disposable PostgreSQL-17-
-Cluster und prüft synthetische Fixtures sowie die neutralen Dateien unter
-`/private/tmp/kd-streaming-performance-20260913`. Der belegte Lauf umfasste 15
+Cluster und prüft standardmäßig portable synthetische Fixtures. Die neutralen
+Dateien unter `/private/tmp/kd-streaming-performance-20260913` werden nur mit
+`KD_STREAMING_PAGES_USE_LAB_FIXTURE=1` gelesen. Der ursprüngliche Lauf umfasste 15
 Checks. Auf 25.023 vereinigten realen Titeln dauerte der einmalige lokale
 Projektionsaufbau rund 11,3 Sekunden. Mit 226 durch den App-Kontext reduzierten
 Library-Identitäten dauerte die erste 20er-Seite für Netflix, Disney+ und Prime
@@ -66,6 +78,17 @@ Video 0,34 Sekunden, die folgende 200er-Seite ebenfalls 0,34 Sekunden. Ihr
 vollständiger Zähler von 8.806
 stimmte mit der bestehenden JavaScript-Projektion überein. Die Messung ist
 lokal und rechnerabhängig; Seitenaufrufe bauen den Katalog nicht erneut auf.
+
+Die Latenzkorrektur wurde zusätzlich mit `work_mem=2184kB`, 25.023 vereinigten
+Titeln, einer 8.806-Titel-Dienstauswahl und 226 reduzierten Library-Identitäten
+gemessen. Erste 20, nächste 20 und direkter Sprung zu Z dauerten lokal
+0,121/0,117/0,113 Sekunden. Die EXPLAIN-Blockzahlen sanken gegenüber derselben
+unveränderten Basis von 7.532/7.326 auf 4.417/2.760 gelesene/geschriebene
+Temp-Blöcke. Ein separates Hintergrundpaket mit 1.000 Titeln benötigte
+0,124 Sekunden und umfasste 305.238 Bytes. Der aktuelle Lauf bestand mit 18
+Checks. Diese Werte sind lokale Vergleichswerte;
+das Ziel von unter 0,5 Sekunden für erste Seite und Direktsprung muss auf dem
+echten Server separat bestätigt werden.
 
 Die Migration ist nur lokal erstellt und geprüft. Sie wurde auf kein Supabase-
 Projekt angewandt. Die Integrationsnaht ist der App-Service, der die bereits
