@@ -387,9 +387,10 @@ check("Radar bleibt bei 393 CSS-Pixel einspaltig, umbruchfest und mit 44-Pixel-A
   assert.match(cssSource, /\.kd-radar-ablehnungen li[^}]*overflow-wrap:anywhere/);
   assert.match(cssSource, /\.kd-entdecken-panel li>\.kd-entdecken-sekundaer[^}]*min-height:44px/);
 });
-check("Tägliche Abwechslung ist eine persistierte Einstellung ohne Timer- oder Netzwerk-Loop", () => {
-  assert.match(datenSource, /Täglich neue Entdecken-Auswahl/);
-  assert.match(datenSource, /setzeEinstellung\("entdeckenTaeglich"/);
+check("Tägliche Abwechslung bleibt nur als persistierter Legacy-Wert ohne sichtbare Checkbox oder Netzwerk-Loop", () => {
+  assert.doesNotMatch(datenSource, /Täglich neue Entdecken-Auswahl/);
+  assert.doesNotMatch(datenSource, /setzeEinstellung\("entdeckenTaeglich"/);
+  assert.match(appSource, /entdeckenTaeglich:\s*wert\?\.entdeckenTaeglich === true/);
   assert.match(appSource, /dailyVariety=\{einstellungen\.entdeckenTaeglich === true\}/);
   assert.doesNotMatch(entdeckenUiSource, /fetch\s*\(|setInterval\s*\(|setTimeout\s*\(/);
 });
