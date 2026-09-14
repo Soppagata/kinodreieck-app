@@ -196,10 +196,17 @@ function validatePilotImportOutbox(entry) {
 function validateAccountRadarPilot(pilot, targetIds) {
   const errors = [];
   const keys = ["status", "events", "serverReceipts", "receiptOutbox", "importOutbox", "radarReview"];
-  if (!exactPilotKeys(pilot, pilot?.searchStatuses === undefined ? keys : [...keys, "searchStatuses"])) return result(["pilot-state-shape-invalid"]);
+  const optionalKeys = [
+    ...(pilot?.searchStatuses === undefined ? [] : ["searchStatuses"]),
+    ...(pilot?.radarSearch === undefined ? [] : ["radarSearch"]),
+  ];
+  if (!exactPilotKeys(pilot, [...keys, ...optionalKeys])) return result(["pilot-state-shape-invalid"]);
   if (pilot.searchStatuses !== undefined) errors.push(...validateRadarSearchStatuses(pilot.searchStatuses, targetIds).errors);
   if (!["idle", "ready", "pilot-unavailable"].includes(pilot.status)) errors.push("pilot-status-invalid");
   if (typeof pilot.radarReview !== "boolean") errors.push("pilot-review-invalid");
+  if (pilot.radarSearch !== undefined && typeof pilot.radarSearch !== "boolean") {
+    errors.push("pilot-search-capability-invalid");
+  }
   if (!Array.isArray(pilot.events)) errors.push("pilot-events-invalid");
   else for (const event of pilot.events) errors.push(...validateRadarPilotEvent(event).errors);
   if (!Array.isArray(pilot.serverReceipts)) errors.push("pilot-server-receipts-invalid");
@@ -1569,6 +1576,8 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     updatedAt: normalizedInstant(entry.updatedAt),
   }));
   next.pilot.radarReview = feed.radarReview;
+  if (feed.radarSearch === undefined) delete next.pilot.radarSearch;
+  else next.pilot.radarSearch = feed.radarSearch;
   next.pilot.status = "ready";
   next.server = {
     revision: feed.revision,

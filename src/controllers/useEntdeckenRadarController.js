@@ -316,7 +316,10 @@ export function useEntdeckenRadarController({
         const active = synced?.status === "ready" && activeTarget(synced.state) && activeTarget(radarStateRef.current);
         const canSearch = newlyAdded && active && remoteKontoAktiv && radarPilotClientEnabled
           && !RADAR_WEBSEARCH_SINGLE_FILE_DISABLED && session.state === "ready"
-          && session.capabilities?.personalAi === true && synced.state.pilot?.radarReview === true
+          && (synced.state.pilot?.radarSearch === true
+            || (synced.state.pilot?.radarSearch === undefined
+              && session.capabilities?.personalAi === true
+              && synced.state.pilot?.radarReview === true))
           && storage.owner === `account:${session.account?.id}`;
         if (!canSearch) return Object.freeze({ status: active ? "active" : "pending", saved: true, writes: 1 });
         progress("searching");
@@ -345,8 +348,12 @@ export function useEntdeckenRadarController({
   const accountRadarServerAvailable = !RADAR_WEBSEARCH_SINGLE_FILE_DISABLED
     && radarAuthority === "account-cache" && remoteKontoAktiv
     && radarPilotClientEnabled;
-  const personRadarAvailable = localPersonRadarAvailable
-    || (accountRadarServerAvailable && session?.capabilities?.personalAi === true);
+  const accountRadarSearchAvailable = accountRadarServerAvailable
+    && (radarStateRef.current?.pilot?.radarSearch === true
+      || (radarStateRef.current?.pilot?.radarSearch === undefined
+        && session?.capabilities?.personalAi === true
+        && radarStateRef.current?.pilot?.radarReview === true));
+  const personRadarAvailable = localPersonRadarAvailable || accountRadarSearchAvailable;
   const franchiseRadarAvailable = false;
 
   const fuegePersonRadarHinzu = useCallback(async ({ name, role, personExternalId = null } = {}) => {
@@ -611,7 +618,7 @@ export function useEntdeckenRadarController({
   }), [accountRadarPilotProjection, radarAuthority, visibleLocalRadarEvents, visiblePilotRadarEvents]);
   const radarAutomaticAvailable = accountRadarServerAvailable
     && radarPilotSyncStatus === "ready"
-    && radarPilotProjection.active === true && radarPilotProjection.radarReview === true
+    && radarPilotProjection.active === true && radarPilotProjection.radarSearch === true
     && radarAutomationAttested(radarAutomationAttestation);
   const fuehreGlobaleSuchaktionAus = useCallback((treffer, intent) => {
     const action = treffer?.searchActions?.[intent];
@@ -625,6 +632,7 @@ export function useEntdeckenRadarController({
     radarPilotActive: radarPilotProjection.active,
     radarPilotEvents: radarPilotProjection.events,
     radarReview: radarPilotProjection.radarReview,
+    radarSearch: radarPilotProjection.radarSearch,
     radarAutomaticAvailable,
     radarPilotSyncStatus,
     setRadarPreviewTarget,

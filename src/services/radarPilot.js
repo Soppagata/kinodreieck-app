@@ -91,6 +91,7 @@ function rpcStatus(code, payload) {
   if (code === 404 && (sqlstate === "PGRST202" || /function.+not found|schema cache/i.test(message))) {
     return { kind: "pilot-unavailable", reason: "pilot-rpc-unavailable" };
   }
+  if (code === 401) return { kind: "session-unavailable", reason: "pilot-session-unavailable" };
   if (code >= 500) return { kind: "pending", reason: "pilot-server-unavailable" };
   if (code >= 400 && TERMINAL_SQLSTATES.has(sqlstate) && /^radar_[a-z0-9_]+$/i.test(message)) {
     return { kind: "rejected", reason: message.toLowerCase() };
@@ -271,7 +272,7 @@ export function createRadarPilotService({
     try { token = await loadToken(fence); }
     catch (error) {
       return Object.freeze({
-        status: error?.code === "RADAR_PILOT_CONTEXT_CHANGED" ? "context-changed" : "pending",
+        status: error?.code === "RADAR_PILOT_CONTEXT_CHANGED" ? "context-changed" : "session-unavailable",
         state,
         reason: error?.code === "RADAR_PILOT_CONTEXT_CHANGED" ? undefined : "pilot-token-unavailable",
       });
@@ -303,6 +304,12 @@ export function createRadarPilotService({
         if (response.kind === "pilot-unavailable") {
           return Object.freeze({ kind: "pilot-unavailable", state: current });
         }
+        if (response.kind === "session-unavailable") {
+          return Object.freeze({ kind: "session-unavailable", state: current, reason: response.reason });
+        }
+        if (response.kind === "rejected") {
+          return Object.freeze({ kind: "forbidden", state: current, reason: response.reason });
+        }
         if (response.kind !== "ok" || !validateRadarPilotFeed(response.payload).ok) {
           return Object.freeze({
             kind: "pending",
@@ -323,6 +330,12 @@ export function createRadarPilotService({
 
       const initialFeed = await reconcileFeed(runSubscriptionIds);
       if (initialFeed.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, commit, fence, token, run));
+      if (initialFeed.kind === "session-unavailable") {
+        return Object.freeze({ status: "session-unavailable", state: initialFeed.state, reason: initialFeed.reason });
+      }
+      if (initialFeed.kind === "forbidden") {
+        return Object.freeze({ status: "forbidden", state: initialFeed.state, reason: initialFeed.reason });
+      }
       if (initialFeed.kind === "pending") return Object.freeze({ status: "pending", state: initialFeed.state, reason: initialFeed.reason });
       current = initialFeed.state;
 
@@ -384,6 +397,13 @@ export function createRadarPilotService({
             status: "pending",
             state: afterSubscriptionFeed.state,
             reason: afterSubscriptionFeed.reason || "pilot-subscription-feed-pending",
+          });
+        }
+        if (["forbidden", "session-unavailable"].includes(afterSubscriptionFeed.kind)) {
+          return Object.freeze({
+            status: afterSubscriptionFeed.kind,
+            state: afterSubscriptionFeed.state,
+            reason: afterSubscriptionFeed.reason,
           });
         }
         current = afterSubscriptionFeed.state;
@@ -460,6 +480,13 @@ export function createRadarPilotService({
         }
         if (afterImportFeed.kind === "pending") {
           return Object.freeze({ status: "pending", state: afterImportFeed.state, reason: afterImportFeed.reason });
+        }
+        if (["forbidden", "session-unavailable"].includes(afterImportFeed.kind)) {
+          return Object.freeze({
+            status: afterImportFeed.kind,
+            state: afterImportFeed.state,
+            reason: afterImportFeed.reason,
+          });
         }
         current = afterImportFeed.state;
         const visibleEventVersionIds = new Set((current.pilot?.events || []).map((entry) => entry.eventVersionId));

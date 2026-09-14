@@ -45,7 +45,7 @@ const event={eventId:"b1000000-0000-4000-8000-000000000001",eventVersionId:"b100
   eventType:"kinostart_at",date:day,region:"AT",platform:"-",lifecycleStatus:"scheduled",verificationStatus:"confirmed",
   evidence:[{sourceId:"web:press.example",sourceDomain:"press.example",url:"https://press.example/start",retrievedAt:instant}]};
 const emptyFeed=()=>({format:"kd-radar-pilot-feed-v2",revision:0,checksum:null,reconciledAt:instant,
-  subscriptions:[],events:[],receipts:[],operationAcks:[],radarReview:true,personResults:[]});
+  subscriptions:[],events:[],receipts:[],operationAcks:[],radarReview:false,radarSearch:true,personResults:[]});
 const subscription={targetId,targetType:"text",title:query,region:"AT",scope:"all",status:"active",updatedAt:instant};
 const config={radarPilotClientEnabled:true,supabaseUrl:"https://mock.example",supabasePublishableKey:"public-test"};
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status});
@@ -71,7 +71,10 @@ function Harness({context}){
 async function mount({status="confirmed",saveFails=false,held=false,guest=false,capability=true}={}){
   localStorage.clear();
   const context={session:guest?{mode:"guest",state:"ready",account:null}:authSession(),calls:[],feed:emptyFeed()};
-  if(!guest) context.session.capabilities.personalAi=capability;
+  if(!guest) {
+    context.session.capabilities.personalAi=capability;
+    context.feed.radarSearch=capability;
+  }
   const install=(id)=>setStorageDriver({name:"test",owner:id?`account:${id}`:"guest-local",
     async get(key){const value=localStorage.getItem(key);return value===null?null:{key,value};},
     async set(key,value){localStorage.setItem(key,value);return {key,value};}});
@@ -105,7 +108,7 @@ async function mount({status="confirmed",saveFails=false,held=false,guest=false,
     async cleanup(){await act(async()=>root.unmount());container.remove();},render};
 }
 try {
-  await check("Neue Eingabe: Save vor genau einem Initialrequest; echte Pilot-Persistenz statt Rohkandidat",async()=>{
+  await check("Mitglied ohne Reviewrecht: Save vor genau einem Initialrequest; echte Pilot-Persistenz statt Rohkandidat",async()=>{
     const ui=await mount({held:true});assert.equal(ui.context.calls.includes("search"),false);
     let first,second;const progress=[];
     await act(async()=>{first=controller.fuegeRadarTextHinzu(query,{onProgress:s=>progress.push(s)});second=controller.fuegeRadarTextHinzu(query);await tick();});
@@ -114,6 +117,7 @@ try {
     await act(async()=>{ui.release();assert.equal((await first).status,"confirmed");});
     const saved=JSON.parse(localStorage.getItem(K.radar));assert.equal(saved.subscriptions[0].targetText,query);
     assert.equal(saved.pilot.events[0].title,event.title);await ui.radar();
+    assert.equal(saved.pilot.radarReview,false);assert.equal(saved.pilot.radarSearch,true);
     /* Der Fundtitel bleibt vom gespeicherten Suchziel getrennt; die sichtbare
        Herkunft stammt ausschließlich aus der serverseitigen Zielreferenz. */
     assert.match(ui.container.textContent,/Ein anderer Werktitel/);

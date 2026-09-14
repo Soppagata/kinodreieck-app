@@ -449,14 +449,18 @@ await check("Nur fehlende Überladung erlaubt einen Altserver-Read ohne erfunden
   assert.equal(h.state.pilot.searchStatuses,undefined);
 });
 
-await check("Opt-in liest bei Auth-/Server-/Netzfehler nicht erneut und wahrt den Kontofence", async () => {
-  for(const failure of [response(403,{code:"42501",message:"radar_pilot_forbidden"}),
-    response(503,{code:"unavailable"}),null]){
+await check("Opt-in unterscheidet Berechtigung, Session, Server und Netz ohne zweiten Read", async () => {
+  for(const [failure,expected] of [
+    [response(403,{code:"42501",message:"radar_pilot_forbidden"}),"forbidden"],
+    [response(401,{code:"PGRST301",message:"JWT expired"}),"session-unavailable"],
+    [response(503,{code:"unavailable"}),"pending"],
+    [null,"pending"],
+  ]){
     let calls=0;
     const h=harness({state:R.createEmptyLocalRadar({authority:"account-cache"}),
       fetchImpl:async()=>{calls++;if(!failure)throw new Error("network");return failure;}});
     const result=await h.service.sync({state:h.state,commit:h.commit});
-    assert.equal(result.status,"pending");assert.equal(calls,1);
+    assert.equal(result.status,expected);assert.equal(calls,1);
     assert.equal(h.writes("account-driver-a"),0);
   }
   let calls=0;

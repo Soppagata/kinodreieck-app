@@ -101,16 +101,21 @@ nach einer eigenen ausdruecklichen Remote-Write-Freigabe ausgefuehrt:
    nach Timeout oder unklarem Ergebnis; zuerst per gebundener Loginadresse und
    ID read-only aufloesen.
 3. Fuer exakt diese ID genau eine `kd_account_access`-Zeile mit
-   `role=member`, `active=true` und `personal_ai=false` anlegen. Keine weiteren
-   Rollen-, Provider- oder Datenwrites ausloesen.
-4. Commit-Readback: genau ein Authkonto und genau eine zugehoerige Access-Zeile
-   mit exakt dieser Matrix muessen sichtbar sein. Erst danach gilt der
+   `role=member`, `active=true` und fuer ein normal freigegebenes Testmitglied
+   `personal_ai=true` anlegen. Dazu genau eine `kd_radar_capabilities`-Zeile
+   mit `radar_pilot=true`, `radar_review=false` und `radar_unlimited=false`
+   anlegen. Review und unbegrenzte Ziele sind separate Sonderrechte; es gibt
+   keinen Trigger, der unbekannte künftige Konten automatisch freischaltet.
+4. Commit-Readback: genau ein Authkonto, genau eine zugehoerige Access-Zeile
+   und genau eine Radar-Capability-Zeile mit exakt dieser Matrix muessen
+   sichtbar sein. Erst danach gilt der
    Bootstrap als abgeschlossen und erst danach duerfen Startzugangsdaten ueber
    den getrennt festgelegten vertraulichen Weg ausgegeben werden.
 5. Bei jedem Fehler vor dem Commit-Readback bleiben Zugangsdaten gesperrt. Eine
-   vorhandene Access-Zeile und danach das neue Authkonto werden in umgekehrter
-   Reihenfolge kompensierend entfernt; der Abschluss-Readback muss fuer beide
-   wieder null Zeilen ergeben. Unbekannter Write- oder Rollbackzustand ist
+   vorhandene Radar-Capability-Zeile, danach die Access-Zeile und zuletzt das
+   neue Authkonto werden in umgekehrter Reihenfolge kompensierend entfernt;
+   der Abschluss-Readback muss fuer alle drei wieder null Zeilen ergeben.
+   Unbekannter Write- oder Rollbackzustand ist
    `PARTIAL_ACCOUNT_BLOCKED`: kein Retry, kein weiteres Konto und manuelle
    Klaerung, bis entweder der exakte Commitzustand oder der exakte Nullzustand
    belegt ist. So wird kein halbes Konto an Tester uebergeben.

@@ -52,7 +52,10 @@ try {
   `);
   sql(readFileSync("supabase/current_schema.sql","utf8"));
   sql(`insert into public.kd_ai_limits(schluessel,wert) values
-    ('task_modell','{}'),('task_max_tokens','{}'),('task_max_reservierung_usd_cent','{}');`);
+    ('ai_aktiv','true'),('monatsbudget_usd_cent','1500'),
+    ('tageslimit_auftraege','30'),('parallel_max','2'),('timeout_ms','30000'),
+    ('anbieter_request_max_usd_cent','500'),('task_modell','{}'),
+    ('task_max_tokens','{}'),('task_max_reservierung_usd_cent','{}');`);
   const selected = readdirSync("supabase/migrations").filter((file) =>
     file.endsWith(".sql") && file >= "20260809180000" && (
       /radar|event_radar|private_pilot|private_export|automatic_ai_retry/.test(file)
@@ -79,9 +82,9 @@ try {
   }
   sql(`insert into auth.users(id) values ('${a}'),('${b}');
     insert into public.kd_account_access(account_id,role,active,personal_ai) values
-      ('${a}','owner',true,true),('${b}','owner',true,true);
+      ('${a}','member',true,true),('${b}','owner',true,true);
     insert into public.kd_radar_capabilities(account_id,radar_pilot,radar_review) values
-      ('${a}',true,true),('${b}',true,true);`);
+      ('${a}',true,false),('${b}',true,true);`);
   const today = new Date().toISOString().slice(0,10);
   const checkedAt = new Date().toISOString();
   const request = {kind:"text",targetId,targetText,region:"AT",scopes:["series_start"]};
@@ -115,18 +118,21 @@ try {
   check("Ohne eigenes aktives Abo scheitert der Schreibpfad",() => assert.throws(() => persist(),/radar_websearch_forbidden/));
   check("Providerfreies Save legt nur ein Textziel an",() => {
     ack("active"); assert.equal(feed().subscriptions.length,1); assert.equal(feed().events.length,0);
+    assert.equal(feed().radarSearch,true);assert.equal(feed().radarReview,false);
     assert.deepEqual(feed().searchStatuses,[{targetId,status:"never",checkedAt:null}]);
     assert.deepEqual(feed(b).searchStatuses,[]);
   });
   check("Alte/geöffnete Clients auf neuer DB erhalten keinen neuen Root-Key; false/null sind opt-out",() => {
     const old=legacyFeed(); const current=feed();
     assert.equal(Object.hasOwn(old,"searchStatuses"),false);
+    assert.equal(Object.hasOwn(old,"radarSearch"),false);
     assert.equal(validateRadarPilotFeed(old).ok,true);
     assert.equal(current.revision,old.revision); assert.equal(current.checksum,old.checksum);
-    assert.deepEqual(Object.keys(current).filter(key=>key!=="searchStatuses").sort(),Object.keys(old).sort());
+    assert.deepEqual(Object.keys(current).filter(key=>!["searchStatuses","radarSearch"].includes(key)).sort(),Object.keys(old).sort());
     for(const flag of ["false","null"]){
       const optedOut=JSON.parse(session(a,`select public.kd_radar_pilot_feed('{}'::uuid[],${flag})`));
       assert.equal(Object.hasOwn(optedOut,"searchStatuses"),false);
+      assert.equal(Object.hasOwn(optedOut,"radarSearch"),false);
       assert.deepEqual(optedOut.subscriptions,old.subscriptions);
     }
   });
@@ -191,10 +197,24 @@ try {
     ack("paused"); assert.equal(feed().events.length,0); assert.throws(() => persist(),/radar_websearch_forbidden/);
     assert.equal(feed().subscriptions[0].status,"paused");
   });
-  check("Capabilityentzug stoppt vor Context und Write",() => {
-    ack("active"); sql(`update public.kd_radar_capabilities set radar_review=false where account_id='${a}'`);
-    assert.throws(() => persist(),/radar_websearch_forbidden/);
-    sql(`update public.kd_radar_capabilities set radar_review=true where account_id='${a}'`);
+  check("Mitglied sucht ohne Reviewrecht; manueller Import bleibt gesperrt",() => {
+    ack("active"); assert.equal(persist().status,"no_change");
+    assert.throws(() => session(a,
+      "select public.kd_radar_pilot_import_event(gen_random_uuid(),'{}'::jsonb)"),
+    /radar_pilot_review_forbidden/);
+  });
+  check("Kostenreserve akzeptiert das eigene Mitgliedsziel ohne Reviewrecht und behaelt alle Deckel",() => {
+    sql(`update public.kd_radar_settings set radar_aktiv=true,radar_provider_aktiv=true;
+      update public.kd_private_settings set provider_requests_enabled=true;
+      update public.kd_private_provider_registry set feature_enabled=true,rights_confirmed=true,
+        dpa_transfer_confirmed=true,retention_confirmed=true,price_budget_confirmed=true,
+        legal_status='APPROVED',reviewed_at=current_date where provider_id='anthropic';`);
+    const accepted=JSON.parse(session(a,`select public.kd_radar_websearch_auftrag_starten(
+      '${a}',${quote(targetId)},'a2000000-0000-4000-8000-000000000001',20,4)`,'service_role'));
+    assert.equal(accepted.ok,true,JSON.stringify(accepted));
+    const overCap=JSON.parse(session(a,`select public.kd_radar_websearch_auftrag_starten(
+      '${a}',${quote(targetId)},'a2000000-0000-4000-8000-000000000002',21,4)`,'service_role'));
+    assert.equal(overCap.ok,false);assert.equal(overCap.code,'server');
   });
   check("Bestehender Scheduler claimt nur autorisierte Ziele und verbraucht Fehler retryfrei für 144h",() => {
     sql(`update public.kd_radar_settings set radar_scheduler_aktiv=true;
@@ -202,10 +222,10 @@ try {
       update public.kd_private_provider_registry set feature_enabled=true,rights_confirmed=true,
         dpa_transfer_confirmed=true,retention_confirmed=true,price_budget_confirmed=true,
         legal_status='APPROVED',reviewed_at=current_date where provider_id='anthropic';
-      update public.kd_radar_capabilities set radar_review=false where account_id='${a}';`);
+      update public.kd_account_access set personal_ai=false where account_id='${a}';`);
     const claim=() => JSON.parse(session(a,"select public.kd_radar_daily_claim()","service_role"));
     assert.equal(claim().claim,false);
-    sql(`update public.kd_radar_capabilities set radar_review=true where account_id='${a}'`);
+    sql(`update public.kd_account_access set personal_ai=true where account_id='${a}'`);
     const claimed=claim(); assert.equal(claimed.claim,true); assert.equal(claimed.targetId,targetId);
     check("Feed liest nur eigene neueste Historie und verändert weder Checksums noch Lease",() => {
       const before=feed();
@@ -231,9 +251,9 @@ try {
         values('${a}',${quote(claimed.targetRowId)},current_date-1,'completed','confirmed',now()-interval '1 day',now()-interval '23 hours',now()-interval '23 hours')`);
       assert.equal(feed().searchStatuses[0].status,"storage_error");
       assert.throws(() => feed(""),/radar_pilot_forbidden/);
-      sql(`update public.kd_radar_capabilities set radar_review=false,radar_pilot=false where account_id='${a}'`);
+      sql(`update public.kd_radar_capabilities set radar_pilot=false where account_id='${a}'`);
       assert.throws(() => feed(),/radar_pilot_forbidden/);
-      sql(`update public.kd_radar_capabilities set radar_pilot=true,radar_review=true where account_id='${a}';
+      sql(`update public.kd_radar_capabilities set radar_pilot=true where account_id='${a}';
         delete from public.kd_radar_daily_runs where account_id='${a}' and vienna_day=current_date-1`);
     });
     const hours=Number(sql(`select extract(epoch from (s.next_check_at-r.terminal_at))/3600
@@ -260,7 +280,7 @@ try {
     assert.throws(() => initial(b,"imdb:tt0000001",targetText),/radar_websearch_forbidden/);
   });
   check("Capability, Account und Providerflags stoppen vor Verbrauch des Initialclaims",() => {
-    for (const [table,column] of [["kd_radar_capabilities","radar_review"],["kd_radar_capabilities","radar_pilot"],["kd_account_access","personal_ai"],["kd_account_access","active"]]) {
+    for (const [table,column] of [["kd_radar_capabilities","radar_pilot"],["kd_account_access","personal_ai"],["kd_account_access","active"]]) {
       const dependency=column==="radar_pilot"?",radar_review=false":column==="active"?",personal_ai=false":"";
       sql(`update public.${table} set ${column}=false${dependency} where account_id='${b}'`);
       assert.throws(() => initial(),/radar_websearch_forbidden/);

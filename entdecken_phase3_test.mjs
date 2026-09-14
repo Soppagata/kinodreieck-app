@@ -1225,8 +1225,8 @@ try {
     ...baseProps, accountMode: true, radarState: cageQueued.state, syncStatus: "pending",
     onRadarPilotSync: async () => { cageSyncCalls += 1; },
   });
-  check("Echter Sync-Fehler bleibt sichtbar und erneut ausführbar", () => {
-    assert.match(cageUi.container.textContent, /Radar konnte die Änderung nicht synchronisieren/);
+  check("Echter Netzfehler bleibt sichtbar und erneut ausführbar", () => {
+    assert.match(cageUi.container.textContent, /Radar konnte die Verbindung nicht herstellen/);
     assert.ok(button(cageUi.container, "Erneut synchronisieren"));
   });
   await act(async () => { button(cageUi.container, "Erneut synchronisieren").click(); await tick(); });

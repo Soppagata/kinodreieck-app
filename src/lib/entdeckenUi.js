@@ -479,8 +479,18 @@ export function radarSubscriptionForEvent(event, subscriptions = []) {
 export function radarSyncProblem(outbox = [], syncStatus = "idle") {
   const rows = list(outbox);
   const pending = rows.filter((entry) => entry?.status === "pending").length;
+  if (pending > 0 && syncStatus === "forbidden") {
+    return Object.freeze({ kind: "permission", count: pending, retryable: false });
+  }
+  if (pending > 0 && syncStatus === "session-unavailable") {
+    return Object.freeze({ kind: "session", count: pending, retryable: false });
+  }
   if (pending > 0 && ["pending", "pilot-unavailable"].includes(syncStatus)) {
-    return Object.freeze({ kind: "sync", count: pending, retryable: true });
+    return Object.freeze({
+      kind: syncStatus === "pilot-unavailable" ? "server" : "connection",
+      count: pending,
+      retryable: true,
+    });
   }
   return null;
 }

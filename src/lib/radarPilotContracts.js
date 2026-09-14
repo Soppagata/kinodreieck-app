@@ -412,8 +412,8 @@ export function validateRadarPilotFeed(value) {
   const v2 = value?.format === RADAR_PILOT_FEED_FORMAT;
   const v1 = value?.format === RADAR_PILOT_LEGACY_FEED_FORMAT;
   const shapeValid = v2
-    ? exactKeysWithOptional(value, RADAR_PILOT_FEED_V2_KEYS, ["automation", "searchStatuses"])
-    : exactKeys(value, RADAR_PILOT_FEED_KEYS);
+    ? exactKeysWithOptional(value, RADAR_PILOT_FEED_V2_KEYS, ["automation", "searchStatuses", "radarSearch"])
+    : exactKeysWithOptional(value, RADAR_PILOT_FEED_KEYS, ["radarSearch"]);
   if ((!v2 && !v1) || !shapeValid) {
     return result(["feed-shape-invalid"]);
   }
@@ -422,6 +422,9 @@ export function validateRadarPilotFeed(value) {
   if (!validChecksum(value.revision, value.checksum)) errors.push("feed-checksum-invalid");
   if (!validInstant(value.reconciledAt)) errors.push("feed-time-invalid");
   if (typeof value.radarReview !== "boolean") errors.push("feed-review-invalid");
+  if (value.radarSearch !== undefined && typeof value.radarSearch !== "boolean") {
+    errors.push("feed-search-capability-invalid");
+  }
   if (value.automation !== undefined && !radarAutomationAttested(value.automation, { allowInactive: true })) {
     errors.push("feed-automation-invalid");
   }
@@ -503,5 +506,7 @@ export function projectEntdeckenRadarPilot({
     active,
     events: active ? freezeDeep(clone(radarState?.pilot?.events)) : localEvents,
     radarReview: active && radarState.pilot.radarReview === true,
+    radarSearch: active && (radarState.pilot.radarSearch === true
+      || (radarState.pilot.radarSearch === undefined && radarState.pilot.radarReview === true)),
   });
 }

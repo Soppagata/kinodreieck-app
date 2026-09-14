@@ -53,7 +53,9 @@ assert.match(accountBoundary, /Auth-Konfigurations-Readback[\s\S]*oeffentliche R
 assert.match(accountBoundary, /ACCOUNT_BOOTSTRAP_ATOMIC/);
 assert.match(accountBoundary, /genau ein neues dediziertes Authkonto/i);
 assert.match(accountBoundary, /genau eine `kd_account_access`-Zeile/);
-assert.match(accountBoundary, /`role=member`, `active=true` und `personal_ai=false`/);
+assert.match(accountBoundary, /`role=member`, `active=true`[\s\S]*`personal_ai=true`/);
+assert.match(accountBoundary, /`radar_pilot=true`, `radar_review=false` und `radar_unlimited=false`/);
+assert.match(accountBoundary, /keinen Trigger, der unbekannte künftige Konten automatisch freischaltet/);
 assert.match(accountBoundary, /Kein Retry[\s\S]*unklarem Ergebnis/);
 assert.match(accountBoundary, /PARTIAL_ACCOUNT_BLOCKED/);
 assert.match(accountBoundary, /Abschluss-Readback[\s\S]*null Zeilen/);

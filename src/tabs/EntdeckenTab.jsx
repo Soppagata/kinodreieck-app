@@ -173,9 +173,30 @@ function ManageDialog({
 
 function RadarSyncProblem({ problem, onRetry }) {
   if (!problem) return null;
+  const copy = ({
+    permission: {
+      title: "Radar ist für dieses Konto noch nicht freigegeben.",
+      detail: "Das offene Ziel bleibt gespeichert und wird nach einer Freigabe automatisch synchronisiert.",
+    },
+    session: {
+      title: "Die Radar-Anmeldung ist nicht mehr gültig.",
+      detail: "Das offene Ziel bleibt gespeichert. Melde dich erneut an, damit es synchronisiert werden kann.",
+    },
+    server: {
+      title: "Radar ist auf dem Server derzeit nicht verfügbar.",
+      detail: "Das offene Ziel bleibt gespeichert. Du kannst die Synchronisierung später erneut anstoßen.",
+    },
+    connection: {
+      title: "Radar konnte die Verbindung nicht herstellen.",
+      detail: "Das offene Ziel bleibt gespeichert. Prüfe die Verbindung und versuche es erneut.",
+    },
+  })[problem.kind] || {
+    title: "Radar konnte die Änderung nicht synchronisieren.",
+    detail: "Das offene Ziel bleibt gespeichert.",
+  };
   return <div className="kd-entdecken-fehler" role="alert">
-    <strong>Radar konnte die Änderung nicht synchronisieren.</strong>
-    <span>Prüfe die Verbindung und versuche die Synchronisierung erneut.</span>
+    <strong>{copy.title}</strong>
+    <span>{copy.detail}</span>
     {problem.retryable && typeof onRetry === "function"
       ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRetry()}>Erneut synchronisieren</button>
       : null}
