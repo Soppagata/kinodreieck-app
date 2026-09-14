@@ -109,18 +109,17 @@ begin
 
   if v_id_count>0 then
     with current_titles as materialized (
-      select b.source_key output_key,b.payload,b.services,b.genres,b.aliases,b.title_order,b.title_norms
+      select b.source_key output_key,'base'::text source_kind,b.aliases,b.title_order
         from public.kd_streaming_page_base b
        where cardinality(b.services)>0
          and not exists(select 1 from public.kd_streaming_page_motn m where m.base_key=b.source_key)
       union all
-      select b.source_key,m.payload,m.services,m.genres,m.aliases,
-        coalesce(m.title_order,b.title_order),m.title_norms
+      select b.source_key,'motn',m.aliases,coalesce(m.title_order,b.title_order)
         from public.kd_streaming_page_motn m
         join public.kd_streaming_page_base b on b.source_key=m.base_key
        where not m.hidden and cardinality(m.services)>0
       union all
-      select m.output_key,m.payload,m.services,m.genres,m.aliases,m.title_order,m.title_norms
+      select m.output_key,'motn',m.aliases,m.title_order
         from public.kd_streaming_page_motn m
        where m.base_key is null and not m.hidden and cardinality(m.services)>0
     ), requested as materialized (
@@ -141,37 +140,58 @@ begin
       select alias_candidates.* from alias_candidates join unique_aliases using(ord)
     ), chosen as (
       select distinct on(output_key) * from resolved order by output_key,ord
+    ), selected_payloads as (
+      select chosen.ord,chosen.output_key,chosen.title_order,
+        case when chosen.source_kind='base' then b.payload else m.payload end payload,
+        case when chosen.source_kind='base' then b.services else m.services end services,
+        case when chosen.source_kind='base' then b.genres else m.genres end genres,
+        case when chosen.source_kind='base' then b.aliases else m.aliases end aliases
+        from chosen
+        left join public.kd_streaming_page_base b
+          on chosen.source_kind='base' and b.source_key=chosen.output_key
+        left join public.kd_streaming_page_motn m
+          on chosen.source_kind='motn' and m.output_key=chosen.output_key
     )
     select coalesce(jsonb_agg(public.kd_mustwatch_streaming_candidate_dto(
       output_key,payload,services,genres,aliases) order by ord),'[]'::jsonb)
-      into v_items from chosen
+      into v_items from selected_payloads
      where nullif(btrim(coalesce(payload->>'titel',payload->>'title')),'') is not null;
   elsif v_query_norm is not null then
     with current_titles as materialized (
-      select b.source_key output_key,b.payload,b.services,b.genres,b.aliases,b.title_order,b.title_norms
+      select b.source_key output_key,'base'::text source_kind,b.title_order,b.title_norms
         from public.kd_streaming_page_base b
        where cardinality(b.services)>0
          and not exists(select 1 from public.kd_streaming_page_motn m where m.base_key=b.source_key)
       union all
-      select b.source_key,m.payload,m.services,m.genres,m.aliases,
-        coalesce(m.title_order,b.title_order),m.title_norms
+      select b.source_key,'motn',coalesce(m.title_order,b.title_order),m.title_norms
         from public.kd_streaming_page_motn m
         join public.kd_streaming_page_base b on b.source_key=m.base_key
        where not m.hidden and cardinality(m.services)>0
       union all
-      select m.output_key,m.payload,m.services,m.genres,m.aliases,m.title_order,m.title_norms
+      select m.output_key,'motn',m.title_order,m.title_norms
         from public.kd_streaming_page_motn m
        where m.base_key is null and not m.hidden and cardinality(m.services)>0
     ), matches as materialized (
       select * from current_titles
-       where nullif(btrim(coalesce(payload->>'titel',payload->>'title')),'') is not null
-         and exists(select 1 from unnest(title_norms) title where title like '%'||v_query_norm||'%')
+       where exists(select 1 from unnest(title_norms) title where title like '%'||v_query_norm||'%')
        order by title_order nulls last,output_key
        limit v_limit
+    ), selected_payloads as (
+      select matches.output_key,matches.title_order,
+        case when matches.source_kind='base' then b.payload else m.payload end payload,
+        case when matches.source_kind='base' then b.services else m.services end services,
+        case when matches.source_kind='base' then b.genres else m.genres end genres,
+        case when matches.source_kind='base' then b.aliases else m.aliases end aliases
+        from matches
+        left join public.kd_streaming_page_base b
+          on matches.source_kind='base' and b.source_key=matches.output_key
+        left join public.kd_streaming_page_motn m
+          on matches.source_kind='motn' and m.output_key=matches.output_key
     )
     select coalesce(jsonb_agg(public.kd_mustwatch_streaming_candidate_dto(
       output_key,payload,services,genres,aliases) order by title_order nulls last,output_key),'[]'::jsonb)
-      into v_items from matches;
+      into v_items from selected_payloads
+     where nullif(btrim(coalesce(payload->>'titel',payload->>'title')),'') is not null;
   end if;
 
   return jsonb_build_object('format',1,'status','ready','version',v_version,

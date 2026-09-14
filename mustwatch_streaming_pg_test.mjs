@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 
 const configured = spawnSync("pg_config", ["--bindir"], { encoding: "utf8" });
 const candidates = [process.env.KD_TEST_PG_BIN, "/Applications/Postgres.app/Contents/Versions/17/bin",
@@ -87,7 +88,7 @@ try {
   run("initdb", ["--no-locale", "--encoding=UTF8", "--auth=trust", "--username=postgres", "--set",
     "shared_memory_type=mmap", "--pgdata", data]);
   run("pg_ctl", ["--pgdata", data, "--log", join(root, "postgres.log"), "--options",
-    `-c listen_addresses= -c unix_socket_directories=${socket} -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix`,
+    `-c listen_addresses= -c unix_socket_directories=${socket} -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix -c work_mem=2184kB`,
     "--wait", "start"]); running = true;
   sql(`create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth;
@@ -182,6 +183,62 @@ try {
     assert.deepEqual(removed.items, []);
     assert.notEqual(removed.version, version);
   });
+
+  const scaleCount = Number(process.env.KD_MUSTWATCH_SIZE_COUNT || 25_000);
+  assert.ok(Number.isInteger(scaleCount) && scaleCount >= 25_000 && scaleCount <= 30_000,
+    "KD_MUSTWATCH_SIZE_COUNT must stay between 25000 and 30000");
+  const padding = "Realistische neutrale Katalogbeschreibung mit Darstellern, Handlung und Herkunft. ".repeat(9);
+  const largeTitles = Array.from({ length: scaleCount }, (_, index) => ({
+    watchmode_id: 100_000 + index,
+    titel: index === scaleCount - 1 ? "Zulu Tail Target" : `Scale Catalog ${String(index).padStart(5, "0")}`,
+    originaltitel: `Scale Original ${String(index).padStart(5, "0")}`,
+    jahr: 1980 + index % 45,
+    typ: index % 7 === 0 ? "tv_series" : "movie",
+    genres: index % 2 ? ["Drama", "Mystery"] : ["Komödie", "Familie"],
+    dienste: [index % 3 ? "Netflix" : "Disney+"],
+    streaming_aliases: [`scale-old-${index}`],
+    beschreibung: `${padding}${index}`,
+    web_urls: { Netflix: `https://example.invalid/title/${index}` },
+    relevanz_signale: ["synthetic-size-probe", `bucket-${index % 20}`],
+  }));
+  const largePayload = { stand, katalog_stand: stand, titel: largeTitles };
+  const rebuildStarted = performance.now();
+  sql(`update public.kd_catalog set payload='${json(largePayload)}'::jsonb
+    where name='streaming_entdecken'`);
+  const rebuildMs = performance.now() - rebuildStarted;
+  const batchIds = [...Array.from({ length: 499 }, (_, index) => String(100_000 + index)),
+    String(100_000 + scaleCount - 1)];
+  const batchRequest = request({ ids: batchIds });
+  const searchRequest = request({ query: "Zulu Tail Target", limit: 6 });
+  const batchStarted = performance.now();
+  const batchResult = call(batchRequest);
+  const batchMs = performance.now() - batchStarted;
+  const searchStarted = performance.now();
+  const searchResult = call(searchRequest);
+  const searchMs = performance.now() - searchStarted;
+  const explain = (value) => JSON.parse(sql(`begin; set local role authenticated;
+    set local "request.jwt.claim.role"='authenticated';
+    set local "request.jwt.claim.sub"='${account}'; set local "fixture.active"='true';
+    explain (analyze,buffers,format json) select public.kd_mustwatch_streaming_candidates(
+      '${json(value)}'::jsonb); rollback;`))[0].Plan;
+  const batchPlan = explain(batchRequest);
+  const searchPlan = explain(searchRequest);
+  const batchTemp = { read: Number(batchPlan["Temp Read Blocks"] || 0),
+    written: Number(batchPlan["Temp Written Blocks"] || 0) };
+  const searchTemp = { read: Number(searchPlan["Temp Read Blocks"] || 0),
+    written: Number(searchPlan["Temp Written Blocks"] || 0) };
+  check(`${scaleCount}-title projection keeps ID batches and tail search bounded`, () => {
+    assert.equal(batchResult.items.length, 500);
+    assert.equal(batchResult.items.at(-1).id, String(100_000 + scaleCount - 1));
+    assert.deepEqual(searchResult.items.map((item) => item.id), [String(100_000 + scaleCount - 1)]);
+    assert.ok(batchMs < 3000, `500-ID batch took ${batchMs.toFixed(0)} ms`);
+    assert.ok(searchMs < 1500, `tail search took ${searchMs.toFixed(0)} ms`);
+    assert.ok(batchTemp.written < 3000, `500-ID batch wrote ${batchTemp.written} temp blocks`);
+    assert.ok(searchTemp.written < 3000, `tail search wrote ${searchTemp.written} temp blocks`);
+  });
+  console.log(`${scaleCount}-title size probe at work_mem=2184kB: projection ${rebuildMs.toFixed(0)} ms, `
+    + `500-ID batch ${batchMs.toFixed(0)} ms/${batchTemp.read} read/${batchTemp.written} written temp blocks, `
+    + `tail search ${searchMs.toFixed(0)} ms/${searchTemp.read} read/${searchTemp.written} written temp blocks`);
 
   check("expired or missing projection state returns unavailable without candidates", () => {
     const expired = new Date(Date.now() - 3600_000).toISOString();
