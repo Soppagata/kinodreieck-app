@@ -93,8 +93,8 @@ export const KI_FUNKTIONEN = {
     beiAus: "ausblenden",
   },
   stapelimport: {
-    label: "Titellisten mit KI ordnen",
-    beschreibung: "Eingefügte Filme, Serien und CDs ordnen und auf Wunsch vorsichtig vorbeurteilen.",
+    label: "Mehrere Titel mit KI erfassen",
+    beschreibung: "Unter Mediathek → Mehrere Titel erfassen eine Liste ordnen und vorbeurteilen; gespeichert wird erst nach deiner Kontrolle.",
     beiAus: "ausblenden",
   },
   diagnose: {

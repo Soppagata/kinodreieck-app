@@ -94,9 +94,11 @@ const teilJson = {
 };
 const imports = [];
 const fehler = [];
+let gesperrteAiAufrufe = 0;
 const teilFixture = await mounte({
   master: [],
   kiAktiv: false,
+  ai: { async runTask() { gesperrteAiAufrufe++; throw new Error("KI-Aufruf trotz Stapelimport-Schalter"); } },
   flixpatrolFacts: { async load() { return [{
     sourceId: "ttl_bHyGTvopBHPVtIKhR2CF68WD", flixpatrol_id: "ttl_bHyGTvopBHPVtIKhR2CF68WD",
     titel: "Alien", jahr: 1979, typ: "film", imdb_id: "tt0078748", tmdb_id: 348,
@@ -109,6 +111,12 @@ const teilFixture = await mounte({
     return medien.map((_, index) => `film-${index}`);
   },
 });
+const gesperrteListe = teilFixture.container.querySelector(".kd-stapelimport > textarea");
+await act(async () => { setzeWert(gesperrteListe, "Alien\nKind of Blue"); await tick(); });
+check(!knopf(teilFixture.container, "Liste mit KI ordnen")
+  && /App-KI ist ausgeschaltet/.test(teilFixture.container.textContent)
+  && gesperrteAiAufrufe === 0,
+"Einzelschalter `stapelimport` aus: Mehrere Titel erfassen bietet keine interne KI-Aktion und startet keinen Aufruf");
 const extern = teilFixture.container.querySelector('textarea[placeholder^="JSON-Antwort"]');
 const codeblock = `Kurzer Zusatz.\n\`\`\`json\n${JSON.stringify(teilJson)}\n\`\`\`\nEnde.`;
 await act(async () => { setzeWert(extern, codeblock); await tick(); });

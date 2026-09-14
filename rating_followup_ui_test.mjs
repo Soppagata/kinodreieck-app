@@ -305,9 +305,9 @@ check(prognoseFehler.container.querySelector('[role="alert"]')?.textContent === 
   "Fehler der eigentlichen Prognose bleiben sichtbar, auch wenn optionale Quellen ausfallen");
 await prognoseFehler.cleanup();
 
-async function mountePrognoseController({ antwort = { prognose }, read = async () => belegteDaten } = {}) {
+async function mountePrognoseController({ antwort = { prognose }, read = async () => belegteDaten, vorbewertungAn = true } = {}) {
   setzeGlobal(true, "2026-09-12T10:00:00.000Z");
-  setzeFunktion("vorbewertung", true);
+  setzeFunktion("vorbewertung", vorbewertungAn);
   setzeFunktion("filmwissen", true);
   const session = { mode: "account", state: "ready", account: { id: "rating-test" }, capabilities: { personalAi: true } };
   globalThis.__kdRatingSession = session;
@@ -333,6 +333,15 @@ async function mountePrognoseController({ antwort = { prognose }, read = async (
 }
 
 const filmEntwurf = { id: "alien_1979", titel: "Alien", jahr: 1979, imdb_id: "tt0078748", typ: "film" };
+const ohneVorbewertung = await mountePrognoseController({ vorbewertungAn: false });
+let gesperrterEntwurf;
+await act(async () => { gesperrterEntwurf = await ohneVorbewertung.api().addFilmMitPrognose(filmEntwurf); });
+check(ohneVorbewertung.api().vorbewertungAktiv === false
+  && gesperrterEntwurf.status === "gesperrt"
+  && ohneVorbewertung.rufe.prognose === 0 && ohneVorbewertung.rufe.schreiben === 0,
+"Einzelschalter `vorbewertung` aus: KI-Bewertungen für neue Einträge und Karten bleiben ohne Anbieteraufruf gesperrt");
+await ohneVorbewertung.cleanup();
+
 const nurPrognose = await mountePrognoseController();
 let entwurf;
 await act(async () => { entwurf = await nurPrognose.api().addFilmMitPrognose(filmEntwurf); });

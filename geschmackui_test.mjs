@@ -1846,6 +1846,17 @@ await montiereTabNeu(tabProps(
 check("M", "Konto + Schalter + echte Master-Genres: der Drei-Fragen-Weg ist erreichbar",
   () => text().includes("Geschmacksprofil mit KI erstellen"));
 
+let gesperrteProfilAiRufe = 0;
+await montiereTabNeu(tabProps(
+  { global: true, funktionen: { profil: false } },
+  {
+    kiProfilFaehig: true,
+    ai: { runTask: async () => { gesperrteProfilAiRufe += 1; throw new Error("KI-Aufruf trotz Profilschalter"); } },
+  },
+));
+check("M", "Einzelschalter `profil` aus: KI-Erstellen ist nicht erreichbar und startet keinen Aufruf",
+  () => !text().includes("Geschmacksprofil mit KI erstellen") && gesperrteProfilAiRufe === 0);
+
 /* Und vollständig bedienbar bei KI=aus — mit dem ECHTEN Speicher, also ohne
    die `speicher`-Prop. Das ist der Weg, den DatenTab tatsächlich einhängt. */
 dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
@@ -2124,6 +2135,25 @@ const vokabularSave = aiMock({
     harte_filter: { genres: ["Drama"] },
   } }) }],
 });
+const sucheAusAi = aiMock();
+await act(async () => { tabWurzel.render(h(DatenTab, {
+  master: [{ titel: "Demo", genre: ["Drama"], tags: ["Drama"] }],
+  programm: [], einstellungen: {},
+  vokabular: [], saveVokabular: async () => true,
+  kiStand: { global: true, funktionen: { suche: false } },
+  kiProfilFaehig: true,
+  streamingBekannt: { stand: "test", titel: [] },
+  streamingEntdecken: { titel: [] }, auswahl: [], artikelListe: [],
+  ai: sucheAusAi.api,
+})) });
+await ruhe();
+feld = () => document.getElementById("tabwurzel");
+check("O", "Einzelschalter `suche` aus: Eigene Begriffe bieten keine KI-Deutung und starten keinen Aufruf",
+  () => !knopf("Mit KI deuten")
+    && !document.querySelector('#tabwurzel input[placeholder="Begriff (z. B. kuhl)"]')
+    && sucheAusAi.calls.length === 0);
+await act(async () => { tabWurzel.render(null); });
+
 const firstSave = defer();
 const savePlan = [
   () => firstSave.promise,

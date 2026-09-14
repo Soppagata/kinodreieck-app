@@ -189,6 +189,8 @@ check("Katalogbestand zeigt den tatsächlich geladenen Teilstand knapp",
     && !hatSummary("Warum fehlt"));
 check("Deterministisches Geschmacksprofil bleibt ohne KI erreichbar",
   !!button("Profil anlegen") && !text().includes("Eigene Blogartikel für dein Profil auswerten"));
+check("Wirkungslose tägliche Entdecken-Auswahl besitzt keinen Settings-Einstieg",
+  !text().includes("Täglich neue Entdecken-Auswahl"));
 check("Manueller Datenrechteweg bleibt erreichbar",
   text().includes("Datenrechte manuell anfragen"));
 check("Datenschutz bleibt als eigener Settings-Bereich erreichbar",

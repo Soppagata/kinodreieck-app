@@ -186,11 +186,6 @@ export function DatenTab({
                   {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Entdecken"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
-              <label className="kd-einstellcheck kd-touch-checkbox">
-                <input type="checkbox" checked={einstellungen.entdeckenTaeglich === true}
-                  onChange={(event) => setzeEinstellung("entdeckenTaeglich", event.target.checked)} />
-                <span><strong>Täglich neue Entdecken-Auswahl</strong><small>Wählt pro Tag stabil aus den 20 besten Passungen.</small></span>
-              </label>
             </div>
           </div>
         </Klappe>
@@ -231,8 +226,9 @@ export function DatenTab({
           <p style={{ ...mono, margin: "0 0 10px", lineHeight: 1.6 }}>
             Diese Schalter steuern KI-Aktionen, die du selbst startest: Suchtexte
             und eigene Begriffe deuten, Geschmacksprofile erstellen oder
-            verfeinern, KI-Bewertungen erstellen und Titellisten ordnen. Suche,
-            Sammlung und Bewertungen funktionieren auch ohne diese KI-Aktionen.
+            verfeinern, KI-Bewertungen erstellen und mehrere Titel erfassen.
+            Suche, Sammlung und Bewertungen funktionieren auch ohne diese
+            KI-Aktionen.
           </p>
           <div className="kd-einstellzeile" style={{ marginBottom: 12 }}>
             <span style={{ ...mono }}>Manuelle KI auf diesem Gerät</span>

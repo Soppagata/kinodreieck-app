@@ -529,6 +529,9 @@ const dt = fs.readFileSync(path.join(NAHT_WURZEL, "src/tabs/DatenTab.jsx"), "utf
    ersten Vorkommen. */
 const blockStart = dt.indexOf('<Klappe titel="Personalisierung & KI">');
 const block = blockStart < 0 ? "" : dt.slice(blockStart, dt.indexOf("Konto, Daten & Sicherung", blockStart));
+const app = fs.readFileSync(path.join(NAHT_WURZEL, "src/App.jsx"), "utf8");
+const finderTab = fs.readFileSync(path.join(NAHT_WURZEL, "src/tabs/FinderTab.jsx"), "utf8");
+const intelligenceController = fs.readFileSync(path.join(NAHT_WURZEL, "src/controllers/useIntelligenceController.js"), "utf8");
 check("U", "der KI-Block ist Inhalt der Sammelklappe „Personalisierung & KI“",
   () => blockStart > 0 && block.length > 400);
 
@@ -553,7 +556,18 @@ check("U", "die Liste samt Label und Beschreibung kommt aus KI_FUNKTIONEN",
 check("U", "und der Block nennt die Gerätelokalität, damit niemand sie im Konto sucht",
   () => /nur für diesen Browser auf diesem Gerät|weder\s+synchronisiert noch gesichert/.test(block));
 check("U", "der Block sagt zu, dass ohne KI alles funktioniert — dieselbe Zusage wie die Willkommens-Karte",
-  () => /Suche,\s+Sammlung und Bewertungen funktionieren auch ohne diese KI-Aktionen/.test(block));
+  () => /Suche,\s+Sammlung und Bewertungen funktionieren auch ohne diese\s+KI-Aktionen/.test(block));
+check("U", "`suche` sperrt Finder-Deutung und das Deuten eigener Begriffe",
+  () => /kiVerfuegbar && kiAn\("suche"\)/.test(finderTab)
+    && /kiStand\.funktionen\?\.suche !== false/.test(dt));
+check("U", "`profil` sperrt ausschließlich den KI-Weg zum Erstellen und Verfeinern",
+  () => /kiStand\.funktionen\?\.profil !== false/.test(dt)
+    && /kiAktiv=\{kiProfilFaehig[\s\S]*?bekannteGenres\.length > 0\}/.test(block));
+check("U", "`vorbewertung` sperrt den gemeinsamen KI-Bewertungsweg für Karten und neue Einträge",
+  () => /kiAn\("vorbewertung"\)/.test(intelligenceController)
+    && (app.match(/vorbewertungAktiv=\{vorbewertungAktiv\}/g) || []).length >= 4);
+check("U", "`stapelimport` sperrt die KI-Aktion hinter „Mehrere Titel erfassen“",
+  () => /stapelimportKiAktiv=\{[\s\S]*?kiAn\("stapelimport"\)\}/.test(app));
 });
 
 /* =========================================================================
