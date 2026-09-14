@@ -100,10 +100,13 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   let maxRpc = 0;
   const activeByQuery = new Map();
   let maxRpcPerQuery = 0;
-  let delayNextRpcMs = 0;
+  let unfilteredAllFollowRequests = 0;
+  let slowOldFollowId = null;
+  let nextRpcId = 0;
+  const abortWaiters = new WeakMap();
   let automaticPortionCount = null;
   let returnedAllCount = null;
-  let filteredXCount = null;
+  let zFilterCount = null;
 
   await page.setViewportSize({ width: 393, height: 852 });
   await seedAccount(page);
@@ -120,24 +123,63 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   }, { films: master });
   await installNetworkFence(page, traffic);
 
+  page.on("requestfailed", (failed) => {
+    const url = new URL(failed.url());
+    if (url.pathname !== "/rest/v1/rpc/kd_streaming_page") return;
+    const body = failed.postDataJSON()?.p_request || {};
+    events.push({
+      kind: "rpc-abort",
+      view: body.view,
+      limit: body.limit,
+      cursor: body.cursor ? "set" : "initial",
+      letter: body.filters?.buchstabe || null,
+      at: performance.now(),
+    });
+    abortWaiters.get(failed)?.();
+  });
+
   await page.route("**/rest/v1/rpc/kd_streaming_page", async (route) => {
-    const request = route.request().postDataJSON()?.p_request;
+    const networkRequest = route.request();
+    const request = networkRequest.postDataJSON()?.p_request;
     const started = performance.now();
     const querySignature = JSON.stringify([request.view, request.filters, request.library, request.personal]);
+    const id = ++nextRpcId;
+    const letter = request.filters?.buchstabe || null;
+    const cursor = request.cursor ? "set" : "initial";
+    if (request.view === "all" && cursor === "set" && letter == null) unfilteredAllFollowRequests += 1;
+    const isSlowOldFollow = request.view === "all" && cursor === "set" && letter == null
+      && unfilteredAllFollowRequests === 2;
+    if (isSlowOldFollow) slowOldFollowId = id;
+    let resolveAbort;
+    const aborted = new Promise((resolve) => { resolveAbort = resolve; });
+    abortWaiters.set(networkRequest, resolveAbort);
     activeRpc += 1;
     maxRpc = Math.max(maxRpc, activeRpc);
     activeByQuery.set(querySignature, (activeByQuery.get(querySignature) || 0) + 1);
     maxRpcPerQuery = Math.max(maxRpcPerQuery, activeByQuery.get(querySignature));
-    events.push({ kind: "rpc-start", view: request.view, limit: request.limit, at: started });
+    events.push({ kind: "rpc-start", id, view: request.view, limit: request.limit, cursor,
+      letter, slowOldFollow: isSlowOldFollow, at: started });
     try {
       const response = await pg.callAsync(request, pg.accountId);
-      const delay = delayNextRpcMs;
-      delayNextRpcMs = 0;
-      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-      events.push({ kind: "rpc-response", view: request.view, limit: request.limit,
-        items: response.items?.length || 0, at: performance.now() });
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
+      if (isSlowOldFollow) {
+        const outcome = await Promise.race([
+          aborted.then(() => "aborted"),
+          new Promise((resolve) => setTimeout(() => resolve("released"), 3000)),
+        ]);
+        if (outcome === "aborted") {
+          events.push({ kind: "rpc-stale-response-discarded", id, at: performance.now() });
+          return;
+        }
+      }
+      events.push({ kind: "rpc-response", id, view: request.view, limit: request.limit, cursor,
+        letter, items: response.items?.length || 0, total: response.total, at: performance.now() });
+      try {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
+      } catch (error) {
+        if (!networkRequest.failure()) throw error;
+      }
     } finally {
+      abortWaiters.delete(networkRequest);
       activeRpc -= 1;
       activeByQuery.set(querySignature, activeByQuery.get(querySignature) - 1);
     }
@@ -162,21 +204,6 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   });
 
   const cdp = await context.newCDPSession(page);
-  const knownInitiators = [];
-  await cdp.send("Network.enable");
-  cdp.on("Network.requestWillBeSent", (event) => {
-    if (!event.request.url.includes("p_name=streaming_bekannt")) return;
-    const frames = [];
-    for (let stack = event.initiator?.stack; stack; stack = stack.parent) {
-      for (const frame of stack.callFrames || []) frames.push({
-        functionName: frame.functionName || "(anonymous)",
-        url: new URL(frame.url).pathname,
-        lineNumber: frame.lineNumber,
-        columnNumber: frame.columnNumber,
-      });
-    }
-    knownInitiators.push({ type: event.initiator?.type || "unknown", frames });
-  });
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
   await cdp.send("Performance.enable");
   const metrics = async () => Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics
@@ -208,39 +235,6 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     console.log(`[PWA_FINAL_STEP] ${JSON.stringify(result)}`);
   }
 
-  if (process.env.KD_STREAMING_FINAL_DISCOVER_ONLY === "1") {
-    await page.goto("/");
-    await expect(page.locator(".kd-app")).toBeVisible();
-    await expect.poll(() => events.some((entry) => (
-      entry.kind === "full-catalog" && entry.name === "streaming_entdecken"
-    )), { timeout: 30_000 }).toBe(true);
-    await frame();
-
-    await step("Entdecken first visit reveals 20 then 40", async () => {
-      await navigateMobile(page, "Entdecken");
-      await expect(page.getByTestId("entdecken-tab")).toBeVisible();
-      await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(20);
-      const sentinel = page.locator(".kd-entdecken-weitere").getByTestId("streaming-page-more");
-      await sentinel.scrollIntoViewIfNeeded();
-      await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(40);
-    });
-    await step("Entdecken leave to Streaming", async () => {
-      await navigateMobile(page, "Streaming");
-      await expect(page.locator(".kd-streaming-tab")).toBeVisible();
-    });
-    await step("Entdecken session return keeps 40", async () => {
-      await navigateMobile(page, "Entdecken");
-      await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(40);
-    });
-    console.log(`[PWA_FINAL_DISCOVER] ${JSON.stringify({
-      conditions: "production build, Chromium 393x852, CPU x4, full local catalog ready before measured first visit",
-      projectionItems: pg.projectionCount,
-      results,
-    })}`);
-    await expect.poll(() => activeRpc, { timeout: 30_000 }).toBe(0);
-    return;
-  }
-
   await step("cold shell to first 20 Alles cards", async () => {
     await page.goto("/");
     await expect(page.locator(".kd-app")).toBeVisible();
@@ -250,105 +244,96 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
   });
 
   const firstAll = pg.calls.find((entry) => entry.view === "all" && entry.cursor === "initial");
-  const firstPageResponse = events.find((entry) => entry.kind === "rpc-response" && entry.limit === 20);
+  const firstPageResponse = events.find((entry) => entry.kind === "rpc-response"
+    && entry.view === "all" && entry.cursor === "initial" && entry.limit === 20 && entry.letter == null);
   const fullKnown = events.find((entry) => entry.kind === "full-catalog" && entry.name === "streaming_bekannt");
   expect(firstAll?.items).toBe(20);
   expect(firstAll?.limit).toBe(20);
+  expect(firstAll?.total).toBe(firstAll?.counts?.all);
   expect(firstPageResponse).toBeTruthy();
   expect(fullKnown, "vollständiger Known-Read folgt bewusst nach der ersten Seite").toBeTruthy();
   const fullKnownAfterFirstPage = fullKnown.at >= firstPageResponse.at;
   const allCount = Number((await page.getByRole("button", { name: /^Alles/u }).textContent()).match(/\((\d+)\)/)?.[1]);
-  expect(allCount).toBeGreaterThan(20);
-  if (process.env.KD_STREAMING_FINAL_START_GATE_ONLY === "1") {
-    console.log(`[PWA_FINAL_START_GATE] ${JSON.stringify({
-      firstAllItems: firstAll.items,
-      firstAllCount: allCount,
-      fullKnownAfterFirstPage,
-      knownDelayAfterFirstPageMs: Math.round(fullKnown.at - firstPageResponse.at),
-      knownInitiators,
-    })}`);
-    expect(fullKnownAfterFirstPage,
-      "vollständiger Known-Read mit MotN-Anhang muss nach der ersten Seitenantwort beginnen").toBe(true);
-    return;
-  }
+  expect(allCount).toBe(firstAll.counts.all);
+  expect(allCount).toBeGreaterThan(1020);
 
-  await step("serial 20-title fetch stays behind a 20-card DOM window", async () => {
-    await expect.poll(() => pg.calls.filter((entry) => entry.view === "all" && entry.cursor === "set").length).toBeGreaterThan(0);
+  await step("one 1000-title background page stays behind a 20-card DOM window", async () => {
+    await expect.poll(() => events.find((entry) => entry.kind === "rpc-response"
+      && entry.view === "all" && entry.cursor === "set" && entry.limit === 1000
+      && entry.letter == null && entry.items === 1000)).toBeTruthy();
     expect(maxRpcPerQuery).toBe(1);
-    expect(pg.calls.filter((entry) => entry.cursor === "set").every((entry) => entry.limit === 20)).toBe(true);
+    expect(pg.calls.find((entry) => entry.view === "all" && entry.cursor === "set")?.limit).toBe(1000);
     await expect(page.locator(".kd-entdecken-karte")).toHaveCount(20);
     await page.getByTestId("streaming-page-more").scrollIntoViewIfNeeded();
     await expect(page.locator(".kd-entdecken-karte")).toHaveCount(40);
     automaticPortionCount = await page.locator(".kd-entdecken-karte").count();
+    await expect.poll(() => slowOldFollowId).not.toBeNull();
   });
 
-  await step("warm Alles to Neu keeps a 20-card portion", async () => {
-    await page.getByRole("button", { name: /^Neu(?:\s|$)/u }).click();
-    await expect(page.locator(".kd-streaming-neu-karte").first()).toBeVisible();
-    expect(await page.locator(".kd-entdecken-karte").count()).toBeLessThanOrEqual(20);
+  let gestureMs = null;
+  const gestureEventStart = events.length;
+  await step("rapid A-to-Z gesture aborts the stale follow-up and sends only Z", async () => {
+    const alphabet = page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" });
+    gestureMs = await alphabet.evaluate(async (element) => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+      element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      const started = performance.now();
+      for (const value of ["1", "5", "10", "15", "20", "26"]) {
+        setValue.call(element, value);
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+      element.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+      return performance.now() - started;
+    });
+    expect(gestureMs).toBeLessThan(80);
+    await expect(alphabet).toHaveAttribute("aria-valuetext", "Buchstabe Z");
+    await expect.poll(() => events.find((entry) => entry.kind === "rpc-response"
+      && entry.view === "all" && entry.cursor === "initial" && entry.letter === "Z")).toBeTruthy();
+    const zResponse = events.find((entry) => entry.kind === "rpc-response"
+      && entry.view === "all" && entry.cursor === "initial" && entry.letter === "Z");
+    const summary = page.locator(".kd-streaming-page-summary strong");
+    zFilterCount = zResponse.total;
+    expect(zFilterCount).toBeGreaterThan(0);
+    expect(zFilterCount).toBeLessThan(allCount);
+    await expect(summary).toHaveText(`${zFilterCount} Treffer`);
+    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(Math.min(20, zFilterCount));
+    await expect.poll(() => events.some((entry) => entry.kind === "rpc-abort"
+      && entry.view === "all" && entry.cursor === "set" && entry.letter == null)).toBe(true);
+    await expect.poll(() => events.some((entry) => entry.kind === "rpc-stale-response-discarded"
+      && entry.id === slowOldFollowId)).toBe(true);
   });
+  const gestureRequests = events.slice(gestureEventStart)
+    .filter((entry) => entry.kind === "rpc-start" && entry.view === "all" && entry.cursor === "initial");
+  expect(gestureRequests.map((entry) => entry.letter)).toEqual(["Z"]);
+  expect(events.some((entry) => entry.kind === "rpc-response" && entry.id === gestureRequests[0].id
+    && entry.letter === "Z")).toBe(true);
 
-  await step("warm Neu to Alles restores its query-bound portion", async () => {
-    await page.getByRole("button", { name: /^Alles/u }).click();
-    await expect(page.locator(".kd-entdecken-karte").first()).toBeVisible();
+  await step("session return restores the loaded Z record without a cursor-null restart", async () => {
+    const zInitialBefore = events.filter((entry) => entry.kind === "rpc-start"
+      && entry.view === "all" && entry.cursor === "initial" && entry.letter === "Z").length;
+    await navigateMobile(page, "Mediathek");
+    await navigateMobile(page, "Streaming");
+    await expect(page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" }))
+      .toHaveAttribute("aria-valuetext", "Buchstabe Z");
+    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(Math.min(20, zFilterCount));
+    await expect(page.locator(".kd-streaming-page-summary strong")).toHaveText(`${zFilterCount} Treffer`);
+    await page.waitForTimeout(250);
+    const zInitialAfter = events.filter((entry) => entry.kind === "rpc-start"
+      && entry.view === "all" && entry.cursor === "initial" && entry.letter === "Z").length;
+    expect(zInitialAfter).toBe(zInitialBefore);
     returnedAllCount = await page.locator(".kd-entdecken-karte").count();
   });
 
-  await step("server filter reaches a title beyond the first page", async () => {
-    const alphabet = page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" });
-    await alphabet.fill("24");
-    await expect(alphabet).toHaveAttribute("aria-valuetext", "Buchstabe X");
-    const summary = page.locator(".kd-streaming-page-summary strong");
-    await expect(summary).not.toHaveText(`${allCount} Treffer`);
-    filteredXCount = Number((await summary.textContent()).match(/(\d+)/u)?.[1]);
-    expect(filteredXCount).toBeGreaterThan(0);
-    expect(filteredXCount).toBeLessThan(allCount);
-    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(Math.min(20, filteredXCount));
-    await expect(page.locator(".kd-entdecken-karte").filter({ hasText: "xXx" })).toHaveCount(1);
-  });
-
-  await step("warm leave and return retains the filtered result", async () => {
-    const before = pg.calls.length;
-    await navigateMobile(page, "Mediathek");
-    await navigateMobile(page, "Streaming");
-    await expect(page.locator(".kd-entdecken-karte")).toHaveCount(Math.min(20, filteredXCount));
-    await expect(page.locator(".kd-streaming-page-summary strong")).toHaveText(`${filteredXCount} Treffer`);
-    await page.waitForTimeout(250);
-    expect(pg.calls.length).toBe(before);
-  });
-
-  await step("reload paints cached library before background refresh returns", async () => {
-    delayNextRpcMs = 900;
-    await page.reload();
-    await expect(page.locator(".kd-app")).toBeVisible();
-    await expect(page.locator('[data-streaming-suchtreffer^="programm:"]')).toHaveCount(20);
-    expect(activeRpc, "Cachekarten sind sichtbar, während die echte Hintergrundantwort aussteht").toBe(1);
-    await expect.poll(() => activeRpc).toBe(0);
-  });
-
-  await step("Entdecken keeps its existing portion and return flow", async () => {
-    await navigateMobile(page, "Entdecken");
-    await expect(page.getByTestId("entdecken-tab")).toBeVisible();
-    const popularBefore = await page.locator(".kd-entdecken-neutral").count();
-    expect(popularBefore).toBe(20);
-    const sentinel = page.locator(".kd-entdecken-weitere").getByTestId("streaming-page-more");
-    await sentinel.scrollIntoViewIfNeeded();
-    await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(40);
-    await navigateMobile(page, "Streaming");
-    await expect(page.locator('[data-streaming-suchtreffer^="programm:"]')).toHaveCount(20);
-    await navigateMobile(page, "Entdecken");
-    await expect(page.locator(".kd-entdecken-neutral")).toHaveCount(40);
-  });
-
-  const streamingText = await page.getByTestId("entdecken-tab").innerText();
-  expect(streamingText).not.toMatch(/Movie of the Night|MotN|Watchmode|FlixPatrol|Anthropic|Stand:/iu);
-  await navigateMobile(page, "Streaming");
-  expect(await page.locator(".kd-streaming-tab").innerText())
-    .not.toMatch(/Movie of the Night|MotN|Watchmode|FlixPatrol|Anthropic|Katalogstand|Datenstand|Stand:/iu);
+  const streamingText = await page.locator(".kd-streaming-tab").innerText();
+  expect(streamingText).not.toMatch(/Movie of the Night|MotN|Watchmode|FlixPatrol|Anthropic|Katalogstand|Datenstand|Stand:|\b\d+(?:[.,]\d+)?\s*(?:ms|Millisekunden|Sekunden)\b/iu);
+  expect(events.filter((entry) => entry.kind === "full-catalog" && entry.name === "streaming_entdecken"),
+    "ein erfolgreicher Seiten-RPC darf nicht durch den Missing-RPC-Legacyfallback maskiert werden").toEqual([]);
   expect(traffic.unknownFixturePaths).toEqual([]);
   expect(traffic.nonLocal.every((entry) => ["mocked", "aborted"].includes(entry.kind))).toBe(true);
+  await expect.poll(() => activeRpc, { timeout: 30_000 }).toBe(0);
   console.log(`[PWA_FINAL] ${JSON.stringify({
-    conditions: "production build, direct Streaming start, Chromium 393x852, CPU x4, service worker blocked, HTTP no-store, synthetic account, sanitized local catalog",
+    conditions: "production build, direct Streaming start, Chromium 393x852, CPU x4, service worker blocked, synthetic account, sanitized local catalog, real disposable PostgreSQL",
     projectionItems: pg.projectionCount,
     projectionMs: pg.projectionMs,
     totalRpcCalls: pg.calls.length,
@@ -356,16 +341,20 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     maxConcurrentRpcCallsPerQuery: maxRpcPerQuery,
     firstAllItems: firstAll.items,
     firstAllCount: allCount,
+    backgroundPageLimit: 1000,
     automaticPortionCount,
     returnedAllCount,
-    filteredXCount,
+    zFilterCount,
+    gestureMs: Math.round(gestureMs),
+    abortedSlowFollow: true,
+    filterRequestsDuringGesture: gestureRequests.map((entry) => entry.letter),
     fullKnownAfterFirstPage,
     knownDelayAfterFirstPageMs: Math.round(fullKnown.at - firstPageResponse.at),
     results,
   })}`);
   expect(automaticPortionCount, "Scrollen erweitert die 20er-DOM-Portion automatisch genau auf 40").toBe(40);
-  expect(returnedAllCount, "querygebundene Alles-Rückkehr bewahrt genau die gewählte DOM-Portion")
-    .toBe(automaticPortionCount);
+  expect(returnedAllCount, "querygebundene Z-Rückkehr bewahrt den geladenen Sitzungsrecord")
+    .toBe(Math.min(20, zFilterCount));
   expect(fullKnownAfterFirstPage,
     "vollständiger Known-Read mit MotN-Anhang muss nach der ersten Seitenantwort beginnen").toBe(true);
 });

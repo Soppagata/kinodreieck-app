@@ -132,11 +132,12 @@ try {
     assert.equal(pg.calls.length, 1);
 
     controller.setActive(true);
-    await waitFor(controller.getSnapshot, (snapshot) => snapshot.items.length >= 40, "erste Folgeseite");
+    const expectedLoaded = Math.min(first.total, 20 + 1000);
+    await waitFor(controller.getSnapshot, (snapshot) => snapshot.items.length >= expectedLoaded, "erste Folgeseite");
     controller.setActive(false);
     await tick();
-    assert.equal(controller.getSnapshot().items.length, 40);
-    assert.equal(pg.calls[1].limit, 20);
+    assert.equal(controller.getSnapshot().items.length, expectedLoaded);
+    assert.equal(pg.calls[1].limit, 1000);
     assert.equal(maxFetches, 1);
     unsubscribe();
     controller.destroy();

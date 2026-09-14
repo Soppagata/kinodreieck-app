@@ -38,11 +38,13 @@ function neutralPayload(row) {
 function loadFixture() {
   if (!USE_LAB_FIXTURE) {
     const now = "2026-09-13T12:00:00.000Z";
-    const titles = Array.from({ length: 260 }, (_, index) => ({
+    const titles = Array.from({ length: 1260 }, (_, index) => ({
       watchmode_id: 900001 + index,
       imdb_id: `tt${String(9_000_001 + index)}`,
       tmdb_id: 800001 + index,
-      titel: index === 259 ? "xXx: Return of Xander Cage" : `Fixture Film ${String(index + 1).padStart(3, "0")}`,
+      titel: index === 1258 ? "Zodiac Fixture Target"
+        : index === 1259 ? "xXx: Return of Xander Cage"
+          : `Fixture Film ${String(index + 1).padStart(4, "0")}`,
       jahr: 1980 + index % 45,
       typ: index % 7 === 0 ? "tv_series" : "movie",
       genres: index % 2 === 0 ? ["Drama"] : ["Action"],
@@ -170,7 +172,10 @@ export async function startStreamingProgressivePgHarness() {
     child.stdin.end(query);
   });
   const fixture = loadFixture();
-  const migration = readFileSync("supabase/migrations/20260913200000_streaming_pages_backend.sql", "utf8");
+  const migrations = [
+    "supabase/migrations/20260913200000_streaming_pages_backend.sql",
+    "supabase/migrations/20260914100000_streaming_pages_latency.sql",
+  ].map((path) => readFileSync(path, "utf8"));
 
   try {
     mkdirSync(socket);
@@ -199,7 +204,7 @@ export async function startStreamingProgressivePgHarness() {
           checked_at timestamptz,watchmode_seen_at timestamptz,link text,show_data jsonb);`);
     }
     const buildStarted = performance.now();
-    sql(migration);
+    for (const migration of migrations) sql(migration);
     const projectionMs = performance.now() - buildStarted;
     const projectionCount = Number(sql("select count(*) from public.kd_streaming_page_base"));
     const calls = [];
@@ -220,6 +225,8 @@ export async function startStreamingProgressivePgHarness() {
         cursor: request.cursor ? "set" : "initial",
         status: response.status,
         items: response.items?.length || 0,
+        total: response.total,
+        counts: response.counts ? structuredClone(response.counts) : null,
         durationMs: Number((performance.now() - started).toFixed(1)),
       }));
       return response;
@@ -241,6 +248,8 @@ export async function startStreamingProgressivePgHarness() {
         cursor: request.cursor ? "set" : "initial",
         status: response.status,
         items: response.items?.length || 0,
+        total: response.total,
+        counts: response.counts ? structuredClone(response.counts) : null,
         durationMs: Number((performance.now() - started).toFixed(1)),
       }));
       return response;
