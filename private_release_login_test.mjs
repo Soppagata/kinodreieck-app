@@ -33,7 +33,7 @@ const sources = {
     export const subscribeStorageContext = () => () => {};
   `,
   catalog: 'export const catalogService = { storedVariant: () => "demo" };',
-  personalDataRegistry: 'export const PERSONAL_DATA_KEYS = ["kd:master"];',
+  personalDataRegistry: 'export const PERSONAL_DATA_KEYS = ["kd:master"]; export const PERSONAL_DATA_ENTRIES = [];',
   errors: 'export const errorText = () => "Anmeldung nicht möglich. Bitte erneut versuchen.";',
   runtime: `
     let environment = "local";
@@ -98,7 +98,7 @@ function check(name, callback) { callback(); checks++; console.log("✓ " + name
 await mount();
 check("Minimaler Erstlogin ohne Demo, Installation, Einführung oder KI-Auswahl", () => {
   assert.deepEqual([...document.querySelectorAll("label")].map((n) => n.textContent), ["Benutzername", "Passwort"]);
-  assert.equal(document.querySelectorAll("a").length, 1);
+  assert.equal(document.querySelectorAll(".kd-entry-legal-link").length, 1);
   assert.equal(document.querySelector("h1").textContent, "Kinodreieck");
   assert.ok(document.querySelector("#datenschutz-rechtliches").hidden);
   assert.doesNotMatch(document.querySelector('[aria-label="Anmeldung"]').textContent, /Demo|Registrier|Install|Mit KI|Einführung/);
@@ -109,6 +109,15 @@ check("Legal erhält Fokus und bleibt klar Entwurf", () => {
   assert.equal(document.activeElement.id, "datenschutz-rechtliches");
   assert.match(document.activeElement.textContent, /ENTWURF/);
   assert.ok(document.querySelector('[aria-label="Anmeldung"]').hidden);
+});
+check("Login-Legal zeigt das vollständige zentrale Diensteregister ohne Owner-Schranke", () => {
+  const dienste = document.querySelector('[data-datenschutz-dienste="central-registry"]');
+  assert.ok(dienste);
+  assert.equal(dienste.querySelectorAll("[data-datenschutz-dienst]").length, 14);
+  assert.ok(dienste.querySelector('[data-datenschutz-dienst="motn"]'));
+  assert.ok(dienste.querySelector('[data-datenschutz-dienst="resend"]'));
+  assert.match(dienste.textContent, /automatischer Radar-Lauf/);
+  assert.match(document.activeElement.textContent, /vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar/);
 });
 await click(button("Zurück zum Login"));
 check("Rückkehr fokussiert genau den einzigen Legal-Link", () => assert.equal(document.activeElement, link));

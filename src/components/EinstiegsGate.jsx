@@ -10,6 +10,7 @@ import {
   schliesseEinstieg,
 } from "../controllers/onboardingController.js";
 import { runtimeConfig } from "../config/runtime.js";
+import { DatenschutzDienste } from "./DatenschutzDienste.jsx";
 
 const EINSTIEGS_LOGIN_OEFFNEN = "kd:einstieg:login-oeffnen";
 
@@ -35,9 +36,11 @@ function ProduktionsRechtliches() {
       <p>Persönliche Profile, Bewertungen, Notizen und deine Streaming-Auswahl werden nicht an FlixPatrol gesendet. Wenn du eine freigeschaltete KI-Funktion bewusst startest, erhält Anthropic nur die für diese Aufgabe benötigten Eingaben und begrenzten Kontextdaten. Passwörter und deine übrige Mediathek gehören nicht zu diesen Aufträgen.</p>
     </LegalAbschnitt>
 
+    <DatenschutzDienste />
+
     <LegalAbschnitt titel="Feedback, Rechte und Löschung">
       <p>Beim Feedback wird nur dein eingegebener Text übertragen; Name, Kontaktadresse, Konto-, Profil-, Diagnose- oder sonstige Browserdaten werden nicht ergänzt. Resend verarbeitet dafür in den USA den Nachrichteninhalt und technische Zustellmetadaten; diese Metadaten werden standardmäßig 30 Tage aufbewahrt.</p>
-      <p>Die Sicherheitskopie dieses Geräts ist kein vollständiger Kontoexport. Eine Kontolöschung beginnt in der App mit einer authentifizierten Anfrage und erfolgt nicht sofort automatisch. Für Auskunft, Berichtigung, Übertragbarkeit oder eine manuelle Löschanfrage nutze den Kontakt oben.</p>
+      <p>Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie der registrierten persönlichen Inhalte dieses Geräts herunterladen. Bei einem aktiven Konto versucht sie vorher, den aktuellen Synchronisationsstand zu laden. Zusätzliche Anmelde- und Kontodaten, KI-Betriebsdaten sowie eigene serverseitige Betriebs- und Freigabedaten sind nicht enthalten; ein Restore oder Reimport ist nicht verfügbar. Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar. Für Auskunft, Berichtigung, Übertragbarkeit oder eine manuelle Löschanfrage nutze den privaten Kontaktweg oben. Eine Kontolöschung beginnt in der App mit einer authentifizierten Anfrage und erfolgt nicht sofort automatisch.</p>
     </LegalAbschnitt>
 
     <LegalAbschnitt titel="Technisch notwendige Speicherung">
@@ -197,6 +200,8 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
             <p>Die übrige Mediathek, Notizen, Passwörter und die öffentliche Kontaktadresse gehören nicht zu diesen Anbieteraufträgen. Ohne Berechtigung oder aktivierte Funktion wird der Anbieterpfad geschlossen abgewiesen.</p>
           </LegalAbschnitt>
 
+          <DatenschutzDienste />
+
           <LegalAbschnitt titel="Diagnose, Support und Feedback">
             <p>Kinodreieck versendet keine Support- oder Diagnosedaten ungefragt. Eine bewusst erzeugte Supportdatei enthält nur technische Statuscodes, Build- und Umgebungsangaben sowie inhaltsarme lokale Diagnosen, nicht aber Konto-ID, Titel, Bewertungen, URLs oder gespeicherte Inhalte.</p>
             <p>Beim Feedback wird nur dein eingegebener Text übertragen; Name, Kontaktadresse, Konto-, Profil-, Diagnose- oder sonstige Browserdaten werden nicht ergänzt. Eine authentifizierte Kontolöschanfrage übermittelt den Anfragetyp und wird dem angemeldeten Konto serverseitig zugeordnet. Der interne Empfänger bleibt serverseitig gebunden und wird nicht veröffentlicht.</p>
@@ -204,7 +209,7 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
           </LegalAbschnitt>
 
           <LegalAbschnitt titel="Download, Rechte und Löschung">
-            <p>Der lokale JSON-Sicherheitsdownload bildet den Stand dieses Geräts ab. Er ist kein bestätigter vollständiger Server- oder Kontoexport und keine Zusage, dass eine Wiederherstellung oder ein Reimport verfügbar ist. Ein Kontoexport wird nur angezeigt, wenn sein vollständiger Umfang technisch verifiziert ist; andernfalls kannst du deine Betroffenenrechte über den oben genannten Kontakt manuell ausüben.</p>
+            <p>Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie der registrierten persönlichen Inhalte dieses Geräts herunterladen. Bei einem aktiven Konto versucht sie vorher, den aktuellen Synchronisationsstand zu laden. Zusätzliche Anmelde- und Kontodaten, KI-Betriebsdaten sowie eigene serverseitige Betriebs- und Freigabedaten sind nicht enthalten; ein Restore oder Reimport ist nicht verfügbar. Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar. Deine Betroffenenrechte kannst du über den oben genannten privaten Kontaktweg manuell ausüben.</p>
             <p>Eine Kontolöschung beginnt in der App ausschließlich mit einer authentifizierten Anfrage. Sie löscht nicht sofort automatisch. Die Anfrage wird manuell geprüft; Konto und betroffene Daten werden anschließend im vereinbarten Einzelfall deaktiviert, archiviert und/oder gelöscht. Für eine manuelle Anfrage außerhalb dieses App-Wegs oder für Auskunft und Berichtigung nutze den oben genannten privaten Kontaktweg.</p>
           </LegalAbschnitt>
 

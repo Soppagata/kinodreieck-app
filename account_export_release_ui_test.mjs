@@ -100,6 +100,14 @@ check("Statt eines Zukunftsbuttons ist der ehrliche manuelle Rechteweg sichtbar"
   assert.match(weg.textContent, /keine Anfrage automatisch/);
   assert.doesNotMatch(weg.textContent, /@|mailto:/);
 });
+check("Settings zeigt das vollständige zentrale Diensteregister ohne Owner-Schranke", () => {
+  const dienste = document.querySelector('[data-datenschutz-dienste="central-registry"]');
+  assert.ok(dienste);
+  assert.equal(dienste.querySelectorAll("[data-datenschutz-dienst]").length, 14);
+  assert.ok(dienste.querySelector('[data-datenschutz-dienst="motn"]'));
+  assert.ok(dienste.querySelector('[data-datenschutz-dienst="resend"]'));
+  assert.equal(dienste.closest("details"), null);
+});
 
 await render({ accountExportContract: { ...exakt, dataClasses: exakt.dataClasses.slice(0, -1) } });
 check("Ein nur teilweise belegter Umfang bleibt unsichtbar und nicht ausführbar", () => {

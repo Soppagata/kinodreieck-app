@@ -3,7 +3,6 @@ import {
   ACCOUNT_EXPORT_RELEASE_CONTRACT,
   ACCOUNT_EXPORT_REQUIRED_SCOPE,
   PRIVATE_DATA_INVENTORY,
-  PRIVATE_PROVIDER_REGISTRY,
   RETENTION_CLASSES,
   istKontoExportVertragVollstaendig,
 } from "../lib/privatePilotOps.js";
@@ -15,8 +14,8 @@ import {
   setLocalDiagnosticsEnabled,
 } from "../lib/localDiagnostics.js";
 import { T, btnStyle } from "../lib/tokens.js";
-import { formatPresentationDate } from "../lib/presentationDate.js";
 import { runtimeConfig } from "../config/runtime.js";
+import { DatenschutzDienste } from "./DatenschutzDienste.jsx";
 import {
   FeedbackOhneNamensangabe,
   Kontoloeschanfrage,
@@ -74,7 +73,6 @@ export function DatenschutzUebersicht({
         <div><dt>Persönliche Töpfe</dt><dd>{PRIVATE_DATA_INVENTORY.filter((entry) => entry.retention === RETENTION_CLASSES.PURPOSE_BOUND.id).length}</dd></div>
         <div><dt>Kurzzeit-Rückholpunkte</dt><dd>{RETENTION_CLASSES.TRANSIENT_7.label}</dd></div>
         <div><dt>Betriebsnachweise</dt><dd>höchstens {RETENTION_CLASSES.AUDIT_90.label}</dd></div>
-        <div><dt>Empfänger und Quellen</dt><dd>{PRIVATE_PROVIDER_REGISTRY.length} registriert · Katalogquellen und optionale KI getrennt</dd></div>
       </dl>
       <details>
         <summary style={{ cursor: "pointer", color: T.rauch, fontSize: 13 }}>Datenklassen und Aufbewahrung anzeigen</summary>
@@ -86,17 +84,8 @@ export function DatenschutzUebersicht({
           ))}
         </ul>
       </details>
-      <details>
-        <summary style={{ cursor: "pointer", color: T.rauch, fontSize: 13 }}>Empfänger und Quellen anzeigen</summary>
-        <ul style={{ margin: "10px 0 0", paddingLeft: 20, display: "grid", gap: 8, color: T.rauch, fontSize: 12, lineHeight: 1.5 }}>
-          {PRIVATE_PROVIDER_REGISTRY.map((entry) => (
-            <li key={entry.id}>
-              <strong>{entry.name}</strong>: {entry.purpose}. Nutzung: {entry.usage}. Verarbeitete Klasse: {entry.data}. Region: {entry.region}.{entry.retentionNote ? ` ${entry.retentionNote}` : ""} <a href={entry.officialSource} target="_blank" rel="noreferrer">{entry.officialSourceLabel} (Abruf {formatPresentationDate(entry.retrievedAt, { fallback: entry.retrievedAt })})</a>{entry.technicalSource && <> · <a href={entry.technicalSource} target="_blank" rel="noreferrer">Technische Quelle</a></>}{entry.termsSource && <> · <a href={entry.termsSource} target="_blank" rel="noreferrer">Bedingungen</a></>}
-            </li>
-          ))}
-        </ul>
-      </details>
       </>}
+      <DatenschutzDienste />
       <ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />
       <PrivateMailPrivacyNote config={config} />
       <FeedbackOhneNamensangabe accountActive={accountActive} config={config} />
@@ -110,11 +99,15 @@ export function ManuellerDatenrechteWeg({ kontoExportFreigegeben = false }) {
       <strong style={{ color: T.leinwand, fontSize: 13 }}>Datenrechte manuell anfragen</strong>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
         {kontoExportFreigegeben
-          ? "Der vollständige Kontoexport ist unten separat verfügbar. Für weitere Auskunft, "
-          : "Der Kontoexport ist in diesem Release nicht als Self-Service freigeschaltet. Für Auskunft, "}
-        Berichtigung, Übertragbarkeit oder die Löschung deines Kontos nutzt du, falls du einen Kontozugang
-        von Max erhalten hast, denselben privaten Kontaktweg. Die App versendet keine Anfrage automatisch.
-        Die Sicherheitskopie dieses Geräts ist kein Kontoexport.
+          ? "Der vollständige Kontoexport ist unten separat verfügbar. "
+          : "Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar. "}
+        Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie der registrierten
+        persönlichen Inhalte dieses Geräts herunterladen. Soweit ein Konto aktiv ist, versucht sie vorher,
+        den aktuellen Synchronisationsstand zu laden. Zusätzliche Anmelde- und Kontodaten, KI-Betriebsdaten
+        sowie eigene serverseitige Betriebs- und Freigabedaten sind nicht enthalten; ein Restore oder Reimport
+        ist nicht verfügbar. Für Auskunft, Berichtigung, Übertragbarkeit oder die Löschung deines Kontos nutzt
+        du, falls du einen Kontozugang von Max erhalten hast, denselben privaten Kontaktweg. Die App versendet
+        keine Anfrage automatisch.
       </p>
     </section>
   );

@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("./src/components/EinstiegsGate.jsx", import.meta.url), "utf8");
+const registry = await readFile(new URL("./src/lib/privatePilotOps.js", import.meta.url), "utf8");
+const disclosure = await readFile(new URL("./src/components/DatenschutzDienste.jsx", import.meta.url), "utf8");
+const sharedDisclosure = `${registry}\n${disclosure}`;
 let checks = 0;
 const check = (name, assertion) => {
   assertion();
@@ -25,6 +28,8 @@ check("Datenübersicht deckt die tatsächlichen Speicher- und Transportgrenzen a
     "Diagnose, Support und Feedback",
     "Download, Rechte und Löschung",
   ]) assert.match(source, new RegExp(text));
+  assert.equal((source.match(/<DatenschutzDienste\s*\/>/g) || []).length, 2);
+  assert.match(disclosure, /PRIVATE_PROVIDER_REGISTRY\.map/);
 });
 
 check("FlixPatrol-Transparenz bildet den zentralen Cache und seine belegten Grenzen ab", () => {
@@ -45,9 +50,12 @@ check("KI-Hinweise begrenzen FlixPatrol auf Forecast, strukturiertes Radar und n
 });
 
 check("Resend-, Kontakt- und MotN-Attribution sind eng und ohne private Adresse", () => {
-  assert.doesNotMatch(source, /@hotmail\.com/i);
-  assert.equal((source.match(/<a\b/g) || []).length, 2);
-  assert.match(source, /href="https:\/\/www\.movieofthenight\.com\/about\/api"/);
+  assert.doesNotMatch(`${source}\n${sharedDisclosure}`, /@hotmail\.com/i);
+  assert.match(sharedDisclosure, /https:\/\/www\.movieofthenight\.com\/privacy-policy/);
+  assert.match(sharedDisclosure, /direkte v4 API/);
+  assert.doesNotMatch(sharedDisclosure, /RapidAPI/);
+  assert.match(sharedDisclosure, /https:\/\/resend\.com\/legal\/privacy-policy/);
+  assert.match(sharedDisclosure, /Konto-ID und Zeitstempel/);
   assert.match(source, /privaten Kontaktweg, über den du deinen Zugang erhalten hast/);
   assert.match(source, /privaten Feedbackweg in der App senden, sofern dieser Weg verfügbar ist/);
   assert.match(source, /Resend in den USA/);
@@ -56,9 +64,18 @@ check("Resend-, Kontakt- und MotN-Attribution sind eng und ohne private Adresse"
 });
 
 check("Kein Kontoexport oder Restore wird versprochen", () => {
-  assert.match(source, /kein bestätigter vollständiger Server- oder Kontoexport/);
-  assert.match(source, /keine Zusage, dass eine Wiederherstellung oder ein Reimport verfügbar ist/);
+  assert.match(source, /vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar/);
+  assert.match(source, /Restore oder Reimport ist nicht verfügbar/);
   assert.match(source, /löscht nicht sofort automatisch/);
+});
+
+check("Zentrales Register nennt alle produktiven Datenwege ohne interne Freigabeflags", () => {
+  for (const name of ["Supabase", "Cloudflare Pages", "GitHub und GitHub Actions", "Anthropic API", "Watchmode", "Movie of the Night", "Österreichisches Filminstitut", "Netflix Top 10", "FlixPatrol API", "Wikidata", "Library of Congress", "film.at", "nonstopkino.at", "Resend"]) {
+    assert.ok(registry.includes(`name: "${name}"`));
+  }
+  assert.match(registry, /automatischer Radar-Lauf[\s\S]*unabhängig vom lokalen KI-Schalter/);
+  assert.match(registry, /keine Aussage verbunden, dass ein Zeitplan aktuell aktiv ist/);
+  assert.doesNotMatch(disclosure, /serverFlag|enabledByDefault|legalStatus/);
 });
 
 check("Analytics- und Bannerentscheidung bleibt auf den privaten Release begrenzt", () => {

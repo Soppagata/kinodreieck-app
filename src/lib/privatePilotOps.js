@@ -75,11 +75,23 @@ const provider = (entry) => Object.freeze({
    einen serverseitig bestätigten Registry-Eintrag und das konkrete Feature-
    Flag. Fehlende Vertrags-/Aufbewahrungsfakten schließen den Pfad. */
 export const PRIVATE_PROVIDER_REGISTRY = Object.freeze([
-  provider({ id: "supabase", name: "Supabase", purpose: "Anmeldung, persönlicher Kontospeicher und Edge Functions", data: "Sitzungstoken und ausdrücklich synchronisierte persönliche Töpfe", region: "Projektregion", usage: "Kernbetrieb für angemeldete Konten und serverseitige Datenwege", officialSource: "https://supabase.com/docs/guides/security", retrievedAt: "2026-08-09" }),
-  provider({ id: "cloudflare", name: "Cloudflare Pages", purpose: "Auslieferung der statischen Web-App", data: "technische HTTP-Verbindungsdaten", region: "globales Edge-Netz", usage: "Auslieferung der Web-App", officialSource: "https://www.cloudflare.com/cloudflare-customer-dpa/", retrievedAt: "2026-08-09" }),
-  provider({ id: "github", name: "GitHub Actions", purpose: "Build, Tests und betriebliche Statusprüfung", data: "Build-Metadaten und feste technische Statuscodes; keine Inhaltsdaten", region: "Anbieterbetrieb", usage: "technischer Betrieb", officialSource: "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement", retrievedAt: "2026-08-09" }),
-  provider({ id: "anthropic", name: "Anthropic API", purpose: "einzelne ausdrücklich aktivierte KI-Aufgaben", data: "begrenzter Inhalt der bewusst gestarteten Aufgabe; keine gesamte Mediathek", region: "Anbieterbetrieb", usage: "optional und nur nach Nutzeraktion sowie Kontoberechtigung", serverFlag: "ai_provider_aktiv", officialSource: "https://privacy.claude.com/en/articles/15425996-data-retention-practices-for-covered-models", retrievedAt: "2026-08-09" }),
-  provider({ id: "watchmode", name: "Watchmode", purpose: "österreichische Streaming-Verfügbarkeiten", data: "serverseitige Titel- und Dienstabfragen; keine Kontokennung", region: "Anbieterbetrieb", usage: "aktive gemeinsame Katalogquelle", serverFlag: "watchmode_provider_aktiv", officialSource: "https://api.watchmode.com/docs/", retrievedAt: "2026-08-09" }),
+  provider({ id: "supabase", name: "Supabase", purpose: "Anmeldung, persönlicher Kontospeicher und eigene Backend-Funktionen", data: "Anmeldedaten und Sitzung; synchronisierte persönliche Bereiche einschließlich Profil, Artikeln, Bewertungen und Radar; außerdem die Eingaben der jeweils aufgerufenen Backend-Funktion", region: "Projektregion", usage: "Kernbetrieb für angemeldete Konten, Synchronisation und serverseitige Datenwege", officialSource: "https://supabase.com/privacy", officialSourceLabel: "Datenschutz", retrievedAt: "2026-09-14" }),
+  provider({ id: "cloudflare", name: "Cloudflare Pages", purpose: "Auslieferung der Web-App", data: "technische HTTP-Verbindungsdaten beim Laden der Website", region: "globales Edge-Netz", usage: "Kernbetrieb beim Öffnen der Website", officialSource: "https://www.cloudflare.com/privacypolicy/", officialSourceLabel: "Datenschutz", retrievedAt: "2026-09-14" }),
+  provider({ id: "github", name: "GitHub und GitHub Actions", purpose: "Quellcodeverwaltung, Builds, Tests, Jobs und öffentliche Katalogdaten", data: "Quellcode, Build- und Jobdaten sowie öffentliche Katalogdaten; keine persönliche Mediathek und kein Geschmacksprofil", region: "Anbieterbetrieb", usage: "technischer Betrieb und Pflege gemeinsamer Daten", officialSource: "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement", officialSourceLabel: "Datenschutz", retrievedAt: "2026-09-14" }),
+  provider({
+    id: "anthropic",
+    name: "Anthropic API",
+    purpose: "KI-Suche, Profil- und Geschmacksaufgaben, Filmprognosen, Listen- und Bloganalyse sowie Filmwissen und Radar-Recherche",
+    data: "begrenzte Eingaben der jeweiligen Aufgabe: etwa Suchtext, Antworten, Film- oder Listenangaben, bestätigte Profilsignale, der ausdrücklich ausgewählte Blogartikel oder ein Radarziel; keine Passwörter und nicht pauschal die gesamte Mediathek",
+    region: "Anbieterbetrieb",
+    usage: "optional bei bewusst gestarteten und freigeschalteten KI-Aufgaben; zusätzlich kann ein serverseitig freigegebener automatischer Radar-Lauf aktive Radarziele unabhängig vom lokalen KI-Schalter prüfen. Damit ist keine Aussage verbunden, dass ein Zeitplan aktuell aktiv ist",
+    serverFlag: "ai_provider_aktiv",
+    officialSource: "https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data",
+    officialSourceLabel: "Datenschutz und Aufbewahrung",
+    retrievedAt: "2026-09-14",
+  }),
+  provider({ id: "watchmode", name: "Watchmode", purpose: "österreichische Streaming-Verfügbarkeiten", data: "serverseitige Titel-, Werk- und Dienstabfragen; keine Kontokennung, persönlichen Profile, Bewertungen oder Abo-Auswahl", region: "Anbieterbetrieb", usage: "gemeinsame Katalogquelle", serverFlag: "watchmode_provider_aktiv", officialSource: "https://www.watchmode.com/privacy", officialSourceLabel: "Datenschutz", technicalSource: "https://api.watchmode.com/docs/", retrievedAt: "2026-09-14" }),
+  provider({ id: "motn", name: "Movie of the Night", purpose: "ergänzende Streaming-Verfügbarkeiten", data: "serverseitige Titel-, Werk- und Dienstabfragen an die direkte v4 API; keine Kontokennung, persönlichen Profile, Bewertungen oder Abo-Auswahl", region: "Anbieterbetrieb", usage: "gemeinsame ergänzende Katalogquelle", officialSource: "https://www.movieofthenight.com/privacy-policy", officialSourceLabel: "Datenschutz", technicalSource: "https://www.movieofthenight.com/about/api", retrievedAt: "2026-09-14" }),
   provider({ id: "oefi", name: "Österreichisches Filminstitut", purpose: "österreichische Kinocharts für Entdecken", data: "öffentliche Chartdaten; keine Kontokennung oder persönlichen Inhalte", region: "Österreich", usage: "aktive gemeinsame Quelle für Entdecken", officialSource: "https://filminstitut.at/charts", retrievedAt: "2026-09-10" }),
   provider({ id: "netflix_top10", name: "Netflix Top 10", purpose: "österreichische Netflix-Charts für Entdecken", data: "öffentliche Länder- und Titelrangdaten; keine Kontokennung oder persönlichen Inhalte", region: "Anbieterbetrieb", usage: "aktive gemeinsame Quelle für Entdecken", officialSource: "https://www.netflix.com/tudum/top10/austria", retrievedAt: "2026-09-10" }),
   provider({
@@ -96,10 +108,22 @@ export const PRIVATE_PROVIDER_REGISTRY = Object.freeze([
     termsSource: "https://flixpatrol.com/about/terms-and-conditions/",
     retrievedAt: "2026-09-10",
   }),
-  provider({ id: "wikidata", name: "Wikidata", purpose: "deterministische Metadatenauflösung", data: "Titel-/Werkabfrage; keine Kontokennung", region: "Anbieterbetrieb", serverFlag: "filmwissen_provider_aktiv", officialSource: "https://www.wikidata.org/wiki/Wikidata:Data_access", retrievedAt: "2026-08-09" }),
-  provider({ id: "loc", name: "Library of Congress", purpose: "gemeinfreie Filminformationen", data: "Titel-/Werkabfrage; keine Kontokennung", region: "USA", serverFlag: "filmwissen_provider_aktiv", officialSource: "https://www.loc.gov/apis/", retrievedAt: "2026-08-09" }),
-  provider({ id: "film_at", name: "film.at", purpose: "Wiener Kinoprogramm als redaktionelle Quelle", data: "öffentliche Programmseiten; keine Kontokennung", region: "Anbieterbetrieb", serverFlag: "programmdaten_import_aktiv", officialSource: "https://www.film.at/", retrievedAt: "2026-08-09" }),
-  provider({ id: "nonstopkino", name: "nonstopkino.at", purpose: "Wiener Kinoprogramm als redaktionelle Quelle", data: "öffentliche Programmseiten; keine Kontokennung", region: "Anbieterbetrieb", serverFlag: "programmdaten_import_aktiv", officialSource: "https://nonstopkino.at/datenschutz/", retrievedAt: "2026-08-09" }),
+  provider({ id: "wikidata", name: "Wikidata", purpose: "optionale Metadatenauflösung und Recherche", data: "Titel-, Werk- oder Suchabfrage; keine Kontokennung", region: "Anbieterbetrieb", usage: "optionale öffentliche Wissensquelle", serverFlag: "filmwissen_provider_aktiv", officialSource: "https://www.wikidata.org/wiki/Wikidata:Data_access", officialSourceLabel: "Datenzugriff", retrievedAt: "2026-09-14" }),
+  provider({ id: "loc", name: "Library of Congress", purpose: "optionale Recherche nach gemeinfreien Filminformationen", data: "Titel-, Werk- oder Suchabfrage; keine Kontokennung", region: "USA", usage: "optionale öffentliche Wissensquelle", serverFlag: "filmwissen_provider_aktiv", officialSource: "https://www.loc.gov/apis/", officialSourceLabel: "API-Informationen", retrievedAt: "2026-09-14" }),
+  provider({ id: "film_at", name: "film.at", purpose: "Wiener Kinoprogramm als redaktionelle Quelle", data: "öffentliche Programmseiten; keine Kontokennung", region: "Anbieterbetrieb", usage: "gemeinsame Programmquelle; eine direkte Browserverbindung entsteht zusätzlich erst, wenn ein externer Link geöffnet wird", serverFlag: "programmdaten_import_aktiv", officialSource: "https://www.film.at/", officialSourceLabel: "Anbieterinformationen", retrievedAt: "2026-09-14" }),
+  provider({ id: "nonstopkino", name: "nonstopkino.at", purpose: "Wiener Kinoprogramm als redaktionelle Quelle", data: "öffentliche Programmseiten; keine Kontokennung", region: "Anbieterbetrieb", usage: "gemeinsame Programmquelle; eine direkte Browserverbindung entsteht zusätzlich erst, wenn ein externer Link geöffnet wird", serverFlag: "programmdaten_import_aktiv", officialSource: "https://nonstopkino.at/datenschutz/", officialSourceLabel: "Datenschutz", retrievedAt: "2026-09-14" }),
+  provider({
+    id: "resend",
+    name: "Resend",
+    purpose: "Versand von Feedback und authentifizierten Kontolöschanfragen",
+    data: "beim Feedback der eingegebene Text, Absender- und Empfänger-Mailadresse sowie technische Transportdaten, ohne angehängte Konto-, Profil-, Diagnose- oder Browserdaten; bei einer Kontolöschanfrage zusätzlich Konto-ID und Zeitstempel",
+    region: "USA",
+    usage: "optional, wenn Feedback gesendet oder eine Kontolöschung angefragt wird",
+    retentionNote: "Technische Zustellmetadaten werden nach dem derzeit eingebundenen Versandhinweis standardmäßig 30 Tage aufbewahrt.",
+    officialSource: "https://resend.com/legal/privacy-policy",
+    officialSourceLabel: "Datenschutz",
+    retrievedAt: "2026-09-14",
+  }),
 ]);
 
 export const PRIVATE_DATA_INVENTORY = Object.freeze([

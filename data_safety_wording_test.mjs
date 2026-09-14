@@ -81,7 +81,7 @@ check("Manueller Rechteweg ist verständlich auffindbar und erfindet weder Adres
   && rechteWeg.includes("Übertragbarkeit")
   && rechteWeg.includes("Löschung")
   && rechteWeg.includes("privaten Kontaktweg")
-  && rechteWeg.includes("versendet keine Anfrage automatisch")
+  && /versendet\s+keine Anfrage automatisch/.test(rechteWeg)
   && !rechteWeg.includes("mailto:")
   && !/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/.test(rechteWeg));
 
@@ -115,7 +115,8 @@ check("Vollständiger Exportwortlaut liegt nur hinter Flags und exakter Umfangsp
 
 check("Nur die Datenschutzübersicht erhält den tatsächlichen Exportstatus für den manuellen Rechteweg",
   (selfService.match(/<ManuellerDatenrechteWeg/g) || []).length === 1
-  && (selfService.match(/Der Kontoexport ist in diesem Release nicht als Self-Service freigeschaltet/g) || []).length === 1
+  && selfService.includes("Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar")
+  && selfService.includes("Settings → Konto, Daten &amp; Sicherung")
   && selfService.includes("<ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />")
   && selfService.includes('data-account-rights-location="privacy-overview"')
   && selfService.includes("Settings → Datenschutz &amp; Rechtliches")
