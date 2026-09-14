@@ -68,11 +68,11 @@ const regular = Array.from({ length: 30 }, (_, index) => ({
 }));
 const titles = [
   ...regular,
-  { watchmode_id: 7001, streaming_aliases: ["unique-old"], titel: "Alias One", jahr: 2020,
+  { watchmode_id: 7001, streaming_aliases: ["unique-old", "shared"], titel: "Alias One", jahr: 2020,
     typ: "movie", dienste: ["Netflix"], imdb_id: "tt7000001", tmdb_id: 7001 },
   { watchmode_id: 7002, streaming_aliases: ["shared"], titel: "Alias Two", jahr: 2021,
     typ: "movie", dienste: ["Netflix"] },
-  { watchmode_id: 7003, streaming_aliases: ["shared", "7002"], titel: "Alias Three", jahr: 2022,
+  { watchmode_id: 7003, streaming_aliases: ["7002"], titel: "Alias Three", jahr: 2022,
     typ: "movie", dienste: ["Disney+"] },
   { watchmode_id: 8001, titel: "Removed By MotN", jahr: 2023, typ: "movie", dienste: ["Netflix"],
     imdb_id: "tt8000001", tmdb_id: 8001 },
@@ -133,6 +133,22 @@ try {
     assert.deepEqual(result.items.map((item) => item.id), ["7001", "7002"]);
     assert.equal(result.items[1].watchmode_id, "7002");
     assert.ok(!result.items.some((item) => item.id === "7003"));
+    assert.deepEqual(result.items[0].streaming_aliases, ["7001", "unique-old"]);
+    assert.deepEqual(result.items[1].streaming_aliases, ["7002"]);
+  });
+
+  check("DTO aliases stay globally safe for mixed lookups, exact-ID collisions and search", () => {
+    const mixed = call(request({ ids: ["7001", "shared"] }));
+    assert.deepEqual(mixed.items.map((item) => item.id), ["7001"]);
+    assert.ok(!mixed.items[0].streaming_aliases.includes("shared"));
+    const exactWins = call(request({ ids: ["7002"] }));
+    assert.deepEqual(exactWins.items.map((item) => item.id), ["7002"]);
+    const search = call(request({ query: "Alias", limit: 6 }));
+    assert.deepEqual(search.items.map((item) => item.id), ["7001", "7003", "7002"]);
+    assert.deepEqual(search.items.find((item) => item.id === "7001").streaming_aliases,
+      ["7001", "unique-old"]);
+    assert.deepEqual(search.items.find((item) => item.id === "7002").streaming_aliases, ["7002"]);
+    assert.deepEqual(search.items.find((item) => item.id === "7003").streaming_aliases, ["7003"]);
   });
 
   check("lookup returns an explicit neutral DTO without private payload fields", () => {

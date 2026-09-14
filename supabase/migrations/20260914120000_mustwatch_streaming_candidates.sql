@@ -108,7 +108,7 @@ begin
   v_query_norm := public.kd_streaming_page_title_norm(v_query);
 
   if v_id_count>0 then
-    with current_titles as materialized (
+    with raw_current_titles as materialized (
       select b.source_key output_key,'base'::text source_kind,b.aliases,b.title_order
         from public.kd_streaming_page_base b
        where cardinality(b.services)>0
@@ -122,6 +122,28 @@ begin
       select m.output_key,'motn',m.aliases,m.title_order
         from public.kd_streaming_page_motn m
        where m.base_key is null and not m.hidden and cardinality(m.services)>0
+    ), alias_occurrences as materialized (
+      select distinct output_key,alias from (
+        select output_key,output_key alias from raw_current_titles
+        union all
+        select title.output_key,alias from raw_current_titles title
+          cross join lateral unnest(title.aliases) alias
+         where length(alias) between 1 and 256
+      ) values_by_title
+    ), alias_owners as materialized (
+      select alias,count(distinct output_key) owner_count
+        from alias_occurrences group by alias
+    ), safe_aliases as materialized (
+      select occurrence.output_key,array_agg(occurrence.alias
+        order by (occurrence.alias=occurrence.output_key) desc,occurrence.alias) aliases
+        from alias_occurrences occurrence
+        join alias_owners owner using(alias)
+       where occurrence.alias=occurrence.output_key
+          or owner.owner_count=1
+       group by occurrence.output_key
+    ), current_titles as materialized (
+      select raw.output_key,raw.source_kind,safe.aliases,raw.title_order
+        from raw_current_titles raw join safe_aliases safe using(output_key)
     ), requested as materialized (
       select btrim(value) id,ordinality::bigint ord
         from jsonb_array_elements_text(v_ids) with ordinality entry(value,ordinality)
@@ -145,7 +167,7 @@ begin
         case when chosen.source_kind='base' then b.payload else m.payload end payload,
         case when chosen.source_kind='base' then b.services else m.services end services,
         case when chosen.source_kind='base' then b.genres else m.genres end genres,
-        case when chosen.source_kind='base' then b.aliases else m.aliases end aliases
+        chosen.aliases
         from chosen
         left join public.kd_streaming_page_base b
           on chosen.source_kind='base' and b.source_key=chosen.output_key
@@ -157,20 +179,42 @@ begin
       into v_items from selected_payloads
      where nullif(btrim(coalesce(payload->>'titel',payload->>'title')),'') is not null;
   elsif v_query_norm is not null then
-    with current_titles as materialized (
-      select b.source_key output_key,'base'::text source_kind,b.title_order,b.title_norms
+    with raw_current_titles as materialized (
+      select b.source_key output_key,'base'::text source_kind,b.aliases,b.title_order,b.title_norms
         from public.kd_streaming_page_base b
        where cardinality(b.services)>0
          and not exists(select 1 from public.kd_streaming_page_motn m where m.base_key=b.source_key)
       union all
-      select b.source_key,'motn',coalesce(m.title_order,b.title_order),m.title_norms
+      select b.source_key,'motn',m.aliases,coalesce(m.title_order,b.title_order),m.title_norms
         from public.kd_streaming_page_motn m
         join public.kd_streaming_page_base b on b.source_key=m.base_key
        where not m.hidden and cardinality(m.services)>0
       union all
-      select m.output_key,'motn',m.title_order,m.title_norms
+      select m.output_key,'motn',m.aliases,m.title_order,m.title_norms
         from public.kd_streaming_page_motn m
        where m.base_key is null and not m.hidden and cardinality(m.services)>0
+    ), alias_occurrences as materialized (
+      select distinct output_key,alias from (
+        select output_key,output_key alias from raw_current_titles
+        union all
+        select title.output_key,alias from raw_current_titles title
+          cross join lateral unnest(title.aliases) alias
+         where length(alias) between 1 and 256
+      ) values_by_title
+    ), alias_owners as materialized (
+      select alias,count(distinct output_key) owner_count
+        from alias_occurrences group by alias
+    ), safe_aliases as materialized (
+      select occurrence.output_key,array_agg(occurrence.alias
+        order by (occurrence.alias=occurrence.output_key) desc,occurrence.alias) aliases
+        from alias_occurrences occurrence
+        join alias_owners owner using(alias)
+       where occurrence.alias=occurrence.output_key
+          or owner.owner_count=1
+       group by occurrence.output_key
+    ), current_titles as materialized (
+      select raw.output_key,raw.source_kind,safe.aliases,raw.title_order,raw.title_norms
+        from raw_current_titles raw join safe_aliases safe using(output_key)
     ), matches as materialized (
       select * from current_titles
        where exists(select 1 from unnest(title_norms) title where title like '%'||v_query_norm||'%')
@@ -181,7 +225,7 @@ begin
         case when matches.source_kind='base' then b.payload else m.payload end payload,
         case when matches.source_kind='base' then b.services else m.services end services,
         case when matches.source_kind='base' then b.genres else m.genres end genres,
-        case when matches.source_kind='base' then b.aliases else m.aliases end aliases
+        matches.aliases
         from matches
         left join public.kd_streaming_page_base b
           on matches.source_kind='base' and b.source_key=matches.output_key
