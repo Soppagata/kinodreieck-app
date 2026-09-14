@@ -122,7 +122,7 @@ function TestHarness({ master, datenKontextKey, artikel = [], nachtragFlach = []
   return React.createElement(MediathekTab, {
     master: normalisiereWieApp ? (master ?? LEERER_MEDIATHEK_MASTER) : master,
     datenKontextKey, expandedId, setExpandedId,
-    nachtragFlach, artikel, mustwatch: [],
+    nachtragFlach, artikel, mustwatch: [], mustwatchGeladen: true,
     updateFilm: async () => {
       mutationen++;
       if (!updateVerzoegern) return true;
