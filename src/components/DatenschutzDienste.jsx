@@ -1,5 +1,4 @@
 import { PRIVATE_PROVIDER_REGISTRY } from "../lib/privatePilotOps.js";
-import { formatPresentationDate } from "../lib/presentationDate.js";
 
 const textStyle = { margin: 0, fontSize: 12, lineHeight: 1.55 };
 
@@ -22,7 +21,6 @@ export function DatenschutzDienste({ titel = "Dienste, Empfänger und Datenquell
               <a href={entry.officialSource} target="_blank" rel="noopener noreferrer">{entry.officialSourceLabel}</a>
               {entry.technicalSource && <> · <a href={entry.technicalSource} target="_blank" rel="noopener noreferrer">Technische Informationen</a></>}
               {entry.termsSource && <> · <a href={entry.termsSource} target="_blank" rel="noopener noreferrer">Bedingungen</a></>}
-              {entry.retrievedAt && <> · geprüft am {formatPresentationDate(entry.retrievedAt, { fallback: entry.retrievedAt })}</>}
             </p>
           </article>
         ))}

@@ -40,7 +40,9 @@ function ProduktionsRechtliches() {
 
     <LegalAbschnitt titel="Feedback, Rechte und Löschung">
       <p>Beim Feedback wird nur dein eingegebener Text übertragen; Name, Kontaktadresse, Konto-, Profil-, Diagnose- oder sonstige Browserdaten werden nicht ergänzt. Resend verarbeitet dafür in den USA den Nachrichteninhalt und technische Zustellmetadaten; diese Metadaten werden standardmäßig 30 Tage aufbewahrt.</p>
-      <p>Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie der registrierten persönlichen Inhalte dieses Geräts herunterladen. Bei einem aktiven Konto versucht sie vorher, den aktuellen Synchronisationsstand zu laden. Zusätzliche Anmelde- und Kontodaten, KI-Betriebsdaten sowie eigene serverseitige Betriebs- und Freigabedaten sind nicht enthalten; ein Restore oder Reimport ist nicht verfügbar. Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar. Für Auskunft, Berichtigung, Übertragbarkeit oder eine manuelle Löschanfrage nutze den privaten Kontaktweg oben. Eine Kontolöschung beginnt in der App mit einer authentifizierten Anfrage und erfolgt nicht sofort automatisch.</p>
+      <p>Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie persönlicher Inhalte dieses Geräts herunterladen, zum Beispiel Mediathek, Artikel, Listen, Einstellungen und Geschmacksprofil. Bei einem aktiven Konto versucht die Sicherung vorher, den aktuellen Synchronisationsstand zu laden.</p>
+      <p>Zusätzliche Anmelde- und Kontodaten sowie KI-Betriebsdaten sind nicht enthalten. Die Datei lässt sich derzeit nicht direkt wieder in die App einlesen. Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar.</p>
+      <p>Für Auskunft, Berichtigung, Übertragbarkeit oder eine manuelle Löschanfrage nutze den privaten Kontaktweg oben. Eine Kontolöschung beginnt in der App mit einer authentifizierten Anfrage und erfolgt nicht sofort automatisch.</p>
     </LegalAbschnitt>
 
     <LegalAbschnitt titel="Technisch notwendige Speicherung">
@@ -209,7 +211,9 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
           </LegalAbschnitt>
 
           <LegalAbschnitt titel="Download, Rechte und Löschung">
-            <p>Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie der registrierten persönlichen Inhalte dieses Geräts herunterladen. Bei einem aktiven Konto versucht sie vorher, den aktuellen Synchronisationsstand zu laden. Zusätzliche Anmelde- und Kontodaten, KI-Betriebsdaten sowie eigene serverseitige Betriebs- und Freigabedaten sind nicht enthalten; ein Restore oder Reimport ist nicht verfügbar. Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar. Deine Betroffenenrechte kannst du über den oben genannten privaten Kontaktweg manuell ausüben.</p>
+            <p>Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie persönlicher Inhalte dieses Geräts herunterladen, zum Beispiel Mediathek, Artikel, Listen, Einstellungen und Geschmacksprofil. Bei einem aktiven Konto versucht die Sicherung vorher, den aktuellen Synchronisationsstand zu laden.</p>
+            <p>Zusätzliche Anmelde- und Kontodaten sowie KI-Betriebsdaten sind nicht enthalten. Die Datei lässt sich derzeit nicht direkt wieder in die App einlesen. Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar.</p>
+            <p>Deine Betroffenenrechte kannst du über den oben genannten privaten Kontaktweg manuell ausüben.</p>
             <p>Eine Kontolöschung beginnt in der App ausschließlich mit einer authentifizierten Anfrage. Sie löscht nicht sofort automatisch. Die Anfrage wird manuell geprüft; Konto und betroffene Daten werden anschließend im vereinbarten Einzelfall deaktiviert, archiviert und/oder gelöscht. Für eine manuelle Anfrage außerhalb dieses App-Wegs oder für Auskunft und Berichtigung nutze den oben genannten privaten Kontaktweg.</p>
           </LegalAbschnitt>
 

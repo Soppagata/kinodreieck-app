@@ -145,7 +145,7 @@ check("Nur Flags plus exakter Vertrag zeigen den vollständigen Umfang und den E
   const rechteWeg = document.querySelector('[data-manual-data-rights="private-contact"]');
   assert.ok(rechteWeg);
   assert.equal(document.querySelectorAll('[data-manual-data-rights="private-contact"]').length, 1);
-  assert.match(rechteWeg.textContent, /unten separat verfügbar/);
+  assert.match(rechteWeg.textContent, /unter Konto, Daten & Sicherung zusätzlich verfügbar/);
   assert.doesNotMatch(rechteWeg.textContent, /nicht als Self-Service freigeschaltet/);
 });
 check("Auch der VERIFIED-Exportpfad schaltet niemals den alten Self-Delete frei", () => {

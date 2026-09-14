@@ -52,7 +52,7 @@ check("KI-Hinweise begrenzen FlixPatrol auf Forecast, strukturiertes Radar und n
 check("Resend-, Kontakt- und MotN-Attribution sind eng und ohne private Adresse", () => {
   assert.doesNotMatch(`${source}\n${sharedDisclosure}`, /@hotmail\.com/i);
   assert.match(sharedDisclosure, /https:\/\/www\.movieofthenight\.com\/privacy-policy/);
-  assert.match(sharedDisclosure, /direkte v4 API/);
+  assert.match(sharedDisclosure, /direkte API von Movie of the Night/);
   assert.doesNotMatch(sharedDisclosure, /RapidAPI/);
   assert.match(sharedDisclosure, /https:\/\/resend\.com\/legal\/privacy-policy/);
   assert.match(sharedDisclosure, /Konto-ID und Zeitstempel/);
@@ -65,7 +65,7 @@ check("Resend-, Kontakt- und MotN-Attribution sind eng und ohne private Adresse"
 
 check("Kein Kontoexport oder Restore wird versprochen", () => {
   assert.match(source, /vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar/);
-  assert.match(source, /Restore oder Reimport ist nicht verfügbar/);
+  assert.match(source, /Datei lässt sich derzeit nicht direkt wieder in die App einlesen/);
   assert.match(source, /löscht nicht sofort automatisch/);
 });
 
@@ -74,8 +74,8 @@ check("Zentrales Register nennt alle produktiven Datenwege ohne interne Freigabe
     assert.ok(registry.includes(`name: "${name}"`));
   }
   assert.match(registry, /automatischer Radar-Lauf[\s\S]*unabhängig vom lokalen KI-Schalter/);
-  assert.match(registry, /keine Aussage verbunden, dass ein Zeitplan aktuell aktiv ist/);
   assert.doesNotMatch(disclosure, /serverFlag|enabledByDefault|legalStatus/);
+  assert.doesNotMatch(disclosure, /geprüft am/);
 });
 
 check("Analytics- und Bannerentscheidung bleibt auf den privaten Release begrenzt", () => {

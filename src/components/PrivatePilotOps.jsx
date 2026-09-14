@@ -14,6 +14,7 @@ import {
   setLocalDiagnosticsEnabled,
 } from "../lib/localDiagnostics.js";
 import { T, btnStyle } from "../lib/tokens.js";
+import { formatPresentationDate } from "../lib/presentationDate.js";
 import { runtimeConfig } from "../config/runtime.js";
 import { DatenschutzDienste } from "./DatenschutzDienste.jsx";
 import {
@@ -98,16 +99,21 @@ export function ManuellerDatenrechteWeg({ kontoExportFreigegeben = false }) {
     <section data-manual-data-rights="private-contact" style={{ display: "grid", gap: 6 }}>
       <strong style={{ color: T.leinwand, fontSize: 13 }}>Datenrechte manuell anfragen</strong>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
+        Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie der persönlichen
+        Inhalte dieses Geräts herunterladen, zum Beispiel Mediathek, Artikel, Listen,
+        Einstellungen und Geschmacksprofil.
+      </p>
+      <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
+        Soweit ein Konto aktiv ist, versucht die Sicherung vorher, den aktuellen Synchronisationsstand zu laden.
+        Zusätzliche Anmelde- und Kontodaten sowie KI-Betriebsdaten sind nicht enthalten. Die Datei lässt sich
+        derzeit nicht direkt wieder in die App einlesen.
+      </p>
+      <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
         {kontoExportFreigegeben
-          ? "Der vollständige Kontoexport ist unten separat verfügbar. "
+          ? "Der vollständige Kontoexport ist unter Konto, Daten & Sicherung zusätzlich verfügbar. "
           : "Ein vollständiger Download aller Konto- und Serverdaten ist derzeit nicht verfügbar. "}
-        Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie der registrierten
-        persönlichen Inhalte dieses Geräts herunterladen. Soweit ein Konto aktiv ist, versucht sie vorher,
-        den aktuellen Synchronisationsstand zu laden. Zusätzliche Anmelde- und Kontodaten, KI-Betriebsdaten
-        sowie eigene serverseitige Betriebs- und Freigabedaten sind nicht enthalten; ein Restore oder Reimport
-        ist nicht verfügbar. Für Auskunft, Berichtigung, Übertragbarkeit oder die Löschung deines Kontos nutzt
-        du, falls du einen Kontozugang von Max erhalten hast, denselben privaten Kontaktweg. Die App versendet
-        keine Anfrage automatisch.
+        Für Auskunft, Berichtigung, Übertragbarkeit oder die Löschung deines Kontos nutzt du, falls du einen
+        Kontozugang von Max erhalten hast, denselben privaten Kontaktweg. Die App versendet keine Anfrage automatisch.
       </p>
     </section>
   );
