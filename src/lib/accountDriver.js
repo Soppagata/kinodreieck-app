@@ -553,6 +553,7 @@ export function createAccountDriver({
   return Object.freeze({
     name: "konto",
     owner,
+    hasConfirmedRemote: (key) => SYNC_SET.has(key) && getVer(key) != null,
     status: syncStatus,
     pull: syncPull,
     async get(k) {

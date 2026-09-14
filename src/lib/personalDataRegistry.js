@@ -15,6 +15,11 @@ import { K } from "./storage.js";
 import { ensureIds } from "./match.js";
 import { normalisiereArtikelTypen } from "./artikel.js";
 import { isLocalRadarBackupState } from "./localEventRadar.js";
+import {
+  createEntdeckenPinsPot,
+  decodeEntdeckenPinsPot,
+  normalizeEntdeckenPins,
+} from "./entdeckenPins.js";
 
 const istObjekt = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 const vorhanden = (v) => v !== undefined && v !== null;
@@ -106,6 +111,27 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
     backupFallback: [],
     pruefe: Array.isArray,
     zaehle: (v) => v.length,
+  }),
+  jsonEintrag({
+    key: K.entdeckenPins,
+    backupField: "entdecken_pins",
+    label: "Titel-Pins",
+    einheit: "Pins",
+    backupFallback: [],
+    pruefe: (v) => decodeEntdeckenPinsPot(v) !== null,
+    zuBackup: (v) => {
+      const decoded = decodeEntdeckenPinsPot(v);
+      return decoded?.owner
+        ? createEntdeckenPinsPot(decoded.pins, { owner: decoded.owner, epoch: decoded.epoch })
+        : normalizeEntdeckenPins(decoded?.pins || []);
+    },
+    zuTopf: (v) => {
+      const decoded = decodeEntdeckenPinsPot(v);
+      return decoded?.owner
+        ? createEntdeckenPinsPot(decoded.pins, { owner: decoded.owner, epoch: decoded.epoch })
+        : normalizeEntdeckenPins(decoded?.pins || []);
+    },
+    zaehle: (v) => decodeEntdeckenPinsPot(v)?.pins.length || 0,
   }),
   jsonEintrag({
     key: K.wochenplan,

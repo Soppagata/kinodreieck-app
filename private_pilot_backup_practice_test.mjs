@@ -58,6 +58,20 @@ function persoenlicherStand(label) {
     })],
     ["kd:artikel", JSON.stringify({ artikel: [], gespeichertAm: timestamp })],
     ["kd:kino-pins", "[]"],
+    ["kd:entdecken-pins", JSON.stringify({
+      format: "kd-entdecken-pins-v1",
+      owner: `account:practice-${label.toLowerCase()}`,
+      epoch: 1,
+      pins: [{
+        format: 1,
+        pinId: "watchmode:9821",
+        title: `Titel-Pin ${label}`,
+        year: 2026,
+        type: "film",
+        ids: { watchmode: "9821" },
+        pinnedAt: timestamp,
+      }],
+    })],
     ["kd:wochenplan", JSON.stringify({ version: 1, eintraege: [] })],
     ["kd:radar", JSON.stringify(radarState())],
     ["kd:merkliste", "[]"],
@@ -99,9 +113,10 @@ const profilA = mapDriver("lokal", "synthetic-profile-a", persoenlicherStand("A"
 const profilB = mapDriver("lokal", "synthetic-profile-b", persoenlicherStand("B"));
 
 await check("Praxisstand A deckt exakt alle Registry-Töpfe inklusive Radar ab", () => {
-  assert.equal(PERSONAL_DATA_KEYS.length, 18);
+  assert.equal(PERSONAL_DATA_KEYS.length, 19);
   assert.deepEqual([...profilA.values.keys()].sort(), [...PERSONAL_DATA_KEYS].sort());
   assert.equal(JSON.parse(profilA.values.get("kd:radar")).subscriptions.length, 1);
+  assert.equal(JSON.parse(profilA.values.get("kd:entdecken-pins")).pins.length, 1);
 });
 
 setStorageDriver(profilA);

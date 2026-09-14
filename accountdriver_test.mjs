@@ -97,14 +97,15 @@ function seed(konto, key, value, revision = 1) { tabelle.set(konto + "|" + key, 
 function db(konto, key) { return tabelle.get(konto + "|" + key)?.value ?? null; }
 
 /* ---------- B1: Topf-Liste ---------- */
-/* 18 seit Event-Radar Phase 2: kd:radar kam dazu. Die Zahl steht hier
+/* 19 seit den kontogebundenen Titel-Pins. Die Zahl steht hier
    bewusst hart -- sie ist die Wache dagegen, dass ein Topf still in die
    Sync-Liste rutscht, ohne dass Backup, Restore-Snapshot, Uebernahme-
    Vorschau und die DB-Whitelist mitgezogen werden. Wer sie erhoeht, hat
    diese vier Stellen zu pruefen. */
-check("B1 Genau 18 Töpfe gehören zum Konto", D.ACCOUNT_SYNC_KEYS.length === 18);
+check("B1 Genau 19 Töpfe gehören zum Konto", D.ACCOUNT_SYNC_KEYS.length === 19);
 check("B1 Der persönliche Wochenplan ist dabei", D.ACCOUNT_SYNC_KEYS.includes("kd:wochenplan"));
 check("B1 Der lokale Event-Radar-Cache ist dabei", D.ACCOUNT_SYNC_KEYS.includes("kd:radar"));
+check("B1 Entdecken-Titelpins sind dabei", D.ACCOUNT_SYNC_KEYS.includes("kd:entdecken-pins"));
 check("B1 Das Geschmacksprofil (Etappe 7) ist dabei",
   D.ACCOUNT_SYNC_KEYS.includes("kd:geschmacksprofil"));
 check("B1 Die vier Sicht-/Zeit-Präferenzen sind dabei",

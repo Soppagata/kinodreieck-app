@@ -139,12 +139,13 @@ check("Empfehlungspin fällt nach dem Refresh eindeutig auf den Kinoprogramm-Ein
   assert.equal(result.resolved[0]?.destination, "kino");
   assert.equal(result.resolved[0]?.target.programm_ref, "film-at-17");
 });
-check("Nicht mehr vorhandene und mehrdeutige Pins verschwinden still statt geraten zu werden", () => {
+check("Nicht vorhandene und mehrdeutige Pins bleiben für einen vollständigeren Katalog erhalten", () => {
   const stale = resolveEntdeckenPins([pin], {
     recommendations: [], streaming: [], cinema: [],
     recommendationReady: true, streamingReady: true, cinemaReady: true,
   });
-  assert.deepEqual(stale.discardedPinIds, [pin.pinId]);
+  assert.deepEqual(stale.discardedPinIds, []);
+  assert.deepEqual(stale.pendingPinIds, [pin.pinId]);
   const ambiguousPin = createEntdeckenPin({ title: "Doppel", year: 2026, type: "film" }, 1234);
   const ambiguous = resolveEntdeckenPins([ambiguousPin], {
     recommendations: [], streaming: [
@@ -153,7 +154,8 @@ check("Nicht mehr vorhandene und mehrdeutige Pins verschwinden still statt gerat
     ], cinema: [], recommendationReady: true, streamingReady: true, cinemaReady: true,
   });
   assert.deepEqual(ambiguous.resolved, []);
-  assert.deepEqual(ambiguous.discardedPinIds, [ambiguousPin.pinId]);
+  assert.deepEqual(ambiguous.discardedPinIds, []);
+  assert.deepEqual(ambiguous.pendingPinIds, [ambiguousPin.pinId]);
 });
 
 const recommendationInput = {

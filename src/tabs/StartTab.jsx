@@ -108,7 +108,7 @@ function VertrauensZeile({ progStand, streamingBekannt, programmInfo = null, str
 
 function StartDashboard({
   kinoPins = [], onNavigiere, zeigeEintrag,
-  entdeckenPins = [], webDiscoveryFeed = null, onEntdeckenPinsBereinigen, onSpringeZuEntdecken,
+  entdeckenPins = [], webDiscoveryFeed = null, onSpringeZuEntdecken,
   kinoMatches = { matched: [] }, mustwatch = [], mwKandidaten = null, auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
   programmInfo = null, streamingInfo = null,
@@ -240,11 +240,6 @@ function StartDashboard({
     mustwatchReady,
   }), [aktuelleEmpfehlungen, entdeckenPins, kinoKatalog, mustwatch, mustwatchReady,
     pinOwnerKey, progStand, serienKatalog, streamingBekannt, streamingEntdecken, webDiscoveryFeed]);
-  useEffect(() => {
-    if (entdeckenPinAufloesung.discardedPinIds.length) {
-      onEntdeckenPinsBereinigen?.(entdeckenPinAufloesung.discardedPinIds);
-    }
-  }, [entdeckenPinAufloesung.discardedPinIds, onEntdeckenPinsBereinigen]);
   const titelPins = entdeckenPinAufloesung.resolved;
   const zuletzt = useMemo(() => projectRecentPersonalEntries({ master, limit: 5 }), [master]);
 

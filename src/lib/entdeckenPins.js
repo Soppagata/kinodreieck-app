@@ -1,4 +1,4 @@
-/* Geraetelokale Titelpins.
+/* Persönliche Titelpins.
    Der Topf speichert nur die Identitaet, nie eine zweite Empfehlungsliste.
    Die Startansicht loest jeden Pin gegen die aktuell geladenen Bereiche auf:
    Entdecken zuerst, danach Streaming und Kino. Format 2 ergänzt ausschließlich
@@ -10,6 +10,7 @@ const MEDIA_TYPES = Object.freeze({
   series: "series", serie: "series", tv: "series", tv_series: "series",
 });
 const ID_NAMESPACES = Object.freeze(["watchmode", "wikidata", "imdb", "tmdb", "film_at", "record"]);
+export const ENTDECKEN_PINS_POT_FORMAT = "kd-entdecken-pins-v1";
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function positiveInteger(value) {
@@ -147,6 +148,32 @@ export function normalizeEntdeckenPins(value) {
   return Object.freeze([...unique.values()]);
 }
 
+export function createEntdeckenPinsPot(pins, { owner, epoch = null } = {}) {
+  const normalizedOwner = text(owner);
+  if (!normalizedOwner) return null;
+  return Object.freeze({
+    format: ENTDECKEN_PINS_POT_FORMAT,
+    owner: normalizedOwner,
+    epoch: Number.isInteger(epoch) && epoch >= 0 ? epoch : null,
+    pins: normalizeEntdeckenPins(pins),
+  });
+}
+
+export function decodeEntdeckenPinsPot(value) {
+  if (Array.isArray(value)) return Object.freeze({
+    pins: normalizeEntdeckenPins(value), owner: null, epoch: null, legacy: true,
+  });
+  if (!value || value.format !== ENTDECKEN_PINS_POT_FORMAT
+      || typeof value.owner !== "string" || !Array.isArray(value.pins)
+      || (value.epoch !== null && (!Number.isInteger(value.epoch) || value.epoch < 0))) return null;
+  return Object.freeze({
+    pins: normalizeEntdeckenPins(value.pins),
+    owner: text(value.owner),
+    epoch: value.epoch,
+    legacy: false,
+  });
+}
+
 function identitiesConflict(left, right) {
   return ID_NAMESPACES.filter((namespace) => namespace !== "record")
     .some((namespace) => left?.[namespace] && right?.[namespace]
@@ -277,7 +304,6 @@ export function resolveEntdeckenPins(pins, {
       const treffer = (Array.isArray(mustwatch) ? mustwatch : [])
         .filter((entry) => text(entry?.id) === pin.mustwatchId);
       if (treffer.length === 1) resolved.push(mustwatchDestination(pin, treffer[0]));
-      else if (mustwatchReady) discardedPinIds.push(pin.pinId);
       else pendingPinIds.push(pin.pinId);
       continue;
     }
@@ -286,26 +312,25 @@ export function resolveEntdeckenPins(pins, {
       resolved.push(recommendationDestination(pin, recommendation.candidate));
       continue;
     }
-    if (recommendation.status === "ambiguous") { discardedPinIds.push(pin.pinId); continue; }
+    if (recommendation.status === "ambiguous") { pendingPinIds.push(pin.pinId); continue; }
 
     const streamingMatch = matchCandidates(pin, streaming);
     if (streamingMatch.status === "matched") {
       const destination = streamingDestination(pin, streamingMatch.candidate);
       if (destination) resolved.push(destination);
-      else discardedPinIds.push(pin.pinId);
+      else pendingPinIds.push(pin.pinId);
       continue;
     }
-    if (streamingMatch.status === "ambiguous") { discardedPinIds.push(pin.pinId); continue; }
+    if (streamingMatch.status === "ambiguous") { pendingPinIds.push(pin.pinId); continue; }
 
     const cinemaMatch = matchCandidates(pin, cinema);
     if (cinemaMatch.status === "matched") {
       resolved.push(cinemaDestination(pin, cinemaMatch.candidate));
       continue;
     }
-    if (cinemaMatch.status === "ambiguous") { discardedPinIds.push(pin.pinId); continue; }
+    if (cinemaMatch.status === "ambiguous") { pendingPinIds.push(pin.pinId); continue; }
 
-    if (recommendationReady && streamingReady && cinemaReady) discardedPinIds.push(pin.pinId);
-    else pendingPinIds.push(pin.pinId);
+    pendingPinIds.push(pin.pinId);
   }
   return Object.freeze({
     resolved: Object.freeze(resolved),

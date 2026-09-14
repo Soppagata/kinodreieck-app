@@ -433,9 +433,12 @@ export default function App() {
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const { vokabular, setVokabular, saveVokabular } = useVokabularController({ setErr });
 
-  /* Lokale Start-Pins: Kinotermine mit Jahres-Wrap; Entdecken-Titel werden gerätelokal gegen aktuelle Bereiche aufgelöst. */
+  /* Persönliche Start-Pins: Kinotermine mit Jahres-Wrap; Entdecken-Titel werden im gebundenen Datenkontext aufgelöst. */
   const [kinoPins, setKinoPins] = useState([]);
-  const { entdeckenPins, toggleRecommendationPin, bereinigeEntdeckenPins } = useEntdeckenPins();
+  const { entdeckenPins, toggleRecommendationPin } = useEntdeckenPins({
+    contextKey: streamingKontextKey,
+    setErr,
+  });
   const wochenplanInitial = useMemo(() => {
     try { return normalisiereWochenplan(JSON.parse(localStorage.getItem(K.wochenplan) || "null")); }
     catch { return LEERER_WOCHENPLAN; }
@@ -1892,7 +1895,7 @@ export default function App() {
 
         {remoteKontoAktiv && tab === "start" && bootDone && (
           <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} onNavigiere={navigiere} zeigeEintrag={springeZuFilm}
-            entdeckenPins={entdeckenPins} webDiscoveryFeed={webDiscoveryState.feed} onEntdeckenPinsBereinigen={bereinigeEntdeckenPins} onSpringeZuEntdecken={() => navigiere("blog")}
+            entdeckenPins={entdeckenPins} webDiscoveryFeed={webDiscoveryState.feed} onSpringeZuEntdecken={() => navigiere("blog")}
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
             entdeckenStatus={entdeckenStatus}
             master={master || []} onSpringeZuStreaming={springeZuStreaming} onFilmAnlegen={addFilm}

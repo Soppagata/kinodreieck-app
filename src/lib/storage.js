@@ -75,6 +75,9 @@ export function captureStorageContext() {
     set: (key, value) => run("set", [key, value]),
     delete: (key) => run("delete", [key]),
     list: (prefix = "") => run("list", [prefix]),
+    hasConfirmedRemote: (key) => isCurrent()
+      && typeof driver?.hasConfirmedRemote === "function"
+      && driver.hasConfirmedRemote(key) === true,
     /* Auch ein frischer Pull gehört zu demselben gebundenen Auftrag. Ohne
        diese Grenze könnte ein Konto-/Treiberwechsel zwischen Pull und Reads
        zwei persönliche Datenräume in ein Backup mischen. */
@@ -175,7 +178,8 @@ export const K = {
   exportStand: "kd:export-stand",    // Export-Wächter: wann zuletzt Master/Artikel exportiert
   zeitgrenze: "kd:zeitgrenze",       // Kino-Tab: Zeitfilter für "Läuft auch" (Default 14:00)
   kinoPins: "kd:kino-pins",          // Angepinnte Kinotermine [{t,j,z,seit}] — Basis fürs Dashboard-Pinboard
-  entdeckenPins: "kd:entdecken-pins", // Geraetelokale Titelpins aus Entdecken — werden auf Start gegen aktuelle Bereiche aufgeloest
+  entdeckenPins: "kd:entdecken-pins", // Konto-/Backup-Topf fuer Titelpins aus Entdecken
+  entdeckenPinsLegacy: "kd:entdecken-pins:legacy-unbound", // geraetelokale Quarantaene fuer nicht eindeutig zuordenbaren Altbestand
   wochenplan: "kd:wochenplan",        // Persönlicher Folgen-/Staffelkalender {version,eintraege[]}
   radar: "kd:radar",                  // Lokaler Event-Radar: Gastabos oder accountgebundener Cache/Outbox/Receipts
   autorName: "kd:autor-name",        // Teilen & Tauschen: steht in jedem Paket-Export und im KI-Prompt

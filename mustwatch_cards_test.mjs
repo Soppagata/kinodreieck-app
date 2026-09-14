@@ -244,7 +244,8 @@ const falscheId = resolveEntdeckenPins([lokalerPin], {
   mustwatchReady: true,
 });
 assert.equal(falscheId.resolved.length, 0);
-assert.deepEqual(falscheId.discardedPinIds, [lokalerPin.pinId]);
+assert.deepEqual(falscheId.discardedPinIds, []);
+assert.deepEqual(falscheId.pendingPinIds, [lokalerPin.pinId]);
 
 const externerPin = createEntdeckenPin(streamingKandidat, 1234);
 assert.equal(externerPin.format, 1);

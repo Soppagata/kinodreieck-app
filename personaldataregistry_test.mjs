@@ -14,6 +14,7 @@ const R = await import("./src/lib/restore.js");
 const P = await import("./src/lib/personalDataRegistry.js");
 const A = await import("./src/lib/accountDriver.js");
 const LR = await import("./src/lib/localEventRadar.js");
+const EP = await import("./src/lib/entdeckenPins.js");
 
 let ok = 0;
 function check(name, wert) {
@@ -23,13 +24,25 @@ function check(name, wert) {
 }
 
 const eintraege = P.PERSONAL_DATA_ENTRIES;
-check("Register enthält genau die 18 persönlichen Töpfe", eintraege.length === 18);
+check("Register enthält genau die 19 persönlichen Töpfe", eintraege.length === 19);
 check("Wochenplan ist in Sync, Backup und Restore registriert",
   P.PERSONAL_DATA_KEYS.includes("kd:wochenplan")
   && P.personalDataEntry("kd:wochenplan")?.backupField === "wochenplan");
 check("Event-Radar ist in Sync, Backup und Restore registriert",
   P.PERSONAL_DATA_KEYS.includes("kd:radar")
   && P.personalDataEntry("kd:radar")?.backupField === "radar");
+check("Titel-Pins sind in Sync, Backup und Restore registriert",
+  P.PERSONAL_DATA_KEYS.includes("kd:entdecken-pins")
+  && P.personalDataEntry("kd:entdecken-pins")?.backupField === "entdecken_pins");
+const pinEintrag = P.personalDataEntry("kd:entdecken-pins");
+const pinTopf = EP.createEntdeckenPinsPot([
+  EP.createEntdeckenPin({ title: "Backup-Pin", year: 2026, type: "film", watchmodeId: 9812 }, 1234),
+], { owner: "account:registry-test", epoch: 7 });
+const pinBackup = pinEintrag.backupAusRoh(JSON.stringify(pinTopf));
+check("Ownergebundene Titel-Pins durchlaufen Backup und Restore bytegetreu",
+  JSON.stringify(pinBackup) === JSON.stringify(pinTopf)
+  && pinEintrag.restorePlan(pinBackup, "2026-09-14T20:00:00.000Z")?.wert === JSON.stringify(pinTopf)
+  && pinEintrag.zaehleRoh(JSON.stringify(pinTopf)) === 1);
 const radarEintrag = P.personalDataEntry("kd:radar");
 const radarStand = LR.createEmptyLocalRadar({ authority: "account-cache" });
 const radarBackup = radarEintrag.backupAusRoh(JSON.stringify(radarStand));
