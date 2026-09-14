@@ -77,7 +77,7 @@ export function istReinerPrognoseMasterwechsel(vorher, nachher, expandedId) {
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht, onSelectionStateChange,
   onFilmBatchVorschau, onFilmBatchLoeschen,
   mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] }, onSpringeZuMustwatchRef,
-  mustwatchSelectedServices = [], onMustwatchStreamingSuche, onMustwatchKandidatenAnfordern,
+  mustwatchSelectedServices = [], onMustwatchStreamingSuche, onMustwatchKandidatenAnfordern, onMustwatchSichtbarkeit,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
   onPrognoseErstellen, onPrognoseStatus,
@@ -88,6 +88,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   stapelimportKiAktiv = false, stapelimportFacts, setErr = () => {},
   recommendationPins = [], onRecommendationPinToggle }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
+  useEffect(() => {
+    onMustwatchSichtbarkeit?.(ansicht === "mustwatch");
+    return () => onMustwatchSichtbarkeit?.(false);
+  }, [ansicht, onMustwatchSichtbarkeit]);
   const [typTab, setTypTab] = useState("filme");
   const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
   const [bewerteTitel, setBewerteTitel] = useState(null); // Nachtrag-Titel, der gerade bewertet wird

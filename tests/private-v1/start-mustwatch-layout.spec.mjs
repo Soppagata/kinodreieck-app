@@ -25,6 +25,19 @@ async function boot(page, { theme, schrift }) {
     if (url.origin === PROJECT_URL) {
       if (url.pathname === "/rest/v1/kd_account_access") return json([{ role: "member", active: true, personal_ai: false }]);
       if (url.pathname === "/rest/v1/kd_personal") return json([]);
+      if (url.pathname === "/rest/v1/rpc/kd_mustwatch_streaming_candidates") {
+        const request = route.request().postDataJSON()?.p_request || {};
+        const requested = new Set((request.ids || []).map(String));
+        return json({
+          format: 1, status: "ready", version: "synthetic-mustwatch-v1",
+          expiresAt: "2099-01-01T00:00:00.000Z",
+          items: FILMS.filter((film) => requested.has(String(film.watchmode_id))).map((film) => ({
+            id: String(film.watchmode_id), watchmode_id: film.watchmode_id,
+            titel: film.titel, jahr: film.jahr, typ: "movie", dienste: film.dienste,
+            streaming_aliases: [],
+          })),
+        });
+      }
       if (["/rest/v1/kd_catalog", "/rest/v1/rpc/kd_streaming_catalog"].includes(url.pathname)) {
         const name = url.searchParams.has("p_name") ? `eq.${url.searchParams.get("p_name")}` : url.searchParams.get("name");
         let payload;

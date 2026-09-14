@@ -140,6 +140,7 @@ export default function App() {
   const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
     frischerStartWarnung ? [{ scope: ERROR_SCOPE.FRISCHER_START, text: frischerStartWarnung }] : []);
   const [tab, setTab] = useState(() => remoteKontoAktiv ? "start" : "mediathek");
+  const [mustwatchBereichSichtbar, setMustwatchBereichSichtbar] = useState(false);
   const navigationRevisionRef = useRef(0);
   const [ausstehenderKontoStartTab, setAusstehenderKontoStartTab] = useState(null);
   const sichtbareNavigation = remoteKontoAktiv ? NAVIGATION : LOCAL_NAVIGATION;
@@ -881,13 +882,18 @@ export default function App() {
     master: master || [],
     programm,
     programmAbgelaufen: programmInfo?.abgelaufen === true,
+    programmExpiresAt: programmInfo?.gueltigBis,
     contextKey: streamingKontextKey,
+    active: tab === "start" || (tab === "mediathek" && mustwatchBereichSichtbar),
   });
   const fordereMustwatchKandidatenAn = useCallback(() => {
-    if ((!programm || programmInfo?.abgelaufen) && snapshotFreigabe && loading !== "programm") {
+    const gueltigBis = Number(programmInfo?.gueltigBis);
+    const inzwischenAbgelaufen = programmInfo?.abgelaufen === true
+      || (Number.isFinite(gueltigBis) && gueltigBis <= Date.now());
+    if ((!programm || inzwischenAbgelaufen) && snapshotFreigabe && loading !== "programm") {
       void ladeProgrammDatei(false);
     }
-  }, [ladeProgrammDatei, loading, programm, programmInfo?.abgelaufen, snapshotFreigabe]);
+  }, [ladeProgrammDatei, loading, programm, programmInfo?.abgelaufen, programmInfo?.gueltigBis, snapshotFreigabe]);
 
   /* Der Seitenvertrag uebertraegt nur die fuer Identitaet und Filterung
      benoetigten Felder. Bewertungswerte, Notizen und sonstige persoenliche
@@ -1965,6 +1971,7 @@ export default function App() {
             mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef} datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
             mustwatchSelectedServices={sichtbareAuswahl} onMustwatchStreamingSuche={sucheMustwatchStreaming}
             onMustwatchKandidatenAnfordern={fordereMustwatchKandidatenAn}
+            onMustwatchSichtbarkeit={setMustwatchBereichSichtbar}
             remoteMasterStand={remoteMasterStandRef.current}
             stapelimportKiAktiv={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true && kiAn("stapelimport")}

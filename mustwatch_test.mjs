@@ -161,6 +161,16 @@ check("Verfügbarkeit: leerer Kandidatenbestand behauptet nichts",
 check("Verfügbarkeit: KEIN Titel-Fuzzy — gleicher Titel ohne passende ID zählt nicht",
   M.mustwatchVerfuegbarkeit({ titel: "Stalker", verknuepfung: { ziel: "programm", id: "stalker" } }, kandidaten) === null
   && M.mustwatchVerfuegbarkeit({ titel: "Stalker", verknuepfung: null }, kandidaten) === null);
+check("Verfügbarkeit: exakte ID gewinnt vor einem früheren Alias",
+  M.mustwatchKandidat({ streaming: [
+    { id: "alias-zuerst", titel: "Falsch", streaming_aliases: ["exakt"] },
+    { id: "exakt", titel: "Richtig", streaming_aliases: [] },
+  ] }, { ziel: "streaming", id: "exakt" })?.titel === "Richtig");
+check("Verfügbarkeit: mehrdeutiger Alias bleibt ohne Treffer",
+  M.mustwatchKandidat({ streaming: [
+    { id: "eins", titel: "Eins", streaming_aliases: ["geteilt"] },
+    { id: "zwei", titel: "Zwei", streaming_aliases: ["geteilt"] },
+  ] }, { ziel: "streaming", id: "geteilt" }) === null);
 
 /* ---------- 9) Sortierung der vollständigen Listenprojektion ---------- */
 const mwBestand = [ohneRef, inMediathek, imStream, toteRef, imKino];

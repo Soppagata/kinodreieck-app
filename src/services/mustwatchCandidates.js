@@ -27,8 +27,15 @@ function currentAuthority(auth, getConnection) {
 }
 
 function normalizeIds(values) {
-  return [...new Set((Array.isArray(values) ? values : [])
-    .map(text).filter(Boolean))].slice(0, MAX_IDS_PRO_LAUF);
+  const ids = [...new Set((Array.isArray(values) ? values : [])
+    .map(text).filter(Boolean))];
+  if (ids.length > MAX_IDS_PRO_LAUF) {
+    throw new BoundaryError(ERROR_CODES.LIMIT, {
+      source: "mustwatch-candidates", operation: "ids.normalize", reason: "mustwatch-ids-bounded",
+      retryable: false,
+    });
+  }
+  return ids;
 }
 
 function normalizeItem(raw) {
@@ -54,7 +61,7 @@ function normalizeItem(raw) {
 
 function normalizeResponse(raw, now) {
   if (raw?.format !== 1 || !["ready", "unavailable"].includes(raw?.status)
-      || !Array.isArray(raw?.items)) {
+      || typeof raw?.version !== "string" || !Array.isArray(raw?.items)) {
     throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
       source: "mustwatch-candidates", operation: "rpc.normalize", reason: "envelope",
     });
@@ -92,6 +99,8 @@ export function createMustwatchCandidatesService({
   fetchImpl = null,
   now = () => Date.now(),
   timeoutMs = 15000,
+  cacheTtlMs = DEFAULT_TTL_MS,
+  emptyCacheTtlMs = EMPTY_TTL_MS,
 } = {}) {
   let generation = 0;
   let authorityKey = null;
@@ -151,9 +160,15 @@ export function createMustwatchCandidatesService({
     if (outerSignal?.aborted) abortFromCaller();
     else outerSignal?.addEventListener?.("abort", abortFromCaller, { once: true });
     const timer = controller ? setTimeout(() => controller.abort(), Math.min(Math.max(1, timeoutMs), 15000)) : null;
+    const throwIfAborted = () => {
+      if (!controller?.signal?.aborted && !outerSignal?.aborted) return;
+      throw Object.assign(new Error("Must-Watch-Kandidatenanfrage abgebrochen"), { name: "AbortError" });
+    };
     try {
+      throwIfAborted();
       assertCurrent(authority, runGeneration, `${operation}.before-token`);
       const token = await driver?.getAccessToken?.({ erwarteteKontoId: authority.accountId });
+      throwIfAborted();
       assertCurrent(authority, runGeneration, `${operation}.after-token`);
       if (!token) throw new BoundaryError(ERROR_CODES.UNAUTHENTICATED, {
         source: "mustwatch-candidates", operation, reason: "token-missing",
@@ -172,6 +187,7 @@ export function createMustwatchCandidatesService({
       });
       let body = null;
       try { body = await response?.json?.(); } catch { /* unten als ungültig */ }
+      throwIfAborted();
       assertCurrent(authority, runGeneration, `${operation}.after-response`);
       if (!response?.ok) {
         if (rpcMissing(body, response?.status)) {
@@ -197,21 +213,35 @@ export function createMustwatchCandidatesService({
 
   const cacheDeadline = (response) => {
     const remote = Date.parse(String(response?.expiresAt || ""));
-    if (Number.isFinite(remote)) return remote;
-    return now() + (response?.status === "ready" && response.items.length ? DEFAULT_TTL_MS : EMPTY_TTL_MS);
+    const requestedTtl = response?.status === "ready" && response.items.length ? cacheTtlMs : emptyCacheTtlMs;
+    const maxTtl = response?.status === "ready" && response.items.length ? DEFAULT_TTL_MS : EMPTY_TTL_MS;
+    const local = now() + Math.min(maxTtl, Math.max(1, Number(requestedTtl) || maxTtl));
+    return Number.isFinite(remote) ? Math.min(remote, local) : local;
   };
   const trimIdCache = () => {
     while (idCache.size > MAX_ID_CACHE) idCache.delete(idCache.keys().next().value);
   };
   const storeIdResponse = (requested, response) => {
     const expiresAt = cacheDeadline(response);
-    const byKey = new Map();
+    const exact = new Map();
+    const aliases = new Map();
     for (const item of response.items) {
-      byKey.set(item.id, item);
-      for (const alias of item.streaming_aliases || []) if (!byKey.has(alias)) byKey.set(alias, item);
+      if (!exact.has(item.id)) exact.set(item.id, []);
+      exact.get(item.id).push(item);
+      for (const alias of item.streaming_aliases || []) {
+        if (!aliases.has(alias)) aliases.set(alias, []);
+        aliases.get(alias).push(item);
+      }
     }
-    for (const id of requested) idCache.set(id, { item: byKey.get(id) || null, expiresAt });
-    for (const [id, item] of byKey) idCache.set(id, { item, expiresAt });
+    const unique = (items) => items?.length === 1 ? items[0] : null;
+    for (const id of requested) {
+      const item = unique(exact.get(id)) || (!exact.has(id) ? unique(aliases.get(id)) : null);
+      idCache.set(id, { item, expiresAt, version: response.version });
+    }
+    for (const [id, items] of exact) {
+      const item = unique(items);
+      if (item) idCache.set(id, { item, expiresAt, version: response.version });
+    }
     trimIdCache();
   };
 
@@ -225,34 +255,57 @@ export function createMustwatchCandidatesService({
     const valid = new Map();
     const missing = [];
     let earliestExpiry = Infinity;
+    const cachedVersions = new Set();
     for (const id of ids) {
       const cached = idCache.get(id);
       if (cached?.expiresAt > now()) {
         earliestExpiry = Math.min(earliestExpiry, cached.expiresAt);
+        cachedVersions.add(cached.version);
         if (cached.item) valid.set(cached.item.id, cached.item);
       } else {
         if (cached) idCache.delete(id);
         missing.push(id);
       }
     }
-    let version = "";
+    if (cachedVersions.size > 1) {
+      idCache.clear();
+      throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+        source: "mustwatch-candidates", operation: "ids.load", reason: "catalog-version-mismatch",
+      });
+    }
+    let version = cachedVersions.size ? [...cachedVersions][0] : null;
     try {
       for (let start = 0; start < missing.length; start += MAX_IDS_PRO_REQUEST) {
         const chunk = missing.slice(start, start + MAX_IDS_PRO_REQUEST);
         const response = await request(authority, {
           format: 1, ids: chunk, query: "", limit: 6,
         }, signal, "ids.load", controller);
-        if (response.status !== "ready") return response;
+        if (response.status !== "ready") {
+          idCache.clear();
+          return response;
+        }
+        if (version != null && response.version !== version) {
+          idCache.clear();
+          throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+            source: "mustwatch-candidates", operation: "ids.load", reason: "catalog-version-mismatch",
+          });
+        }
+        version = response.version;
         storeIdResponse(chunk, response);
-        version = response.version || version;
         earliestExpiry = Math.min(earliestExpiry, cacheDeadline(response));
-        for (const item of response.items) valid.set(item.id, item);
+        for (const id of chunk) {
+          const cached = idCache.get(id);
+          if (cached?.item) valid.set(cached.item.id, cached.item);
+        }
       }
       return Object.freeze({
-        format: 1, status: "ready", version,
+        format: 1, status: "ready", version: version || "",
         expiresAt: Number.isFinite(earliestExpiry) ? new Date(earliestExpiry).toISOString() : null,
         items: Object.freeze([...valid.values()]),
       });
+    } catch (error) {
+      idCache.clear();
+      throw error;
     } finally {
       if (activeLookup === controller) activeLookup = null;
     }

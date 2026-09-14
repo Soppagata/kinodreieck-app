@@ -62,6 +62,7 @@ const streamingKandidat = {
 const start = [
   { id: "mw_stalker", titel: "Stalker", jahr: 1979, typ: "film", im_besitz: false, notiz: "Tarkowski", verknuepfung: { ziel: "streaming", id: 7001 } },
   { id: "mw_offen", titel: "Ohne sichere Referenz", jahr: null, typ: "", im_besitz: true, notiz: "", verknuepfung: null },
+  { id: "mw_roh", titel: "Eigener Titel", jahr: 2024, typ: "film", im_besitz: false, notiz: "", verknuepfung: { ziel: "streaming", id: "motn:anbieter:123" } },
 ];
 const pins = [];
 const pinAufrufe = [];
@@ -80,7 +81,9 @@ function Harness() {
     onKandidatenAnfordern: () => { pickerLoads += 1; },
     onStreamingSuche: async (query) => {
       pickerQueries.push(query);
-      return [{ id: "remote-1", titel: "Remote Treffer", jahr: 2025, dienste: ["MUBI"] }];
+      return query === "Remote"
+        ? [{ id: "remote-1", titel: "Solaris", originaltitel: "Remote Treffer", jahr: 2025, dienste: ["MUBI"] }]
+        : [{ id: "remote-2", titel: "Neue Suche", originaltitel: "New Search", jahr: 2026, dienste: ["MUBI"] }];
     },
     recommendationPins: pins,
     pinOwnerKey: OWNER_A,
@@ -122,6 +125,8 @@ assert.ok(stalker?.classList.contains("kd-titelaktionskarte"));
 assert.equal(stalker.querySelectorAll(".kd-titelkarten-aktionen button").length, 3);
 assert.equal(offen.querySelector(".kd-entdecken-pin")?.disabled, false);
 assert.match(document.body.textContent, /1 jetzt verfügbar/u);
+assert.doesNotMatch(document.body.textContent, /motn:anbieter:123/u,
+  "Fehlende Kandidaten zeigen den eigenen Must-Watch-Titel statt technischer IDs");
 
 const jetztChip = [...document.querySelectorAll("button")]
   .find((el) => el.textContent.trim() === "Jetzt verfügbar");
@@ -148,7 +153,20 @@ await act(async () => {
   await new Promise((resolve) => setTimeout(resolve, 220));
 });
 assert.deepEqual(pickerQueries, ["Remote"], "Nur der ausdrücklich eingegebene Pickertext wird gesucht");
-assert.ok([...document.querySelectorAll("button")].some((el) => /Remote Treffer/.test(el.textContent)));
+assert.ok([...document.querySelectorAll("button")].some((el) => /Solaris/.test(el.textContent)),
+  "Serverseitiger Originaltitel-Treffer wird nicht erneut nur gegen den Anzeigetitel gefiltert");
+assert.equal(pickerLoads, 1, "Picker-Programmload bleibt trotz Callback-Wechsel bei einem Versuch pro Öffnen");
+await act(async () => {
+  const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set;
+  setter.call(pickerInput, "Neu");
+  pickerInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  await Promise.resolve();
+});
+assert.equal([...document.querySelectorAll("button")].some((el) => /Solaris/.test(el.textContent)), false,
+  "Ein Querywechsel leert alte Pickertreffer sofort");
+await act(async () => { await new Promise((resolve) => setTimeout(resolve, 220)); });
+assert.deepEqual(pickerQueries, ["Remote", "Neu"]);
+assert.ok([...document.querySelectorAll("button")].some((el) => /Neue Suche/.test(el.textContent)));
 assert.doesNotMatch(document.body.textContent, /\bready\b|unavailable|ungeprüft/iu,
   "Interne RPC-Zustände werden nicht als neue Statusworte sichtbar");
 await click([...document.querySelectorAll("button")].find((el) => el.textContent.trim() === "Abbrechen"));

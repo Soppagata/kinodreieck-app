@@ -84,6 +84,19 @@ export function passtZuMustwatchSuche(eintrag, suche) {
 
 const STATUS_LABEL = { master: "MEDIATHEK", programm: "IM KINO", streaming: "STREAMING" };
 
+export function mustwatchKandidat(kandidaten, verknuepfung) {
+  if (!verknuepfung || !STATUS_LABEL[verknuepfung.ziel] || verknuepfung.id == null) return null;
+  const refId = String(verknuepfung.id);
+  const liste = Array.isArray(kandidaten?.[verknuepfung.ziel]) ? kandidaten[verknuepfung.ziel] : [];
+  const exact = liste.filter((item) => item?.id != null && String(item.id) === refId);
+  if (exact.length) return exact.length === 1 ? exact[0] : null;
+  if (verknuepfung.ziel !== "streaming") return null;
+  const alias = liste.filter((item) => item?.id != null
+    && (Array.isArray(item.streaming_aliases) ? item.streaming_aliases : [])
+      .some((id) => String(id) === refId));
+  return alias.length === 1 ? alias[0] : null;
+}
+
 /* Verfügbarkeit ausschließlich aus expliziter stabiler Verknüpfung + aktuell
    geladenem Kandidatenbestand. Kein Titelvergleich, kein Fuzzy, kein Rateweg.
    IDs werden tolerant als String verglichen (watchmode_id ist eine Zahl,
@@ -92,12 +105,7 @@ export function mustwatchVerfuegbarkeit(eintrag, kandidaten = {}, selectedServic
   const ref = eintrag?.verknuepfung;
   if (!ref || !STATUS_LABEL[ref.ziel] || ref.id == null || String(ref.id).trim() === "") return null;
   const ownedByEntry = eintrag?.im_besitz === true;
-  const liste = Array.isArray(kandidaten?.[ref.ziel]) ? kandidaten[ref.ziel] : [];
-  const refId = String(ref.id);
-  const kandidat = liste.find((k) => k && k.id != null && (
-    String(k.id) === refId || (ref.ziel === "streaming"
-      && (Array.isArray(k.streaming_aliases) ? k.streaming_aliases : []).some((id) => String(id) === refId))
-  ));
+  const kandidat = mustwatchKandidat(kandidaten, ref);
   /* Der Besitzhaken ist persönlicher Zustand und bleibt auch dann nutzbar,
      wenn die neutrale Kandidaten-RPC oder das Kinoprogramm gerade nicht
      antwortet. Die gespeicherte explizite Ref bindet ihn an eine Identität;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm } from "../lib/match.js";
 import { Chip } from "./ui.jsx";
@@ -7,7 +7,7 @@ import { TitelKartenAktionen } from "./TitelKartenAktionen.jsx";
 import { createEntdeckenPin, isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 import {
-  MUSTWATCH_FILTER, mustwatchJahr, mustwatchTyp, mustwatchVerfuegbarkeit, projiziereMustwatch,
+  MUSTWATCH_FILTER, mustwatchJahr, mustwatchKandidat, mustwatchTyp, mustwatchVerfuegbarkeit, projiziereMustwatch,
 } from "../lib/mustwatch.js";
 import { passtInJahrzehntMitKulanz, streamingAnfangsbuchstabe, streamingJahrzehntBereich } from "../lib/streamingSort.js";
 
@@ -28,15 +28,6 @@ const TYP_LABEL = { film: "Film", serie: "Serie" };
 const FILTER_LABEL = { alle: "Alle", jetzt: "Jetzt verfügbar", film: "Filme", serie: "Serien" };
 
 const monoKlein = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
-
-function findeKandidat(kandidaten, verknuepfung) {
-  if (!verknuepfung) return null;
-  const refId = String(verknuepfung.id);
-  return (kandidaten?.[verknuepfung.ziel] || []).find((item) => item?.id != null && (
-    String(item.id) === refId || (verknuepfung.ziel === "streaming"
-      && (item.streaming_aliases || []).some((id) => String(id) === refId))
-  )) || null;
-}
 
 /* Jahr und Art werden im Formular und in der Karte identisch angeboten, damit
    nachträgliches Ergänzen genauso aussieht wie das Anlegen. */
@@ -164,7 +155,9 @@ function VerknuepfungsPicker({ kandidaten, onStreamingSuche, onKandidatenAnforde
   const [suche, setSuche] = useState("");
   const [streamingTreffer, setStreamingTreffer] = useState([]);
   const [streamingLaedt, setStreamingLaedt] = useState(false);
-  useEffect(() => { onKandidatenAnfordern?.(); }, [onKandidatenAnfordern]);
+  const kandidatenAnfordernRef = useRef(onKandidatenAnfordern);
+  kandidatenAnfordernRef.current = onKandidatenAnfordern;
+  useEffect(() => { kandidatenAnfordernRef.current?.(); }, []);
   useEffect(() => {
     const query = suche.trim();
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -173,6 +166,7 @@ function VerknuepfungsPicker({ kandidaten, onStreamingSuche, onKandidatenAnforde
       setStreamingLaedt(false);
       return () => controller?.abort();
     }
+    setStreamingTreffer([]);
     setStreamingLaedt(true);
     const timer = setTimeout(() => {
       Promise.resolve(onStreamingSuche(query, { signal: controller?.signal, limit: 6 }))
@@ -188,7 +182,10 @@ function VerknuepfungsPicker({ kandidaten, onStreamingSuche, onKandidatenAnforde
     const gruppen = [];
     const streaming = typeof onStreamingSuche === "function" ? streamingTreffer : kandidaten.streaming;
     for (const [ziel, liste] of [["master", kandidaten.master], ["programm", kandidaten.programm], ["streaming", streaming]]) {
-      const hits = (liste || []).filter((k) => k?.id != null && norm(k.titel).includes(nq)).slice(0, 6);
+      const hits = ziel === "streaming" && typeof onStreamingSuche === "function"
+        ? (liste || []).filter((k) => k?.id != null).slice(0, 6)
+        : (liste || []).filter((k) => k?.id != null
+          && [k.titel, k.originaltitel].some((title) => norm(title).includes(nq))).slice(0, 6);
       if (hits.length) gruppen.push({ ziel, hits });
     }
     return gruppen;
@@ -295,10 +292,10 @@ export function MustWatchListe({
   const [gesehenSpeichert, setGesehenSpeichert] = useState(null);
   const [gesehenFehler, setGesehenFehler] = useState("");
 
-  const titelZu = (v) => {
-    if (!v) return "";
-    const k = findeKandidat(kandidaten, v);
-    return k ? k.titel : v.id;
+  const titelZu = (v, fallbackTitel) => {
+    if (!v) return fallbackTitel || "";
+    const k = mustwatchKandidat(kandidaten, v);
+    return k?.titel || fallbackTitel || "Verknüpfter Titel";
   };
   /* Reine Such-/Filterprojektion der vollständigen Must-Watch-Ansicht. */
   const projektion = useMemo(() => {
@@ -351,7 +348,7 @@ export function MustWatchListe({
     if (lokal && isEntdeckenPinned(recommendationPins, lokal)) return lokal;
     const ref = eintrag?.verknuepfung;
     if (["programm", "streaming"].includes(ref?.ziel) && ref.id != null) {
-      const kandidat = findeKandidat(kandidaten, ref);
+      const kandidat = mustwatchKandidat(kandidaten, ref);
       if (kandidat && ref.ziel === "streaming") {
         const extern = {
           ...kandidat,
@@ -522,8 +519,8 @@ export function MustWatchListe({
                   ↪ {ZIEL_LABEL[e.verknuepfung.ziel] || e.verknuepfung.ziel}:{" "}
                   {["master", "programm", "streaming"].includes(e.verknuepfung.ziel) && onSpringeZuRef
                     ? <a href="#" onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); onSpringeZuRef(e.verknuepfung, e); }}
-                        style={{ color: T.tinte, textDecorationColor: T.wolfram, textUnderlineOffset: 3 }}>{titelZu(e.verknuepfung)}</a>
-                    : titelZu(e.verknuepfung)}
+                        style={{ color: T.tinte, textDecorationColor: T.wolfram, textUnderlineOffset: 3 }}>{titelZu(e.verknuepfung, e.titel)}</a>
+                    : titelZu(e.verknuepfung, e.titel)}
                 </div>
               )}
               {gesehenFrage === e.id && (
