@@ -14,10 +14,10 @@ Gemeinsame Paketbasis: der Commit, der dieses Register erstmals anlegt.
 
 | ID | Nutzbares Ergebnis | Status | Paket / Kandidat |
 |---|---|---|---|
-| K1 | KI-Schalter benennen und erklären die tatsächlich steuerbaren Funktionen; Profilhinweise stimmen mit der Wirkung überein. | LOKAL GEPRÜFT | KI / `4f9978f`, `291bfd8` |
-| K2 | Der Schalter für mehrere Titel verweist auf den sichtbaren Mediathek-Einstieg; die wirkungslose Entdecken-Checkbox ist entfernt. | LOKAL GEPRÜFT | KI / `291bfd8`, `0b9a2ba` |
-| D1 | Settings und Login nennen dieselben eingebundenen Dienste, ihren Zweck und die übertragenen Daten. | LOKAL GEPRÜFT | DATENSCHUTZ / `8dadf8e`, `f01378a`, `d5a3c83`, `a16c7e8` |
-| D2 | Der Datenschutztext erklärt die verfügbare Gerätesicherung und den weiterhin gesperrten vollständigen Kontoexport verständlich. | LOKAL GEPRÜFT | DATENSCHUTZ / `8dadf8e`, `f01378a`, `d5a3c83` |
+| K1 | KI-Schalter benennen und erklären die tatsächlich steuerbaren Funktionen; Profilhinweise stimmen mit der Wirkung überein. | AUSGELIEFERT | KI / `4f9978f`, `291bfd8` |
+| K2 | Der Schalter für mehrere Titel verweist auf den sichtbaren Mediathek-Einstieg; die wirkungslose Entdecken-Checkbox ist entfernt. | AUSGELIEFERT | KI / `291bfd8`, `0b9a2ba` |
+| D1 | Settings und Login nennen dieselben eingebundenen Dienste, ihren Zweck und die übertragenen Daten. | AUSGELIEFERT | DATENSCHUTZ / `8dadf8e`, `f01378a`, `d5a3c83`, `a16c7e8` |
+| D2 | Der Datenschutztext erklärt die verfügbare Gerätesicherung und den weiterhin gesperrten vollständigen Kontoexport verständlich. | AUSGELIEFERT | DATENSCHUTZ / `8dadf8e`, `f01378a`, `d5a3c83` |
 
 ## Parallelwelle
 
@@ -112,5 +112,35 @@ festen unteren Suchleiste in die Mitte gescrollt. Alle externen Anfragen wurden
 abgefangen. Nachweise unter `/private/tmp/kd-settings-mobile-20260914/`:
 `release-final.log` (Chromium) und `release-webkit-final.log` (WebKit).
 
-Freigabebedingungen lokal erfüllt; Push, CI und Auslieferungs-Readback stehen
-als nächster Schritt an. `git diff --check` ist sauber.
+Freigabebedingungen lokal erfüllt; `git diff --check` ist sauber.
+
+## Auslieferungsnachweis
+
+Veröffentlichter Produktstand: `8c900fdb24d939b90d8b2c4b17805a7c4c42682e`.
+Push und anschließende Remote-Abfrage bestätigen diesen Commit auf `main` und
+`staging`. Dieser Nachweis ist ein nachfolgender Dokumentationscommit auf dem
+Featurebranch; der ausgelieferte Produktstand bleibt `8c900fd`.
+
+- Staging: [CI und Deployment 34875583852](https://github.com/Soppagata/kinodreieck-app/actions/runs/34875583852)
+  vollständig erfolgreich; `https://staging.kinodreieck.at` liefert den exakten
+  Commit mit Umgebung `staging`.
+- Produktion: [CI und Deployment 34876860445](https://github.com/Soppagata/kinodreieck-app/actions/runs/34876860445)
+  vollständig erfolgreich. Die reguläre GitHub-Produktionsfreigabe erfolgte
+  nach allen grünen Testgates auf Basis der Owner-Freigabe; Schutzregeln wurden
+  nicht geändert. `https://kinodreieck.at` liefert denselben Commit mit Umgebung
+  `production`.
+- Beide Domains: HTTPS-, Build-, Service-Worker-, JavaScript-Asset-, Login- und
+  Header-Readback bestanden. Die zusätzliche lokale anonyme DB-Sichtprüfung
+  wurde mangels öffentlicher Supabase-Umgebungsvariablen ausdrücklich übersprungen;
+  die jeweiligen Deploymentjobs prüften mit ihrer konfigurierten Umgebung.
+- Frischer öffentlicher Chromium-Readback bei 393 Pixeln auf beiden Domains:
+  14 Dienste, korrigierte Sicherheitskopie-/Kontoexporttexte, neuer KI-Importname
+  und entfernte Checkbox in den tatsächlichen JS-Modulen bestätigt; kein
+  horizontaler Überlauf, keine JavaScript-Fehler und keine Drittanfragen.
+  Nachweise: `/private/tmp/kd-settings-staging-readback-20260914.json` und
+  `/private/tmp/kd-settings-production-readback-20260914.json`; Screenshots unter
+  `/private/tmp/kd-settings-mobile-20260914/{staging,production}-published.png`.
+
+K1, K2, D1 und D2 sind damit gebaut, lokal geprüft, committed, gepusht,
+CI-grün und auf beiden Domains bestätigt. Kein physischer iPhone-/PWA-Nachweis
+und keine Live-KI-Anbieterprobe beansprucht.
