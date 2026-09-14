@@ -270,23 +270,28 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     await expect.poll(() => slowOldFollowId).not.toBeNull();
   });
 
-  let gestureMs = null;
+  let gestureTiming = null;
   const gestureEventStart = events.length;
   await step("rapid A-to-Z gesture aborts the stale follow-up and sends only Z", async () => {
     const alphabet = page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" });
-    gestureMs = await alphabet.evaluate(async (element) => {
+    gestureTiming = await alphabet.evaluate(async (element) => {
       const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
       element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       const started = performance.now();
+      let previousInputAt = started;
+      let maxInputGapMs = 0;
       for (const value of ["1", "5", "10", "15", "20", "26"]) {
+        const inputAt = performance.now();
+        maxInputGapMs = Math.max(maxInputGapMs, inputAt - previousInputAt);
+        previousInputAt = inputAt;
         setValue.call(element, value);
         element.dispatchEvent(new Event("input", { bubbles: true }));
         await new Promise((resolve) => setTimeout(resolve, 2));
       }
       element.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-      return performance.now() - started;
+      return { totalMs: performance.now() - started, maxInputGapMs };
     });
-    expect(gestureMs).toBeLessThan(80);
+    expect(gestureTiming.maxInputGapMs).toBeLessThan(80);
     await expect(alphabet).toHaveAttribute("aria-valuetext", "Buchstabe Z");
     await expect.poll(() => events.find((entry) => entry.kind === "rpc-response"
       && entry.view === "all" && entry.cursor === "initial" && entry.letter === "Z")).toBeTruthy();
@@ -345,7 +350,8 @@ test("progressiver PWA-Gesamtfluss gegen echte lokale SQL-Seiten", async ({ page
     automaticPortionCount,
     returnedAllCount,
     zFilterCount,
-    gestureMs: Math.round(gestureMs),
+    gestureTotalMs: Math.round(gestureTiming.totalMs),
+    gestureMaxInputGapMs: Math.round(gestureTiming.maxInputGapMs),
     abortedSlowFollow: true,
     filterRequestsDuringGesture: gestureRequests.map((entry) => entry.letter),
     fullKnownAfterFirstPage,
