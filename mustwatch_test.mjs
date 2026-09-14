@@ -105,7 +105,10 @@ check("Suche: Nichttreffer bleibt Nichttreffer", M.passtZuMustwatchSuche(suchEin
 
 /* ---------- 8) Verfügbarkeit: nur aus expliziter stabiler Verknüpfung ---------- */
 const kandidaten = {
-  master: [{ id: "solaris_1972", titel: "Solaris", jahr: 1972, quelle: "dvd" }],
+  master: [
+    { id: "solaris_1972", titel: "Solaris", jahr: 1972, quelle: "dvd" },
+    { id: "digital", titel: "Lokaler Titel", originaltitel: "Exact Original", jahr: 2024, typ: "film", quelle: "apple" },
+  ],
   programm: [{ id: 4711, titel: "Stalker", jahr: 1979 }],
   streaming: [
     { id: 88123, watchmode_id: 88123, titel: "The Substance", jahr: 2024, dienste: ["MUBI"] },
@@ -114,6 +117,9 @@ const kandidaten = {
        auf der normalisierten Watchmode-ID. */
     { id: 77002, watchmode_id: 77002, master_id: "alien_1979", titel: "Alien", jahr: 1979 },
   ],
+  linkedStreaming: {
+    "master:digital": { id: "catalog-42", titel: "Exact Original", jahr: 2024, typ: "film", dienste: ["Netflix"] },
+  },
 };
 const imKino = { id: "mw_a", titel: "Stalker", verknuepfung: { ziel: "programm", id: "4711" }, erstellt_am: "2026-08-01T10:00:00Z" };
 const imStream = { id: "mw_b", titel: "The Substance", verknuepfung: { ziel: "streaming", id: 88123 }, erstellt_am: "2026-07-29T10:00:00Z" };
@@ -142,6 +148,18 @@ check("Verfügbarkeit: reine Master-Mitgliedschaft und digitale Quelle behaupten
     { ...inMediathek, verknuepfung: { ziel: "master", id: "digital" } },
     { master: [{ id: "digital", titel: "Digital", quelle: "apple" }] },
   )?.aktuell === false);
+check("Verfügbarkeit: explizite Masterref ohne externe ID nutzt den serverseitig eindeutigen Streamingabgleich",
+  M.mustwatchVerfuegbarkeit(
+    { ...inMediathek, verknuepfung: { ziel: "master", id: "digital" } },
+    kandidaten, ["Netflix"],
+  )?.gruende.streaming.join(",") === "Netflix");
+check("Verfügbarkeit: Dienstabwahl entfernt den Stream, ohne digitalen Besitz zu erfinden",
+  M.mustwatchVerfuegbarkeit(
+    { ...inMediathek, verknuepfung: { ziel: "master", id: "digital" } },
+    kandidaten, [],
+  )?.aktuell === false);
+check("Verfügbarkeit: gleichnamige unverknüpfte Notiz übernimmt keinen verknüpften Streamingtreffer",
+  M.mustwatchVerfuegbarkeit({ ...ohneRef, titel: "Exact Original", im_besitz: true }, kandidaten, ["Netflix"]) === null);
 check("Verfügbarkeit: Besitzhaken zählt erst mit weiterhin gültiger expliziter Verknüpfung",
   M.mustwatchVerfuegbarkeit({ ...ohneRef, im_besitz: true }, kandidaten) === null
   && M.mustwatchVerfuegbarkeit({ ...imStream, im_besitz: true }, kandidaten, []).aktuell === true);
@@ -216,6 +234,9 @@ check("Filter und Suche greifen gemeinsam",
   M.projiziereMustwatch(mitTypen, { filter: "film", suche: "serie" }, kandidaten).length === 0);
 check("MUSTWATCH_FILTER benennt genau die vier Ansichten",
   M.MUSTWATCH_FILTER.join(",") === "alle,jetzt,film,serie");
+check("Mediathek-Gesamtbadge zeigt vor dem bestätigten Personalread keine geschätzte Null",
+  M.mustwatchBadgeAnzahl([], false) === null
+  && M.mustwatchBadgeAnzahl([imKino, imStream], true) === 2);
 
 /* ---------- 11) Bestandsfelder überleben die Projektionen ---------- */
 const altbestand = [{
@@ -234,23 +255,28 @@ const dailyEntries = [
   { id: "mw_cinema", titel: "Cinema", jahr: 2026, verknuepfung: { ziel: "programm", id: "cinema-auto" } },
   { id: "mw_stream", titel: "Stream", typ: "film", verknuepfung: { ziel: "streaming", id: "1" } },
   { id: "mw_other", titel: "Other Stream", verknuepfung: { ziel: "streaming", id: "2" } },
+  { id: "mw_master_stream", titel: "Linked Master Stream", verknuepfung: { ziel: "master", id: "master-stream" } },
 ];
 const dailyCandidates = {
-  master: [{ id: "owned", titel: "Owned" }],
+  master: [{ id: "owned", titel: "Owned" }, { id: "master-stream", titel: "Linked Master Stream", jahr: 2024, typ: "film" }],
   programm: [{ id: "cinema-auto", projection_id: "cinema-auto", titel: "Cinema", jahr: 2026 }],
   streaming: [
     { id: 1, titel: "Stream", typ: "movie", dienste: ["MUBI", "Andere"] },
     { id: 2, titel: "Other Stream", dienste: ["Netflix"] },
   ],
+  linkedStreaming: {
+    "master:master-stream": { id: 3, titel: "Linked Master Stream", jahr: 2024, typ: "film", dienste: ["MUBI"] },
+  },
 };
 const daily = M.projectDailyMustwatch({
   entries: dailyEntries, candidates: dailyCandidates, selectedServices: ["mubi"], day: "2026-09-05",
 });
-check("Tagesauswahl kombiniert verknüpften Besitz, Kino und case-sichere Dienstauswahl",
-  daily.length === 3
+check("Tagesauswahl kombiniert verknüpften Besitz, Kino, direkte und Master-verknüpfte Streams",
+  daily.length === 4
   && daily.some((item) => item.entry.id === "mw_owned" && item.reasons.owned)
   && daily.some((item) => item.entry.id === "mw_cinema" && item.reasons.cinema)
   && daily.some((item) => item.entry.id === "mw_stream" && item.reasons.streaming[0] === "MUBI")
+  && daily.some((item) => item.entry.id === "mw_master_stream" && item.reasons.streaming[0] === "MUBI")
   && daily.every((item) => item.entry.id !== "mw_other"));
 check("Leere Anbieterauswahl ist ausdrücklich keine Streamingfreigabe",
   M.projectDailyMustwatch({ entries: [dailyEntries[2]], candidates: dailyCandidates, selectedServices: [], day: "2026-09-05" }).length === 0);

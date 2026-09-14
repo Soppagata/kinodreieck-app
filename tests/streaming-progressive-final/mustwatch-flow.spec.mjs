@@ -8,7 +8,7 @@ const NOW = "2026-09-14T10:00:00.000Z";
 const STREAMING_ID = "901258";
 
 let pg;
-test.beforeAll(async () => { pg = await startStreamingProgressivePgHarness(); });
+test.beforeAll(async () => { pg = await startStreamingProgressivePgHarness({ mustwatchFixture: true }); });
 test.afterAll(async () => { pg?.stop(); });
 
 async function seed(page) {
@@ -29,6 +29,10 @@ async function seed(page) {
         id: "dvd-besitz", titel: "DVD Besitz", originaltitel: "DVD Besitz", jahr: 1984,
         typ: "film", quelle: "dvd", kategorie: null, bewertet_von: null, bewertung: null,
         genre: [], tags: [], begruendung: "", notiz: "", status: "gesetzt",
+      }, {
+        id: "linked-no-id", titel: "Lokaler Titel ohne Fremdkennung", originaltitel: "Needle Original Search", jahr: 2022,
+        typ: "film", quelle: "apple", kategorie: null, bewertet_von: null, bewertung: null,
+        genre: [], tags: [], begruendung: "", notiz: "", status: "gesetzt",
       }],
       meta: { version: "mustwatch-final" }, gespeichertAm: Date.parse(now),
     }));
@@ -36,7 +40,7 @@ async function seed(page) {
       eintraege: [
         { id: "mw_dvd", titel: "DVD Besitz", jahr: 1984, typ: "film", im_besitz: false,
           notiz: "", beschreibung: "", verknuepfung: { ziel: "master", id: "dvd-besitz" }, erstellt_am: now },
-        { id: "mw_notiz", titel: "Unverknüpfte Besitznotiz", jahr: null, typ: "", im_besitz: true,
+        { id: "mw_notiz", titel: "Needle Original Search", jahr: 2022, typ: "film", im_besitz: true,
           notiz: "bleibt unter Alle", beschreibung: "", verknuepfung: null, erstellt_am: now },
         { id: "mw_stream", titel: "Gewählter Stream", jahr: 2026, typ: "film", im_besitz: false,
           notiz: "", beschreibung: "", verknuepfung: { ziel: "streaming", id: streamingId }, erstellt_am: now },
@@ -44,6 +48,10 @@ async function seed(page) {
           notiz: "", beschreibung: "", verknuepfung: null, erstellt_am: now },
         { id: "mw_kino", titel: "Kino ohne Vorbesuch", jahr: 2026, typ: "film", im_besitz: false,
           notiz: "", beschreibung: "", verknuepfung: null, erstellt_am: now },
+        { id: "mw_linked", titel: "Masterref ohne Fremdkennung", jahr: 2022, typ: "film", im_besitz: false,
+          notiz: "", beschreibung: "", verknuepfung: { ziel: "master", id: "linked-no-id" }, erstellt_am: now },
+        { id: "mw_linked_duplicate", titel: "Doppelte explizite Masterref", jahr: 2022, typ: "film", im_besitz: false,
+          notiz: "", beschreibung: "", verknuepfung: { ziel: "master", id: "linked-no-id" }, erstellt_am: now },
       ],
       gespeichertAm: Date.parse(now),
     }));
@@ -58,6 +66,16 @@ async function seed(page) {
     localStorage.setItem("kd:start", "clean");
     localStorage.setItem("kd:start-version", "local-v1");
     localStorage.setItem("kd:einstieg", JSON.stringify({ version: "private-v1", abgeschlossen: true, weg: "konto" }));
+    window.__kdMustwatchBadgeHistory = [];
+    document.addEventListener("DOMContentLoaded", () => {
+      const record = () => {
+        for (const button of document.querySelectorAll("button")) {
+          if (/^Must-Watch/u.test(button.textContent || "")) window.__kdMustwatchBadgeHistory.push(button.textContent.trim());
+        }
+      };
+      new MutationObserver(record).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+      record();
+    }, { once: true });
   }, { accountId: ACCOUNT_ID, now: NOW, projectUrl: PROJECT_URL, streamingId: STREAMING_ID });
 }
 
@@ -65,8 +83,13 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
   const traffic = [];
   const unknown = [];
   const candidateRequests = [];
+  const pageRequests = [];
   const catalogRequests = [];
   const catalogEvents = [];
+  let personalReads = 0;
+  let heldPersonalRead = null;
+  let delayInitialReconciliation = true;
+  const heldReconciliation = [];
   let candidateMode = "sql";
   let phase = "setup";
 
@@ -80,7 +103,11 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
     if (url.origin !== PROJECT_URL) return route.abort("blockedbyclient");
     const json = (body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     if (url.pathname === "/rest/v1/kd_account_access") return json([{ role: "member", active: true, personal_ai: false }]);
-    if (url.pathname === "/rest/v1/kd_personal") return json([]);
+    if (url.pathname === "/rest/v1/kd_personal") {
+      personalReads += 1;
+      if (personalReads === 1) { heldPersonalRead = route; return; }
+      return json([]);
+    }
     if (url.pathname === "/rest/v1/rpc/kd_radar_pilot_feed") return json({
       format: "kd-radar-pilot-feed-v2", revision: 1, checksum: "a".repeat(64), reconciledAt: NOW,
       subscriptions: [], events: [], receipts: [], operationAcks: [], radarReview: false,
@@ -105,6 +132,21 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
       }),
     });
     const body = await pg.callMustwatchAsync(payload, ACCOUNT_ID);
+    if (delayInitialReconciliation) {
+      heldReconciliation.push({ route, body });
+      return;
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.route("**/rest/v1/rpc/kd_streaming_page", async (route) => {
+    const request = route.request();
+    const payload = request.postDataJSON()?.p_request;
+    pageRequests.push({ payload, authorization: request.headers().authorization || "", phase });
+    const body = await pg.callAsync(payload, ACCOUNT_ID);
+    if (delayInitialReconciliation) {
+      heldReconciliation.push({ route, body });
+      return;
+    }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.route(/\/rest\/v1\/(?:kd_catalog|rpc\/kd_streaming_catalog)(?:\?|$)/, async (route) => {
@@ -119,22 +161,65 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
         updated_at: NOW, quelle: "synthetic-mustwatch-final", stand: NOW, gueltig_bis: null,
       }]),
     });
+    if (name === "streaming_bekannt") return route.fulfill({
+      status: 200, contentType: "application/json", body: JSON.stringify([{
+        payload: { stand: NOW, katalog_stand: NOW, region: "AT", dienste: ["Netflix"], titel: [] },
+        updated_at: NOW, quelle: "synthetic-mustwatch-final", stand: NOW, gueltig_bis: null,
+      }]),
+    });
     return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
   });
 
   phase = "cold-medithek";
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Mediathek", exact: true })).toBeVisible();
+  await expect.poll(() => personalReads).toBe(1);
   expect(candidateRequests).toHaveLength(0);
+  expect(pageRequests).toHaveLength(0);
+  await heldPersonalRead.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+  await expect(page.getByRole("heading", { name: "Mediathek", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Must-Watch (7)", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.__kdMustwatchBadgeHistory)).not.toContain("Must-Watch (0)");
+  await expect.poll(() => candidateRequests.length).toBe(1);
+  await expect.poll(() => pageRequests.length).toBe(1);
+  await expect.poll(() => heldReconciliation.length).toBe(2);
+  await page.getByRole("button", { name: /^Must-Watch/u }).click();
+  await expect(page.locator(".kd-mustwatch-karte")).toHaveCount(7);
+  await page.getByRole("button", { name: "Jetzt verfügbar", exact: true }).click();
+  await expect(page.locator(".kd-mustwatch-karte")).toHaveCount(0);
+  await expect(page.getByText(/0 von 7 vorgemerkt/u)).toHaveCount(0);
+  await expect(page.getByText(/Keine Einträge für diese Filter/u)).toHaveCount(0);
+  delayInitialReconciliation = false;
+  await Promise.all(heldReconciliation.map(({ route, body }) => route.fulfill({
+    status: 200, contentType: "application/json", body: JSON.stringify(body),
+  })));
+  await expect(page.locator("#mw-mw_dvd")).toBeVisible();
+  await expect(page.locator("#mw-mw_stream")).toBeVisible();
+  await expect(page.locator("#mw-mw_linked")).toBeVisible();
+  await expect(page.locator("#mw-mw_linked_duplicate")).toBeVisible();
+  await page.getByRole("button", { name: "Alle", exact: true }).click();
+  expect(pageRequests[0].payload.view).toBe("library");
+  expect(pageRequests[0].payload.limit).toBe(1000);
+  expect(pageRequests[0].payload.library).toHaveLength(2);
+  const noIdTarget = pageRequests[0].payload.library.find((item) => item.id === "master:linked-no-id");
+  expect(noIdTarget).toMatchObject({
+    watchmode_id: null, streaming_id: null, imdb_id: null, tmdb_id: null,
+    titel: "Lokaler Titel ohne Fremdkennung", originaltitel: "Needle Original Search", jahr: 2022, typ: "film",
+  });
+  expect(pageRequests[0].payload.personal).toEqual({
+    seenIds: [], mustWatchIds: [], ratedIds: [], newEntries: [], legacyNew: [],
+  });
+  expect(JSON.stringify(pageRequests[0].payload)).not.toMatch(/bleibt unter Alle|bewertung|notiz/iu);
   await expect.poll(() => catalogRequests.filter((name) => name === "programm").length).toBe(1);
   await expect.poll(() => catalogRequests.filter((name) => name === "streaming_bekannt").length).toBe(1);
   expect(catalogRequests.filter((name) => name === "streaming_entdecken")).toEqual([]);
   const coldCatalogRequestCount = catalogRequests.length;
+  const coldCandidateRequestCount = candidateRequests.length;
+  const coldPageRequestCount = pageRequests.length;
 
   phase = "mustwatch";
-  await page.getByRole("button", { name: /^Must-Watch/u }).click();
-  await expect.poll(() => candidateRequests.length).toBe(1);
-  await expect(page.locator(".kd-mustwatch-karte")).toHaveCount(5);
+  await expect(page.locator(".kd-mustwatch-karte")).toHaveCount(7);
+  expect(candidateRequests).toHaveLength(coldCandidateRequestCount);
+  expect(pageRequests).toHaveLength(coldPageRequestCount);
   expect(candidateRequests[0].payload.ids).toEqual([STREAMING_ID]);
   expect(candidateRequests[0].authorization).toBe("Bearer synthetic-mustwatch-final-access");
   await expect.poll(() => pg.mustwatchCalls.some((call) => call.mode === "ids"
@@ -144,6 +229,8 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
   await page.getByRole("button", { name: "Jetzt verfügbar", exact: true }).click();
   await expect(page.locator("#mw-mw_dvd")).toBeVisible();
   await expect(page.locator("#mw-mw_stream")).toBeVisible();
+  await expect(page.locator("#mw-mw_linked")).toBeVisible();
+  await expect(page.locator("#mw-mw_linked_duplicate")).toBeVisible();
   await expect(page.locator("#mw-mw_notiz")).toHaveCount(0);
   await expect(page.locator("#mw-mw_search")).toHaveCount(0);
 
@@ -173,6 +260,8 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
   await page.getByRole("button", { name: "Jetzt verfügbar", exact: true }).click();
   await expect(page.locator("#mw-mw_dvd")).toBeVisible();
   await expect(page.locator("#mw-mw_stream")).toBeVisible();
+  await expect(page.locator("#mw-mw_linked")).toBeVisible();
+  await expect(page.locator("#mw-mw_linked_duplicate")).toBeVisible();
   await expect(page.locator("#mw-mw_kino")).toBeVisible();
   await expect(page.locator("#mw-mw_notiz")).toHaveCount(0);
 
@@ -187,6 +276,19 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
   await expect(page.locator("#mw-mw_dvd")).toBeVisible();
   await expect(page.locator("#mw-mw_kino")).toBeVisible();
   await expect(page.locator("#mw-mw_stream")).toHaveCount(0);
+  await expect(page.locator("#mw-mw_linked")).toHaveCount(0);
+  await expect(page.locator("#mw-mw_linked_duplicate")).toHaveCount(0);
+
+  const beforeServiceRestoreCandidates = candidateRequests.length;
+  const beforeServiceRestorePages = pageRequests.length;
+  phase = "service-restore";
+  await navigateMobile(page, "Settings");
+  await page.getByPlaceholder(/Quelle suchen/u).fill("Netflix");
+  await page.getByTitle("„Netflix“ zur Auswahl hinzufügen").click();
+  phase = "mediathek-restored";
+  await navigateMobile(page, "Mediathek");
+  expect(candidateRequests).toHaveLength(beforeServiceRestoreCandidates);
+  await expect.poll(() => pageRequests.length).toBe(beforeServiceRestorePages + 1);
 
   let simulatedVisibility = "hidden";
   await page.evaluate(() => {
@@ -197,19 +299,23 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
     document.dispatchEvent(new Event("visibilitychange"));
   });
   const beforeHiddenExpiry = candidateRequests.length;
+  const beforeHiddenPageExpiry = pageRequests.length;
   const beforeHiddenTime = await page.evaluate(() => Date.now());
   candidateMode = "unavailable";
   await page.clock.fastForward(6 * 60 * 1000);
   expect(await page.evaluate(() => Date.now())).toBeGreaterThanOrEqual(beforeHiddenTime + 6 * 60 * 1000);
   expect(candidateRequests).toHaveLength(beforeHiddenExpiry);
+  expect(pageRequests).toHaveLength(beforeHiddenPageExpiry);
   simulatedVisibility = "visible";
   await page.evaluate((state) => {
     window.__kdMustwatchVisibility = state;
     document.dispatchEvent(new Event("visibilitychange"));
   }, simulatedVisibility);
   await expect.poll(() => candidateRequests.length).toBe(beforeHiddenExpiry + 1);
+  await expect.poll(() => pageRequests.length).toBe(beforeHiddenPageExpiry + 1);
   await page.clock.fastForward(60 * 1000);
   expect(candidateRequests).toHaveLength(beforeHiddenExpiry + 1);
+  expect(pageRequests).toHaveLength(beforeHiddenPageExpiry + 1);
 
   phase = "start";
   await navigateMobile(page, "Start");
@@ -221,9 +327,9 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
 
   const mustwatchText = await page.locator("body").innerText();
   expect(mustwatchText).not.toMatch(/\bready\b|unavailable|ungeprüft|motn:|901258/iu);
+  expect(mustwatchText).not.toMatch(/Streamingkatalog nicht ladbar/iu);
   expect(catalogEvents.filter(({ name }) => name === "streaming_bekannt")).toEqual([
     { name: "streaming_bekannt", phase: "cold-medithek" },
-    { name: "streaming_bekannt", phase: "service-change" },
   ]);
   expect(catalogRequests.filter((name) => name === "streaming_entdecken")).toEqual([]);
   expect(candidateRequests.every((entry) => entry.payload.ids.length <= 500)).toBe(true);
@@ -236,6 +342,7 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
       query: entry.payload.query, resultMode: entry.mode,
     })),
     sqlCalls: pg.mustwatchCalls,
+    pageSqlCalls: pg.calls.filter((call) => call.view === "library"),
     catalogEvents,
     programReads: catalogRequests.filter((name) => name === "programm").length,
     fullStreamingReads: catalogRequests.filter((name) => name === "streaming_entdecken").length,

@@ -4,8 +4,9 @@ import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { runtimeConfig } from "./src/config/runtime.js";
 import {
-  buildMustwatchProgramCandidates, candidateRefreshDelay, collectMustwatchStreamingIds,
+  buildMustwatchLinkedLibrary, buildMustwatchProgramCandidates, candidateRefreshDelay, collectMustwatchStreamingIds,
   istMustwatchDokumentSichtbar, istMustwatchZeitAbgelaufen, useMustwatchCandidatesController,
+  loadMustwatchLinkedStreaming,
 } from "./src/controllers/useMustwatchCandidatesController.js";
 import { createMustwatchCandidatesService } from "./src/services/mustwatchCandidates.js";
 
@@ -81,8 +82,68 @@ assert.equal(istMustwatchDokumentSichtbar({ visibilityState: "hidden" }), false)
 assert.equal(istMustwatchDokumentSichtbar({ visibilityState: "visible" }), true);
 assert.deepEqual(buildMustwatchProgramCandidates({ filme: [{ t: "Ohne ID", j: 2026 }] }), [{
   t: "Ohne ID", j: 2026, id: null, projection_id: "auto:ohne_id_2026",
-  titel: "Ohne ID", originaltitel: undefined, jahr: 2026,
+  titel: "Ohne ID", originaltitel: undefined, jahr: 2026, typ: "film",
 }]);
+
+const linkedPlan = buildMustwatchLinkedLibrary([
+  { titel: "Nutzertext bleibt lokal", notiz: "privat", bewertung: 5,
+    verknuepfung: { ziel: "master", id: "master-ohne-externe-id" } },
+  { verknuepfung: { ziel: "master", id: "master-ohne-externe-id" } },
+  { verknuepfung: { ziel: "master", id: "mehrdeutig" } },
+  { verknuepfung: null, titel: "Unverknuepft gleichnamig" },
+], [
+  { id: "master-ohne-externe-id", titel: "Lokaler Titel", originaltitel: "Exact Original",
+    jahr: 2024, typ: "film" },
+  { id: "mehrdeutig", titel: "Doppelt", jahr: 2020, typ: "film" },
+  { id: "mehrdeutig", titel: "Doppelt", jahr: 2020, typ: "film" },
+], []);
+assert.deepEqual(linkedPlan.library, [{
+  id: "master:master-ohne-externe-id", watchmode_id: null, streaming_id: null,
+  imdb_id: null, tmdb_id: null, titel: "Lokaler Titel", originaltitel: "Exact Original",
+  jahr: 2024, typ: "film",
+}], "Doppelte Must-Watch-Refs werden einmal neutral, ohne erfundene externe ID uebertragen");
+assert.equal(Object.hasOwn(linkedPlan.library[0], "notiz"), false);
+assert.equal(Object.hasOwn(linkedPlan.library[0], "bewertung"), false);
+assert.throws(() => buildMustwatchLinkedLibrary(
+  Array.from({ length: 5001 }, (_, index) => ({ verknuepfung: { ziel: "master", id: `m-${index}` } })),
+  Array.from({ length: 5001 }, (_, index) => ({ id: `m-${index}`, titel: `Titel ${index}`, jahr: 2000, typ: "film" })),
+  [],
+), /mustwatch-linked-targets-bounded/u, "Mehr als 5000 verknuepfte Ziele werden nicht still abgeschnitten");
+
+const linkedPageRequests = [];
+const linkedResult = await loadMustwatchLinkedStreaming({
+  library: [
+    ...linkedPlan.library,
+    { ...linkedPlan.library[0], id: "master:ambiguous" },
+  ],
+  refKeys: ["master:master-ohne-externe-id", "master:ambiguous"],
+}, ["Netflix"], {
+  service: {
+    async loadPage(request) {
+      linkedPageRequests.push(request);
+      return request.cursor ? {
+        status: "ready", version: "sp1-abcd-estable", complete: true, nextCursor: null,
+        nextExpiryAt: "2099-01-01T00:00:00.000Z",
+        items: [{ library_id: "master:ambiguous", id: "zweiter", titel: "Zweiter", dienste: ["Netflix"] }],
+      } : {
+        status: "ready", version: "sp1-abcd-estable", complete: false, nextCursor: "weiter",
+        nextExpiryAt: "2099-01-01T00:00:00.000Z",
+        items: [
+          { library_id: "master:master-ohne-externe-id", id: "treffer", titel: "Exact Original", dienste: ["Netflix"] },
+          { library_id: "master:ambiguous", id: "erster", titel: "Erster", dienste: ["Netflix"] },
+        ],
+      };
+    },
+  },
+});
+assert.equal(linkedPageRequests.length, 2, "Mehrseitiger Library-Abgleich bleibt seriell gebuendelt");
+assert.equal(linkedPageRequests[0].limit, 1000);
+assert.deepEqual(linkedPageRequests[0].personal, {
+  seenIds: [], mustWatchIds: [], ratedIds: [], newEntries: [], legacyNew: [],
+});
+assert.equal(linkedResult.byRef["master:master-ohne-externe-id"].id, "treffer");
+assert.equal(linkedResult.byRef["master:ambiguous"], undefined,
+  "Mehrere Katalogtreffer fuer eine explizite Ref bleiben intern ungeprueft statt positiv");
 
 const ids = Array.from({ length: 501 }, (_, index) => `id-${index}`);
 const first = await service.loadByIds(ids);
@@ -270,12 +331,14 @@ function Probe(props) {
   return React.createElement("output", {
     "data-streaming": result.kandidaten.streaming.map((item) => item.id).join(","),
     "data-programm": result.kandidaten.programm.map((item) => item.projection_id).join(","),
+    "data-linked": Object.keys(result.kandidaten.linkedStreaming || {}).join(","),
+    "data-ready": String(result.abgleichBereit),
   });
 }
 const root = createRoot(document.getElementById("app"));
 const controllerProps = {
   entries: [{ verknuepfung: { ziel: "streaming", id: "controller-id" } }],
-  contextKey: "account:closed", service: retryService,
+  contextKey: "account:closed", service: retryService, selectedServices: ["MUBI"],
 };
 await act(async () => {
   root.render(React.createElement(Probe, { ...controllerProps, active: false }));
@@ -292,14 +355,60 @@ assert.equal(controllerLoads, 2, "Ablauf einer ready-Antwort revalidiert genau e
 await act(async () => { await new Promise((resolve) => setTimeout(resolve, 35)); });
 assert.equal(controllerLoads, 2, "Unavailable mit vergangenem Ablauf startet keine Wiederholschleife");
 
+let linkedControllerLoads = 0;
+const linkedControllerPageService = {
+  async loadPage(request) {
+    linkedControllerLoads += 1;
+    return {
+      status: "ready", version: "sp1-beef-estable", complete: true, nextCursor: null,
+      nextExpiryAt: new Date(Date.now() + 60_000).toISOString(),
+      items: request.services.includes("Netflix")
+        ? [{ library_id: "master:linked-no-id", id: "catalog-99", titel: "Outside first 20", dienste: ["Netflix"] }]
+        : [],
+    };
+  },
+};
+const linkedControllerProps = {
+  entries: [
+    { id: "mw-linked-a", verknuepfung: { ziel: "master", id: "linked-no-id" } },
+    { id: "mw-linked-b", verknuepfung: { ziel: "master", id: "linked-no-id" } },
+    { id: "mw-unlinked", titel: "Outside first 20", verknuepfung: null },
+  ],
+  master: [{ id: "linked-no-id", titel: "Lokaltitel", originaltitel: "Outside first 20", jahr: 2024, typ: "film" }],
+  contextKey: "account:linked", active: true, selectedServices: ["Netflix"],
+  service: retryService, pageService: linkedControllerPageService,
+};
+await act(async () => {
+  root.render(React.createElement(Probe, linkedControllerProps));
+  await Promise.resolve();
+});
+assert.equal(linkedControllerLoads, 1, "Masterrefs werden beim aktiven Mediathek-Kontext gesammelt abgeglichen");
+assert.equal(document.querySelector("output").dataset.linked, "master:linked-no-id");
+assert.equal(document.querySelector("output").dataset.ready, "true");
+await act(async () => {
+  root.render(React.createElement(Probe, { ...linkedControllerProps, active: true }));
+  await Promise.resolve();
+});
+assert.equal(linkedControllerLoads, 1, "Untertabwechsel im selben Mediathek-Kontext startet keinen zweiten Abgleich");
+await act(async () => {
+  root.render(React.createElement(Probe, { ...linkedControllerProps, selectedServices: ["MUBI"] }));
+  await Promise.resolve();
+});
+assert.equal(linkedControllerLoads, 2, "Dienstwechsel erzeugt genau einen neuen gebuendelten Abgleich");
+assert.equal(document.querySelector("output").dataset.linked, "");
+
 let visibilityState = "hidden";
 Object.defineProperty(document, "visibilityState", {
   configurable: true, get: () => visibilityState,
 });
 let visibilityLoads = 0;
+let finishVisibilityReload = null;
 const visibilityService = {
   async loadByIds() {
     visibilityLoads += 1;
+    if (visibilityLoads === 2) {
+      return await new Promise((resolve) => { finishVisibilityReload = resolve; });
+    }
     return {
       status: "ready", expiresAt: new Date(Date.now() + 20).toISOString(),
       items: [{ id: "sichtbar-id", titel: "Sichtbar", dienste: [] }],
@@ -310,7 +419,7 @@ const visibilityService = {
 await act(async () => {
   root.render(React.createElement(Probe, {
     entries: [{ verknuepfung: { ziel: "streaming", id: "sichtbar-id" } }],
-    contextKey: "account:hidden", active: true, service: visibilityService,
+    contextKey: "account:hidden", active: true, service: visibilityService, selectedServices: ["MUBI"],
   }));
   document.dispatchEvent(new dom.window.Event("visibilitychange"));
   await new Promise((resolve) => setTimeout(resolve, 30));
@@ -334,6 +443,62 @@ await act(async () => {
   await Promise.resolve();
 });
 assert.equal(visibilityLoads, 2, "Nach sichtbarer Rückkehr wird der inzwischen abgelaufene Kontext neu geprüft");
+assert.equal(document.querySelector("output").dataset.streaming, "",
+  "Ein abgelaufener Hidden-Stand wird während der verzögerten Rückkehrprüfung sofort ausgeblendet");
+assert.equal(document.querySelector("output").dataset.ready, "false");
+await act(async () => {
+  finishVisibilityReload({
+    status: "ready", version: "mw1-cafe", expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    items: [{ id: "sichtbar-id", titel: "Sichtbar neu", dienste: [] }],
+  });
+  await Promise.resolve();
+});
+assert.equal(document.querySelector("output").dataset.ready, "true");
+
+let conflictDirectLoads = 0;
+let conflictPageLoads = 0;
+const conflictService = {
+  async loadByIds() {
+    conflictDirectLoads += 1;
+    return {
+      status: "ready", version: "mw1-aaaa", expiresAt: "2099-01-01T00:00:00.000Z",
+      items: [{ id: "conflict-direct", titel: "Direkt", dienste: ["MUBI"] }],
+    };
+  },
+  async search() { return { status: "ready", items: [] }; },
+};
+const conflictPageService = {
+  async loadPage() {
+    conflictPageLoads += 1;
+    return {
+      status: "ready", version: "sp1-bbbb-estable", complete: true, nextCursor: null,
+      nextExpiryAt: "2099-01-01T00:00:00.000Z",
+      items: [{ library_id: "master:conflict-master", id: "conflict-linked", dienste: ["MUBI"] }],
+    };
+  },
+};
+await act(async () => {
+  root.render(React.createElement(Probe, {
+    entries: [
+      { verknuepfung: { ziel: "streaming", id: "conflict-direct" } },
+      { verknuepfung: { ziel: "master", id: "conflict-master" } },
+    ],
+    master: [{ id: "conflict-master", titel: "Konflikt", jahr: 2024, typ: "film" }],
+    contextKey: "account:conflict", active: true, selectedServices: ["MUBI"],
+    service: conflictService, pageService: conflictPageService, sessionTtlMs: 25,
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 5));
+});
+assert.equal(document.querySelector("output").dataset.ready, "false",
+  "Abweichende Katalogrevisionen werden nicht als gemeinsamer Teilstand freigegeben");
+assert.equal(document.querySelector("output").dataset.streaming, "");
+assert.equal(document.querySelector("output").dataset.linked, "");
+await act(async () => { await new Promise((resolve) => setTimeout(resolve, 35)); });
+assert.deepEqual([conflictDirectLoads, conflictPageLoads], [2, 2],
+  "Ein Versionskonflikt wird genau einmal an der lokalen Cachegrenze neu geprüft");
+await act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)); });
+assert.deepEqual([conflictDirectLoads, conflictPageLoads], [2, 2],
+  "Ein fortbestehender Versionskonflikt startet keine Retryschleife");
 
 await act(async () => {
   root.render(React.createElement(Probe, {
@@ -356,14 +521,14 @@ const staleService = {
 await act(async () => {
   root.render(React.createElement(Probe, {
     entries: [{ verknuepfung: { ziel: "streaming", id: "alt-id" } }],
-    contextKey: "account:alt", active: true, service: staleService,
+    contextKey: "account:alt", active: true, service: staleService, selectedServices: ["MUBI"],
   }));
   await Promise.resolve();
 });
 await act(async () => {
   root.render(React.createElement(Probe, {
     entries: [{ verknuepfung: { ziel: "streaming", id: "neu-id" } }],
-    contextKey: "account:neu", active: true, service: staleService,
+    contextKey: "account:neu", active: true, service: staleService, selectedServices: ["MUBI"],
   }));
   await Promise.resolve();
 });

@@ -142,7 +142,6 @@ export default function App() {
   const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
     frischerStartWarnung ? [{ scope: ERROR_SCOPE.FRISCHER_START, text: frischerStartWarnung }] : []);
   const [tab, setTab] = useState(() => remoteKontoAktiv ? "start" : "mediathek");
-  const [mustwatchBereichSichtbar, setMustwatchBereichSichtbar] = useState(false);
   const navigationRevisionRef = useRef(0);
   const [ausstehenderKontoStartTab, setAusstehenderKontoStartTab] = useState(null);
   const sichtbareNavigation = remoteKontoAktiv ? NAVIGATION : LOCAL_NAVIGATION;
@@ -879,6 +878,7 @@ export default function App() {
   const {
     kandidaten: mwKandidaten,
     searchStreaming: sucheMustwatchStreaming,
+    abgleichBereit: mustwatchAbgleichBereit,
   } = useMustwatchCandidatesController({
     entries: mustwatch,
     master: master || [],
@@ -886,7 +886,9 @@ export default function App() {
     programmAbgelaufen: programmInfo?.abgelaufen === true,
     programmExpiresAt: programmInfo?.gueltigBis,
     contextKey: streamingKontextKey,
-    active: tab === "start" || (tab === "mediathek" && mustwatchBereichSichtbar),
+    selectedServices: sichtbareAuswahl,
+    active: (tab === "start" || tab === "mediathek")
+      && mustwatchGeladen && sichtbareAuswahlGeladen,
   });
   const fordereMustwatchKandidatenAn = useCallback(() => {
     const inzwischenAbgelaufen = programmInfo?.abgelaufen === true
@@ -1907,6 +1909,7 @@ export default function App() {
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */
             kinoMatches={kinoMatches} mustwatch={mustwatch} mwKandidaten={mwKandidaten} auswahl={sichtbareAuswahl}
             pinOwnerKey={streamingKontextKey} mustwatchReady={mustwatchGeladen}
+            mustwatchAvailabilityReady={mustwatchGeladen && sichtbareAuswahlGeladen && mustwatchAbgleichBereit}
             streamingEntdecken={streamingEntdecken} streamingBekannt={streamingBekannt}
             progStand={progStand} programmInfo={programmInfo} streamingInfo={streamingInfo} />
         )}
@@ -1966,13 +1969,12 @@ export default function App() {
             artikel={artikelListe} onArtikelKlick={springeZuArtikel}
             fokusFilmId={mediathekFokus} onFokusVerbraucht={() => setMediathekFokus(null)}
             onSelectionStateChange={meldeMediathekAuswahl}
-            mustwatch={mustwatch} addMustwatch={addMustwatch}
+            mustwatch={mustwatch} mustwatchGeladen={mustwatchGeladen} addMustwatch={addMustwatch}
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
             recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef} datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
             mustwatchSelectedServices={sichtbareAuswahl} onMustwatchStreamingSuche={sucheMustwatchStreaming}
             onMustwatchKandidatenAnfordern={fordereMustwatchKandidatenAn}
-            onMustwatchSichtbarkeit={setMustwatchBereichSichtbar}
             remoteMasterStand={remoteMasterStandRef.current}
             stapelimportKiAktiv={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true && kiAn("stapelimport")}

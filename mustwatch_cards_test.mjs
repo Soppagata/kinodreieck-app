@@ -76,7 +76,7 @@ function Harness() {
   const [eintraege, setEintraege] = useState(start);
   return React.createElement(MustWatchListe, {
     eintraege,
-    kandidaten: { master: [], programm: [], streaming: [streamingKandidat] },
+    kandidaten: { master: [], programm: [], streaming: [streamingKandidat], abgleichBereit: true },
     selectedServices: ["MUBI"],
     onKandidatenAnfordern: () => { pickerLoads += 1; },
     onStreamingSuche: async (query) => {

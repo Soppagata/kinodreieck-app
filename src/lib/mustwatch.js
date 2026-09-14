@@ -97,6 +97,13 @@ export function mustwatchKandidat(kandidaten, verknuepfung) {
   return alias.length === 1 ? alias[0] : null;
 }
 
+function mustwatchLinkedStreaming(kandidaten, verknuepfung) {
+  if (!verknuepfung || !["master", "programm"].includes(verknuepfung.ziel)) return null;
+  const key = `${verknuepfung.ziel}:${String(verknuepfung.id)}`;
+  const item = kandidaten?.linkedStreaming?.[key];
+  return item && typeof item === "object" ? item : null;
+}
+
 /* Verfügbarkeit ausschließlich aus expliziter stabiler Verknüpfung + aktuell
    geladenem Kandidatenbestand. Kein Titelvergleich, kein Fuzzy, kein Rateweg.
    IDs werden tolerant als String verglichen (watchmode_id ist eine Zahl,
@@ -121,8 +128,10 @@ export function mustwatchVerfuegbarkeit(eintrag, kandidaten = {}, selectedServic
   } : null;
   const services = new Set((Array.isArray(selectedServices) ? selectedServices : [])
     .map((value) => norm(String(value || ""))).filter(Boolean));
-  const streaming = ref.ziel === "streaming"
-    ? [...new Set((Array.isArray(kandidat?.dienste) ? kandidat.dienste : [])
+  const streamingKandidat = ref.ziel === "streaming"
+    ? kandidat : mustwatchLinkedStreaming(kandidaten, ref);
+  const streaming = streamingKandidat
+    ? [...new Set((Array.isArray(streamingKandidat?.dienste) ? streamingKandidat.dienste : [])
       .filter((service) => services.has(norm(String(service || "")))))]
     : [];
   const owned = ownedByEntry || (ref.ziel === "master"
@@ -155,6 +164,10 @@ export function sortiereMustwatch(eintraege, kandidaten = {}, selectedServices =
 }
 
 export const MUSTWATCH_FILTER = ["alle", "jetzt", "film", "serie"];
+
+export function mustwatchBadgeAnzahl(eintraege, geladen = false) {
+  return geladen ? (Array.isArray(eintraege) ? eintraege.length : 0) : null;
+}
 
 export function passtZuMustwatchFilter(eintrag, filter, kandidaten = {}, selectedServices = []) {
   if (filter === "jetzt") return mustwatchVerfuegbarkeit(eintrag, kandidaten, selectedServices)?.aktuell === true;

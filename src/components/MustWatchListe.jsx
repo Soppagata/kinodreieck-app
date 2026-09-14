@@ -276,7 +276,7 @@ function MustWatchForm({ onAdd, onDone, kandidaten, onStreamingSuche, onKandidat
 }
 
 export function MustWatchListe({
-  eintraege, onAdd, onUpdate, onDelete, kandidaten, kommtVorInMap, onArtikelKlick,
+  eintraege, eintraegeGeladen = true, onAdd, onUpdate, onDelete, kandidaten, kommtVorInMap, onArtikelKlick,
   onSpringeZuRef, onAddFilm, recommendationPins = [], onRecommendationPinToggle,
   pinOwnerKey = null, alphabetBuchstabe = null, jahrzehnt = null,
   selectedServices = [], onStreamingSuche, onKandidatenAnfordern,
@@ -297,8 +297,10 @@ export function MustWatchListe({
     const k = mustwatchKandidat(kandidaten, v);
     return k?.titel || fallbackTitel || "Verknüpfter Titel";
   };
+  const abgleichBereit = kandidaten?.abgleichBereit === true;
   /* Reine Such-/Filterprojektion der vollständigen Must-Watch-Ansicht. */
   const projektion = useMemo(() => {
+    if (filter === "jetzt" && !abgleichBereit) return [];
     let liste = projiziereMustwatch(eintraege, { filter, suche }, kandidaten, selectedServices);
     if (alphabetBuchstabe) {
       liste = liste.filter((eintrag) => streamingAnfangsbuchstabe(eintrag.titel) === alphabetBuchstabe);
@@ -307,14 +309,16 @@ export function MustWatchListe({
       liste = liste.filter((eintrag) => passtInJahrzehntMitKulanz(eintrag.jahr, jahrzehnt));
     }
     return liste;
-  }, [eintraege, filter, suche, kandidaten, selectedServices, alphabetBuchstabe, jahrzehnt]);
+  }, [abgleichBereit, eintraege, filter, suche, kandidaten, selectedServices, alphabetBuchstabe, jahrzehnt]);
   const sichtbar = useMemo(
     () => nurMarkierte ? projektion.filter((e) => markierteIds.has(String(e.id))) : projektion,
     [markierteIds, nurMarkierte, projektion],
   );
   const jetztAnzahl = useMemo(
-    () => (eintraege || []).filter((e) => mustwatchVerfuegbarkeit(e, kandidaten, selectedServices)?.aktuell).length,
-    [eintraege, kandidaten, selectedServices],
+    () => abgleichBereit
+      ? (eintraege || []).filter((e) => mustwatchVerfuegbarkeit(e, kandidaten, selectedServices)?.aktuell).length
+      : null,
+    [abgleichBereit, eintraege, kandidaten, selectedServices],
   );
   const eingeschraenkt = filter !== "alle" || !!suche.trim() || nurMarkierte
     || !!alphabetBuchstabe || !!streamingJahrzehntBereich(jahrzehnt);
@@ -473,10 +477,10 @@ export function MustWatchListe({
       </div>
       {formOffen && <div style={{ marginBottom: 12 }}><MustWatchForm onAdd={onAdd} onDone={() => setFormOffen(false)} kandidaten={kandidaten}
         onStreamingSuche={onStreamingSuche} onKandidatenAnfordern={onKandidatenAnfordern} /></div>}
-      <div style={{ ...monoKlein, marginBottom: 10 }}>
+      {eintraegeGeladen && (filter !== "jetzt" || abgleichBereit) && <div style={{ ...monoKlein, marginBottom: 10 }}>
         {sichtbar.length} von {(eintraege || []).length} vorgemerkt
         {jetztAnzahl > 0 ? " · " + jetztAnzahl + " jetzt verfügbar" : ""}
-      </div>
+      </div>}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {sichtbar.map((e) => {
           const offen = offenId === e.id;
@@ -608,7 +612,7 @@ export function MustWatchListe({
             </div>
           );
         })}
-        {sichtbar.length === 0 && (
+        {sichtbar.length === 0 && eintraegeGeladen && (filter !== "jetzt" || abgleichBereit) && (
           <p style={{ color: T.rauch, fontSize: 14 }}>
             {eingeschraenkt
               ? "Keine Treffer für diese Auswahl. Setz die Suche zurück oder wähle „Alle“."

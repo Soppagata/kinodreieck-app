@@ -115,6 +115,7 @@ function StartDashboard({
   wochenplan, onWochenplanAendern, entdeckenStatus = {},
   master = [], onSpringeZuStreaming, onSpringeZuKino, onFilmAnlegen, toggleKinoPin,
   onStreamingKatalogLaden, pinOwnerKey = null, mustwatchReady = false,
+  mustwatchAvailabilityReady = mustwatchReady,
 }) {
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
@@ -184,10 +185,10 @@ function StartDashboard({
     return () => { window.clearInterval(timer); window.removeEventListener("focus", aktualisieren); };
   }, []);
   const mwTop = useMemo(
-    () => projectDailyMustwatch({
+    () => mustwatchAvailabilityReady ? projectDailyMustwatch({
       entries: mustwatch, candidates: mwKandidatenSicher, selectedServices: auswahl, day: mwTag,
-    }),
-    [auswahl, mustwatch, mwKandidatenSicher, mwTag],
+    }) : [],
+    [auswahl, mustwatch, mustwatchAvailabilityReady, mwKandidatenSicher, mwTag],
   );
 
   /* Pinboard: nächster Termin zuerst (Sortierung auf dem formatierten String). */
@@ -345,7 +346,9 @@ function StartDashboard({
                   </button>
               ))}
             </div>
-          ) : <p className="kd-dash-leer">Gerade ist kein Must-Watch-Titel bei deinen gewählten Diensten, im Kino oder im Besitz.</p>}
+          ) : mustwatchAvailabilityReady
+            ? <p className="kd-dash-leer">Gerade ist kein Must-Watch-Titel bei deinen gewählten Diensten, im Kino oder im Besitz.</p>
+            : null}
         </Modul>
 
         {/* ---- 4 · Zuletzt hinzugefügt: nur rollierend markierte Neuanlagen ---- */}

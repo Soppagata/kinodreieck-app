@@ -126,7 +126,7 @@ export function loadSyntheticMaster() {
   }));
 }
 
-export async function startStreamingProgressivePgHarness() {
+export async function startStreamingProgressivePgHarness({ mustwatchFixture = false } = {}) {
   const pg = findPg();
   const root = mkdtempSync(join(tmpdir(), "kd-pg-"));
   const data = join(root, "data");
@@ -173,7 +173,27 @@ export async function startStreamingProgressivePgHarness() {
     });
     child.stdin.end(query);
   });
-  const fixture = loadFixture();
+  const loadedFixture = loadFixture();
+  const mustwatchTarget = {
+    watchmode_id: 901258,
+    imdb_id: "tt00901258",
+    tmdb_id: 801258,
+    titel: "Verborgener Katalogtreffer",
+    originaltitel: "Needle Original Search",
+    jahr: 2022,
+    typ: "movie",
+    genres: ["Drama"],
+    dienste: ["Netflix"],
+  };
+  const targetVorhanden = [...(loadedFixture.known?.titel || []), ...(loadedFixture.discover?.titel || [])]
+    .some((item) => String(item?.watchmode_id) === String(mustwatchTarget.watchmode_id));
+  const fixture = mustwatchFixture && !targetVorhanden ? {
+    ...loadedFixture,
+    discover: {
+      ...loadedFixture.discover,
+      titel: [...(loadedFixture.discover?.titel || []), mustwatchTarget],
+    },
+  } : loadedFixture;
   const migrations = [
     "supabase/migrations/20260913200000_streaming_pages_backend.sql",
     "supabase/migrations/20260914100000_streaming_pages_latency.sql",

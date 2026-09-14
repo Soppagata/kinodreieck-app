@@ -6,7 +6,7 @@ import { store, K } from "../services/storage.js";
 import { offeneReferenzen } from "../lib/artikel.js";
 import { TYP_GRUPPEN, TAB_LABELS, ALLE_TYPEN, tabVonTyp, hatDreieck } from "../lib/typen.js";
 import { hatPhysischeQuelle } from "../lib/quellen.js";
-import { istMustwatchId } from "../lib/mustwatch.js";
+import { istMustwatchId, mustwatchBadgeAnzahl } from "../lib/mustwatch.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import {
@@ -76,8 +76,8 @@ export function istReinerPrognoseMasterwechsel(vorher, nachher, expandedId) {
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht, onSelectionStateChange,
   onFilmBatchVorschau, onFilmBatchLoeschen,
-  mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] }, onSpringeZuMustwatchRef,
-  mustwatchSelectedServices = [], onMustwatchStreamingSuche, onMustwatchKandidatenAnfordern, onMustwatchSichtbarkeit,
+  mustwatch = [], mustwatchGeladen = false, addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] }, onSpringeZuMustwatchRef,
+  mustwatchSelectedServices = [], onMustwatchStreamingSuche, onMustwatchKandidatenAnfordern,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
   onPrognoseErstellen, onPrognoseStatus,
@@ -88,10 +88,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   stapelimportKiAktiv = false, stapelimportFacts, setErr = () => {},
   recommendationPins = [], onRecommendationPinToggle }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
-  useEffect(() => {
-    onMustwatchSichtbarkeit?.(ansicht === "mustwatch");
-    return () => onMustwatchSichtbarkeit?.(false);
-  }, [ansicht, onMustwatchSichtbarkeit]);
   const [typTab, setTypTab] = useState("filme");
   const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
   const [bewerteTitel, setBewerteTitel] = useState(null); // Nachtrag-Titel, der gerade bewertet wird
@@ -665,7 +661,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         options={[
           { id: "bestand", label: "Einträge" },
           { id: "besitz", label: "Im Besitz", badge: besitzAnzahl },
-          { id: "mustwatch", label: "Must-Watch", badge: mustwatch.length },
+          { id: "mustwatch", label: "Must-Watch", badge: mustwatchBadgeAnzahl(mustwatch, mustwatchGeladen) },
         ]} />
 
       {/* ===== Must-Watch: eigener Datentopf, eigene Liste ===== */}
@@ -674,7 +670,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         <KatalogRegler className="kd-mediathek-regler" name="Must-Watch"
           buchstabe={buchstabe} onBuchstabe={setBuchstabe}
           jahrzehnt={dekade} jahrzehnte={reglerJahrzehnte} onJahrzehnt={aendereDekade} />
-        <MustWatchListe eintraege={mustwatch}
+        <MustWatchListe eintraege={mustwatch} eintraegeGeladen={mustwatchGeladen}
           alphabetBuchstabe={buchstabe} jahrzehnt={dekade}
           onAdd={addMustwatch} onUpdate={updateMustwatch} onDelete={deleteMustwatch}
           kandidaten={mwKandidaten} kommtVorInMap={kommtVorInMap} onArtikelKlick={onArtikelKlick}
