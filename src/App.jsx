@@ -1,4 +1,4 @@
-import { streamingTitelKennung as streamingId, gleicheStreamingTitel } from "./lib/streamingProjection.js";
+import { gleicheStreamingTitel } from "./lib/streamingProjection.js";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 /* ============================================================
    KINODREIECK · WIEN — v4 (Webapp, Vite)
@@ -42,6 +42,7 @@ import {
 } from "./controllers/catalogController.js";
 import { useIntelligenceController } from "./controllers/useIntelligenceController.js";
 import { useMustwatchController } from "./controllers/useMustwatchController.js";
+import { useMustwatchCandidatesController } from "./controllers/useMustwatchCandidatesController.js";
 import { useArticleController, useMasterPersistenceController } from "./controllers/useArticleController.js";
 import { useErrorQueue } from "./controllers/useErrorQueue.js";
 import { useMasterStateController } from "./controllers/useMasterStateController.js";
@@ -872,6 +873,21 @@ export default function App() {
     addMustwatch: persistiereNeuesMustwatch, updateMustwatch,
     mustwatchMasterIds,
   } = useMustwatchController({ master, masterRef, setErr });
+  const {
+    kandidaten: mwKandidaten,
+    searchStreaming: sucheMustwatchStreaming,
+  } = useMustwatchCandidatesController({
+    entries: mustwatch,
+    master: master || [],
+    programm,
+    programmAbgelaufen: programmInfo?.abgelaufen === true,
+    contextKey: streamingKontextKey,
+  });
+  const fordereMustwatchKandidatenAn = useCallback(() => {
+    if ((!programm || programmInfo?.abgelaufen) && snapshotFreigabe && loading !== "programm") {
+      void ladeProgrammDatei(false);
+    }
+  }, [ladeProgrammDatei, loading, programm, programmInfo?.abgelaufen, snapshotFreigabe]);
 
   /* Der Seitenvertrag uebertraegt nur die fuer Identitaet und Filterung
      benoetigten Felder. Bewertungswerte, Notizen und sonstige persoenliche
@@ -1138,23 +1154,6 @@ export default function App() {
       : Array.isArray(v.dienste) ? v.dienste.map((d) => ALTE_SLUGS[d] || d) : []);
     setHeuristikAn(v.heuristik !== false);
   }, meldeRemoteLesefehler);
-
-  /* Kandidaten für Picker und lokale Startprojektion: Master, aktuelles
-     Kinoprogramm (stabile ID oder rein lokaler Projektionsschlüssel) sowie
-     beide aktuellen Streaming-Snapshots. */
-  const mwKandidaten = useMemo(() => ({
-    master: (master || []).map((f) => ({ ...f, id: f.id, titel: f.titel, jahr: f.jahr })),
-    programm: (programmInfo?.abgelaufen ? [] : ((programm && programm.filme) || [])).map((pf) => ({
-      ...pf,
-      id: pf.film_at_id ?? pf.id ?? null,
-      projection_id: pf.film_at_id ?? pf.id ?? `auto:${slugId(pf.t, pf.j)}`,
-      titel: pf.t, originaltitel: pf.ot, jahr: pf.j,
-    })),
-    streaming: streamingInfo?.abgelaufen ? [] : [
-      ...((streamingBekannt && streamingBekannt.titel) || []),
-      ...((streamingEntdecken && streamingEntdecken.titel) || []),
-    ].map((t) => ({ ...t, id: streamingId(t), titel: t.titel, jahr: t.jahr })),
-  }), [master, programm, programmInfo?.abgelaufen, streamingBekannt, streamingEntdecken, streamingInfo?.abgelaufen]);
 
   /* ---- Navigation zwischen Blog und Mediathek ---- */
   const [blogFokus, setBlogFokus] = useState(null);
@@ -1964,6 +1963,8 @@ export default function App() {
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
             recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef} datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
+            mustwatchSelectedServices={sichtbareAuswahl} onMustwatchStreamingSuche={sucheMustwatchStreaming}
+            onMustwatchKandidatenAnfordern={fordereMustwatchKandidatenAn}
             remoteMasterStand={remoteMasterStandRef.current}
             stapelimportKiAktiv={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true && kiAn("stapelimport")}

@@ -88,18 +88,45 @@ const STATUS_LABEL = { master: "MEDIATHEK", programm: "IM KINO", streaming: "STR
    geladenem Kandidatenbestand. Kein Titelvergleich, kein Fuzzy, kein Rateweg.
    IDs werden tolerant als String verglichen (watchmode_id ist eine Zahl,
    film_at_id kommt je nach Quelle als Zahl oder String). */
-export function mustwatchVerfuegbarkeit(eintrag, kandidaten = {}) {
+export function mustwatchVerfuegbarkeit(eintrag, kandidaten = {}, selectedServices = []) {
   const ref = eintrag?.verknuepfung;
   if (!ref || !STATUS_LABEL[ref.ziel] || ref.id == null || String(ref.id).trim() === "") return null;
+  const ownedByEntry = eintrag?.im_besitz === true;
   const liste = Array.isArray(kandidaten?.[ref.ziel]) ? kandidaten[ref.ziel] : [];
-  const kandidat = liste.find((k) => k && k.id != null && String(k.id) === String(ref.id));
-  if (!kandidat) return null;
+  const refId = String(ref.id);
+  const kandidat = liste.find((k) => k && k.id != null && (
+    String(k.id) === refId || (ref.ziel === "streaming"
+      && (Array.isArray(k.streaming_aliases) ? k.streaming_aliases : []).some((id) => String(id) === refId))
+  ));
+  /* Der Besitzhaken ist persönlicher Zustand und bleibt auch dann nutzbar,
+     wenn die neutrale Kandidaten-RPC oder das Kinoprogramm gerade nicht
+     antwortet. Die gespeicherte explizite Ref bindet ihn an eine Identität;
+     ohne Ref bleibt derselbe Haken absichtlich wirkungslos. */
+  if (!kandidat) return ownedByEntry ? {
+    ziel: ref.ziel,
+    label: null,
+    aktuell: true,
+    gruende: { owned: true, cinema: false, streaming: [] },
+    titel: null,
+    jahr: null,
+    kandidat: null,
+  } : null;
+  const services = new Set((Array.isArray(selectedServices) ? selectedServices : [])
+    .map((value) => norm(String(value || ""))).filter(Boolean));
+  const streaming = ref.ziel === "streaming"
+    ? [...new Set((Array.isArray(kandidat?.dienste) ? kandidat.dienste : [])
+      .filter((service) => services.has(norm(String(service || "")))))]
+    : [];
+  const owned = ownedByEntry || (ref.ziel === "master"
+    && (kandidat?.im_besitz === true || hatPhysischeQuelle(kandidat?.quelle)));
   return {
     ziel: ref.ziel,
     label: STATUS_LABEL[ref.ziel],
-    /* "Jetzt verfügbar" meint eine laufende externe Abspielgelegenheit. Ein
-       Mediathek-Treffer ist Besitz, keine aktuelle Vorstellung. */
-    aktuell: ref.ziel === "programm" || ref.ziel === "streaming",
+    /* Erst die explizite, weiterhin gültige Verknüpfung bindet den Besitzhaken
+       an eine Identität. Reine Master-Mitgliedschaft und digitale Quellen sind
+       keine Besitzbehauptung; Streaming zählt nur bei gewähltem Dienst. */
+    aktuell: owned || ref.ziel === "programm" || streaming.length > 0,
+    gruende: { owned, cinema: ref.ziel === "programm", streaming },
     titel: kandidat.titel ?? null,
     jahr: kandidat.jahr ?? null,
     kandidat,
@@ -108,10 +135,10 @@ export function mustwatchVerfuegbarkeit(eintrag, kandidaten = {}) {
 
 /* Sortierung der vollständigen Listenansicht: aktuell verfügbar, dann zuletzt
    gemerkt, dann Titel. Rein und ohne Mutation der Eingabe. */
-export function sortiereMustwatch(eintraege, kandidaten = {}) {
+export function sortiereMustwatch(eintraege, kandidaten = {}, selectedServices = []) {
   return [...(Array.isArray(eintraege) ? eintraege : [])].sort((a, b) => {
-    const ra = mustwatchVerfuegbarkeit(a, kandidaten)?.aktuell ? 0 : 1;
-    const rb = mustwatchVerfuegbarkeit(b, kandidaten)?.aktuell ? 0 : 1;
+    const ra = mustwatchVerfuegbarkeit(a, kandidaten, selectedServices)?.aktuell ? 0 : 1;
+    const rb = mustwatchVerfuegbarkeit(b, kandidaten, selectedServices)?.aktuell ? 0 : 1;
     const za = Date.parse(a?.erstellt_am || "") || 0;
     const zb = Date.parse(b?.erstellt_am || "") || 0;
     return ra - rb || zb - za
@@ -121,101 +148,17 @@ export function sortiereMustwatch(eintraege, kandidaten = {}) {
 
 export const MUSTWATCH_FILTER = ["alle", "jetzt", "film", "serie"];
 
-export function passtZuMustwatchFilter(eintrag, filter, kandidaten = {}) {
-  if (filter === "jetzt") return mustwatchVerfuegbarkeit(eintrag, kandidaten)?.aktuell === true;
+export function passtZuMustwatchFilter(eintrag, filter, kandidaten = {}, selectedServices = []) {
+  if (filter === "jetzt") return mustwatchVerfuegbarkeit(eintrag, kandidaten, selectedServices)?.aktuell === true;
   if (filter === "film" || filter === "serie") return mustwatchTyp(eintrag?.typ) === filter;
   return true;
 }
 
 /* Gemeinsame Projektion für beide Ansichten: filtern, suchen, sortieren. */
-export function projiziereMustwatch(eintraege, { filter = "alle", suche = "" } = {}, kandidaten = {}) {
+export function projiziereMustwatch(eintraege, { filter = "alle", suche = "" } = {}, kandidaten = {}, selectedServices = []) {
   const gefiltert = (Array.isArray(eintraege) ? eintraege : []).filter((e) =>
-    passtZuMustwatchFilter(e, filter, kandidaten) && passtZuMustwatchSuche(e, suche));
-  return sortiereMustwatch(gefiltert, kandidaten);
-}
-
-const candidateType = (entry) => mustwatchTyp(entry?.typ ?? entry?.type);
-const candidateYear = (entry) => mustwatchJahr(entry?.jahr ?? entry?.year);
-const candidateAliases = (entry) => [
-  entry?.titel,
-  entry?.originaltitel,
-  entry?.original_title,
-  ...(Array.isArray(entry?.alternativtitel) ? entry.alternativtitel : []),
-  ...(Array.isArray(entry?.alternate_titles) ? entry.alternate_titles : []),
-].map((value) => norm(String(value ?? ""))).filter(Boolean);
-
-function candidateId(target, candidate) {
-  const value = target === "streaming"
-    ? candidate?.watchmode_id ?? candidate?.id
-    : candidate?.id ?? candidate?.film_at_id ?? candidate?.projection_id;
-  return value == null ? null : `${target}:${String(value)}`;
-}
-
-function allCandidates(candidates) {
-  return ["master", "programm", "streaming"].flatMap((target) => (
-    Array.isArray(candidates?.[target]) ? candidates[target] : []
-  ).map((candidate) => ({ target, candidate, ref: candidateId(target, candidate) }))
-    .filter(({ ref }) => ref));
-}
-
-/* Die Startseite bewertet viele Must-Watch-Zeilen gegen denselben Katalog.
-   Titel, Typ und Referenzen einmal vorzubereiten bewahrt die strengen
-   Identitätsregeln, vermeidet aber den bisherigen Vollkatalogscan pro Zeile. */
-function prepareCandidateMatcher(candidates) {
-  const all = allCandidates(candidates).map((item, index) => {
-    const aliases = candidateAliases(item.candidate);
-    const year = candidateYear(item.candidate);
-    const type = candidateType(item.candidate);
-    return { ...item, index, aliases, year, type,
-      identity: `${aliases[0] || ""}|${year ?? ""}|${type || ""}` };
-  });
-  const byRef = new Map();
-  const byAlias = new Map();
-  for (const item of all) {
-    if (!byRef.has(item.ref)) byRef.set(item.ref, item);
-    for (const alias of new Set(item.aliases)) {
-      if (!byAlias.has(alias)) byAlias.set(alias, []);
-      byAlias.get(alias).push(item);
-    }
-  }
-  return { byRef, byAlias };
-}
-
-function matchedCandidates(entry, candidates, vorbereitet = null) {
-  const { byRef, byAlias } = vorbereitet || prepareCandidateMatcher(candidates);
-  const kompatibel = (item) => {
-    const wantedYear = mustwatchJahr(entry?.jahr);
-    if (wantedYear != null && item.year != null && wantedYear !== item.year) return false;
-    const wantedType = mustwatchTyp(entry?.typ);
-    return !wantedType || !item.type || wantedType === item.type;
-  };
-  const passendeAliase = (aliases) => {
-    const gefunden = new Map();
-    for (const alias of aliases) {
-      for (const item of byAlias.get(alias) || []) gefunden.set(item.index, item);
-    }
-    return [...gefunden.values()].sort((left, right) => left.index - right.index);
-  };
-  const explicit = entry?.verknuepfung;
-  let anchor = null;
-  if (explicit?.ziel && explicit.id != null) {
-    const ref = `${explicit.ziel}:${String(explicit.id)}`;
-    anchor = byRef.get(ref) || null;
-    /* Eine gesetzte Verknüpfung ist eine bewusste Identitätsentscheidung. Ist
-       ihr Ziel im aktuellen Bestand nicht geladen, wird nicht ersatzweise per
-       Titel auf einen anderen Datensatz gesprungen. */
-    if (!anchor) return [];
-  }
-  if (anchor) {
-    return passendeAliase(anchor.aliases).filter(kompatibel)
-      .map(({ target, candidate, ref }) => ({ target, candidate, ref }));
-  }
-  const wantedAliases = new Set(candidateAliases(entry));
-  if (!wantedAliases.size) return [];
-  const exact = passendeAliase(wantedAliases).filter(kompatibel);
-  const identities = new Set(exact.map(({ identity }) => identity));
-  return identities.size === 1
-    ? exact.map(({ target, candidate, ref }) => ({ target, candidate, ref })) : [];
+    passtZuMustwatchFilter(e, filter, kandidaten, selectedServices) && passtZuMustwatchSuche(e, suche));
+  return sortiereMustwatch(gefiltert, kandidaten, selectedServices);
 }
 
 function stableHash(value) {
@@ -252,33 +195,20 @@ export function projectDailyMustwatch({
   entries = [], candidates = {}, selectedServices = [], day = viennaCalendarDay(), limit = 5,
 } = {}) {
   if (!day) return [];
-  const services = new Set((Array.isArray(selectedServices) ? selectedServices : [])
-    .map((value) => norm(String(value || ""))).filter(Boolean));
-  const kandidatensuche = prepareCandidateMatcher(candidates);
   const eligible = [];
   for (const entry of Array.isArray(entries) ? entries : []) {
     const titleKey = norm(String(entry?.titel ?? ""));
     if (!titleKey) continue;
-    const matches = matchedCandidates(entry, candidates, kandidatensuche);
-    const masterMatches = matches.filter(({ target }) => target === "master");
-    const programMatches = matches.filter(({ target }) => target === "programm");
-    const streamingMatches = matches.filter(({ target }) => target === "streaming");
-    const owned = entry?.im_besitz === true || masterMatches.some(({ candidate }) => (
-      candidate?.im_besitz === true || hatPhysischeQuelle(candidate?.quelle)
-    ));
-    const inCinema = programMatches.length > 0;
-    const streamingServices = [...new Set(streamingMatches.flatMap(({ candidate }) => (
-      Array.isArray(candidate?.dienste) ? candidate.dienste : []
-    )).filter((service) => services.has(norm(String(service || "")))))].sort((a, b) => a.localeCompare(b, "de"));
-    if (!owned && !inCinema && !streamingServices.length) continue;
+    const availability = mustwatchVerfuegbarkeit(entry, candidates, selectedServices);
+    if (!availability?.aktuell) continue;
     eligible.push({
       entry,
       canonicalKey: `${titleKey}|${mustwatchJahr(entry?.jahr) ?? ""}|${mustwatchTyp(entry?.typ) || ""}`,
       titleKey,
       reasons: {
-        streaming: streamingServices,
-        cinema: inCinema,
-        owned,
+        streaming: availability.gruende.streaming,
+        cinema: availability.gruende.cinema,
+        owned: availability.gruende.owned,
       },
     });
   }

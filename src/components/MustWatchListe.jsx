@@ -29,6 +29,15 @@ const FILTER_LABEL = { alle: "Alle", jetzt: "Jetzt verfügbar", film: "Filme", s
 
 const monoKlein = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
 
+function findeKandidat(kandidaten, verknuepfung) {
+  if (!verknuepfung) return null;
+  const refId = String(verknuepfung.id);
+  return (kandidaten?.[verknuepfung.ziel] || []).find((item) => item?.id != null && (
+    String(item.id) === refId || (verknuepfung.ziel === "streaming"
+      && (item.streaming_aliases || []).some((id) => String(id) === refId))
+  )) || null;
+}
+
 /* Jahr und Art werden im Formular und in der Karte identisch angeboten, damit
    nachträgliches Ergänzen genauso aussieht wie das Anlegen. */
 function MetaFelder({ jahr, typ, onJahr, onTyp, farbeAufKarte = false }) {
@@ -151,18 +160,39 @@ function KonfliktTextfeld({ eintrag, feld, placeholder, rows, onUpdate }) {
 
 /* Picker: durchsucht die drei Kandidaten-Gruppen per norm-Substring; Auswahl
    ausschließlich per Klick. Max 6 Treffer pro Gruppe. */
-function VerknuepfungsPicker({ kandidaten, onWaehle, onAbbrechen }) {
+function VerknuepfungsPicker({ kandidaten, onStreamingSuche, onKandidatenAnfordern, onWaehle, onAbbrechen }) {
   const [suche, setSuche] = useState("");
+  const [streamingTreffer, setStreamingTreffer] = useState([]);
+  const [streamingLaedt, setStreamingLaedt] = useState(false);
+  useEffect(() => { onKandidatenAnfordern?.(); }, [onKandidatenAnfordern]);
+  useEffect(() => {
+    const query = suche.trim();
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    if (!query || typeof onStreamingSuche !== "function") {
+      setStreamingTreffer([]);
+      setStreamingLaedt(false);
+      return () => controller?.abort();
+    }
+    setStreamingLaedt(true);
+    const timer = setTimeout(() => {
+      Promise.resolve(onStreamingSuche(query, { signal: controller?.signal, limit: 6 }))
+        .then((items) => { if (!controller?.signal.aborted) setStreamingTreffer(Array.isArray(items) ? items : []); })
+        .catch(() => { if (!controller?.signal.aborted) setStreamingTreffer([]); })
+        .finally(() => { if (!controller?.signal.aborted) setStreamingLaedt(false); });
+    }, 180);
+    return () => { clearTimeout(timer); controller?.abort(); };
+  }, [onStreamingSuche, suche]);
   const treffer = useMemo(() => {
     const nq = norm(suche);
     if (!nq) return [];
     const gruppen = [];
-    for (const [ziel, liste] of [["master", kandidaten.master], ["programm", kandidaten.programm], ["streaming", kandidaten.streaming]]) {
+    const streaming = typeof onStreamingSuche === "function" ? streamingTreffer : kandidaten.streaming;
+    for (const [ziel, liste] of [["master", kandidaten.master], ["programm", kandidaten.programm], ["streaming", streaming]]) {
       const hits = (liste || []).filter((k) => k?.id != null && norm(k.titel).includes(nq)).slice(0, 6);
       if (hits.length) gruppen.push({ ziel, hits });
     }
     return gruppen;
-  }, [suche, kandidaten]);
+  }, [suche, kandidaten, onStreamingSuche, streamingTreffer]);
   return (
     <div style={{ background: T.saal, borderRadius: 4, padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -184,14 +214,14 @@ function VerknuepfungsPicker({ kandidaten, onWaehle, onAbbrechen }) {
           </div>
         </div>
       ))}
-      {suche.trim() && treffer.length === 0 && (
+      {suche.trim() && !streamingLaedt && treffer.length === 0 && (
         <div style={{ ...monoKlein }}>Keine Treffer — Verknüpfung bleibt leer (kein Auto-Anlegen).</div>
       )}
     </div>
   );
 }
 
-function MustWatchForm({ onAdd, onDone, kandidaten }) {
+function MustWatchForm({ onAdd, onDone, kandidaten, onStreamingSuche, onKandidatenAnfordern }) {
   const [titel, setTitel] = useState("");
   const [jahr, setJahr] = useState("");
   const [typ, setTyp] = useState("");
@@ -234,7 +264,8 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
           : <button style={{ ...btnStyle(false), padding: "5px 10px" }} onClick={() => setPickerOffen(!pickerOffen)}>{pickerOffen ? "Picker schließen" : "… wählen (optional)"}</button>}
       </div>
       {pickerOffen && !verkn && (
-        <VerknuepfungsPicker kandidaten={kandidaten}
+        <VerknuepfungsPicker kandidaten={kandidaten} onStreamingSuche={onStreamingSuche}
+          onKandidatenAnfordern={onKandidatenAnfordern}
           onWaehle={(v, t) => { setVerkn(v); setVerknTitel(t); setPickerOffen(false); }}
           onAbbrechen={() => setPickerOffen(false)} />
       )}
@@ -251,6 +282,7 @@ export function MustWatchListe({
   eintraege, onAdd, onUpdate, onDelete, kandidaten, kommtVorInMap, onArtikelKlick,
   onSpringeZuRef, onAddFilm, recommendationPins = [], onRecommendationPinToggle,
   pinOwnerKey = null, alphabetBuchstabe = null, jahrzehnt = null,
+  selectedServices = [], onStreamingSuche, onKandidatenAnfordern,
 }) {
   const [formOffen, setFormOffen] = useState(false);
   const [offenId, setOffenId] = useState(null);
@@ -265,13 +297,12 @@ export function MustWatchListe({
 
   const titelZu = (v) => {
     if (!v) return "";
-    const liste = kandidaten[v.ziel] || [];
-    const k = liste.find((x) => String(x.id) === String(v.id));
+    const k = findeKandidat(kandidaten, v);
     return k ? k.titel : v.id;
   };
   /* Reine Such-/Filterprojektion der vollständigen Must-Watch-Ansicht. */
   const projektion = useMemo(() => {
-    let liste = projiziereMustwatch(eintraege, { filter, suche }, kandidaten);
+    let liste = projiziereMustwatch(eintraege, { filter, suche }, kandidaten, selectedServices);
     if (alphabetBuchstabe) {
       liste = liste.filter((eintrag) => streamingAnfangsbuchstabe(eintrag.titel) === alphabetBuchstabe);
     }
@@ -279,14 +310,14 @@ export function MustWatchListe({
       liste = liste.filter((eintrag) => passtInJahrzehntMitKulanz(eintrag.jahr, jahrzehnt));
     }
     return liste;
-  }, [eintraege, filter, suche, kandidaten, alphabetBuchstabe, jahrzehnt]);
+  }, [eintraege, filter, suche, kandidaten, selectedServices, alphabetBuchstabe, jahrzehnt]);
   const sichtbar = useMemo(
     () => nurMarkierte ? projektion.filter((e) => markierteIds.has(String(e.id))) : projektion,
     [markierteIds, nurMarkierte, projektion],
   );
   const jetztAnzahl = useMemo(
-    () => (eintraege || []).filter((e) => mustwatchVerfuegbarkeit(e, kandidaten)?.aktuell).length,
-    [eintraege, kandidaten],
+    () => (eintraege || []).filter((e) => mustwatchVerfuegbarkeit(e, kandidaten, selectedServices)?.aktuell).length,
+    [eintraege, kandidaten, selectedServices],
   );
   const eingeschraenkt = filter !== "alle" || !!suche.trim() || nurMarkierte
     || !!alphabetBuchstabe || !!streamingJahrzehntBereich(jahrzehnt);
@@ -320,8 +351,7 @@ export function MustWatchListe({
     if (lokal && isEntdeckenPinned(recommendationPins, lokal)) return lokal;
     const ref = eintrag?.verknuepfung;
     if (["programm", "streaming"].includes(ref?.ziel) && ref.id != null) {
-      const kandidat = (kandidaten?.[ref.ziel] || [])
-        .find((item) => item?.id != null && String(item.id) === String(ref.id));
+      const kandidat = findeKandidat(kandidaten, ref);
       if (kandidat && ref.ziel === "streaming") {
         const extern = {
           ...kandidat,
@@ -347,7 +377,7 @@ export function MustWatchListe({
   };
 
   const filmDatenFuer = (eintrag) => {
-    const status = mustwatchVerfuegbarkeit(eintrag, kandidaten);
+    const status = mustwatchVerfuegbarkeit(eintrag, kandidaten, selectedServices);
     const kandidat = status?.kandidat || null;
     const typ = mustwatchTyp(eintrag?.typ ?? kandidat?.typ ?? kandidat?.type);
     const jahr = mustwatchJahr(eintrag?.jahr ?? kandidat?.jahr ?? kandidat?.year);
@@ -444,7 +474,8 @@ export function MustWatchListe({
           Markiert ({markierteIds.size})
         </Chip>
       </div>
-      {formOffen && <div style={{ marginBottom: 12 }}><MustWatchForm onAdd={onAdd} onDone={() => setFormOffen(false)} kandidaten={kandidaten} /></div>}
+      {formOffen && <div style={{ marginBottom: 12 }}><MustWatchForm onAdd={onAdd} onDone={() => setFormOffen(false)} kandidaten={kandidaten}
+        onStreamingSuche={onStreamingSuche} onKandidatenAnfordern={onKandidatenAnfordern} /></div>}
       <div style={{ ...monoKlein, marginBottom: 10 }}>
         {sichtbar.length} von {(eintraege || []).length} vorgemerkt
         {jetztAnzahl > 0 ? " · " + jetztAnzahl + " jetzt verfügbar" : ""}
@@ -453,7 +484,7 @@ export function MustWatchListe({
         {sichtbar.map((e) => {
           const offen = offenId === e.id;
           const backlinks = kommtVorInMap && kommtVorInMap[e.id];
-          const status = mustwatchVerfuegbarkeit(e, kandidaten);
+          const status = mustwatchVerfuegbarkeit(e, kandidaten, selectedServices);
           const typ = mustwatchTyp(e.typ);
           const meta = [e.jahr || null, typ ? TYP_LABEL[typ] : null].filter(Boolean).join(" · ");
           return (
@@ -466,7 +497,7 @@ export function MustWatchListe({
                 <div className="kd-mustwatch-statuszeile">
                   {/* Statusbadge NUR bei belegter aktueller Verknüpfung — ohne
                       geladenen Katalog wird nichts behauptet. */}
-                  {status && (
+                  {status?.label && (
                     <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.08em", padding: "3px 7px", borderRadius: 3, whiteSpace: "nowrap", border: "1px solid " + (status.aktuell ? T.wolfram : T.tinteWeich), background: status.aktuell ? T.wolfram : "transparent", color: status.aktuell ? T.tinte : T.tinteWeich }}>
                       {status.label}
                     </span>
@@ -540,7 +571,8 @@ export function MustWatchListe({
                     </button>
                   </div>
                   {pickerFuer === e.id && !e.verknuepfung && (
-                    <VerknuepfungsPicker kandidaten={kandidaten}
+                    <VerknuepfungsPicker kandidaten={kandidaten} onStreamingSuche={onStreamingSuche}
+                      onKandidatenAnfordern={onKandidatenAnfordern}
                       onWaehle={(v) => { onUpdate(e.id, { verknuepfung: v }); setPickerFuer(null); }}
                       onAbbrechen={() => setPickerFuer(null)} />
                   )}

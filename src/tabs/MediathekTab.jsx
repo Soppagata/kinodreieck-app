@@ -77,6 +77,7 @@ export function istReinerPrognoseMasterwechsel(vorher, nachher, expandedId) {
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht, onSelectionStateChange,
   onFilmBatchVorschau, onFilmBatchLoeschen,
   mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] }, onSpringeZuMustwatchRef,
+  mustwatchSelectedServices = [], onMustwatchStreamingSuche, onMustwatchKandidatenAnfordern,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
   onPrognoseErstellen, onPrognoseStatus,
@@ -673,6 +674,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           alphabetBuchstabe={buchstabe} jahrzehnt={dekade}
           onAdd={addMustwatch} onUpdate={updateMustwatch} onDelete={deleteMustwatch}
           kandidaten={mwKandidaten} kommtVorInMap={kommtVorInMap} onArtikelKlick={onArtikelKlick}
+          selectedServices={mustwatchSelectedServices} onStreamingSuche={onMustwatchStreamingSuche}
+          onKandidatenAnfordern={onMustwatchKandidatenAnfordern}
           onSpringeZuRef={onSpringeZuMustwatchRef} onAddFilm={addFilm}
           recommendationPins={recommendationPins} onRecommendationPinToggle={onRecommendationPinToggle}
           pinOwnerKey={datenKontextKey} />

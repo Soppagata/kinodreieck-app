@@ -61,19 +61,27 @@ const streamingKandidat = {
 };
 const start = [
   { id: "mw_stalker", titel: "Stalker", jahr: 1979, typ: "film", im_besitz: false, notiz: "Tarkowski", verknuepfung: { ziel: "streaming", id: 7001 } },
-  { id: "mw_offen", titel: "Ohne sichere Referenz", jahr: null, typ: "", im_besitz: false, notiz: "", verknuepfung: null },
+  { id: "mw_offen", titel: "Ohne sichere Referenz", jahr: null, typ: "", im_besitz: true, notiz: "", verknuepfung: null },
 ];
 const pins = [];
 const pinAufrufe = [];
 const filmWrites = [];
 const deletes = [];
 const updates = [];
+const pickerQueries = [];
+let pickerLoads = 0;
 
 function Harness() {
   const [eintraege, setEintraege] = useState(start);
   return React.createElement(MustWatchListe, {
     eintraege,
     kandidaten: { master: [], programm: [], streaming: [streamingKandidat] },
+    selectedServices: ["MUBI"],
+    onKandidatenAnfordern: () => { pickerLoads += 1; },
+    onStreamingSuche: async (query) => {
+      pickerQueries.push(query);
+      return [{ id: "remote-1", titel: "Remote Treffer", jahr: 2025, dienste: ["MUBI"] }];
+    },
     recommendationPins: pins,
     pinOwnerKey: OWNER_A,
     onRecommendationPinToggle: (entry) => pinAufrufe.push(entry),
@@ -113,6 +121,37 @@ const offen = document.querySelector("#mw-mw_offen");
 assert.ok(stalker?.classList.contains("kd-titelaktionskarte"));
 assert.equal(stalker.querySelectorAll(".kd-titelkarten-aktionen button").length, 3);
 assert.equal(offen.querySelector(".kd-entdecken-pin")?.disabled, false);
+assert.match(document.body.textContent, /1 jetzt verfügbar/u);
+
+const jetztChip = [...document.querySelectorAll("button")]
+  .find((el) => el.textContent.trim() === "Jetzt verfügbar");
+await click(jetztChip);
+assert.ok(document.querySelector("#mw-mw_stalker"));
+assert.equal(document.querySelector("#mw-mw_offen"), null,
+  "Unverknüpfter Besitzhaken darf im Jetzt-verfügbar-Filter nicht zählen");
+const alleChip = [...document.querySelectorAll("button")]
+  .find((el) => el.textContent.trim() === "Alle");
+await click(alleChip);
+assert.ok(document.querySelector("#mw-mw_offen"), "Unter Alle bleibt der unverknüpfte Eintrag sichtbar");
+
+await click(document.querySelector("#mw-mw_offen"));
+const verknuepfen = [...document.querySelectorAll("button")]
+  .find((el) => el.textContent.trim() === "Verknüpfen …");
+await click(verknuepfen);
+assert.equal(pickerLoads, 1, "Picker fordert Kino-/Mediathek-Kandidaten beim Öffnen an");
+assert.deepEqual(pickerQueries, [], "Ein gespeicherter Must-Watch-Titel startet keine automatische Streaming-Suche");
+const pickerInput = document.querySelector('input[placeholder^="Titel suchen"]');
+await act(async () => {
+  const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set;
+  setter.call(pickerInput, "Remote");
+  pickerInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 220));
+});
+assert.deepEqual(pickerQueries, ["Remote"], "Nur der ausdrücklich eingegebene Pickertext wird gesucht");
+assert.ok([...document.querySelectorAll("button")].some((el) => /Remote Treffer/.test(el.textContent)));
+assert.doesNotMatch(document.body.textContent, /\bready\b|unavailable|ungeprüft/iu,
+  "Interne RPC-Zustände werden nicht als neue Statusworte sichtbar");
+await click([...document.querySelectorAll("button")].find((el) => el.textContent.trim() === "Abbrechen"));
 
 await click(button("Ohne sichere Referenz am Pinboard anpinnen"));
 assert.equal(pinAufrufe.length, 1);
@@ -214,6 +253,6 @@ await click(lokalerPinboardKnopf);
 assert.equal(startSprung, "mw_offen");
 await act(async () => { startRoot.unmount(); await Promise.resolve(); });
 
-console.log("Must-Watch-Karten und lokale Pins: 35/35 Checks bestanden.");
+console.log("Must-Watch-Karten, Filter, Picker und lokale Pins: Checks bestanden.");
 dom.window.close();
 process.exit(0);

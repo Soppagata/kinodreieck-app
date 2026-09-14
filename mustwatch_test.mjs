@@ -105,10 +105,10 @@ check("Suche: Nichttreffer bleibt Nichttreffer", M.passtZuMustwatchSuche(suchEin
 
 /* ---------- 8) Verfügbarkeit: nur aus expliziter stabiler Verknüpfung ---------- */
 const kandidaten = {
-  master: [{ id: "solaris_1972", titel: "Solaris", jahr: 1972 }],
+  master: [{ id: "solaris_1972", titel: "Solaris", jahr: 1972, quelle: "dvd" }],
   programm: [{ id: 4711, titel: "Stalker", jahr: 1979 }],
   streaming: [
-    { id: 88123, watchmode_id: 88123, titel: "The Substance", jahr: 2024 },
+    { id: 88123, watchmode_id: 88123, titel: "The Substance", jahr: 2024, dienste: ["MUBI"] },
     /* Ein lokal mit dem Master gematchter Streamingtitel trägt in der Ansicht
        zusätzlich dessen ID. Der Picker-/Verfügbarkeitsvertrag bleibt trotzdem
        auf der normalisierten Watchmode-ID. */
@@ -133,10 +133,24 @@ check("Verfügbarkeit: normalisierte Watchmode-ID bleibt auch neben einer Master
   }, kandidaten) === null);
 check("Verfügbarkeit: Kino und Streaming gelten als jetzt verfügbar",
   M.mustwatchVerfuegbarkeit(imKino, kandidaten).aktuell === true
-  && M.mustwatchVerfuegbarkeit(imStream, kandidaten).aktuell === true);
-check("Verfügbarkeit: Mediathek ist Besitz, nicht 'jetzt verfügbar'",
+  && M.mustwatchVerfuegbarkeit(imStream, kandidaten, ["MUBI"]).aktuell === true);
+check("Verfügbarkeit: physische Mediathekquelle gilt als jetzt verfügbar",
   M.mustwatchVerfuegbarkeit(inMediathek, kandidaten)?.label === "MEDIATHEK"
-  && M.mustwatchVerfuegbarkeit(inMediathek, kandidaten).aktuell === false);
+  && M.mustwatchVerfuegbarkeit(inMediathek, kandidaten).aktuell === true);
+check("Verfügbarkeit: reine Master-Mitgliedschaft und digitale Quelle behaupten keinen Besitz",
+  M.mustwatchVerfuegbarkeit(
+    { ...inMediathek, verknuepfung: { ziel: "master", id: "digital" } },
+    { master: [{ id: "digital", titel: "Digital", quelle: "apple" }] },
+  )?.aktuell === false);
+check("Verfügbarkeit: Besitzhaken zählt erst mit weiterhin gültiger expliziter Verknüpfung",
+  M.mustwatchVerfuegbarkeit({ ...ohneRef, im_besitz: true }, kandidaten) === null
+  && M.mustwatchVerfuegbarkeit({ ...imStream, im_besitz: true }, kandidaten, []).aktuell === true);
+check("Verfügbarkeit: Kandidatenfehler blockiert verknüpften persönlichen Besitz nicht",
+  M.mustwatchVerfuegbarkeit({ ...imStream, im_besitz: true }, {}, []).gruende.owned === true);
+check("Verfügbarkeit: Streaming zählt nur bei einem ausgewählten aktuellen Dienst",
+  M.mustwatchVerfuegbarkeit(imStream, kandidaten, []).aktuell === false
+  && M.mustwatchVerfuegbarkeit(imStream, kandidaten, ["netflix"]).aktuell === false
+  && M.mustwatchVerfuegbarkeit(imStream, kandidaten, ["mubi"]).aktuell === true);
 check("Verfügbarkeit: ohne Verknüpfung keine Aussage",
   M.mustwatchVerfuegbarkeit(ohneRef, kandidaten) === null);
 check("Verfügbarkeit: nicht mehr vorhandene Verknüpfung erfindet keine Verfügbarkeit",
@@ -150,12 +164,12 @@ check("Verfügbarkeit: KEIN Titel-Fuzzy — gleicher Titel ohne passende ID zäh
 
 /* ---------- 9) Sortierung der vollständigen Listenprojektion ---------- */
 const mwBestand = [ohneRef, inMediathek, imStream, toteRef, imKino];
-const sortiert = M.sortiereMustwatch(mwBestand, kandidaten);
+const sortiert = M.sortiereMustwatch(mwBestand, kandidaten, ["MUBI"]);
 check("Sortierung: aktuell verfügbare zuerst",
-  sortiert.slice(0, 2).map((e) => e.id).sort().join(",") === "mw_a,mw_b");
+  sortiert.slice(0, 3).map((e) => e.id).sort().join(",") === "mw_a,mw_b,mw_c");
 check("Sortierung: innerhalb der Gruppe zuletzt gemerkt zuerst",
-  sortiert[0].id === "mw_a" && sortiert[1].id === "mw_b"
-  && sortiert.slice(2).map((e) => e.id).join(",") === "mw_c,mw_d,mw_e");
+  sortiert.slice(0, 3).map((e) => e.id).join(",") === "mw_c,mw_a,mw_b"
+  && sortiert.slice(3).map((e) => e.id).join(",") === "mw_d,mw_e");
 check("Sortierung: Eingabeliste wird nicht mutiert",
   mwBestand.map((e) => e.id).join(",") === "mw_d,mw_c,mw_b,mw_e,mw_a");
 const gleichstand = M.sortiereMustwatch([
@@ -163,8 +177,8 @@ const gleichstand = M.sortiereMustwatch([
   { id: "mw_ae", titel: "Ätherwelle", erstellt_am: "2026-08-01T10:00:00Z" },
 ], kandidaten);
 check("Sortierung: bei gleichem Zeitstempel entscheidet der Titel (de)", gleichstand[0].id === "mw_ae");
-const vollansicht = M.projiziereMustwatch(mwBestand, { filter: "alle", suche: "" }, kandidaten);
-const ersteFuenf = M.sortiereMustwatch(mwBestand, kandidaten).slice(0, 5);
+const vollansicht = M.projiziereMustwatch(mwBestand, { filter: "alle", suche: "" }, kandidaten, ["MUBI"]);
+const ersteFuenf = M.sortiereMustwatch(mwBestand, kandidaten, ["MUBI"]).slice(0, 5);
 check("Sortierung: Vollansicht und Sortierhelper liefern dieselbe Reihenfolge",
   vollansicht.map((e) => e.id).join(",") === ersteFuenf.map((e) => e.id).join(","));
 
@@ -185,7 +199,7 @@ check("Filter: unbekannter Typ erscheint weder unter Filme noch unter Serien",
   M.projiziereMustwatch(mitTypen, { filter: "film" }, kandidaten).every((e) => e.id !== "mw_u")
   && M.projiziereMustwatch(mitTypen, { filter: "serie" }, kandidaten).every((e) => e.id !== "mw_u"));
 check("Filter: 'jetzt' zeigt nur belegbar aktuell Verfügbares",
-  M.projiziereMustwatch(mitTypen, { filter: "jetzt" }, kandidaten).map((e) => e.id).join(",") === "mw_a");
+  M.projiziereMustwatch(mitTypen, { filter: "jetzt" }, kandidaten, ["MUBI"]).map((e) => e.id).join(",") === "mw_a");
 check("Filter: 'jetzt' ohne geladenen Katalog zeigt nichts statt alles",
   M.projiziereMustwatch(mitTypen, { filter: "jetzt" }, {}).length === 0);
 check("Filter und Suche greifen gemeinsam",
@@ -206,14 +220,14 @@ check("Projektion: Bestandsfelder inkl. unbekannter Zusatzfelder bleiben unverä
 
 /* ---------- 12) Tägliche Startauswahl ---------- */
 const dailyEntries = [
-  { id: "mw_owned", titel: "Owned", im_besitz: true },
-  { id: "mw_cinema", titel: "Cinema", jahr: 2026 },
-  { id: "mw_stream", titel: "Stream", typ: "film" },
-  { id: "mw_other", titel: "Other Stream" },
+  { id: "mw_owned", titel: "Owned", im_besitz: true, verknuepfung: { ziel: "master", id: "owned" } },
+  { id: "mw_cinema", titel: "Cinema", jahr: 2026, verknuepfung: { ziel: "programm", id: "cinema-auto" } },
+  { id: "mw_stream", titel: "Stream", typ: "film", verknuepfung: { ziel: "streaming", id: "1" } },
+  { id: "mw_other", titel: "Other Stream", verknuepfung: { ziel: "streaming", id: "2" } },
 ];
 const dailyCandidates = {
-  master: [],
-  programm: [{ projection_id: "cinema-auto", titel: "Cinema", jahr: 2026 }],
+  master: [{ id: "owned", titel: "Owned" }],
+  programm: [{ id: "cinema-auto", projection_id: "cinema-auto", titel: "Cinema", jahr: 2026 }],
   streaming: [
     { id: 1, titel: "Stream", typ: "movie", dienste: ["MUBI", "Andere"] },
     { id: 2, titel: "Other Stream", dienste: ["Netflix"] },
@@ -222,7 +236,7 @@ const dailyCandidates = {
 const daily = M.projectDailyMustwatch({
   entries: dailyEntries, candidates: dailyCandidates, selectedServices: ["mubi"], day: "2026-09-05",
 });
-check("Tagesauswahl kombiniert Besitz, Kino ohne stabile film.at-ID und case-sichere Dienstauswahl",
+check("Tagesauswahl kombiniert verknüpften Besitz, Kino und case-sichere Dienstauswahl",
   daily.length === 3
   && daily.some((item) => item.entry.id === "mw_owned" && item.reasons.owned)
   && daily.some((item) => item.entry.id === "mw_cinema" && item.reasons.cinema)
@@ -239,14 +253,14 @@ const ambiguousCandidates = {
 };
 check("Unverknüpfter mehrdeutiger Exakttitel wird nicht geraten",
   M.projectDailyMustwatch({ entries: [{ id: "mw_signal", titel: "Signal" }], candidates: ambiguousCandidates, selectedServices: ["MUBI"], day: "2026-09-05" }).length === 0);
-check("Jahr macht denselben Exakttitel eindeutig",
-  M.projectDailyMustwatch({ entries: [{ id: "mw_signal", titel: "Signal", jahr: 2024 }], candidates: ambiguousCandidates, selectedServices: ["MUBI"], day: "2026-09-05" }).length === 1);
-check("Ein exakter Alternativtitel kann einen unverknüpften Eintrag eindeutig zuordnen",
+check("Auch ein eindeutiges Jahr führt ohne explizite Verknüpfung nicht zu Auto-Matching",
+  M.projectDailyMustwatch({ entries: [{ id: "mw_signal", titel: "Signal", jahr: 2024 }], candidates: ambiguousCandidates, selectedServices: ["MUBI"], day: "2026-09-05" }).length === 0);
+check("Auch ein exakter Alternativtitel führt ohne explizite Verknüpfung nicht zu Auto-Matching",
   M.projectDailyMustwatch({
     entries: [{ id: "mw_alt", titel: "Unverbundener Titel", originaltitel: "The Signal", jahr: 2024 }],
     candidates: { master: [], programm: [], streaming: [{ id: 13, titel: "The Signal", jahr: 2024, dienste: ["MUBI"] }] },
     selectedServices: ["MUBI"], day: "2026-09-05",
-  }).length === 1);
+  }).length === 0);
 check("Eine tote explizite Verknüpfung fällt nicht still auf Titelmatching zurück",
   M.projectDailyMustwatch({
     entries: [{ id: "mw_signal", titel: "Signal", jahr: 2024, verknuepfung: { ziel: "streaming", id: 999 } }],
@@ -255,11 +269,13 @@ check("Eine tote explizite Verknüpfung fällt nicht still auf Titelmatching zur
 check("Explizite Streaming-Verknüpfung bleibt bei zusätzlicher Mediathek-ID an Watchmode gebunden",
   M.projectDailyMustwatch({
     entries: [{ id: "mw_stream_ref", titel: "Gebunden", verknuepfung: { ziel: "streaming", id: 77 } }],
-    candidates: { master: [], programm: [], streaming: [{ id: "master-77", watchmode_id: 77, titel: "Gebunden", dienste: ["MUBI"] }] },
+    candidates: { master: [], programm: [], streaming: [{ id: "77", watchmode_id: 77, master_id: "master-77", titel: "Gebunden", dienste: ["MUBI"] }] },
     selectedServices: ["MUBI"], day: "2026-09-05",
   }).length === 1);
 
-const twelveEntries = Array.from({ length: 12 }, (_, index) => ({ id: `mw_${index}`, titel: `Titel ${index}` }));
+const twelveEntries = Array.from({ length: 12 }, (_, index) => ({
+  id: `mw_${index}`, titel: `Titel ${index}`, verknuepfung: { ziel: "streaming", id: String(100 + index) },
+}));
 const twelveCandidates = { master: [], programm: [], streaming: twelveEntries.map((entry, index) => ({
   id: 100 + index, titel: entry.titel, dienste: ["MUBI"],
 })) };
@@ -277,15 +293,21 @@ const stableTwo = M.projectDailyMustwatch({ entries: [...twelveEntries].reverse(
 check("Tagesauswahl ist über Eingabereihenfolge und Rerender stabil",
   stableOne.map((item) => item.entry.id).join(",") === stableTwo.map((item) => item.entry.id).join(","));
 check("Doppelte sichtbare Titel erscheinen höchstens einmal",
-  M.projectDailyMustwatch({ entries: [{ id: "a", titel: "Doppelt", im_besitz: true }, { id: "b", titel: "Doppelt", im_besitz: true }], day: "2026-09-05" }).length === 1);
-const grosserStreamingKatalog = Array.from({ length: 24690 }, (_, index) => ({
-  watchmode_id: 900000 + index, titel: `Start-Katalog ${index}`, jahr: 1900 + (index % 126),
+  M.projectDailyMustwatch({
+    entries: [
+      { id: "a", titel: "Doppelt", im_besitz: true, verknuepfung: { ziel: "master", id: "doppelt" } },
+      { id: "b", titel: "Doppelt", im_besitz: true, verknuepfung: { ziel: "master", id: "doppelt" } },
+    ], candidates: { master: [{ id: "doppelt", titel: "Doppelt" }] }, day: "2026-09-05",
+  }).length === 1);
+const grosserStreamingKatalog = Array.from({ length: 80 }, (_, index) => ({
+  id: String(900000 + index), watchmode_id: 900000 + index, titel: `Start-Katalog ${index}`, jahr: 1900 + (index % 126),
   typ: index % 3 ? "movie" : "tv_series", dienste: ["MUBI"],
 }));
 const grosseStartliste = Array.from({ length: 80 }, (_, index) => ({
   id: `mw_start_${index}`, titel: grosserStreamingKatalog[index].titel,
   jahr: grosserStreamingKatalog[index].jahr,
   typ: grosserStreamingKatalog[index].typ === "movie" ? "film" : "serie",
+  verknuepfung: { ziel: "streaming", id: grosserStreamingKatalog[index].id },
 }));
 const grosseStartprojektionBeginn = performance.now();
 const grosseStartprojektion = M.projectDailyMustwatch({
@@ -294,7 +316,7 @@ const grosseStartprojektion = M.projectDailyMustwatch({
   selectedServices: ["MUBI"], day: "2026-09-05",
 });
 const grosseStartprojektionDauer = performance.now() - grosseStartprojektionBeginn;
-check("Startprojektion indexiert 24.690 Titel einmal statt pro Must-Watch-Zeile",
+check("Startprojektion arbeitet nur auf dem schmalen Ref-Batch statt einem Vollkatalog",
   grosseStartprojektionDauer < 1500 && grosseStartprojektion.length === 5);
 check("Wiener Kalendertag folgt Europe/Vienna statt UTC",
   M.viennaCalendarDay(new Date("2026-09-04T22:30:00Z")) === "2026-09-05");
