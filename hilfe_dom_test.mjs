@@ -45,7 +45,8 @@ check("Datenschutz bleibt im Login und in den Settings erreichbar", () => {
   assert.match(settings, /<Klappe titel="Datenschutz & Rechtliches">/);
   assert.doesNotMatch(navigation, /Anleitung &amp; Hilfe|kd-mobile-menu-hilfe|onHilfe/);
   assert.doesNotMatch(privacy, /standardmäßig geschlossen/);
-  assert.match(privacy, /Katalogquellen und optionale KI getrennt/);
+  assert.match(privacy, /<DatenschutzDienste\s*\/>/);
+  assert.match(einstieg, /<DatenschutzDienste\s*\/>/);
 });
 
 const dom = new JSDOM("<!doctype html><div id='root'></div>", { url: "https://local.invalid/" });
