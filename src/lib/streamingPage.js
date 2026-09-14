@@ -2,8 +2,8 @@ import { streamingTitelKennung } from "./streamingProjection.js";
 
 export const STREAMING_PAGE_FORMAT = 1;
 export const STREAMING_PAGE_INITIAL_LIMIT = 20;
-export const STREAMING_PAGE_BACKGROUND_LIMIT = 20;
-export const STREAMING_PAGE_MAX_LIMIT = 200;
+export const STREAMING_PAGE_BACKGROUND_LIMIT = 1000;
+export const STREAMING_PAGE_MAX_LIMIT = 1000;
 export const STREAMING_PAGE_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 const VIEWS = new Set(["all", "new", "library"]);

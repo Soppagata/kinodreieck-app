@@ -370,7 +370,7 @@ await check("Hintergrundseiten laufen seriell und pausieren ohne Zwischenstandve
   controller.setActive(true);
   controller.query({ view: "all", filters: {} });
   await flush();
-  assert.deepEqual(calls, [{ cursor: null, limit: 20 }, { cursor: "c1", limit: 20 }]);
+  assert.deepEqual(calls, [{ cursor: null, limit: 20 }, { cursor: "c1", limit: 1000 }]);
   controller.setActive(false);
   second.resolve(page({ ids: [2], cursor: "c2", complete: false }));
   await flush();
@@ -378,13 +378,17 @@ await check("Hintergrundseiten laufen seriell und pausieren ohne Zwischenstandve
   assert.equal(calls.length, 2);
   controller.setActive(true);
   await flush();
-  assert.deepEqual(calls.at(-1), { cursor: "c2", limit: 20 });
+  assert.deepEqual(calls.at(-1), { cursor: "c2", limit: 1000 });
   assert.deepEqual(controller.getSnapshot().items.map((item) => item.watchmode_id), [1, 2, 3]);
   controller.destroy();
 });
 
-await check("normale App-Seiten bleiben 20, waehrend der Vertrag bis 200 akzeptiert", async () => {
-  assert.equal(normalizeStreamingPageRequest({ ...context(), limit: 500 }).limit, 200);
+await check("erste App-Seite bleibt 20 und der Vertrag akzeptiert kompatibel bis Hintergrundgroesse 1000", async () => {
+  assert.equal(normalizeStreamingPageRequest({ ...context() }).limit, 20);
+  assert.equal(normalizeStreamingPageRequest({ ...context(), limit: 20 }).limit, 20);
+  assert.equal(normalizeStreamingPageRequest({ ...context(), limit: 200 }).limit, 200);
+  assert.equal(normalizeStreamingPageRequest({ ...context(), limit: 1000 }).limit, 1000);
+  assert.equal(normalizeStreamingPageRequest({ ...context(), limit: 5000 }).limit, 1000);
 });
 
 await check("spaetere Seiten verlaengern den fruehesten Neu-Ablauf nicht", async () => {
@@ -444,7 +448,7 @@ await check("langsamer Altrequest wird abgebrochen und A-bis-Z auf den neuesten 
       loadCachedPage: async () => null,
       async loadPage(request, { signal } = {}) {
         const marker = request.cursor || request.filters.buchstabe || "initial";
-        calls.push(marker);
+        calls.push({ marker, limit: request.limit });
         let occupied = true;
         active += 1;
         maxActive = Math.max(maxActive, active);
@@ -475,19 +479,22 @@ await check("langsamer Altrequest wird abgebrochen und A-bis-Z auf den neuesten 
   controller.setActive(true);
   controller.query({ view: "all", filters: {} });
   await flush();
-  assert.deepEqual(calls, ["initial", "alte-folgeseite"]);
+  assert.deepEqual(calls, [
+    { marker: "initial", limit: 20 },
+    { marker: "alte-folgeseite", limit: 1000 },
+  ]);
   for (const buchstabe of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
     controller.query({ view: "all", filters: { buchstabe } });
   }
   await flush();
   assert.equal(aborts, 1);
-  assert.deepEqual(calls.filter((value) => /^[A-Z]$/.test(value)), []);
+  assert.deepEqual(calls.filter(({ marker }) => /^[A-Z]$/.test(marker)), []);
   assert.equal(timers.size, 1);
   const [startLatest] = timers.values();
   timers.clear();
   startLatest();
   await flush();
-  assert.deepEqual(calls.filter((value) => /^[A-Z]$/.test(value)), ["Z"]);
+  assert.deepEqual(calls.filter(({ marker }) => /^[A-Z]$/.test(marker)), [{ marker: "Z", limit: 20 }]);
   assert.equal(maxActive, 1);
   assert.deepEqual(controller.getSnapshot().items.map((item) => item.watchmode_id), [26]);
   controller.destroy();
