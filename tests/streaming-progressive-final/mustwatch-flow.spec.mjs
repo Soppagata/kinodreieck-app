@@ -187,7 +187,7 @@ test("Must-Watch-Nutzerweg nutzt schmale SQL-Kandidaten ohne versteckte Nachlade
   await page.getByRole("button", { name: "Jetzt verfügbar", exact: true }).click();
   await expect(page.locator(".kd-mustwatch-karte")).toHaveCount(0);
   await expect(page.getByText(/0 von 7 vorgemerkt/u)).toHaveCount(0);
-  await expect(page.getByText(/Keine Einträge für diese Filter/u)).toHaveCount(0);
+  await expect(page.getByText(/Keine Treffer für diese Auswahl/u)).toHaveCount(0);
   delayInitialReconciliation = false;
   await Promise.all(heldReconciliation.map(({ route, body }) => route.fulfill({
     status: 200, contentType: "application/json", body: JSON.stringify(body),
