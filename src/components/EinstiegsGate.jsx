@@ -65,6 +65,7 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
   const [storageState, setStorageState] = useState(() => sessionCoordinator.getStorageState());
   const [benutzer, setBenutzer] = useState("");
   const [passwort, setPasswort] = useState("");
+  const [passwortSichtbar, setPasswortSichtbar] = useState(false);
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState("");
   const [legalOffen, setLegalOffen] = useState(false);
@@ -85,6 +86,7 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
         || loginLaeuftRef.current) return;
       setLegalOffen(false);
       setFehler("");
+      setPasswortSichtbar(false);
       setOffen(true);
     };
     window.addEventListener(EINSTIEGS_LOGIN_OEFFNEN, oeffneLogin);
@@ -116,6 +118,7 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
     event.preventDefault();
     if (loginLaeuftRef.current) return;
     loginLaeuftRef.current = true;
+    setPasswortSichtbar(false);
     setLaeuft(true); setFehler("");
     try { await sessionCoordinator.signIn(benutzer, passwort); setPasswort(""); }
     catch (error) {
@@ -151,7 +154,13 @@ export function EinstiegsGate({ children, config = runtimeConfig }) {
           {!konto ? <>
             <form className="kd-entry-login" onSubmit={anmelden} aria-busy={laeuft}>
               <label>Benutzername<input value={benutzer} onChange={(e) => setBenutzer(e.target.value)} autoComplete="username" required /></label>
-              <label>Passwort<input type="password" value={passwort} onChange={(e) => setPasswort(e.target.value)} autoComplete="current-password" required /></label>
+              <div className="kd-entry-passwort">
+                <label htmlFor="kd-entry-passwort">Passwort</label>
+                <div className="kd-entry-passwort-zeile">
+                  <input id="kd-entry-passwort" type={passwortSichtbar ? "text" : "password"} value={passwort} onChange={(e) => setPasswort(e.target.value)} autoComplete="current-password" autoCapitalize="none" autoCorrect="off" spellCheck={false} required />
+                  <button className="kd-secondary kd-entry-passwort-toggle" type="button" aria-controls="kd-entry-passwort" aria-label={passwortSichtbar ? "Passwort verbergen" : "Passwort anzeigen"} onClick={() => setPasswortSichtbar((sichtbar) => !sichtbar)}>{passwortSichtbar ? "Verbergen" : "Anzeigen"}</button>
+                </div>
+              </div>
               <button className="kd-primary" type="submit" disabled={laeuft || !benutzer || !passwort}>{laeuft ? "Meldet an …" : "Anmelden"}</button>
             </form>
             <button className="kd-secondary kd-entry-skip" type="button" onClick={ohneKonto} disabled={laeuft}>Ohne Konto fortfahren</button>
