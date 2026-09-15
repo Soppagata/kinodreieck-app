@@ -359,7 +359,7 @@ await check("API-Ausfall behaelt vorhandene Fakten und stoppt nur offene Anreich
   assert.equal(writes, 0);
 });
 
-await check("Ambiguous Fakten blockieren den Popular-Pool nicht", () => {
+await check("Ambiguous Fakten blockieren den Popular-Pool mit belegtem Kinoprogramm nicht", () => {
   const item = ENTDECKEN_MARKET_POOL_50.items[0];
   const input = inputFor(item);
   const snapshot = mergeEntdeckenWikidataFactsSnapshot(
@@ -374,6 +374,12 @@ await check("Ambiguous Fakten blockieren den Popular-Pool nicht", () => {
     webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
     selectionDay: "2026-08-29",
     factsSnapshot: snapshot,
+    program: { filme: ENTDECKEN_MARKET_POOL_50.items
+      .filter((entry) => entry.availability.market === "cinema")
+      .map((entry, index) => ({
+        film_at_id: String(99001 + index), t: entry.title, j: entry.releaseYear,
+        z: [new Date(Date.now() + 3_600_000).toISOString()],
+      })) },
   });
   assert.equal(result.popularPool.length, 50);
   assert.equal(result.popular.length, 6);
