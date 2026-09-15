@@ -20,7 +20,6 @@ import { DatenschutzDienste } from "./DatenschutzDienste.jsx";
 import {
   FeedbackOhneNamensangabe,
   Kontoloeschanfrage,
-  PrivateMailPrivacyNote,
 } from "./PrivateMailRequests.jsx";
 
 function kontoExportIstFreigegeben({
@@ -88,7 +87,6 @@ export function DatenschutzUebersicht({
       </>}
       <DatenschutzDienste />
       <ManuellerDatenrechteWeg kontoExportFreigegeben={accountExportEnabled} />
-      <PrivateMailPrivacyNote config={config} />
       <FeedbackOhneNamensangabe accountActive={accountActive} config={config} />
     </div>
   );

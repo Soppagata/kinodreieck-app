@@ -25,7 +25,6 @@ try {
       contents: [
         'export { EinstiegsGate } from "./src/components/EinstiegsGate.jsx";',
         'export { DatenschutzUebersicht, SupportDaten } from "./src/components/PrivatePilotOps.jsx";',
-        'export { PrivateMailPrivacyNote } from "./src/components/PrivateMailRequests.jsx";',
         'export { RadarSubscriptionPreview } from "./src/components/RadarSubscriptionPreview.jsx";',
         'export { ErklaerHero } from "./src/components/Erklaerstuecke.jsx";',
         'export { PrognoseBereich } from "./src/components/PrognoseBereich.jsx";',
@@ -83,6 +82,12 @@ try {
     return {
       host,
       text: () => host.textContent.replace(/\s+/g, " ").trim(),
+      textWithoutProviderDetails: () => {
+        // Die gemeinsame Dienste-Liste enthält bewusst die ausführlichen Quellenangaben.
+        const copy = host.cloneNode(true);
+        copy.querySelectorAll('[data-datenschutz-dienste="central-registry"]').forEach((list) => list.remove());
+        return copy.textContent.replace(/\s+/g, " ").trim();
+      },
       async close() { await act(async () => root.unmount()); host.remove(); },
     };
   }
@@ -96,7 +101,7 @@ try {
     assert.match(prodLegal.text(), /Anthropic/);
   });
   check("Production zeigt keine Staging-Analyse oder detaillierte Betriebsdiagnose", () => {
-    assert.doesNotMatch(prodLegal.text(), /ENTWURF|Staging-Fassung|Betreiber-API-Key|DPA-Aussage|Build- und Umgebungsangaben|Statuscodes|revisionsbasiert|@hotmail\.com/i);
+    assert.doesNotMatch(prodLegal.textWithoutProviderDetails(), /ENTWURF|Staging-Fassung|Betreiber-API-Key|DPA-Aussage|Build- und Umgebungsangaben|Statuscodes|revisionsbasiert|@hotmail\.com/i);
     assert.doesNotMatch(fs.readFileSync(outfile, "utf8"), /@hotmail\.com/i);
   });
   await prodLegal.close();
@@ -115,7 +120,7 @@ try {
     assert.match(prodPrivacy.text(), /Persönliche Inhalte liegen in diesem Browser/);
     assert.match(prodPrivacy.text(), /Speicherung und Aufbewahrung/);
     assert.match(prodPrivacy.text(), /Datenrechte manuell anfragen/);
-    assert.doesNotMatch(prodPrivacy.text(), /feste Datenklassen|Persönliche Töpfe|registriert|Betreiber-API-Key|Technische Quelle/);
+    assert.doesNotMatch(prodPrivacy.textWithoutProviderDetails(), /feste Datenklassen|Persönliche Töpfe|registriert|Betreiber-API-Key|Technische Quelle/);
   });
   await prodPrivacy.close();
 
@@ -135,11 +140,13 @@ try {
     ...production, privateMailEnabled: true, supabaseUrl: "https://copy-test.supabase.co",
     supabasePublishableKey: "publishable-test", privateMailEndpointName: "private-mail",
   };
-  const prodMail = await render(components.PrivateMailPrivacyNote, { config: mailConfig });
-  check("Production-Mailhinweis behält Resend-Transparenz ohne internen Freigabekommentar", () => {
-    assert.match(prodMail.text(), /Resend in den USA/);
-    assert.match(prodMail.text(), /30 Tage/);
-    assert.doesNotMatch(prodMail.text(), /juristische Endfreigabe/);
+  const prodMail = await render(components.DatenschutzUebersicht, { accountActive: true, config: mailConfig });
+  check("Feedback behält die zentrale Resend-Information ohne doppelten Versandhinweis", () => {
+    const resend = prodMail.host.querySelector('[data-datenschutz-dienst="resend"]');
+    assert.match(resend.textContent, /USA/);
+    assert.match(resend.textContent, /30 Tage/);
+    assert.equal(prodMail.host.querySelector('[data-private-mail-privacy="resend"]'), null);
+    assert.ok(prodMail.host.querySelector('[data-private-mail-feedback="true"] textarea'));
   });
   await prodMail.close();
 

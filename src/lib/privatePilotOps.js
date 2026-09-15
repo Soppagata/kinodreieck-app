@@ -119,7 +119,7 @@ export const PRIVATE_PROVIDER_REGISTRY = Object.freeze([
     data: "beim Feedback der eingegebene Text, Absender- und Empfänger-Mailadresse sowie technische Transportdaten, ohne angehängte Konto-, Profil-, Diagnose- oder Browserdaten; bei einer Kontolöschanfrage zusätzlich Konto-ID und Zeitstempel",
     region: "USA",
     usage: "optional, wenn Feedback gesendet oder eine Kontolöschung angefragt wird",
-    retentionNote: "Technische Zustellmetadaten werden nach dem derzeit eingebundenen Versandhinweis standardmäßig 30 Tage aufbewahrt.",
+    retentionNote: "Resend verarbeitet Nachrichten und technische Zustellmetadaten in den USA. Die technischen Zustellmetadaten werden standardmäßig 30 Tage aufbewahrt.",
     officialSource: "https://resend.com/legal/privacy-policy",
     officialSourceLabel: "Datenschutz",
     retrievedAt: "2026-09-14",
