@@ -1920,7 +1920,7 @@ export default function App() {
             pinOwnerKey={streamingKontextKey} mustwatchReady={mustwatchGeladen}
             mustwatchAvailabilityReady={mustwatchGeladen && sichtbareAuswahlGeladen && mustwatchAbgleichBereit}
             streamingEntdecken={streamingEntdecken} streamingBekannt={streamingBekannt}
-            progStand={progStand} programmInfo={programmInfo} streamingInfo={streamingInfo} />
+            programm={programm} progStand={progStand} programmInfo={programmInfo} streamingInfo={streamingInfo} />
         )}
 
         {remoteKontoAktiv && tab === "kino" && bootDone && (

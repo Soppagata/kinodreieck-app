@@ -28,6 +28,7 @@ import {
   currentCinemaDiscoveryCandidates,
   fillPopularWithCinema,
   projectTransientDescriptions,
+  reconcileCinemaDiscoveryCandidates,
   serviceAllowedDiscoveryEntry,
 } from "./entdeckenProjection.js";
 import entdeckenFactsSnapshot from "../data/entdeckenFactsSnapshot.json" with { type: "json" };
@@ -787,6 +788,7 @@ function discoveryEvidence(record) {
    Webtipps und loesen keinerlei Pin-/Persistenzaktion aus. */
 export function webDiscoveryFeedCards({
   webDiscoveryFeed, catalogCandidates = [], factsSnapshot = entdeckenFactsSnapshot,
+  program = null, programInfo = null, now = new Date(),
 } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
@@ -854,7 +856,9 @@ export function webDiscoveryFeedCards({
         wikidata: facts || null,
       });
     });
-    return Object.freeze([...new Map(projected.map((candidate) => [candidate.targetId, candidate])).values()]);
+    const available = reconcileCinemaDiscoveryCandidates(projected,
+      currentCinemaDiscoveryCandidates({ program, programInfo, now }));
+    return Object.freeze([...new Map(available.map((candidate) => [candidate.targetId, candidate])).values()]);
   }
   return Object.freeze(matchWebDiscoveryFeed(checked.value, catalogCandidates).map((decision) => {
     const { record } = decision;
@@ -1008,7 +1012,10 @@ export function createEntdeckenRecommendations({
       includeSeen: true, requireMetadata: false, factsSnapshot, flixpatrolFacts,
       preparedSeenEntries: publicSeenEntries,
     });
-    const direct = allDirect.filter((candidate) => !candidate.seen);
+    const currentCinema = currentCinemaDiscoveryCandidates({ program, programInfo, now });
+    const direct = reconcileCinemaDiscoveryCandidates(allDirect, currentCinema)
+      .filter((candidate) => !candidate.seen && (candidate.availability?.market !== "cinema"
+        || !sourceItemSeen(candidate, master, broadCatalog, candidate?.wikidata, publicSeenEntries)));
     const rankingMaster = projectTransientDescriptions(master, {
       catalogEntries: mixed
         ? narrowedDescriptionSources(master, prepared)
@@ -1016,14 +1023,13 @@ export function createEntdeckenRecommendations({
       facts: flixpatrolFacts,
     });
     const rankingLibrary = localLibraryProjection(rankingMaster);
-    /* Die Quellenliste darf Popularität zeigen, ohne daraus Verfügbarkeit zu
-       behaupten. Erst die persönliche Rankinglane verlangt weiterhin den
-       echten Watchmode-/Kinoprogrammbeleg über availabilityConfirmed. */
+    /* Kinokarten brauchen auch in der Quellenliste einen aktuellen Termin.
+       Streaming behält seinen bestehenden Dienst-/Verfügbarkeitsvertrag. */
     const feedPopular = direct;
     const cinemaSeenEntries = mixed
       ? prepareSeenEntries(master, preparedSeenCandidates(prepared, entdeckenStatus, selectedServices))
       : prepareSeenEntries(master, catalogCandidates);
-    const cinemaCandidates = currentCinemaDiscoveryCandidates({ program, programInfo, now })
+    const cinemaCandidates = currentCinema
       .filter((candidate) => !sourceItemSeen(
         candidate, master, catalogCandidates || [], candidate?.wikidata, cinemaSeenEntries,
       ));

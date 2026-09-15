@@ -123,7 +123,7 @@ function legacyPopularReference(input) {
     selectedServices: input.selectedServices,
     includeSeen: true,
     requireMetadata: false,
-  }).filter((candidate) => !candidate.seen);
+  }).filter((candidate) => !candidate.seen && candidate.availability?.market !== "cinema");
   return selectStablePopularCards(direct, {
     webDiscoveryFeed: input.webDiscoveryFeed,
     selectionDay: input.selectionDay,

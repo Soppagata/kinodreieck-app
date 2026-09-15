@@ -112,7 +112,7 @@ function StartDashboard({
   legacyEntdeckenPins = [], onLegacyEntdeckenPinsUebernehmen,
   kinoMatches = { matched: [] }, mustwatch = [], mwKandidaten = null, auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
-  programmInfo = null, streamingInfo = null,
+  programm = null, programmInfo = null, streamingInfo = null,
   wochenplan, onWochenplanAendern, entdeckenStatus = {},
   master = [], onSpringeZuStreaming, onSpringeZuKino, onFilmAnlegen, toggleKinoPin,
   onStreamingKatalogLaden, pinOwnerKey = null, mustwatchReady = false,
@@ -229,7 +229,8 @@ function StartDashboard({
     : [], [entdeckenPins.length, entdeckenStatus, streamingBekannt, streamingEntdecken, webDiscoveryFeed]);
   const aktuelleEmpfehlungen = useMemo(() => webDiscoveryFeedCards({
     webDiscoveryFeed, catalogCandidates: empfehlungsKatalog,
-  }), [empfehlungsKatalog, webDiscoveryFeed]);
+    program: programm, programInfo: programmInfo,
+  }), [empfehlungsKatalog, webDiscoveryFeed, programm, programmInfo]);
   const entdeckenPinAufloesung = useMemo(() => resolveEntdeckenPins(entdeckenPins, {
     recommendations: aktuelleEmpfehlungen,
     streaming: serienKatalog,

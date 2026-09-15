@@ -319,7 +319,7 @@ function cinemaDestination(pin, entry) {
     pinId: pin.pinId, title: entry.titel ?? entry.title ?? pin.title, year: entry.jahr ?? entry.year ?? pin.year, type: "film",
     destination: "kino", label: "Kinoprogramm",
     target: Object.freeze({
-      programm_ref: entry.programm_ref ?? entry.film_at_id ?? entry.id ?? null,
+      programm_ref: entry.programm_ref ?? entry.film_at_id ?? entry.filmAtId ?? entry.id ?? null,
       ...(entry.film_ref != null ? { film_ref: entry.film_ref } : {}),
       titel: entry.titel ?? entry.title ?? pin.title,
     }),
@@ -360,7 +360,11 @@ export function resolveEntdeckenPins(pins, {
     }
     const recommendation = matchCandidates(pin, recommendations);
     if (recommendation.status === "matched") {
-      resolved.push(recommendationDestination(pin, recommendation.candidate));
+      const entry = recommendation.candidate;
+      const cinemaMatch = entry.availability?.market === "cinema" ? matchCandidates(pin, cinema) : null;
+      resolved.push(entry.availability?.market === "cinema" && entry.filmAtId && entry.program
+        ? cinemaDestination(pin, cinemaMatch?.status === "matched" ? cinemaMatch.candidate : entry)
+        : recommendationDestination(pin, entry));
       continue;
     }
     if (recommendation.status === "ambiguous") { pendingPinIds.push(pin.pinId); continue; }

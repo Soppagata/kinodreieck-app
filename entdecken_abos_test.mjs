@@ -48,11 +48,9 @@ const kinoOnly = createEntdeckenRecommendations({
   streamingEntdecken: { region: "AT", titel: [] }, master: [], profile: {}, selectedServices: [],
   webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50, selectionDay: "2026-09-10", now: NOW,
 });
-check("ohne Streamingauswahl bleiben unbelegte Charttitel aus Für mich; Beliebte Titel zeigen den Kinomarkt", () => {
+check("ohne Streamingauswahl und aktuelles Programm erscheinen keine unbelegten Kinocharts", () => {
   assert.equal(kinoOnly.personal.length, 0);
-  assert.ok(kinoOnly.popularPool.length > 0);
-  assert.ok([...kinoOnly.personal, ...kinoOnly.popularPool]
-    .every((entry) => entry.availability?.market === "cinema"));
+  assert.deepEqual(kinoOnly.popularPool, []);
 });
 
 const programFilms = Array.from({ length: 40 }, (_, index) => ({

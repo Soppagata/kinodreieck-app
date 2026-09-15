@@ -3,9 +3,60 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildKinoFixture } from '../kino_mobile_filter_test.mjs';
+import { buildEntdeckenKinoFixture } from './fixtures/entdecken-kino.mjs';
 
 let fixture;
 test.beforeAll(async () => { fixture = await buildKinoFixture(); });
+
+for (const width of [320, 393]) {
+  test(`Kinoempfehlungen: Pinboard und Programm bei ${width}px`, async ({ page }, testInfo) => {
+    const discoveryFixture = await buildEntdeckenKinoFixture();
+    const requests = [];
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/*', async route => {
+      if (route.request().url() === 'http://entdecken-kino.test/') {
+        await route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="fixture" style="padding:12px;max-width:1000px;margin:auto"></main></body></html>' });
+      } else { requests.push(route.request().url()); await route.abort(); }
+    });
+    await page.setViewportSize({ width, height: 852 });
+    await page.clock.install({ time: new Date('2026-09-15T12:00:00+02:00') });
+    const mount = async () => {
+      await page.goto('http://entdecken-kino.test/');
+      await page.addStyleTag({ content: discoveryFixture.css });
+      await page.addScriptTag({ content: discoveryFixture.js });
+    };
+    await mount();
+    const title = 'Ein aktueller Film im Wiener Kinoprogramm';
+    const pin = page.getByRole('button', { name: `${title} am Pinboard anpinnen`, exact: true });
+    await expect(pin).toBeVisible();
+    await expect(page.getByText('Cars (20. Jubiläum)', { exact: true })).toHaveCount(0);
+    const bounds = await pin.boundingBox();
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    await pin.click();
+    await expect(page.getByRole('button', { name: `${title} vom Pinboard lösen` })).toHaveAttribute('aria-pressed', 'true');
+    await page.screenshot({ path: testInfo.outputPath(`kinoempfehlung-${width}.png`), fullPage: true });
+    await page.getByRole('button', { name: 'Start öffnen', exact: true }).click();
+    const board = page.locator('.kd-pinboard-titel');
+    await expect(board).toContainText(title);
+    await expect(board).toContainText('Kinoprogramm');
+    await board.click();
+    await expect(page.locator('[data-kino-suchtreffer="programm:98001"]')).toBeVisible();
+    await expect(page.locator('[data-kino-suchtreffer="programm:98001"]')).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await mount();
+    await expect(page.getByRole('button', { name: `${title} vom Pinboard lösen` })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: `${title} vom Pinboard lösen` }).click();
+    await expect(pin).toHaveAttribute('aria-pressed', 'false');
+    // Eine offen gebliebene iPhone-PWA prüft beim Wiederaufnehmen die Uhrzeit neu.
+    await page.clock.setSystemTime(new Date('2026-09-16T12:00:00+02:00'));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.locator('.kd-entdecken-neutral')).toHaveCount(0);
+    expect(requests).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
 
 for (const width of [320, 393, 1280]) {
   test(`PR-08: Kino-Filter bei ${width}px lokal bedienbar`, async ({ page }) => {

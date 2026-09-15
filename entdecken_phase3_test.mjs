@@ -655,21 +655,26 @@ try {
   });
   check("Für mich nutzt belegte Snapshot-Fakten; neutrale Kandidaten bleiben im Quellenpool", () => {
     assert.deepEqual(versionedRecommendations.diagnostics, {
-      candidates: 50, metadata: 39, afterExclusions: 50,
+      candidates: 50, metadata: 39, afterExclusions: 35,
       profileMatches: 1, visible: 1, duplicatesRemoved: 0,
     });
     assert.deepEqual(versionedRecommendations.personal.map((item) => item.title), ["Reacher"]);
     assert.equal(versionedRecommendations.personal[0].watchmodeId, 9901);
     assert.ok(versionedRecommendations.personal[0].reasons.includes("Profil: drama"));
     assert.equal(versionedRecommendations.popular.length, 6);
-    assert.equal(versionedRecommendations.popularPool.length, 50);
+    assert.equal(versionedRecommendations.popularPool.length, 35);
   });
 
   let angepinnterEintrag = null;
+  const currentProgram = { filme: ENTDECKEN_MARKET_POOL_50.items
+    .filter((item) => item.availability.market === "cinema")
+    .map((item, index) => ({ film_at_id: String(96001 + index), t: item.title,
+      j: item.releaseYear, z: [new Date(Date.now() + 3_600_000).toISOString()] })) };
   const versionedProps = {
     ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: { region: "AT", titel: [] },
     selectedServices: [], webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50, calendarDay: "2026-08-29",
     recommendationPins: [], onRecommendationPinToggle(entry) { angepinnterEintrag = entry; },
+    programm: currentProgram,
   };
   const versionedUi = await mount(EntdeckenTab, versionedProps);
   await act(async () => { await tick(); await tick(); });
@@ -741,17 +746,18 @@ try {
   const startUi = await mount(StartTab, {
     entdeckenPins: gesetztePins, webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
     streamingEntdecken: { region: "AT", titel: [] }, streamingBekannt: { region: "AT", titel: [] },
-    progStand: Date.now(), kinoMatches: { matched: [], rest: [] },
+    progStand: Date.now(), programm: currentProgram, kinoMatches: { matched: [], rest: currentProgram.filme },
     wochenplan: { version: 1, eintraege: [] }, onWochenplanAendern() {},
     onSpringeZuEntdecken(target) { pinboardSprung = target; }, onEntdeckenPinsBereinigen() {},
+    onSpringeZuKino(target) { pinboardSprung = target; },
   });
   await act(async () => { await tick(); });
   const pinboardEintrag = startUi.container.querySelector(".kd-pinboard-titel");
   await act(async () => { pinboardEintrag.click(); await tick(); });
-  check("Der Pin erscheint im bestehenden Start-Pinboard und verweist zurück auf Entdecken", () => {
+  check("Der Kinoempfehlungspin erscheint im Start-Pinboard und öffnet den konkreten Programmeintrag", () => {
     assert.match(pinboardEintrag.textContent, new RegExp(angepinnterEintrag.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    assert.match(pinboardEintrag.textContent, /Entdecken/);
-    assert.equal(pinboardSprung?.pinId, gesetztePins[0].pinId);
+    assert.match(pinboardEintrag.textContent, /Kinoprogramm/);
+    assert.equal(pinboardSprung?.programm_ref, angepinnterEintrag.filmAtId);
   });
   let legacyUebernahmen = 0;
   await startUi.render({
@@ -773,22 +779,31 @@ try {
     assert.equal(cards.length, 15);
     assert.equal(cards.filter((card) => card.querySelector('h3 > a[href^="https://"]')).length, 15);
   });
+  await versionedUi.render({ ...versionedProps, programmInfo: { abgelaufen: true } });
+  check("Abgelaufenes Programm entfernt auch bestätigte Chartkarten aus der Oberfläche", () => {
+    assert.equal(versionedUi.container.querySelectorAll(".kd-entdecken-neutral").length, 0);
+    assert.equal(versionedUi.container.querySelectorAll(".kd-entdecken-pin").length, 0);
+  });
   await versionedUi.cleanup();
 
   const mixedUi = await mount(EntdeckenTab, {
     ...baseProps, radarState: createEmptyLocalRadar(),
     streamingDiscover: { region: "AT", titel: [] }, selectedServices: ["Netflix"],
     webDiscoveryFeed: mixedDiscoveryFeed, calendarDay: "2026-08-27",
+    programm: { filme: mixedDiscoveryFeed.items.filter((item) => item.availability.market === "cinema")
+      .map((item, index) => ({ film_at_id: String(97001 + index), t: item.title,
+        j: mixedDiscoveryFeed.annotations?.find((entry) => entry.sourceItemId === item.sourceItemId)?.releaseYear || 2026,
+        z: [new Date(Date.now() + 3_600_000).toISOString()] })) },
   });
   await act(async () => { await tick(); await tick(); });
   const mixedPopularSection = mixedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
   const mixedObserver = intersectionObservers.at(-1);
-  check("Format 6 zeigt die erste 20er-Portion und verlinkt jede sichtbare Titelüberschrift neutral", () => {
+  check("Format 6 zeigt die erste 20er-Portion mit belegten Programmfilmen und neutralen Streaminglinks", () => {
     const cards = [...mixedPopularSection.querySelectorAll(".kd-entdecken-neutral")];
     const links = cards.map((card) => card.querySelector("h3 > a.kd-entdecken-titellink"));
     assert.equal(cards.length, 20);
-    assert.equal(links.filter(Boolean).length, 20);
-    assert.ok(links.every((link) => link.target === "_blank"
+    assert.ok(links.filter(Boolean).length > 0);
+    assert.ok(links.filter(Boolean).every((link) => link.target === "_blank"
       && link.getAttribute("rel") === "noopener noreferrer"
       && /Referenz bei/.test(link.getAttribute("aria-label") || "")));
     assert.equal([...mixedPopularSection.querySelectorAll("button")]
@@ -802,10 +817,10 @@ try {
   check("Die nächste Viewport-Begegnung ergänzt automatisch die restlichen fünf Karten", () => {
     const cards = [...mixedPopularSection.querySelectorAll(".kd-entdecken-neutral")];
     const links = cards.map((card) => card.querySelector("h3 > a.kd-entdecken-titellink"));
-    const hosts = links.map((link) => new URL(link.href).hostname);
+    const hosts = links.filter(Boolean).map((link) => new URL(link.href).hostname);
     assert.equal(cards.length, 25);
-    assert.equal(links.filter(Boolean).length, 25);
-    assert.equal(hosts.filter((host) => host === "filminstitut.at").length, 15);
+    assert.equal(links.filter(Boolean).length, 10);
+    assert.equal(hosts.filter((host) => host === "filminstitut.at").length, 0);
     assert.equal(hosts.filter((host) => host === "www.netflix.com").length, 10);
   });
   await mixedUi.cleanup();
@@ -1457,3 +1472,4 @@ console.log("ENTDECKEN-PHASE3-TEST BESTANDEN");
 
 // Die bestehende Gesamtsuite prueft auch den dienstgefilterten 50er-Pool.
 await import("./entdecken_abos_test.mjs");
+await import("./entdecken_kino_availability_test.mjs");

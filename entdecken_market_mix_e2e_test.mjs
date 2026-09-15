@@ -376,13 +376,13 @@ check("Für mich nutzt den breiten Pool, das echte Profil und liefert anonymisie
   assert.ok(result.personal.every((entry) => entry.reasons.some((reason) => reason.startsWith("Profil:"))));
   assert.ok(result.personal.every((entry) => !/rang|platz|beliebt/i.test(entry.reasons.join(" "))));
   assert.deepEqual(result.diagnostics, {
-    candidates: 25, metadata: 10, afterExclusions: 24, profileMatches: 9, visible: 6,
+    candidates: 25, metadata: 10, afterExclusions: 9, profileMatches: 9, visible: 6,
     duplicatesRemoved: 0,
   });
   assert.ok(!result.personal.some((entry) => entry.sourceItemId === seen.sourceItemId));
 });
 
-check("Beliebte Karten sind pro Pool und Tag stabil, marktgemischt und duplikatfrei", () => {
+check("Beliebte Karten sind pro Pool und Tag stabil; unbelegte Kinocharts bleiben draußen", () => {
   const input = {
     streamingEntdecken: { region: "AT", titel: [] }, master: [],
     profile: {},
@@ -395,14 +395,14 @@ check("Beliebte Karten sind pro Pool und Tag stabil, marktgemischt und duplikatf
   assert.deepEqual(ids(first.popular), ids(same.popular));
   assert.notDeepEqual(ids(first.popular), ids(next.popular));
   assert.equal(new Set(ids(first.popular)).size, 6);
-  assert.equal(first.popularPool.length, 25);
+  assert.equal(first.popularPool.length, 10);
   assert.equal(first.popularPool.filter((entry) => entry.sourceId === ENTDECKEN_NETFLIX_SOURCE_ID).length, 10);
   assert.deepEqual(first.popular.reduce((counts, entry) => {
     const key = entry.availability.market === "cinema" ? "cinema"
       : entry.type === "series" ? "streamingSeries" : "streamingFilm";
     counts[key] += 1; return counts;
   }, { cinema: 0, streamingFilm: 0, streamingSeries: 0 }), {
-    cinema: 2, streamingFilm: 2, streamingSeries: 2,
+    cinema: 0, streamingFilm: 3, streamingSeries: 3,
   });
 });
 

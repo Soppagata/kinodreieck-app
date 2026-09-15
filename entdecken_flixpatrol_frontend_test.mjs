@@ -71,7 +71,8 @@ const feed = {
 const checked = validateWebDiscoveryFeed(feed);
 assert.equal(checked.ok, true, checked.errors.join(","));
 const cards = webDiscoveryFeedCards({ webDiscoveryFeed: feed });
-assert.equal(cards.length, 50);
+assert.equal(cards.length, 35);
+assert.ok(cards.every((card) => card.availability.market !== "cinema"));
 const apple = cards.find((card) => card.services.includes("Apple TV"));
 assert.ok(apple);
 assert.match(apple.targetId, /^market:ttl_/);
@@ -84,7 +85,7 @@ const recommendations = createEntdeckenRecommendations({
   selectedServices: ["Netflix", "Prime Video", "Disney+", "Apple TV"], selectionDay: day,
 });
 assert.equal(recommendations.popular.length, 6);
-assert.equal(recommendations.popularPool.length, 50);
+assert.equal(recommendations.popularPool.length, 35);
 assert.equal(new Set(recommendations.popular.map((entry) => entry.targetId)).size, 6);
 
 const server = Object.freeze({ status: "fresh", feed, feedOrigin: "server" });
@@ -159,23 +160,23 @@ dailyCheck("Format 9 erreicht den gemeinsamen Browservertrag", () => {
   const result = validateWebDiscoveryFeed(dailyFeed);
   assert.equal(result.ok, true, result.errors.join(","));
 });
-dailyCheck("50 Tagesfeed-Karten behalten Identitäten und Netflix-Quellenstand", () => {
+dailyCheck("35 Streamingkarten behalten Identitäten und Netflix-Quellenstand; Kino benötigt das Programm", () => {
   const dailyCards = webDiscoveryFeedCards({ webDiscoveryFeed: dailyFeed });
-  assert.equal(dailyCards.length, 50);
+  assert.equal(dailyCards.length, 35);
   const netflix = dailyCards.filter((card) => card.services.includes("Netflix"));
   assert.equal(netflix.length, 10);
   assert.ok(netflix.every((card) => card.externalIds.flixpatrol === card.sourceItemId
     && card.popularity.metric === "daily-provider-rank"
     && card.year === 2020));
 });
-dailyCheck("Format 9 hält den 50er-Pool und behauptet keine persönliche Verfügbarkeit", () => {
+dailyCheck("Format 9 zeigt ohne Programm nur Streaming und behauptet keine persönliche Verfügbarkeit", () => {
   const selection = createEntdeckenRecommendations({
     webDiscoveryFeed: dailyFeed, profile: {}, master: [],
     streamingEntdecken: { region: "AT", titel: [] },
     selectedServices: allServices, selectionDay: day,
   });
   assert.equal(selection.popular.length, 6);
-  assert.equal(selection.popularPool.length, 50);
+  assert.equal(selection.popularPool.length, 35);
   assert.equal(selection.personal.length, 0);
   assert.ok(selection.popularPool.every((item) => item.availabilityConfirmed === false));
 });

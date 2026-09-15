@@ -73,14 +73,20 @@ function filmAtId(value) {
 export function currentCinemaDiscoveryCandidates({
   program = null, programInfo = null, now = new Date(),
 } = {}) {
-  if (programInfo?.abgelaufen === true || program?.status?.archiviert === true) return Object.freeze([]);
   const at = referenceTime(now);
+  const expiresAt = programInfo?.gueltigBis == null ? null : new Date(programInfo.gueltigBis).getTime();
+  if (programInfo?.abgelaufen === true || program?.status?.archiviert === true
+      || program?.archiviert === true || (Number.isFinite(expiresAt) && expiresAt <= at.getTime())) {
+    return Object.freeze([]);
+  }
   const idCounts = new Map();
+  const compositeCounts = new Map();
   for (const entry of list(program?.filme)) {
     const id = filmAtId(entry?.film_at_id);
     if (id) idCounts.set(id, (idCounts.get(id) || 0) + 1);
+    const composite = `${normalisiereExternenTitel(entry?.t)}|${year(entry?.j)}|film`;
+    compositeCounts.set(composite, (compositeCounts.get(composite) || 0) + 1);
   }
-  const seenComposite = new Set();
   const rows = [];
   for (const entry of list(program?.filme)) {
     const id = filmAtId(entry?.film_at_id);
@@ -88,12 +94,12 @@ export function currentCinemaDiscoveryCandidates({
     const releaseYear = year(entry?.j);
     const composite = `${normalisiereExternenTitel(title)}|${releaseYear}|film`;
     if (!id || idCounts.get(id) !== 1 || !title || releaseYear == null
-        || !hasFutureShow(entry, at) || seenComposite.has(composite)) continue;
-    seenComposite.add(composite);
+        || !hasFutureShow(entry, at) || compositeCounts.get(composite) !== 1) continue;
     rows.push(Object.freeze({
       targetId: `film-at:${id}`,
       filmAtId: id,
       title,
+      originalTitle: text(entry?.ot) || null,
       year: releaseYear,
       type: "film",
       region: "AT",
@@ -115,6 +121,35 @@ export function currentCinemaDiscoveryCandidates({
     }));
   }
   return Object.freeze(rows);
+}
+
+/* Ein Chartplatz belegt keinen laufenden Kinotermin. Nur ein eindeutiger
+   Werkabgleich mit dem aktuellen, auch im Kino-Tab verwendeten Programm
+   darf die Chartkarte erhalten. Fehlende Jahre oder widersprüchliche Werke
+   bleiben ohne Match; echte Programmeinträge können den freien Platz füllen. */
+export function reconcileCinemaDiscoveryCandidates(entries, cinemaCandidates = []) {
+  const cinema = list(cinemaCandidates).map(comparableIdentity);
+  return Object.freeze(list(entries).flatMap((entry) => {
+    if (entry?.availability?.market !== "cinema") return [entry];
+    const decision = ordneExternenTitelZu(comparableIdentity(entry), cinema);
+    if (decision.status !== "matched") return [];
+    const current = decision.match;
+    return [Object.freeze({
+      ...entry,
+      targetId: current.targetId,
+      filmAtId: current.filmAtId,
+      title: current.title,
+      originalTitle: current.originalTitle,
+      year: current.year,
+      type: current.type,
+      program: current.program,
+      availability: current.availability,
+      availabilityConfirmed: true,
+      genres: Object.freeze([...new Set([...list(current.genres), ...list(entry.genres)])]),
+      description: current.description || entry.description || null,
+      descriptionEvidence: current.description ? null : entry.descriptionEvidence || null,
+    })];
+  }));
 }
 
 function descriptionOf(entry) {

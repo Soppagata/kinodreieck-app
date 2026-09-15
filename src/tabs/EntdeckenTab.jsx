@@ -254,6 +254,18 @@ function RecommendationsView({
   recommendationPins, onRecommendationPinToggle, programm, programmInfo, flixpatrolFacts,
 }) {
   const [visiblePopularCount, setVisiblePopularCount] = useState(STREAMING_PAGE_PORTION);
+  const [availabilityTime, setAvailabilityTime] = useState(() => new Date());
+  useEffect(() => {
+    const refreshTime = () => {
+      if (document.visibilityState !== "hidden") setAvailabilityTime(new Date());
+    };
+    window.addEventListener("focus", refreshTime);
+    document.addEventListener("visibilitychange", refreshTime);
+    return () => {
+      window.removeEventListener("focus", refreshTime);
+      document.removeEventListener("visibilitychange", refreshTime);
+    };
+  }, []);
   const [offeneEmpfehlungBeschreibung, setOffeneEmpfehlungBeschreibung] = useState(null);
   const [offeneBeliebtBeschreibung, setOffeneBeliebtBeschreibung] = useState(null);
   const selection = useMemo(() => createEntdeckenRecommendations({
@@ -261,7 +273,7 @@ function RecommendationsView({
     entdeckenStatus, webDiscoveryFeed, dailyVariety, selectionDay,
     program: programm, programInfo: programmInfo, flixpatrolFacts,
   }), [dailyVariety, entdeckenStatus, master, profile, selectedServices, selectionDay,
-    streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed, programm, programmInfo, flixpatrolFacts]);
+    streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed, programm, programmInfo, flixpatrolFacts, availabilityTime]);
   const { personal, popular } = selection;
   const popularPool = selection.popularPool || popular;
   const visiblePopular = popularPool.slice(0, visiblePopularCount);
