@@ -211,7 +211,7 @@ async function installNetworkFence(page, traffic) {
       }
       return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
     }
-    if (url.pathname === "/rest/v1/rpc/kd_radar_pilot_feed") {
+    if (["/rest/v1/rpc/kd_radar_pilot_feed", "/rest/v1/rpc/kd_radar_pilot_feed_search_access"].includes(url.pathname)) {
       record("mocked", "radar-feed");
       traffic.contracts.push("radar-feed");
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(radarFeed) });

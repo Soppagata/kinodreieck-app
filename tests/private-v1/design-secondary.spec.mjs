@@ -1,7 +1,7 @@
 import { expect, expectTouchTarget, navigateMobile, test } from "./fixtures.mjs";
 
 for (const mode of [
-  { theme: "dunkel", button: "Saal (dunkel)", schrift: "normal", fontButton: "Normal", factor: 1, saal: "#17151A" },
+  { theme: "dunkel", button: "Saal (dunkel)", schrift: "normal", fontButton: "Normal", factor: .9, saal: "#17151A" },
   { theme: "hell", button: "Foyer (hell)", schrift: "gross", fontButton: "Groß", factor: 1.12, saal: "#EDEAE3" },
 ]) for (const viewport of [{ width: 320, height: 760 }, { width: 393, height: 852 }, { width: 430, height: 932 }]) {
   test(`secondary design keeps controls reachable at ${viewport.width}px/${mode.theme}/${mode.schrift}`, async ({ privateApp }, testInfo) => {

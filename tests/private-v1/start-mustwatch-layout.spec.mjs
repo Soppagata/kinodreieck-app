@@ -121,7 +121,7 @@ async function assertReadableRows(page, schrift) {
     const film = FILMS.find((entry) => `${entry.titel} (${entry.jahr})` === measure.titleText);
     expect(film, "vollständiger Titel und Jahr bleiben erhalten").toBeTruthy();
     expect(measure.title.width).toBeGreaterThan(150);
-    expect(measure.titleFont).toBeCloseTo(22 * (schrift === "gross" ? 1.12 : 1), 1);
+    expect(measure.titleFont).toBeCloseTo(22 * (schrift === "gross" ? 1.12 : .9), 1);
     expect(measure.title.left).toBeGreaterThan(measure.rank.right);
     expect(measure.row.height).toBeGreaterThanOrEqual(44);
     expect(measure.badges.map((badge) => badge.text).sort()).toEqual([
@@ -167,7 +167,7 @@ for (const theme of ["dunkel", "hell"]) {
       const anbieter = page.locator(".kd-dash-mustwatch .kd-dash-badge--neu").first();
       await expect(anbieter).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       expect(parseFloat(await anbieter.evaluate((element) => getComputedStyle(element).fontSize)))
-        .toBeCloseTo(12 * (schrift === "gross" ? 1.12 : 1), 1);
+        .toBeCloseTo(12 * (schrift === "gross" ? 1.12 : .9), 1);
         if (width === 393 && process.env.KD_DESIGN_EVIDENCE_DIR) {
           await mkdir(process.env.KD_DESIGN_EVIDENCE_DIR, { recursive: true });
           const block = page.locator(".kd-dash-modul").filter({ has: page.getByText("Must-Watch", { exact: true }) });
