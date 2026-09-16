@@ -5,8 +5,17 @@ import { readFileSync } from "node:fs";
 import {
   formatPrivateOpsGitHub,
   PRIVATE_OPS_FLAG_MATRICES,
-  runPrivateOpsCheck,
+  runPrivateOpsCheck as runPrivateOpsCheckAtTime,
 } from "./private-ops-check.mjs";
+
+// Die synthetischen Feed-Daten bleiben gueltig, unabhaengig vom CI-Kalendertag.
+// Zeitbezogene Einzelfaelle koennen die feste Testuhr weiterhin ueberschreiben.
+function runPrivateOpsCheck(options) {
+  return runPrivateOpsCheckAtTime({
+    now: () => new Date("2026-09-09T12:00:00Z"),
+    ...options,
+  });
+}
 
 let ok = 0;
 const fehler = [];
