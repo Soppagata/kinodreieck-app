@@ -24,6 +24,9 @@ const data = join(root, "data");
 const socket = join(root, "socket");
 const port = "65467";
 const migrationSql = readFileSync(MIGRATION, "utf8");
+const backlogMigrationSql = readFileSync(
+  "supabase/migrations/20260916193000_automatic_ai_retry_backlog.sql", "utf8",
+);
 mkdirSync(socket);
 let running = false;
 let checks = 0;
@@ -214,6 +217,7 @@ try {
     grant usage on schema auth,public to anon,authenticated,service_role;
   `);
   sql(migrationSql);
+  sql(backlogMigrationSql);
 
   const columns = sql(`
     select column_name || ':' || data_type
@@ -276,7 +280,7 @@ try {
     "public.kd_automatic_ai_retry_mail_claim(uuid,uuid)",
     "public.kd_automatic_ai_retry_mail_finish(uuid,uuid,text)",
   ];
-  check("RLS und Rechte lassen nur die fünf service-role-RPCs zu", () => {
+  check("RLS und Rechte erhalten die fünf mutierenden service-role-RPCs", () => {
     assert.equal(sql("select relrowsecurity from pg_class where oid='public.kd_automatic_ai_retry_jobs'::regclass"), "t");
     for (const role of ["anon", "authenticated", "service_role"]) {
       for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
@@ -291,6 +295,26 @@ try {
     }
     assert.throws(() => session("select public.kd_automatic_ai_retry_due_claim()", "authenticated"), /permission denied/);
     assert.deepEqual(JSON.parse(sql("select public.kd_automatic_ai_retry_due_claim()")), { claim: false, status: "forbidden" });
+  });
+
+  check("Statusabfrage funktioniert mit echter service_role trotz gesperrter Tabelle", () => {
+    // Regression: Der bisherige direkte SELECT scheitert auch mit BYPASSRLS.
+    assert.throws(() => session(`select check_due_at from public.kd_automatic_ai_retry_jobs
+      where initial_evidence_status='pending' and check_due_at<=now() limit 1`), /permission denied/);
+    assert.deepEqual(JSON.parse(session("select public.kd_automatic_ai_retry_backlog(now())")), {
+      remainingDueJobs: 0, oldestDueAt: null,
+    });
+    const signature = "public.kd_automatic_ai_retry_backlog(timestamptz)";
+    assert.equal(sql(`select prosecdef and provolatile='s' and proconfig @> array['search_path=pg_catalog, public']
+      from pg_proc where oid=${quote(signature)}::regprocedure`), "t");
+    for (const role of ["anon", "authenticated"]) {
+      assert.equal(sql(`select has_function_privilege('${role}',${quote(signature)},'EXECUTE')`), "f");
+      assert.throws(() => session("select public.kd_automatic_ai_retry_backlog(now())", role), /permission denied/);
+    }
+    assert.throws(() => sql("select public.kd_automatic_ai_retry_backlog(now())"), /backlog forbidden/);
+    for (const timestamp of ["null", "'infinity'", "'-infinity'"]) {
+      assert.throws(() => session(`select public.kd_automatic_ai_retry_backlog(${timestamp})`), /timestamp invalid/);
+    }
   });
 
   const first = fixture({ targetNumber: 1, operationNumber: 1, ageHours: 1 });
@@ -521,6 +545,28 @@ try {
     assert.equal(sql(`select count(*) from public.kd_automatic_ai_retry_jobs where logical_job_id=${quote(cascadeLogical)}::uuid`), "1");
     sql(`delete from auth.users where id=${quote(cascadeAccount)}::uuid`);
     assert.equal(sql(`select count(*) from public.kd_automatic_ai_retry_jobs where logical_job_id=${quote(cascadeLogical)}::uuid`), "0");
+  });
+
+  check("Backlog zählt nur fällige offene Jobs und verändert keinen Jobzustand", () => {
+    for (const [number, ageHours] of [[41, 7], [42, 9]]) {
+      const item = fixture({ targetNumber: number, operationNumber: number, ageHours });
+      assert.equal(beginJob({ logical: uuid(300000 + number), target: item.target, operation: item.operation }).ok, true);
+    }
+    const snapshot = () => sql(`select jsonb_agg(to_jsonb(job) order by logical_job_id)
+      from public.kd_automatic_ai_retry_jobs job`);
+    const before = snapshot();
+    const earliest = sql(`select check_due_at from public.kd_automatic_ai_retry_jobs
+      where logical_job_id=${quote(uuid(300042))}::uuid`);
+    const inspect = (at) => JSON.parse(session(`select public.kd_automatic_ai_retry_backlog(${at})`));
+    const due = inspect("now()");
+    assert.deepEqual(Object.keys(due).sort(), ["oldestDueAt", "remainingDueJobs"]);
+    assert.equal(due.remainingDueJobs, 2);
+    assert.equal(Date.parse(due.oldestDueAt), Date.parse(earliest));
+    assert.equal(inspect(`${quote(earliest)}::timestamptz`).remainingDueJobs, 1);
+    assert.deepEqual(inspect(`${quote(earliest)}::timestamptz - interval '1 microsecond'`), {
+      remainingDueJobs: 0, oldestDueAt: null,
+    });
+    assert.equal(snapshot(), before);
   });
 
   check("Migration ist additiv und enthält keinen Provider-, Mail- oder Scheduleraufruf", () => {

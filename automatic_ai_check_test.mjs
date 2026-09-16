@@ -869,6 +869,7 @@ test("Function, Workflow und Tests bleiben bodylos, seriell und ohne Retryschlei
     "kd_automatic_ai_retry_finish",
     "kd_automatic_ai_retry_mail_claim",
     "kd_automatic_ai_retry_mail_finish",
+    "kd_automatic_ai_retry_backlog",
   ]) {
     assert.equal((runtime.match(new RegExp(rpc, "g")) || []).length, 1, rpc);
   }
@@ -882,11 +883,8 @@ test("Function, Workflow und Tests bleiben bodylos, seriell und ohne Retryschlei
   assert.match(core, /AUTOMATIC_AI_DRAIN_MAX_JOBS = 3/);
   assert.match(core, /for \(let index = 0; index < maxJobs; index \+= 1\)/);
   assert.match(core, /await createAutomaticAiCheckHandler/);
-  assert.match(runtime, /\.from\("kd_automatic_ai_retry_jobs"\)/);
-  assert.match(runtime, /\.select\("check_due_at", \{ count: "exact" \}\)/);
-  assert.match(runtime, /\.eq\("initial_evidence_status", "pending"\)/);
-  assert.match(runtime, /\.lte\("check_due_at", asOf\)/);
-  assert.doesNotMatch(runtime, /select\("(?:account_id|target_id|logical_job_id|initial_provider_operation_id)/);
+  assert.match(runtime, /rpc\("kd_automatic_ai_retry_backlog", \{ p_as_of: asOf \}\)/);
+  assert.doesNotMatch(runtime, /\.from\(|\.select\(/);
   assert.match(runtime, /createAutomaticAiDrainHandler\(runtimeDependencies\(\)\)/);
   assert.doesNotMatch(runtime, /createAutomaticAiCheckHandler/);
   assert.match(runtimeRadar, /signal: AbortSignal\.timeout\(timeoutMs\)/);
