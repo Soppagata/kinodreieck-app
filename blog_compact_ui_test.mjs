@@ -141,6 +141,20 @@ await page.getByRole("button", { name: "Star Wars: A New Hope: Kino öffnen" }).
 await check("Sekundäres Kinoziel ist ein eigener dezenter Link", async () => assert.equal(await page.evaluate(() => globalThis.blogNavigations.at(-1)?.kind), "cinema"));
 await page.setViewportSize({ width: 736, height: 760 }); await page.emulateMedia({ colorScheme: "light" });
 await page.evaluate(() => { document.body.style.colorScheme = "light"; document.body.style.background = "#edeae3"; });
+await check("Kurzer Titel und Quellenziel bleiben bei 736px in einer kompakten Zeile", async () => {
+  const layout = await page.locator(".kd-blog-reader .kd-blog-reference-row").nth(2).evaluate((row) => {
+    const title = row.querySelector(".kd-blog-reference-link").getBoundingClientRect();
+    const sources = row.querySelector(".kd-blog-reference-sources").getBoundingClientRect();
+    return { rowHeight: row.getBoundingClientRect().height, titleTop: title.top, sourcesTop: sources.top };
+  });
+  assert.ok(Math.abs(layout.titleTop - layout.sourcesTop) < 2);
+  assert.ok(layout.rowHeight <= 46);
+});
+await check("Technische Disney-ID erscheint lesbar und kontrastreich", async () => {
+  const disney = page.getByRole("button", { name: "Star Wars: A New Hope: Disney+ öffnen" });
+  assert.equal(await disney.isVisible(), true);
+  assert.equal(await disney.evaluate((element) => getComputedStyle(element).color), "rgb(87, 82, 92)");
+});
 await page.screenshot({ path: "/private/tmp/kd-blog-reader-736-light.png", fullPage: true });
 await page.getByRole("button", { name: "← Zurück" }).click(); await page.getByRole("button", { name: "Bearbeiten", exact: true }).click();
 await check("Neu, Lesen, Zurück und Bearbeiten bleiben direkte Wege", async () => assert.equal(await page.getByRole("heading", { name: "Artikel bearbeiten" }).isVisible(), true));

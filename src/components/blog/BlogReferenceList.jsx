@@ -1,6 +1,10 @@
 function targetLabel(target) {
   if (target?.kind === "library") return "Mediathek";
-  if (target?.kind === "streaming") return target.sourceLabel || target.sourceId || "Streaming";
+  if (target?.kind === "streaming") return target.sourceLabel || ({
+    netflix: "Netflix", prime: "Prime Video", disney: "Disney+", apple: "Apple TV+",
+    hbo: "HBO Max", paramount: "Paramount+", mubi: "MUBI",
+    crunchyroll: "Crunchyroll", rtl: "RTL+",
+  })[target.sourceId] || "Streaming";
   if (target?.kind === "cinema") return "Kino";
   return "Öffnen";
 }
@@ -33,12 +37,12 @@ export function BlogReferenceList({ references = [], ordered = false, editable =
           onClick={active ? () => unavailable && redlinksEnabled
             ? actions.onOpenRedlinkForm({ articleId: reference.articleId, rowId: reference.rowId })
             : actions.onNavigateReference({ referenceId: reference.referenceId || reference.rowId, target }) : undefined}>
-          <span className="kd-blog-reference-title">{reference.title}</span>{reference.year ? <span> ({reference.year})</span> : null}</Tag>
+          <span className="kd-blog-reference-title">{reference.title}{reference.year ? ` (${reference.year})` : ""}</span></Tag>
           {targets.length ? <span className="kd-blog-reference-sources">{targets.map((sourceTarget, targetIndex) => <span key={`${sourceTarget.kind}-${sourceTarget.ref}-${targetIndex}`}>
-            {" · "}<button type="button" className="kd-blog-target-link"
+            <button type="button" className="kd-blog-target-link"
               aria-label={`${reference.title}: ${targetLabel(sourceTarget)} öffnen`}
               onClick={() => actions.onNavigateReference({ referenceId: reference.referenceId || reference.rowId, target: sourceTarget })}>{targetLabel(sourceTarget)}</button>
-          </span>)}</span> : <span className="kd-blog-reference-source"> · {unavailable ? "Rotlink" : reference.state === "unchecked" ? "Verfügbarkeit ungeprüft" : "Zuordnung prüfen"}</span>}
+          </span>)}</span> : <span className="kd-blog-reference-source">{unavailable ? "Rotlink" : reference.state === "unchecked" ? "Verfügbarkeit ungeprüft" : "Zuordnung prüfen"}</span>}
           {editable ? <ReferenceDecision reference={reference} actions={actions} /> : null}</div>
         {editable ? <details className="kd-blog-reference-menu"><summary aria-label={`Aktionen für ${reference.title}`}>⋯</summary>
           <div className="kd-blog-menu-panel"><button type="button" disabled={index === 0} onClick={() => actions.onMoveReference({ draftKey, rowId: reference.rowId, direction: "up" })}>Nach oben</button>
