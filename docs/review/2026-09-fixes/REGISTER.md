@@ -30,7 +30,7 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | Paket | Welle / Modus | Ergebnis | Abhaengigkeit | Owner / Worktree | Write-Ownership | Status | Basis / Commit |
 |---|---|---|---|---|---|---|---|
 | P01 | W1 / PARALLEL_WAVE | Sitzungen | keine | Baumeister-P01 / `/private/tmp/kd-review49-p01` | src/lib/authDriver.js inkl. lokalem atomarem Commit-Mutex ohne Web Locks; authdriver_test.mjs; neue review49_p01_* Tests | RUNNING | 4a5cc52 / — |
-| P02 | W1 / PARALLEL_WAVE | Kontodaten | keine | Baumeister-P02 / `/private/tmp/kd-review49-p02` | src/lib/accountDriver.js; src/services/uebernahme.js; src/services/storage.js; Konto-/Adoptiontests; neue review49_p02_* Tests | RUNNING | 4a5cc52 / — |
+| P02 | W1 / PARALLEL_WAVE | Kontodaten | keine | Baumeister-P02 / `/private/tmp/kd-review49-p02` | src/lib/accountDriver.js; src/services/uebernahme.js; src/services/storage.js; Konto-/Adoptiontests; neue review49_p02_* Tests | DELIVERED | 4a5cc52 / 214ac7940cf244b0540a8f22c489bf3fbcbb67c8 |
 | P03 | W1 / PARALLEL_WAVE | Pruefwerkzeuge | keine | Baumeister-P03 / `/private/tmp/kd-review49-p03` | blogprofilanalyse_test.mjs; local_data_safety_test.mjs; tests/private-v1/private-v1.spec.mjs; tools/rls_test_personal.mjs; tools/radar_freitext_live_contract.mjs; tools/function-release-info.mjs; zugehoerige Werkzeugtests; neue review49_p03_* Tests | RUNNING | 4a5cc52 / — |
 | P04 | W2 / PARALLEL_WAVE | Persoenliche Eingaben | W1/P02,P03 | Baumeister-P04 / bei DISPATCH | App.jsx; persoenliche Eingabekomponenten/-controller/-lib und deren Tests (bei DISPATCH praezisiert) | PLANNED | — |
 | P05 | W2 / PARALLEL_WAVE | Radar und Faktenkontext | W1; E05-002 vor E14-001 intern | Baumeister-P05 / bei DISPATCH | Radarclient/-contract/-runner, Faktencontext, Radarpreview; src/styles/design-secondary.css; eigene Migrationen und Tests (bei DISPATCH praezisiert) | PLANNED | — |
@@ -51,8 +51,8 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | Rang | Ticket | Prioritaet | Paket | Verantwortlicher | Status | Fixcommit | Pruefnachweis |
 |---:|---|---|---|---|---|---|---|
 | 1 | [E02-001](../2026-09-vollreview/tickets/E02/KD-REV-E02-001.md) | P1 | P01 | Baumeister-P01 | OFFEN | — | — |
-| 2 | [E03-002](../2026-09-vollreview/tickets/E03/KD-REV-E03-002.md) | P1 | P02 | Baumeister-P02 | OFFEN | — | — |
-| 3 | [E03-001](../2026-09-vollreview/tickets/E03/KD-REV-E03-001.md) | P2 | P02 | Baumeister-P02 | OFFEN | — | — |
+| 2 | [E03-002](../2026-09-vollreview/tickets/E03/KD-REV-E03-002.md) | P1 | P02 | Baumeister-P02 | GEBAUT | 214ac79 | [P02](evidence/P02.md): 154 Checks; 22 neue Sollszenarien |
+| 3 | [E03-001](../2026-09-vollreview/tickets/E03/KD-REV-E03-001.md) | P2 | P02 | Baumeister-P02 | GEBAUT | 214ac79 | [P02](evidence/P02.md): 154 Checks; 22 neue Sollszenarien |
 | 4 | [E09-001](../2026-09-vollreview/tickets/E09/KD-REV-E09-001.md) | P2 | P04 | Baumeister-P04 | OFFEN | — | — |
 | 5 | [E08-002](../2026-09-vollreview/tickets/E08/KD-REV-E08-002.md) | P2 | P05 | Baumeister-P05 | OFFEN | — | — |
 | 6 | [E05-003](../2026-09-vollreview/tickets/E05/KD-REV-E05-003.md) | P2 | P04 | Baumeister-P04 | OFFEN | — | — |
@@ -107,3 +107,5 @@ Integration sequenziell je Welle in Paketnummernfolge; jede Lieferung wird auf B
 P01 RESTAUFTRAG: treiberinterne IndexedDB-Koordination als begrenzter lokaler Commit-Mutex autorisiert; keine zusaetzliche Credentialablage, alle Credential-Commits koordinieren, Ausfallgrenzen und Mehrtab-Fall belegen. Keine Scope-Kollision.
 
 Finaler Kandidat: —. Lokaler Abschlusslauf: OFFEN. Push / CI / Deployment / praktische Geraeteabnahme: NICHT BEAUFTRAGT bzw. NICHT BELEGT.
+
+P02 DELIVERED statisch geprueft: exakt drei autorisierte Produktdateien, zwei echte Produktintegrationstests und Paketbeleg; Diff whitespace-sauber. Interne optionale Pull-Erweiterung nur im gebundenen Adoptionspfad. Integration wartet gemaess Queue auf P01.
