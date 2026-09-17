@@ -1,0 +1,12 @@
+✓ Löschvertrag enthält genau persönliche Töpfe, Rückholpunkte und freigegebene lokale Metadaten
+✓ Auth, Katalog/PWA und größerer Browserreset liegen außerhalb des Löschvertrags
+✓ Ohne bestätigten Download bleibt die lokale Löschung gesperrt
+✓ Ungültige Titel-Pins sperren den Download und lassen alle Daten stehen
+✓ Erst Download, dann getrennte Löschung entfernt jeden freigegebenen lokalen Schlüssel
+✓ Auth-, Katalog- und Einstiegszustand bleiben unangetastet
+✓ Erfolg wird erst nach Rücklesen gemeldet und lädt die App genau einmal neu
+✓ A/B- oder Treiberwechsel nach dem Download bricht vor jeder Löschung fail-closed ab
+✓ Ein stiller Teilfehler wird rückgelesen, nie als Erfolg gemeldet und vollständig zurückgerollt
+✓ Ein Sitzungswechsel zum Konto sperrt die lokale Löschung ohne Remote- oder Local-Write
+
+LOCAL-DATA-SAFETY-TEST BESTANDEN (10/10)

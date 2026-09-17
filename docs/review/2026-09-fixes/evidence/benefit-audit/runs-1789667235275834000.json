@@ -1,0 +1,52 @@
+[
+  {
+    "script": "review49_p09_product_test.mjs",
+    "exit": 0,
+    "seconds": 1.12
+  },
+  {
+    "script": "review49_p10a_mediathek_focus_test.mjs",
+    "exit": 0,
+    "seconds": 4.85
+  },
+  {
+    "script": "review49_p11_finder_test.mjs",
+    "exit": 0,
+    "seconds": 0.29
+  },
+  {
+    "script": "review49_p12_workflow_test.mjs",
+    "exit": 0,
+    "seconds": 0.71
+  },
+  {
+    "script": "review49_p12_retention_pg17_test.mjs",
+    "exit": 0,
+    "seconds": 1.56
+  },
+  {
+    "script": "review49_p01_browser_test.mjs",
+    "exit": 0,
+    "seconds": 2.8
+  },
+  {
+    "script": "review49_p05_layout_test.mjs",
+    "exit": 0,
+    "seconds": 6.53
+  },
+  {
+    "script": "review49_p07_browser_test.mjs",
+    "exit": 0,
+    "seconds": 5.02
+  },
+  {
+    "script": "review49_p09_browser_test.mjs",
+    "exit": 0,
+    "seconds": 88.56
+  },
+  {
+    "script": "review49_p10b_browser_test.mjs",
+    "exit": 0,
+    "seconds": 5.73
+  }
+]

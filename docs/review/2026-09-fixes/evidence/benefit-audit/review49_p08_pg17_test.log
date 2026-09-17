@@ -1,0 +1,8 @@
+✓ F8: Produzent -> Backend -> echter SQL-Save/Readback -> Browser
+✓ F8: alte Payloads bleiben kompatibel; neue Annotationen sind eng gebunden
+✓ F8: falscher Fence kann nicht speichern
+✓ F9: Produzent -> Backend -> echter SQL-Save/Readback -> Browser
+✓ F9: alte Payloads bleiben kompatibel; neue Annotationen sind eng gebunden
+✓ F9: falscher Fence kann nicht speichern
+✓ Neue und bestehende SQL-Einstiege bleiben fuer anon/authenticated gesperrt
+P08 PG 17.10: 7 checks passed

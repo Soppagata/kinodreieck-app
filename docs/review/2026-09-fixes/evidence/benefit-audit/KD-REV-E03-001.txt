@@ -1,0 +1,67 @@
+# KD-REV-E03-001 · Verspäteter Pull setzt bestätigten Kontostand zurück
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — ein realistisch überlappender Hintergrund-Pull kann einen bereits serverseitig bestätigten lokalen Stand sichtbar zurücksetzen. Der Serverstand bleibt erhalten, ein frischer Pull heilt den lokalen Stand, und ein Folgeschreiben wird als Konflikt abgefangen; dauerhafter automatischer Serverdatenverlust ist nicht belegt.
+- Finding: E03-F001
+- Prüfstand: `BASE`
+- Zuständige Etappe: E03
+
+## Fehler und Auswirkung
+
+In einem bereits aktiven, freigegebenen Konto kann eine ältere Pull-Antwort den aktuell sichtbaren persönlichen Topf und seine lokal bekannte Revision zurückdrehen. Der Validator reproduzierte dies für `kd:mustwatch`; betroffen ist grundsätzlich jeder durch diesen Driver synchronisierte `ACCOUNT_SYNC_KEYS`-Topf, sofern derselbe Ablauf entsteht.
+
+Der falsche Stand wird über den normalen Remote-Storage-Subscriber weitergegeben. Für Must-Watch übernimmt der Controller den gelieferten Wert unmittelbar und berechnet spätere Mutationen aus diesem Ref. Ein nachfolgendes Schreiben kann damit den zurückgesetzten Stand als Grundlage haben. Der getestete Server-Revisionsfilter verhindert dabei ein blindes Überschreiben von B: der Folge-PATCH mit Revision 1 wird gegen Serverrevision 2 als Konflikt abgewiesen. Das ist eine lokale Konsistenz- und Bedienungsstörung, kein belegter RLS- oder Serverdatenverlust.
+
+## Auslöser, Soll und Ist
+
+Voraussetzung ist ein aktives Konto mit A auf Revision 1. Ein Hintergrund-Pull liest A/1 und seine GET-Antwort bleibt ausstehend. Währenddessen speichert der Nutzer B; der PATCH bestätigt B/2 und räumt `pending`. Erst danach trifft die alte GET-Antwort A/1 ein. Account, Owner und Epoch bleiben dabei unverändert.
+
+Soll: Eine Pull-Antwort, die älter als die inzwischen bestätigte lokale Revision ist, darf B/2 weder im Cache noch in der Revisionsmetrik zurücksetzen oder A an Abonnenten publizieren.
+
+Ist: `syncPull()` übernimmt A, setzt die bekannte Revision auf 1 und meldet `ok: true`, ohne `pending` oder `conflict`. Die Mock-Reproduktion beobachtete anschließend lokal `[film-a]` auf Revision 1, obwohl der Server weiterhin B/2 hält. Ein weiterer frischer Pull stellt B/2 wieder her.
+
+## Ursache und Fundstellen
+
+Der Pull wartet auf GET außerhalb der pro Schlüssel geführten Commit-Queue. Nach Rückkehr prüft er nur den aktuellen Fehler-/Pending-Zustand. Nach dem erfolgreichen Commit ist dieser leer; eine Prüfung auf `row.revision < getVer(key)` oder eine gleichwertige Pull/Write-Ordnung fehlt. Dadurch ersetzen die Zeilen 308–321 den Cache und die Revision mit der alten Antwort; Zeile 327 publiziert sie.
+
+Primäre Fundstellen in der unveränderlichen Source-Kopie (bytegleich mit dem Prüfcommit):
+
+- `src/lib/accountDriver.js:254` — ausstehendes GET in `syncPull`; repository-relativ `src/lib/accountDriver.js:254` am Commit `BASE`.
+- `src/lib/accountDriver.js:291`, `:308`, `:321` und `:327` — unvollständiger Guard, Cache-Ersetzung, Revisionsrücksetzung und Benachrichtigung; repository-relativ `src/lib/accountDriver.js:291,308-327`.
+- `src/lib/accountDriver.js:395` und `:583` — erfolgreicher Commit erhöht die Revision; ein normales `set()` markiert pending und reiht danach den Commit ein; repository-relativ `src/lib/accountDriver.js:395,583-595`.
+- `src/services/sessionCoordinator.js:374` und `src/controllers/useMustwatchController.js:93` — statisch verfolgter Refresh-/Verbrauchspfad; repository-relativ `src/services/sessionCoordinator.js:368-377` sowie `src/controllers/useMustwatchController.js:93-95`.
+
+## Belege und Gegenproben
+
+Ausgeführt durch den unabhängigen Validator, ausschließlich lokal mit Deferred-GET/PATCH-Mocks und produktivem Driver, Store-Fassade und Storage-Subscriber:
+
+- `source-provenance.json` bestätigt neun relevante Dateien der Source-Kopie bytegleich zum Prüfcommit; der normale Task-Checkout war nicht Prüfstand.
+- `node /private/tmp/kd-vollreview-20260916/tests/E03-F001/validator/stale-pull.mjs > /private/tmp/kd-vollreview-20260916/tests/E03-F001/validator/results.jsonl` endete mit Exit 0. Alle vier Assertions in `results.jsonl` sind `verified: true`: Fehlerablauf, Folgeschreiben, noch pending und inaktiver Kontext. Exit 0 bestätigt die Fehler- und Kontrollassertions; er ist kein Produkt-PASS.
+- Der statische Aufrufpfad über AutoSync/Coordinator, UI-Write und Subscriber ist in der Validatorakte festgehalten. Ein vollständiger Browser- oder Coordinator-Lauf wurde nicht ausgeführt.
+
+Gegenproben begrenzen den Befund: Noch `pending` verhindert die Rücksetzung; ein inaktiver Kontext verwirft die Antwort; ein frischer Pull heilt B/2; der PATCH-Filter erzeugt beim Folgeedit einen Konflikt statt B remote zu überschreiben. Vor-Pull-`flush`, Snapshot sowie Owner-/Epoch-Grenzen ordnen diesen selben aktiven Kontokontext nicht. Vorhandene Driver-/Sync-Tests wurden als Abdeckungsgegenprobe gelesen, aber hier nicht ausgeführt; sie decken dieses Antwort-Rennen nicht ab.
+
+Testwerkzeugfehler: keiner festgestellt. Betriebsbeleglücke: keine Live-/Provider-/Remote-Schreibprobe, keine Produktionshäufigkeit und keine physische Browser-/PWA-Abnahme erhoben.
+
+## Korrekturziel und Abnahme
+
+Die Korrektur auf die Antwortübernahme im `AccountDriver` begrenzen: eine im weiterhin gültigen Kontokontext veraltete Remote-Revision vor jeder Cache-, Metadaten- und Subscriber-Änderung verwerfen oder Pull und Commit gleichwertig ordnen. Die bestehenden Gleichheits-, Pending-, Konflikt-, Snapshot- und Accountwechselverträge bleiben erhalten. Servertrigger, Authsystem und Datenmodell sind für diesen Fehler nicht umzubauen.
+
+Abnahme:
+
+- Deferred GET(A/1), danach bestätigter PATCH(B/2), dann die alte GET-Antwort: Cache und bekannte Revision bleiben B/2; A wird nicht publiziert.
+- Eine Folgemutation derselben Sequenz baut auf B auf und erzeugt keinen ausschließlich vom veralteten Pull verursachten Revisionskonflikt.
+- Ein tatsächlich neuerer Remote-Stand wird weiterhin übernommen und publiziert, sofern kein geschützter lokaler Zustand dagegensteht.
+- Noch ausstehende Writes, bestehende Konflikte, terminal abgelehnte Werte und Accountwechsel bleiben geschützt.
+- Ein zulässiges Überschreiben setzt weiterhin den erfolgreichen Snapshot voraus.
+
+## Abhängigkeiten und offene Punkte
+
+E03-F002 betrifft eine andere Ursache beim Kontoload und ist kein Duplikat. Die Ausführung wurde nur lokal mit Mocks nachgewiesen; Sichtbarkeit im React-UI und Backup-Auswirkung sind statisch abgeleitet, nicht als Browser- oder Exporttest belegt.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: `/private/tmp/kd-vollreview-20260916/validations/E03-F001.json`. Ursprünglicher Vorschlag: `/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E03-F001.json`. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Master-Abnahme ist bestätigt, bis sein gesonderter Abgleich vorliegt.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E03/KD-REV-E03-001.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

@@ -1,0 +1,28 @@
+Check ai_task_test.ts
+running 23 tests from ./ai_task_test.ts
+C8 OPTIONS: 204 mit CORS-Kopf, erlaubter Origin wird gespiegelt ... ok (9ms)
+C11 Nicht-POST: 405 ... ok (628µs)
+C12 unlesbarer Körper: 400 kein-json ... ok (752µs)
+H1 health: 200, ohne Reservierung und ohne Anbieteraufruf ... ok (3ms)
+H2 health braucht trotzdem ein gültiges Token ... ok (148µs)
+H2b health ist ohne personal_ai vor Admin-Diagnose gesperrt ... ok (444µs)
+H3 health läuft auch bei gesetztem Not-Aus (reine Diagnose ohne Anbieter) ... ok (663µs)
+H4 anbieter-modelle bei gesetztem Not-Aus: 503, kein Anbieteraufruf ... ok (517µs)
+H4b serverseitige Provider-Registry sperrt Diagnose und zahlenden Pfad vor jedem Anbieterfetch ... ok (1ms)
+H4c Provider-Registry verlangt exakt eigene ok/code-Erfolgsfelder in Health ... ok (1ms)
+H4d formfremder Registry-Erfolg sperrt Diagnose und Zahlung vor Start/Fetch ... ok (2ms)
+H4e exakt {ok:true,code:PROVIDER_ALLOWED} erlaubt alle drei Pfade ... ok (2ms)
+H5 anbieter-modelle bei aktivem Betrieb: 200 mit Liste UND Protokollzeile ... ok (308µs)
+H5b anbieter-modelle: ein abgelehnter Start verhindert den Anbieteraufruf VOLLSTÄNDIG ... ok (1ms)
+H5c anbieter-modelle: jeder Fehlerpfad schließt die Zeile mit Status fehler ... ok (2ms)
+H6 anbieter-modelle meldet nur den Fehlertyp, nie die Anbietermeldung ... ok (641µs)
+H5d auch der Diagnosepfad prüft die Protokoll-ID vor dem Provider ... ok (443µs)
+FF3e gecachte FlixPatrol-Fakten werden serverseitig streng zugeordnet ... ok (3ms)
+FF3e2 FlixPatrol-Identitaetscache ausserhalb der Charts behaelt den Forecast-Vertrag ... ok (1ms)
+FF3f direkte FlixPatrol-ID liest genau einen Titel und Browserfakten bleiben gesperrt ... ok (1ms)
+FF3g FlixPatrol-Cachefehler erhält den bisherigen Prognoseweg ... ok (658µs)
+FF3h widersprüchliche IMDb- und TMDB-Kennungen stoppen vor Cache und Kosten ... ok (642µs)
+FF3i derselbe normalisierte IMDb- oder TMDB-Wert bleibt gültig ... ok (1ms)
+
+ok | 23 passed | 0 failed | 326 filtered out (39ms)
+

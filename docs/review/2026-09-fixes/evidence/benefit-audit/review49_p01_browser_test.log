@@ -1,0 +1,19 @@
+✓ two tabs / IDB fallback / logout / success
+✓ two tabs / IDB fallback / logout / invalid_grant
+✓ two tabs / IDB fallback / b / success
+✓ two tabs / IDB fallback / b / invalid_grant
+✓ two tabs / IDB fallback / same-login / success
+✓ two tabs / IDB fallback / same-login / invalid_grant
+✓ browser account 401 force / IDB fallback
+✓ two tabs / Web Locks + IDB / logout / success
+✓ two tabs / Web Locks + IDB / logout / invalid_grant
+✓ two tabs / Web Locks + IDB / b / success
+✓ two tabs / Web Locks + IDB / b / invalid_grant
+✓ two tabs / Web Locks + IDB / same-login / success
+✓ two tabs / Web Locks + IDB / same-login / invalid_grant
+✓ browser account 401 force / Web Locks + IDB
+✓ native IDB transaction excludes credential commit / web=false
+✓ native IDB transaction excludes credential commit / web=true
+✓ browser IDB missing fails closed without credential mutation
+✓ browser IDB denied fails closed without credential mutation
+P01 BROWSER: 18/18

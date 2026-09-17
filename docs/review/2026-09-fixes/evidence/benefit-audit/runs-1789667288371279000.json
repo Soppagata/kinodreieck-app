@@ -1,0 +1,47 @@
+[
+  {
+    "script": "streaming_page_cache_test.mjs",
+    "exit": 0,
+    "seconds": 0.06
+  },
+  {
+    "script": "controllers_test.mjs",
+    "exit": 0,
+    "seconds": 0.25
+  },
+  {
+    "script": "extraktion_test.mjs",
+    "exit": 0,
+    "seconds": 0.87
+  },
+  {
+    "script": "blogprofilanalyse_test.mjs",
+    "exit": 0,
+    "seconds": 0.04
+  },
+  {
+    "script": "filmwissen_live_target_test.mjs",
+    "exit": 0,
+    "seconds": 0.04
+  },
+  {
+    "script": "radar_freitext_live_contract_test.mjs",
+    "exit": 0,
+    "seconds": 0.03
+  },
+  {
+    "script": "function_release_test.mjs",
+    "exit": 0,
+    "seconds": 0.09
+  },
+  {
+    "script": "production_copy_surface_test.mjs",
+    "exit": 0,
+    "seconds": 0.34
+  },
+  {
+    "script": "tools/private_ops_monitor_test.mjs",
+    "exit": 0,
+    "seconds": 0.04
+  }
+]

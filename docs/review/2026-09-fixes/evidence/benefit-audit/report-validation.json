@@ -1,0 +1,8 @@
+{
+  "tickets": 49,
+  "criteria": 239,
+  "tableRows": 49,
+  "sourceLinesAndTestLinks": "PASS",
+  "worktreeClean": true,
+  "decision": "49 local fixes retained; 3 rollout contracts open"
+}

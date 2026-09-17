@@ -1,0 +1,27 @@
+PostgreSQL binaries: /Applications/Postgres.app/Contents/Versions/17/bin
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: initdb: 2026-09-17 19:40:27.090 CEST [41943] FATAL:  could not create shared memory segment: Operation not permitted
+2026-09-17 19:40:27.090 CEST [41943] DETAIL:  Failed system call was shmget(key=17875431, size=56, 03600).
+child process exited with exit code 1
+initdb: removing data directory "/var/folders/0p/vd5hq0654rnb68xyymz1493w0000gn/T/review49-p07-pg-f8tTAX/data"
+
+
+1 !== 0
+
+    at run (file:///private/tmp/kd-review49-benefit-audit-20260917/review49_p07_pg_test.mjs:22:186)
+    at file:///private/tmp/kd-review49-benefit-audit-20260917/review49_p07_pg_test.mjs:62:2
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.18.0

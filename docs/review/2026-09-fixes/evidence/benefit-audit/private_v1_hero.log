@@ -1,0 +1,17 @@
+[WebServer] (node:43907) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:43909) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[PRIVATE_V1_TOUCH] {"browser":"chromium","viewport":"393x852","touchBox":{"width":327,"height":44},"helpBox":{"width":353,"height":44}}
+[PRIVATE_V1_NET] {"browser":"chromium","nonLocal":7,"mocked":7,"aborted":0,"unknownFixturePaths":0}
+  ✓  1 [chromium] › tests/private-v1/private-v1.spec.mjs:233:1 › Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag (2.0s)
+(node:43914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[PRIVATE_V1_TOUCH] {"browser":"webkit","viewport":"393x852","touchBox":{"width":327,"height":44},"helpBox":{"width":353,"height":44}}
+[PRIVATE_V1_NET] {"browser":"webkit","nonLocal":7,"mocked":7,"aborted":0,"unknownFixturePaths":0}
+  ✓  2 [webkit] › tests/private-v1/private-v1.spec.mjs:233:1 › Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag (2.4s)
+
+  2 passed (5.6s)

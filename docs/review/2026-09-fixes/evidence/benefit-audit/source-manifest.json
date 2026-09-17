@@ -1,0 +1,362 @@
+[
+  {
+    "file": ".github/workflows/automatic-ai-check.yml",
+    "sha256": "ded41dfca6211960b73657464fac2baeb647ab46e8a884df521c0a82864a10ba",
+    "lines": 138,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/App.jsx",
+    "sha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+    "lines": 2158,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/components/DreiFragen.jsx",
+    "sha256": "f131f54b7cd6616da5227f6953d9d1a716c4c9f6be7ab0bef8ee303094425223",
+    "lines": 342,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/components/EintragForm.jsx",
+    "sha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+    "lines": 416,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/components/FilmCard.jsx",
+    "sha256": "c85ee47bab5e3a447500765fad9a259336d9ca48022ac0f0cd759e8fe4e848a3",
+    "lines": 314,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/components/GeschmackBereich.jsx",
+    "sha256": "1a752eff853c5df1eb54be8d4007f5e7da85685b0c8f1dad450404d1e1a18f11",
+    "lines": 419,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/components/GeschmackOnboarding.jsx",
+    "sha256": "c0c405ed850ee4e74a00839fb996eee39097075ad79ca423840d7072805be5d4",
+    "lines": 332,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/components/MustWatchListe.jsx",
+    "sha256": "1bb02a86704abb70de4e231f5ee5065282c0d7078cab2c2b5e86c2f14b3003f8",
+    "lines": 671,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/components/StapelImport.jsx",
+    "sha256": "1f63a5e7f1109f5105f91add4535c409c925de0be299b0580a65a0ed7689164c",
+    "lines": 224,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/components/Wochenplan.jsx",
+    "sha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+    "lines": 396,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/controllers/useEntdeckenRadarController.js",
+    "sha256": "b5f12fb51aee38d471fb3017e8db57790637e6cdc45812081a975783f76497ba",
+    "lines": 687,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/controllers/useStreamingNeuController.js",
+    "sha256": "df8c2f0cfa92caa0f04127b2704ead4839550ee299443ad6429fccf9da98e20a",
+    "lines": 202,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/controllers/useStreamingPageController.js",
+    "sha256": "f413285ce3846502bd096c0d9912eee957b0cfd5c1b9f6fa378db3c2a1f0f9d8",
+    "lines": 527,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/index.css",
+    "sha256": "f350073dfdc2a483678235089880665267bc8c731878394ad895662631a8f187",
+    "lines": 1584,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/accountDriver.js",
+    "sha256": "d821d185b160d816b953d10fd9a9e2665aadd136add7db87b47e53fad2397d8e",
+    "lines": 626,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/authDriver.js",
+    "sha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+    "lines": 544,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/bewertungsvergleich.js",
+    "sha256": "3c4e191b02e023f90bc4895cfc459e1160aa1fcbc04657af869f1d5cb7909864",
+    "lines": 11,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/entdeckenUi.js",
+    "sha256": "0b5ec8c42e2c023c6090f3d10689c29e49910b03d531e9404af7cf098e7ede02",
+    "lines": 1252,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/filmwissen.js",
+    "sha256": "9560ca16e339060e1b30f08fa4acadc152b6b646033f57d934323c276e084e05",
+    "lines": 136,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/finder.js",
+    "sha256": "2d8c0a4e17e3b3b55f0753b2a2ac57ff292fafb87014269983d084528ee1f99f",
+    "lines": 834,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/katalog.js",
+    "sha256": "1367de581b252463816bb769bcff75a00f09f1ba0411cf81db2bea62035d33b8",
+    "lines": 623,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/libraryProjection.js",
+    "sha256": "9baa3a25d8c978e069f8f04eb1753598d816962d66e3af89a28f2e746df488b8",
+    "lines": 282,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/match.js",
+    "sha256": "0f5f945ad6764b3984d3dd45e68df434fd9de194bae6ccf75b8c6f92ed8bb3e5",
+    "lines": 190,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/profil.js",
+    "sha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+    "lines": 965,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/radarPilotContracts.js",
+    "sha256": "ac541672a1e41e89f1ce90539603118329dd1f26b494ff74587badb59ee9c945",
+    "lines": 514,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/staffeln.js",
+    "sha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+    "lines": 182,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/stapelimport.js",
+    "sha256": "2ad7936420e751e5c5a70cde742a5e16739d914ab5377b06e60b9901aca486c1",
+    "lines": 346,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/streamingPage.js",
+    "sha256": "c8609879f6efe2dff3a72282cb654d1ccdbcf56c60adf3e4489002ead9bace1b",
+    "lines": 246,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/lib/webDiscoveryFeed.js",
+    "sha256": "675b7ef8eee8362cc8a5681caca0791540a507ac7c7d3048163b7a697941772e",
+    "lines": 773,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/services/filmwissen.js",
+    "sha256": "88e62f36ad45d2d9b1f208b4d47369f66106d5169473906edf65cdf1ba4c6661",
+    "lines": 154,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/services/radarWebsearch.js",
+    "sha256": "f0b50ce6ff49bff03370eafef1212f2573c17ca2ff01796213d458ece84e9e7d",
+    "lines": 274,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/services/storage.js",
+    "sha256": "4324eeb5480e0e3d2322a7b3540dbd7f58085f1250f0fdcbc54124411bcfea1d",
+    "lines": 712,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/services/uebernahme.js",
+    "sha256": "924938c20f2b8297d07ec22030dbe1e8a458cf04e363720ad5a24fe371d4df7d",
+    "lines": 341,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/styles/design-secondary.css",
+    "sha256": "d2bc02ee8a3645eb5fb36d3e8bea65f9b4b3e48d105eb1850024634b3ffb3866",
+    "lines": 278,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/styles/streaming-progressive.css",
+    "sha256": "4810293c12df274815ecd343769706ba1e7cc1d50851a770a0badb093b246ffe",
+    "lines": 62,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/tabs/EntdeckenTab.jsx",
+    "sha256": "bce5cdaebfcef257123c7903f5fc0baf097a691a9174b25917017dc77d7e5036",
+    "lines": 624,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/tabs/KinoTab.jsx",
+    "sha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+    "lines": 750,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/tabs/MediathekTab.jsx",
+    "sha256": "8b68f27976d01bd25d7a8d69532b598318b90e0692fc61337df2de3c206cd80d",
+    "lines": 1040,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/tabs/StartTab.jsx",
+    "sha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+    "lines": 410,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "src/tabs/StreamingTab.jsx",
+    "sha256": "9f09c61c2fa7323a5545cc48867caaf0d2671283acb1bb47302a7cf834185023",
+    "lines": 987,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/functions/_shared/flixpatrolFactsContext.js",
+    "sha256": "4350a9a8bf0c1e8c759e27725b2c67a5c26ffac906b5ac9f10286b3fdd643f62",
+    "lines": 308,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/functions/ai-task/index.ts",
+    "sha256": "7d3aee5a2b6a75a187901351e135051895029a1f796d038c70a6521b8a4cdfb6",
+    "lines": 5683,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/functions/entdecken-daily-task/contract.js",
+    "sha256": "6be25a5065a4fa88ec84237102aeb457e63579cbc69365d3bee1a32d9c07e3cd",
+    "lines": 1119,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/functions/entdecken-daily-task/runner.js",
+    "sha256": "7ea118ce1459570b1a4106fc95c90b7a6c68a7ab10ef7c7f7084fcddd80353e9",
+    "lines": 299,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/functions/filmwissen-task/quellen.ts",
+    "sha256": "0f30276e778beacdebcb209cf9f02677733a8d6e4189855f21be7545eb5fcb8f",
+    "lines": 1019,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/functions/radar-websearch-task/contract.js",
+    "sha256": "8db0a6b938e41fc44c13fe7caccc69bdd21d6152d391ad69c8c181d996fcf1e6",
+    "lines": 1213,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/functions/radar-websearch-task/index.ts",
+    "sha256": "5f469a72131ee43dc72dfe756878ac014369ed93806ceca3bdd0d09f829588d7",
+    "lines": 772,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/functions/radar-websearch-task/runner.js",
+    "sha256": "938c866e52ea59c81137423263d7cd4c8197d0556883196e1f0767e550241c0e",
+    "lines": 298,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/migrations/20260917100000_review_radar_text_identity.sql",
+    "sha256": "82661ea4f2d1f6c968b5a3f719e0684096597bada2a5006b7be7d7786ed1070d",
+    "lines": 77,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/migrations/20260917101000_review_radar_context_year.sql",
+    "sha256": "738cbf27b9748e0ee5d2fd95631e8d2d4ad9a716d5f3a2edc3ebb674817c2d80",
+    "lines": 24,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/migrations/20260917110000_review_filmwissen_identity.sql",
+    "sha256": "2cd4740a1b1807012316db22b62bd2a947cc3929f94680116da59cdf95a49546",
+    "lines": 436,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/migrations/20260917120000_review_streaming_freshness_anchors.sql",
+    "sha256": "104a29402c3c442d7504093795904ce4414dc78f71a4dd19ebbec3eca75aec52",
+    "lines": 372,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/migrations/20260917123000_review_mail_rate_bucket_retention.sql",
+    "sha256": "ae915a36f2686b9b2dbd15f0d553ba0c2d538fc76e6bf8796c642d1d3ac632aa",
+    "lines": 189,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "supabase/migrations/20260917130000_review_entdecken_ofi_identity.sql",
+    "sha256": "3b4c03230e7afd9ef87be92b1bc7b419a61282f2fdd3072bc5b158bf01bbd07b",
+    "lines": 65,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "tools/ai_smoke.mjs",
+    "sha256": "a7e8c3f096fb129a5bc7582d714bf22bd74dd0ad12748d53eb45edfe6c8f2f57",
+    "lines": 1443,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "tools/filmwissen_live_target.mjs",
+    "sha256": "ee04e8272ea6ff137215268b148b6839fe9a4864ab1797c72aab6235a5f22af4",
+    "lines": 292,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "tools/function-release-info.mjs",
+    "sha256": "a86f3e4c3fbc193145bf6806bfb012d33ba643ba9fb682a83c8ec7fc5df406a4",
+    "lines": 288,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "tools/private_ops_monitor_test.mjs",
+    "sha256": "0a65ec55ca394060d9f159fd8ea1d04593ac4e39c27bd054fdd81743609ef07c",
+    "lines": 401,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "tools/radar_freitext_live_contract.mjs",
+    "sha256": "eb4d08a47efaa551fd3d5aca16b8437ca2d8052b844be1bff243d994a70fd637",
+    "lines": 171,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  },
+  {
+    "file": "tools/rls_test_personal.mjs",
+    "sha256": "6a9ce3e85a0e98e0cf410dc587ab60dc0fa6656949dea2dd594cd05b7a78888c",
+    "lines": 950,
+    "comparison": "Affected implementation and neighboring contract reviewed; baseline delta archived."
+  }
+]

@@ -1,0 +1,70 @@
+✓ grüner Build/Function/Rolle/Flags/Budget/Purge/Feed
+✓ grüne Check-Läufe liefern kein kritisches Ergebnis
+✓ Purge als Warnung darf weiterlaufen und nicht kritisch sein
+✓ fehlende Secrets je Check melden NOT_CONFIGURED
+✓ fehlende Secrets brechen den Ablauf nicht ab, aber machen ihn rot
+✓ Build-Mismatch wird erkannt
+✓ Build-Mismatch gilt als kritisch
+✓ Function-Mismatch wird erkannt
+✓ Function-Mismatch gilt als kritisch
+✓ inaktive oder fehlende Rollen-v1-Freigabe macht Monitoring rot
+✓ abweichender Privat-Flag 'provider_requests_enabled' wird erkannt
+✓ abweichender Privat-Flag 'provider_requests_enabled' ist kritisch
+✓ abweichender Privat-Flag 'scheduler_enabled' wird erkannt
+✓ abweichender Privat-Flag 'scheduler_enabled' ist kritisch
+✓ abweichender Privat-Flag 'purge_enabled' wird erkannt
+✓ abweichender Privat-Flag 'purge_enabled' ist kritisch
+✓ abweichender Privat-Flag 'delete_enabled' wird erkannt
+✓ abweichender Privat-Flag 'delete_enabled' ist kritisch
+✓ abweichender Privat-Flag 'export_enabled' wird erkannt
+✓ abweichender Privat-Flag 'export_enabled' ist kritisch
+✓ fehlender export_enabled-Flag wird als FLAG_MATRIX_MISMATCH erkannt
+✓ fehlender export_enabled-Flag ist kritisch
+✓ fehlender export_enabled-Flag macht Gesamtcheck rot
+✓ leere Singleton-Antwort der privaten Einstellungen wird fail-closed erkannt
+✓ leere Singleton-Antwort bleibt kritisch
+✓ schema-/queryfehlerhafte private Einstellungen werden fail-closed erkannt
+✓ schema-/queryfehlerhafte private Einstellungen bleiben kritisch
+✓ radar_aktiv wird fail-closed erkannt
+✓ radar_aktiv macht den Lauf kritisch
+✓ radar_shares_aktiv wird fail-closed erkannt
+✓ radar_shares_aktiv macht den Lauf kritisch
+✓ radar_provider_aktiv wird fail-closed erkannt
+✓ radar_provider_aktiv macht den Lauf kritisch
+✓ radar_scheduler_aktiv wird fail-closed erkannt
+✓ radar_scheduler_aktiv macht den Lauf kritisch
+✓ radar_proposal_import_aktiv wird fail-closed erkannt
+✓ radar_proposal_import_aktiv macht den Lauf kritisch
+✓ unbekannte Umgebung besitzt keinen stillen Flag-Fallback
+✓ unbekannte Umgebung macht beide Flagchecks kritisch
+✓ Budget unbekannt wird als BUDGET_UNKNOWN eingestuft
+✓ Budget unbekannt ist kritisch
+✓ Purge liefert nur Warning bei fälligen Daten
+✓ Purge-Warnung bleibt nicht kritisch
+✓ Mailbucket-Monitor bleibt beim Dryrun mit Limit 500
+✓ allein abgelaufene Mailrate-Buckets lösen PURGE_DUE aus
+✓ Mailbucket-Warnung bleibt sichtbar und nicht kritisch
+✓ keine IDs/Secrets/Payload in Reports
+✓ Reports enthalten nur erlaubte Felder
+✓ Feedreport enthält nur Metadaten, nie Payload oder Quellen-IDs
+✓ fachlicher Feedfehler wird mit sicherem Grundcode rot
+✓ Feedfehler nennt letzte Versuchs- und Bestandsdaten ohne Payload
+✓ Monitor erkennt abgelaufenen Feed ohne feste Format- oder Quellenzahl
+✓ leerer Quellenvertrag wird fail-closed statt über 25/50-Annahmen bewertet
+✓ laufender Feedrefresh bleibt sichtbare Warnung ohne falschen Fehler
+✓ GitHub-Ausgabe enthält Fehlerannotation und verständliche Schrittzusammenfassung
+✓ GitHub-Ausgabe enthält keine Secrets, Kontodaten, Payloads oder Quellen-IDs
+✓ je Netzcheck max 20s Timeout
+✓ Run-Timeout für den Check ist 5 Minuten
+✓ Workflow ist auf 5 Minuten begrenzt
+✓ Workflow verwendet ausschließlich den Check-Entrypoint
+✓ Workflow bindet die explizite Staging-Sollmatrix
+✓ Workflow bindet das GitHub-Environment staging
+✓ Workflow checkt unabhängig vom Schedule-Default den staging-Ref aus
+✓ App-Build-Soll stammt aus dem tatsächlich ausgecheckten staging-Commit
+✓ Workflow verwendet die kanonischen Environment-Variablen des Deployments
+✓ alte driftende App-Sollvariablen und falsche Supabase-Secret-Namen sind entfernt
+✓ Workflow schreibt annotierte Gründe und eine GitHub-Schrittzusammenfassung über den Check
+
+67/67 Private-Ops-Monitor-Checks bestanden.
+PRIVATE-OPS-MONITOR-TEST BESTANDEN (0 echte Netzzugriffe)

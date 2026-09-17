@@ -1,0 +1,16 @@
+PASS E09-002: actual film.at future-only fallback excludes 16/26 today
+PASS E09-002: real cache re-normalization retains fallback but finder excludes it
+PASS E09-002: tomorrow selects 7, excludes 17/27 in supported legacy cache
+PASS E09-002: mixed/padded exact dates expose only the requested times
+PASS E09-003: heute filters mixed master/rest before answer, SSR and compact projection
+PASS E09-003: morgen filters mixed master/rest before answer, SSR and compact projection
+PASS E09-003: date filtering precedes rest ranking and the 15-result limit
+PASS E09-003: rest also uses exact date tokens in future fallback
+PASS Control: no time filter retains all otherwise matching films
+PASS Control: genre/year/decade/exclusions remain effective on rest films
+PASS Control: direct master title bypass and soft time without explicit cinema survive
+PASS Control: real four-day normalization and future fallback keep their contract
+PASS Calendar control: tomorrow survives DST and year rollover in both branches
+PASS Real Finder DOM: submit today/tomorrow and remove the hard time chip
+PASS No network or provider requests
+P11: 15 passed, 0 failed

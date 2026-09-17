@@ -1,0 +1,6 @@
+✓ E11-003: type/year/strong-ID/ambiguity reject both new and stored links independent of order
+✓ E06-001: source expiry survives normalization/cache and null remains unbounded
+✓ E06-001: open expiry, stale200, resume and valid next source without refresh loop
+✓ E14-002: actual App refresh revision invalidates inactive fresh record once and fences old response
+✓ E06-003: rejected account/epoch responses do not publish anchors
+5/5 review49 P07 state checks passed

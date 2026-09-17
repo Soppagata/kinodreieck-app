@@ -1,0 +1,5 @@
+# Immutable evidence: retain the exact original output and patch whitespace.
+# These three archives are hash-verified; no product or test source is excluded.
+ai_task_P06.log -diff
+ai_task_neighbor_guards.log -diff
+baseline-to-candidate.patch -diff

@@ -1,0 +1,40 @@
+✔ wikidata: header stall aborts and releases reader (28.026917ms)
+✔ wikidata: body stall aborts and releases reader (28.744375ms)
+✔ wikidata: chunk stall aborts and releases reader (27.41525ms)
+✔ wikidata: redirect keeps classification (0.460375ms)
+✔ wikidata: rate keeps classification (0.176ms)
+✔ wikidata: overloaded keeps classification (0.124584ms)
+✔ wikidata: http keeps classification (0.144959ms)
+✔ wikidata: type keeps classification (0.285583ms)
+✔ wikidata: length keeps classification (0.185625ms)
+✔ wikidata: size keeps classification (0.580625ms)
+✔ wikidata: utf8 keeps classification (0.218959ms)
+✔ wikidata: json keeps classification (0.164708ms)
+✔ wikidata: missing-body keeps classification (0.101834ms)
+✔ wikidata: network keeps classification (0.07925ms)
+✔ wikidata: body-error keeps classification (0.12675ms)
+✔ wikidata: timely body clears timer (121.960375ms)
+✔ loc: header stall aborts and releases reader (27.449666ms)
+✔ loc: body stall aborts and releases reader (28.133041ms)
+✔ loc: chunk stall aborts and releases reader (26.549833ms)
+✔ loc: redirect keeps classification (0.279625ms)
+✔ loc: rate keeps classification (0.217416ms)
+✔ loc: overloaded keeps classification (0.123875ms)
+✔ loc: http keeps classification (0.122458ms)
+✔ loc: type keeps classification (0.283875ms)
+✔ loc: length keeps classification (0.22275ms)
+✔ loc: size keeps classification (0.434958ms)
+✔ loc: utf8 keeps classification (0.184875ms)
+✔ loc: json keeps classification (0.150541ms)
+✔ loc: missing-body keeps classification (0.080334ms)
+✔ loc: network keeps classification (0.112875ms)
+✔ loc: body-error keeps classification (0.1805ms)
+✔ loc: timely body clears timer (134.239167ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 431.661459

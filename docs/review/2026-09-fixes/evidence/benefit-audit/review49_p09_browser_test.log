@@ -1,0 +1,5 @@
+chromium: 32 editor layouts; centers and four edges of all seven labels PASS
+chromium: five default-count creations, six ending edits, eight invalid/corrected title paths PASS
+webkit: 32 editor layouts; centers and four edges of all seven labels PASS
+webkit: five default-count creations, six ending edits, eight invalid/corrected title paths PASS
+PASS: 32 browser/theme/width combinations, each new + edit. Geometry evidence: /var/folders/0p/vd5hq0654rnb68xyymz1493w0000gn/T/review49-p09-browser-FGbeIz/results.json

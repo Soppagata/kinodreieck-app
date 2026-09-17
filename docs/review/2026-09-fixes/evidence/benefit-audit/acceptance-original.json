@@ -1,0 +1,339 @@
+{
+  "KD-REV-E01-001": [
+    "Ein frischer Online-Start mit gültigem bestätigtem Format-1-Pin außerhalb Known/Kino zeigt entweder den Pin oder einen zutreffenden ausstehenden Zustand – nie „Noch leer“ für diesen vorhandenen Bestand.",
+    "Nach erfolgreicher gezielter Auflösung ist der Pin ohne vorherigen Fachbereichsbesuch sichtbar und navigiert zum korrekten Werk.",
+    "Fehlende, fehlerhafte oder mehrdeutige Katalogantworten löschen keinen Pin und behaupten keine erfolgreiche Auflösung.",
+    "Ein leerer Pinbestand löst keinen unnötigen Vollkatalogabruf aus; vorhandene Katalogtreffer sowie Must-Watch- und Kinopins behalten ihr Verhalten.",
+    "Ein fokussierter gemounteter Regressionstest deckt Speichern, frischen Start und verzögerte Katalogdaten mit Mock-Konto ab."
+  ],
+  "KD-REV-E01-002": [
+    "Bei festem 31.12.2026 10:00 Europe/Vienna und den sechs nach echter Programmnormierung gültigen Fixtures zeigt das Pinboard Film 0, 1, 2, 3, 4; Film 5 entfällt durch das Limit.",
+    "Bei zwei gültigen Pins vom 31.12. und 01.01. steht der Dezembertermin zuerst.",
+    "Gleichjährige Pins bleiben nach Tag und Uhrzeit korrekt geordnet; die Fünfergrenze bleibt bestehen.",
+    "Katalogauflösung und Ablaufprüfung bleiben aktiv; kein fehlender Programmtreffer wird künstlich zur Testerfüllung verwendet.",
+    "Falls ein gemeinsamer Parser verwendet wird, berücksichtigt er ISO-Terminjahre vor der Anzeigeformatierung und erhält die bestehende lokale Uhrzeitsemantik."
+  ],
+  "KD-REV-E02-001": [
+    "Ein ausstehendes direktes `getAccessToken(A)` plus abgeschlossener Coordinator-Logout darf nach spätem Erfolg keinen Sessionkey wiederherstellen; Resume bleibt Gast.",
+    "Ein B-Sign-in über einen anderen Coordinator darf durch späten A-Erfolg und `invalid_grant` weder ersetzt noch gelöscht werden; B bleibt nach Resume angemeldet.",
+    "Der Schutz deckt Logout plus erneuten Login desselben Kontos und den Mehrtab-Fall ab; seine Operationsidentität ist stärker als die Konto-ID.",
+    "Bei unveränderter aktueller Sitzung rotiert ein gültiger Refresh weiter normal; `invalid_grant` entfernt nur diese Sitzung, Netzwerkfehler erhalten sie, und der bestehende Single-Flight-Vertrag bleibt bestehen.",
+    "Tests verwenden den echten Auth-Treiber mit verzögerten Mock-Antworten und prüfen Persistenz sowie UI-Snapshot. Shared-Lock-/Fallback-Fälle und ein nachfolgendes Resume sind enthalten."
+  ],
+  "KD-REV-E02-002": [
+    "Nach erstem REST-401 eines lokal noch mehr als fünf Minuten gültigen Tokens und mit gültigem Refresh-Token erfolgt genau ein Refresh-HTTP-Request und genau ein Retry mit neuem Bearer.",
+    "Derselbe Nachweis gilt mit und ohne Web-Lock sowie bei hinter Serverzeit liegender Geräteuhr; eine manuell manipulierte gespeicherte Sitzung ist nicht die einzige Reproduktion.",
+    "Ein im Lock sichtbar von anderem Tab erneuerter Bearer wird ohne unnötige Rotation übernommen; Konto-ID-/Kontextwechsel brechen sicher ab.",
+    "Normale frische Tokens ohne Force verursachen keinen Auth-Request. Parallele reguläre und erzwungene Erneuerungen erzeugen keinen Refresh-Sturm und verlieren die erzwungene Erneuerung nicht.",
+    "Bleibt der neue Bearer bei 401 oder ist die Sitzung nicht erneuerbar, endet der Account-Versuch begrenzt: kein Endlos-Retry, keine falsche Erfolgsmeldung und keine lokale Datenlöschung."
+  ],
+  "KD-REV-E02-003": [
+    "Mit vollständig gemocktem Fetch: T7 ist erfolgreich, T3 wirft einmalig; As eigene Probe wird danach account-/key-/wertgebunden gelöscht und der Lauf endet weiterhin fehlerhaft.",
+    "Ist ein Cleanup-Request nicht erreichbar oder fehlerhaft, werden weitere registrierte Proben trotzdem separat behandelt; nicht entfernte Proben erhalten sichere Zuordnung und Fehlerstatus.",
+    "Vorhandene oder zwischenzeitlich geänderte Werte werden nie gelöscht; Freitopf- und Rollen-Guards bleiben aktiv.",
+    "Nach erfolgreicher Abbruchbereinigung kann ein Folgelauf denselben zuvor freien Topf wieder nutzen. Ein Abbruch vor der ersten Probe löst keine Löschung fremder Daten aus.",
+    "Beim regulären Abschluss werden eigene A-/B-/Profil-/Shared-Proben weiter bereinigt und vorhandene Profildaten bewahrt."
+  ],
+  "KD-REV-E03-001": [
+    "Deferred GET(A/1), danach bestätigter PATCH(B/2), dann die alte GET-Antwort: Cache und bekannte Revision bleiben B/2; A wird nicht publiziert.",
+    "Eine Folgemutation derselben Sequenz baut auf B auf und erzeugt keinen ausschließlich vom veralteten Pull verursachten Revisionskonflikt.",
+    "Ein tatsächlich neuerer Remote-Stand wird weiterhin übernommen und publiziert, sofern kein geschützter lokaler Zustand dagegensteht.",
+    "Noch ausstehende Writes, bestehende Konflikte, terminal abgelehnte Werte und Accountwechsel bleiben geschützt.",
+    "Ein zulässiges Überschreiben setzt weiterhin den erfolgreichen Snapshot voraus."
+  ],
+  "KD-REV-E03-002": [
+    "Nichtleerer Gast plus Login in ein leeres Konto: `account-ready`, alle betroffenen persönlichen Töpfe sind leer/abwesend, der Store liefert keine Gastdaten und der Login erzeugt keine persönlichen Uploads.",
+    "Nichtleerer Gast plus sparsames Konto: vorhandene Remote-Töpfe werden übernommen; fehlende Töpfe zeigen keine Gastreste; explizit leere Remote-Werte bleiben korrekt.",
+    "Nach Kontoload neu angelegte oder bearbeitete Kontoinhalte enthalten keine alten Gastdatensätze, sofern keine ausdrückliche Gastübernahme gewählt wurde.",
+    "Rückholpunkt und Logout stellen die ursprünglichen Gastrohwerte bytegenau wieder her.",
+    "Fehler bei Snapshot, Pull oder lokaler Ersetzung aktivieren keinen gemischten Kontocache; Transition-, Owner- und Epoch-Grenzen bleiben wirksam.",
+    "Normale Konto-Pulls bewahren echte ungesyncte Kontoänderungen; die explizite Gast-zu-Konto-Übernahme bleibt separat funktionsfähig."
+  ],
+  "KD-REV-E03-003": [
+    "`node local_data_safety_test.mjs` läuft mit der gültigen Fixture am Prüfstand vollständig und meldet alle 9 Checks.",
+    "Die gültige Fixture enthält für `K.entdeckenPins` gültiges JSON; ihr Backup erzeugt keine Warnung und gilt als vollständig.",
+    "Vorhandener ungültiger Pin-JSON-Text sperrt die Löschfreigabe weiterhin vor jeder Löschung.",
+    "Kontextwechsel, stille Teilfehler mit Rollback und Kontowechsel werden nach dem positiven Fall tatsächlich erreicht."
+  ],
+  "KD-REV-E04-001": [
+    "Must-Watch The Thing (1982, Film), leerer Master und Blog The Thing (2011, Film) ergeben keinen automatischen Must-Watch-Link.",
+    "Ein eindeutiger Must-Watch-Eintrag Dark (2017, Serie) wird aus dem gleichartigen Blogeintrag korrekt verlinkt.",
+    "Beide Fälle gelten für baueRefUniversum plus gleicheArtikelAb beziehungsweise heileRotlinks sowie für planeMasterErsetzung.",
+    "Bekannte Metadaten bleiben in allen Projektionen erhalten; Eingabeobjekte werden nicht mutiert.",
+    "Kontrollfälle decken korrekten Master-Jahrestreffer, Mehrdeutigkeit, Altbestand ohne Metadaten und bewusst gesetzte bestehende Refs ab."
+  ],
+  "KD-REV-E04-002": [
+    "Unveränderte offene Prognose übernehmen und speichern ergibt angenommen; das ursprüngliche Ergebnis bleibt erhalten.",
+    "Nach Übernahme jeweils Achse, Kategorie oder Begründung ändern und speichern ergibt korrigiert; die Nutzerwerte bleiben erhalten und die UI zeigt von dir korrigiert.",
+    "Eine bereits angenommene Prognose erneut übernehmen, verändern und speichern ergibt korrigiert.",
+    "Nur die Notiz ändern oder die Bewertungsfelder vor dem Speichern wieder exakt zurücksetzen ergibt angenommen.",
+    "Manueller Bewertungsweg, EintragForm, unvollständige Prognosefelder und Fehlerpfade beim Speichern behalten ihre bisherigen Guards."
+  ],
+  "KD-REV-E04-003": [
+    "Mit aktiver Suche Alpha öffnet ein Must-Watch-Masterlink auf Zulu die sichtbare, aufgeklappte Zulu-Karte ohne manuelles Leeren der Suche.",
+    "Ein gültiges Ziel verliert seinen Fokus nicht still, solange es nur wegen lokaler Filter unsichtbar ist.",
+    "Gezielt getestete Regressionen decken Suche, ausschließenden Genre-, Kategorie- und Besitzfilter sowie einen tatsächlich erreichbaren A-Z- oder Dekadenfall ab.",
+    "Kontrollpfad ohne Filter und automatische Wahl des passenden Medientyps funktionieren fort; Navigation verändert keine gespeicherten Daten."
+  ],
+  "KD-REV-E04-004": [
+    "Ein Integrationstest mit MustWatchListe und echtem useMustwatchController zeigt 1, 19, 198 und 1982 über einzelne React- und Storage-Ticks sichtbar als Entwurf; der Commit persistiert numerisch 1982.",
+    "Bei bestehendem 1982 darf Backspace auf 198 nicht zu stillschweigendem jahr:null führen; Ergänzen auf 1983 und Commit funktionieren.",
+    "Bewusstes Leeren und Bestätigen kann das optionale Jahr weiterhin auf null setzen. Eine ungültige nichtleere abgeschlossene Eingabe überschreibt kein gültiges Jahr still.",
+    "Vollständiges Einsetzen, schrittweise Neuanlage, Abbruch und fehlgeschlagene Speicherung bleiben verständlich; die Persistenz enthält nur gültige Jahreszahlen oder null."
+  ],
+  "KD-REV-E04-005": [
+    "Der produktive addFilm-Pfad id/null/id behält exakt den fehlgeschlagenen Kandidaten einschließlich Quelle, Staffeln, Faktenwahl und Auswahl; die UI weist zwei erfolgreiche und einen fehlgeschlagenen Eintrag aus.",
+    "Erneutes Übernehmen adressiert nur den verbliebenen Fehlkandidaten. Bereits erfolgreiche Kandidaten werden nicht erneut geschrieben; die KI wird nicht erneut aufgerufen.",
+    "Bei null/null/null bleibt die gesamte korrigierte Auswahl erhalten.",
+    "Vollständiger Erfolg darf die Vorschau weiterhin schließen; Doppelklick verursacht keine doppelte Übernahme.",
+    "Konto- und Generationsguards bleiben wirksam. Als Dublette klassifizierte Fälle sind von Speicherfehlern unterscheidbar oder werden konservativ behandelt."
+  ],
+  "KD-REV-E04-006": [
+    "In Abgleich und privater Leseansicht speichert Film zu Serie typ=serie und Serie zu Film typ=film.",
+    "Äußerer Selektor, innerer Selektor, Validierung und Save-Payload verwenden durchgehend denselben aktuellen Typ.",
+    "Ohne Wechsel und beim Wechsel über Musik oder Sonstiges bleibt die bisher korrekte Anlage erhalten.",
+    "Direkter Typwechsel verwirft andere gültige Formulareingaben nicht unbeabsichtigt.",
+    "Die Referenz wird weiterhin erst nach bestätigter Anlage gesetzt; Regressionstests benötigen keine Netz- oder Provideraufrufe."
+  ],
+  "KD-REV-E05-001": [
+    "Mocktest für Boot Known A, Discover B mit entferntem ausgewähltem Dienst und Known-Refresh aus Cache A: Finder, Badges und Legacy-`Mein Programm` geben keinen alten Dienst oder Link als aktuelle Verfügbarkeit aus.",
+    "Derselbe Schutz gilt für geworfenen Refresh ohne Cache sowie für einen erfolgreichen Read, dessen Generation weiterhin nicht zu Discover passt.",
+    "Der Konflikt bleibt für Wiederherstellung erkennbar; ein späterer erlaubter Refresh kann ein passendes Paar übernehmen.",
+    "Die sichtbare Herkunft behauptet keinen frischen Gesamtkatalog, wenn verwendete Angebote aus einem alten Teil stammen.",
+    "Kontrolle: Passender Known-Nachzug B entfernt das Angebot; zwei Lanes derselben Generation behalten ihre legitime Union.",
+    "`Alles`/`Neu` bleiben bei Mismatch geschützt; der normale progressive Seitenpfad bleibt unverändert."
+  ],
+  "KD-REV-E05-002": [
+    "Serienidentitäten mit gültigem Jahr und nur IMDb beziehungsweise nur TMDb senden `mediaType: \"series\"` und liefern außerhalb aller Charts einen passenden resolved Cachetitel.",
+    "Beide Reader-Eingaben `typ: \"serie\"` und `typ: \"series\"` funktionieren; der Forecast darf intern weiter `serie` verwenden.",
+    "Filmlookup, direkte FlixPatrol-ID und Chartfallback bleiben funktionsfähig.",
+    "ID-Konflikte, mehrdeutige SQL-Treffer sowie fehlendes oder widersprüchliches Jahr bleiben ohne ungesicherten Kontext.",
+    "Ein Regressionstest prüft echte SQL-Vertragsvalidierung oder einen strikt vertragstreuen Mock; ein argumentunabhängiger Erfolgs-Mock genügt nicht."
+  ],
+  "KD-REV-E05-003": [
+    "`ensureIds` liefert für `id: null`, `id: \"\"`, fehlendes `id` und andere falsy Altwerte nichtleere eindeutige IDs; ein erneuter Lauf erhält die IDs.",
+    "Gültige IDs bleiben bestehen; Kollisionen mit existierenden sowie im gleichen Lauf neu vergebenen IDs bleiben verhindert.",
+    "Der aktuelle Musikpfad mit `!!!` und leerem Jahr persistiert und gibt eine gültige ID zurück; der Eintrag bleibt nach Reload auswählbar.",
+    "Ein zweiter Satzzeichen-Titel mit leerem Rohslug wird nicht als Dublette abgewiesen.",
+    "Wiederhergestellte null-/Leerstring-ID-Paare sind vor Nutzung getrennt; ein Einzeledit verändert nur das gewählte Werk. Ein Bibliothekstest genügt; ein neuer UI-Restore ist nicht erforderlich."
+  ],
+  "KD-REV-E06-001": [
+    "Eine vor Ablauf geladene progressive Seite wird bei Ablauf oder Wiederaufnahme als veraltet/nicht verfügbar behandelt, auch wenn Known zuvor geladen wurde und nicht neu lädt.",
+    "Eine erneute Antwort derselben bereits abgelaufenen Projektion entfernt den Hinweis nicht und verlängert ihre Quellfrist nicht.",
+    "Cachewiederverwendung berücksichtigt eine endliche Quellfrist; `null` erzeugt keine erfundene Ablaufzeit.",
+    "Ein beim Start bereits abgelaufener Quellstand ist unabhängig von Verzögerung oder Fehlschlag des Known-Ladens als nicht frisch erkennbar.",
+    "Ein tatsächlich neuer gültiger Quellstand hebt den Hinweis auf; Neu-Fristen bleiben funktionsgleich und es entsteht keine Refresh-Schleife.",
+    "Ein fokussierter lokaler RPC-, Controller-/Cache- und UI-Test deckt offenen Tab und Wiederaufnahme ab. Dazu sind keine Live-Anbieteranfragen erforderlich."
+  ],
+  "KD-REV-E06-002": [
+    "Einen Titel über Alles anlegen, regulär löschen und auf einer fertig geladenen progressiven Seite erneut anzeigen: „Zum Eintrag“ fehlt, „Eintrag erstellen“ ist verfügbar und eine erneute Anlage funktioniert.",
+    "Derselbe Ablauf funktioniert in Neu, sofern der Titel weiter zur Neu-Auswahl gehört.",
+    "Ein als gesehen markierter Titel behält den Gesehen-Status nach der Löschung und bietet „In Mediathek übernehmen“; eine verwaiste ID blockiert die Übernahme nicht.",
+    "Bei einem tatsächlich vorhandenen Mediathek-Eintrag bleiben sichere Navigation und das Verbergen doppelter Erstellung erhalten.",
+    "Keine gültige Verknüpfung wird bei noch nicht geladenem Master, Accountwechsel oder teilweiser Seite voreilig entfernt; die vorhandene Legacy-Bereinigung bleibt wirksam."
+  ],
+  "KD-REV-E06-003": [
+    "Frischer Cache, erfolgreicher Seiten-RPC und Tag-1/Tag-2/Tag-4-Verlauf erhalten im progressiven Pfad den Beginn Tag 1 und den verbrauchten Wiederzugang Tag 4 — ohne Vollkatalog-Fallback.",
+    "Nach einem gültigen Katalogwechsel auf den bloßen Tag-4-Restdiff liefert Tag 16 weder Neu-Karte noch Neu-Zähler (`total/new count=0`); dies bleibt nach Reload/Remount mit Gerätecache erhalten.",
+    "Ein tatsächlicher weiterer Zugang nach Ablauf des ursprünglichen Fensters kann ein neues 14-Tage-Fenster beginnen; wiederholte Seitenabrufe und Cachetreffer verlängern keine Frist.",
+    "Regression deckt Account-/Dienstauswahlbindung und veraltete Seitenantworten ab; fremde oder veraltete Anker werden nicht übernommen.",
+    "Bestehende gültige Anker und MotN-Zugangszeiten bleiben wirksam; ein normal erfolgreicher Seitenbetrieb benötigt weiterhin keinen `streaming_entdecken`-Vollabruf."
+  ],
+  "KD-REV-E07-001": [
+    "Gültige Format-8- und Format-9-Feeds: gleiche numerische TMDB-ID bei Film versus Serie erzeugt in beiden Richtungen kein `seen=true`.",
+    "Unter sonst gleichen Voraussetzungen bleibt die Zielkarte in `popularPool`; bei bestätigter lokaler Verfügbarkeit und Profilgrund bleibt sie auch in `personal`.",
+    "Gleiche Werkart bei bestätigter gleicher Identität wird weiterhin als gesehen ausgeblendet; ein unbewerteter Eintrag ohne anderes Sehmerkmal nicht.",
+    "Widersprechende gemeinsame IDs führen weiterhin zu keinem Gesehen-Treffer; der bestehende typgebundene Titel-/Jahr-Fallback bleibt wirksam.",
+    "Die Regression deckt `master` und als gesehen markierte `catalogCandidates` ab; sie benötigt keinen Liveanbieteraufruf."
+  ],
+  "KD-REV-E07-002": [
+    "Mindestens ein vom realen Produzentenvertrag erzeugter gültiger Feed mit sicher angereichertem ÖFI-Film passiert Server-, Persistenz- und Browservalidierung und erscheint bei passendem aktuellem Programm genau einmal mit `film_at_id`, unverändertem ÖFI-Rang, Besucherzahl, Messdatum und Quellenlink.",
+    "Beide weiterhin unterstützten Liveformate — oder ihre ausdrücklich kompatible Migration — sind abgedeckt; eine nur auf Format 7 beruhende Prüfung genügt nicht.",
+    "Fehlende Identitätsbelege, Remakes, Typkonflikte, mehrdeutige Treffer sowie fehlende oder veraltete Vorstellungen erzeugen weiter keine Chartkarte.",
+    "Lokale Füller ohne ÖFI-Nachweis erhalten keine künstliche Popularität; Streaming-Dienstfilter und 50er-Pool bleiben erhalten."
+  ],
+  "KD-REV-E08-001": [
+    "Ein fokussierter Integrationstest mit echtem Adapter/Receipt, Handler und Browser-Service akzeptiert bei zwei gültigen Kandidaten, einem erfolgreichen und einem fehlschlagenden Mock-Upsert den Teilerfolg: `confirmed`, `writes: 1`, ein gespeicherter Feedfund und `partial`.",
+    "Dieser Fall liefert nicht pauschal `unavailable`; der Browser-Service hält die Speicherwarnung verfügbar und der Controller klassifiziert die initiale Suche nicht insgesamt als nicht verfügbar.",
+    "Vollständiger `structured`-Erfolg und bereits providerseitig `partial` klassifizierte Antworten bleiben akzeptiert. Unzulässige oder manipulierte Moduskombinationen bleiben abgewiesen.",
+    "Der Receipt bleibt unverändert als Nachweis des konsumierten Providerresultats. Kein zusätzlicher Providerrequest und kein automatischer Retry werden eingeführt.",
+    "Der persistierte Geschwisterfund bleibt nach regulärem Feed-Sync sichtbar; Modellkandidaten werden weiterhin nicht direkt als gespeicherte UI-Daten übernommen."
+  ],
+  "KD-REV-E08-002": [
+    "Zwei gültige gleichzeitige Plattformstarts desselben Werks bleiben über Parser → Evaluator → Runner → realen SQL-Upsert → Feed mitsamt beiden Plattformen und zugehörigen Quellen erhalten.",
+    "Umgekehrte Kandidatenreihenfolge führt zum selben fachlichen Endzustand.",
+    "Ein identischer Wiederholungsfund bleibt idempotent (`no_change`, keine unnötige neue Version).",
+    "Bestehende Textfunde erhalten bei einer Identitätsänderung einen definierten kompatiblen Umgang ohne stille Verdoppelung oder Verlust.",
+    "Account-/Abobindung, Pause/Entfernen und die unveränderten strukturierten Pfade bleiben erhalten; es entsteht kein zusätzlicher Providerrequest."
+  ],
+  "KD-REV-E08-003": [
+    "Ein gültiges eigenes aktives Personen-Abo lässt sich trotz leerem `PERSON_RADAR_CATALOG` im echten Verwaltungsdialog entfernen; genau eine passende Account-Outbox-Operation nutzt die bestehende Personen-Subscription-Route.",
+    "Nach bestätigtem Feed-Sync ist das Abo ausgeblendet und bleibt auch nach Neuladen entfernt.",
+    "Dasselbe funktioniert für ein eigenes pausiertes Personen-Abo, sofern die Radarverwaltung erreichbar ist.",
+    "Unbekannte, fremde oder nicht bestätigte Identitäten dürfen keine Mutation auslösen; Accountwechsel und Kontextguards bleiben wirksam.",
+    "Ablehnung oder Speicher-/Syncfehler erzeugen eine sichtbare Erklärung, keine vorgetäuschte erfolgreiche Entfernung."
+  ],
+  "KD-REV-E08-004": [
+    "`IMDb:tt0068646` und weitere bislang gesperrte Präfixe sind als Textabos über Queue → SQL-Setter → SQL-Feed → Pilotservice nach frischem Cache lesbar.",
+    "Ein solches Abo blockiert weder weitere eigene Abos/Funde noch deren Reconciliation.",
+    "Pausieren und Entfernen funktionieren über den regulären Service ohne direkte Datenbankreparatur.",
+    "Leertext, Nichtstrings und überschrittene Freitextlänge bleiben ungültig; technische ID-Präfixe bleiben für Nicht-Text-Werktitel ungültig.",
+    "Normale Texte, Feedvarianten und Kontotrennung behalten ihr bisheriges Verhalten."
+  ],
+  "KD-REV-E08-005": [
+    "Readback akzeptiert genau einen Providerrequest und `searchRequests` 1, 2, 3 oder 4.",
+    "0, 5, negative, gebrochene, nichtnumerische oder fehlende Zähler sowie `providerRequests` ungleich 1 bleiben abgewiesen.",
+    "`phaseCode`, Präsentation, Receipt-Provenienz sowie Feed- und Ergebnisprüfungen bleiben wirksam.",
+    "Ein fokussierter Mocktest führt mindestens eine Drei-Suchen-Antwort durch echten Adapter/Runner und Readback; der Smoke-Meldungstext beschreibt den Textvertrag korrekt."
+  ],
+  "KD-REV-E09-001": [
+    "Profil mit A, weitere Angaben nur B, Bestätigung, Speichern und erneutes Laden ergeben A und B — oder ein separat getesteter, explizit sichtbarer Ersatz.",
+    "Keine neue Filmauswahl und Abbruch bewahren bestätigte Filme.",
+    "Die erneute Auswahl desselben Films erzeugt keine Dublette und verliert keinen anderen Film; eine geänderte Richtung wird eindeutig sichtbar behandelt.",
+    "Ein vorhandener Film außerhalb des aktuellen Angebots bleibt bei einer Ergänzung erhalten.",
+    "Ein gemockter KI-Verfeinerungsfall mit Teil-Filmliste folgt derselben Bestandserhaltungsregel; nur bestätigte Vorschläge dürfen ergänzt werden.",
+    "Einwilligung, Vorschau-Gate, Rahmenvalidierung und der Versionsschritt pro bestätigtem Durchlauf bleiben wirksam."
+  ],
+  "KD-REV-E09-002": [
+    "Bei eingefrorenem 6. September schließen „heute im Kino“ 16.9. und 26.9. aus — auch im film.at-Fallback und nach Cache-Re-Normalisierung.",
+    "„Morgen im Kino“ behält 7.9., schließt 17.9. und 27.9. aus.",
+    "Gleichdatierte Termine bleiben erhalten; ausgegebene `zeitenAlle` enthalten nur passende Tage, soweit kein dokumentierter direkter Titel-Bypass greift.",
+    "Vorhandene Verträge für direkte Titel, Zeit ohne Kinoquelle und die Vier-Tage-Normalisierung bleiben durch gezielte Kontrollfälle erhalten."
+  ],
+  "KD-REV-E09-003": [
+    "Ein normalisiertes Programm mit Restfilmen nur heute, morgen und übermorgen liefert für „heute im Kino“ nur heute und für „morgen im Kino“ nur morgen.",
+    "Antwortfunktion, gerenderter Finder und kompakte globale Liste zeigen keinen Restfilm außerhalb des angefragten Tages.",
+    "Ein Restfilm mit mehreren Terminen bleibt bei mindestens einem passenden Termin enthalten.",
+    "Die Kontrollanfrage „im Kino“ ohne Tag zeigt alle sonst passenden Restfilme; Genre-/Jahresfilter und Titelverträge bleiben erhalten.",
+    "Ein isolierter Regressionstest deckt beide Tage und einen gemischten Bestand aus zugeordneten Masterfilmen und Restfilmen ab, ohne Netz oder Provider."
+  ],
+  "KD-REV-E09-004": [
+    "Der normale Einzeldateilauf betritt alle vier Testkörper.",
+    "Die vier ursprünglichen Assertions bestehen gegen unveränderte Produktmodule.",
+    "Je eine gezielte lokale Sentinel-Mutation in jedem der vier Körper wird als Fehler gezählt und ergibt einen von null verschiedenen Prozess-Exit.",
+    "Falls der Helfer abgesichert wird, darf er ein unaufgerufenes Funktionsobjekt nicht als erfolgreiche Assertion verbuchen."
+  ],
+  "KD-REV-E10-001": [
+    "`null` und Whitespace-`null` liefern mit aktivem wie deaktiviertem KI-Schalter kontrolliert 400/`invalid-response`; das Promise wird nicht verworfen.",
+    "Die Ablehnung geschieht vor `createClient`, Auth, DB und Provider und benötigt keinen Netzwerkaufruf.",
+    "Malformed JSON, `OPTIONS`, Nicht-POST und normale Objektrequests behalten ihr bisheriges Verhalten.",
+    "Arrays und primitive JSON-Wurzeln werden bewusst in den Formvertrag aufgenommen und getestet; zulässige `null`-Felder innerhalb eines gültigen Requestobjekts werden nicht pauschal abgelehnt."
+  ],
+  "KD-REV-E10-002": [
+    "HTTP 200 mit Bodyabort nach Headern liefert `ok:false`, Fehlerstatus, Grund `anbieter-zeitgrenze` und genau einen Fehlerabschluss mit Kosten 0.",
+    "HTTP 200 mit ungültigem JSON oder fehlender gültiger Katalogstruktur liefert einen definierten Antwortfehler statt 200/`[]`.",
+    "Eine gültige Modellliste bleibt HTTP 200/`ok:true` und wird genau einmal fertig abgeschlossen.",
+    "Netzfehler vor Headern, HTTP-Fehler und abgelehnte Start-RPCs behalten ihre Fehler- bzw. Sperrwirkung; bei Startablehnung erfolgt kein Anbieteraufruf.",
+    "P8 bleibt ohne Modell-ID gesperrt; die bestehenden Sicherheitsgrenzen regressieren nicht."
+  ],
+  "KD-REV-E10-003": [
+    "Ein sofortiger HTTP-200-Header mit offenem Body endet innerhalb Frist plus kleiner Laufzeittoleranz mit `adapter-timeout`; dies ist für beide öffentlichen Adapter mit abbrechbaren Mock-Streams belegt.",
+    "Dasselbe gilt für einen Body, der nach einem kleinen ersten Chunk stockt.",
+    "Header-Stall bleibt `adapter-timeout`; ein vollständig rechtzeitig gelieferter gültiger Body wird normal verarbeitet.",
+    "Nach Abbruch erfolgt keine weitere erfolgreiche Bodyverarbeitung/Auflösung; Timer und Streamressourcen werden freigegeben.",
+    "HTTP-, Rate-Limit-, Content-Type-, Größen-, UTF-8- und JSON-Fehler bleiben sinnvoll klassifiziert."
+  ],
+  "KD-REV-E10-004": [
+    "Film und Serie mit gleicher TMDB-Nummer teilen weder Filmwissen-Identität noch In-flight-Deduplizierung.",
+    "Serien-Read und -Recherche akzeptieren keinen Filmbericht als belegt, auch nicht nach IMDb-`cache_miss`.",
+    "Der Film-only-Adapter weist eine Serien-TMDB-Anfrage vor Quellenzugriff ab, oder ein expliziter Serienadapter verwendet einen korrekten typisierten Vertrag.",
+    "Der Forecast prüft die Cache-Werkidentität; ein Filmbericht erzeugt für eine Serie keine Filmwissen-Provenienz.",
+    "Gültige IMDb-Treffer und reguläre Film-TMDB-Treffer bleiben funktionsfähig.",
+    "Migration und Read-RPC unterscheiden Film und Serie mit gleicher numerischer TMDB-ID sicher; Altkennungen sind eindeutig behandelt."
+  ],
+  "KD-REV-E11-001": [
+    "Ein neuer gültiger Reminder mit „nach Terminen“ und unverändert sichtbarer 12 speichert ende={typ:anzahl, anzahl:12}.",
+    "Der 12. passende Termin ist fällig, der 13. nicht; der Serien-ICS enthält COUNT=12.",
+    "Explizit eingegebene Zahlen und bestehende begrenzte Reminder bleiben korrekt.",
+    "Beim Wechsel von nie oder datum nach anzahl stimmen sichtbarer und gespeicherter Wert auch im Bearbeitungsmodus überein.",
+    "Nach erfolgreichem Speichern und JSON-Readback bleibt die Anzahl erhalten; bewusstes nie und ein Enddatum behalten ihre bisherige Bedeutung."
+  ],
+  "KD-REV-E11-002": [
+    "Derselbe gültige Programmeintrag wird mit und ohne passendes Profil nach art:programm-Fokusauftrag fokussiert, mit scrollIntoView adressiert und geöffnet.",
+    "Das gilt sowohl bei Fokus bereits beim Mount (Tabwechsel) als auch bei einem neuen Auftrag im geöffneten KinoTab.",
+    "App darf den erfolgreich zugestellten Fokusauftrag löschen, ohne die geöffneten Details wieder zu schließen.",
+    "Globale Suche und auflösbarer Kino-Pin verwenden dieselbe stabile Programmidentität; der Film erscheint weiter genau einmal.",
+    "Neutrale Restkarten und gematchte Mediathek-Karten behalten ihr bisheriges Fokusverhalten."
+  ],
+  "KD-REV-E11-003": [
+    "Gleiche TMDb-ID bei widersprüchlicher Werkart oder Bezugsjahr führt nach baueStreamingAnsichten zu keinem Mediathekstatus und keinem Navigationsziel.",
+    "Gemeinsame ID mit widersprechender weiterer starker ID sowie mehrere widersprüchliche Kandidaten erzeugen unabhängig von Masterreihenfolge keine automatische Verknüpfung.",
+    "Eine bereits falsch gespeicherte, noch existente mediathek_id bleibt bei erneut bestätigtem Konflikt weder gültige Zuordnung noch Link; gesehen und unabhängige historische Felder bleiben erhalten.",
+    "Der gerenderte Legacy-Alles-Pfad zeigt keinen falschen „Zum Eintrag“-Link und ermöglicht für den Konflikttitel eine eigene Erstellung.",
+    "Gültige eindeutige Identitäten und bestehende strenge Known-/progressive Zuordnungen funktionieren weiter; der Missing-RPC-Fallback bleibt mit Mocks testbar."
+  ],
+  "KD-REV-E11-004": [
+    "Ein automatisch verknüpfter persönlicher Kinoreminder zu einem Mediathekmatch öffnet, fokussiert und scrollt zu film:<Master-ID>.",
+    "Das gilt für manuelle Verknüpfung und für einen zuvor ungematchten, inzwischen zur Mediathek hinzugefügten Film anhand der aktuell aufgelösten Filmreferenz.",
+    "Ein neutraler Programmeintrag ohne Mediathekmatch behält programm:<Programm-ID>; Pins und Vorschläge bleiben funktionsfähig.",
+    "Fehlende oder explizit gelöste Ziele zeigen keinen irreführenden Öffnungsbutton.",
+    "Ein Regressionstest durchläuft Reminderprojektion, Klicktransport und tatsächliche Zielkarte; das Prüfen von quelle oder ziel allein genügt nicht."
+  ],
+  "KD-REV-E11-005": [
+    "Leerstring und reine Leerzeichen werden beim Anlegen sowie beim Bearbeiten verständlich zurückgewiesen, bei leerem und nichtleerem Plan.",
+    "Bei ungültigem Titel gibt es keinen unhandledRejection, keinen Aufruf von onPlanAendern und keine Planänderung.",
+    "Das Formular bleibt korrigierbar; ein anschließend gültiger Titel wird genau einmal gespeichert.",
+    "Gültige neue und bearbeitete Reminder behalten ihr Verhalten; nullable Konstruktorergebnisse werden vor Objektzugriff abgefangen."
+  ],
+  "KD-REV-E12-001": [
+    "Mit der originalen Radar-Vorschau und finaler CSS-Importreihenfolge liegen bei `521x800`, `600x800`, `667x375` und `760x800` Dialog, Vorschauhinweis, Dialogkopf und die gesamte 44-Pixel-Schließen-Fläche innerhalb des Viewports.",
+    "Nach dem originalen Autofokus und bei `scrollTop=0` sind die Elemente unmittelbar sichtbar; kein Fokus- oder Scroll-Trick ist nötig.",
+    "`393x852` und `520x800` behalten die funktionierende mobile Darstellung; `761x800` und `1280x900` behalten den zentrierten Desktopdialog.",
+    "Touch-Schließen, Abbrechen und Keyboard-Escape funktionieren weiterhin. Die Manager-Safe-Area-Ausnahme bleibt unverändert wirksam.",
+    "Mindestens Chromium und WebKit decken die Grenzbreiten ab. Eine physische iPhone-/PWA-Safe-Area-Prüfung ist zusätzlich erforderlich, falls eine entsprechende Geräteabnahme behauptet werden soll."
+  ],
+  "KD-REV-E12-002": [
+    "In Kino/„Läuft auch“ und bei Kino-Profil-Empfehlungen außerhalb der Mediathek erreicht Tab einen benannten Detailtrigger; Enter und Leertaste öffnen und schließen. Anschließend sind vorhandene Terminpins und „Eintrag erstellen“ erreichbar.",
+    "In Streaming/„Alles“ und „Neu“ funktioniert derselbe direkte Weg für ungesehene, gesehene und bereits zugeordnete Titel — ohne Statusänderung, zusätzliche Suche oder Mausklick.",
+    "Das Aktivieren innerer Links, Pin-, Merk-, Gesehen-, Formular- oder Terminaktionen löst nicht zusätzlich das Disclosure aus. Bestehender Suchfokus darf weiter gezielt öffnen.",
+    "Fokussierte lokale Browsertests verwenden native Tab-, Enter- und Leertasten-Eingaben, prüfen `aria-expanded` sowie den sichtbaren Zustand und bewahren die bestehenden Gesehen-/Zuordnungsbedingungen."
+  ],
+  "KD-REV-E12-003": [
+    "Bei 320, 375, 393 und 430 CSS-Pixeln liegen die Tageslabels in Chromium und WebKit, jeweils in allen vier Themes, vollständig im Fieldset und überlappen paarweise nicht.",
+    "Jedes Label besitzt mindestens eine echte 44×44-CSS-Pixel-Touchfläche; Zwischenräume gehören nicht zum Nachbarlabel.",
+    "Native Klicks/Taps in Zentren und nahe den Rändern aller sieben Tagesflächen toggeln ausschließlich den zugehörigen Tag. Die übrigen Checkboxzustände bleiben unverändert; der bestehende Guard für mindestens einen ausgewählten Tag bleibt erhalten.",
+    "Eine gezielte Regression misst Label-Rechtecke und tatsächliche Trefferzuordnung. Ein alleiniger `scrollWidth/clientWidth`-Vergleich genügt nicht.",
+    "Neueintrag und Bearbeiten verwenden weiterhin denselben funktionierenden Editor. Live-Anbieter- oder Remote-Schreibtests sind nicht erforderlich."
+  ],
+  "KD-REV-E13-001": [
+    "Ein unveränderter Core-Lauf mit `idle`-Claim und danach positivem, gültigem Backlog wird akzeptiert, auch mit `processedJobs: 0` und Lag `0`.",
+    "Diese Antwort erreicht die Rückstandswarnung, nicht „ungültiger Antwortvertrag“.",
+    "`idle` mit `0/0`, `drained` mit `>0/0` und `backlog` mit `>0/>0` bleiben gültig.",
+    "Inkonsistente Code-/Backlogzustände, ungültiger Lag, falsche Zählersummen, Zusatzfelder und überschrittene Limits bleiben fail-closed abgewiesen.",
+    "Die fokussierte Mock-Regression belegt, dass der Zeitgrenzenfall keine zusätzlichen Claims, Providerrequests oder Mails auslöst."
+  ],
+  "KD-REV-E13-002": [
+    "Dryrun meldet abgelaufene Mail-Ratenbuckets getrennt und ohne Mutation; der Monitor erkennt daraus fällige Mailbereinigung.",
+    "Bei aktiviertem Purge werden höchstens die pro Lauf erlaubten abgelaufenen Buckets entfernt; bei deaktiviertem Purge keine.",
+    "Aktive Fenster und ihre Zähler bleiben unverändert; konkurrierende Begin-Aufrufe behalten die Rate-Grenzen.",
+    "Wiederholte Nutzung nach Ablauf lässt alte Bucketfenster begrenzt verschwinden statt sie zeitlich unbeschränkt anzusammeln.",
+    "Alte `accepted`-, `rejected`-, `unknown`- und abgelaufene `claimed`-Operationen bleiben gegen erneuten Versand derselben `operation_id` geschützt."
+  ],
+  "KD-REV-E13-003": [
+    "Die aktuelle Closure umfasst alle elf lokalen Dateien, einschließlich der drei ausgelassenen Module.",
+    "Nicht committete Änderungen an jeder direkt oder transitiv eingebundenen Datei werden vom CLI abgewiesen; eine weitere lokale Abhängigkeit kann nicht still fehlen.",
+    "Eine ausschließlich committete Byte- oder Verhaltensänderung jeder Closure-Datei ändert `sourceSha256` und `deployContractSha256`; gleiche Inputs bleiben deterministisch.",
+    "Regressionstests bestimmen oder prüfen die Importabdeckung unabhängig von einer duplizierten festen Erwartungsliste.",
+    "Config-/JWT-Prüfung, rohe Git-Blob-Hashbildung, der vollständige Runbook-Dirty-Check und die separaten Readback-Schutzschritte bleiben wirksam."
+  ],
+  "KD-REV-E13-004": [
+    "Der ausgewählte Originaltest mit dem korrigierten Erwartungstext besteht gegen unveränderten Produktcode in Chromium und WebKit.",
+    "Hilfe bleibt über Settings erreichbar und zeigt den persönlichen Plattform-Hero.",
+    "Menü-, Audit- und Touch-Assertions nach dem Hero laufen vollständig; Netzzaun und `retries: 0` bleiben erhalten.",
+    "Der Production-Copy-Vertrag „neuer Text vorhanden, alter Text nicht vorhanden“ bleibt gewahrt."
+  ],
+  "KD-REV-E14-001": [
+    "Ein regulär über Produkt-RPCs angelegtes und separat abonniertes Filmwerk gibt sein gespeichertes, valides Jahr im effektiven `kd_radar_websearch_context` aus.",
+    "Bei gleicher starker ID, Werkart und Jahr enthält der Request an einen Mock-Suchadapter `flixpatrolFakten`; der Test nutzt den effektiv aus SQL gelesenen Kontext statt eines handgebauten Jahresrequests.",
+    "Fehlendes, ungültiges oder widersprüchliches Jahr liefert weiterhin keinen Fakt, während die normale Suche benutzbar bleibt.",
+    "Es entstehen weder zusätzliche Provideranfragen noch Cache-Schreibungen; Berechtigungs-, Personen-, Titelgruppen- und Freitextverträge bleiben unverändert.",
+    "Nach dem separaten Serien-Mappingfix E05-F002 wird ein Serienfall an derselben SQL-Kontext/Reader-Grenze geprüft."
+  ],
+  "KD-REV-E14-002": [
+    "Ein vollständiger Seitenrecord unter fünf Minuten wird nach „Katalog neu laden“ und Rückkehr zur gleichen Ansicht erneut angefordert, auch wenn `newEntries`, `legacyNew`, Dienste und Mediathek wertgleich bleiben.",
+    "Eine reine Titel-/Metadatenkorrektur des neuen Katalogstands ist nach erfolgreicher Seitenantwort sichtbar; erfolgreiche Legacy-Reads genügen nicht als Abnahmebeleg.",
+    "Die Invalidierung funktioniert bei inaktivem Streamingtab und mehrfachen Rendern, ohne denselben manuellen Refresh unnötig mehrfach anzufordern.",
+    "Eine späte Antwort eines vor dem Refresh gestarteten Seitenlaufs kann den neuen Stand nicht überschreiben; Accountwechsel und bestehende Abbruchgrenzen bleiben wirksam.",
+    "Ohne manuellen Refresh wird der frische Record weiterhin wiederverwendet; Fristenbuchwerte und 14-Tage-Fenster werden nicht künstlich geändert."
+  ]
+}

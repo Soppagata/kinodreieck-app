@@ -1,0 +1,26 @@
+✓ Actual committed ai-task graph contains eleven local sources including the three omissions
+✓ CLI blocks dirty source supabase/functions/_shared/externalTitleIdentity.js
+✓ Committed bytes alter source and deploy hashes supabase/functions/_shared/externalTitleIdentity.js
+✓ CLI blocks dirty source supabase/functions/_shared/flixpatrolFacts.js
+✓ Committed bytes alter source and deploy hashes supabase/functions/_shared/flixpatrolFacts.js
+✓ CLI blocks dirty source supabase/functions/_shared/flixpatrolFactsContext.js
+✓ Committed bytes alter source and deploy hashes supabase/functions/_shared/flixpatrolFactsContext.js
+✓ CLI blocks dirty source supabase/functions/_shared/providerDiagnostic.js
+✓ Committed bytes alter source and deploy hashes supabase/functions/_shared/providerDiagnostic.js
+✓ CLI blocks dirty source supabase/functions/_shared/providerReceipt.js
+✓ Committed bytes alter source and deploy hashes supabase/functions/_shared/providerReceipt.js
+✓ CLI blocks dirty source supabase/functions/_shared/providerText.js
+✓ Committed bytes alter source and deploy hashes supabase/functions/_shared/providerText.js
+✓ CLI blocks dirty source supabase/functions/ai-task/index.ts
+✓ Committed bytes alter source and deploy hashes supabase/functions/ai-task/index.ts
+✓ CLI blocks dirty source supabase/functions/ai-task/providerContract.ts
+✓ Committed bytes alter source and deploy hashes supabase/functions/ai-task/providerContract.ts
+✓ CLI blocks dirty source supabase/functions/ai-task/requestContract.ts
+✓ Committed bytes alter source and deploy hashes supabase/functions/ai-task/requestContract.ts
+✓ CLI blocks dirty source supabase/functions/filmwissen-task/quellen.ts
+✓ Committed bytes alter source and deploy hashes supabase/functions/filmwissen-task/quellen.ts
+✓ CLI blocks dirty source supabase/functions/filmwissen-task/vertrag.ts
+✓ Committed bytes alter source and deploy hashes supabase/functions/filmwissen-task/vertrag.ts
+✓ A newly committed transitive dependency joins the graph without a list edit
+✓ Parser follows reexports, type imports, literal dynamic imports and cycles, ignores comment/string decoys
+review49_p03_release_test: 25 Checks bestanden.

@@ -1,0 +1,35 @@
+✓ F8: echter Adapter/Runner + Resolver validieren nachvollziehbare OEFI-Annotation
+✓ F8: positiver und negativer Resolvercache verhindern neue Requests
+✓ F8: Browserdienst und beide Kartenwege behalten OEFI-Beleg genau einmal
+✓ F8: Remake, mehrdeutige Werke, fehlende/alte Termine und archivierte Programme blockieren
+✓ F8: strenger Annotationsvertrag auf beiden Grenzen
+✓ F8: alte Feeds, ehrliche Fueller, Dienstwahl und 50er-Pool bleiben erhalten
+✓ F8: Resolver missing erzeugt keine Chartidentitaet
+✓ F8: Resolver ambiguous erzeugt keine Chartidentitaet
+✓ F8: Resolver type-conflict erzeugt keine Chartidentitaet
+✓ F8: Resolver missing-year erzeugt keine Chartidentitaet
+✓ F8: Resolver unavailable erzeugt keine Chartidentitaet
+✓ F8: master, film gegen TV_SERIES kollidiert nicht
+✓ F8: catalogCandidates, film gegen TV_SERIES kollidiert nicht
+✓ F8: film gleiche Identitaet/Sehkriterien/ID-Konflikt/Titel-Jahr-Typ bleiben erhalten
+✓ F8: master, series gegen Movie kollidiert nicht
+✓ F8: catalogCandidates, series gegen Movie kollidiert nicht
+✓ F8: series gleiche Identitaet/Sehkriterien/ID-Konflikt/Titel-Jahr-Typ bleiben erhalten
+✓ F9: echter Adapter/Runner + Resolver validieren nachvollziehbare OEFI-Annotation
+✓ F9: positiver und negativer Resolvercache verhindern neue Requests
+✓ F9: Browserdienst und beide Kartenwege behalten OEFI-Beleg genau einmal
+✓ F9: Remake, mehrdeutige Werke, fehlende/alte Termine und archivierte Programme blockieren
+✓ F9: strenger Annotationsvertrag auf beiden Grenzen
+✓ F9: alte Feeds, ehrliche Fueller, Dienstwahl und 50er-Pool bleiben erhalten
+✓ F9: Resolver missing erzeugt keine Chartidentitaet
+✓ F9: Resolver ambiguous erzeugt keine Chartidentitaet
+✓ F9: Resolver type-conflict erzeugt keine Chartidentitaet
+✓ F9: Resolver missing-year erzeugt keine Chartidentitaet
+✓ F9: Resolver unavailable erzeugt keine Chartidentitaet
+✓ F9: master, film gegen TV_SERIES kollidiert nicht
+✓ F9: catalogCandidates, film gegen TV_SERIES kollidiert nicht
+✓ F9: film gleiche Identitaet/Sehkriterien/ID-Konflikt/Titel-Jahr-Typ bleiben erhalten
+✓ F9: master, series gegen Movie kollidiert nicht
+✓ F9: catalogCandidates, series gegen Movie kollidiert nicht
+✓ F9: series gleiche Identitaet/Sehkriterien/ID-Konflikt/Titel-Jahr-Typ bleiben erhalten
+P08 Entdecken: 34 checks passed

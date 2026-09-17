@@ -1,0 +1,5 @@
+PostgreSQL 17.10: /Applications/Postgres.app/Contents/Versions/17/bin
+PASS E08-002: both platforms and sources, reversed order, replay, legacy UUID/version preservation, account and pause guards
+PASS E08-004: seven prefixes, fresh reconciliation with sibling findings, real pause/remove, invalid input and nontext guards
+PASS E05-002: real strict SQL, IMDb/TMDb x serie/series, film/direct/chart, missing/conflicting year and conflicting/ambiguous IDs
+PASS E14-001: product RPC -> effective SQL year -> production facts method -> mock adapter; film+series, six year variants each, no extra searches/writes

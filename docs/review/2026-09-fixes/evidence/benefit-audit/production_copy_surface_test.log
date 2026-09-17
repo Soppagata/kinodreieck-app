@@ -1,0 +1,18 @@
+✓ Veraltete Settings-Pfade sind aus allen sichtbaren Anleitungen entfernt
+✓ Production zeigt kurze, nutzbare Rechts- und Kontaktinformationen
+✓ Production zeigt keine Staging-Analyse oder detaillierte Betriebsdiagnose
+✓ Staging behält die ausführliche Analysefassung
+✓ Production-Datenschutz behält Datenwege und Rechte ohne Registerzähler
+✓ Staging-Datenschutz behält Register und Quellenanalyse
+✓ Production blendet Supportdiagnose auch für bestätigte Owner aus
+✓ Feedback behält die zentrale Resend-Information ohne doppelten Versandhinweis
+✓ Production-Radar behält Kapazität und Privatsphäre, aber keine Providerdiagnose
+✓ Staging-Radar behält den Provider-/Kostenhinweis
+✓ Hero beschreibt die konto- und onlinefähige persönliche Plattform
+✓ Production-Prognose zeigt keine Profil- oder Modellversion
+✓ Staging-Prognose behält Profil- und Modellversion
+✓ Production-Stapelimport zeigt keine Kontingent-, Kosten- oder externe Workflowdiagnose
+✓ Production-Stapelimport verschweigt exakte Kosten auch nach einem KI-Lauf
+✓ Staging-Stapelimport behält Kontingent- und externe Workflowdiagnose
+
+16/16 Production-Copy-Checks bestanden.

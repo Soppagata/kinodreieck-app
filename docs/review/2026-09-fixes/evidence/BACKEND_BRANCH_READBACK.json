@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-09-17T17:55:23.531835+00:00",
+  "query": "supabase branches list --project-ref bscjgwcntapobyxsiyce --output json",
+  "exitCode": 0,
+  "rawJsonType": "array",
+  "count": 0,
+  "branches": [],
+  "remoteMutation": false
+}

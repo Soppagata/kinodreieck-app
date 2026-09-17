@@ -1,0 +1,21 @@
+PostgreSQL binaries: /Applications/Postgres.app/Contents/Versions/17/bin
+PASS legacy movie migrated without losing verification
+PASS legacy series quarantined until explicit typed verification
+PASS untyped input never normalizes
+PASS movie:348 selects its own cache work
+PASS movie:348 service synthesis resolves same typed identity
+PASS tv:348 selects its own cache work
+PASS tv:348 service synthesis resolves same typed identity
+PASS IMDb cache unaffected
+PASS legacy series remains cache miss
+PASS unknown television key never reads movie
+PASS RPC and table ACLs retained
+PASS untyped read
+PASS untyped synthesis
+PASS wrong typed key for movie
+PASS direct mismatched key write
+PASS direct work type change
+PASS inactive account
+PASS no auth UID
+PASS anon cannot read
+19/19 real PostgreSQL identity checks passed

@@ -1,0 +1,67 @@
+# KD-REV-E09-003 · Unbewertete Kino-Funde ignorieren den ausdrücklichen Heute-/Morgenfilter
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — der Finder und die kompakte globale Suche können bei einem als hart angezeigten Kino-Tagesfilter unbewertete Kinofilme anderer Tage ausgeben. Kein Datenverlust und kein Remote-Effekt belegt.
+- Finding: E09-F003
+- Prüfstand: `BASE`
+- Zuständige Etappe: E09
+
+## Fehler und Auswirkung
+
+Bei „heute im Kino“ oder „morgen im Kino“ werden zugeordnete Masterfilme zeitlich gefiltert, die nicht zur Masterliste gehörenden Kino-Restfunde aber nicht. Die Oberfläche markiert `zeit` als harten Filter und rendert die unpassenden Restfunde trotzdem im Finder; die kompakte globale Ergebnisprojektion übernimmt sie ebenfalls.
+
+Betroffen ist der deterministische Finder-/globale-Suche-Zweig für regulär normalisierte Mehrtagesprogramme und nicht bewertete Kinofilme. Eine Anfrage ohne Tagesfilter zeigt das volle Restprogramm weiterhin korrekt; direkte Titel-Ausnahmen sind nicht Gegenstand des Befunds.
+
+## Auslöser, Soll und Ist
+
+Ein normalisiertes Programm enthält nicht zugeordnete Restfilme ausschließlich für heute, morgen und übermorgen. Die Anfrage enthält die explizite Kombination Quelle `kino` und Zeit `heute` bzw. `morgen`, aber keinen direkten Titel.
+
+Soll: Auch im Kino-Restbestand erscheinen nur Filme mit mindestens einem Termin am angefragten Tag. Ohne Tagesfilter bleibt das übrige passende Programm sichtbar.
+
+Ist: `sucheKino` liefert bei beiden Tagesanfragen alle drei synthetischen Restfilme; `erstelleFinderAntwort` reicht sie unverändert weiter. Die zwei zugeordneten Masterfilme werden im selben Lauf korrekt auf ihren jeweiligen Tag beschränkt. Die unpassenden Restfunde sind im Finder-SSR und in der kompakten Ergebnisprojektion nachgewiesen.
+
+## Ursache und Fundstellen
+
+- `src/lib/finder.js:491-555` öffnet in `sucheKino` das Gate bei `quellen.includes("kino")`, prüft in der Schleife Genre/Jahr/Ausschlüsse, aber weder `sig.zeit` noch `pf.z`. Folglich gelangen alle passenden Restfilme in `treffer`.
+- `src/tabs/FinderTab.jsx:152-184` übergibt `kinoMatches.rest` direkt an `sucheKino`. `…:315-357` zeigt `zeit` als **harten** Filter. `…:902-916` rendert die gelieferten Restfunde ohne nachgelagerte Tagesprüfung.
+- `src/App.jsx:1314-1328` erzeugt `kinoMatches`; `restSichtbar` ist eine getrennte Kino-Tab-Projektion und nicht der Finder-Eingang. Die globale Suche erzeugt dieselbe Antwort und verdichtet sie anschließend (`src/App.jsx:1371-1380`). Die Verdichtung selbst filtert nicht nach Datum (`src/lib/globalSearchProjection.js:37-66`).
+- Die Normalisierung liefert regulär mehrere Anzeigetage (`src/lib/programm.js:120-176`); dadurch ist ein zukünftiger Resttermin ein normaler Finder-Eingang und kein Sonderzustand.
+
+Die Vollpfadlinks verweisen auf ``, die `src/...`-Pfade sind repository-relativ; alle Fundstellen gelten für Commit `BASE`.
+
+## Belege und Gegenproben
+
+**Ausgeführte Reproduktion:**
+
+`TZ=Europe/Vienna node /private/tmp/kd-vollreview-20260916/tests/E09-F003/validator/repro.mjs`
+
+Der Validator verwendete die unveränderte eingefrorene Quelle, sperrte `fetch`, ersetzte den KI-Service durch einen werfenden Stub und fror die Zeit auf 16.09.2026 mittags in Europe/Vienna ein. Ein synthetisches film.at-Programm durchlief tatsächliche Normalisierung, Zuordnung und Antwortfunktion; der Finder wurde mit der echten Komponente per React-SSR gerendert. Exit 0 bestätigt den Fehlerfingerprint, nicht eine korrekte Tagesfilterung: heute Rest 3 statt 1, morgen Rest 3 statt 1, ohne Tag korrekt 3. Die Master-Tagesfilterung war jeweils korrekt.
+
+Soll-/Ist-Listen und HTML-Belege liegen unter `/private/tmp/kd-vollreview-20260916/tests/E09-F003/validator/`, insbesondere `result.json`, `heute.html`, `morgen.html` und `no-day.html`.
+
+**Gegenproben und Grenzen:** Zeit ohne Kinoquelle ist nach bestehendem Vertrag nicht hart und ist ausgeschlossen. Direkte Titelsuche darf Filter überstimmen; `sig.titel=[]` im Lauf. Die Normalisierung führt regulär mehrere Tage; eine Anfrage „im Kino“ ohne Tag bleibt mit allen drei Restfilmen korrekt. Es wurde kein Gegenvertrag gefunden, der den ausdrücklichen Tagesfilter auf Masterfilme begrenzt. Der Browser-/Gerätelauf und Live-Katalogdaten wurden nicht geprüft.
+
+**Einordnung:** Produktfehler ist die fehlende Tagesprüfung im Restkino-Zweig. Kein Testwerkzeugfehler: Esbuild bündelte nur den Testimport, bestehende Abhängigkeiten wurden gelesen, Produktmodule blieben unverändert; KI und Netz waren bewusst blockiert. Betriebsbeleglücke: keine Produktionsdaten, Browserinteraktion, Screenshot- oder physische Abnahme und keine Aussage zu Häufigkeit oder Deutungswegen außerhalb des statisch verfolgten Pfads.
+
+## Korrekturziel und Abnahme
+
+Für den Restkino-Zweig eine gemeinsame lokale Tagesprüfung mit dem Masterzweig einsetzen oder einen gleichwertigen vollständigen Terminparser verwenden. Bei Quelle Kino + heute/morgen müssen unpassende Restfilme vor Ranking und Limit herausfallen; ein Film mit mindestens einem passenden Termin bleibt enthalten. Zeit ohne Kino, Anfragen ohne Zeit, Genre-/Jahresfilter und dokumentierte direkte Titelverträge bleiben gezielt erhalten. Kein Provider-, Datenbank- oder Programmladerumbau gehört in die Korrektur.
+
+Abnahme:
+
+- Ein normalisiertes Programm mit Restfilmen nur heute, morgen und übermorgen liefert für „heute im Kino“ nur heute und für „morgen im Kino“ nur morgen.
+- Antwortfunktion, gerenderter Finder und kompakte globale Liste zeigen keinen Restfilm außerhalb des angefragten Tages.
+- Ein Restfilm mit mehreren Terminen bleibt bei mindestens einem passenden Termin enthalten.
+- Die Kontrollanfrage „im Kino“ ohne Tag zeigt alle sonst passenden Restfilme; Genre-/Jahresfilter und Titelverträge bleiben erhalten.
+- Ein isolierter Regressionstest deckt beide Tage und einen gemischten Bestand aus zugeordneten Masterfilmen und Restfilmen ab, ohne Netz oder Provider.
+
+## Abhängigkeiten und offene Punkte
+
+Keine bekannte Duplikatbeziehung. E09-F002 ist benachbart, aber getrennt: dort filtert der Masterzweig zwar, verwendet jedoch einen fehlerhaften Datumssubstring; hier fehlt im Restzweig jede Tagesprüfung. Mit einer gemeinsamen Prüfung können beide Tickets technisch an derselben klar abgegrenzten Termin-Utility zusammentreffen, die Abnahmekriterien bleiben getrennt. Mitternacht-/Sommerzeitgrenzen und reine Zeitangaben ohne Kino sind nicht untersucht.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: `/private/tmp/kd-vollreview-20260916/validations/E09-F003.json`. Ursprünglicher Vorschlag: `/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E09-F003.json`. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E09/KD-REV-E09-003.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

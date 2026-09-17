@@ -1,0 +1,11 @@
+Check ai_task_test.ts
+running 6 tests from ./ai_task_test.ts
+P06 non-object JSON roots fail before Auth/DB/provider in either activation mode ... ok (10ms)
+P06 model diagnostic rejects post-header errors and closes exactly once at zero cost ... ok (35ms)
+P06 valid empty diagnostic catalog remains valid; P8 still requires a model ID ... ok (1ms)
+P06 typed TMDB series synthesis stops before preparation, sources and costs ... ok (547µs)
+P06 forecast rejects mismatched TMDB type before cache and retains typed series identity ... ok (3ms)
+P06 movie TMDB synthesis retains typed identity through source and adapter RPC ... ok (4ms)
+
+ok | 6 passed | 0 failed | 343 filtered out (57ms)
+

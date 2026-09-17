@@ -1,0 +1,16 @@
+PASS E12-001 chromium 393x852: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 chromium 520x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 chromium 521x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 chromium 600x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 chromium 667x375: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 chromium 760x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 chromium 761x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 chromium 1280x900: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 webkit 393x852: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 webkit 520x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 webkit 521x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 webkit 600x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 webkit 667x375: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 webkit 760x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 webkit 761x800: full close/header, touch/cancel/Escape, manager exception
+PASS E12-001 webkit 1280x900: full close/header, touch/cancel/Escape, manager exception

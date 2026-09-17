@@ -1,0 +1,5 @@
+✓ Executed and sentinel detected: Hash-Fallback mit 64 Nullen wird abgelehnt
+✓ Executed and sentinel detected: Clock-Fehler wird nicht nach außen geworfen
+✓ Executed and sentinel detected: Marker mit 64 Nullen wird abgelehnt
+✓ Executed and sentinel detected: Marker mit nicht-string Typen wird explizit abgelehnt
+review49_p03_blog_execution_test: original 4 bodies and 4 individual sentinels executed; uncalled callback rejected.

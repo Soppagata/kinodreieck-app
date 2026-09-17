@@ -1,0 +1,584 @@
+{
+  "schema": "kinodreieck-benefit-audit-master-receipt-v1",
+  "checkedAt": "2026-09-17T18:10:26.553097+00:00",
+  "auditedCandidate": "a69a32be51d8258fc4604d925f03ff35d74b4da6",
+  "fullyTestedCandidate": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+  "scope": "Second full issue-specific local benefit audit; rollout remainder is explicitly not accepted",
+  "counts": {
+    "tickets": 49,
+    "criteria": 239,
+    "ERLEDIGT": 49,
+    "OFFEN": 0,
+    "NICHT BELEGT": 0,
+    "rolloutContractsOpen": 3
+  },
+  "artifactManifestSha256": "10ef57314420e5c0567f302a3261dbee2d5933696868f8e21c35121a3b52e389",
+  "sourceFilesHashVerified": 60,
+  "criteriaSourceTextVerified": 239,
+  "currentSourceLinesVerified": true,
+  "userChangesPreserved": true,
+  "originalTicketBytesPreserved": true,
+  "productAndTestInputsUnchanged": true,
+  "retainedMasterGate": "STAGING_LOCAL_GATE.json",
+  "retainedMasterGateLogArchivesVerified": true,
+  "ticketMapping": [
+    {
+      "id": "KD-REV-E02-001",
+      "package": "P01",
+      "owner": "Baumeister-P01",
+      "fixCommits": [
+        "e45e2baaefa175e97a36bed49eded5c8cb35c161"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E03-002",
+      "package": "P02",
+      "owner": "Baumeister-P02",
+      "fixCommits": [
+        "2b9b92a42b5e605218cfba19861f00c1ba58ff44"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E03-001",
+      "package": "P02",
+      "owner": "Baumeister-P02",
+      "fixCommits": [
+        "2b9b92a42b5e605218cfba19861f00c1ba58ff44"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E09-001",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E08-002",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E05-003",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E10-004",
+      "package": "P06",
+      "owner": "Baumeister-P06",
+      "fixCommits": [
+        "7def1b0ccd104826cd6fdb6965318fa46801f57d",
+        "f957fbe23052c9ebe84a06293d971c3ab23fbdaf"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E04-004",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E04-005",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E04-006",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E04-001",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E08-004",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E02-002",
+      "package": "P01",
+      "owner": "Baumeister-P01",
+      "fixCommits": [
+        "e45e2baaefa175e97a36bed49eded5c8cb35c161"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E08-003",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E06-002",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E11-003",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E05-001",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E06-001",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E14-002",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E06-003",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E07-001",
+      "package": "P08",
+      "owner": "Baumeister-P08",
+      "fixCommits": [
+        "338948dcea6147dabcfdbef8a1c5309c120a92a9"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E11-001",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E12-003",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E12-002",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E10-003",
+      "package": "P06",
+      "owner": "Baumeister-P06",
+      "fixCommits": [
+        "7def1b0ccd104826cd6fdb6965318fa46801f57d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E01-001",
+      "package": "P10b",
+      "owner": "Baumeister-P10b",
+      "fixCommits": [
+        "79dfe15cffb38fd465ee69c2abe0f49dd57fdb14"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E04-003",
+      "package": "P10a",
+      "owner": "p10a_focus",
+      "fixCommits": [
+        "2217e5a82f8c272af850bd6c7e8406f377e0425f"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E11-004",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E11-002",
+      "package": "P10b",
+      "owner": "Baumeister-P10b",
+      "fixCommits": [
+        "79dfe15cffb38fd465ee69c2abe0f49dd57fdb14"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E09-002",
+      "package": "P11",
+      "owner": "Baumeister-P11",
+      "fixCommits": [
+        "8be8375ee4c8f6d3466f79ae194738cab3d9b19b"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E09-003",
+      "package": "P11",
+      "owner": "Baumeister-P11",
+      "fixCommits": [
+        "8be8375ee4c8f6d3466f79ae194738cab3d9b19b"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E01-002",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E04-002",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E08-001",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E05-002",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E14-001",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E07-002",
+      "package": "P08",
+      "owner": "Baumeister-P08",
+      "fixCommits": [
+        "338948dcea6147dabcfdbef8a1c5309c120a92a9"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E12-001",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E10-001",
+      "package": "P06",
+      "owner": "Baumeister-P06",
+      "fixCommits": [
+        "7def1b0ccd104826cd6fdb6965318fa46801f57d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E13-003",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E09-004",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E13-004",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E02-003",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E08-005",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E13-001",
+      "package": "P12",
+      "owner": "Baumeister-P12",
+      "fixCommits": [
+        "dfabad991b6a60cc0a828331edccd709daf1090d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E13-002",
+      "package": "P12",
+      "owner": "Baumeister-P12",
+      "fixCommits": [
+        "dfabad991b6a60cc0a828331edccd709daf1090d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E10-002",
+      "package": "P06",
+      "owner": "Baumeister-P06",
+      "fixCommits": [
+        "7def1b0ccd104826cd6fdb6965318fa46801f57d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E11-005",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    },
+    {
+      "id": "KD-REV-E03-003",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "localStatus": "ERLEDIGT",
+      "benefitDecision": "BEHALTEN"
+    }
+  ],
+  "openRolloutItems": [
+    {
+      "id": "R-OFI",
+      "tickets": [
+        "KD-REV-E07-002"
+      ],
+      "status": "OFFEN",
+      "decision": "KORRIGIEREN",
+      "evidence": "Eigene repro-oefi-compat.mjs führt echten Kandidatenproducer/Resolver mit lokalen Antworten aus und lädt den Baseline-Browservertrag. Format8 und9: jeweils50 Items, eine Annotation, neuer Leser true, alter false/feed-shape-invalid. Nach Entfernen nur von annotations akzeptiert alter Leser denselben Feed.",
+      "files": [
+        "supabase/functions/entdecken-daily-task/runner.js",
+        "supabase/functions/entdecken-daily-task/contract.js",
+        "src/lib/webDiscoveryFeed.js",
+        "supabase/migrations/20260917130000_review_entdecken_ofi_identity.sql"
+      ],
+      "retainedContract": "Neue Leser brauchen die sichere ÖFIidentität; alte Leser müssen weiterhin ihren bisherigen gültigen50er-Feed erhalten.",
+      "recommendedOption": "Explizite kompatible Leseprojektion beziehungsweise versionierter Readvertrag, der alten Lesern annotations nicht liefert; neue Writer/SQL erst innerhalb dieses Übergangs aktivieren. Reines frontend-first reicht für offene/offline Altclients ohne zusätzlichen Gültigkeitsvertrag nicht als vollständiger Nachweis.",
+      "testsRequired": "Matrix alt/neu Writer, Persistenz und Reader für8/9; alter Feed ohne Annotation bleibt lesbar; neuer Reader erhält sichere ÖFIkarte; Programme ohne Beleg bleiben ausgeschlossen.",
+      "couplingCost": "Version/Capability muss am wirklichen Feedread bekannt sein; sonst getrennte Ablage/Version nötig. Noch kein getesteter Patch und keine Freigabe."
+    },
+    {
+      "id": "R-RADAR",
+      "tickets": [
+        "KD-REV-E08-002"
+      ],
+      "status": "OFFEN",
+      "decision": "KORRIGIEREN",
+      "evidence": "Kandidatvalidator akzeptiert release:v[12], Baseline nurv1. Migration ersetzt V1schlüssel aller Textfunde durch V2, behält Finding-/Eventversion-IDs und akzeptiert alte Writer. Master meldet26 reale V1-Funde; diese Bestandszahl wurde hier nicht remote gelesen.",
+      "files": [
+        "supabase/functions/radar-websearch-task/contract.js",
+        "supabase/migrations/20260917100000_review_radar_text_identity.sql",
+        "src/lib/radarPilotContracts.js"
+      ],
+      "retainedContract": "Zwei Plattformstarts müssen erhalten bleiben; alte stabile Eventidentitäten und Altclient-Lesbarkeit dürfen nicht durch bloße Writerkompatibilität ersetzt werden.",
+      "recommendedOption": "Interne V2-Plattformidentität und explizit kompatible Altclient-Feedprojektion prüfen; alternativ nachgewiesener Clientversionszaun mit entsprechend sichtbarer Altclientbehandlung. Nicht die neue Identität zurückdrehen, da sonst Plattformverlust zurückkommt.",
+      "testsRequired": "V1bestand migrieren, alte/neue Feedreader, zwei Plattformen, Pause/Remove/Reviews und idempotenter Replay über Versionsgrenzen.",
+      "couplingCost": "Feedprojektion und Schlüsselidentität müssen konsistent versioniert werden. Keine blanket Zusage, dass ein simples Umbenennen des V2präfixes den Hash-/IDvertrag erfüllt."
+    },
+    {
+      "id": "R-TMDB",
+      "tickets": [
+        "KD-REV-E10-004"
+      ],
+      "status": "OFFEN",
+      "decision": "KORRIGIEREN",
+      "evidence": "Neue Helper senden movie:/tv:-Werte, alter Normierer akzeptiert nur Numeric. Neuer SQLnormierer akzeptiert nur Typed; Baselineclient sendet Numeric. Master meldetkeine vorhandenen TMDB-Filmwissenkennungen, was Datenmigration vereinfacht, aber den Requestbruch nicht löst.",
+      "files": [
+        "src/lib/filmwissen.js",
+        "src/services/filmwissen.js",
+        "supabase/functions/ai-task/index.ts",
+        "supabase/migrations/20260917110000_review_filmwissen_identity.sql"
+      ],
+      "retainedContract": "Keine Film/Serien-Verwechslung; gültiger IMDb-/Film-TMDBnutzen und unabhängige persönliche Prognose bleiben nutzbar.",
+      "recommendedOption": "Explicitly typed neuer Vertrag plus serverseitige kontrollierte Legacybehandlung, die Numeric nicht blind als Serie oder Film rät. Altrequests ohne sichere Werkart kontrolliert ausgrenzen oder gesicherte Filmzuordnung prüfen. Gemeinsames zeitgleiches Deploy ist bei offenen/offline Clients kein Vertrag.",
+      "smallerAlternative": "Originalticket erlaubt einen guard-first Umfang: Serien-TMDB vor Cache/Adapter stoppen, Cachetyp prüfen und Numeric-Filmvertrag vorerst erhalten. Das könnte Typmigration/Trigger/mehrere Spezialfälle ersparen, verzichtet aber auf getrennte Typed-Cacheadressen und verlangt besonders sichere Alt-Mappingbehandlung. Es ist eine Scopeentscheidung, kein bereits belegter besserer Patch.",
+      "testsRequired": "Alt/neu Client gegen alt/neu Function+SQL; Film/Serie gleiche Nummer; IMDbmiss plus TMDBfallback; falscher Cachetyp; persönliche Prognose ohne Filmwissen; keine versehentliche Umdeutung von Numeric.",
+      "couplingCost": "Ein Übergangsadapter kostet weniger als unkontrollierte globale Client/Server-Kopplung, muss aber nach Ende des Altvertrags bewusst entfernt werden."
+    }
+  ],
+  "boundaries": {
+    "remotePush": false,
+    "deployment": false,
+    "sharedDataMutation": false,
+    "paidProviderRequest": false,
+    "physicalIphoneAcceptance": false
+  },
+  "artifactDiffPolicy": "Only the two immutable Deno stdout files and archived baseline patch use -diff to retain original blank lines/context whitespace. Their original byte hashes were verified. No product or test file is excluded."
+}

@@ -1,0 +1,70 @@
+# KD-REV-E02-002 · Erzwungener Refresh nach HTTP 401 kann dasselbe Token wiederverwenden
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 – die begrenzte 401-Erholung bleibt bei einem lokal noch frischen, serverseitig abgelehnten Bearer wirkungslos; betroffene Account-/Katalog-Lesevorgänge können trotz gültigem Refresh-Token terminal scheitern.
+- Finding: E02-F002
+- Prüfstand: `BASE`
+- Zuständige Etappe: E02
+
+## Fehler und Auswirkung
+
+Der 401-Retry des echten Account-Treibers fordert einen erzwungenen Tokenrefresh an, erhält bei lokal noch mehr als fünf Minuten Restlaufzeit aber denselben Bearer zurück. Der zweite REST-Request wiederholt daher denselben 401 und endet begrenzt. In Account-Sync wird der Fehler danach als `stale` beziehungsweise `pending` weitergeführt; bei Katalog-Lesen folgt nach der erneuten 401 ein anonymer Fallback.
+
+Betroffen sind clientseitige 401-Erholungen in persönlichem Account-Sync, Shared Articles, Streaming Pages und tokenbasierten Katalog-Leseversuchen, sofern die jeweiligen Account-/Capability-Guards den Request überhaupt zulassen. Keine Datenlöschung, Rechteausweitung, accountübergreifende Preisgabe oder Provider-Kostenwirkung ist bestätigt. Bei lokal abgelaufenen oder nahe am Ablauf liegenden Tokens funktioniert der normale Refresh; es handelt sich nicht um einen generellen Auth-Refresh-Ausfall.
+
+## Auslöser, Soll und Ist
+
+Eine aktive freigegebene Sitzung sendet ein Access-Token, das der Server mit HTTP 401 verwirft, während die lokale `gueltigBis` nach Geräteuhr noch mehr als fünf Minuten entfernt ist. Der Refresh-Token bleibt verwendbar. Ein erreichbares Modell ist ein Token, das serverseitig bereits abgelaufen ist, während die Geräteuhr zehn Minuten nachgeht. Ein Account-Request in der bestehenden aktiven Sitzung genügt; ein Konto- oder erfolgreicher konkurrierender Refreshwechsel ist nicht erforderlich.
+
+Soll ist: Der erste 401 löst genau einen echten, begrenzten Refreshversuch aus und wiederholt dann einmal mit dem neuen Bearer. Wurde der passende Bearer inzwischen wirklich von einem anderen Tab rotiert, darf dieser ohne weitere Rotation übernommen werden. Nicht erneuerbare Sitzungen oder andere 401-Ursachen müssen nicht erfolgreich werden.
+
+Ist ist: `getAccessToken({ erzwingeErneuerung: true })` umgeht nur seinen äußeren Schnellpfad. `refreshIntern` prüft die unveränderte Ablaufzeit erneut und gibt dasselbe Token zurück. Der ausgeführte Account-Fall mit zehn Minuten Clock-Skew beobachtete zwei REST-Requests mit demselben Bearer, null Refresh-Requests und terminal HTTP 401.
+
+## Ursache und Fundstellen
+
+Das Force-Flag wird in `getAccessToken` nicht an `refresh` oder `refreshIntern` übergeben. `refreshIntern` verwendet seinen Ablauf-Schnellpfad ohne Force-Kontext. Dieser Schnellpfad ist für die sinnvolle Übernahme eines bereits von einem anderen Tab rotierten Tokens gedacht, kann aber nicht zwischen einem tatsächlich anderen Bearer und genau dem gerade serverseitig abgelehnten Bearer unterscheiden.
+
+Maßgebliche Fundstellen am Prüfcommit:
+
+- eingefrorene Quelle: authDriver.js – `refreshIntern` gibt bei mehr als `REFRESH_PUFFER_MS` Restlaufzeit direkt die gelesene Sitzung zurück. Repository: `src/lib/authDriver.js:269-276` @ `BASE`.
+- eingefrorene Quelle: authDriver.js – `refresh()` hat keinen Force-Parameter; `getAccessToken` ruft es bei Force ohne Kontext auf. Repository: `src/lib/authDriver.js:318-343` @ `BASE`.
+- eingefrorene Quelle: accountDriver.js – `rest` reicht bei einem ersten 401 `schonErneuert: true` und damit `erzwingeErneuerung: true` weiter, begrenzt aber auf genau einen Retry. Repository: `src/lib/accountDriver.js:172-200` @ `BASE`.
+- eingefrorene Quelle: storage.js – die Produktverdrahtung reicht Tokenoptionen inklusive gebundener Konto-ID durch und prüft nach dem asynchronen Tokenzugriff erneut den aktiven Kontext. Repository: `src/services/storage.js:248-285` @ `BASE`.
+- eingefrorene Quelle: sharedArticles.js und katalog.js – weitere Aufrufer verwenden denselben erzwungenen 401-Refresh; der Katalog hat danach den belegten Anon-Fallback. Repository: `src/services/sharedArticles.js:150-202`, `src/lib/katalog.js:248-273` @ `BASE`.
+
+## Belege und Gegenproben
+
+Statische Beweiskette: Vollständiger Auth-Treiber sowie Account-Retry und Produktverdrahtung wurden geprüft. Die Standarduhr nutzt `Date.now()` (eingefrorene Quelle: authDriver.js, Repository `src/lib/authDriver.js:136-148` @ `BASE`). Der Validator verglich die sechs zentralen Dateien byteweise mit `git show` des Prüfcommits: `src/lib/authDriver.js`, `src/lib/accountDriver.js`, `src/services/storage.js`, `src/services/sharedArticles.js`, `src/services/streamingPages.js`, `src/lib/katalog.js`.
+
+Ausgeführt wurde ausschließlich ein isolierter Node-Harness mit den unveränderten Auth- und Account-Modulen aus der eingefrorenen Quelle, In-Memory-`localStorage` und injizierten HTTP-Mocks; globales Fetch schlug bei unerwarteter Nutzung fehl. Kein Netzwerk wurde angesprochen: reproduce.mjs, Ergebnis result.json, Exit 0.
+
+- Force bei lokal lange gültigem Token reproduziert mit und ohne Web-Lock: altes Token, null Refresh-HTTP-Calls (`BUG_REPRODUCED`).
+- Der kombinierte Account-401-Pfad mit zehn Minuten Clock-Skew reproduziert zwei gleiche Bearer, null Refresh-Aufrufe und terminal 401 (`BUG_REPRODUCED`).
+- Korrekte Uhr am selben Konto führt zu einem Refresh, neuem Bearer und Erfolg; normaler Near-Expiry-Single-Flight nutzt bei drei Aufrufern genau einen Refresh; ein bereits anderer-tab-rotierter Bearer wird ohne redundante Rotation übernommen (Gegenproben).
+
+Die bestandenen Harness-Assertions belegen die Fehlerbeobachtung, nicht die Produktkorrektheit. Testwerkzeugfehler wurden nicht festgestellt. Betriebsbeleglücke: keine Live-401-Antworten, realen Geräteuhren, Supabase-Server, Accounts, Browser- oder iPhone-Abnahme; Clock-Skew und Serverablauf sind ausdrücklich nur im lokalen HTTP-Mock modelliert.
+
+## Korrekturziel und Abnahme
+
+Die Änderung bleibt auf die Options- und Tokenidentitätsweitergabe von `getAccessToken` über `refresh` nach `refreshIntern` begrenzt. Ein unverändert serverseitig abgelehnter Bearer darf bei Force nicht den Ablauf-Schnellpfad nehmen; ein inzwischen tatsächlich anderer Bearer desselben Kontos darf übernommen werden. Single-Flight, Web-Lock, Konto-ID-Prüfung, Offline-Erhalt und genau ein REST-Retry bleiben unverändert. Keine Migration oder Änderung von Auth-/RLS-Rechten gehört zur Korrektur.
+
+Abnahme:
+
+- Nach erstem REST-401 eines lokal noch mehr als fünf Minuten gültigen Tokens und mit gültigem Refresh-Token erfolgt genau ein Refresh-HTTP-Request und genau ein Retry mit neuem Bearer.
+- Derselbe Nachweis gilt mit und ohne Web-Lock sowie bei hinter Serverzeit liegender Geräteuhr; eine manuell manipulierte gespeicherte Sitzung ist nicht die einzige Reproduktion.
+- Ein im Lock sichtbar von anderem Tab erneuerter Bearer wird ohne unnötige Rotation übernommen; Konto-ID-/Kontextwechsel brechen sicher ab.
+- Normale frische Tokens ohne Force verursachen keinen Auth-Request. Parallele reguläre und erzwungene Erneuerungen erzeugen keinen Refresh-Sturm und verlieren die erzwungene Erneuerung nicht.
+- Bleibt der neue Bearer bei 401 oder ist die Sitzung nicht erneuerbar, endet der Account-Versuch begrenzt: kein Endlos-Retry, keine falsche Erfolgsmeldung und keine lokale Datenlöschung.
+
+## Abhängigkeiten und offene Punkte
+
+Keine bestätigte Abhängigkeit zu E02-F001; beide befinden sich im Auth-Treiber, unterscheiden sich aber in Auslöser, Auswirkung und schmaler Korrekturgrenze.
+
+Weitere Aufrufer und Pending-/stale-Auswirkungen sind statisch, nicht jeweils als eigener Laufzeittest belegt. Ein 401 wegen Berechtigung, Projekt-Key oder Gateway muss nicht durch Refresh heilbar sein. Vorhandene Tests mit Tokenprovider-Mocks beziehungsweise lokal abgelaufenen Sitzungen widerlegen den Force-Fall mit mehr als fünf Minuten Restlaufzeit nicht; sie wurden gelesen, nicht ausgeführt. Der Validator hat keine globale Testsuite ausgeführt und keine anderen Review-Duplikate geprüft; die vollständige E02-Leseabdeckung ist separat dokumentiert.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: E02-F002.json (`confirmed`). Eingefrorenes Master-Proposal: E02-F002.json. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E02/KD-REV-E02-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

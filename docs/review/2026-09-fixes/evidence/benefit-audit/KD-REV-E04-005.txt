@@ -1,0 +1,81 @@
+# KD-REV-E04-005 · Stapelimport verwirft korrigierte Fehlkandidaten nach Einzelwritefehler
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — bei einem bedingten lokalen Speicherfehler gehen ausgewählte und manuell korrigierte Vorschauinformationen verloren; bereits bestätigte Medien bleiben erhalten. Ein Livevorfall, allgemeiner Datenverlust oder Providerfehler ist nicht belegt.
+- Finding: E04-F005
+- Prüfstand: BASE
+- Zuständige Etappe: E04
+
+## Fehler und Auswirkung
+
+Der Bestands-Stapelimport speichert Kandidaten über den produktiv übergebenen Einzeladapter addFilm. Liefert mindestens ein Einzelwrite im unveränderten Kontext null, zählt persistiereStapelAuswahl nur die truthy Ergebnisse, lässt den Lauf weiterlaufen und gibt trotzdem ein truthy Abschlussobjekt zurück. StapelImport löscht daraufhin die komplette Vorschau.
+
+Bei der validierten Folge id/null/id werden zwei von drei Kandidaten gespeichert, der fehlgeschlagene Kandidat einschließlich seiner manuell korrigierten Quelle und Staffeln jedoch verworfen. Bei null/null/null verschwindet die gesamte korrigierte Auswahl ebenfalls, während Übernommen: 0 angezeigt wird. Der ursprüngliche Texteingabewert bleibt erhalten; betroffen sind aufbereitete Kandidaten, Faktenauswahl und manuelle Vorschaukorrekturen. Bereits bestätigte Medien werden nicht gelöscht.
+
+## Auslöser, Soll und Ist
+
+Auslöser: Mediathek, Bestand, Mehrere Titel erfassen. Im produktiven Build liegt ein angemeldetes berechtigtes Konto mit aktivem Stapelimport-KI-Schalter und erfolgreicher Vorschau vor. Nicht vorhandene sichere Kandidaten werden ausgewählt und etwa Quelle oder Staffeln korrigiert. Mindestens ein lokaler Speicherwrite scheitert im selben Kontext, beispielsweise durch eine localStorage-Quota, sodass addFilm null liefert. Teil- und Totalausfall sind betroffen.
+
+Soll: Gespeicherte Kandidaten sind gesondert auszuweisen. Nicht gespeicherte Kandidaten samt Auswahl, Korrekturen, Faktenwahl und eindeutigem Fehlerstatus bleiben erhalten und lassen sich gezielt erneut übernehmen. Bereits erfolgreiche Kandidaten dürfen weder erneut geschrieben noch erneut per KI verarbeitet werden.
+
+Ist: Der Einzeladapter transportiert nur die Erfolgsanzahl. Die Komponente deutet jedes nicht-null, nicht-abgebrochene Ergebnis als fertig und ruft setVorschau(null) auf. Ein globaler Fehler kann sichtbar sein, ordnet aber keinen Schreibfehler dem Vorschaukandidaten zu und bewahrt keinen Wiederanlaufzustand.
+
+## Ursache und Fundstellen
+
+Der Ergebnisvertrag enthält weder fehlgeschlagene Kandidaten noch einen kandidatenspezifischen Status:
+
+- persistiereStapelAuswahl zählt beim Einzeladapter nur erfolgreiche Antworten und gibt stets ein Objekt mit eintraege zurück: eingefrorene Quelle: src/lib/stapelimport.js:264, repository-relativ src/lib/stapelimport.js:264-288, Commit BASE.
+- uebernehmen schließt jede nicht-null, nicht-abgebrochene Antwort als erfolgreich ab und löscht die Vorschau: eingefrorene Quelle: src/components/StapelImport.jsx:124, repository-relativ src/components/StapelImport.jsx:124-139.
+- Der produktive Bestandsimport reicht nur addFilm, kein addFilme, an StapelImport weiter: eingefrorene Quelle: src/tabs/MediathekTab.jsx:837, repository-relativ src/tabs/MediathekTab.jsx:837-845.
+- App.addFilm übersetzt einen fehlgeschlagenen Masterwrite zu null: eingefrorene Quelle: src/App.jsx:1236, repository-relativ src/App.jsx:1236-1260.
+
+Ein konkreter lokaler Writefehler ist über localDriver.set erreichbar; der Accounttreiber schreibt zunächst lokal und der Mastercontroller meldet den Fehler und liefert false:
+
+- eingefrorene Quelle: src/lib/storage.js:9, repository-relativ src/lib/storage.js:9-20 und 59-77.
+- eingefrorene Quelle: src/lib/accountDriver.js:583, repository-relativ src/lib/accountDriver.js:583-595.
+- eingefrorene Quelle: src/controllers/useArticleController.js:263, repository-relativ src/controllers/useArticleController.js:263-316.
+
+Der anders behandelte addFilme-Zweig bewahrt die Vorschau bei null, ist aber im produktiven Mediathek-Aufrufer nicht angeschlossen. Der Fehler ist damit ein Produktvertrag zwischen Einzelpersistenz und Vorschauabschluss, nicht eine KI-, Datenbank- oder Schedulerstörung.
+
+## Belege und Gegenproben
+
+Statisch wurde der vollständige produktive Pfad App → MediathekTab → StapelImport → addFilm verfolgt. Der KI-Einstieg ist zusätzlich konto-, fähigkeits- und schaltergebunden. Die Speicherpfadprüfung zeigt, dass ein localStorage-Fehler addFilm ohne Kontowechsel zu null führen kann; spätere Sync- oder Migrationspfade können eine bereits gelöschte lokale Vorschau nicht rekonstruieren.
+
+Die UI-Reproduktion reproduce.mjs verwendete die echte eingefrorene StapelImport-Komponente in React/JSDOM, Produktionskonfiguration und vollständig gemockte KI- sowie Faktendaten. Ausschließlich addFilm war gemockt; Quelle und Staffeln wurden über DOM-Ereignisse korrigiert. Der Lauf endete mit Exit 0 bei null Netzwerkaufrufen:
+
+- id/null/id: exakt zwei Einträge gespeichert, Vorschau und korrigierter Fehlkandidat entfernt.
+- null/null/null: Vorschau ebenfalls entfernt.
+- Erfolgsgegenprobe: drei erfolgreiche Einträge gemeldet.
+
+Ein zusätzlicher ausgeführter Gegenlauf mit optionalem addFilme-Adapter, der null liefert, bewahrt Vorschau und Korrekturen. Seine Beobachtung steht in result.json. Ein isolierter Test des echten useMasterPersistenceController mit einem geworfenen zweiten Write ergab true/false/true und zwei Commits für ersten und dritten Titel. Dies trennt den Fehler von einer erfundenen Return-Konvention. Exit 0 bedeutet erfolgreiche Reproduktion des fehlerhaften Ist-Verhaltens, nicht Produkt-PASS.
+
+Gegenproben und Grenzen:
+
+- Der Generation- und Unmount-Guard verhindert die Abschlussanzeige nach Kontowechsel; der bestätigte Fall bleibt im selben Kontext.
+- Eine globale setErr-Meldung verhindert einen vollständig stillen Fehler, ersetzt aber keinen zuordenbaren Rest- oder Retryzustand.
+- Duplikate können ebenfalls null erzeugen. Die Reproduktion nutzt drei unterschiedliche Titel und Jahre, leeren Master und einen gezielt fehlgeschlagenen Write; eine Dublette ist nicht nötig.
+- Remote-Sync- und Netzfehler sind nicht automatisch addFilm-null: Der Accounttreiber bestätigt den lokalen Write vor dem asynchronen Remotecommit. Der Befund stützt sich ausschließlich auf lokale Writefehler, nicht auf Offline-Sein.
+- stapelimport_partial_ui_test.mjs deckt unvollständige KI-Extraktion und einen erfolgreichen addFilme-Spy ab, nicht den produktiven Einzelwrite-Teilausfall. Er wurde als Testabdeckung gelesen, nicht ausgeführt.
+
+## Korrekturziel und Abnahme
+
+Der Ergebnisvertrag zwischen persistiereStapelAuswahl und StapelImport soll kandidatenspezifische Erfolgs-, Fehler- und gegebenenfalls Duplikatstati zurückgeben. Nur bestätigte Kandidaten werden abgeschlossen; der korrigierte Rest bleibt mit einer zielgerichteten erneuten Übernahme erhalten. Ein null-Ergebnis darf weder pauschal Erfolg noch gesicherte Dublette bedeuten. Provider, Datenbank und Scheduling liegen außerhalb der Korrekturgrenze.
+
+Abnahme:
+
+1. Der produktive addFilm-Pfad id/null/id behält exakt den fehlgeschlagenen Kandidaten einschließlich Quelle, Staffeln, Faktenwahl und Auswahl; die UI weist zwei erfolgreiche und einen fehlgeschlagenen Eintrag aus.
+2. Erneutes Übernehmen adressiert nur den verbliebenen Fehlkandidaten. Bereits erfolgreiche Kandidaten werden nicht erneut geschrieben; die KI wird nicht erneut aufgerufen.
+3. Bei null/null/null bleibt die gesamte korrigierte Auswahl erhalten.
+4. Vollständiger Erfolg darf die Vorschau weiterhin schließen; Doppelklick verursacht keine doppelte Übernahme.
+5. Konto- und Generationsguards bleiben wirksam. Als Dublette klassifizierte Fälle sind von Speicherfehlern unterscheidbar oder werden konservativ behandelt.
+
+## Abhängigkeiten und offene Punkte
+
+Kein vollständiger App- oder Mediathek-Mount, keine physische Speicherquota, keine Live-KI- oder Remoteanfrage wurden ausgeführt. Die Produktverdrahtung und App.addFilm-null-Übersetzung sind statisch geprüft; Komponente und Persistenzcontroller wurden separat dynamisch getestet. Das reale Auftreten und die Häufigkeit von Speicherfehlern sind nicht erhoben. Die P2-Einstufung bezieht sich ausschließlich auf bedingten Verlust von Vorschauarbeit.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: E04-F005.json. Ursprünglicher Verdacht: E04-F005.json. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E04/KD-REV-E04-005.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

@@ -1,0 +1,24 @@
+[
+  {
+    "format": 8,
+    "annotations": 1,
+    "items": 50,
+    "newReader": true,
+    "oldReader": false,
+    "oldErrors": [
+      "feed-shape-invalid"
+    ],
+    "oldReaderWithoutAnnotations": true
+  },
+  {
+    "format": 9,
+    "annotations": 1,
+    "items": 50,
+    "newReader": true,
+    "oldReader": false,
+    "oldErrors": [
+      "feed-shape-invalid"
+    ],
+    "oldReaderWithoutAnnotations": true
+  }
+]

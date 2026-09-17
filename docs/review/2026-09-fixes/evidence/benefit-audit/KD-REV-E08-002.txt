@@ -1,0 +1,68 @@
+# KD-REV-E08-002 · Verschiedene Plattformfunde überschreiben sich beim selben Werkstart
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — zwei bereits akzeptierte und bestätigte Plattformfunde verlieren still die zuerst gespeicherte Plattform samt Quelle; betroffen ist private Kontodatenintegrität, nicht die Kontoabgrenzung.
+- Finding: E08-F002
+- Prüfstand: `BASE`
+- Zuständige Etappe: E08
+
+## Fehler und Auswirkung
+
+Für ein aktives Freitext-Radarabo kann derselbe Werkstart am selben Tag auf zwei verschiedenen Streamingplattformen durch zwei zulässige, belegte Kandidaten repräsentiert sein. Parser und Evaluator akzeptieren beide, der Runner bestätigt zwei erfolgreiche Writes, aber die Datenbank hält anschließend nur einen Fund und der Feed nur ein Event. Der zweite Write ersetzt Plattform, Quellen-URL und Quellmetadaten des ersten. Die Eingabereihenfolge entscheidet damit, welcher Fund verbleibt.
+
+Belegt ist stiller Verlust einer akzeptierten Plattforminformation samt Beleg in einem privaten Text-Radar-Abo. Weder ein Zugriff über Kontogrenzen noch ein allgemeiner Datenverlust für andere Radararten ist belegt. Der reproduzierte Fall betrifft `streamingstart_at`; andere erlaubte Text-Startarten können wegen derselben fehlenden Identitätskomponente betroffen sein, wurden aber nicht separat ausgeführt.
+
+## Auslöser, Soll und Ist
+
+**Auslöser.** Ein autorisiertes Konto mit aktivem Textabo erhält zwei zulässige, künftige österreichische Streamingstarts desselben Werks mit gleichem Datum, `eventType`, `targetType` und `seasonNumber`, aber unterschiedlicher Plattform und eigener Toolresult-URL. Der Validator reproduzierte dies mit einem normalen Mitglied ohne `radar_review`.
+
+**Soll.** Verschiedene akzeptierte Plattformfunde samt Quellen bleiben erhalten oder werden durch einen ausdrücklich definierten Vertrag verlustfrei zusammengeführt. Die Kandidatenreihenfolge darf nicht entscheiden, welcher bekannte Plattformbeleg bleibt.
+
+**Ist.** Beide Kandidaten erhalten dieselbe `release:v1:`-ID, der Runner meldet `writes: 2` und zwei akzeptierte Kandidaten. Wegen des SQL-Konfliktschlüssels wird nur eine Zeile bzw. ein Feed-Event persistiert. In der Ausgangsreihenfolge blieb „Platform B“, in umgekehrter Reihenfolge „Platform A“. Beide Schreibbestätigungen trugen dieselbe `eventId`, aber verschiedene `eventVersionId`s. Eine identische Wiederholung des zuletzt gespeicherten einzelnen Fundes bleibt dagegen korrekt `no_change` mit `writes: 0`.
+
+## Ursache und Fundstellen
+
+Die Evaluator-Deduplikation und die Persistenzidentität haben unterschiedliche Verträge: `candidateKey` enthält `platform`, die erzeugte `release:v1:`-ID dagegen nicht. Der Runner übergibt diese Release-ID unverändert als Text-`targetKey`; die Tabelle erzwingt pro Konto/Textziel/Release-ID nur einen Datensatz und aktualisiert bei Konflikt gerade die Plattform- und Belegfelder. Es gibt keine Aggregation oder spätere Rekonstruktion beider Plattformen.
+
+- Die Persistenz-ID bildet Titel, Datum, Typ und Staffel, aber keine Plattform: eingefrorene Quelle: `supabase/functions/radar-websearch-task/contract.js:522` — Repository-Pfad `supabase/functions/radar-websearch-task/contract.js:520-533`, Prüfcommit `BASE`.
+- Die Evaluator-Deduplikation unterscheidet Plattformen und lässt beide Kandidaten durch: eingefrorene Quelle: `supabase/functions/radar-websearch-task/contract.js:656` — Repository-Pfad `supabase/functions/radar-websearch-task/contract.js:654-704`, gleicher Prüfcommit.
+- Der Runner schreibt die akzeptierten Events seriell und zählt jeden bestätigten Upsert als Write: eingefrorene Quelle: `supabase/functions/radar-websearch-task/runner.js:180` und Zeile 202 — Repository-Pfad `supabase/functions/radar-websearch-task/runner.js:174-257`, gleicher Prüfcommit.
+- Die Function übergibt `event.targetKey` und `event.platform` an den Text-Upsert: eingefrorene Quelle: `supabase/functions/radar-websearch-task/index.ts:127` und Zeile 516 — Repository-Pfad `supabase/functions/radar-websearch-task/index.ts:121-133, 507-531`, gleicher Prüfcommit.
+- Tabelle und Upsert reduzieren beide Plattformen auf `unique (account_id,text_target_id,release_key)`; der Konflikt-Update ersetzt Plattform und Quellenfelder: eingefrorene Quelle: `supabase/migrations/20260830140000_radar_text_findings.sql:28` und Zeile 117 — Repository-Pfad `supabase/migrations/20260830140000_radar_text_findings.sql:20-29, 109-133`, gleicher Prüfcommit.
+- Die spätere Feed-Projektion ergänzt `sourceTargetKey`, kann aber nur die eine bereits persistierte Plattform ausgeben: eingefrorene Quelle: `supabase/migrations/20260906170000_radar_text_finding_source_target.sql:15` — Repository-Pfad `supabase/migrations/20260906170000_radar_text_finding_source_target.sql:15-41`, gleicher Prüfcommit.
+
+## Belege und Gegenproben
+
+**Ausgeführte Reproduktion des Validators.** `node /private/tmp/kd-vollreview-20260916/tests/E08-F002/validator/reproduce.mjs` endete mit Exit 0. Sie kombinierte Original-Parser, -Evaluator und -Runner mit einer echten lokalen PostgreSQL-17-Migrationskette sowie dem echten Feed; nur die Providerantwort war synthetisch und eine Repository-Brücke übernahm die statisch geprüfte Textfeldabbildung aus `index.ts`. Der maschinenlesbare Nachweis ist `/private/tmp/kd-vollreview-20260916/tests/E08-F002/validator/result.json`: 25 Radar-relevante Migrationen, zwei akzeptierte Kandidaten, eine einzigartige Release-ID, zwei Writes, eine Datenbankzeile und ein Feed-Event; die umgekehrte Reihenfolge kehrt den verbleibenden Plattformfund um.
+
+**Ausgeführte Kontrolle.** Die Wiederholung desselben zuletzt persistierten Plattformfunds ergibt `no_change` und keinen zusätzlichen Write. Damit ist nicht die gewöhnliche Wiederholung defekt, sondern die Kollision zweier unterschiedlicher zulässiger Funde. Quellen-, Datums-, Typ- und Zugriffs-Guards machten den Fall nicht unerreichbar: Die Reproduktion verwendete zulässige zukünftige Daten, zwei Toolresult-URLs, `work`/Film, `AT` und ein autorisiertes normales Mitglied.
+
+**Statische Gegenbelege und Grenzen.** Kein belegter Ein-Fund-pro-Werk-Vertrag rechtfertigt das Überschreiben: Die vorhandene Dokumentation beschreibt minimale Werkfunde und optionale Plattformen; der aktive Evaluator unterscheidet Plattformen ausdrücklich. Auch eine gewollte Werk-Sammelkarte wäre mit dem jetzigen reihenfolgeabhängigen Ersetzen nicht verlustfrei. Die gezielt geprüften Folgemigrationen definieren den Upsert nicht neu. Der vorhandene Release-ID-Test prüft Titel, Datum, Eventtyp und Zieltyp, aber keinen Plattformwechsel; der bestehende PG17-Test prüft nur einfache Wiederholung und wurde hier nicht als Gegenbeleg ausgeführt.
+
+Der erste sandboxierte Start scheiterte bei `initdb` mit `shmget Operation not permitted`. Das ist ein Umgebungs-/Testausführungsfehler, kein fachlicher Testnachweis und keine Fehlerursache. Der anschließend autorisiert lokal ausgeführte Test war erfolgreich; sein temporärer Cluster wurde gestoppt und entfernt. Der Befund selbst ist ein Produktfehler im Identitäts-/Persistenzvertrag, kein Testwerkzeugfehler. Live-Provider-, Remote- und Deploymentbelege fehlen als getrennte Betriebsbeleglücken.
+
+## Korrekturziel und Abnahme
+
+Evaluator-Deduplikation und Persistenzidentität auf einen gemeinsamen fachlichen Vertrag bringen: Plattformfunde entweder getrennt identifizieren oder Plattformen samt Quellen explizit und verlustfrei aggregieren. Der Umgang mit vorhandenen `release:v1:`-Funden sowie stabilen Feed-/Event-Identitäten muss definiert sein. Die Änderung auf Textfund-Deduplikation, Persistenzmodell/-migration, Feedprojektion und fokussierte Integrationstests begrenzen; Providerkosten, Scheduler und strukturierte Altpfade bleiben außerhalb des Scopes.
+
+- Zwei gültige gleichzeitige Plattformstarts desselben Werks bleiben über Parser → Evaluator → Runner → realen SQL-Upsert → Feed mitsamt beiden Plattformen und zugehörigen Quellen erhalten.
+- Umgekehrte Kandidatenreihenfolge führt zum selben fachlichen Endzustand.
+- Ein identischer Wiederholungsfund bleibt idempotent (`no_change`, keine unnötige neue Version).
+- Bestehende Textfunde erhalten bei einer Identitätsänderung einen definierten kompatiblen Umgang ohne stille Verdoppelung oder Verlust.
+- Account-/Abobindung, Pause/Entfernen und die unveränderten strukturierten Pfade bleiben erhalten; es entsteht kein zusätzlicher Providerrequest.
+
+## Abhängigkeiten und offene Punkte
+
+- Keine abhängigen oder duplizierten Findings bekannt.
+- Kein Live-/Provider-/Remote-Test: Häufigkeit tatsächlicher Modellantworten und aktuelle Deploymentparität sind nicht festgestellt.
+- Die HTTP/Deno-Indexfunktion wurde nicht vollständig gestartet; ihre Text-RPC-Feldabbildung wurde statisch geprüft und in der isolierten Repository-Brücke übernommen.
+- Die lokale Datenbank nutzte `current_schema.sql` und 25 Radar-relevante Migrationen des vorhandenen PG17-Bootstraps, keinen vollständigen Produktionsdump.
+- `region` ist ebenfalls kein Teil der Release-ID. Ein eigenständiger Regionskonflikt wurde nicht validiert und ist kein zusätzlicher Ticketbefund.
+- Keine globale Duplikatprüfung anderer Findings beauftragt.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: `/private/tmp/kd-vollreview-20260916/validations/E08-F002.json` (`confirmed`). Ursprüngliches Master-Proposal: `/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E08-F002.json`. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die Master-Abnahme ist bestätigt, bis dessen gesonderter Abgleich vorliegt.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E08/KD-REV-E08-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

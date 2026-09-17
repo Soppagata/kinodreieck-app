@@ -1,0 +1,10 @@
+PostgreSQL binaries: /Applications/Postgres.app/Contents/Versions/17/bin
+✓ fresh PostgreSQL: additive migration and unchanged ACL
+✓ day4 actual full RPC/controller/hook persist day1 start and day4 consumption
+✓ day16 pruned catalog + device reload: no new card or count, no full fallback
+✓ genuine access after window expiry starts day16 and repeats never extend it
+✓ service-selection and obsolete response guards reject foreign anchors
+✓ account switch and storage owner restore no foreign book
+✓ actual React hooks close the anchor feedback loop after one bounded requery
+✓ RPC retains expired source deadline independently from Neu expiry and null
+8/8 P07 PostgreSQL/React integration checks passed; 4 page reads, 0 full fallbacks

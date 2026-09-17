@@ -1,0 +1,6 @@
+✓ Fixture ist einfacher unveränderter Freitext mit lokal abgeleiteter interner ID
+✓ Bestaetigter Functionwrite ist nur mit neuem Feed-Event samt Datum und Quelle PROVEN
+✓ Insufficient evidence bleibt ein sichtbares degraded Ergebnis ohne Eventwrite
+✓ Confirmed ohne neuen sicheren Eventreadback bleibt rot
+✓ Acht-Pfade-Hook sendet Freitext und prüft den normalen Feedreadback
+5 Radar-Freitext-Livevertrag-Checks bestanden.

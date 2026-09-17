@@ -1,0 +1,16 @@
+✓ Netzantwort wird accountgebunden persistiert und aus CacheStorage gelesen
+✓ automatische Folgeseiten erzeugen keine ungenutzten persistenten Cacheeintraege
+✓ gleicher Request laeuft serviceintern nur einmal
+✓ Kontowechsel verwirft eine verspaetete Antwort vor Cache und Ergebnis
+✓ Caller-Abort erreicht fetch und der neueste Account startet unabhaengig
+✓ abgebrochener Singleflight blockiert keinen sofortigen Same-Key-Neustart
+✓ Cache-Schreiben blockiert die erste Netzantwort nicht
+✓ Kontowechsel waehrend caches.open verhindert den alten Cache-Write
+✓ Kontowechsel waehrend cache.put entfernt den gerade geschriebenen alten Eintrag
+✓ Logout sperrt selbst einen vorhandenen accountgebundenen Cache
+✓ abgelaufene Neu-Frist wird nicht durch den Cachezeitpunkt verlaengert
+✓ Quellfrist bleibt in Service/Cache erhalten und stale200 erneuert sie nicht
+✓ nur ein eindeutig fehlendes RPC traegt die Legacy-Fallback-Marke
+
+13/13 Checks bestanden.
+STREAMING-PAGE-CACHE-TEST BESTANDEN

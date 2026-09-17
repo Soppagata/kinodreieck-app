@@ -1,0 +1,76 @@
+# KD-REV-E11-005 · Leerzeichentitel löst beim Speichern eines Reminders eine unbehandelte Promise-Ablehnung aus
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P3 – eng begrenzter Eingabevalidierungsfehler. Ein ungültiger Titel verhindert das Speichern, zeigt aber keinen hilfreichen Hinweis; vorhandene Termine bleiben erhalten und eine anschließende Korrektur funktioniert.
+- Finding: E11-F005
+- Prüfstand: BASE
+- Zuständige Etappe: E11
+
+## Fehler und Auswirkung
+
+Im Wochenplaneditor wird ein aus ausschließlich Leerzeichen bestehender Titel vom HTML-required-Attribut als gültig akzeptiert. Bei mindestens einem vorhandenen gültigen Reminder führt dies zu einer unbehandelten Promise-Ablehnung vor dem Speicheradapter. Der Editor bleibt offen, der Plan unverändert und ohne sichtbaren Validierungshinweis; nach Korrektur des Titels ist Speichern wieder möglich.
+
+Betroffen sind Anlegen und – statisch belegt – Bearbeiten mit nach Trim leerem Titel und mindestens einem vorhandenen gültigen Reminder. Die Ausnahme entsteht vor Gast-/Kontospeicher, daher unabhängig vom Speicheradapter. Die ausgeführte Reproduktion nutzt einen neuen Termin der Standardart. Kein Verlust vorhandener Termine, dauerhafter Lock oder vollständiger App-Ausfall ist belegt.
+
+## Auslöser, Soll und Ist
+
+1. Start → Deine Woche öffnen und mindestens einen gültigen Reminder anlegen.
+2. Einen Eintrag anlegen oder bearbeiten.
+3. Als Titel ausschließlich Leerzeichen eingeben und Speichern klicken.
+
+Soll: Ein nach Trim leerer Titel wird mit verständlichem Feldhinweis zurückgewiesen. Es gibt keinen Speicheraufruf und keine unbehandelte Ausnahme; Plan und bearbeitbarer Entwurf bleiben erhalten.
+
+Ist: required akzeptiert beispielsweise drei Leerzeichen. neuerFolgenReminder liefert null; bei einem nichtleeren normalisierten Plan dereferenziert aktuell.some anschließend e.id. Diese Promise-Ablehnung läuft aus ReminderEditor.speichern ungefangen durch, onPlanAendern wird nicht erreicht, und der Editor zeigt keinen Validierungshinweis.
+
+## Ursache und Fundstellen
+
+ReminderEditor prüft nur die native required-Bedingung, nicht den getrimmten Titel. normalisiereWochenplan verwirft diesen Titel und neuerFolgenReminder liefert deshalb null. Wochenplan.speichere behandelt dieses nullable Ergebnis trotzdem als Objekt; der Zugriff e.id erfolgt vor schreibePlan und somit vor dessen try/catch. Eine spätere Persistenznormalisierung kann den Pfad nicht abfangen.
+
+- Eingefrorene Quelle: src/components/Wochenplan.jsx, Zeilen 140-153 (Submit und Titel-Input) sowie 281-307 (e.id vor schreibePlan). Übertragbar: src/components/Wochenplan.jsx am Commit BASE.
+- Eingefrorene Quelle: src/lib/wochenplan.js, Zeilen 110-148 (Trim-Filter in Normalisierung) und 151-157 (nullable neuerFolgenReminder). Übertragbar: src/lib/wochenplan.js am Prüfcommit.
+- Eingefrorene Quelle: src/controllers/useConfirmedStorageState.js, Zeilen 20-39 (erst nach berechne einsetzende Speichernormalisierung). Übertragbar: src/controllers/useConfirmedStorageState.js am Prüfcommit.
+
+## Belege und Gegenproben
+
+Statische Beweiskette:
+
+- App bindet persistWochenplan über StartTab an Wochenplan. Der Editor übergibt den Titel unverändert; der Normalisierer verwirft getrimmt leere Titel; vor e.id liegt keine Nullprüfung.
+- Der Fehler entsteht vor Persistenz und damit vor Backend-Guards oder Migrationen.
+
+Ausgeführte Reproduktion:
+
+- node /private/tmp/kd-vollreview-20260916/tests/E11-F005/validator/repro.cjs lief mit Exit 0. Der unabhängige JSDOM-Test rendert echten eingefrorenen React-Produktcode, legt zuerst einen gültigen Termin über Formularaktionen an, testet einen wirklich leeren Titel als Negativkontrolle, danach drei Leerzeichen und korrigiert den Titel anschließend. Die Persistenz war nur In-Memory gemockt; es gab keine Netzwerkzugriffe.
+- Ergebnis: /private/tmp/kd-vollreview-20260916/tests/E11-F005/validator/result.json. Für drei Leerzeichen: nativeFormValid=true, unhandledRejections=[Cannot read properties of null (reading id)], additionalWrites=0, editorOpen=true, planUnchanged=true und alertCount=0. Gültige Anlage und anschließende Korrektur funktionieren.
+- Die sechs gelesenen Produktdateien wurden bytegleich mit dem Prüfcommit verglichen: /private/tmp/kd-vollreview-20260916/tests/E11-F005/validator/source-provenance.json.
+
+Gegenproben:
+
+- Ein tatsächlich leerer String wird durch HTML required blockiert; drei Leerzeichen hingegen nicht.
+- Bei leerem normalisiertem Plan läuft aktuell.some nicht, folglich entsteht an dieser Stelle kein e.id-Fehler. Der null-Eintrag wird danach von der Persistenznormalisierung entfernt; daraus folgt kein Beleg für dauerhafte null-Daten oder Verlust vorhandener Termine.
+- schreibePlan fängt Speicherfehler ab, wird in diesem Fehlerpfad aber nicht erreicht.
+- Die AppErrorBoundary deckt Renderfehler ab; im untersuchten src-Baum wurde keine unhandledrejection-Behandlung und kein gezielter Formularhinweis gefunden.
+- Existierende Wochenplantests behandeln gültige Reminder und Normalisierung, nicht den Formularsubmit mit Leerzeichentitel; keine vollständige Suite wurde ausgeführt.
+
+Der lokale JSDOM-Mock belegt die Ausnahme und die Grenzen des Produktpfads, aber keine vollständige Browser-, Remote- oder Geräteabnahme.
+
+## Korrekturziel und Abnahme
+
+Im ReminderEditor nach Trim leere Titel mit sichtbarer Pflichtfeldvalidierung abweisen und Wochenplan.speichere zusätzlich gegen ein null-Ergebnis von neuerFolgenReminder absichern. Gültige Reminder und bestehende Daten bleiben unverändert; Backend- oder Migrationsumbauten sind nicht Teil der Korrektur.
+
+Abnahmekriterien:
+
+1. Leerstring und reine Leerzeichen werden beim Anlegen sowie beim Bearbeiten verständlich zurückgewiesen, bei leerem und nichtleerem Plan.
+2. Bei ungültigem Titel gibt es keinen unhandledRejection, keinen Aufruf von onPlanAendern und keine Planänderung.
+3. Das Formular bleibt korrigierbar; ein anschließend gültiger Titel wird genau einmal gespeichert.
+4. Gültige neue und bearbeitete Reminder behalten ihr Verhalten; nullable Konstruktorergebnisse werden vor Objektzugriff abgefangen.
+
+## Abhängigkeiten und offene Punkte
+
+Die Laufzeitreproduktion verwendet JSDOM und React mit Persistenzmock, keinen physischen Browser, keine vollständige App und keinen Remote-Speicher. Bearbeitungsmodus und leerer Plan wurden statisch verfolgt, nicht als separate UI-Laufzeitreproduktion ausgeführt. Es gibt keine Aussage über eine reale Auftretenshäufigkeit.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: /private/tmp/kd-vollreview-20260916/validations/E11-F005.json. Master-Proposal: /Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E11-F005.json. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E11/KD-REV-E11-005.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

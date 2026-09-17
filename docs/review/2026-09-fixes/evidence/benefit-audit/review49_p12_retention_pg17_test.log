@@ -1,0 +1,14 @@
+✓ additive migration preserves the actual begin/finish definitions
+✓ expiry index exists and RPC/table access remains service-only
+✓ dryrun reports only the two expired mail buckets, without any mutation
+✓ disabled purge deletes no buckets or operations
+✓ enabled purge obeys limit one and preserves every active counter and operation
+✓ expired accepted/rejected/unknown/claimed IDs cannot reopen after purge
+✓ large batches clamp to 500, null defaults to 200 and zero clamps to one
+✓ repeated new windows keep expired storage bounded while active limits remain
+✓ twelve concurrent begins plus purge preserve the global/subject limit four
+✓ concurrent replay consumes only one rate slot and creates only one operation
+✓ purge skips a concurrently locked expired row and removes only the available row
+✓ released expired row is eligible on the next bounded run
+✓ existing retention advisory lock prevents overlapping purges
+REVIEW49_P12_RETENTION: 13/13 PostgreSQL 17 checks passed; synthetic local data only

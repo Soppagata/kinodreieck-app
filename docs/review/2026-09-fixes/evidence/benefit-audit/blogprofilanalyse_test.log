@@ -1,0 +1,151 @@
+✓ gültige Health-Antwort wird akzeptiert
+✓ contractVersion fehlt wird abgelehnt
+✓ ok != true wird abgelehnt
+✓ task != health wird abgelehnt
+✓ activation fehlt wird abgelehnt
+✓ betrieb.aiAktiv != true wird abgelehnt
+✓ Zusatzfeld in capabilities wird abgelehnt
+✓ vorgangId darf kein Leerwert sein
+✓ phase darf keine Leerzeichenfolge sein
+✓ buildVersion darf kein Leerwert sein
+✓ buildVersion unversioned wird abgelehnt
+✓ buildVersion mit formfremden Zeichen wird abgelehnt
+✓ fehlendes Anbieter-Secret sperrt die Capability
+✓ zeit muss kanonische ISO sein
+✓ gültiges eigenes Artikel-Payload
+✓ Payload hat exakt artikelfokussierte Felder
+✓ ID-Match muss exakt einen Treffer haben
+✓ fremde ID wird abgelehnt
+✓ fehlende herkunft wird akzeptiert
+✓ formfremde Herkunft wird abgelehnt
+✓ gezogene Herkunft wird abgelehnt
+✓ finderGenreKey wird nicht blockiert
+✓ Titel muss echter String sein
+✓ Titel darf keine Steuerzeichen enthalten
+✓ Titel darf nach NFKC+trim nicht leer sein
+✓ Titel mit 160+ Byte scheitert
+✓ Titel mit genau 160 Byte wird akzeptiert
+✓ Text mit 18.000 Byte wird akzeptiert
+✓ Text mit 18.001 Byte wird abgelehnt
+✓ Text darf nach NFKC+trim nicht leer sein
+✓ genres darf nicht leer sein
+✓ Maximal 80 Einträge je Liste
+✓ Maximal 120 Einträge gemeinsam
+✓ Cross-List-Dublette (exakt) wird abgelehnt
+✓ Cross-List-Dublette (normalisiert) wird abgelehnt
+✓ Listenwert darf nach NFKC+trim nicht leer sein
+✓ U+200B bleibt als Titel unsichtbar
+✓ U+200B bleibt als Artikeltext unsichtbar
+✓ U+200B bleibt als Listenwert unsichtbar
+✓ U+200C bleibt als Titel unsichtbar
+✓ U+200C bleibt als Artikeltext unsichtbar
+✓ U+200C bleibt als Listenwert unsichtbar
+✓ U+200D bleibt als Titel unsichtbar
+✓ U+200D bleibt als Artikeltext unsichtbar
+✓ U+200D bleibt als Listenwert unsichtbar
+✓ U+00AD bleibt als Titel unsichtbar
+✓ U+00AD bleibt als Artikeltext unsichtbar
+✓ U+00AD bleibt als Listenwert unsichtbar
+✓ U+FE0F bleibt als Titel unsichtbar
+✓ U+FE0F bleibt als Artikeltext unsichtbar
+✓ U+FE0F bleibt als Listenwert unsichtbar
+✓ U+2066 bleibt als Titel unsichtbar
+✓ U+2066 bleibt als Artikeltext unsichtbar
+✓ U+2066 bleibt als Listenwert unsichtbar
+✓ U+202E bleibt als Titel unsichtbar
+✓ U+202E bleibt als Artikeltext unsichtbar
+✓ U+202E bleibt als Listenwert unsichtbar
+✓ Whitespace-Mix I bleibt als Titel unsichtbar
+✓ Whitespace-Mix I bleibt als Artikeltext unsichtbar
+✓ Whitespace-Mix I bleibt als Listenwert unsichtbar
+✓ Whitespace-Mix II bleibt als Titel unsichtbar
+✓ Whitespace-Mix II bleibt als Artikeltext unsichtbar
+✓ Whitespace-Mix II bleibt als Listenwert unsichtbar
+✓ Emoji-ZWJ bleibt sichtbar und roh identisch
+✓ Variation-Selector bleibt sichtbar und roh identisch
+✓ Keycap bleibt sichtbar und roh identisch
+✓ Persisch mit ZWNJ bleibt sichtbar und roh identisch
+✓ gültige Modellantwort wird akzeptiert
+✓ sechs U+200B hat die belegte UTF-8-Bytelänge
+✓ sechs U+200B wird trotz exaktem Rohsubstring als Beleg abgewiesen
+✓ gemischte DICP hat die belegte UTF-8-Bytelänge
+✓ gemischte DICP wird trotz exaktem Rohsubstring als Beleg abgewiesen
+✓ U+200B verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ U+200B verwirft die gesamte Antwort bei vokabular.wort
+✓ U+200B verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ U+200C verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ U+200C verwirft die gesamte Antwort bei vokabular.wort
+✓ U+200C verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ U+200D verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ U+200D verwirft die gesamte Antwort bei vokabular.wort
+✓ U+200D verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ U+00AD verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ U+00AD verwirft die gesamte Antwort bei vokabular.wort
+✓ U+00AD verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ U+FE0F verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ U+FE0F verwirft die gesamte Antwort bei vokabular.wort
+✓ U+FE0F verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ U+2066 verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ U+2066 verwirft die gesamte Antwort bei vokabular.wort
+✓ U+2066 verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ U+202E verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ U+202E verwirft die gesamte Antwort bei vokabular.wort
+✓ U+202E verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ Whitespace-Mix I verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ Whitespace-Mix I verwirft die gesamte Antwort bei vokabular.wort
+✓ Whitespace-Mix I verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ Whitespace-Mix II verwirft die gesamte Antwort bei geschmackszueg.wert
+✓ Whitespace-Mix II verwirft die gesamte Antwort bei vokabular.wort
+✓ Whitespace-Mix II verwirft die gesamte Antwort bei vokabular.beschreibung
+✓ Emoji-ZWJ bleibt in allen Outputfeldern roh identisch
+✓ Variation-Selector bleibt in allen Outputfeldern roh identisch
+✓ Keycap bleibt in allen Outputfeldern roh identisch
+✓ Persisch mit ZWNJ bleibt in allen Outputfeldern roh identisch
+✓ root darf keine Zusatzfelder haben
+✓ artikelPayload mit Zusatzfeld wird abgelehnt
+✓ artikelPayload ohne artikel wird abgelehnt
+✓ 12 geschmackszuege werden akzeptiert
+✓ 13 geschmackszuege werden abgelehnt
+✓ 6 vokabular-Einträge werden akzeptiert
+✓ 7 vokabular-Einträge werden abgelehnt
+✓ Beleg muss exakter Substring sein
+✓ Beleg darf keine Zeilenumbrüche haben
+✓ Vokabel-Beleg muss substring sein
+✓ vokabular hat zu viele Zuordnungen (3+1) → abgelehnt
+✓ vokabular-Dupllette über beide Listen wird erkannt
+✓ genre-art darf nur übergebene Genres nutzen
+✓ geschmackszueg.wert darf nach NFKC+trim nicht leer sein
+✓ vokabular.wort darf nach NFKC+trim nicht leer sein
+✓ vokabular.beschreibung darf nach NFKC+trim nicht leer sein
+✓ 16-Spaces-Beleg wird trotz Byte-Minimum und Substring abgelehnt
+✓ Vorschau liefert Status und Provenienz-Kopf
+✓ Bereits vorhandene Kandidaten bleiben editierbar
+✓ Leere Antwort wird nicht als bereits_vorhanden klassifiziert
+✓ vorhandene offene Signale werden bei der Dedupe berücksichtigt
+✓ Vokabular-Mappings werden genres/tags getrennt verglichen
+✓ Hash-Fallback mit 64 Nullen wird abgelehnt
+✓ Clock-Fehler wird nicht nach außen geworfen
+✓ Revalidation verarbeitet editierte Vorschau mit frischem Hash und ohne neue Clock
+✓ Revalidation lehnt gleichen supplied Hash bei geändertem Titel ab
+✓ Revalidation lehnt gleichen supplied Hash bei geändertem Text ab
+✓ Revalidation lehnt Preserve ohne frischen Digest fail-closed ab
+✓ erzeugeBlogProfilAnalyseVorschau lehnt direkte ungültige Preserve-Metadaten ab
+✓ Revalidation vergleicht gespeicherten contentHash mit frischem Hash ohne neue Clock
+✓ Revalidation lehnt fehlende/fehlangepasste Metadaten ab und berechnet keine neuen Hash/Clock
+✓ Marker ist account-namespaced und formfremd fail-closed
+✓ Leere accountId wird bei Leseversuch abgewiesen
+✓ AccountId mit Whitespace wird abgewiesen
+✓ Leere accountId wird bei Schreibversuch abgewiesen
+✓ Storage-Getter-Exception führt zu fail-closed Leseergebnis
+✓ Storage-Setter-Exception führt zu fail-closed Schreibergebnis
+✓ Korruptes Marker-JSON wird abgewiesen
+✓ analyseAt muss kanonische ISO sein
+✓ Marker mit 64 Nullen wird abgelehnt
+✓ Marker mit nicht-string Typen wird explizit abgelehnt
+✓ Unveränderten Artikel per Marker erkennen
+✓ Supplied Hash akzeptiert unveränderten aktuellen Inhalt
+✓ Supplied Hash schützt gegen Titel-Drift
+✓ Supplied Hash schützt gegen Text-Drift
+✓ Null-Hash und ungültiger Digest bleiben fail-closed
+
+Ergebnis: 149 ok, 0 offen

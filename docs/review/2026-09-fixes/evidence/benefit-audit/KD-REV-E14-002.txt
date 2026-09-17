@@ -1,0 +1,87 @@
+# KD-REV-E14-002 · Manueller Katalogrefresh invalidiert frischen progressiven Streamingcache nicht
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — ein tatsächlich vorhandener manueller Refresh lädt Legacy-Streamingdaten neu, lässt die sichtbare progressive Seite aber trotz verfügbarer Katalogkorrektur unverändert. Datenverlust, Rechteüberschreitung, Providerwirkung und Live-Häufigkeit sind nicht belegt.
+- Finding: E14-F002
+- Prüfstand: `BASE`
+- Zuständige Etappe: E14
+
+## Fehler und Auswirkung
+
+Wenn der Nutzer in der Klappe „Verbindung wiederherstellen“ auf „Katalog neu laden“ klickt, wird der aktive progressive Seitenrecord nicht ungültig. Der Originalhandler lädt Programm sowie beide Legacy-Streamingbereiche erfolgreich nach, der produktive progressive Streamingpfad behält aber einen vollständigen, weniger als fünf Minuten alten Record. Bei Rückkehr zur gleichen Ansicht sieht der Nutzer daher noch den alten Titel beziehungsweise die alte Metadatenversion, obwohl die korrigierten Legacy-Daten bereits vorliegen.
+
+Der bestätigte Umfang ist ein aktives Konto mit einem vollständigen frischen Seitenrecord und unveränderten Diensten, Mediathek sowie persönlichen Neu-/Statusmarkern. Ausgeführt wurde die Ansicht `all` mit einer Titelkorrektur. Dieselbe fehlende Invalidierungsbrücke kann weitere Seitenansichten treffen, sofern ihr Kontext und ihre Query gleich bleiben. Der Refreshknopf ist nicht dauerhaft sichtbar und als Kinoprogramm-Recovery kontextualisiert; daraus folgt kein Anspruch auf einen allgemeinen, immer verfügbaren Streamingrefresh.
+
+## Auslöser, Soll und Ist
+
+1. Ein Konto hat eine geladene Dienstauswahl und einen vollständigen progressiven Streamingrecord, der unter fünf Minuten alt ist.
+2. Der Katalog erhält eine Titel- oder Metadatenkorrektur bei unveränderten Diensten, Mediathek und persönlichen Markern.
+3. Die Verbindungshilfe ist beispielsweise wegen eines aus dem Browsercache geladenen Kinoprogramms sichtbar; der Nutzer löst „Katalog neu laden“ aus und kehrt vor Ablauf der Frischegrenze in dieselbe Streamingansicht zurück.
+
+Soll: Ein expliziter Katalogrefresh aktualisiert auch den für die sichtbare Streamingansicht maßgeblichen Seitenstand. Beim Wiederöffnen wird eine neue Erstseite angefordert und die inzwischen verfügbare Katalogkorrektur dargestellt.
+
+Ist: Der Refresh holt beide Legacy-Bereiche mit der korrigierten Version, invalidiert den bestehenden Seitenrecord aber nicht. Auch ein erneuter identischer Query löst innerhalb der Frischegrenze keinen weiteren Seitenread aus. In der ausgeführten Probe blieben Seitenversion `v1` und „Alter Titel“ sichtbar, während der Legacytitel bereits „Korrigierter Titel“ war. Erst die Wiederaufnahme nach Überschreiten der Frischegrenze führte zum zweiten Seitenread und `v2`.
+
+## Ursache und Fundstellen
+
+`refreshKatalog` erhöht nur die Legacy-Generation und leert Legacy-Refs. Die dauerhaft im App-Body gehaltene Page-Controller-Revision enthält ausschließlich Konto und Storageowner. Nach `ladeStreamingDateien` erreichen den Page-Kontext nur die persönlichen Fristanker. Bei wertgleichen persönlichen Daten verwirft `setContext` neue Objektidentitäten über die stabile Signatur; `resumeRecord` startet für einen vollständigen frischen Record keinen Initial- oder Hintergrundread.
+
+- UI-Auslöser: eingefrorene Quelle, Zeilen 194–204 — die Klappe zeigt den Knopf „Katalog neu laden“. Fixbezug: `src/tabs/DatenTab.jsx` am Prüfcommit.
+- Verdrahtung und Revision: eingefrorene Quelle, Zeilen 920–932 — der Page-Controller erhält die nur konto-/storagebasierte `revision`. Fixbezug: `src/App.jsx` am Prüfcommit.
+- Manueller Handler: eingefrorene Quelle, Zeilen 1794–1803 — lädt Programm und Legacy-Streaming, ohne Seitencontroller zu invalidieren. Fixbezug: `src/App.jsx` am Prüfcommit.
+- Callback-Verdrahtung: eingefrorene Quelle, Zeilen 2088–2105 — `onKatalogRefresh={refreshKatalog}`. Fixbezug: `src/App.jsx` am Prüfcommit.
+- Frischer Record wird wiederverwendet: eingefrorene Quelle, Zeilen 308–325 — Refresh erfolgt nur bei Ablauf/Frischegrenze oder einer nicht gestarteten Kette. Fixbezug: `src/controllers/useStreamingPageController.js` am Prüfcommit.
+- Unveränderter Kontext ist ein No-op: eingefrorene Quelle, Zeilen 399–422 — identische Signatur hält den Record. Fixbezug: `src/controllers/useStreamingPageController.js` am Prüfcommit.
+- Controller lebt über Tabwechsel: eingefrorene Quelle, Zeilen 474–500. Fixbezug: `src/controllers/useStreamingPageController.js` am Prüfcommit.
+- Wertgleiche persönliche Projektion: eingefrorene Quelle, Zeilen 53–66 und 121–142 — der Vollkatalog kann Neu-Effects auslösen, ohne die an den Seitenkontext gegebenen Fristanker zu ändern. Fixbezug: `src/controllers/useStreamingNeuController.js` am Prüfcommit.
+
+## Belege und Gegenproben
+
+Ausgeführte lokale Reproduktion:
+
+- `node --experimental-vm-modules /private/tmp/kd-vollreview-20260916/tests/E14-F002/validator/reproduce.mjs` endete mit Exit 0. Sie verwendete die originalen Page- und Neu-Hooks in React/jsdom sowie unverändert aus `App.jsx` extrahierte `refreshKatalog`-/`ladeStreamingDateien`-Funktionen und die originalen Projektionen. Netzwerk, Konto-/Speicherzugriffe und Kinoprogramm waren lokal gemockt; es gab keinen Remotezugriff.
+- Maschinenlesbares Ergebnis: Nach dem manuellen Refresh zwei neue Legacy-Reads und ein erfolgreicher Programm-Mockaufruf, aber `pageReads: 1`, Seitenversion `v1`, „Alter Titel“, `personalUnchanged: true`. Die positive Fünf-Minuten-Gegenprobe erreicht `pageReads: 2`, `v2` und „Korrigierter Titel“.
+- Provenance belegt zwölf zentrale Produktdateien byteidentisch zu `BASE`; die ausgeführten Produktbytes stammen aus `/private/tmp/kd-vollreview-20260916/source`.
+- Validatorergebnis enthält die vollständige statische Verdrahtung, Gegenbelege und den engen Geltungsbereich. Das ursprüngliche Master-Proposal ist nur Herkunft, nicht die maßgebliche Präzisierung.
+
+Gegenproben und Abgrenzung:
+
+- Die fünfminütige Revalidierung funktioniert grundsätzlich; der Befund ist die ignorierte **ausdrückliche** Refreshabsicht innerhalb dieser Frischeperiode, keine Behauptung eines fehlenden Timers.
+- Neue Library-, Service-, Account- oder persönliche Neu-Werte können über den Kontext indirekt invalidieren. Die reproduzierte reine Metadatenkorrektur hielt sie trotz echter Neu-Hook-Effects wertgleich.
+- Die Reproduktion hat das erneute Senden derselben Query geprüft; der vollständige frische Record blieb bestehen. Unvollständige Seitenketten und der Fallback bei fehlender Seiten-RPC liegen außerhalb des bestätigten Triggers.
+- Dies ist keine Dublette zu E06-F001: Dort geht es um eine Quellkatalog-Ablauffrist. Hier ist die Quelle gültig und die neue Version abrufbar; nur die manuelle Aktualisierungsabsicht erreicht den aktiven Seitenrecord nicht.
+
+## Test- und Betriebsbeleggrenzen
+
+- **Produktfehler:** Bestätigt ist die fehlende clientseitige Invalidierungsverbindung zwischen manuellem Refresh und progressivem Seitencontroller.
+- **Kein belegter Testwerkzeugfehler:** Die Reproduktion lief erfolgreich im begrenzten React/jsdom-Harness. Sie ersetzt keine Produkt-UI-E2E; App, DatenTab und StreamingTab wurden nicht vollständig gerendert, ihre Verdrahtung ist statisch belegt.
+- **Betriebsbeleglücke:** Kinoprogramm, Netzwerk, Auth und Speicher waren gemockt. Es gibt keinen Beleg zu aktuellen Produktionskatalogen, tatsächlicher Häufigkeit des Recovery-Zustands oder Deploymentstand. Backendmigrationen wurden nicht ausgeführt; im belegten Fehlerfenster wird schlicht kein neuer Seitenrequest gestartet.
+- Die ausgeführte Änderung ist eine Metadatenkorrektur, nicht die reale Entfernung eines Titels bei einem Streaminganbieter.
+
+## Korrekturziel und Abnahme
+
+Korrekturziel: Den manuellen Katalogrefresh an eine eigene Page-Refreshrevision oder eine gezielte Controllerinvalidierung binden. Die Invalidierung muss bei inaktivem Streamingtab bis zur nächsten Wiederaufnahme bestehen bleiben. Kontogrenzen, Queries, Abbrüche, Epoch-Guards, Neu-Fristen und die automatische Wiederverwendung ohne ausdrücklichen Refresh bleiben unverändert. Dafür sind keine Quellen-, Scheduler-, Backend- oder Provideränderungen erforderlich.
+
+Abnahmekriterien:
+
+1. Ein vollständiger Seitenrecord unter fünf Minuten wird nach „Katalog neu laden“ und Rückkehr zur gleichen Ansicht erneut angefordert, auch wenn `newEntries`, `legacyNew`, Dienste und Mediathek wertgleich bleiben.
+2. Eine reine Titel-/Metadatenkorrektur des neuen Katalogstands ist nach erfolgreicher Seitenantwort sichtbar; erfolgreiche Legacy-Reads genügen nicht als Abnahmebeleg.
+3. Die Invalidierung funktioniert bei inaktivem Streamingtab und mehrfachen Rendern, ohne denselben manuellen Refresh unnötig mehrfach anzufordern.
+4. Eine späte Antwort eines vor dem Refresh gestarteten Seitenlaufs kann den neuen Stand nicht überschreiben; Accountwechsel und bestehende Abbruchgrenzen bleiben wirksam.
+5. Ohne manuellen Refresh wird der frische Record weiterhin wiederverwendet; Fristenbuchwerte und 14-Tage-Fenster werden nicht künstlich geändert.
+
+## Abhängigkeiten und offene Punkte
+
+- Verwandter, aber eigenständiger Befund: E06-F001 (Ablauffrist des Quellkatalogs).
+- Master-Abnahme ist bestätigt. Dieses Ticket behauptet keine Reparatur, keinen Produkt-Test-PASS, kein CI, kein Deployment und keine physische Abnahme.
+
+## Herkunft und Master-Abnahme
+
+- Validatorergebnis: `/private/tmp/kd-vollreview-20260916/validations/E14-F002.json` (`confirmed`)
+- Master-Proposal: `/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E14-F002.json`
+- Autor: Terra/xhigh
+- Zuständiger Master: Astra/high
+- Master-Abnahme: offen — bis zum gesonderten Finding-zu-Ticket-Abgleich.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E14/KD-REV-E14-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

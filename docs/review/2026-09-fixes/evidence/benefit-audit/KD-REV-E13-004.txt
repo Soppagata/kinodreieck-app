@@ -1,0 +1,62 @@
+# KD-REV-E13-004 · Privat-v1-Browsergate erwartet einen entfernten Hilfe-Hero
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — die aktive, netzgesperrte private-v1-Abnahme scheitert in Chromium und WebKit vor einem Teil ihrer nachfolgenden Prüfungen. Betroffen sind Test-/Releasezuverlässigkeit, nicht ein beobachteter Endnutzerfehler oder reales Deployment.
+- Finding: E13-F004
+- Prüfstand: `BASE`
+- Zuständige Etappe: E13
+
+## Fehler und Auswirkung
+
+Der aktive Radar-/Audit-/Hilfe-Browsertest erwartet nach Öffnen von „Hilfe & Anleitung“ den entfernten Hero-Text `LOKALE FILM-PLATTFORM`. Die Produktquelle rendert dort bedingungslos `PERSÖNLICHE FILM-PLATTFORM`. Beide Browserprojekte laufen damit nach acht Sekunden in einen Assertion-Timeout; die nachfolgenden Menü- und Katalogaudit-Assertions desselben Tests werden übersprungen.
+
+`npm run test:private-v1` bindet die Spec ein (Script); das finale private Releasegate führt sie als Pflichtschritt `account-ready-browsers` aus (Gateplan). Kein Fehler des sichtbaren Heroes und keine reale Releaseauswirkung sind aus diesem Befund abgeleitet.
+
+## Auslöser, Soll und Ist
+
+Der vollständig gemockte private Konto-Test öffnet Settings, klappt „Hilfe & Anleitung“ auf und prüft den Hero. Die private-v1-Konfiguration umfasst den Testordner, startet Chromium und WebKit und hat `retries: 0` sowie einen Expect-Timeout von acht Sekunden (Config).
+
+Soll: Der Abnahmetest akzeptiert den aktuellen persönlichen Plattform-Hero und führt anschließend seine Menü-, Audit- und Touch-Verträge aus.
+
+Ist: Die exakte alte Texterwartung an `tests/private-v1/private-v1.spec.mjs:276` kann keinen Treffer finden. `DatenTab` setzt für den geöffneten Settings-Bereich bedingungslos `UeberKinodreieck` ein (`src/tabs/DatenTab.jsx:348`); dieser Renderer setzt `ErklaerHero` ein (`src/components/Erklaerstuecke.jsx:92`), das den neuen Text enthält (`:42`).
+
+## Ursache und Fundstellen
+
+Die exakte Testassertion ist gegenüber dem beabsichtigten Produktions-Copy-Vertrag veraltet. Es gibt keinen Guard, alternativen aktiven `src`-Produzenten oder Migrationspfad, der für diese Fixture noch den alten Text rendern würde. Der Production-Copy-Vertrag verlangt ausdrücklich den neuen Text und die Abwesenheit des alten (`production_copy_surface_test.mjs:174`).
+
+Fundstellen am Prüfcommit (repository-relativ; die Links zeigen auf die unveränderliche Prüfkopie):
+
+- `tests/private-v1/private-v1.spec.mjs:270` bis `:285`: Auslöser, veraltete Assertion und die danach bisher übersprungenen Verträge.
+- `src/tabs/DatenTab.jsx:348` bis `:351`: kanonischer Settings-Hilfepfad.
+- `src/components/Erklaerstuecke.jsx:35` bis `:52` und `:92` bis `:100`: aktueller Hero und bedingungslose Einbindung.
+- `production_copy_surface_test.mjs:174` bis `:179`: absichtlicher Gegenvertrag; `playwright.private-v1.config.mjs:34` bis `:37` und `tools/private-release-final.mjs:12` bis `:23`: aktive Browser und Gateeinbindung.
+
+## Belege und Gegenproben
+
+Der Validierer führte die unveränderte Originalspec, Fixture und Produktquellen in einer isolierten Kopie genau einmal je Browser aus. Beide Läufe scheiterten mit Exit 1 an Zeile 276 nach 8000 ms; der Fehler-DOM enthielt `PERSÖNLICHE FILM-PLATTFORM Kinodreieck`. Netzledger je Browser: zehn Mock-Anfragen, keine abgebrochenen und keine unbekannten Fixturepfade. Die Originalausgabe, DOM-Kontexte, Traces und Screenshots liegen unter validator/original-results und original-run.log.
+
+Als Gegenfaktum ersetzte eine getrennte Validator-Testkopie ausschließlich den erwarteten String; Produktcode und Fixture blieben unverändert. Der ausgewählte Test bestand danach in Chromium und WebKit (2 passed, 5,3 s) einschließlich aller folgenden Menü-, Audit- und Touch-Assertions. Je Browser wurden sieben Mock-Anfragen gezählt, ohne Abbrüche oder unbekannte Fixturepfade. Beleg: corrected-run.log.
+
+Die Finale-Gate-Weitergabe wurde getrennt mit einem synthetischen Runner geprüft: ein Fehlschlag von `account-ready-browsers` macht `runFinalGate.ok` falsch, alle sechs Schritte werden jedoch erfasst (gate-propagation.log). Das ist ein Mock-only-Werkzeugbeleg, kein ausgeführtes Finalgate. Die nach den Reproduktionen erneut geprüften Kopien stimmen mit der eingefrorenen Quelle überein; nur der erwartete String unterscheidet sich in der Gegenprobe (copied-source-manifest.json).
+
+Gegenbelege und Grenzen: Die Hilfe ist erreichbar; beide Originalbrowserläufe bestehen sämtliche vorherigen Radar-, Blog-, Navigations- und Touchprüfungen. Der neue Hero ist beabsichtigt, weshalb der Produkttext nicht zurückgedreht werden darf. Weitere alte Erwartungen in `cleanup-d2.spec.mjs` und `mobile-layout.spec.mjs` liegen außerhalb von `tests/private-v1` und sind nicht erforderlich für diesen Befund. Frühere Umgebungsprobleme (Cache-Schreibort, lokaler Port, grep-Auswahl, fehlende kopierte Shared-Module) waren Harnessprobleme und keine Produktbefunde.
+
+## Korrekturziel und Abnahme
+
+Nur die aktive Browsertest-Erwartung an den aktuellen Hilfe-Hero anpassen; optional gezielt die Abwesenheit des alten Texts prüfen. Keine Produkt-, Backend-, Schema-, Migrations- oder Fixture-Änderung.
+
+- Der ausgewählte Originaltest mit dem korrigierten Erwartungstext besteht gegen unveränderten Produktcode in Chromium und WebKit.
+- Hilfe bleibt über Settings erreichbar und zeigt den persönlichen Plattform-Hero.
+- Menü-, Audit- und Touch-Assertions nach dem Hero laufen vollständig; Netzzaun und `retries: 0` bleiben erhalten.
+- Der Production-Copy-Vertrag „neuer Text vorhanden, alter Text nicht vorhanden“ bleibt gewahrt.
+
+## Abhängigkeiten und offene Punkte
+
+Keine globale Testsuite, kein vollständiges Finalgate und keine produktive Anwendung wurden ausgeführt; weitere unabhängige Gatefehler sind damit möglich. Die Browserreproduktion nutzte vorhandene lokale Playwright-1.62.1-Abhängigkeiten und installierte Chromium-/WebKit-Binaries, ohne `npm ci`. Kein Duplikat im abgegrenzten Validatorauftrag festgestellt. Master-Abnahme ist bestätigt.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: `/private/tmp/kd-vollreview-20260916/validations/E13-F004.json`. Ausgangsverdacht: `/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E13-F004.json`. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E13/KD-REV-E13-004.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

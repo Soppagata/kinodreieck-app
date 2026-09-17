@@ -1,0 +1,72 @@
+# KD-REV-E04-002 · Bearbeitete KI-Vorschläge werden als angenommen gespeichert
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — die persönliche Bewertung bleibt erhalten, aber ihr gespeicherter Status und die sichtbare Herkunftseinordnung sind im normalen Bewertungsweg falsch. Datenverlust und Sicherheitsvorfall sind nicht belegt.
+- Finding: E04-F002
+- Prüfstand: BASE
+- Zuständige Etappe: E04
+
+## Fehler und Auswirkung
+
+Wird ein KI-Vorschlag in der FilmCard übernommen, danach in Achse, Kategorie oder Begründung verändert und gespeichert, trägt die gespeicherte Prognose trotzdem den Status angenommen. Die Oberfläche zeigt deshalb von dir angenommen, obwohl die persönliche Bewertung vom Vorschlag abweicht. bewertet_von bleibt KI-Bewertung (übernommen).
+
+Betroffen ist der gespeicherte Mediathek-Eintrag mit gültiger offener oder bereits angenommener Prognose und sichtbarem Prognosebereich. Das neue Eintragsformular ist vom validierten Fehler ausgenommen. Es ist nicht belegt, dass der Status Profiltraining oder Modellverhalten auslöst.
+
+## Auslöser, Soll und Ist
+
+Auslöser: Einen Film- oder Serieneintrag mit gültiger offener Prognose öffnen, Vorschlag in Eingabe übernehmen, mindestens eine Bewertungsachse, Kategorie oder Begründung ändern und Bewertung speichern. Alle Achsen und die Kategorie sind ausgefüllt, die Speicherung wird bestätigt. Derselbe Weg ist für bereits angenommene Vorschläge erreichbar.
+
+Soll: Der resultierende persönliche Bewertungsinhalt wird mit prognose.ergebnis verglichen. Abweichungen in Achsen, Kategorie oder Begründung erzeugen korrigiert. Eine unveränderte Übernahme oder ausschließlich geänderte Notiz bleibt angenommen; der sichtbare Status muss dazu passen.
+
+Ist: Nach einer WARUM-Änderung von 4 auf 5 bleibt die persönliche Bewertung 5, die ursprüngliche Prognose 4 und der Status angenommen. Kategorie- und Begründungsänderungen verhalten sich gleich. Auf dem Übernahme-Einstieg bleibt auch eine bereits angenommene Prognose angenommen.
+
+## Ursache und Fundstellen
+
+FilmCard speichert beim Übernahme-Einstieg nur das Einstiegsflag prognoseEntwurf, nicht den resultierenden Editorwert:
+
+- Übernahme setzt prognoseEntwurf auf true und füllt den Editor: eingefrorene Quelle: src/components/FilmCard.jsx:262, repository-relativ src/components/FilmCard.jsx:262-289, Commit BASE.
+- Der Speicherentscheid setzt bei offener Prognose allein anhand dieses Flags angenommen; der Korrekturzweig schließt es aus: eingefrorene Quelle: src/components/FilmCard.jsx:291, repository-relativ src/components/FilmCard.jsx:291-300.
+- EditPanel lässt die Felder editierbar und gibt die fertigen Werte an onSave weiter: eingefrorene Quelle: src/components/EditPanel.jsx:53, repository-relativ src/components/EditPanel.jsx:53-77.
+- Der Status wird sichtbar ausgegeben und der Übernahmeweg ist für offen sowie angenommen verfügbar: eingefrorene Quelle: src/components/PrognoseBereich.jsx:102, repository-relativ src/components/PrognoseBereich.jsx:102-110,174-179.
+- Das neue Eintragsformular besitzt bereits einen Vergleich von Achsen, Kategorie und Begründung: eingefrorene Quelle: src/components/EintragForm.jsx:22, repository-relativ src/components/EintragForm.jsx:22-31,235-240.
+
+setzePrognoseStatus validiert Schema und Statusübergang, erhält aber nicht die persönliche Bewertung. App.updateFilm übergibt den so erzeugten Prognosewert über mergePersonalMasterEntry unverändert zur Speichergrenze; eingefrorene Quelle: src/lib/personalEntryChronology.js:46, repository-relativ src/lib/personalEntryChronology.js:46-60, und src/App.jsx:1197-1205 am Prüfcommit.
+
+## Belege und Gegenproben
+
+Statisch nachvollzogen wurden Erzeugung und Anzeige der Prognose, FilmCard zu updateFilm, der Speicherpfad durch mergePersonalMasterEntry und die fehlende spätere Abgleichkorrektur in den untersuchten Speicher-, Account- und Migrationspfaden.
+
+Die begrenzte Validator-Reproduktion reproduce.mjs bündelte echte Komponenten aus der eingefrorenen Quelle und bediente sie in JSDOM. Esbuild bundelte die Komponenten; gültige Prognosen entstanden über erstellePrognose. Speicher- und JSON-Grenze waren isoliert nachgebildet; es gab weder App-Gesamtmount noch Remote-Speichertest. Exit 0 bestätigte acht erwartete Ist-Fälle bei null Netzwerkaufrufen. Die Werte und sichtbaren Stati liegen in results.json. Das ist eine erfolgreiche Fehlerreproduktion, kein Produkt-PASS.
+
+Gegenproben:
+
+- EintragForm klassifiziert denselben geänderten WARUM-Wert als korrigiert.
+- Der manuelle Einstieg Jetzt bewerten setzt bei offener Prognose korrekt korrigiert.
+- Unveränderte Übernahme und reine Notizänderung bleiben zu Recht angenommen.
+- Unvollständige übernommene Pflichtfelder werden vor dem Speichern gesperrt.
+- Die ursprüngliche Prognose und die geänderten Nutzerwerte gehen nicht verloren.
+
+Die vorhandenen Tests rating_followup_ui_test.mjs und prognose_test.mjs wurden als Testabdeckung gelesen, nicht ausgeführt. Sie widerlegen den Fehler nicht: Sie prüfen den Wertevergleich im Formular beziehungsweise gültige Statusübergänge, nicht das Bearbeiten nach FilmCard-Übernahme. Dies ist ein Produktfehler, kein nachgewiesener Testwerkzeugfehler.
+
+## Korrekturziel und Abnahme
+
+FilmCard soll vor dem Statuswechsel den gespeicherten Bewertungsinhalt mit prognose.ergebnis vergleichen. Der vorhandene reine Vergleich aus EintragForm ist als gemeinsam genutzte, fachlich einheitliche Funktion vorzuziehen. Eine bearbeitete, vorher angenommene Prognose muss ebenfalls korrigiert werden. Reine Notizen dürfen keinen Korrekturstatus auslösen; Herkunftskennzeichnung und sichtbarer Status müssen konsistent sein. Provider, Modell, Backend und Quoten bleiben außerhalb der Korrekturgrenze.
+
+Abnahme:
+
+1. Unveränderte offene Prognose übernehmen und speichern ergibt angenommen; das ursprüngliche Ergebnis bleibt erhalten.
+2. Nach Übernahme jeweils Achse, Kategorie oder Begründung ändern und speichern ergibt korrigiert; die Nutzerwerte bleiben erhalten und die UI zeigt von dir korrigiert.
+3. Eine bereits angenommene Prognose erneut übernehmen, verändern und speichern ergibt korrigiert.
+4. Nur die Notiz ändern oder die Bewertungsfelder vor dem Speichern wieder exakt zurücksetzen ergibt angenommen.
+5. Manueller Bewertungsweg, EintragForm, unvollständige Prognosefelder und Fehlerpfade beim Speichern behalten ihre bisherigen Guards.
+
+## Abhängigkeiten und offene Punkte
+
+Keine Live-KI-, Provider- oder Remote-Persistenzprüfung wurde ausgeführt. Die App- und Speicherwirkung wurde statisch verfolgt; die Laufzeitreproduktion verwendete echte UI-Komponenten mit gemockter Speichergrenze. Eine Korrektur bereits falsch klassifizierter historischer Einträge ist nicht untersucht und gehört nicht zu diesem Ticket.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: E04-F002.json. Ursprünglicher Verdacht: E04-F002.json. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E04/KD-REV-E04-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

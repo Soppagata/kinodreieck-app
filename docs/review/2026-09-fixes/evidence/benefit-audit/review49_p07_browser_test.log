@@ -1,0 +1,3 @@
+Chromium: native keyboard, creation/delete/recreate, legacy conflicts, source warning and 320/390/1280px passed
+WebKit: native keyboard, creation/delete/recreate, legacy conflicts, source warning and 320/390/1280px passed
+44 browser scenarios passed; external requests 0

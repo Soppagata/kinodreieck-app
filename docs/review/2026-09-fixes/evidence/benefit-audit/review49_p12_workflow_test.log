@@ -1,0 +1,10 @@
+✔ E13-001: a job due after an idle claim reaches the actual backlog warning with lag zero (51.474875ms)
+✔ E13-001: inconsistent states, counters, extras and limits remain fail-closed (621.268375ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 675.118167

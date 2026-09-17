@@ -1,0 +1,11 @@
+✓ RLS mocked actual CLI: t3
+✓ RLS mocked actual CLI: lost-insert-response
+✓ RLS mocked actual CLI: before-probe
+✓ RLS mocked actual CLI: changed-value
+✓ RLS mocked actual CLI: cleanup-read-fails
+✓ RLS mocked actual CLI: cleanup-delete-fails
+✓ RLS mocked actual CLI: changed-after-read
+✓ RLS mocked actual CLI: changed-shared
+✓ RLS mocked actual CLI: normal
+✓ RLS mocked actual CLI: existing-profile
+review49_p03_rls_test: 10 Checks bestanden; no network.

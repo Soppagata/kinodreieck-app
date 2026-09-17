@@ -1,0 +1,113 @@
+✓ E05 falsy IDs werden eindeutig repariert
+✓ E05 gültige ID bleibt erhalten; zweiter Lauf ist stabil
+✓ E05 App.addFilm speichert zwei Satzzeichentitel und gibt tatsächliche IDs zurück
+✓ E05 Anlage bleibt nach Reload auswählbar
+✓ E05 Einzeledit reparierter Alt-ID verändert genau ein Werk
+✓ E05 fehlender Speichererfolg gibt keine ID zurück
+✓ E04-001 Remake bleibt offen und eindeutige Serie wird verlinkt
+✓ E04-001 Remake bleibt offen und eindeutige Serie wird verlinkt
+✓ E04-001 Remake bleibt offen und eindeutige Serie wird verlinkt
+✓ E04-001 Projektion bewahrt Metadaten ohne Mutation
+✓ E04-001 passender Master-Jahrestreffer gewinnt
+✓ E04-001 Mehrdeutigkeit bleibt Entscheidung
+✓ E04-001 Altbestand behält null/Film-Semantik
+✓ E04-001 explizite bestehende Ref bleibt stabil
+✓ E09 Vorschau zeigt geschützten Bestand vor Schreiben
+✓ E09 A plus B und Film außerhalb Angebot bleiben erhalten, genau ein Versionsschritt
+✓ E09 geänderte Filmrichtung wird ausdrücklich angezeigt
+✓ E09 erneute Auswahl aktualisiert eindeutig ohne Dublette
+✓ E09 keine Auswahl kann Bestand nicht leeren
+✓ E09 Abbruch bewahrt gespeicherten Bestand
+✓ E09 gemockte KI-Teilliste ergänzt nur bestätigten Film
+✓ E09 bloße Nennung überschreibt keine bestätigte Richtung
+✓ E09 fremde starke IDs, Remakes und unbekanntes Jahr werden nicht titelbasiert vereinigt
+✓ E09 Einwilligung bleibt zwingend
+✓ E09 offene Vorschau und Rahmenvalidierung bleiben wirksam
+✓ E04-004 1 bleibt lokaler String über Tick
+✓ E04-004 19 bleibt lokaler String über Tick
+✓ E04-004 198 bleibt lokaler String über Tick
+✓ E04-004 1982 bleibt lokaler String über Tick
+✓ E04-004 Commit persistiert numerisch 1982
+✓ E04-004 unvollständiger Commit löscht gültiges Jahr nicht
+✓ E04-004 Korrektur auf 1983 speichert
+✓ E04-004 Abbruch verwirft Leerentwurf
+✓ E04-004 bewusste Leerung persistiert null
+✓ E04-004 Speicherfehler bewahrt Entwurf und alten Topf
+✓ E04-004 vollständiges Einsetzen nach Speicherfehler funktioniert
+✓ E04-004 Escape verwirft nur Jahresentwurf
+✓ E04-004 Enter bestätigt das vollständige Jahr
+✓ E04-004 schrittweise Neuanlage bleibt vor Submit ungespeichert
+✓ E04-004 Neuanlage persistiert das vollständige Jahr
+✓ E04-005 partial: Doppelklick schreibt jeden Kandidaten einmal
+✓ E04-005 partial: Rest bewahrt Quelle, Staffeln, Faktenwahl und Auswahl
+✓ E04-005 Bericht ordnet den Teilerfolg korrekt ein
+✓ E04-005 gezielter Retry schreibt nur Rest ohne neue KI
+✓ E04-005 all-failed: Doppelklick schreibt jeden Kandidaten einmal
+✓ E04-005 all-failed: Rest bewahrt Quelle, Staffeln, Faktenwahl und Auswahl
+✓ E04-005 Bericht ordnet den Teilerfolg korrekt ein
+✓ E04-005 gezielter Retry schreibt nur Rest ohne neue KI
+✓ E04-005 success: Doppelklick schreibt jeden Kandidaten einmal
+✓ E04-005 vollständiger Erfolg schließt Vorschau
+✓ E04-005 Kontextwechsel stoppt Rest und alte Abschlussanzeige
+✓ E04-006 wartet film→serie: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 wartet film→serie: Save und Entwurf korrekt
+✓ E04-006 wartet serie→film: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 wartet serie→film: Save und Entwurf korrekt
+✓ E04-006 wartet serie→serie: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 wartet serie→serie: Save und Entwurf korrekt
+✓ E04-006 wartet film→serie: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 wartet film→serie über musik: Save und Entwurf korrekt
+✓ E04-006 wartet film→serie: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 wartet film→serie über sonstiges: Save und Entwurf korrekt
+✓ E04-006 freigegeben film→serie: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 freigegeben film→serie: Save und Entwurf korrekt
+✓ E04-006 freigegeben serie→film: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 freigegeben serie→film: Save und Entwurf korrekt
+✓ E04-006 freigegeben serie→serie: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 freigegeben serie→serie: Save und Entwurf korrekt
+✓ E04-006 freigegeben film→serie: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 freigegeben film→serie über musik: Save und Entwurf korrekt
+✓ E04-006 freigegeben film→serie: innerer und äußerer Typ synchron
+✓ E04-006 Referenz wartet auf bestätigte Anlage
+✓ E04-006 freigegeben film→serie über sonstiges: Save und Entwurf korrekt
+✓ E04-006 Validierung folgt aktuellem Serientyp
+✓ E04-002 offen/none: gespeicherter und sichtbarer Status angenommen
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 offen/axis: gespeicherter und sichtbarer Status korrigiert
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 offen/category: gespeicherter und sichtbarer Status korrigiert
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 offen/reason: gespeicherter und sichtbarer Status korrigiert
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 offen/note: gespeicherter und sichtbarer Status angenommen
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 offen/reset: gespeicherter und sichtbarer Status angenommen
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 angenommen/none: gespeicherter und sichtbarer Status angenommen
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 angenommen/axis: gespeicherter und sichtbarer Status korrigiert
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 angenommen/category: gespeicherter und sichtbarer Status korrigiert
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 angenommen/reason: gespeicherter und sichtbarer Status korrigiert
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 angenommen/note: gespeicherter und sichtbarer Status angenommen
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 angenommen/reset: gespeicherter und sichtbarer Status angenommen
+✓ E04-002 Herkunft entspricht endgültigem Bewertungsinhalt
+✓ E04-002 unvollständige Übernahme bleibt gesperrt
+✓ E04-002 Speicherfehler bewahrt korrigierten Entwurf
+✓ E04-002 manueller Bewertungsweg bewahrt Korrekturstatus und Werte
+✓ E05 normale Anlage und Dublettenregel bleiben erhalten
+✓ E09 stabile Master-ID schlägt geänderten Titel; leere Teilliste erhält Bestand
+✓ Keine Netzwerk- oder Provideraufrufe
+P04 PASS: 112 Prüfungen

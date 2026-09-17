@@ -1,0 +1,63 @@
+# KD-REV-E13-002 · Abgelaufene Mail-Ratenbuckets werden weder bereinigt noch als fällig gemeldet
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — abgelaufene, nicht mehr verwendete Ratenbuckets sammeln sich an und die bestehende Betriebsprüfung meldet dafür keinen Retentionbedarf. Keine aktuell falsche Ratelimit-Entscheidung, Maildoppelzustellung, Datenleck oder Produktionsüberlastung ist belegt.
+- Finding: E13-F002
+- Prüfstand: `BASE`
+- Zuständige Etappe: E13
+
+## Fehler und Auswirkung
+
+Der private Mailpfad erzeugt pro zulässigem Zeitfenster globale und persönliche Ratenbuckets. Nach ihrem Ablauf existiert kein Produkt-Retentionpfad, der diese Buckets zählt oder innerhalb einer Laufgrenze löscht. Der `private-ops-check` summiert nur die `due`-Werte der unvollständigen Retentionfunktion und meldet deshalb „OK“, obwohl abgelaufene Buckets bestehen.
+
+Der bestätigte Scope ist ausschließlich die Retention des Rate-Ledgers. Das Operationsledger darf nicht aus diesem Ticket nach sieben Tagen gelöscht werden: Es dient der dauerhaften, fail-closed Idempotenz; ein Löschen könnte dieselbe `operation_id` wieder freigeben.
+
+## Auslöser, Soll und Ist
+
+Ein authentifiziertes und freigeschaltetes Konto sendet bei aktiviertem Transport eine gültige Feedback- oder Kontolöschanfrage. Der reguläre Handler erzeugt frische Operations- und Bucket-Digests, ruft vor dem Transport `beginRequest` auf und bekommt dort die Ratenbuckets (Handler, Begin, RPC-Bindung). Nach Ablauf der 24 Stunden folgen weitere normale Anfragen in neuen Fenstern.
+
+Soll: Abgelaufene Ratenbuckets werden begrenzt und nur bei aktivem Purge bereinigt; der Dryrun meldet sie separat. Aktive Fenster, Rate-Limits und die dauerhafte Idempotenz des Operationsledgers bleiben unverändert.
+
+Ist: Die Begin-RPC schreibt `expires_at` als Fensterbeginn plus 24 Stunden, aber verwendet beim Upsert ausschließlich den jeweiligen Fenster-Primärschlüssel (Bucket-DDL, Inserts). Die finale `kd_private_retention_run` zählt und löscht andere Tabellen, jedoch keine Mailbuckets (Zählung, Purge, Antwortmatrix). Der Monitor wertet genau diese `due`-Matrix aus (`tools/private-ops-check.mjs:287`).
+
+## Ursache und Fundstellen
+
+Die Mailmigration führt ein vom Operationsledger absichtlich entkoppeltes, zeitfensterbasiertes Rate-Ledger ein, ohne die bestehende Retentionfunktion um dieses Ledger zu erweitern. Die Primärschlüssel enthalten `window_started_at`; neue Fenster werden folglich neu angelegt, alte weder wiederverwendet noch entfernt.
+
+Fundstellen am Prüfcommit (repository-relativ; die Links zeigen auf die unveränderliche Prüfkopie):
+
+- `supabase/migrations/20260902090000_private_mail_request_guards.sql:61` bis `:90`: bewusst entkoppeltes Bucket-Schema, Fenster-Primärschlüssel und 24h-Ablauf.
+- `supabase/migrations/20260902090000_private_mail_request_guards.sql:181` bis `:198`: Operationsreplay bleibt dauernd fail-closed; `:261` und `:273`: globale und persönliche Bucket-Upserts.
+- `supabase/migrations/20260815120000_private_export_radar_pilot_compat.sql:217`, `:251` und `:322`: letzte Retentiondefinition ohne Mailtabellen.
+- `tools/private-ops-check.mjs:287`: Monitoring basiert ausschließlich auf dieser unvollständigen `due`-Antwort.
+
+## Belege und Gegenproben
+
+Die Quellprovenienzprüfung source-audit.json verglich die sechs relevanten Dateien mit den Git-Blobs des Prüfcommits und suchte alle SQL-Migrationen nach beiden Mailtabellen und Retentiondefinitionen. Beide Tabellen erscheinen nur in ihrer Erzeugungsmigration; keine spätere Migration behebt die Lücke.
+
+Die isolierte PostgreSQL-17.10-Reproduktion repro.py führte die exakte Mailmigration sowie den unveränderten letzten Retentionfunktionskörper aus; unbeteiligte Retentiontabellen waren leere Fixtures. Nach einem echten Begin-RPC entstanden 1 Operation und 2 Buckets. Nach einer constraints-konformen Simulation von acht Tagen waren beide Buckets abgelaufen. Dryrun und ein ausdrücklich aktivierter Purge meldeten sämtlich `due: 0`; danach blieben 1 Operation und 2 abgelaufene Buckets bestehen. Eine neue Operation erhöhte den Bestand auf 2/4, die zwei alten blieben erhalten. Das Replay der alten Operation gab `replay: true`, `status: unknown` zurück und erzeugte keine Buckets. Vollständiges Ergebnis, Quellhashes und Grenzen: result.json.
+
+Der erste Versuch scheiterte vor SQL-Ausführung am sandbox-blockierten `initdb`-`shmget`; derselbe isolierte Test lief danach mit erlaubter Sandbox-Eskalation erfolgreich und beendete PostgreSQL im `finally`. Es gab keine Provider-, Mail-, Live-KI- oder Remote-Datenbankaufrufe.
+
+Gegenbelege und Abgrenzung: Die Rate-Abfragen lesen nur das aktuelle Fenster mit höchstens 24 Stunden. Authentifizierung, Kontofreigabe, Serversecrets, Transportaktivierung und Rate-Limits begrenzen die Erzeugung; sie bilden aber keine Retention. Eine extern administrierte Owner-Bereinigung wäre möglich, ist im Produktstand nicht implementiert oder belegt. Produktionsmenge, tatsächliche externe Wartung und Deploymentstand bleiben offen.
+
+## Korrekturziel und Abnahme
+
+Additive Migration nur für begrenzte Bereinigung abgelaufener `kd_private_mail_rate_buckets`, einschließlich Dryrun-Zählung, bestehendem Purge-Gate, Ablaufindexierung und fokussierten lokalen Tests. Das Operationsledger bleibt unverändert; seine mögliche Retention erfordert ein separates, explizites Idempotenzkonzept.
+
+- Dryrun meldet abgelaufene Mail-Ratenbuckets getrennt und ohne Mutation; der Monitor erkennt daraus fällige Mailbereinigung.
+- Bei aktiviertem Purge werden höchstens die pro Lauf erlaubten abgelaufenen Buckets entfernt; bei deaktiviertem Purge keine.
+- Aktive Fenster und ihre Zähler bleiben unverändert; konkurrierende Begin-Aufrufe behalten die Rate-Grenzen.
+- Wiederholte Nutzung nach Ablauf lässt alte Bucketfenster begrenzt verschwinden statt sie zeitlich unbeschränkt anzusammeln.
+- Alte `accepted`-, `rejected`-, `unknown`- und abgelaufene `claimed`-Operationen bleiben gegen erneuten Versand derselben `operation_id` geschützt.
+
+## Abhängigkeiten und offene Punkte
+
+Kein Duplikat im abgegrenzten Validatorauftrag festgestellt. Die Reproduktion ist kein vollständiger Replay aller Projektmigrationen; die finale Retentionfunktion und Mail-DDL sind aber unverändert belegt. Keine Produktvorgabe fordert eine Operationslöschung nach sieben Tagen; der weiter gefasste Masterverdacht gehört daher nicht in dieses Ticket. Master-Abnahme ist bestätigt.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: `/private/tmp/kd-vollreview-20260916/validations/E13-F002.json`. Ausgangsverdacht: `/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E13-F002.json`. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E13/KD-REV-E13-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

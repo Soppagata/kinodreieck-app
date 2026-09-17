@@ -1,0 +1,62 @@
+# KD-REV-E10-003 · Filmwissen-Quellenadapter hebt das Timeout vor dem Lesen des Antwortbodys auf
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 – Ein stockender Quellenbody kann die Filmwissen-Recherche über die konfigurierbare Adapterfrist hinaus offen halten. Datenkorruption, zusätzlicher bezahlter KI-Request und ein Live-Ausfall sind nicht belegt.
+- Finding: E10-F003
+- Prüfstand: `BASE`
+- Zuständige Etappe: E10
+
+## Fehler und Auswirkung
+
+Die pro Quellenrequest konfigurierte Zeitgrenze (standardmäßig 8 s) deckt im gemeinsamen Filmwissen-Adapter nur den Headerempfang ab. Sobald `fetch` eine Response liefert, wird der einzige Abort-Timer gelöscht. `liesBegrenzt` wartet danach ohne eigene Zeitgrenze auf `reader.read()`. Bei einem Cache-Miss kann der Wikidata- oder LOC-Abruf somit mit offenem beziehungsweise stockendem Body über die Adapterfrist hinaus offen bleiben.
+
+Lokal nahm ein erst nach Ablauf einer 25-ms-Testfrist freigegebener, gültiger LOC-Body noch erfolgreich 900 Einträge an. Cachetreffer, vorzeitig abgewiesene Aufträge und der spätere KI-Providerpfad sind nicht betroffen.
+
+## Auslöser, Soll und Ist
+
+Ein autorisierter `filmwissen-synthese`-Aufruf benötigt neue Quellen statt eines Cachetreffers. Kontaktkonfiguration, Providerfreigaben und Quellenrate erlauben den Abruf. Wikidata – oder nach erfolgreichem Wikidata-Abruf bei LOC-Snapshot-Miss LOC – liefert zeitnah HTTP 200 und JSON-Content-Type, lässt den Body jedoch offen oder nach einem Chunk stocken.
+
+Soll: Die Quellenfrist umfasst Header und begrenztes Bodylesen. Nach Ablauf wird der Request abgebrochen und der aufrufende Handler erhält `QuellenFehler("adapter-timeout")`.
+
+Ist: `clearTimeout(timer)` läuft nach `fetch` noch vor `liesBegrenzt`; ein offener Body wird nicht durch die Adapterfrist abgebrochen. Erst neuer Bodyfortschritt, ein externer Transportfehler oder eine übergeordnete, hier nicht vermessene Begrenzung kann den Aufruf beenden.
+
+## Ursache und Fundstellen
+
+Der `try`/`catch`/`finally`-Block des gemeinsamen `holeJson` umfasst nur `fetch`. Das `finally` löscht den Abbruchmechanismus an Zeile 190; danach wartet der Bodyleser an Zeile 134 beziehungsweise dessen Aufruf an Zeile 213. Die Umwandlung eines `AbortError` in `adapter-timeout` liegt ebenfalls außerhalb möglicher Body-Lesefehler.
+
+- Reader ohne Wartezeitbegrenzung: eingefrorene Quelle `quellen.ts:121-149` – Repository: `supabase/functions/filmwissen-task/quellen.ts`, Commit `BASE`.
+- Timer nur um `fetch`, Löschung vor Bodylesen: eingefrorene Quelle `quellen.ts:171-191` und `quellen.ts:205-225` – derselbe Repositorypfad und Commit.
+- Gemeinsame Adapterverwendung für Wikidata: eingefrorene Quelle `quellen.ts:395-448`; für LOC: `quellen.ts:937-951` – derselbe Repositorypfad und Commit.
+- Der Handler wartet direkt auf die Adapter und setzt den späteren KI-Provider-Timer erst danach: eingefrorene Quelle `ai-task/index.ts:4692-4740` sowie `ai-task/index.ts:5122-5135` – Repository: `supabase/functions/ai-task/index.ts`, derselbe Commit.
+
+## Belege und Gegenproben
+
+- Statisch: Die entscheidenden drei Quell-/Migrationsdateien wurden bytegenau gegen den Prüfcommit verglichen; dokumentierte SHA-256-Werte und die kontrollierte Aufrufkette stehen in E10-F003.json.
+- Ausgeführt, lokal mit Mocks: `node /private/tmp/kd-vollreview-20260916/tests/E10-F003/validator/body-timeout.mjs` importierte das Originalmodul direkt unter Node v24.18.0. `fetch` war vollständig gemockt; die offenen `ReadableStream`s reagierten explizit auf `init.signal.abort`. Es gab kein Netzwerk und keine Provideraufrufe. LOC blieb nach 162 ms und Wikidata nach 153 ms bei einer 25-ms-Frist unabgebrochen; ein später freigegebener LOC-Body wurde erfolgreich verarbeitet. Details und Exit 0/`REPRODUCED` stehen in result.json.
+- Gegenproben: Werden die HTTP-Header zurückgehalten, liefern beide Adapter nach 26 beziehungsweise 27 ms korrekt `adapter-timeout`; der Fehler beginnt erst nach Headerempfang. Content-Length- und Bytegrenzen beschränken empfangene Bytes, nicht die Wartezeit. Cachetreffer beziehungsweise bereits laufende Aufträge kehren vor dem Adapter zurück; der spätere `rufeAnbieter`-Timer ist getrennt. Der vorhandene Adaptertest Q6 deckt Redirect, Rate-Limit, HTML und Übergröße ab, nicht den Body-Stall.
+
+Das erfolgreiche Ende der Reproduktion ist ein erfolgreicher Fehlernachweis, kein PASS des vorgesehenen Timeout-Verhaltens.
+
+## Korrekturziel und Abnahme
+
+Die Korrektur bleibt lokal in `holeJson`/`liesBegrenzt`: den Timer bis zum Ende des begrenzten Bodylesens aktiv halten, einen Abort in der Bodyphase ebenfalls in `adapter-timeout` umwandeln und Timer/Reader auf Erfolgs- wie Fehlerpfaden aufräumen. Host-, Redirect-, Größen-, Content-Type-, UTF-8-, JSON- und sonstige Fehlerklassengrenzen bleiben erhalten. Keine Scheduler-, Datenbank- oder Quellenarchitekturänderung.
+
+- Ein sofortiger HTTP-200-Header mit offenem Body endet innerhalb Frist plus kleiner Laufzeittoleranz mit `adapter-timeout`; dies ist für beide öffentlichen Adapter mit abbrechbaren Mock-Streams belegt.
+- Dasselbe gilt für einen Body, der nach einem kleinen ersten Chunk stockt.
+- Header-Stall bleibt `adapter-timeout`; ein vollständig rechtzeitig gelieferter gültiger Body wird normal verarbeitet.
+- Nach Abbruch erfolgt keine weitere erfolgreiche Bodyverarbeitung/Auflösung; Timer und Streamressourcen werden freigegeben.
+- HTTP-, Rate-Limit-, Content-Type-, Größen-, UTF-8- und JSON-Fehler bleiben sinnvoll klassifiziert.
+
+## Abhängigkeiten und offene Punkte
+
+- Produktfehler: die nur bis zum Headerempfang wirkende Zeitgrenze ist statisch und in zwei isolierten Body-Stall-Proben bestätigt.
+- Testwerkzeuggrenze: Node v24.18.0 mit Web-API-Mocks, kein vollständiger Edge-Handler-/Deno-Lauf. Die 153/162 ms beweisen Fristüberschreitung und fehlenden Abort; unendliches Warten ist aus der fehlenden weiteren Anwendungsfrist abgeleitet.
+- Betriebsbeleglücke: produktive Quellfreigaben, Caches, Häufigkeit stockender Responses sowie Plattform-/Transportlimits wurden nicht geprüft. Es gibt keinen Live-Providerlauf und keine Aussage über einen beobachteten Produktionsausfall.
+- Kein globaler Duplikatabgleich und keine vollständige Master-Leseabdeckung werden mit diesem Ticket beansprucht.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: E10-F003.json. Ursprungsproposal: E10-F003.json. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: bestätigter Abgleich. Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E10/KD-REV-E10-003.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

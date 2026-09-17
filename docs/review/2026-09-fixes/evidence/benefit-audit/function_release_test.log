@@ -1,0 +1,37 @@
+✓ Release-Info verwendet den vollständigen Commit als Build-Version
+✓ Release-Info gibt exakt die ai-task-Closure in fester Reihenfolge aus
+✓ Release-Info enthält configDatei im Output
+✓ Release-Info enthält Projektdaten, Funktionsnamen und verifyJwt im Output
+✓ Release-Info hasht exakt diese Closure mit Raw-Byte-Quelle in fester Reihenfolge
+✓ Dirty-Gate prüft exakt Source-Closure plus Config in einem Status-Aufruf
+✓ Alle getrennten Hashes sind 64-stellige SHA-256-Werte
+✓ Release-Info liefert deterministische Deploy-Hashes
+✓ Config-Byteänderungen ändern configSha256
+✓ Config-Byteänderung verändert Deploy-Vertrag, nicht Source-Hash
+✓ Fehlender/zusätzlicher LF ändert Source-Hash
+✓ Nicht-UTF-8- und NUL-Bytes ändern den Source-Hash bytegenau
+✓ Quellpfad beeinflusst den Hash
+✓ Reihenfolge beeinflusst den Hash
+✓ Quellinhalt beeinflusst den Hash
+✓ Längenrahmung verhindert Mehrdeutigkeit bei eingebetteten Pfadtrennern
+✓ Dirty-Gate sperrt supabase/functions/_shared/leaf.js
+✓ Dirty-Gate sperrt supabase/functions/ai-task/branch.ts
+✓ Dirty-Gate sperrt supabase/functions/ai-task/index.ts
+✓ Dirty-Gate sperrt supabase/config.toml
+✓ Falsche Projekt-ID wird blockiert
+✓ Projekt-ID außerhalb des Top-Levels wird blockiert
+✓ Fehlende Projekt-ID wird blockiert
+✓ String-förmiges verify_jwt wird blockiert
+✓ Falsches verify_jwt wird blockiert
+✓ Fehlendes verify_jwt wird blockiert
+✓ fehlende [functions.ai-task] wird blockiert
+✓ doppelte Functions-sektion blockiert
+✓ Doppeltes verify_jwt wird blockiert
+✓ doppelte project_id blockiert
+✓ Deploy-Vertrag weicht bei Configwechsel erwartungsgemäß
+✓ Release-Runbook deployt Code vor dem sofort wirksamen Build-Version-Secret
+✓ Deploy-Contract-Hash ist reproduzierbar aus der versionierten Canonical-Form
+✓ Deploy-Contract-Hash bindet projectId
+✓ Deploy-Contract-Hash bindet functionName
+✓ Deploy-Contract-Hash bindet verifyJwt
+function_release_test: 36 Checks bestanden.

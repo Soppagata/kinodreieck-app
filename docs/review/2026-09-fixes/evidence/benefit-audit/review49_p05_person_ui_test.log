@@ -1,0 +1,6 @@
+PASS E08-003 active: actual controller/dialog/storage/outbox/service
+PASS E08-003 paused: actual controller/dialog/storage/outbox/service
+PASS E08-003 rejected: actual controller/dialog/storage/outbox/service
+PASS E08-003 sync-failure: actual controller/dialog/storage/outbox/service
+PASS E08-003 storage-failure: actual controller/dialog/storage/outbox/service
+PASS E08-003 context-change: actual controller/dialog/storage/outbox/service
