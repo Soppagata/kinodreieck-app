@@ -38,7 +38,7 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P07 | W3 / PARALLEL_WAVE | Streaming und Katalog | P04/App | p07_streaming / `/private/tmp/kd-review49-p07` | App.jsx; Streamingcontroller/-libs; StreamingTab/KinoTab; TitelKartenAktionen; eigene Migrationen und Tests | INTEGRATED | a2c6b60 / cb63219 |
 | P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W1; disjunkt zu W2 | p08_entdecken / `/private/tmp/kd-review49-p08` | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; Migration 20260917130000 und Entdecken-Tests | INTEGRATED | a2c6b60 / 338948d |
 | P09 | W3b / PARALLEL_WAVE | Wochenplan und Termine | App-Klickvertrag eingefroren; kein Output von P07 | p09_planning / `/private/tmp/kd-review49-p09` | Wochenplan.jsx; StartTab.jsx; enge Wochenplan-Editorregeln in index.css/design-primary.css; eigene Termin-/Browsertests | INTEGRATED | a2c6b60 / 89e8918 |
-| P10a | W3c / PARALLEL_WAVE | Sichtbares Mediathek-Sprungziel | App-Propvertrag read-only | p10a_focus / `/private/tmp/kd-review49-p10a` | MediathekTab.jsx; eigene Fokus-/Navigationstests | RUNNING | a2c6b60 / — |
+| P10a | W3c / PARALLEL_WAVE | Sichtbares Mediathek-Sprungziel | App-Propvertrag read-only | p10a_focus / `/private/tmp/kd-review49-p10a` | MediathekTab.jsx; eigene Fokus-/Navigationstests | INTEGRATED | a2c6b60 / 2217e5a |
 | P10b | W4 / SOLO | Pins und Kinonavigation | P07/App und P09/StartTab | p10b_navigation / `/private/tmp/kd-review49-p10b` | App.jsx; KinoTab/StartTab; entdeckenPins und eng begrenzte Pinhelper; eigene Navigations-/Browsertests | RUNNING | 45ada41 / — |
 | P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W1; programm read-only | p11_finder / `/private/tmp/kd-review49-p11` | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | INTEGRATED | a2c6b60 / 8be8375 |
 | P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | INTEGRATED | 4a5cc52 / dfabad9 |
@@ -77,7 +77,7 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 24 | [E12-002](../2026-09-vollreview/tickets/E12/KD-REV-E12-002.md) | P2 | P07 | Baumeister-P07 | GEBAUT | cb63219 | [P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise |
 | 25 | [E10-003](../2026-09-vollreview/tickets/E10/KD-REV-E10-003.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 | [P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle |
 | 26 | [E01-001](../2026-09-vollreview/tickets/E01/KD-REV-E01-001.md) | P2 | P10b | Baumeister-P10b | OFFEN | — | — |
-| 27 | [E04-003](../2026-09-vollreview/tickets/E04/KD-REV-E04-003.md) | P2 | P10a | p10a_focus | OFFEN | — | — |
+| 27 | [E04-003](../2026-09-vollreview/tickets/E04/KD-REV-E04-003.md) | P2 | P10a | p10a_focus | GEBAUT | 2217e5a | [P10a](evidence/P10a.md): 16 echte Komponentenpfade plus Nachbarn |
 | 28 | [E11-004](../2026-09-vollreview/tickets/E11/KD-REV-E11-004.md) | P2 | P09 | Baumeister-P09 | GEBAUT | 89e8918 | [P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise |
 | 29 | [E11-002](../2026-09-vollreview/tickets/E11/KD-REV-E11-002.md) | P2 | P10b | Baumeister-P10b | OFFEN | — | — |
 | 30 | [E09-002](../2026-09-vollreview/tickets/E09/KD-REV-E09-002.md) | P2 | P11 | Baumeister-P11 | GEBAUT | 8be8375 | [P11](evidence/P11.md): fokussierte Produkt-/Integrationsnachweise |
@@ -140,3 +140,5 @@ P09 DELIVERED 506e4ef892e59f659f37e413e777b35abcb02ece: Genau drei vereinbarte P
 INTEGRATED W3: P07 cb63219 → P08 338948d → P11 8be8375 → P09 89e8918, sequenziell konfliktfrei. P07-RPC mit vorherigem effektivem Funktionskoerper verglichen: nur Antwortfristen/Anker erweitert, Request-/ACL-/Cursorgrenzen erhalten. App-StartTab-Vertrag bleibt identisch. Nun 46/49 Tickets GEBAUT. P10a ist der letzte laufende disjunkte Baumeister; P10b kann ohne Output-Abhaengigkeit zu MediathekTab auf diesem integrierten Stand beginnen, keine optionalen Bauchats waehrend der Ueberlappung.
 
 DISPATCH P10b: 45ada414a822e72f3c68e79699e07104f7edb518, eigener Worktree/Branch. Ende-zu-Ende-Paket mit Start-Pinauflösung und Kino-Fokusvertrag; P10a besitzt weiterhin ausschliesslich MediathekTab. Keine gemeinsamen Schreibflaechen, kein optionaler Bauchat. P10b benoetigt den bereits integrierten P07/P09-Stand, nicht P10a.
+
+INTEGRATED P10a 2217e5a: Eine Produktdatei, gemounteter Solltest und Beleg; unveraenderter App-Vertrag, kein Konflikt mit P10b. Diff und 16 Fokus-/Sichtbarkeitsfaelle geprueft. 47/49 GEBAUT; nur P10b laeuft noch.
