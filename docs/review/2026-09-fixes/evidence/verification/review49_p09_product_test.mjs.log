@@ -1,0 +1,16 @@
+PASS rollover six valid pins: Film 0..4; Film 5 only removed by five limit
+PASS rollover two valid pins
+PASS same-year ordering including hours
+PASS raw ISO year before formatting
+PASS raw ISO preserves local event-hour order despite transport offsets
+PASS ISO year and local clock semantics
+PASS null constructor rejected before object access for empty and nonempty plans
+PASS auto: real StartTab -> Wochenplan projection/click -> actual App callback -> KinoTab card
+PASS manual: real StartTab -> Wochenplan projection/click -> actual App callback -> KinoTab card
+PASS late: real StartTab -> Wochenplan projection/click -> actual App callback -> KinoTab card
+PASS neutral: real StartTab -> Wochenplan projection/click -> actual App callback -> KinoTab card
+PASS missing: no misleading personal open action
+PASS detached: no misleading personal open action
+PASS pin: real StartTab -> Wochenplan projection/click -> actual App callback -> KinoTab card
+PASS suggestion: real StartTab -> Wochenplan projection/click -> actual App callback -> KinoTab card
+15 product regression checks PASS (no App/auth shell, no remote persistence)

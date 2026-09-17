@@ -1,0 +1,12 @@
+PASS old GET after confirmed PATCH cannot roll back cache, revision or subscriber; follow-up uses B
+PASS old GET with equal bytes cannot roll back revision
+PASS newer remote publishes after snapshot; identical repeat is quiet
+PASS snapshot failure blocks newer remote
+PASS pending edit survives old response before PATCH acknowledgement
+PASS ordinary pull preserves a pending new account pot absent on server
+PASS kd_personal_value_max: terminal local value and conflict remain protected
+PASS kd_personal_key_erlaubt: terminal local value and conflict remain protected
+PASS existing revision conflict survives pull
+PASS invalidated account ignores deferred response completely
+PASS overlapping pulls cannot replace a newer accepted revision
+P02 PULL REVISION: 11/11 scenarios passed

@@ -1,0 +1,12 @@
+PASS empty
+PASS partial
+PASS present-empty
+PASS snapshot-failure
+PASS pull-failure
+PASS remove-failure
+PASS silent-remove
+PASS replace-failure
+PASS silent-replace
+PASS restore-failure
+PASS explicit-adoption
+P02 ACCOUNT LOAD: 11/11 scenarios passed

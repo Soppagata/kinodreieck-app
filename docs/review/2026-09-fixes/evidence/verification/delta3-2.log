@@ -1,0 +1,487 @@
+
+--- A: extraktion.js, die reinen Funktionen ---
+✓ [A] FRAGEN hat genau drei Einträge  [gemessen: 3]
+✓ [A] …mit den IDs K1, K2, K4 in dieser Reihenfolge  [gemessen: ["K1","K2","K4"]]
+✓ [A] FRAGEN ist eingefroren (kein stiller Umbau zur Laufzeit)
+✓ [A] …und jede Frage trägt kurz, frage und hilfe  [gemessen: [4,4,4]]
+✓ [A] …und keine Frage stellt eine zweite Frage im selben Feld (die drei sind fix)
+✓ [A] ANTWORT_MAX_ZEICHEN ist 2000  [gemessen: 2000]
+✓ [A] antwortenBrauchbar(null) = false
+✓ [A] antwortenBrauchbar(undefined) = false
+✓ [A] antwortenBrauchbar(leeres Objekt) = false
+✓ [A] antwortenBrauchbar(nur Leerstring) = false
+✓ [A] antwortenBrauchbar(nur Leerzeichen) = false
+✓ [A] antwortenBrauchbar(eine echte Antwort) = true
+✓ [A] antwortenBrauchbar(dritte Frage echt) = true
+✓ [A] antwortenBrauchbar(unbekannter Schlüssel) = false
+✓ [A] antwortenBrauchbar(Zahl statt Text) = false
+✓ [A] antwortenBrauchbar(Liste statt Text) = false
+✓ [A] bauePayload ohne Antworten liefert leere Hülle  [gemessen: {"antworten":{},"listen":{"genres":[]}}]
+✓ [A] …nimmt nur beantwortete Fragen  [gemessen: ["K1","K4"]]
+✓ [A] …und trimmt sie  [gemessen: "vorne und hinten Luft"]
+✓ [A] …und lässt fremde Schlüssel draußen  [gemessen: ["K1"]]
+✓ [A] …und kürzt auf ANTWORT_MAX_ZEICHEN  [gemessen: 2000]
+✓ [A] …genau an der Grenze bleibt alles stehen  [gemessen: 2000]
+✓ [A] bauePayload entdoppelt und säubert die Genre-Liste  [gemessen: ["Drama","Horror"]]
+✓ [A] …und kappt bei 120 (= LISTE_MAX_EINTRAEGE der Function)  [gemessen: 120]
+✓ [A] …ohne Genres bleibt die Liste leer (der Endpunkt weist dann ab, BEVOR er zahlt)
+✓ [A] Merkmalsvokabular ist bereinigt, entdoppelt und getrennt von eigenen Antworten
+✓ [A] Merkmalsvokabular bleibt auf 120 Werte begrenzt
+✓ [A] Ohne brauchbares Merkmalsvokabular bleibt der bisherige Auftrag kompatibel
+✓ [A] bauePayload verändert seine Eingabe nicht  [gemessen: {"K1":"  a  "}]
+✓ [A] frageZu("K2") findet die zweite Frage  [gemessen: "Der Wiedergänger"]
+✓ [A] frageZu("schlagwort") liefert null (keine Onboarding-Frage)
+✓ [A] frageZu(undefined) liefert null statt zu werfen
+✓ [A] "profile-extract" steht in AI_TASKS  [gemessen: ["health","echo-struct","intelligent-search","profile-extract","film-forecast","filmwissen-synthese","media-batch-extract","blog-profile-extract"]]
+✓ [A] …und AI_TASKS bleibt eingefroren
+
+--- B: ausExtraktion, die Formprüfung ---
+✓ [B] ein sauberes Signal kommt durch  [gemessen: [{"art":"genre","wert":"Science-Fiction","richtung":"zieht_an","staerke":4,"sicherheit":"hoch","quelle":"K1","beleg":"di]
+✓ [B] verworfen: unbekannte Art  [Grund: "Art unbekannt: stimmung"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (unbekannte Art)
+✓ [B] verworfen: fehlende Art  [Grund: "Art unbekannt: undefined"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (fehlende Art)
+✓ [B] verworfen: Art als Zahl  [Grund: "Art unbekannt: 3"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Art als Zahl)
+✓ [B] verworfen: unbekannte Richtung  [Grund: "Richtung unbekannt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (unbekannte Richtung)
+✓ [B] verworfen: fehlende Richtung  [Grund: "Richtung unbekannt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (fehlende Richtung)
+✓ [B] verworfen: unbekannte Sicherheit  [Grund: "Sicherheit unbekannt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (unbekannte Sicherheit)
+✓ [B] verworfen: Sicherheit als Zahl  [Grund: "Sicherheit unbekannt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Sicherheit als Zahl)
+✓ [B] verworfen: unbekannte Quelle  [Grund: "Quelle unbekannt: K3"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (unbekannte Quelle)
+✓ [B] verworfen: Quelle leer  [Grund: "Quelle unbekannt: "]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Quelle leer)
+✓ [B] verworfen: fehlender Wert  [Grund: "Wert oder Beleg fehlt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (fehlender Wert)
+✓ [B] verworfen: Wert nur Leerzeichen  [Grund: "Wert oder Beleg fehlt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Wert nur Leerzeichen)
+✓ [B] verworfen: Wert als Zahl  [Grund: "Wert oder Beleg fehlt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Wert als Zahl)
+✓ [B] verworfen: fehlender Beleg  [Grund: "Wert oder Beleg fehlt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (fehlender Beleg)
+✓ [B] verworfen: Beleg nur Leerzeichen  [Grund: "Wert oder Beleg fehlt"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Beleg nur Leerzeichen)
+✓ [B] verworfen: Wert mit Zeilenumbruch  [Grund: "wert enthaelt Zeilenumbruch oder Steuerzeichen"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Wert mit Zeilenumbruch)
+✓ [B] verworfen: Beleg mit Zeilenumbruch  [Grund: "beleg enthaelt Zeilenumbruch oder Steuerzeichen"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Beleg mit Zeilenumbruch)
+✓ [B] verworfen: Wert mit Steuerzeichen  [Grund: "wert enthaelt Zeilenumbruch oder Steuerzeichen"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Wert mit Steuerzeichen)
+✓ [B] verworfen: Wert 61 Zeichen  [Grund: "wert zu lang (max 60)"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Wert 61 Zeichen)
+✓ [B] verworfen: Beleg 401 Zeichen  [Grund: "beleg zu lang (max 400)"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (Beleg 401 Zeichen)
+✓ [B] verworfen: staerke 0  [Grund: "staerke fehlt oder liegt ausserhalb 1..5"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (staerke 0)
+✓ [B] verworfen: staerke 6  [Grund: "staerke fehlt oder liegt ausserhalb 1..5"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (staerke 6)
+✓ [B] verworfen: staerke negativ  [Grund: "staerke fehlt oder liegt ausserhalb 1..5"]
+✓ [B] …und der verworfene Rohwert reist als Beleg mit (staerke negativ)
+✓ [B] Wert mit genau 60 Zeichen kommt durch (Grenze der Function)
+✓ [B] Beleg mit genau 400 Zeichen kommt durch (Grenze von pruefeSignal)
+✓ [B] Nicht-Objekt in signale (null) wird MIT Grund verworfen  [gemessen: "Art unbekannt: undefined"]
+✓ [B] Nicht-Objekt in signale (Text) wird MIT Grund verworfen  [gemessen: "Art unbekannt: undefined"]
+✓ [B] Nicht-Objekt in signale (Zahl) wird MIT Grund verworfen  [gemessen: "Art unbekannt: undefined"]
+✓ [B] Nicht-Objekt in signale (Liste) wird MIT Grund verworfen  [gemessen: "Art unbekannt: undefined"]
+✓ [B] INVARIANTE: Eingaben = Signale + Verworfene  [gemessen: 9 = 2 + 7]
+✓ [B] …und JEDES Verworfene trägt einen nicht-leeren Grund  [gemessen: ["Art unbekannt: kap","Art unbekannt: und","Wert oder Beleg fe","staerke fehlt oder","Art unbekannt: und","Quelle unbekannt: ","Wert oder Beleg fe"]]
+✓ [B] …und jedes durchgelassene Signal besteht pruefeSignal  [gemessen: 2 Signale]
+✓ [B] ausExtraktion(null) wirft nicht und liefert leer  [gemessen: {"s":0,"v":0,"r":null}]
+✓ [B] ausExtraktion(undefined) wirft nicht und liefert leer  [gemessen: {"s":0,"v":0,"r":null}]
+✓ [B] ausExtraktion(Text) wirft nicht und liefert leer  [gemessen: {"s":0,"v":0,"r":null}]
+✓ [B] ausExtraktion(Zahl) wirft nicht und liefert leer  [gemessen: {"s":0,"v":0,"r":null}]
+✓ [B] ausExtraktion(leere Liste) wirft nicht und liefert leer  [gemessen: {"s":0,"v":0,"r":null}]
+✓ [B] ausExtraktion(leeres Objekt) wirft nicht und liefert leer  [gemessen: {"s":0,"v":0,"r":null}]
+✓ [B] signale: "keine Liste" → leer statt Absturz  [gemessen: {"s":0,"v":0,"r":null}]
+✓ [B] staerke fehlt → Signal wird mit Grund verworfen  [gemessen: {"v":1}]
+✓ [B] staerke "5" (Text) → wird nicht still umgedeutet  [gemessen: undefined]
+✓ [B] staerke 4.5 → wird verworfen  [gemessen: "staerke fehlt oder liegt ausserhalb 1..5"]
+✓ [B] staerke 1 und 5 bleiben unverändert  [gemessen: [1,5]]
+✓ [B] Fremdfelder der Serverantwort werden NICHT durchgereicht  [gemessen: ["art","wert","richtung","staerke","sicherheit","quelle","beleg"]]
+✓ [B] …auch kein `weitereBelege` aus der Serverantwort
+✓ [B] Wert und Beleg werden getrimmt  [gemessen: ["Drama","eine Textstelle"]]
+✓ [B] K1, K2 und K4 sind gültige Quellen
+✓ [B] …und alles ausserhalb von QUELLEN fällt durch  [gemessen: [0,0,0,0]]
+✓ [B] GEMESSEN: welche NICHT-Onboarding-Quellen kommen durch  [gemessen: []]
+
+--- C: Rahmen und die Trennung verworfen/ohneBeleg ---
+✓ [C] filme kommen als Liste im Rahmen  [gemessen: [{"titel":"Alien","jahr":1979,"masterId":null,"sicher":false,"richtung":"zieht_an"},{"titel":"Stalker","jahr":null,"mast]
+✓ [C] JEDER extrahierte Film trägt sicher: false  [gemessen: [false,false]]
+✓ [C] …und masterId null (der Titel ist nicht aufgelöst)
+✓ [C] …jahr wird übernommen, wenn es eine Ganzzahl ist  [gemessen: [1979,null]]
+✓ [C] …richtung nur, wenn sie im Modell steht  [gemessen: ["zieht_an",null]]
+✓ [C] FlixPatrol-Treffer bleiben getrennte flüchtige Hinweise
+✓ [C] …und erweitern den persönlichen Filmvertrag nicht
+✓ [C] Film-Titel wird getrimmt  [gemessen: "Alien"]
+✓ [C] …jahr als Text wird zu null statt still umgerechnet  [gemessen: null]
+✓ [C] …unbekannte Richtung fällt weg (eine Nennung ist keine Zuneigung)
+✓ [C] …titelloser Film und null verschwinden aus der Liste  [gemessen: ["Alien","Solaris"]]
+✓ [C] gesetzte Achsen wandern in den Rahmen  [gemessen: {"wie":5,"was":3}]
+✓ [C] …`null` heisst „nicht ändern" und wird NICHT durchgereicht
+✓ [C] achsen.wie = 0 wird übernommen  [gemessen: {"wie":0}]
+✓ [C] achsen.wie = 5 wird übernommen  [gemessen: {"wie":5}]
+✓ [C] achsen.wie = -1 fällt weg  [gemessen: null]
+✓ [C] achsen.wie = 6 fällt weg  [gemessen: null]
+✓ [C] achsen.wie = 3.5 fällt weg  [gemessen: null]
+✓ [C] achsen.wie = "3" fällt weg  [gemessen: null]
+✓ [C] achsen.wie = null fällt weg  [gemessen: null]
+✓ [C] achsen.wie = true fällt weg  [gemessen: null]
+✓ [C] achsen_tendenz als Liste wird ignoriert statt zu werfen
+✓ [C] nichtDeutbar nimmt nur Text und trimmt  [gemessen: ["etwas","und 3 weitere"]]
+✓ [C] ein Rahmen ohne jeden Inhalt ist null (kein leerer Vorschlag)
+✓ [C] verworfen und ohneBeleg zählen Verschiedenes  [gemessen: {"v":1,"o":4}]
+✓ [C] …ohneBeleg fehlt → 0
+✓ [C] …ohneBeleg als Text → 0 (keine stille Umrechnung)  [gemessen: 0]
+✓ [C] …ein sauberer Lauf meldet beide als 0/leer
+
+--- D: Konstanten Client ↔ Edge Function ↔ profil.js ---
+✓ [D] ANTWORT_MAX_ZEICHEN: Client == Edge Function  [gemessen: Client 2000, Function 2000]
+✓ [D] EXTRAKT_QUELLEN == FRAGEN-IDs  [gemessen: Function ["K1","K2","K4"], Client ["K1","K2","K4"]]
+✓ [D] …und alle drei stehen in QUELLEN von profil.js  [gemessen: ["K1","K2","K4"]]
+✓ [D] EXTRAKT_ARTEN ist eine sichere Teilmenge von SIGNAL_ARTEN  [gemessen: ["genre","thema","erzaehlweise","inszenierung","tempo","ton","regie","epoche","land","kritikpunkt","achse"]]
+✓ [D] `haltung` bleibt deterministisch, bis der KI-Prompt die Art fachlich definiert
+✓ [D] EXTRAKT_RICHTUNGEN == RICHTUNGEN  [gemessen: 3 vs 3]
+✓ [D] EXTRAKT_SICHERHEITEN == SICHERHEITEN  [gemessen: 3 vs 3]
+✓ [D] WERT_MAX_ZEICHEN == Wertgrenze von pruefeSignal  [gemessen: Function 60, Client 60]
+✓ [D] BELEG_MAX_ZEICHEN <= Beleggrenze von pruefeSignal  [gemessen: Function 200, Client 400]
+✓ [D] WUNSCH_MAX_ZEICHEN (nicht_deutbar) <= 200 von pruefeProfil  [gemessen: 60]
+✓ [D] LISTE_MAX_EINTRAEGE == Kappung in bauePayload  [gemessen: Function 120, Client 120]
+✓ [D] DreiFragen.jsx benutzt ANTWORT_MAX_ZEICHEN und keine nackte Zahl  [gemessen: 0 Vorkommen von 2000]
+✓ [D] extraktion.js nennt die Function-Konstante ausdrücklich im Kommentar
+✓ [D] eine Antwort an der Grenze übersteht bauePayload ungekürzt  [gemessen: 2000]
+
+--- E: DreiFragen, das Formular ---
+✓ [E] drei Textfelder, eins je Frage  [gemessen: 3]
+✓ [E] …mit den IDs frage-K1/K2/K4  [gemessen: ["frage-K1","frage-K2","frage-K4"]]
+✓ [E] …jedes mit einem beschrifteten <label>  [gemessen: 3]
+✓ [E] …und die Hilfetexte stehen dabei
+✓ [E] der Text sagt ausdrücklich, dass nichts gespeichert wird  [gemessen: "Kinodreieck speichert deine Antworten nicht. Sie werden einmal zur Auswertung an den KI-Anbieter übertragen; im Profil gespeichert wird nur, was du danach ausdrücklich übernimmst.W"]
+✓ [E] „Profilvorschläge erstellen" ist ohne Antwort gesperrt
+✓ [E] …und der Grund steht im title  [gemessen: "Beantworte mindestens eine Frage"]
+✓ [E] …die Live-Region meldet „noch keine Antwort"  [gemessen: ["noch keine Antwort"]]
+✓ [E] eine Antwort genügt: der Knopf wird frei
+✓ [E] …und die Live-Region meldet „bereit"
+✓ [E] der Zeichenzähler bleibt weg, solange es nicht knapp wird
+✓ [E] …erscheint ab 80 % der Grenze  [gemessen: "1700 von 2000 Zeichen"]
+✓ [E] …und warnt dort noch nicht vor dem Abschneiden
+✓ [E] …über der Grenze steht die Warnung  [gemessen: "2100 von 2000 Zeichen — alles darüber wird abgeschnitten und nicht ausgewertet"]
+✓ [E] onExtrahieren bekommt die rohen Antworten  [gemessen: {"K2":"Alien, bestimmt zwanzig Mal."}]
+✓ [E] „Abbrechen" meldet nach oben  [gemessen: 1]
+✓ [E] während des Laufs sind die Textfelder gesperrt  [gemessen: [true,true,true]]
+✓ [E] …der Knopf heisst „Profilvorschläge entstehen …" und ist gesperrt
+✓ [E] …„Abbrechen" ist während des Laufs ebenfalls gesperrt
+✓ [E] …und die Live-Region meldet „läuft"
+✓ [E] die Fehler-Prop wird angezeigt  [gemessen: "assen, damit du so einen Film magst?Das Nutzungslimit ist erreicht.Profilvorschläge erstellenAbbrechennoch keine Antwort"]
+✓ [E] …und das Formular bleibt bedienbar (kein Sackgassen-Zustand)
+✓ [E] die `antworten`-Prop belegt das Formular vor  [gemessen: "vorbelegt"]
+
+--- G: Die Vorschau lügt nicht ---
+✓ [G] die Vorschau sagt ausdrücklich, dass noch nichts gespeichert ist
+✓ [G] drei Signalzeilen, eine je Vorschlag  [gemessen: 3]
+✓ [G] ein Faktenfund wird als mögliches, noch unbestätigtes Werk gezeigt
+✓ [G] …mit geprüftem Stand und verlinkter Quelle
+✓ [G] Beleg sichtbar: "diese lange stille Kamerafahrt dur"…
+✓ [G] Beleg sichtbar: "immer die gleiche kalte Stimmung, "…
+✓ [G] Beleg sichtbar: "Ich hasse es, wenn alles erklaert "…
+✓ [G] …jede Zeile trägt ihren EIGENEN Beleg  [gemessen: ["diese lange stil","immer die gleich","Ich hasse es, we"]]
+✓ [G] …und der Beleg ist der Frage zugeordnet  [gemessen: ["Der Frame",null,"Der Pflichtfilm"]]
+✓ [G] jede Zeile weist ihre Sicherheit aus  [gemessen: ["hoch","mittel","niedrig"]]
+✓ [G] …auch und gerade „niedrig"
+✓ [G] …und „niedrig" wird optisch abgesetzt (eigene Farbe)
+✓ [G] jede Zeile weist die Stärke aus  [gemessen: [4,3,5]]
+✓ [G] …und die Richtung in Worten, nicht nur in Farbe  [gemessen: ["magScience-Fiction","magkalt","meidetueberklaerung"]]
+✓ [G] die Zahl der ohne Beleg verworfenen Angaben steht da  [gemessen: "2 weitere Angaben wurden verworfen"]
+✓ [G] …und die Zahl der nicht ins Datenmodell passenden getrennt davon  [gemessen: "1 Angabe passte nicht"]
+✓ [G] abgewählt: aria-pressed steht auf true  [gemessen: "true"]
+✓ [G] …und der Knopf heisst jetzt „doch übernehmen"  [gemessen: "doch übernehmen"]
+✓ [G] …genau EINE Zeile ist abgewählt  [gemessen: 1]
+✓ [G] …die Zeile bleibt sichtbar (Abwahl ist kein Verschwinden)
+✓ [G] onUebernehmen bekommt GENAU die Belege, die noch dastehen  [gemessen: ["diese lange st","Ich hasse es, "]]
+✓ [G] …und der abgewählte Beleg ist NICHT dabei  [gemessen: "immer die gleiche kalte "]
+✓ [G] …die übergebenen Signale sind vollständige Signale, keine Textreste
+✓ [G] …der persönliche Film bleibt frei von Cache-IDs und Fakten
+✓ [G] …der flüchtige Hinweis reist getrennt und unverändert unbestätigt
+✓ [G] wieder angewählt: keine Zeile mehr weg  [gemessen: 0]
+✓ [G] …und alle drei sind wieder in der Auswahl  [gemessen: 3]
+✓ [G] alles abgewählt → der Übernehmen-Knopf ist gesperrt  [gemessen: {"d":true,"t":"Es ist nichts mehr ausgewählt"}]
+✓ [G] die genannten Filme stehen als eigene Knöpfe da  [gemessen: ["Alien (1979) · wird ergänzt","Stalker · wird ergänzt"]]
+✓ [G] …mit Jahr, wo es eines gibt
+✓ [G] …abgewählter Film wird als abgewählt gezeigt  [gemessen: ["true","false"]]
+✓ [G] …und ist nicht in der Auswahl  [gemessen: ["Alien"]]
+✓ [G] …die Achsen sind noch dabei  [gemessen: {"wie":5,"was":3}]
+✓ [G] die Achsen-Tendenz steht mit ihren Werten da  [gemessen: ["WIE 5","WAS 3"]]
+✓ [G] …und WARUM (null) steht NICHT da
+✓ [G] Achsen sind einzeln abwählbar  [gemessen: {"was":3}]
+✓ [G] …die Filme sind noch dabei
+✓ [G] Nicht-Gedeutetes wird genannt  [gemessen: "etwas mit dem Ende"]
+✓ [G] …und ist einzeln abwählbar  [gemessen: 1 Element]
+✓ [G] …und abgewählter Modelltext reist nicht ins Profil  [gemessen: undefined]
+✓ [G] ohne Signale steht ein ehrlicher Satz da  [gemessen: "Deine ProfilvorschlägeNichts davon ist schon gespeichert. Ni"]
+✓ [G] …der die Frageform verantwortlich macht und nicht den Nutzer
+✓ [G] …und der Übernehmen-Knopf ist gesperrt
+✓ [G] …„Verwerfen" gibt es trotzdem
+✓ [G] …und meldet nach oben  [gemessen: 1]
+
+--- H: nichts wird gespeichert, bevor übernommen wurde ---
+✓ [H] kein Schreibversuch nach der Montage  [gemessen: []]
+✓ [H] kein Schreibversuch nach dem Öffnen der drei Fragen  [gemessen: []]
+✓ [H] kein Schreibversuch nach dem Ausfüllen aller drei Felder  [gemessen: []]
+✓ [H] …der Aufruf läuft  [gemessen: "ofilvorschläge entstehen …Abbrechenläuft"]
+✓ [H] kein Schreibversuch WÄHREND des laufenden Aufrufs  [gemessen: []]
+✓ [H] …nach dem Lauf steht die Vorschau  [gemessen: 3 Zeilen]
+✓ [H] kein Schreibversuch nach dem Ergebnis (Vorschau steht)  [gemessen: []]
+✓ [H] kein Schreibversuch nach dem Abwählen eines Vorschlags  [gemessen: []]
+✓ [H] kein Schreibversuch nach dem Abwählen von Achsen und Film  [gemessen: []]
+✓ [H] kein Schreibversuch nach „Verwerfen"  [gemessen: []]
+✓ [H] …und die Vorschau ist weg  [gemessen: "Du hast noch kein Geschmacksprofil. Kinodreieck me"]
+✓ [H] kein Schreibversuch nach einem gescheiterten Aufruf  [gemessen: []]
+✓ [H] im ganzen Abschnitt kein einziger Schreibversuch  [gemessen: 0 von 1 Operationen]
+✓ [H] …gelesen wurde dagegen sehr wohl  [gemessen: 1×]
+
+--- I: kein zweiter Schreibweg ---
+✓ [I] `uebernehmeExtrakt` ruft `uebernehmen` und nichts anderes  [gemessen: "const uebernehmeExtrakt = async (auswahl) => { const ok = await uebernehmen(auswahl); if (ok !== false) { const filme = auswahl?.r"]
+✓ [I] …und der KI-Zweig setzt `signale` nirgends selbst  [gemessen: 0 Vorkommen von `signale:`]
+✓ [I] …`speichereProfil` steht nur in Import und Speicher-Ersetzung  [gemessen: 3]
+✓ [I] …und `schreiben(` wird an GENAU EINER Stelle gerufen  [gemessen: 1]
+✓ [I] `uebernehmen` benutzt sammle + gezieltes uebernimm und vorschlagRahmen + uebernimmRahmen
+✓ [I] DreiFragen.jsx darf aus profil.js nur den reinen Anzeigehelfer importieren, keine Services  [gemessen: ["Memo, useState } from \"react\";","yle } from \"../lib/tokens.js\";","} from \"../lib/extraktion.js\";","eis } from \"../lib/profil.js\";","} from \"../config/runtime.js\";"]]
+✓ [I] …und ProfilAnsicht.jsx ruft nirgends eine Speicherfunktion
+✓ [I] genau EIN Schreibvorgang für den ganzen Durchlauf  [gemessen: ["schreibe"]]
+✓ [I] …das Ergebnis ist ein gültiges Profil  [gemessen: []]
+✓ [I] …die Einwilligung wurde dabei erteilt  [gemessen: {"erteilt":true,"am":"2026-09-17T08:42:12.875Z","textVersion":"v1"}]
+✓ [I] …die Signale stehen in `signale`, nicht in `offen`  [gemessen: {"s":3,"o":0}]
+✓ [I] …jedes mit `bestaetigt`-Zeitstempel (der Weg über uebernimm ist gelaufen)  [gemessen: ["string","string","string"]]
+✓ [I] …und mit `erfasst` (der Weg über sammle ebenso)
+✓ [I] die Belege der Vorschau stehen unverändert im Profil  [gemessen: ["diese lange st","immer die glei","Ich hasse es, "]]
+✓ [I] …und die Quelle bleibt die Frage (K1/K2/K4), keine Sammelkennung  [gemessen: ["K1","K2","K4"]]
+✓ [I] Filmidentität und Jahr im Profil entsprechen exakt den sichtbaren Ergänzungsvorschlägen  [gemessen: ["Alien","Stalker"]]
+✓ [I] …nach der Einzelbestätigung mit sicher: true  [gemessen: [true,true]]
+✓ [I] die Achsen der Vorschau stehen im Profil, die dritte bleibt null  [gemessen: {"wie":5,"was":3,"warum":null}]
+✓ [I] Nicht-Gedeutetes steht im Profil  [gemessen: ["etwas mit dem Ende"]]
+✓ [I] …und `rahmenOffen` ist wieder leer (die Bühne wurde geräumt)
+✓ [I] die Fassung steigt um GENAU EINS  [gemessen: "p1"]
+✓ [I] …und die Vorschau ist danach zu  [gemessen: 0 Zeilen]
+✓ [I] …die Profil-Ansicht zeigt das Ergebnis  [gemessen: "KI-Eindruck aus deinen AngabenDein bisheriges Profil zieht dich zu Sci"]
+✓ [I] …Cachehinweise wurden nicht in den persönlichen Speicher geschrieben
+✓ [I] …die flüchtige Zuordnung bleibt in der Profilübersicht ausdrücklich unbestätigt
+✓ [I] GEGENPROBE: der abgewählte Beleg steht NICHT im Profil  [gemessen: ["diese lange ","immer die gl"]]
+✓ [I] …und sein Wert auch nicht  [gemessen: "ueberklaerung"]
+✓ [I] …was dastand, steht im Profil — Zeichen für Zeichen  [gemessen: ["diese lange ","immer die gl"]]
+✓ [I] …der abgewählte Film fehlt  [gemessen: ["Stalker"]]
+✓ [I] …die abgewählten Achsen sind unverändert null  [gemessen: {"wie":null,"was":3,"warum":null}]
+✓ [I] …und nicht abgewähltes Nicht-Gedeutetes ist trotzdem da
+✓ [I] partial: genau zwei gerettete Vorschläge stehen in der Vorschau
+✓ [I] partial: der bereinigte Hinweis ist sichtbar
+✓ [I] partial: vor der Bestätigung bleibt das Profil unverändert
+✓ [I] partial: selektive Bestätigung schreibt genau ein gewähltes Signal
+✓ [I] partial: Darstellungs-Hinweis und Warncodes werden nie Profilmerkmale
+✓ [I] degraded: der bereinigte Hinweis erscheint statt eines undurchsichtigen Fehlers
+✓ [I] degraded: es gibt keine Profilvorschläge und keine Schreibmöglichkeit
+✓ [I] degraded: auch nach dem Schließen gab es null Profilwrites
+✓ [I] zweiter Durchlauf: Fassung p3 (p1 → p2 aus dem ersten, dann p3)  [gemessen: "p2"]
+✓ [I] …die bestehenden Signale bleiben erhalten  [gemessen: 3]
+✓ [I] …und die bestehenden Achsen überleben  [gemessen: {"wie":null,"was":3,"warum":2}]
+✓ [I] …eine leere Film-Teilliste bewahrt alle zuvor bestätigten Filme
+✓ [I] …das Ergebnis bleibt ein gültiges Profil
+✓ [I] Bestandsvorschau nennt Erhalt und konkrete Richtungsänderung ohne Schreibversuch
+✓ [I] Auch die Abwahl verändert keinen persönlichen Altbestand
+✓ [I] Bestand plus bestätigte Auswahl schreibt genau einmal und erhöht genau eine Fassung
+✓ [I] Eindeutiger Altfilm wird ohne Dublette aktualisiert und behält seine stabile Master-ID
+✓ [I] Nur der bestätigte neue Film kommt hinzu, das abgewählte Remake bleibt draußen
+✓ [I] Ein Altfilm außerhalb der Vorschau bleibt unverändert und wird nicht still bestätigt
+✓ [I] Nie gezeigte offene Altsignale bleiben offen statt mitbestätigt zu werden
+✓ [I] Ergänztes Profil überlebt erneutes Laden ohne zusätzlichen Write
+✓ [I] Verwerfen einer weiteren Vorschau lässt Ergänzungen und Altbestand unverändert
+
+--- J: Fehlerfälle des Aufrufs ---
+✓ [J] LIMIT: der Nutzer sieht den Text aus errorText  [gemessen: "Das Nutzungslimit ist erreicht. Bitte später erneu"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["limit"]]
+✓ [J] AI_DISABLED: der Nutzer sieht den Text aus errorText  [gemessen: "Die KI-Funktionen sind vorübergehend abgeschaltet."]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["ai-disabled"]]
+✓ [J] FORBIDDEN: der Nutzer sieht den Text aus errorText  [gemessen: "Für diese Funktion fehlt die Berechtigung.Profilvo"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["forbidden"]]
+✓ [J] UNAUTHENTICATED: der Nutzer sieht den Text aus errorText  [gemessen: "Für diese Funktion ist eine Anmeldung nötig.Profil"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["unauthenticated"]]
+✓ [J] OFFLINE: der Nutzer sieht den Text aus errorText  [gemessen: "Keine Netzwerkverbindung. Bitte später erneut vers"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["offline"]]
+✓ [J] AI_REFUSED: der Nutzer sieht den Text aus errorText  [gemessen: "Die KI hat die Bearbeitung dieser Anfrage abgelehn"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["ai-refused"]]
+✓ [J] SERVER: der Nutzer sieht den Text aus errorText  [gemessen: "Der Server ist vorübergehend nicht verfügbar.Profi"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["server"]]
+✓ [J] INVALID_RESPONSE: der Nutzer sieht den Text aus errorText  [gemessen: "Der Server hat eine ungültige Antwort geliefert.Pr"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["invalid-response"]]
+✓ [J] AI_DUPLICATE: der Nutzer sieht den Text aus errorText  [gemessen: "Dieser Vorgang läuft bereits.Profilvorschläge erst"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["ai-duplicate"]]
+✓ [J] NOT_IMPLEMENTED: der Nutzer sieht den Text aus errorText  [gemessen: "Diese Funktion ist noch nicht verfügbar.Profilvors"]
+✓ [J] …und NICHT die rohe Ausnahmemeldung
+✓ [J] …kein Schreibversuch  [gemessen: 0]
+✓ [J] …die Vorschau erscheint nicht  [gemessen: 0]
+✓ [J] …das Formular steht noch, mit dem eingegebenen Text  [gemessen: "Der Anflug auf das R"]
+✓ [J] …und der Fehler wird nach oben gemeldet  [gemessen: ["not-implemented"]]
+✓ [J] eine nackte Ausnahme wird auf den Serverfehler-Text abgebildet  [gemessen: "gst?Der Server ist vorübergehend nicht verfügbar.Profilvorschläge erstellenAbbrechenbereit"]
+✓ [J] …und kein Schreibversuch
+✓ [J] ganz ohne `daten`-Hülle → ehrliche Formmeldung  [gemessen: "ienstes hatte nicht die erwartete Form.Profilvorschläge erstellenAbbrechenbereit"]
+✓ [J] …keine Vorschau, kein Schreibversuch (ganz ohne `daten`-Hülle)
+✓ [J] `daten: null` → ehrliche Formmeldung  [gemessen: "ienstes hatte nicht die erwartete Form.Profilvorschläge erstellenAbbrechenbereit"]
+✓ [J] …keine Vorschau, kein Schreibversuch (`daten: null`)
+✓ [J] `daten` als Text → ehrliche Formmeldung  [gemessen: "ienstes hatte nicht die erwartete Form.Profilvorschläge erstellenAbbrechenbereit"]
+✓ [J] …keine Vorschau, kein Schreibversuch (`daten` als Text)
+✓ [J] Antwort ist null → ehrliche Formmeldung  [gemessen: "ienstes hatte nicht die erwartete Form.Profilvorschläge erstellenAbbrechenbereit"]
+✓ [J] …keine Vorschau, kein Schreibversuch (Antwort ist null)
+✓ [J] Antwort ist ein Text → ehrliche Formmeldung  [gemessen: "ienstes hatte nicht die erwartete Form.Profilvorschläge erstellenAbbrechenbereit"]
+✓ [J] …keine Vorschau, kein Schreibversuch (Antwort ist ein Text)
+✓ [J] `signale: "keine Liste"` → Vorschau ohne Signale statt Absturz  [gemessen: "Deine ProfilvorschlägeNichts davon ist schon gespeichert. Nimm weg, wa"]
+✓ [J] …der Übernehmen-Knopf ist gesperrt
+✓ [J] …und noch immer kein Schreibversuch  [gemessen: 0]
+✓ [J] …es gab keine unbehandelte Ablehnung  [gemessen: 0]
+✓ [J] die Aufgabe heisst "profile-extract"  [gemessen: "profile-extract"]
+✓ [J] …die Nutzlast trägt genau die drei Antworten  [gemessen: ["K1","K2","K4"]]
+✓ [J] …und die Genre-Werteliste (ohne sie weist der Endpunkt ab, BEVOR er zahlt)  [gemessen: {"genres":["Science-Fiction","Horror","Drama"],"tags":["zeitreisen","offene enden"]}]
+✓ [J] …und vorhandene Merkmalsbegriffe fuer andere Profilnutzer
+✓ [J] …und sonst nichts (kein Profil, kein Konto, keine Titel)  [gemessen: ["antworten","listen"]]
+✓ [J] …und protokolliert bei einem neuen Profil ehrlich keine Profilversion  [gemessen: {"profilVersion":null}]
+✓ [J] genau EIN bezahlter Aufruf für einen Durchlauf  [gemessen: 1]
+✓ [J] ein bestehendes Profil reist als `profilVersion` ins KI-Protokoll  [gemessen: {"profilVersion":"p3"}]
+
+--- K: die Vorschau überlebt einen Schreibfehler ---
+✓ [K] die Vorschau STEHT noch  [gemessen: 3 Zeilen]
+✓ [K] …mit unveränderter Abwahl  [gemessen: [false,true,false]]
+✓ [K] …der Nutzer bekommt eine Meldung  [gemessen: "ewähltes übernehmenVerwerfenKonnte nicht gespeichert werden: Topf voll"]
+✓ [K] …der Fehler wird nach oben gemeldet  [gemessen: ["Topf voll"]]
+✓ [K] …der Topf ist unangetastet  [gemessen: null]
+✓ [K] …genau ein abgewiesener Schreibversuch  [gemessen: ["schreib-versuch-abgewiesen"]]
+✓ [K] der zweite Versuch trägt  [gemessen: "p1"]
+✓ [K] …und der BEZAHLTE Aufruf wurde NICHT wiederholt  [gemessen: 1 Aufrufe]
+✓ [K] …geschrieben wurde genau das, was noch dastand  [gemessen: ["diese lange ","Ich hasse es"]]
+✓ [K] …die Vorschau ist jetzt zu
+✓ [K] …und das Ergebnis ist ein gültiges Profil
+
+--- L: KI-Gate und der KI-lose Weg ---
+✓ [L] kiAktiv=true: Einstieg „Geschmacksprofil mit KI erstellen" da  [gemessen: ["Profil anlegen","Geschmacksprofil mit KI erstellen"]]
+✓ [L] …der deterministische Einstieg ist in beiden Fällen da
+✓ [L] …und ohne Einstieg gibt es auch keine Textfelder  [gemessen: 0]
+✓ [L] kiAktiv=false: Einstieg „Geschmacksprofil mit KI erstellen" weg  [gemessen: ["Profil anlegen"]]
+✓ [L] …der deterministische Einstieg ist in beiden Fällen da
+✓ [L] …und ohne Einstieg gibt es auch keine Textfelder  [gemessen: 0]
+✓ [L] die Bestands-Fixtur ist ein gültiges Profil  [gemessen: []]
+✓ [L] bestehendes Profil, kiAktiv=true: „Geschmacksprofil mit KI verfeinern" da  [gemessen: ["Ändern","Einwilligung widerrufen","","","Weitere Angaben machen","Geschmacksprofil mit KI verfeinern","Aktuelle Infos"]]
+✓ [L] …„Weitere Angaben machen" bleibt in beiden Fällen
+✓ [L] …und „Einwilligung widerrufen" ebenso
+✓ [L] bestehendes Profil, kiAktiv=false: „Geschmacksprofil mit KI verfeinern" weg  [gemessen: ["Ändern","Einwilligung widerrufen","","","Weitere Angaben machen","Aktuelle Infos"]]
+✓ [L] …„Weitere Angaben machen" bleibt in beiden Fällen
+✓ [L] …und „Einwilligung widerrufen" ebenso
+✓ [L] auch ohne jede KI-Prop ist der Einstieg fail-closed weg  [gemessen: ["Profil anlegen"]]
+✓ [L] …und `ai.runTask` wurde nie gerufen  [gemessen: 0]
+✓ [L] ProfilAnsicht blendet den KI-Einstieg aus statt ihn zu sperren  [gemessen: ["kiWegOffen,","kiWegOffen && <button style={b","kiWegOffen = false, onKiErhebe","kiWegOffen && <button style={b","kiWegOffen={kiWegOffen} onNeuE"]]
+✓ [L] …und `kiWegOffen` hat den Vorgabewert false (fail-closed)
+✓ [L] GeschmackBereich öffnet ausschließlich bei ausdrücklichem kiAktiv=true  [gemessen: "const kiWegOffen = kiAktiv === true;"]
+✓ [L] KI=aus: der Einwilligungsschritt erscheint  [gemessen: "Dein GeschmacksprofilKinodreieck kann sich merken, was dich "]
+✓ [L] …die Schlagwortliste steht vollständig da  [gemessen: 21 Chips]
+✓ [L] …die Vorschau steht  [gemessen: "Das käme ins Profilmag drama (genre)Filme: + AlienZurückIns Profil übernehmenAbb"]
+✓ [L] …und kein Schreibversuch bis hierher  [gemessen: 0]
+✓ [L] KI=aus: der deterministische Weg schreibt ein vollständiges Profil  [gemessen: {"v":"p1","s":["drama"],"f":["Alien"]}]
+✓ [L] …mit erteilter Einwilligung
+✓ [L] …und es ist gültig  [gemessen: []]
+✓ [L] …der Film aus dem eigenen Bestand trägt sicher: TRUE  [gemessen: [true]]
+✓ [L] …die Profil-Ansicht zeigt danach das Profil  [gemessen: "KI-Eindruck aus deinen AngabenDein bisheriges Profil zieht d"]
+✓ [L] …der KI-Einstieg fehlt weiterhin
+✓ [L] DER ANKER: im ganzen KI-losen Durchlauf NULL Rufe an ai.runTask  [gemessen: 0]
+✓ [L] …entfernen wirkt  [gemessen: 0 statt 1]
+✓ [L] …und ai.runTask blieb ungerufen  [gemessen: 0]
+✓ [L] kein einziger Netzzugriff im ganzen Lauf  [gemessen: 0]
+✓ [L] keine unbehandelte Ablehnung im ganzen Lauf  [gemessen: []]
+
+--- M: Film-Bestätigung öffnet den Prompt-Weg ---
+✓ [M] die extrahierten Filme stehen im Profil  [gemessen: ["Alien","Stalker"]]
+✓ [M] …nach dem sichtbaren Übernahmeklick alle mit sicher: true  [gemessen: [true,true]]
+✓ [M] die Prompt-Fassung entsteht (Einwilligung liegt vor)  [gemessen: {"b":276,"s":3}]
+✓ [M] der bestätigte Film steht im Prompt: "Alien"  [gemessen: true]
+✓ [M] der bestätigte Film steht im Prompt: "Stalker"  [gemessen: true]
+✓ [M] …und Filmzeilen sind vorhanden  [gemessen: ["Filme, die ihn treffen: Alien (1979)","Genannte Filme: Stalker"]]
+✓ [M] die Signale stehen dagegen sehr wohl im Prompt  [gemessen: 3 Signalzeilen]
+✓ [M] …und die Achsen-Tendenz  [gemessen: "Achsen-Tendenz: WIE 5, WAS 3 (von 5)"]
+✓ [M] …und der ohne Richtung landet unter „Genannte Filme" (keine erfundene Zuneigung)
+✓ [M] GEGENPROBE: geschmack.js setzt für Filme aus dem Bestand sicher: true
+✓ [M] die rohe Extraktion bleibt bis zur Vorschau ausdrücklich sicher: false  [gemessen: "sicher: false"]
+
+--- F: Nachgezogene frühere Auffälligkeiten ---
+✓ [F] F1: die ECHTE Hülle des Endpunkts (`data`) wird gelesen  [gemessen: "3 Zeilen, Text: icht in deiner Antwort fand.Ausgewähltes übernehmenVerwerfen"]
+✓ [F] F2: zwei Signale mit demselben Beleg sind einzeln abwählbar  [gemessen: 2 Zeilen für 2 Signale]
+✓ [F] F2: …das Abwählen des ersten lässt den zweiten stehen  [gemessen: [true,false]]
+✓ [F] F2: …und übernommen wird genau der eine  [gemessen: ["Horror"]]
+✓ [F] F3: eine Extraktion mit `quelle: "schlagwort"` wird verworfen  [gemessen: {"durch":0,"grund":"Quelle unbekannt: schlagwort"}]
+✓ [F] F3: …keine profileigene Quelle kommt über die Extraktion herein  [gemessen: []]
+✓ [F] F4: fehlende `staerke` wird MIT Grund verworfen statt auf 3 gesetzt  [gemessen: {"durch":0,"grund":"staerke fehlt oder liegt ausserhalb 1..5"}]
+✓ [F] F4: …und `staerke: "5"` wird nicht still zu 3  [gemessen: null]
+✓ [F] F5: ein unbrauchbarer Rahmen wird gemeldet und nicht von „gespeichert" verdeckt  [gemessen: Filme in der Vorschau 2, im Profil [], Meldung " nicht übernommen werden: nichtDeutbar[0]: zu lang (max 200)"]
+✓ [F] F6: ein nie gezeigter offener Vorschlag wird nicht mitbestätigt  [gemessen: 3 gezeigt, 3 bestätigt, Fremdzug im Profil: false]
+✓ [F] F7: `daten: []` wird als Formfehler gemeldet, nicht als leere Extraktion  [gemessen: "tte nicht die erwartete Form.Profilvorschläge erstellenAbbrechenbereit"]
+✓ [F] F8: verworfene Film-Einträge werden gezählt oder gemeldet  [gemessen: {"filme":1,"verworfen":2}]
+
+===========================================================
+Quelle extraktion:  src/lib/extraktion.js
+Quelle dreifragen:  src/components/DreiFragen.jsx
+Quelle bereich:     src/components/GeschmackBereich.jsx
+Quelle ansicht:     src/components/ProfilAnsicht.jsx
+Quelle profil:      src/lib/profil.js
+Bündel:   esbuild, 27 ms   ·   services/ai.js ECHT im Baum
+Netz:     kein einziger Versuch
+Fehler:   keine unbehandelte Ablehnung
+A  Das Modul: Fragen, Grenzen, Payload .......... 34/34
+B  ausExtraktion: die Formprüfung ............... 71/71
+C  Rahmen und die Trennung verworfen/ohneBeleg .. 28/28
+D  Doppelt geführte Konstanten .................. 14/14
+E  DreiFragen: das Formular ..................... 23/23
+G  Die Vorschau lügt nicht ...................... 45/45
+H  Null Schreibversuche vor der Übernahme ....... 14/14
+I  Kein zweiter Schreibweg ...................... 53/53
+J  Fehlerfälle des Aufrufs ...................... 84/84
+K  Vorschau überlebt Schreibfehler .............. 11/11
+L  KI-Gate fail-closed, KI-loser Weg vollwertig . 33/33
+M  Film-Bestätigung öffnet den Prompt-Weg ....... 11/11
+
+421/421 Checks bestanden.   Laufzeit 0.7 s
+
+F  Auffälligkeiten am Ist-Verhalten: 12/12 unauffällig
+
+EXTRAKTIONS-TEST BESTANDEN

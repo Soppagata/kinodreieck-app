@@ -1,0 +1,98 @@
+✓ Bibliothekscontroller vereinigt Master und Must-Watch ohne Fremdfelder
+✓ film_at-ID gewinnt im Bibliothekscontroller vor dem Titelmatch
+✓ Nicht gematchtes Kinoprogramm bleibt im Rest
+✓ Kinopins laufen erst an einem autoritativen Programmstand ab
+✓ Artikelprüfung akzeptiert die echte Minimalform
+✓ Artikelprüfung weist die crashende Listenform ab
+✓ Filmlöschung entfernt nur den gewählten Master-Eintrag
+✓ Filmlöschung löst Blog- und Must-Watch-Verweise ohne die Einträge zu löschen
+✓ Must-Watch-Löschung macht Blogrefs zu Rotlinks statt truthy Leichen
+✓ Master-Ersatz löst tote Masterrefs und bewahrt gültige MW-Refs samt persönlichen Feldern
+✓ Must-Watch-Sprungplan fokussiert Master, gematchtes Kino, reines Programm und Streaming eindeutig
+✓ Amazon-Prime-Channels werden kompakt zu einem gemeinsamen Tag
+✓ App-Hilfe beantwortet Settings-Fragen ohne einen KI-Aufruf
+✓ Must-Watch-Schreibkette startet Aufträge strikt seriell
+✓ Must-Watch-Schreibkette meldet Fehler und bleibt danach verwendbar
+✓ Must-Watch-Leser akzeptiert beide Bestandsformate, aber keinen beschädigten Topf
+✓ Must-Watch Add→Delete wird gegen den jeweils aktuellen Queue-Stand berechnet
+✓ Must-Watch Add→Delete hinterlässt weder Eintrag noch verlorene Schreibreihenfolge
+✓ Zwei schnelle funktionale Besitz-Toggles ergeben false→true→false
+✓ Must-Watch-Migrationsdoppelklick bleibt erfolgreich und idempotent
+✓ Must-Watch-Migrationsdoppelklick erzeugt genau einen Eintrag und einen Write
+✓ Späteres Add wartet auf die Mehrtopf-Barriere
+✓ Queue-Validator entfernt eine während der Barriere veraltete Master-Verknüpfung
+✓ Flagmigration wartet auf die Master-Barriere
+✓ Gequeue-te Flagmigration liest den Master erst nach der Barriere neu
+✓ Externer Fehler sichert den vorherigen Must-Watch-Stand zurück
+✓ Fehlgeschlagene Rücksicherung zeigt den tatsächlich persistierten Folgestand
+✓ Vorhandener leerer Must-Watch-Topf sperrt Änderungen fail-closed
+✓ Veralteter Load-Fehler sperrt keinen inzwischen bestätigten Demo-Stand
+✓ Ausgangsstand A ist vor dem Treiberwechsel bestätigt sichtbar
+✓ Während des blockierten B-Loads sind A-Liste und A-Referenzsignale sofort isoliert
+✓ Nach dem B-Load wird ausschließlich der bestätigte B-Stand sichtbar
+✓ Treiberwechsel verwirft laufende und gequeue-te A-Aufträge vor jedem B-Write
+✓ Eine veraltete MW-Transaktion führt ihren Folgeschritt nicht im neuen Kontext aus
+✓ Kontextwechsel im Folgeschritt sperrt Folge-Write und MW-Rollback gegen B
+✓ Katalogcontroller normalisiert ISO-Zeit und lehnt Müll ab
+✓ Manueller Import erbt weder Variante noch Fehler- oder Ablaufetikett
+✓ Getrennte Streaming-Demo übernimmt Katalogmetadaten in die Anzeigepayload
+✓ Vorhandene Streaming-Payloadmetadaten werden nicht überschrieben
+✓ App verdrahtet onboardingController
+✓ App verdrahtet catalogController
+✓ App verdrahtet libraryController
+✓ App verdrahtet useIntelligenceController
+✓ App verdrahtet useMustwatchController
+✓ App verdrahtet useEntdeckenRadarController
+✓ App verdrahtet useArticleController
+✓ App verdrahtet personalDataTransactionController
+✓ App verdrahtet useEggController
+✓ Bezahlte KI- und Filmwissen-Services sind aus App.jsx herausgelöst
+✓ Egg-Frequenz und Achievements sind aus App.jsx herausgelöst
+✓ Onboarding-Reset verwendet das PersonalDataRegistry statt einer zweiten 16er-Liste
+✓ Datenhaltende Controller verwenden die isolierten Projektionen
+✓ App.jsx bleibt inklusive der späteren Login-Integration unter 2240 Zeilen
+✓ Master- und Artikelimport persistieren keine ungenutzten Rohdaten-Snapshots
+✓ App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch
+✓ Browser verdrahtet keinen manuellen Radar- oder zweiten Websearch-Pfad
+✓ Controller liest Radar-Initialwert aus localStorage und decodiert ihn pro Authority
+✓ Controller liest Kd-Radar-Boot aus Store und decodiert pro Authority
+✓ Controller meldet Boot-Malformed und Lesefehler mit W3-Texten
+✓ Boot-Sync persistiert unsynchronisierte Freitextziele providerfrei vor dem aktiv-guarded Sync
+✓ Store-Lesefehler wird vorläufig unmounted-safe abgefangen
+✓ Controller-Sync ruft den Pilot-Adapter exakt mit state und commit auf
+✓ Manualer Pilot-Sync mapped unerwartete Errors auf pending/pilot-unknown ohne globale Fehlerqueue
+✓ Share-Pfad bleibt ohne Pilot-Sync
+✓ Controller schreibt bestätigt bestätigten Subscription-/Receipt-/Import-Stand nur über Queuewrite-Ergebnis in Pilot-Sync
+✓ Controller liefert strukturiertes Pilot-Import-Ergebnis statt booleschem Rückgabewert
+✓ Controller hat keinen Pilot-Timer/Retry/Serial für den W2-Pfad
+✓ Pilot-Gates richten sich nur an Flag/Authority/Active-Account
+✓ Must-Watch-Verknüpfungen springen stabil in alle drei Katalogbereiche
+✓ Must-Watch-Controller migriert keine Merkliste und erhält Bestandsfelder
+✓ Must-Watch-Flagmigration berechnet neue Einträge erst innerhalb der Schreibkette
+✓ Must-Watch prüft gequeue-te Master-Verknüpfungen erst beim tatsächlichen Schreiben erneut
+✓ Must-Watch-Besitzcheckbox toggelt funktional innerhalb der Schreibqueue
+✓ Must-Watch normalisiert optionales Jahr und Typ an der Schreibgrenze
+✓ Must-Watch-Dashboard verwendet die tägliche lokale Verfügbarkeitsprojektion
+✓ Must-Watch speichert keinen Verfügbarkeitsstatus und rät keine Titel
+✓ App besitzt keinen Demo-seitigen Must-Watch-Seed; normales Laden und Schreiben bleiben bestaetigt
+✓ Master-Add kanonisiert trilogie zu film im Schreibpayload
+✓ Master-Update kanonisiert trilogie zu film im Schreibpayload
+✓ Master-Add kanonisiert filmreihe zu film im Schreibpayload
+✓ Master-Update kanonisiert filmreihe zu film im Schreibpayload
+✓ Master-Add kanonisiert franchise zu serie im Schreibpayload
+✓ Master-Update kanonisiert franchise zu serie im Schreibpayload
+✓ Master-Add kanonisiert film zu film im Schreibpayload
+✓ Master-Update kanonisiert film zu film im Schreibpayload
+✓ Master-Add kanonisiert serie zu serie im Schreibpayload
+✓ Master-Update kanonisiert serie zu serie im Schreibpayload
+✓ Master-Add kanonisiert musik zu musik im Schreibpayload
+✓ Master-Update kanonisiert musik zu musik im Schreibpayload
+✓ Master-Add kanonisiert sonstiges zu sonstiges im Schreibpayload
+✓ Master-Update kanonisiert sonstiges zu sonstiges im Schreibpayload
+✓ Master-Add und -Update erhalten den unbeteiligten persönlichen Bestand
+✓ KI-Bewertung bleibt bis zum bewussten Speichern ein kontogebundener Entwurf
+✓ Mehrtopf-Löschungen warten fail-closed auf den sicheren Must-Watch-Ladestand
+✓ Radarcontroller projiziert den Kontopilot getrennt und lässt Gast-Fixtures lokal
+✓ Pilot-Import-Queue akzeptiert den Eingangssatz als erfolgreich
+✓ Pilot-Import-Queue bleibt in aktiver Projektion ohne sichtbares Event
+controllers_test: 97 Checks bestanden.

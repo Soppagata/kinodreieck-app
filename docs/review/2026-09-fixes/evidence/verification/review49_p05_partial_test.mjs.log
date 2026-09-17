@@ -1,0 +1,2 @@
+PASS E08-001: real adapter/receipt/handler/browser/pilot, success and provider/storage partial, 11 tamper guards, sibling feed, one provider request per scenario
+PASS E08-001 initial controller: accepted storage partial and sibling persisted feed stay confirmed

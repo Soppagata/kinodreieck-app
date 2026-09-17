@@ -1,0 +1,74 @@
+✓ globale Queue rendert jeden Scope als eigenen Alert
+✓ Queue-Dismiss adressiert exakt den gewählten Eintrag
+✓ FilmCard sperrt einen zweiten Write, solange die Bestätigung aussteht
+✓ FilmCard lässt den Editor samt Eingabe während des Writes offen
+✓ FilmCard bewahrt Editor und Eingabe nach bestätigtem false
+✓ FilmCard schließt erst nach erfolgreicher Write-Bestätigung
+✓ Gast sieht in der Artikelmaske kein Shared-Control
+✓ Artikelmaske verhindert Doppelartikel und bewahrt bestehenden geteilt-Wert beim Gast
+✓ Artikelmaske bleibt nach fehlgeschlagenem Write mit sichtbarer Diagnose offen
+✓ Artikelmaske blockiert nicht-ganzzahlige Referenzjahre mit sichtbarem Feldfehler
+✓ Artikelmaske bewahrt historische Nicht-Film- und untypisierte Referenzjahre
+✓ Auch ein bereites Konto sieht im Privatrelease kein Shared-Control
+✓ Kontoaktivierung serialisiert Doppelklick und meldet vor Persistenz keinen Erfolg
+✓ Fehlgeschlagene Kontoaktivierung bleibt mit Fehler und Retry im Assistenten offen
+✓ Kontoassistent schließt erst nach bestätigter Aktivierung erfolgreich ab
+✓ MedienForm serialisiert den Add-Doppelklick
+✓ MedienForm bleibt bei fehlgeschlagener Persistenz samt Eingabe offen
+✓ MedienForm blockiert Freitextjahre vor onAdd und erklärt die gültige Eingabe
+✓ MedienForm persistiert ein historisches Nicht-Film-Jahr als ganze Zahl
+✓ Adaptive EintragForm blockiert historische Jahreszahlen gezielt nur im Filmtyp
+✓ Adaptive EintragForm persistiert historische Personenjahre als ganze Zahl
+✓ Unberührter Must-Watch-Editor übernimmt einen neu eintreffenden Syncstand
+✓ Blur eines unberührten Editors schreibt keinen alten Must-Watch-Stand zurück
+✓ Paralleler Must-Watch-Textkonflikt bewahrt den Entwurf und verlangt eine sichtbare Entscheidung
+✓ Konflikt-Blur überschreibt den neueren Must-Watch-Syncstand nicht automatisch
+✓ Konflikt kann ohne Write zugunsten der neueren Must-Watch-Version aufgelöst werden
+✓ Stapelimport startet bei Doppelklick nur eine Übernahme
+✓ Stapelimport behält bei Writefehler die geprüfte Vorschau und meldet keinen Scheinerfolg
+✓ Folgezustand bleibt leer, solange addFilm nur ein offenes Promise ist
+✓ erst die bestätigte String-ID erreicht Blogref/Streaming-Status
+✓ Objekte und Promises können nicht als ID in den Folgezustand gelangen
+✓ Wochenplan bleibt bei Storage-Reject auf dem bestätigten Ausgangsstand
+✓ Streamingstatus bleibt bei Storage-Reject auf dem bestätigten Ausgangsstand
+✓ K.vokabular-Reject liefert false und lässt sichtbaren State sowie Finder-Projektion bestätigt
+✓ K.vokabular weist formfremde Werte fail-closed ohne Scheinerfolg ab
+✓ bestätigter Vokabular-Writer schreibt exakt K.vokabular
+✓ offener K.vokabular-Write ändert weder sichtbaren State noch Finder-Projektion vorzeitig
+✓ bestätigter K.vokabular-Commit aktualisiert danach State und Finder-Projektion gemeinsam
+✓ Konto-/Treiberwechsel während K.vokabular-Write liefert false und commitet nicht in den neuen Sichtkontext
+✓ Doppelklick-Äquivalent startet keinen zweiten K.vokabular-Write parallel und commitet nicht vorzeitig
+✓ K.vokabular serialisiert zwei schnelle Writes und projiziert den letzten bestätigten Stand
+✓ App bindet den echten useVokabularController im Runtime-Pfad weiter
+✓ App verschluckt keine asynchronen Storage-Schreibfehler mehr lautlos
+✓ App macht Persistenzfehler sichtbar: Die Kino-Zeitgrenze konnte nicht gespeichert werden
+✓ App macht Persistenzfehler sichtbar: Die Einstellung konnte nicht gespeichert werden
+✓ App macht Persistenzfehler sichtbar: Der Darstellungsmodus konnte nicht gespeichert werden
+✓ App macht Persistenzfehler sichtbar: Der Kinotermin konnte nicht gespeichert werden
+✓ App macht Persistenzfehler sichtbar: Die Streaming-Merkliste konnte nicht gespeichert werden
+✓ App macht Persistenzfehler sichtbar: Die Streaming-Dienste konnten nicht gespeichert werden
+✓ App macht Persistenzfehler sichtbar: Die Streaming-Heuristik konnte nicht gespeichert werden
+✓ setVokabular projiziert bestätigte geladene Vokabulardaten in State und Finder
+✓ saveVokabular verändert vor Promise-Erfolg weder sichtbaren State noch Finder-Projektion
+✓ saveVokabular schreibt gegen den bestätigten Vokabular-Key
+✓ bestätigter saveVokabular-Commit aktualisiert State und Finder gemeinsam
+✓ bestätigter Vokabular-Write serialisiert den exakten persistierten Stand
+✓ Ablehnung eines saveVokabular-Laufs hält vor dem Resolve den alten Stand
+✓ Reject/false hält Vokabular-State und Finder unverändert
+✓ Contextwechsel wird während offener Bestätigung sauber vorbereitet
+✓ Contextwechsel verhindert Commit von saveVokabular und schützt den sichtbaren Stand
+✓ notiz → gesehen bewahrt Gesehen-, Zusatz- und Mediathekstatus queue-zeitig
+✓ gesehen → notiz bewahrt Gesehen-, Zusatz- und Mediathekstatus queue-zeitig
+✓ Wochenplan meldet nach addFilm keinen Erfolg vor bestätigtem Referenz-Write
+✓ fehlgeschlagener Wochenplan-Write lässt die Referenz sichtbar unverändert
+✓ geladener leerer Master erlaubt die Übernahmefrage ohne vorzeitigen Write
+✓ Streaming schreibt während einer noch unbestätigten Film-ID keinen Folgestatus
+✓ Streaming wartet nach addFilm auf die bestätigte Statuspersistenz
+✓ fehlgeschlagener Streaming-Statuswrite zeigt keinen Scheinerfolg
+✓ ungeladener Master bietet trotz offener Details weder Erstellung noch Zuordnung an
+✓ ungeladener Master öffnet keine Übernahmefrage und startet weder Film- noch Statuswrite
+✓ Konto B ignoriert den höheren Exportmarker von Konto A sofort
+✓ ein alter Konto-A-Markierer schreibt nach dem Kontextwechsel nicht in Konto B
+✓ eine verspätete Konto-A-Antwort kann den Exportstand von Konto B nicht setzen
+
+ASYNC-PERSISTENCE-UI-TEST BESTANDEN (72/72)

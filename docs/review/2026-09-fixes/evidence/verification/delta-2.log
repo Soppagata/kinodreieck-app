@@ -1,0 +1,15 @@
+✔ TMDB media identities are separate; numeric legacy input fails closed (0.756375ms)
+✔ typed identity survives HTTP RPC transport (8.875584ms)
+✔ concurrent film / series reads and research never share evidence or in-flight work (0.481125ms)
+✔ IMDb miss then wrong film report cannot become series evidence (0.093125ms)
+✔ valid series IMDb and movie TMDB reports still work (0.116ms)
+✔ film adapter rejects television, collection and untyped TMDB before any source request (0.402833ms)
+✔ movie adapter strips only the verified prefix for exact P4947 lookup (1.35925ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 84.7115

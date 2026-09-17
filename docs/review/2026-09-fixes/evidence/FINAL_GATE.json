@@ -1,0 +1,211 @@
+{
+  "status": "PASS",
+  "candidateCommit": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+  "nonDocumentationTreeSha256": "38833aaf711d3c045c87f54c103eb165c3d88d671476eb68fff2058ee66a025b",
+  "recordedAt": "2026-09-17T08:48:10.999488+00:00",
+  "independentReview": {
+    "path": "docs/review/2026-09-fixes/evidence/verification/FINAL_REVIEW.json",
+    "sha256": "2de0beb8323ee0e7680a72c997590b377983acea9f513c8cb1b0a8a693a9f4b5",
+    "issues": 49,
+    "criteria": 239,
+    "counts": {
+      "ERLEDIGT": 49,
+      "OFFEN": 0,
+      "NICHT BELEGT": 0
+    },
+    "scope": "Independent issuewise acceptance; Master full-suite/build results are recorded separately here."
+  },
+  "executions": [
+    {
+      "candidateCommit": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "startedAt": "2026-09-17T08:41:48.805430+00:00",
+      "endedAt": "2026-09-17T08:43:59.723391+00:00",
+      "durationSeconds": 130.918,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-gate/npm-test-accepted.log",
+      "logSha256": "dbe446e7d0918634600ce0fecf1533d281a13736fedcd19a55eb7ca6162d22f0",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/npm-test-accepted.log.gz",
+      "archiveSha256": "82a00181e667f58bc3e43fada4ae18cc39b5bc5a03dedeee996036207965a2ee",
+      "validForCandidate": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+      "validityBasis": "Exact candidate execution"
+    },
+    {
+      "candidateCommit": "ac8fca5fc23b55bb0c583eb86f1dcfeedda2c142",
+      "command": [
+        "npm",
+        "run",
+        "test:function",
+        "--",
+        "--cached-only"
+      ],
+      "startedAt": "2026-09-17T08:23:45.823778+00:00",
+      "endedAt": "2026-09-17T08:23:47.071736+00:00",
+      "durationSeconds": 1.248,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-gate/function-tests.log",
+      "logSha256": "b1dd871aacaf42f3b4dfe7ec3e069b5ccd003cd4389c531b5afbbd74b2417fff",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/function-tests.log.gz",
+      "archiveSha256": "bb226c3f37c1dbff604f77909fcdddce2e2dd00515539d781ca8b44ffd94ed63",
+      "validForCandidate": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+      "validityBasis": "Product, command, test and fixture bytes unchanged; intervening non-doc delta consists only of four unrelated existing test files, independently reviewed."
+    },
+    {
+      "candidateCommit": "ac8fca5fc23b55bb0c583eb86f1dcfeedda2c142",
+      "command": [
+        "npm",
+        "run",
+        "test:review49:browser"
+      ],
+      "startedAt": "2026-09-17T08:25:55.975227+00:00",
+      "endedAt": "2026-09-17T08:27:46.130584+00:00",
+      "durationSeconds": 110.155,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-gate/review49-browsers.log",
+      "logSha256": "558ce496c6beb6697128d9df8c86907bf658b7acd3a8bb5b7cd478f621026dcf",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/review49-browsers.log.gz",
+      "archiveSha256": "1842933eb84b578e471142920caaab84810ab2ddd4dbb27b6ec601b939a72366",
+      "validForCandidate": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+      "validityBasis": "Product, command, test and fixture bytes unchanged; intervening non-doc delta consists only of four unrelated existing test files, independently reviewed."
+    },
+    {
+      "candidateCommit": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "startedAt": "2026-09-17T08:45:22.695579+00:00",
+      "endedAt": "2026-09-17T08:45:23.789555+00:00",
+      "durationSeconds": 1.094,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-gate/build.log",
+      "logSha256": "e20345e6b9163a1bc87fbf39ffb4c2026ba339dd5d3e7d2fcbf94a20eb54e858",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/build.log.gz",
+      "archiveSha256": "2e160f411715c7174ddfce0695007f8d6807f6f7ebe4f95842d0cfe6e1478d08",
+      "validForCandidate": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+      "validityBasis": "Exact candidate execution"
+    },
+    {
+      "candidateCommit": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+      "command": [
+        "npm",
+        "run",
+        "check:function-release"
+      ],
+      "startedAt": "2026-09-17T08:45:22.706737+00:00",
+      "endedAt": "2026-09-17T08:45:23.147494+00:00",
+      "durationSeconds": 0.441,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-gate/function-release-final.log",
+      "logSha256": "8830cf04f3416283a276a1d8e79ac85e593b47f31aa8bcf5b76510b5eae47afe",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/function-release-final.log.gz",
+      "archiveSha256": "bc12c999ac20f9855f60fda049179cc53cc77754804d1229a606e16e58c80b52",
+      "validForCandidate": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+      "validityBasis": "Exact candidate execution"
+    }
+  ],
+  "staticChecks": {
+    "candidateCommit": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+    "nonMainBranch": "codex/review49-integration-20260917",
+    "ticketCount": 49,
+    "registerRows": 49,
+    "uniqueRegisterIssues": 49,
+    "allTicketIdsMapped": true,
+    "ticketBytesMatchPreflight": true,
+    "allFixCommitsAreAncestors": true,
+    "independentlyAcceptedProductBase": "ac8fca5fc23b55bb0c583eb86f1dcfeedda2c142",
+    "nonDocumentationChangesSinceProductAcceptance": [
+      "async_persistence_ui_test.mjs",
+      "controllers_test.mjs",
+      "extraktion_test.mjs",
+      "ui_library_followup_test.mjs"
+    ],
+    "productBytesUnchanged": true,
+    "primaryHead": "98b5eca18d15f0a4ec8bed52b1d952c7cc8ec383",
+    "preservedPrimaryChanges": {
+      ".gitignore": true,
+      "AGENTS.md": true,
+      "docs/pruefagenten/LIESMICH.md": true,
+      "docs/zukunft/NAECHSTER_MASTERCHAT_PRIVATRELEASE_ETAPPENPLAN.md": true,
+      "docs/zukunft/README.md": true
+    },
+    "gitDiffCheckExit": 0,
+    "changedFileCountSinceBase": 131
+  },
+  "reviewEvidenceIntegrity": {
+    "allTicketHashesMatch": true,
+    "allFixCommitsAreAncestors": true,
+    "allCurrentSourceLocationsMatchExcerpts": true,
+    "allCriterionSourcesExist": true,
+    "all239CriteriaHaveCompletedEvidence": true,
+    "artifactManifestFilesVerified": 31
+  },
+  "closedMasterGateFailures": [
+    {
+      "stage": "Initial npm pretest",
+      "test": "ui_library_followup_test.mjs",
+      "classification": "Incomplete identity fixtures and obsolete Known-ID shortcut expectation",
+      "fixCommit": "214a73757a905827177e52363f14ae134fc8a415"
+    },
+    {
+      "stage": "Main mock suite",
+      "test": "controllers_test.mjs",
+      "classification": "Variable-name-dependent assertion replaced by real Add/Update write-payload tests",
+      "fixCommit": "4d361aeff769a01367642b359977e5776d6ef72b"
+    },
+    {
+      "stage": "Main mock suite",
+      "test": "async_persistence_ui_test.mjs",
+      "classification": "Unknown master state was incorrectly used as a loaded empty master",
+      "fixCommit": "5f304490f1ec3763b002ebe4c306033b30a64141"
+    },
+    {
+      "stage": "Unexecuted suite suffix",
+      "test": "extraktion_test.mjs",
+      "classification": "Pure display import rejected and visible addition hint misread as film title",
+      "fixCommit": "3aa384e525fbf5189e725a26e52bfd9017f63acd"
+    }
+  ],
+  "closesReviewerRemainingIntegrationWork": [
+    "Full unmodified npm test including pretest completed on candidate with exit 0",
+    "Separate npm run build completed on candidate with exit 0",
+    "Complete ticket mapping and final diff checked"
+  ],
+  "environment": {
+    "candidateCommit": "ac8fca5fc23b55bb0c583eb86f1dcfeedda2c142",
+    "nonDocsTreeSha256": "35b41a9bd704c6dd5d0b5580eff3a1a3d94959b99668028e37d9c4bba5061b7d",
+    "node": {
+      "exit": 0,
+      "version": "v24.18.0"
+    },
+    "npm": {
+      "exit": 0,
+      "version": "11.16.0"
+    },
+    "deno": {
+      "exit": 0,
+      "version": "deno 2.9.4 (stable, release, aarch64-apple-darwin)\nv8 15.0.245.2-rusty\ntypescript 6.0.3"
+    },
+    "postgres": {
+      "exit": 0,
+      "version": "postgres (PostgreSQL) 17.10 (Postgres.app)"
+    }
+  },
+  "finalDocumentationRule": "After this accepted candidate only files under docs/review/2026-09-fixes/ are added or updated. A final git readback verifies source/test/config byte equality and clean integration worktree.",
+  "boundaries": {
+    "localImplementation": "COMPLETE",
+    "localTests": "PASS",
+    "localCommits": "COMPLETE",
+    "push": "NOT_REQUESTED_NOT_PERFORMED",
+    "CI": "NOT_RUN",
+    "deployment": "NOT_REQUESTED_NOT_PERFORMED",
+    "existingServerDataWrites": "NOT_REQUESTED_NOT_PERFORMED",
+    "paidProviderRequests": "NOT_REQUESTED_NOT_PERFORMED",
+    "physicalIphonePwaAcceptance": "NOT_PERFORMED",
+    "E13-F005": "UNRESOLVED_OUTSIDE_49"
+  }
+}

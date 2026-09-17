@@ -1,0 +1,17 @@
+PASS search Alpha → Zulu
+PASS genre exclusion
+PASS category exclusion
+PASS ownership exclusion
+PASS reachable A–Z alias
+PASS reachable decade alias
+PASS no-filter control
+PASS automatic type serie
+PASS automatic type musik
+PASS automatic type sonstiges
+PASS missing target is explained and not consumed
+PASS hidden DOM guard: hidden
+PASS hidden DOM guard: aria-hidden
+PASS hidden DOM guard: inert
+PASS filter race retains pending focus until visible
+PASS selection-preserved hidden card becomes visible before consumption
+16/16 P10a mounted navigation scenarios passed; 0 writes; 0 network calls.

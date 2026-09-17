@@ -1,0 +1,250 @@
+{
+  "result": "49/49 exact ticket bytes unchanged since fix baseline 4a5cc52; historical E14 sha256 metadata does not match imported ticket bytes",
+  "tickets": [
+    {
+      "ticketId": "KD-REV-E01-001",
+      "sha256": "202404cc8848b8869b1a71c953d38ed2ea06e382cd4a6cdfe7dfccf9a4453911",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E01-002",
+      "sha256": "fe923da5689cd0de00e674ad438367510bdf4b02db9ae9305929bb4c1a5c2a02",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E02-001",
+      "sha256": "dee8870f6ab3e5e3896ebe5bcff42be2326a8dbaab99634bd95a7415cef4bf87",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E02-002",
+      "sha256": "8d992a8d179cb5f5393dbe203edcdbc6d84cc654bdd037ed163cce4b0e03adbb",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E02-003",
+      "sha256": "af3b6793d21fc66389f719c63f08b4e6bb0817bcd54d367a6374e26687957d36",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E03-001",
+      "sha256": "e3fa4b0508f4da70eefc7b04d2e0c8799480990ce691fbb221d08ec9db4cd1e6",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E03-002",
+      "sha256": "c3a193a684bec3ae4f02379affbf8a557c65cc940832f4b686ec007755992e78",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E03-003",
+      "sha256": "df17a5eb946bfd37e06fe299a82c55b3aec8aadff8608056ab77412cd300513c",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E04-001",
+      "sha256": "9695df0bf9c5b3d132830bbfcff071755d07c83afb9cf6e4cb1b43b065d17152",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E04-002",
+      "sha256": "9e850bfa86c5b93fa6e5538fece1a660f698ebf4a4f31ae5ce2277cc0d01cc49",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E04-003",
+      "sha256": "f11ca29c15deca869706a9735e2736d641b656cd802bad5529a47459ee2a132b",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E04-004",
+      "sha256": "1b498999b7f85d9be4c25ffa91b9f37595db4b5a39d93146cde3c2820728bcba",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E04-005",
+      "sha256": "b1665c07c97643c64e3bd79e8e6aff35e2d794a2418cb0b39d6fab8722bf4c46",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E04-006",
+      "sha256": "32b8542b196c801b30c60c71484f9ed10933ef26511e44af93a5d7fd76d04f57",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E05-001",
+      "sha256": "06d282746fe3dda60f7deb9955b222f373d1746f81c8556d21ec0ec1deb44687",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E05-002",
+      "sha256": "b59d75c2d46f96004a3a1a1464a58ba534e2e99b1bbf73fcfe477ddbafecc0d9",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E05-003",
+      "sha256": "7dcfa28a4fd9aaaba33453928e2b1fcc00d4622c47265e9058da8d8a368201ee",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E06-001",
+      "sha256": "a8b6ce97339a91c8926ba951e1f77a77dc432cd16e6884ba5d8d45a1a6a658bb",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E06-002",
+      "sha256": "b37be7bc27d66d783fcb29992f51a6d47ad04549f9a43ab75b5a3ceb56bcece2",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E06-003",
+      "sha256": "c280f43fdbfe5245a2f114a0ef6db8e46b3d1f2da8cc19123457189f7e54cb3d",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E07-001",
+      "sha256": "828bd848a8e574f439cfdc357bd37f9904697bc16b57e54ceecfa0c116afe6ba",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E07-002",
+      "sha256": "fd94b2e4069e00cfc03dc4beddac39c89aadd637301d33bb277dafaaab32ad1a",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E08-001",
+      "sha256": "a5db14ee73dab10fdebb1a2c0baa912e0f45169c1f3ecc97245d153b4e71742a",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E08-002",
+      "sha256": "591d45b1802b67348af95f1891b76538867dc4b4a816f90e7465cd7c77f35428",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E08-003",
+      "sha256": "1e9bbbf7453f10a4dfb57378683ad843aca5b42aa59abd90427773f443fe3ecb",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E08-004",
+      "sha256": "b87636a9a2f64123712add679f523eb31c65cd9dc61ec675df81add211ec025e",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E08-005",
+      "sha256": "c362b97924447abbe19984f9b9083a178ba9da11006957b200586e837c494511",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E09-001",
+      "sha256": "47ee58d8cc18bbc34106f9c1373865bd5930e97c8b194dd9599f1126d0be9ba4",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E09-002",
+      "sha256": "7a4d2e3d9d242db42985dd586bfd0b6c598927cc8221a8e82e2f34682b94eb7a",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E09-003",
+      "sha256": "c327e6c9ef1d438209aebfe67fe1d06420830b3ea2656f48a74861b880c4d1c3",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E09-004",
+      "sha256": "3a00a762270b0ab932cee005f6f16d7aa27b324789340a10fed8e83482dd57af",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E10-001",
+      "sha256": "b4248fbe8784e1c04df0c563ea7761bc52cdaf2c5e51e6620dfa3db29612415e",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E10-002",
+      "sha256": "2ac238f17da467f2d169f51f366e308d477822d81267fa1c9cfbb66e51cf9328",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E10-003",
+      "sha256": "d5af57eca025a3a7e90325408a95b05c8ece4a7708377c5d6df2f0920f0b2cfe",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E10-004",
+      "sha256": "40a135dcefb8ab4160fb0f0183d623b06c1960c7b5b46d0c9d222933a5de10b0",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E11-001",
+      "sha256": "c1ab41488dd7f02bf700c4412cb794361f7e615da8db15ae1a68cd39e1ec09aa",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E11-002",
+      "sha256": "edc60f563fe5887a23089c6a8cb8d419835e67713751a43570f45b2b16530fb5",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E11-003",
+      "sha256": "c2434f97ce242138cfd92112cc5741e245fac667fd4d07fb309e774d8997483b",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E11-004",
+      "sha256": "d9af59ab9d8a2eb5e8a28cfc9acf7677c052ee41b28bea2791bddc1442c674e3",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E11-005",
+      "sha256": "350a89598780f4f3ebce6d8d8d0d7a74a8ba639547489944a6bc206ca8f3924f",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E12-001",
+      "sha256": "c5b917c2164f6a857b859bf01c658c4a4d3d025e7a715168898d7e0f79d82f52",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E12-002",
+      "sha256": "1b05cbbd819222b2d6f554ec8c87b2a60c225dc7e3a14c37aa4659d16332c1e3",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E12-003",
+      "sha256": "df4eaaf39397c7bb52b84f206049775993c6b98c1276e9ec88623839ca0ea066",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E13-001",
+      "sha256": "ec483e0fb70bef815a9ce5f65753e01a689794b7e9cb9a423ce5d37cf435f1c0",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E13-002",
+      "sha256": "f2444367b3d4f01757753f66d26523ae54f23577033d6bce07bc22456370d10a",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E13-003",
+      "sha256": "c9f54a697ec028526aab05877f6312d4cc8c58a9d50a9dae38ac6daa12245dca",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E13-004",
+      "sha256": "faf5c4c48158fddd37aece0712595a533e33ee3989fe0c27e2d8cbc08fa722ef",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E14-001",
+      "sha256": "428bcd508572bf5b5a5b5c93df03d1c0b3f1a28a05cf28301370981440960ced",
+      "unchangedSince": "4a5cc52"
+    },
+    {
+      "ticketId": "KD-REV-E14-002",
+      "sha256": "c41322db15d448014a370383d361f703e318b52225263a99145dbad95550b099",
+      "unchangedSince": "4a5cc52"
+    }
+  ]
+}

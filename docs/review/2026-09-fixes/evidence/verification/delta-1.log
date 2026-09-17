@@ -1,0 +1,37 @@
+PASS film prefilled "77" kept numeric
+PASS film prefilled 77 kept numeric
+PASS film prefilled "00077" kept numeric
+PASS film manual " 00077 " kept numeric
+PASS film manual "0" invalid
+PASS film prefilled "0" invalid
+PASS film manual "-77" invalid
+PASS film prefilled "-77" invalid
+PASS film manual "77x" invalid
+PASS film prefilled "77x" invalid
+PASS film manual "77.5" invalid
+PASS film prefilled "77.5" invalid
+PASS film manual "movie:77" invalid
+PASS film prefilled "movie:77" invalid
+PASS film manual "tv:77" invalid
+PASS film prefilled "tv:77" invalid
+PASS film manual "1234567890123456789" invalid
+PASS film prefilled "1234567890123456789" invalid
+PASS serie prefilled "77" kept numeric
+PASS serie prefilled 77 kept numeric
+PASS serie prefilled "00077" kept numeric
+PASS serie manual " 00077 " kept numeric
+PASS serie manual "0" invalid
+PASS serie prefilled "0" invalid
+PASS serie manual "-77" invalid
+PASS serie prefilled "-77" invalid
+PASS serie manual "77x" invalid
+PASS serie prefilled "77x" invalid
+PASS serie manual "77.5" invalid
+PASS serie prefilled "77.5" invalid
+PASS serie manual "movie:77" invalid
+PASS serie prefilled "movie:77" invalid
+PASS serie manual "tv:77" invalid
+PASS serie prefilled "tv:77" invalid
+PASS serie manual "1234567890123456789" invalid
+PASS serie prefilled "1234567890123456789" invalid
+36/36 actual FilmForm save/forecast scenarios; 0 network calls

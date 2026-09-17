@@ -1,0 +1,40 @@
+✓ process fallback: late success after logout, snapshot + resume
+✓ process fallback: late success after b, snapshot + resume
+✓ process fallback: late success after same-login, snapshot + resume
+✓ process fallback: late invalid_grant after logout, snapshot + resume
+✓ process fallback: late invalid_grant after b, snapshot + resume
+✓ process fallback: late invalid_grant after same-login, snapshot + resume
+✓ process fallback: late offline after logout, snapshot + resume
+✓ process fallback: late offline after b, snapshot + resume
+✓ process fallback: late offline after same-login, snapshot + resume
+✓ process fallback: fresh normal token, force, single-flight, account guard
+✓ process fallback: real account 401 / clock skew / ok bounded retry
+✓ process fallback: real account 401 / clock skew / 401 bounded retry
+✓ process fallback: real account 401 / clock skew / invalid_grant bounded retry
+✓ process fallback: real account 401 / clock skew / offline bounded retry
+✓ Web Lock: late success after logout, snapshot + resume
+✓ Web Lock: late success after b, snapshot + resume
+✓ Web Lock: late success after same-login, snapshot + resume
+✓ Web Lock: late invalid_grant after logout, snapshot + resume
+✓ Web Lock: late invalid_grant after b, snapshot + resume
+✓ Web Lock: late invalid_grant after same-login, snapshot + resume
+✓ Web Lock: late offline after logout, snapshot + resume
+✓ Web Lock: late offline after b, snapshot + resume
+✓ Web Lock: late offline after same-login, snapshot + resume
+✓ Web Lock: fresh normal token, force, single-flight, account guard
+✓ Web Lock: real account 401 / clock skew / ok bounded retry
+✓ Web Lock: real account 401 / clock skew / 401 bounded retry
+✓ Web Lock: real account 401 / clock skew / invalid_grant bounded retry
+✓ Web Lock: real account 401 / clock skew / offline bounded retry
+✓ Mixed near-expiry regular + forced calls share one actual refresh / web=false
+✓ Mixed near-expiry regular + forced calls share one actual refresh / web=true
+✓ Late force after request-free rotation adoption is not lost
+✓ Web Lock waiting force adopts a genuinely rotated same-login token
+✓ Late success cannot replace/delete a newer token rotation of the same login
+✓ Late invalid_grant cannot replace/delete a newer token rotation of the same login
+✓ Commit lock rejection never falls back to an unprotected credential write
+✓ Forced request waiting in Web Lock rejects a new a login
+✓ Forced request waiting in Web Lock rejects a new b login
+✓ Reauthentication cannot overwrite a login committed while password response was pending
+✓ Browser without a safe mutex preserves credentials and rejects commits
+P01 AUTH DRIVER: 39/39
