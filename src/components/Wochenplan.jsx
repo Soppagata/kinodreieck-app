@@ -96,6 +96,7 @@ function ReminderEditor({
   onStreamingKatalogLaden, speichert = false,
 }) {
   const [entwurf, setEntwurf] = useState(() => ({ ...leererEntwurf(), ...initial, ende: { typ: "nie", ...(initial?.ende || {}) } }));
+  const [titelFehler, setTitelFehler] = useState(false);
   const [katalogSucheLaeuft, setKatalogSucheLaeuft] = useState(false);
   const zeigtUhrzeit = ARTEN_MIT_UHRZEIT.has(entwurf.art);
   const verknuepfungsOptionen = useMemo(() => reminderVerknuepfungsOptionen(
@@ -140,6 +141,7 @@ function ReminderEditor({
   const speichern = async (event) => {
     event.preventDefault();
     if (speichert) return;
+    if (!entwurf.titel.trim()) { setTitelFehler(true); return; }
     let ref = entwurf.ref && typeof entwurf.ref === "object" ? { ...entwurf.ref } : null;
     if (ref) delete ref.url;
     if (ref && !Object.keys(ref).length) ref = null;
@@ -150,7 +152,13 @@ function ReminderEditor({
     <form id="kd-wochen-editor" className="kd-wochen-editor" onSubmit={speichern}>
       <div className="kd-wochen-editorintro"><KalenderIcon /><div><strong>Eintrag planen</strong><span>{datumKurz(entwurf.startdatum)}</span></div></div>
       <div className="kd-wochen-formgrid">
-        <label className="kd-wochen-field--wide">Titel<input autoFocus required value={entwurf.titel} onChange={(e) => setze("titel", e.target.value)} placeholder="Was möchtest du vormerken?" /></label>
+        <label className="kd-wochen-field--wide">Titel<input autoFocus required value={entwurf.titel}
+          aria-invalid={titelFehler || undefined} aria-describedby={titelFehler ? "kd-wochen-titelfehler" : undefined}
+          onInvalid={() => setTitelFehler(true)}
+          onChange={(e) => { setze("titel", e.target.value); if (e.target.value.trim()) setTitelFehler(false); }}
+          placeholder="Was möchtest du vormerken?" />
+          {titelFehler && <span id="kd-wochen-titelfehler" role="alert">Bitte gib einen Titel ein.</span>}
+        </label>
         <label className="kd-wochen-field--wide">Ort / Anbieter<input value={entwurf.plattform} onChange={(e) => setze("plattform", e.target.value)} placeholder="z. B. Gartenbaukino oder Netflix" /></label>
         <label>Art<select value={entwurf.art} onChange={(e) => setze("art", e.target.value)}><option value="termin">Termin</option><option value="kino">Kino</option><option value="konzert">Konzert</option><option value="folge">Folge</option><option value="staffel">Staffel</option></select></label>
         <label>Rhythmus<select value={entwurf.intervall_wochen} onChange={(e) => setze("intervall_wochen", Number(e.target.value))}>
@@ -198,11 +206,11 @@ function ReminderEditor({
         <label key={tag.nr} className="kd-touch-checkbox"><input type="checkbox" checked={entwurf.wochentage.includes(tag.nr)} onChange={() => tagToggle(tag.nr)} /><span>{tag.kurz}</span></label>
       ))}</fieldset>
       <div className="kd-wochen-formgrid">
-        <label>Wiederholen bis<select value={entwurf.ende.typ} onChange={(e) => setze("ende", { typ: e.target.value })}>
+        <label>Wiederholen bis<select value={entwurf.ende.typ} onChange={(e) => setze("ende", e.target.value === "anzahl" ? { typ: "anzahl", anzahl: 12 } : { typ: e.target.value })}>
           <option value="nie">nie</option><option value="datum">an einem Datum</option><option value="anzahl">nach Terminen</option>
         </select></label>
         {entwurf.ende.typ === "datum" && <label>Enddatum<input type="date" required value={entwurf.ende.datum || ""} onChange={(e) => setze("ende", { typ: "datum", datum: e.target.value })} /></label>}
-        {entwurf.ende.typ === "anzahl" && <label>Anzahl Termine<input type="number" min="1" max="999" required value={entwurf.ende.anzahl || 12} onChange={(e) => setze("ende", { typ: "anzahl", anzahl: Number(e.target.value) })} /></label>}
+        {entwurf.ende.typ === "anzahl" && <label>Anzahl Termine<input type="number" min="1" max="999" required value={entwurf.ende.anzahl ?? ""} onChange={(e) => setze("ende", { typ: "anzahl", anzahl: Number(e.target.value) })} /></label>}
       </div>
       <label>Notiz<textarea rows="2" value={entwurf.notiz} onChange={(e) => setze("notiz", e.target.value)} placeholder="Optional" /></label>
       <div className="kd-wochen-editoraktionen"><button type="submit" className="kd-wochen-primary" disabled={katalogSucheLaeuft || speichert}>{katalogSucheLaeuft ? "Suche …" : (speichert ? "Speichert …" : "Speichern")}</button><button type="button" disabled={speichert} onClick={onAbbrechen}>Abbrechen</button></div>
@@ -302,6 +310,7 @@ export function Wochenplan({
       id: roh.id || undefined,
       erstellt_am: roh.erstellt_am,
     }, jetzt);
+    if (!e) return false;
     const aktuell = normalisiereWochenplan(plan, jetzt).eintraege;
     const next = aktuell.some((x) => x.id === e.id) ? aktuell.map((x) => x.id === e.id ? e : x) : [...aktuell, e];
     return schreibePlan({ version: 1, eintraege: next }, true);
@@ -317,7 +326,7 @@ export function Wochenplan({
   const ansehen = (e) => {
     if (e.ziel?.art === "mediathek") onSpringeZuFilm?.(e.ziel.ref);
     else if (e.ziel?.art === "streaming") onSpringeZuStreaming?.({ art: e.ziel.bereich || "entdecken", ref: e.ziel.ref, titel: e.titel });
-    else if (e.ziel?.art === "kino") onKinoVorschlagAnsehen?.({ ...e, programm_ref: e.ziel.ref });
+    else if (e.ziel?.art === "kino") onKinoVorschlagAnsehen?.({ ...e, programm_ref: e.ziel.ref, film_ref: e.quelle?.film_ref ?? null });
     else if (e.ziel?.art === "extern") window.open(e.ziel.url, "_blank", "noopener,noreferrer");
   };
   const anlegen = async (e) => {

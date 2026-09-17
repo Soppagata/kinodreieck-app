@@ -1511,7 +1511,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-wochen-editor .kd-wochen-zeitfeld input { align-self:flex-start; width:108px; max-width:100%; }
 .kd-wochen-editor textarea { min-height:50px; resize:vertical; }
 .kd-wochen-editor input:focus,.kd-wochen-editor select:focus,.kd-wochen-editor textarea:focus { outline:1px solid var(--kd-wolfram); border-color:var(--kd-wolfram); }
-.kd-wochen-tage { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; margin:0; padding:7px 8px 8px; border:1px solid var(--wp-border); border-radius:5px; }
+.kd-wochen-tage { display:grid; grid-template-columns:repeat(auto-fit,minmax(44px,1fr)); min-width:0; gap:5px; margin:0; padding:7px 8px 8px; border:1px solid var(--wp-border); border-radius:5px; }
 .kd-wochen-tage legend { padding:0 3px; color:var(--kd-rauch); font:8px 'Space Mono',monospace; }
 .kd-wochen-tage label { position:relative; display:flex; align-items:center; min-width:44px; min-height:44px; cursor:pointer; }
 .kd-wochen-tage input { position:absolute; width:1px; height:1px; margin:0; opacity:0; pointer-events:none; }

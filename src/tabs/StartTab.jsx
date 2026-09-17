@@ -4,7 +4,7 @@ import { syncStatusAnzeige } from "../lib/syncStatus.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { formatiereTermin } from "../lib/programm.js";
 import { Wochenplan } from "../components/Wochenplan.jsx";
-import { findeKinoPinImKatalog } from "../lib/wochenplan.js";
+import { findeKinoPinImKatalog, kinoPinTermin } from "../lib/wochenplan.js";
 import { projectDailyMustwatch, viennaCalendarDay } from "../lib/mustwatch.js";
 import { localRecommendationCandidates, webDiscoveryFeedCards } from "../lib/entdeckenUi.js";
 import { resolveEntdeckenPins } from "../lib/entdeckenPins.js";
@@ -19,13 +19,6 @@ import { formatPresentationDate } from "../lib/presentationDate.js";
 export function StartTab(props) {
   return <StartDashboard {...props} />;
 }
-
-/* Pin-Sortierung (nächster Termin zuerst). */
-const pinSortWert = (p) => {
-  const d = /(\d{1,2})\.(\d{1,2})\./.exec(String(p.z));
-  const u = /(\d{1,2}):(\d{2})/.exec(String(p.z));
-  return (d ? Number(d[2]) * 1000000 + Number(d[1]) * 10000 : 99999999) + (u ? Number(u[1]) * 100 + Number(u[2]) : 0);
-};
 
 /* ==================== DASHBOARD ====================
    Modul-Reihenfolge und -Zuschnitt: Entscheidung Max 18.07.2026.
@@ -193,11 +186,12 @@ function StartDashboard({
     [auswahl, mustwatch, mustwatchAvailabilityReady, mwKandidatenSicher, mwTag],
   );
 
-  /* Pinboard: nächster Termin zuerst (Sortierung auf dem formatierten String). */
+  /* Rohtermine samt Jahr lokal sortieren, erst danach begrenzen und formatieren. */
   const pins = useMemo(() => aktiveKinoPins
-    .map((p) => ({ ...p, zAnzeige: formatiereTermin(p.z) }))
-    .sort((a, b) => pinSortWert({ z: a.zAnzeige }) - pinSortWert({ z: b.zAnzeige }))
-    .slice(0, 5), [aktiveKinoPins]);
+    .map((pin) => ({ pin, termin: kinoPinTermin(pin)?.getTime() ?? Infinity }))
+    .sort((a, b) => a.termin - b.termin)
+    .slice(0, 5)
+    .map(({ pin }) => ({ ...pin, zAnzeige: formatiereTermin(pin.z) })), [aktiveKinoPins]);
 
   /* Der Vollkatalog kann rund 25.000 Titel enthalten. Für eine leere
      Startseite daraus bei jedem Rückwechsel zehntausende neue Objekte zu
