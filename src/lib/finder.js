@@ -322,11 +322,24 @@ export function parseAnfrage(text, master, zusatzGenres = []) {
 
 const tagKey = (d) => d.getDate() + "." + (d.getMonth() + 1) + ".";
 
+/* Programm/Cache liefern Anzeigezeiten wie "So 6.9. 20:00 · Kino".
+   Das vollständige Datumstoken vergleichen: 6.9. ist weder 16.9. noch 26.9.
+   Führende Nullen ändern den Kalendertag nicht. */
+const terminTagKey = (zeit) => {
+  const m = /(?:^|\s)(\d{1,2})\.(\d{1,2})\.(?=\s|$)/.exec(String(zeit ?? ""));
+  return m ? Number(m[1]) + "." + Number(m[2]) + "." : null;
+};
+const gesuchteKinoTage = (zeit = [], jetzt = new Date()) => {
+  // Kalendertag statt +24 Stunden: auch beim Sommerzeitwechsel ist morgen morgen.
+  const morgen = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() + 1);
+  return new Set(zeit.map((z) => tagKey(z === "heute" ? jetzt : morgen)));
+};
+const passendeKinoZeiten = (zeiten, tage) => (zeiten || []).filter((zeit) => tage.has(terminTagKey(zeit)));
+
 export function sucheFinder(sig, { master, kinoMatches, streamingBekannt }) {
   const kinoProId = new Map((kinoMatches?.matched || []).map((m) => [m.film.id, m.prog]));
   const streamProId = new Map(((streamingBekannt && streamingBekannt.titel) || []).map((t) => [t.id, t]));
-  const heute = tagKey(new Date());
-  const morgen = tagKey(new Date(Date.now() + 86400000));
+  const kinoTage = gesuchteKinoTage(sig.zeit);
 
   const titelIds = new Set((sig.titel || []).map((t) => t.id));
   const titelRang = new Map((sig.titel || []).map((t, index) => [t.id, index]));
@@ -361,8 +374,7 @@ export function sucheFinder(sig, { master, kinoMatches, streamingBekannt }) {
     // Zeit-Signal (nur Kino): Termin am gewünschten Tag nötig
     let kinoZeiten = kino ? kino.z || [] : [];
     if (sig.zeit.length && kino) {
-      const tage = sig.zeit.map((z) => (z === "heute" ? heute : morgen));
-      const gefiltert = kinoZeiten.filter((s) => tage.some((t) => s.includes(t)));
+      const gefiltert = passendeKinoZeiten(kinoZeiten, kinoTage);
       if (gefiltert.length || !istTitelTreffer) kinoZeiten = gefiltert;
       if (!istTitelTreffer && sig.quellen.includes("kino") && !kinoZeiten.length) continue;
     }
@@ -507,8 +519,14 @@ export function sucheKino(sig, kinoRest) {
   ]));
   // Reine Titel-Suche (kein Genre/Dekade/Jahr/quellen:kino) -> nur Titel-Treffer zeigen.
   const nurTitel = !sig.genres.length && !sig.dekaden.length && !sig.jahrMin && !sig.jahrMax && !sig.quellen.includes("kino");
+  const kinoTage = gesuchteKinoTage(sig.zeit);
   const treffer = [];
   for (const pf of kinoRest || []) {
+    const titelHit = titelRang.has(pf);
+    // Derselbe harte Tagesfilter wie im Masterzweig, vor Ranking und Limit.
+    // Direkter Titel und Zeit ohne explizite Kinoquelle bleiben ausgenommen.
+    if (!titelHit && sig.quellen.includes("kino") && kinoTage.size
+      && !passendeKinoZeiten(pf.z, kinoTage).length) continue;
     const g = (pf.g || []).map(norm);
     const gKeys = g.map(genreKey);
     const gruende = [];
@@ -534,7 +552,6 @@ export function sucheKino(sig, kinoRest) {
     if (sig.jahrMin && (!pf.j || pf.j < sig.jahrMin)) continue;
     if (sig.jahrMax) gruende.push("bis:" + sig.jahrMax);
     if (sig.jahrMin) gruende.push("ab:" + sig.jahrMin);
-    const titelHit = titelRang.has(pf);
     if (titelHit) gruende.push("titel");
     if (nurTitel) { if (!titelHit) continue; }            // reine Titel-Suche -> Titel-Treffer verlangt
     else if (!gruende.length && !sig.quellen.includes("kino")) continue;
