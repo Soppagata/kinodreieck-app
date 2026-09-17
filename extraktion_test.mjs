@@ -1262,9 +1262,16 @@ check("I", "`uebernehmen` benutzt sammle + gezieltes uebernimm und vorschlagRahm
     return /sammle\(/.test(k) && /uebernimm\(p, t, auswahl\)/.test(k)
       && /vorschlagRahmen\(/.test(k) && /uebernimmRahmen\(/.test(k);
   });
-check("I", "DreiFragen.jsx importiert nichts aus profil.js oder services  [gemessen: "
+check("I", "DreiFragen.jsx darf aus profil.js nur den reinen Anzeigehelfer importieren, keine Services  [gemessen: "
   + JSON.stringify((QUELLEN.dreifragen.text.match(/^\s*import[^\n]*/gm) || []).map((z) => z.slice(-30))) + "]",
-  () => !/^\s*import[^\n]*(profil\.js|services\/)/m.test(QUELLEN.dreifragen.text));
+  () => {
+    const code = QUELLEN.dreifragen.text.replace(/\/\*[^]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+    const ohneAnzeigeImport = code.replace(
+      /^\s*import\s*\{\s*profilFilmHinweis\s*\}\s*from\s*["']\.\.\/lib\/profil\.js["'];?/m, "",
+    );
+    return !/\b(?:from\s*|import\s*(?:\(\s*)?)["'][^"']*(?:profil\.js|services\/)/.test(ohneAnzeigeImport)
+      && !/\b(?:speichereProfil|loescheProfil|ladeProfil|localStorage|sessionStorage|indexedDB)\b/.test(code);
+  });
 check("I", "…und ProfilAnsicht.jsx ruft nirgends eine Speicherfunktion",
   () => !/speichereProfil|loescheProfil|ladeProfil/.test(QUELLEN.ansicht.text));
 
@@ -1287,7 +1294,7 @@ ki.antwort = () => HUELLE({
 });
 await bisVorschau(ki, s);
 const vorschauBelege = zeilen().map((z) => z.beleg);
-const vorschauFilme = filmKnoepfe().map((b) => b.textContent.trim().replace(/\s*\(\d+\)$/, ""));
+const vorschauFilme = filmKnoepfe().map((b) => b.textContent.trim());
 await klick(knopf("Ausgewähltes übernehmen"), "übernehmen");
 
 const p = s.letzteNutzlast();
@@ -1313,9 +1320,9 @@ check("I", "die Belege der Vorschau stehen unverändert im Profil  [gemessen: "
 check("I", "…und die Quelle bleibt die Frage (K1/K2/K4), keine Sammelkennung  [gemessen: "
   + JSON.stringify(p.signale.map((x) => x.quelle)) + "]",
   () => gleich(p.signale.map((x) => x.quelle).sort(), ["K1", "K2", "K4"]));
-check("I", "die Filme der Vorschau stehen im Profil  [gemessen: "
+check("I", "Filmidentität und Jahr im Profil entsprechen exakt den sichtbaren Ergänzungsvorschlägen  [gemessen: "
   + JSON.stringify(p.filme.map((f) => f.titel)) + "]",
-  () => gleich(p.filme.map((f) => f.titel), vorschauFilme));
+  () => gleich(p.filme.map((f) => f.titel + (f.jahr ? ` (${f.jahr})` : "") + " · wird ergänzt"), vorschauFilme));
 check("I", "…nach der Einzelbestätigung mit sicher: true  [gemessen: "
   + JSON.stringify(p.filme.map((f) => f.sicher)) + "]",
   () => p.filme.every((f) => f.sicher === true));
@@ -1453,8 +1460,62 @@ check("I", "…die bestehenden Signale bleiben erhalten  [gemessen: " + p3.signa
   () => p3.signale.length === p2.signale.length + 1);
 check("I", "…und die bestehenden Achsen überleben  [gemessen: " + kurz(p3.achsen) + "]",
   () => p3.achsen.warum === 2);
+check("I", "…eine leere Film-Teilliste bewahrt alle zuvor bestätigten Filme",
+  () => gleich(p3.filme, p2.filme));
 check("I", "…das Ergebnis bleibt ein gültiges Profil",
   () => P.pruefeProfil(p3).length === 0);
+
+/* E09-001: Die Vorschau entscheidet über Zugänge/Änderungen, nicht über das
+   Löschen des Bestands. Auch unbestätigte Altfilme und alte offene Signale
+   dürfen dabei weder verschwinden noch nebenbei bestätigt werden. */
+const altFilm = { titel: "Außerhalb der Vorschau", jahr: null, masterId: null, sicher: false };
+const altOffen = { ...SIG({ art: "land", wert: "japan", quelle: "vertiefung", beleg: "nie gezeigter Altvorschlag" }),
+  erfasst: "2026-07-01T00:00:00.000Z" };
+const bestand = { ...tief(p), version: "p7", offen: [altOffen], filme: [
+  { titel: "Alien", jahr: 1979, masterId: "alien-1979", sicher: true, richtung: "stoesst_ab" }, altFilm,
+] };
+const sBestand = neuerSpeicher(bestand);
+const kiBestand = neueKi();
+kiBestand.antwort = () => HUELLE({ ...DATEN(), filme: [
+  ...DATEN().filme, { titel: "Alien", jahr: 2000, richtung: "zieht_an" },
+] });
+await neuMontieren({ ai: kiBestand.api, speicher: sBestand.api });
+await klickT("Geschmacksprofil mit KI verfeinern");
+await tippe("K1", A_K1);
+await klick(knopf("Profilvorschläge erstellen"), "Bestand verfeinern");
+check("I", "Bestandsvorschau nennt Erhalt und konkrete Richtungsänderung ohne Schreibversuch",
+  () => text().includes("Bisherige Filme bleiben erhalten: Alien, Außerhalb der Vorschau")
+    && filmKnoepfe()[0].textContent.includes("Richtung ändern: stößt mich ab → zieht mich an")
+    && sBestand.schreibOps().length === 0 && gleich(sBestand.topf, bestand));
+await klick(filmKnoepfe()[2], "Remake nicht bestätigen");
+check("I", "Auch die Abwahl verändert keinen persönlichen Altbestand",
+  () => sBestand.schreibOps().length === 0 && gleich(sBestand.topf, bestand));
+await klick(knopf("Ausgewähltes übernehmen"), "gezielte Ergänzung bestätigen");
+const ergaenzt = sBestand.letzteNutzlast();
+check("I", "Bestand plus bestätigte Auswahl schreibt genau einmal und erhöht genau eine Fassung",
+  () => sBestand.schreibOps().length === 1 && ergaenzt.version === "p8" && P.pruefeProfil(ergaenzt).length === 0);
+check("I", "Eindeutiger Altfilm wird ohne Dublette aktualisiert und behält seine stabile Master-ID",
+  () => ergaenzt.filme.filter((f) => f.titel === "Alien").length === 1
+    && ergaenzt.filme.find((f) => f.masterId === "alien-1979")?.richtung === "zieht_an");
+check("I", "Nur der bestätigte neue Film kommt hinzu, das abgewählte Remake bleibt draußen",
+  () => ergaenzt.filme.length === 3
+    && ergaenzt.filme.some((f) => f.titel === "Stalker" && f.sicher === true)
+    && !ergaenzt.filme.some((f) => f.titel === "Alien" && f.jahr === 2000));
+check("I", "Ein Altfilm außerhalb der Vorschau bleibt unverändert und wird nicht still bestätigt",
+  () => gleich(ergaenzt.filme.find((f) => f.titel === altFilm.titel), altFilm)
+    && !P.promptFassung(ergaenzt).text.includes(altFilm.titel));
+check("I", "Nie gezeigte offene Altsignale bleiben offen statt mitbestätigt zu werden",
+  () => gleich(ergaenzt.offen, [altOffen]) && !ergaenzt.signale.some((signal) => signal.wert === "japan"));
+await neuMontieren({ ai: kiBestand.api, speicher: sBestand.api });
+check("I", "Ergänztes Profil überlebt erneutes Laden ohne zusätzlichen Write",
+  () => sBestand.schreibOps().length === 1 && gleich(sBestand.topf, ergaenzt)
+    && text().includes("Fassung p8"));
+await klickT("Geschmacksprofil mit KI verfeinern");
+await tippe("K1", A_K1);
+await klick(knopf("Profilvorschläge erstellen"), "weitere Vorschau");
+await klick(knopf("Verwerfen"), "weitere Vorschau verwerfen");
+check("I", "Verwerfen einer weiteren Vorschau lässt Ergänzungen und Altbestand unverändert",
+  () => sBestand.schreibOps().length === 1 && gleich(sBestand.topf, ergaenzt));
 
 await abraeumen();
 });
