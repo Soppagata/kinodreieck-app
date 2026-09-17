@@ -14,7 +14,11 @@ import {
   bereiteStartwahlVor,
   erstellePersonalDataTransactionController,
 } from "./src/controllers/personalDataTransactionController.js";
-import { useBlogPublicationController } from "./src/controllers/useBlogPublicationController.js";
+import {
+  isBlogLibraryReady,
+  readBlogLibraryBootState,
+  useBlogPublicationController,
+} from "./src/controllers/useBlogPublicationController.js";
 
 let ok = 0;
 function check(name, wert) {
@@ -531,6 +535,23 @@ check("Kontextwechsel stoppt die Mehrtopf-Kette nach dem gebundenen A-Write fail
 await fixture.cleanup();
 
 /* ---------- Blog-v1 Private-first-Controller ---------- */
+const emptyMasterRead = await readBlogLibraryBootState(
+  async () => null,
+  () => { throw new Error("Decoder darf bei fehlendem Topf nicht laufen"); },
+);
+check("Neuer leerer Konto-Start gilt nach bestätigtem fehlendem Mastertopf als geladener Leerbestand",
+  emptyMasterRead.status === "loaded" && emptyMasterRead.value === null
+  && isBlogLibraryReady(true, emptyMasterRead.status));
+const failedMasterRead = await readBlogLibraryBootState(
+  async () => { throw new Error("Storage nicht lesbar"); },
+  () => ({ master: [] }),
+);
+check("Fehlgeschlagener Master-Read bleibt ungeprüft und wird nicht als leer geladen verkauft",
+  failedMasterRead.status === "failed" && failedMasterRead.value === null
+  && !isBlogLibraryReady(true, failedMasterRead.status)
+  && !isBlogLibraryReady(false, "loaded")
+  && isBlogLibraryReady(true, failedMasterRead.status, true));
+
 const v1Capability = {
   contractVersion: "blog-publication-v1", enabled: true, anonymousProjection: true,
   maxReferences: 15, cursorPagination: true, ownerReadback: true, legacyProjectionSafe: true,
@@ -546,7 +567,7 @@ const publicSnapshot = {
 
 async function mounteBlogController({
   initialArticles = [], initialLibrary = [{ id: "library-1", titel: "Alien", jahr: 1979, typ: "film", imdb_id: "tt0078748" }],
-  serviceOverrides = {}, addLibraryItem, navigateTarget, articlesReady = true,
+  serviceOverrides = {}, addLibraryItem, navigateTarget, articlesReady = true, libraryReady = true,
 } = {}) {
   const events = [];
   let api = null;
@@ -599,7 +620,7 @@ async function mounteBlogController({
     const controller = useBlogPublicationController({
       accountScope: scope, enabled: true, articles, articlesReady,
       writeArticles, library,
-      libraryReady: true, mustwatch: [], mustwatchReady: true,
+      libraryReady, mustwatch: [], mustwatchReady: true,
       selectedServices: ["Netflix"], selectedServicesReady: true,
       service: defaultService,
       addLibraryItem: addLibraryItem || (async () => "library-1"),
@@ -620,6 +641,25 @@ async function mounteBlogController({
     async cleanup() { await act(async () => root.unmount()); container.remove(); },
   };
 }
+
+const emptyBootArticle = {
+  id: "empty-boot", titel: "Leerstart", text: "Text", status: "freigegeben",
+  contentVersion: "10000000-0000-4000-8000-000000000055",
+  liste: [{ rowId: "empty-row", eingabe: "Noch nicht vorhanden", jahr: 2030,
+    typ: "film", ref: null, rotlink_ok: true }],
+};
+let emptyBootFixture = await mounteBlogController({
+  initialArticles: [emptyBootArticle], initialLibrary: [], libraryReady: isBlogLibraryReady(true, emptyMasterRead.status),
+});
+check("Bestätigt leerer App-Bestand projiziert den ersten echten Rotlink",
+  emptyBootFixture.api().controller.articleCards[0].referencePreview[0].state === "redlink");
+await emptyBootFixture.cleanup();
+emptyBootFixture = await mounteBlogController({
+  initialArticles: [emptyBootArticle], initialLibrary: [], libraryReady: isBlogLibraryReady(true, failedMasterRead.status),
+});
+check("Master-Readfehler hält dieselbe Referenz bis zu einem bestätigten Stand ungeprüft",
+  emptyBootFixture.api().controller.articleCards[0].referencePreview[0].state === "unchecked");
+await emptyBootFixture.cleanup();
 
 let blogFixture = await mounteBlogController();
 await act(async () => {

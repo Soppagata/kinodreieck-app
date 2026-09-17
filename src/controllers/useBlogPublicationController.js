@@ -34,6 +34,23 @@ import {
 } from "../lib/sharedPublication.js";
 import { sharedArticlesService } from "../services/sharedArticles.js";
 
+export async function readBlogLibraryBootState(readMaster, decodeMaster) {
+  try {
+    const record = await readMaster();
+    return {
+      status: "loaded",
+      value: record ? decodeMaster(record) : null,
+      error: null,
+    };
+  } catch (error) {
+    return { status: "failed", value: null, error };
+  }
+}
+
+export function isBlogLibraryReady(bootDone, masterReadStatus, hasMaterializedLibrary = false) {
+  return bootDone === true && (masterReadStatus === "loaded" || hasMaterializedLibrary === true);
+}
+
 function text(value) { return String(value == null ? "" : value).trim(); }
 function excerpt(value) {
   const full = String(value == null ? "" : value).trim();

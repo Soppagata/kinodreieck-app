@@ -46,7 +46,11 @@ import {
   istMustwatchZeitAbgelaufen, useMustwatchCandidatesController,
 } from "./controllers/useMustwatchCandidatesController.js";
 import { useArticleController, useMasterPersistenceController } from "./controllers/useArticleController.js";
-import { useBlogPublicationController } from "./controllers/useBlogPublicationController.js";
+import {
+  isBlogLibraryReady,
+  readBlogLibraryBootState,
+  useBlogPublicationController,
+} from "./controllers/useBlogPublicationController.js";
 import { useErrorQueue } from "./controllers/useErrorQueue.js";
 import { useMasterStateController } from "./controllers/useMasterStateController.js";
 import { useBackupExportController } from "./controllers/useBackupExportController.js";
@@ -319,6 +323,7 @@ export default function App() {
   const [loading, setLoading] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
+  const [masterReadStatus, setMasterReadStatus] = useState("idle");
   const webDiscoveryState = useWebDiscoveryFeed(remoteKontoAktiv && bootDone && tab === "blog");
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(true);   // Kino startet ohne aktive Zeitbeschränkung
@@ -695,18 +700,27 @@ export default function App() {
     const navigationRevisionBeimBoot = navigationRevisionRef.current;
     (async () => {
       let m = null, meta = null, herkunft = null, cachedProg = null;
-      try {
-        const r = await store.get(K.master);
-        if (r) {
+      setMasterReadStatus("loading");
+      const masterRead = await readBlogLibraryBootState(
+        () => store.get(K.master),
+        (r) => {
           const p = JSON.parse(r.value);
-          m = ensureIds(p.filme || []);
-          meta = p.meta || null;
-          herkunft = { typ: "storage", zeit: p.gespeichertAm || Date.now(), basis: p.herkunft && p.herkunft.basis };
-        }
-      } catch { /* kein Master im Storage */ }
+          return {
+            master: ensureIds(p.filme || []),
+            meta: p.meta || null,
+            herkunft: { typ: "storage", zeit: p.gespeichertAm || Date.now(), basis: p.herkunft && p.herkunft.basis },
+          };
+        },
+      );
+      setMasterReadStatus(masterRead.status);
+      if (masterRead.value) {
+        m = masterRead.value.master;
+        meta = masterRead.value.meta;
+        herkunft = masterRead.value.herkunft;
+      }
       /* Fehlender Kontostand ist ein leerer Kontostand, niemals ein Anlass,
          alte Gast-/Demo-Marker oder eine bereitgestellte Beilage zu laden. */
-      if (!m && !remoteKontoAktiv) {
+      if (masterRead.status === "loaded" && !m && !remoteKontoAktiv) {
         try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
       }
       try {
@@ -1288,7 +1302,7 @@ export default function App() {
     articlesReady: artikelGeladen,
     writeArticles: schreibeArtikel,
     library: master || [],
-    libraryReady: master != null && bootDone,
+    libraryReady: isBlogLibraryReady(bootDone, masterReadStatus, master != null),
     mustwatch,
     mustwatchReady: mustwatchGeladen,
     selectedServices: sichtbareAuswahl,
