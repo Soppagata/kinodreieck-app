@@ -54,9 +54,11 @@ export class FilmwissenLiveTargetFehler extends Error {
 
 export function normalisiereFilmwissenLiveTarget(wert) {
   const roh = typeof wert === "string" ? wert.trim() : "";
-  const match = /^([a-z]+):([^\s:,]{1,150})$/i.exec(roh);
+  const match = /^([a-z]+):([^\s,]{1,150})$/i.exec(roh);
   const namespace = match?.[1]?.toLowerCase() ?? "";
   if (!match || !RECHERCHE_NAMENSRAEUME.has(namespace)) return null;
+  // Der vorhandene Quellenweg ist film-only; niemals einen Typ erraten.
+  if (namespace === "tmdb" && !match[2].startsWith("movie:")) return null;
   const kennung = normalisiereFilmkennung(namespace, match[2]);
   return kennung ? Object.freeze({ namespace, kennung }) : null;
 }

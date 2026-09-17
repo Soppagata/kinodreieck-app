@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { normalisiereFilmkennung } from "./src/lib/filmwissen.js";
 import {
   FILMWISSEN_LIVE_TARGET_MAX,
   FILMWISSEN_PREFLIGHT_EXIT,
@@ -214,6 +216,36 @@ await pruefe("Nicht-Owner-Smoke bleibt ohne Preflight unveraendert", async () =>
     fehlerAusgabe: () => {},
   });
   return code === 0 && smokeStarts === 1 && fetches === 0;
+});
+
+await pruefe("TMDB-Liveziel braucht einen expliziten Filmtyp; andere Typen und Altkennung stoppen", () => {
+  const film = normalisiereFilmwissenLiveTarget("tmdb:movie:00077");
+  let duplicateRejected = false;
+  try { liesFilmwissenLiveTargets({ liste: "tmdb:movie:00077,tmdb:movie:77" }); }
+  catch (error) { duplicateRejected = error instanceof FilmwissenLiveTargetFehler; }
+  return film?.namespace === "tmdb" && film.kennung === "movie:77"
+    && ["tmdb:77", "tmdb:tv:77", "tmdb:collection:77", "tmdb:movie:0", "tmdb:movie:77x", "tmdb:movie:77:1"]
+      .every(value => normalisiereFilmwissenLiveTarget(value) === null)
+    && duplicateRejected;
+});
+
+await pruefe("echter Smoke-Zielparser erhaelt typisierte Filmziele und sperrt andere TMDB-Eingaben", () => {
+  // Nur die reine Parserfunktion ausführen, niemals den Smoke-Einstieg importieren.
+  const source = readFileSync(new URL("./tools/ai_smoke.mjs", import.meta.url), "utf8");
+  const start = source.indexOf("function liesFilmwissenKennung() {");
+  const end = source.indexOf("const FILMWISSEN_KENNUNG = liesFilmwissenKennung();", start);
+  if (start < 0 || end < 0) return false;
+  const parse = new Function("OWNER_CORE_SIX", "process", "FILMWISSEN_DEFAULT_TARGET", "normalisiereFilmkennung", "stoppeLiveLauf", "LiveSicherheitsStopp", source.slice(start, end) + "return liesFilmwissenKennung();");
+  const run = (value, owner = true) => parse(owner, { env: { KD_FILMWISSEN_TARGET_ID: value } }, "imdb:tt0081505", normalisiereFilmkennung, error => { throw error; }, Error);
+  for (const [value, expected] of [["tmdb:movie:00077", "movie:77"], ["imdb:TT0081505", "tt0081505"], ["wikidata:q103569", "Q103569"]]) {
+    if (run(value).kennung !== expected) return false;
+  }
+  for (const value of ["tmdb:77", "tmdb:tv:77", "tmdb:collection:77", "tmdb:movie:0", "tmdb:movie:77x", "tmdb:movie:77:1"]) {
+    let stopped = false;
+    try { run(value); } catch { stopped = true; }
+    if (!stopped) return false;
+  }
+  return run("tmdb:77", false).kennung === "tt0078748";
 });
 
 console.log(`FILMWISSEN-LIVE-TARGET-TEST: ${bestanden}/${gesamt}`);

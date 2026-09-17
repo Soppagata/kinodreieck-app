@@ -5,6 +5,7 @@ import { ALLE_TYPEN, hatDreieck, normalisiereTyp } from "../lib/typen.js";
 import { quelleZuArray, arrayZuQuelle } from "../lib/quellen.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { normalisiereFilmkennung } from "../lib/filmwissen.js";
+import { normalisiereExterneTitelkennung } from "../lib/externalTitleIdentity.js";
 import { lesePlausiblesJahr, plausiblerJahresbereich } from "../lib/match.js";
 import { QuellenWahl } from "./QuellenWahl.jsx";
 import { PrognoseBereich } from "./PrognoseBereich.jsx";
@@ -124,7 +125,10 @@ export function FilmForm({
     }
     const externeKennungen = {
       imdb: f.imdbId ? normalisiereFilmkennung("imdb", f.imdbId) : null,
-      tmdb: f.tmdbId ? normalisiereFilmkennung("tmdb", f.tmdbId) : null,
+      // Persönliche TMDB-IDs bleiben numerisch. movie:/tv: entsteht erst
+      // beim Filmwissen-/Forecast-Auftrag; die bisherige Eingabegrenze bleibt.
+      tmdb: /^[0-9]{1,18}$/.test(String(f.tmdbId ?? "").trim())
+        ? normalisiereExterneTitelkennung("tmdb", f.tmdbId) : null,
       wikidata: f.wikidataId ? normalisiereFilmkennung("wikidata", f.wikidataId) : null,
     };
     if (kennungenBearbeitbar && ((f.imdbId && !externeKennungen.imdb)

@@ -1007,10 +1007,10 @@ function liesFilmwissenKennung() {
   const raw = String(
     process.env.KD_FILMWISSEN_TARGET_ID || FILMWISSEN_DEFAULT_TARGET,
   ).trim();
-  const match = raw.match(/^(imdb|tmdb|wikidata):([^\s:]{1,150})$/i);
+  const match = raw.match(/^(imdb|tmdb|wikidata):([^\s]{1,150})$/i);
   const namespace = match?.[1]?.toLowerCase() ?? "";
   const kennung = match ? normalisiereFilmkennung(namespace, match[2]) : null;
-  if (!kennung) {
+  if (!kennung || (namespace === "tmdb" && !kennung.startsWith("movie:"))) {
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
       "Owner-Kernphase hat keine starke reale Filmwissen-Kennung.",
