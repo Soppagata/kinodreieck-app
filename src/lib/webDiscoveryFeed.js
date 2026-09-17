@@ -519,7 +519,7 @@ export function validateWebDiscoveryFeed(value) {
       : publicWeekly ? ["isoWeek", "annotations"] : weekly ? ["isoWeek"] : []),
   ];
   if ((!flixpatrolDaily && !versionedWeekly && !mixedWeekly && !publicWeekly && !weekly && !legacy)
-      || !exactKeys(value, required)) {
+      || !exactKeys(value, required, flixpatrolDaily ? ["annotations"] : [])) {
     return Object.freeze({ ok: false, errors: Object.freeze(["feed-shape-invalid"]), value: null });
   }
   const expected = flixpatrolDaily ? {
@@ -571,6 +571,20 @@ export function validateWebDiscoveryFeed(value) {
     errors.push("feed-items-invalid");
   } else {
     if (flixpatrolDaily) {
+      if (Object.hasOwn(value, "annotations")) {
+        validatePublicAnnotations(value.annotations, value, errors);
+        const oefiIds = new Set(value.items.filter((item) => item.sourceId === "chart:oefi-weekend-at")
+          .map((item) => item.sourceItemId));
+        if (!Array.isArray(value.annotations) || value.annotations.length > 15
+            || value.annotations.some((entry) => !oefiIds.has(entry?.sourceItemId)
+              || !validYear(entry?.releaseYear)
+              || !exactKeys(entry?.externalIds, [], ["imdb", "tmdb"])
+              || Object.values(entry.externalIds).some((id) => typeof id !== "string")
+              || ("imdb" in entry.externalIds && !/^tt\d{7,10}$/.test(entry.externalIds.imdb))
+              || ("tmdb" in entry.externalIds && !/^[1-9]\d{0,8}$/.test(entry.externalIds.tmdb)))) {
+          errors.push("oefi-annotations-invalid");
+        }
+      }
       value.items.forEach((item, index) => validateFlixPatrolRecord(item, value, errors, index, { format9: flixpatrolFormat9 }));
       if (new Set(value.items.map((item) => item?.sourceItemId)).size !== value.items.length) errors.push("feed-source-id-duplicate");
       if (new Set(value.items.map((item) => `${item?.mediaType}|${normalizeDiscoveryTitle(item?.title)}`)).size
@@ -691,11 +705,11 @@ export function matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates = []) 
   const annotations = new Map((publicWeekly ? (checked.value.annotations || []) : [])
     .map((entry) => [entry.sourceItemId, entry]));
   const records = publicWeekly ? checked.value.items.map((item, index) => {
-    const facts = embeddedFacts ? Object.freeze({
+    const facts = annotations.get(item.sourceItemId) || (embeddedFacts ? Object.freeze({
       qid: null,
       releaseYear: item.releaseYear,
       externalIds: item.externalIds,
-    }) : annotations.get(item.sourceItemId);
+    }) : null);
     return Object.freeze({
       ...item,
       recordId: `${checked.value.format === PUBLIC_DISCOVERY_FEED_FORMAT ? "joyn" : "market"}:${item.sourceItemId}`,

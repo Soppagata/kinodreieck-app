@@ -655,6 +655,10 @@ function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wiki
       itemIds[namespace] && entryIds[namespace]
     ));
     if (comparable.length) {
+      // TMDB vergibt Film- und Seriennummern in getrennten Namensraeumen.
+      const sourceType = normalizeDiscoveryMediaType(item?.mediaType ?? item?.type);
+      const seenType = normalizeDiscoveryMediaType(entry?.typ ?? entry?.type);
+      if (comparable.includes("tmdb") && sourceType && seenType && sourceType !== seenType) return false;
       return comparable.every((namespace) => itemIds[namespace] === entryIds[namespace]);
     }
     const entryType = radarTargetTypeForCatalogType(entry?.typ ?? entry?.type) === "series" ? "series" : "film";
@@ -696,13 +700,13 @@ export function publicDiscoveryCandidates({
   const seenEntries = preparedSeenEntries || prepareSeenEntries(master, catalogCandidates);
   const projected = checked.value.items.map((item) => {
     const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
-    const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
+    const facts = annotations.get(item.sourceItemId) || ([VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
       .includes(checked.value.format) ? Object.freeze({
       qid: enriched?.strongId?.startsWith("wikidata:")
         ? enriched.strongId.slice("wikidata:".length) : null,
       releaseYear: item.releaseYear,
       externalIds: Object.freeze({ ...item.externalIds, ...(enriched?.externalIds || {}) }),
-    }) : annotations.get(item.sourceItemId);
+    }) : null);
     const local = decisions.get(item.sourceItemId)?.status === "matched"
       ? decisions.get(item.sourceItemId).candidate : null;
     const genres = profileCompatibleGenres(uniqueText([
@@ -806,13 +810,13 @@ export function webDiscoveryFeedCards({
       .map((decision) => [decision.record.sourceItemId, decision]));
     const projected = checked.value.items.map((item) => {
       const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
-      const facts = [VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
+      const facts = annotations.get(item.sourceItemId) || ([VERSIONED_DISCOVERY_FEED_FORMAT, FLIXPATROL_DISCOVERY_FEED_FORMAT, FLIXPATROL_DAILY_DISCOVERY_FEED_FORMAT]
         .includes(checked.value.format) ? Object.freeze({
         qid: enriched?.strongId?.startsWith("wikidata:")
           ? enriched.strongId.slice("wikidata:".length) : null,
         releaseYear: item.releaseYear,
         externalIds: Object.freeze({ ...item.externalIds, ...(enriched?.externalIds || {}) }),
-      }) : annotations.get(item.sourceItemId);
+      }) : null);
       const local = decisions.get(item.sourceItemId)?.status === "matched"
         ? decisions.get(item.sourceItemId).candidate : null;
       const availability = mixed ? item.availability : Object.freeze({

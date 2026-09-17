@@ -521,6 +521,19 @@ function validPublicAnnotation(value, itemsById) {
   return value.releaseYear !== null || Object.keys(value.externalIds).length > 0;
 }
 
+// Additive Annotationen fuer Format 8/9: der OEFI-Beleg bleibt unveraendert.
+// QID und Aufloesezeit belegen die Herkunft; nur ein vollstaendiges Filmjahr
+// und die vom bestehenden Resolver unterstuetzten IDs sind transportierbar.
+function validOefiAnnotations(feed) {
+  if (!Object.hasOwn(feed, "annotations")) return true;
+  const items = new Map(feed.items.filter((item) => item.sourceId === ENTDECKEN_OEFI_SOURCE_ID)
+    .map((item) => [item.sourceItemId, item]));
+  return Array.isArray(feed.annotations) && feed.annotations.length <= 15
+    && feed.annotations.every((entry) => validPublicAnnotation(entry, items) && validYear(entry.releaseYear)
+      && Object.values(entry.externalIds).every((id) => typeof id === "string"))
+    && new Set(feed.annotations.map((entry) => entry.sourceItemId)).size === feed.annotations.length;
+}
+
 export function evaluateEntdeckenPublicResponse(envelope, sourceRegistry, {
   retrievedOn,
   claimedIsoWeek = null,
@@ -669,7 +682,7 @@ export function evaluateEntdeckenFlixPatrolResponse(envelope, sourceRegistry, {
   if (!week || !expectedQuery || !exactKeys(envelope, [
     "sourceMode", "sourceId", "sourceIds", "queryContext", "checkedAt",
     "retrievedOn", "isoWeek", "chartDate", "items", ...(format9 ? ["feedFormat"] : []),
-  ]) || envelope.sourceMode !== "flixpatrol-mix" || envelope.sourceId !== sourceId
+  ], ["annotations"]) || envelope.sourceMode !== "flixpatrol-mix" || envelope.sourceId !== sourceId
       || !Array.isArray(envelope.sourceIds)
       || JSON.stringify([...envelope.sourceIds].sort()) !== JSON.stringify([...sourceIds].sort())
       || envelope.retrievedOn !== retrievedOn || envelope.isoWeek !== week.isoWeek
@@ -711,10 +724,12 @@ export function evaluateEntdeckenFlixPatrolResponse(envelope, sourceRegistry, {
       || JSON.stringify(segmentCounts) !== JSON.stringify(expectedSegments)) {
     return result("invalid_response", ["flixpatrol-mix-source-counts-invalid"]);
   }
+  if (!validOefiAnnotations(envelope)) return result("invalid_response", ["oefi-annotations-invalid"]);
   const feed = freezeDeep({
     format: feedFormat, feedId, region: "AT", sourceId,
     sourceIds: [...envelope.sourceIds], isoWeek: week.isoWeek, chartDate,
     refreshedOn: retrievedOn, validUntil: retrievedOn,
+    ...(Object.hasOwn(envelope, "annotations") ? { annotations: JSON.parse(JSON.stringify(envelope.annotations)) } : {}),
     items: JSON.parse(JSON.stringify(envelope.items)),
   });
   return result("confirmed", [], feed, mergePresentation(null), {
@@ -957,7 +972,7 @@ export function validateEntdeckenDailyFeed(value) {
       || !exactKeys(value, flixpatrolDaily ? [...required, "sourceIds", "isoWeek", "chartDate"]
         : mixedWeekly ? [...required, "sourceIds", "isoWeek", "annotations"]
         : publicWeekly ? [...required, "isoWeek", "annotations"]
-        : weekly ? [...required, "isoWeek"] : required)
+        : weekly ? [...required, "isoWeek"] : required, flixpatrolDaily ? ["annotations"] : [])
       || value.feedId !== (flixpatrolDaily ? flixpatrolFeedId
         : mixedWeekly ? ENTDECKEN_MIXED_FEED_ID : publicWeekly ? ENTDECKEN_PUBLIC_FEED_ID
         : weekly ? ENTDECKEN_WEEKLY_FEED_ID : LEGACY_FEED.feedId)
@@ -978,6 +993,7 @@ export function validateEntdeckenDailyFeed(value) {
     if (!week || value.isoWeek !== week.isoWeek || value.validUntil !== value.refreshedOn
         || value.chartDate !== previousDay(value.refreshedOn)
         || value.items.length !== ENTDECKEN_FLIXPATROL_POOL_SIZE || !Array.isArray(value.sourceIds)
+        || !validOefiAnnotations(value)
         || JSON.stringify([...value.sourceIds].sort()) !== JSON.stringify([...flixpatrolSourceIds].sort())) {
       return Object.freeze({ ok: false, value: null });
     }

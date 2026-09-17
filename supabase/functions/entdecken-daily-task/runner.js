@@ -196,15 +196,22 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       refresh: refreshState(context, "failed"),
     });
   }
-  if (["public-chart", "public-mix"].includes(envelope?.sourceMode)) {
+  if (["public-chart", "public-mix", "flixpatrol-mix"].includes(envelope?.sourceMode)) {
     let annotations = [];
     try {
       if (typeof repository.enrichPublicItems === "function") {
-        const resolved = await repository.enrichPublicItems(envelope.items);
-        if (Array.isArray(resolved)) annotations = resolved;
+        // FlixPatrol besitzt eigene Fakten; nur die identitaetslosen OEFI-Reihen
+        // verwenden den bestehenden, begrenzten Wikidata-/Cacheweg.
+        const items = envelope.sourceMode === "flixpatrol-mix"
+          ? envelope.items.filter((item) => item.sourceId === "chart:oefi-weekend-at") : envelope.items;
+        const resolved = await repository.enrichPublicItems(items);
+        if (Array.isArray(resolved)) annotations = envelope.sourceMode === "flixpatrol-mix"
+          ? resolved.filter((entry) => Number.isInteger(entry?.releaseYear)) : resolved;
       }
     } catch { /* Wikidata ist optional; der belegte Basispool bleibt speicherbar. */ }
-    envelope = Object.freeze({ ...envelope, annotations: Object.freeze([...annotations]) });
+    if (envelope.sourceMode !== "flixpatrol-mix" || annotations.length) {
+      envelope = Object.freeze({ ...envelope, annotations: Object.freeze([...annotations]) });
+    }
   }
   const normalizedReceipt = publicSourceMode ? null : normalizeProviderReceipt(envelope?.providerReceipt);
   const providerEvidence = normalizedReceipt
