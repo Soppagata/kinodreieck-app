@@ -39,8 +39,8 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W2 | Baumeister-P08 / bei DISPATCH | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; eigene Format8/9-Migrationen und Entdecken-Tests | PLANNED | — |
 | P09 | W4 / PARALLEL_WAVE | Wochenplan und Termine | P07/App | Baumeister-P09 / bei DISPATCH | App.jsx; Wochenplan.jsx; StartTab.jsx; wochenplan/programm; eigene Termin-/Browsertests | PLANNED | — |
 | P10 | W5 / SOLO | Pins und Fokusnavigation | P09/App | Baumeister-P10 / bei DISPATCH | App.jsx; MediathekTab/KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
-| P11 | W4 / PARALLEL_WAVE | Finder-Zeitfilter | W3; programm read-only | Baumeister-P11 / bei DISPATCH | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | PLANNED | — |
-| P12 | W3 / PARALLEL_WAVE | Betriebsvertraege | W2 | Baumeister-P12 / bei DISPATCH | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | PLANNED | — |
+| P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W2; programm read-only | Baumeister-P11 / bei DISPATCH | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | PLANNED | — |
+| P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | RUNNING | 4a5cc52 / — |
 
 Kollisionspruefung: Dateien/Generatoren, Exports, Schema/State, Config/Styles, Dependencies/Lockfile, Tests/Fixtures, Output-Abhaengigkeiten und Worktrees beruecksichtigt. W1: P01×P02×P03 disjunkt. W2: App/Persoenliches=P04, Radar/Faktencontext=P05, KI/Filmwissen=P06; gemeinsame read-only Identitaetsvertraege eingefroren. W3: App/Streaming/Kino=P07, Entdeckenprojektion=P08, Betrieb=P12. W4: App/Planung=P09, Finderlogik=P11. App-Schreiber laufen ausschliesslich in Folgewellen.
 
@@ -109,3 +109,5 @@ P01 RESTAUFTRAG: treiberinterne IndexedDB-Koordination als begrenzter lokaler Co
 Finaler Kandidat: —. Lokaler Abschlusslauf: OFFEN. Push / CI / Deployment / praktische Geraeteabnahme: NICHT BEAUFTRAGT bzw. NICHT BELEGT.
 
 P02 DELIVERED statisch geprueft: exakt drei autorisierte Produktdateien, zwei echte Produktintegrationstests und Paketbeleg; Diff whitespace-sauber. Interne optionale Pull-Erweiterung nur im gebundenen Adoptionspfad. Integration wartet gemaess Queue auf P01.
+
+DISPATCH P12 vorgezogen: P02 ist DELIVERED und sein Slot frei. P12 besitzt keine Output-Abhaengigkeit und keine Schreibkollision zu den verbleibenden P01/P03; identische Basis 4a5cc52, maximal drei aktive Baumeister. Integrationsfolge W1: P01 → P02 → P03 → P12. Dadurch rückt P11 in den freien W3-Slot zu P07/P08; P09 und P10 bleiben gekoppelte Folgepakete.
