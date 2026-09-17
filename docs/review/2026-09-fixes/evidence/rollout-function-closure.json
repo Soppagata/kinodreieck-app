@@ -1,0 +1,180 @@
+{
+  "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+  "functions": {
+    "ai-task": {
+      "sourceSha256": "df61ffe850592f2763d172bd4b16e586e4dadc63d03b700e198ee83aeab68474",
+      "files": [
+        {
+          "file": "supabase/functions/_shared/externalTitleIdentity.js",
+          "sha256": "fc4591f87ad6cc213cbb55bcdc93150967f30e93a0606474a8ba1be9c202e906"
+        },
+        {
+          "file": "supabase/functions/_shared/flixpatrolFacts.js",
+          "sha256": "2efd48d9e2a7bb9eef1c7a0b5001f31b6a90eb1bfe3031b375ed9d9331f73f6d"
+        },
+        {
+          "file": "supabase/functions/_shared/flixpatrolFactsContext.js",
+          "sha256": "4350a9a8bf0c1e8c759e27725b2c67a5c26ffac906b5ac9f10286b3fdd643f62"
+        },
+        {
+          "file": "supabase/functions/_shared/providerDiagnostic.js",
+          "sha256": "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef"
+        },
+        {
+          "file": "supabase/functions/_shared/providerReceipt.js",
+          "sha256": "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8"
+        },
+        {
+          "file": "supabase/functions/_shared/providerText.js",
+          "sha256": "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf"
+        },
+        {
+          "file": "supabase/functions/ai-task/index.ts",
+          "sha256": "d16eda20ced73896db86a40a92b3c5ca91a5cb38ae73bc6810adaae29d0d86cd"
+        },
+        {
+          "file": "supabase/functions/ai-task/providerContract.ts",
+          "sha256": "9b4b43eff6e2cec6b3771fef1ae86aeac4ee829ce842d35b20321f39fc834522"
+        },
+        {
+          "file": "supabase/functions/ai-task/requestContract.ts",
+          "sha256": "18cb4bee38f711fde5a93498816a9ca50c2474ccabb66e396509aae2fdac5d94"
+        },
+        {
+          "file": "supabase/functions/filmwissen-task/quellen.ts",
+          "sha256": "0f30276e778beacdebcb209cf9f02677733a8d6e4189855f21be7545eb5fcb8f"
+        },
+        {
+          "file": "supabase/functions/filmwissen-task/vertrag.ts",
+          "sha256": "79039fe6ffe84982936446d28ee86f16193d7351ef10f26ad2b31e540f52d15c"
+        }
+      ]
+    },
+    "radar-websearch-task": {
+      "sourceSha256": "9214768d8be079b70c7bd04a994dc6900c73577889951fa99c463515ed2a98d8",
+      "files": [
+        {
+          "file": "supabase/functions/_shared/externalTitleIdentity.js",
+          "sha256": "fc4591f87ad6cc213cbb55bcdc93150967f30e93a0606474a8ba1be9c202e906"
+        },
+        {
+          "file": "supabase/functions/_shared/flixpatrolFacts.js",
+          "sha256": "2efd48d9e2a7bb9eef1c7a0b5001f31b6a90eb1bfe3031b375ed9d9331f73f6d"
+        },
+        {
+          "file": "supabase/functions/_shared/flixpatrolFactsContext.js",
+          "sha256": "4350a9a8bf0c1e8c759e27725b2c67a5c26ffac906b5ac9f10286b3fdd643f62"
+        },
+        {
+          "file": "supabase/functions/_shared/providerDiagnostic.js",
+          "sha256": "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef"
+        },
+        {
+          "file": "supabase/functions/_shared/providerReceipt.js",
+          "sha256": "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8"
+        },
+        {
+          "file": "supabase/functions/_shared/providerText.js",
+          "sha256": "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf"
+        },
+        {
+          "file": "supabase/functions/radar-websearch-task/anthropicAdapter.js",
+          "sha256": "a8ba102835ea7809f1994c669e43c0815cc89a1e781ec61e0af125e1a743da55"
+        },
+        {
+          "file": "supabase/functions/radar-websearch-task/contract.js",
+          "sha256": "2c81d29166a14d3f4493b1ead1015a207ede3c12a0c38d14424763742bd6c26b"
+        },
+        {
+          "file": "supabase/functions/radar-websearch-task/index.ts",
+          "sha256": "ab0c8a804c2a376cff52e098ccdf73a4925637d0cb0495be743e6eefb3602777"
+        },
+        {
+          "file": "supabase/functions/radar-websearch-task/runner.js",
+          "sha256": "938c866e52ea59c81137423263d7cd4c8197d0556883196e1f0767e550241c0e"
+        }
+      ]
+    },
+    "entdecken-daily-task": {
+      "sourceSha256": "05f230dbaa560383a400afb6d0f19927f33e1e05254d8c1f04b1706dcc77d37c",
+      "files": [
+        {
+          "file": "supabase/functions/_shared/entdeckenFacts.js",
+          "sha256": "736201b052686366c5085648937671b72d3649b763e4c5e4c92e1ee256a043ea"
+        },
+        {
+          "file": "supabase/functions/_shared/flixpatrolClient.js",
+          "sha256": "db9ecd3760624490b0f115d0f25f90cc032a4142c21578e4ae57dc736754527b"
+        },
+        {
+          "file": "supabase/functions/_shared/flixpatrolData.js",
+          "sha256": "0b52267383b5a7b24000bcc8fd28730c22a10f9122e84cc631fd28d3079f0207"
+        },
+        {
+          "file": "supabase/functions/_shared/providerDiagnostic.js",
+          "sha256": "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef"
+        },
+        {
+          "file": "supabase/functions/_shared/providerReceipt.js",
+          "sha256": "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8"
+        },
+        {
+          "file": "supabase/functions/_shared/providerText.js",
+          "sha256": "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/anthropicFactsAdapter.js",
+          "sha256": "aec3d0013441f66f28c7e49690c10f1ad30e8917477f0c374e135485881d0835"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/contract.js",
+          "sha256": "6be25a5065a4fa88ec84237102aeb457e63579cbc69365d3bee1a32d9c07e3cd"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/factsRequest.js",
+          "sha256": "1cc8b10f23def52f4e2bf35a0b1e268d09898b02c6451ee3a668eb5751f55943"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/flixpatrolMixAdapter.js",
+          "sha256": "a6955c63b2e0da7034131df853fbbaf811196fa504b3c72a3664414fec7d9d89"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/index.ts",
+          "sha256": "55ff32b38db83d9a120bbcaaebee73002f7e6a3ce8e6225702e72573f1a47f07"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/providerFailureContract.js",
+          "sha256": "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/providerProbe.js",
+          "sha256": "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/publicChartAdapter.js",
+          "sha256": "7e8403c919ae4096c403958e45ed1967068154f975a0d5ac8db599c80ad8952a"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/publicMixAdapter.js",
+          "sha256": "29d3147a116a5fef983e3353ebb16046a4bbce1aeee79a9408b5d2a2ff675eb6"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/readbackContract.js",
+          "sha256": "31953dade9e6c313aef116e8565995b4fe95c526cfc36abfc2a100ee818f9914"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/responseContract.js",
+          "sha256": "007511798092931da7579f0eb4cf0efedbf4ac4e9cfacf0b72dac0a49160b83e"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/runner.js",
+          "sha256": "7ea118ce1459570b1a4106fc95c90b7a6c68a7ab10ef7c7f7084fcddd80353e9"
+        },
+        {
+          "file": "supabase/functions/entdecken-daily-task/wikidataResolver.js",
+          "sha256": "bd20f09da8f4755ba6e15d5d796918a8d8c2b9188ed649381c0246b93564f037"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: old/old: invalid_response
+    at Object.verify (file:///private/tmp/kd-review49-benefit-audit-20260917/tests/fixtures/review49_rollout_p08_readers.mjs:81:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///private/tmp/kd-review49-benefit-delta-20260917/probe-p08-read-matrix.mjs:17:20 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.18.0

@@ -1,0 +1,11 @@
+{
+  "commit": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+  "ticketCount": 49,
+  "uniqueTickets": 49,
+  "criteria": 239,
+  "targeted": 4,
+  "carried": 45,
+  "allTicketsOriginalBytes": true,
+  "rolloutCount": 3,
+  "worktreeClean": true
+}

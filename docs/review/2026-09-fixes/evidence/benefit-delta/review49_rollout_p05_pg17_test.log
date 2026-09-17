@@ -1,0 +1,15 @@
+PostgreSQL 17.10: /Applications/Postgres.app/Contents/Versions/17/bin
+PASS migrated v1 row retains UUIDs, metadata and exact legacy work-start hash; old/new replay is no_change
+PASS HTTP writer old -> SQL v2 -> reader old -> actual UI projection: two cards and sources
+PASS HTTP writer old -> SQL v2 -> reader new -> actual UI projection: two cards and sources
+PASS HTTP writer new -> SQL v2 -> reader old -> actual UI projection: two cards and sources
+PASS HTTP writer new -> SQL v2 -> reader new -> actual UI projection: two cards and sources
+PASS old partial-storage reader: truthful 1 write and rereadable sibling
+PASS new partial-storage reader: truthful 1 write and rereadable sibling
+PASS mounted baseline initial-search followup full: persisted cards visible
+PASS mounted baseline initial-search followup partial: persisted cards visible
+PASS mounted current initial-search followup full: persisted cards visible
+PASS mounted current initial-search followup partial: persisted cards visible
+PASS actual old/new lifecycle queue + RPC + reload: pause/resume/remove; unsupported text receipt remains forbidden
+PASS structured Review/import, operation replay and UUID receipt through both clients remain unchanged
+R-P05 PG PASS; 15 synthetic adapter requests, zero network/provider calls

@@ -1,0 +1,275 @@
+import { runtimeConfig } from "../config/runtime.js";
+import { authDriver, authService } from "./auth.js";
+import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
+import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
+import { normalizeProviderReceipt } from "../../supabase/functions/_shared/providerReceipt.js";
+import { validateRadarPilotFeed } from "../lib/radarPilotContracts.js";
+import { createLocalTextRadarTargetId } from "../lib/localEventRadar.js";
+
+export const RADAR_WEBSEARCH_ENDPOINT = "radar-websearch-task";
+export const RADAR_WEBSEARCH_SINGLE_FILE_DISABLED = typeof __KD_SINGLE_FILE__ !== "undefined"
+  && __KD_SINGLE_FILE__ === true;
+export const RADAR_WEBSEARCH_CLIENT_STATUSES = Object.freeze([
+  "confirmed", "insufficient_evidence", "no_change", "provider_error",
+  "invalid_response", "forbidden", "unavailable", "storage_error", "busy",
+]);
+export const RADAR_WEBSEARCH_CLIENT_RESPONSE_MAX_BYTES = 64 * 1024;
+export const RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS = 140_000;
+
+function text(value) { return String(value == null ? "" : value).trim(); }
+function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
+function freezeDeep(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) freezeDeep(child);
+  return Object.freeze(value);
+}
+function frozenClone(value) { return freezeDeep(JSON.parse(JSON.stringify(value))); }
+function exactResult(value, expectedPerson = null, expectedText = null) {
+  const allowed = [
+    "ok", "status", "writes", "providerRequests", "searchRequests", "phaseCode", "personResult",
+    "reservationStatus", "reservationUsdCent", "reservationDecision",
+    "responseMode", "displayText", "warnings", "providerReceipt", "feed",
+    ...(expectedText ? ["textResult", "textDiagnostics", "persistence"] : []),
+  ];
+  if (!plain(value) || Object.keys(value).some((key) => !allowed.includes(key))) return null;
+  if (value.ok !== true || !RADAR_WEBSEARCH_CLIENT_STATUSES.includes(value.status)
+      || (value.status === "busy" && !expectedText)
+      || !Number.isInteger(value.writes) || value.writes < 0) return null;
+  const reservationKeys = ["reservationStatus", "reservationUsdCent", "reservationDecision"];
+  const reservationCount = reservationKeys.filter((key) => value[key] !== undefined).length;
+  if (reservationCount !== 0 && reservationCount !== reservationKeys.length) return null;
+  if (reservationCount === reservationKeys.length) {
+    const statuses = ["not-started", "reserved", "rejected", "unknown"];
+    const decisions = ["not-started", "accepted", "limit", "disabled", "forbidden", "server", "unknown"];
+    if (!statuses.includes(value.reservationStatus) || !decisions.includes(value.reservationDecision)
+        || (value.reservationUsdCent !== null
+          && (typeof value.reservationUsdCent !== "number" || !Number.isFinite(value.reservationUsdCent)
+            || value.reservationUsdCent <= 0 || value.reservationUsdCent > (expectedText ? 20 : 5)))
+        || (value.reservationStatus === "not-started"
+          && (value.reservationDecision !== "not-started" || value.reservationUsdCent !== null))
+        || (value.reservationStatus === "reserved"
+          && (value.reservationDecision !== "accepted" || value.reservationUsdCent === null))
+        || (value.reservationStatus === "rejected"
+          && (!["limit", "disabled", "forbidden", "server", "unknown"].includes(value.reservationDecision)
+            || value.reservationUsdCent !== null))
+        || (value.reservationStatus === "unknown"
+          && (value.reservationDecision !== "unknown" || value.reservationUsdCent !== null))) return null;
+  }
+  const telemetryKeys = ["providerRequests", "searchRequests", "phaseCode"];
+  const telemetryCount = telemetryKeys.filter((key) => value[key] !== undefined).length;
+  const hasRequestTelemetry = value.providerRequests !== undefined || value.searchRequests !== undefined;
+  if (telemetryCount !== 0 && ((!hasRequestTelemetry
+      && value.phaseCode !== undefined)
+      || (hasRequestTelemetry && (value.providerRequests === undefined || value.searchRequests === undefined))
+      || !Number.isInteger(value.providerRequests) || value.providerRequests < 0 || value.providerRequests > 1
+      || !Number.isInteger(value.searchRequests) || value.searchRequests < 0 || value.searchRequests > (expectedText ? 4 : 1)
+      || (value.phaseCode !== undefined
+        && !["runtime-setup", "cost-reservation", "provider-request", "provider-complete"].includes(value.phaseCode)))) {
+    return null;
+  }
+  const providerReceipt = value.providerReceipt === undefined
+    ? null : normalizeProviderReceipt(value.providerReceipt);
+  if (value.providerReceipt !== undefined && (!providerReceipt
+      || telemetryCount !== telemetryKeys.length
+      || value.providerRequests !== providerReceipt.server.providerRequests
+      || ("webSearchRequests" in providerReceipt.usage
+        && value.searchRequests !== providerReceipt.usage.webSearchRequests))) return null;
+  const presentationKeys = ["responseMode", "displayText", "warnings"];
+  const presentationCount = presentationKeys.filter((key) => value[key] !== undefined).length;
+  let presentation = {};
+  if (presentationCount !== 0) {
+    if (presentationCount !== presentationKeys.length
+        || !["structured", "partial", "degraded"].includes(value.responseMode)
+        || (value.displayText !== null
+          && (typeof value.displayText !== "string" || !value.displayText.trim()
+            || value.displayText !== value.displayText.trim() || value.displayText.length > 320
+            || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(value.displayText)))
+        || !Array.isArray(value.warnings) || value.warnings.length > 8
+        || new Set(value.warnings).size !== value.warnings.length
+        || value.warnings.some((warning) => (
+          typeof warning !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(warning)
+          || warning.length > 64
+        ))
+        || (value.responseMode === "structured"
+          ? value.displayText !== null || value.warnings.length !== 0
+          : value.displayText === null)) return null;
+    presentation = {
+      responseMode: value.responseMode,
+      displayText: value.displayText,
+      warnings: Object.freeze([...value.warnings]),
+    };
+  }
+  const feed = value.feed === undefined ? null : validateRadarPilotFeed(value.feed).ok
+    ? frozenClone(value.feed) : null;
+  if (value.feed !== undefined && !feed) return null;
+  const feedResult = feed ? { feed } : {};
+  if (expectedText && (value.textResult !== undefined || value.textDiagnostics !== undefined)) {
+    const diagnostic = value.textDiagnostics;
+    const result = value.textResult;
+    if (!feed?.subscriptions.some((entry) => entry.targetId === expectedText.targetId
+        && entry.targetType === "text" && entry.title === expectedText.targetText
+        && entry.status === "active")
+        || !plain(diagnostic) || Object.keys(diagnostic).sort().join(",") !== "acceptedCandidates,normalizedCandidates,rejectionCodes"
+        || !Number.isInteger(diagnostic.normalizedCandidates) || diagnostic.normalizedCandidates < 0 || diagnostic.normalizedCandidates > 6
+        || !Number.isInteger(diagnostic.acceptedCandidates) || diagnostic.acceptedCandidates < 0
+        || diagnostic.acceptedCandidates > diagnostic.normalizedCandidates
+        || !Array.isArray(diagnostic.rejectionCodes) || diagnostic.rejectionCodes.length > 8
+        || diagnostic.rejectionCodes.some((code) => typeof code !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(code) || code.length > 64)
+        || (result === null ? diagnostic.acceptedCandidates !== 0
+          : !plain(result) || Object.keys(result).sort().join(",") !== "candidates,checkedAt,status"
+            || !["confirmed", "insufficient_evidence", "no_change", "provider_error"].includes(result.status)
+            || typeof result.checkedAt !== "string" || !Number.isFinite(Date.parse(result.checkedAt))
+            || !Array.isArray(result.candidates) || result.candidates.length !== diagnostic.acceptedCandidates
+            || result.candidates.some((entry) => !plain(entry)
+              || !/^release:v[12]:[a-f0-9]{16}$/.test(entry.targetId)
+              || typeof entry.title !== "string" || !entry.title.trim() || entry.title.length > 200
+              || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)
+              || !["film", "series", "season", "special"].includes(entry.category)))) return null;
+    // Model candidates are diagnostic only. UI state is exclusively the
+    // validated, persisted pilot feed, never this uncommitted candidate list.
+  }
+  // Provider receipt remains the pre-storage truth. Only this explicit,
+  // independently counted text persistence result may downgrade structured.
+  const persistence = value.persistence;
+  let storagePartial = false;
+  if (persistence !== undefined) {
+    const candidates = value.textResult?.candidates;
+    storagePartial = !!expectedText && plain(persistence)
+      && Object.keys(persistence).sort().join(",") === "failed,stored"
+      && Number.isInteger(persistence.stored) && persistence.stored > 0
+      && Number.isInteger(persistence.failed) && persistence.failed > 0
+      && persistence.stored + persistence.failed === value.textDiagnostics?.acceptedCandidates
+      && value.writes <= persistence.stored
+      && value.status === (value.writes > 0 ? "confirmed" : "no_change")
+      && value.responseMode === "partial"
+      && value.warnings.includes("text-finding-storage-dropped")
+      && Array.isArray(candidates)
+      && candidates.filter((candidate) => feed?.events.some((event) => (
+        event.targetId === candidate.targetId && event.title === candidate.title
+          && event.date === candidate.date && event.platform === candidate.platform
+          && event.sourceTargetKey === `text:${expectedText.targetId}`
+      ))).length >= persistence.stored;
+    if (!storagePartial) return null;
+  }
+  if (providerReceipt && presentationCount !== 0
+      && providerReceipt.resultMode !== value.responseMode
+      && !(storagePartial && providerReceipt.resultMode === "structured")) return null;
+  if (!expectedPerson) {
+    if (value.personResult !== undefined) return null;
+    return Object.freeze({ status: value.status, writes: value.writes, ...presentation, ...feedResult });
+  }
+  const result = value.personResult;
+  if (!plain(result) || !validatePersonIdentity(result.person).ok
+      || result.person.personExternalId !== expectedPerson.personExternalId
+      || result.person.name !== expectedPerson.name || result.person.role !== expectedPerson.role
+      || result.status !== value.status || value.writes > 3) return null;
+  return Object.freeze({ status: value.status, writes: value.writes, personResult: result, ...presentation, ...feedResult });
+}
+
+/* Der Browser sendet die starke Zielkennung und nur bei einem lokalen
+   Freitextziel zusätzlich dessen unveränderten targetText. Kontoidentität und
+   Capability werden serverseitig aus dem Sitzungstoken abgeleitet; weder
+   Profildaten noch Mediathek oder weitere Abos gehören in den Request. */
+export function createRadarWebsearchService({
+  config = runtimeConfig,
+  auth = authService,
+  getAccount = authDriver.konto,
+  getAccessToken = authDriver.getAccessToken,
+  fetchImpl = globalThis.fetch,
+  singleFile = RADAR_WEBSEARCH_SINGLE_FILE_DISABLED,
+  timeoutMs = RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS,
+} = {}) {
+  const requestTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? Math.min(timeoutMs, RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS)
+    : RADAR_WEBSEARCH_CLIENT_TIMEOUT_MS;
+  async function checkTarget(targetId, expectedPerson = null, targetText = null, options = {}) {
+    const normalizedTargetId = text(targetId);
+    const hasTargetText = targetText !== null && targetText !== undefined;
+    const validTargetText = typeof targetText === "string" && targetText.trim().length > 0
+      && targetText === targetText.trim() && targetText.length <= 160
+      && normalizedTargetId === createLocalTextRadarTargetId(targetText);
+    const initial = options?.initial === true;
+    const session = auth.getSnapshot();
+    const accountId = text(session?.account?.id);
+    if (singleFile === true || config.radarPilotClientEnabled !== true || session?.mode !== "account"
+        || session?.state !== "ready" || !accountId
+        || text(getAccount()?.id) !== accountId || !normalizedTargetId
+        || normalizedTargetId.length > 160 || (hasTargetText && !validTargetText)
+        || !plain(options) || Object.keys(options).some((key) => key !== "initial")
+        || (Object.hasOwn(options, "initial") && (!initial || !validTargetText))
+        || typeof fetchImpl !== "function") {
+      return Object.freeze({ status: "forbidden", writes: 0 });
+    }
+    const basis = text(config.supabaseUrl).replace(/\/+$/, "");
+    const publishableKey = text(config.supabasePublishableKey);
+    if (!basis || !publishableKey) return Object.freeze({ status: "unavailable", writes: 0 });
+
+    let token;
+    try { token = await getAccessToken({ erwarteteKontoId: accountId }); }
+    catch { return Object.freeze({ status: "unavailable", writes: 0 }); }
+    if (!token || auth.getSnapshot() !== session || text(getAccount()?.id) !== accountId) {
+      return Object.freeze({ status: "forbidden", writes: 0 });
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+    let response;
+    let payload;
+    try {
+      response = await fetchImpl(`${basis}/functions/v1/${RADAR_WEBSEARCH_ENDPOINT}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: publishableKey,
+          "Content-Type": "application/json",
+          "x-client-info": "kd-radar-result-v2",
+        },
+        body: JSON.stringify({ targetId: normalizedTargetId, ...(hasTargetText ? { targetText } : {}), ...(initial ? { initial: true } : {}) }),
+        signal: controller.signal,
+      });
+      if (auth.getSnapshot() !== session || text(getAccount()?.id) !== accountId) {
+        return Object.freeze({ status: "forbidden", writes: 0 });
+      }
+      try { payload = await response.json(); }
+      catch {
+        return Object.freeze({
+          status: controller.signal.aborted ? "unavailable" : "invalid_response",
+          writes: 0,
+        });
+      }
+    } catch {
+      return Object.freeze({ status: "unavailable", writes: 0 });
+    } finally { clearTimeout(timer); }
+    if (auth.getSnapshot() !== session || text(getAccount()?.id) !== accountId) {
+      return Object.freeze({ status: "forbidden", writes: 0 });
+    }
+    let payloadBytes = Number.POSITIVE_INFINITY;
+    try { payloadBytes = new TextEncoder().encode(JSON.stringify(payload)).length; } catch { /* fail closed */ }
+    if (payloadBytes > RADAR_WEBSEARCH_CLIENT_RESPONSE_MAX_BYTES) {
+      return Object.freeze({ status: "invalid_response", writes: 0 });
+    }
+    const checked = exactResult(payload, expectedPerson, hasTargetText ? { targetId: normalizedTargetId, targetText } : null);
+    if (!response.ok || !checked) {
+      const status = response.status === 401 || response.status === 403 ? "forbidden" : "unavailable";
+      return Object.freeze({ status, writes: 0 });
+    }
+    return checked;
+  }
+
+  async function checkNow(targetId, targetText = null, options = {}) {
+    return checkTarget(targetId, null, targetText, options);
+  }
+
+  async function checkPersonNow(identity) {
+    const checked = validatePersonIdentity(identity);
+    const expectedTargetId = createPersonRadarTargetId(identity?.personExternalId, identity?.role);
+    if (!checked.ok || identity?.targetId !== expectedTargetId) {
+      return Object.freeze({ status: "forbidden", writes: 0 });
+    }
+    return checkTarget(expectedTargetId, identity);
+  }
+
+  return Object.freeze({ checkNow, checkPersonNow });
+}
+
+export const radarWebsearchService = createRadarWebsearchService();

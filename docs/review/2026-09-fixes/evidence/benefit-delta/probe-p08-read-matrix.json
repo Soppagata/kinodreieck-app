@@ -1,0 +1,90 @@
+[
+  {
+    "format": 8,
+    "writer": "old",
+    "day": "2026-09-17",
+    "oldStatus": "fresh",
+    "newStatus": "fresh",
+    "oldItems": 50,
+    "newItems": 50,
+    "oldAnnotations": 0,
+    "newAnnotations": 0
+  },
+  {
+    "format": 8,
+    "writer": "old",
+    "day": "2026-09-18",
+    "oldStatus": "stale",
+    "newStatus": "stale",
+    "oldItems": 50,
+    "newItems": 50,
+    "oldAnnotations": 0,
+    "newAnnotations": 0
+  },
+  {
+    "format": 8,
+    "writer": "new",
+    "day": "2026-09-17",
+    "oldStatus": "fresh",
+    "newStatus": "fresh",
+    "oldItems": 50,
+    "newItems": 50,
+    "oldAnnotations": 0,
+    "newAnnotations": 1
+  },
+  {
+    "format": 8,
+    "writer": "new",
+    "day": "2026-09-18",
+    "oldStatus": "stale",
+    "newStatus": "stale",
+    "oldItems": 50,
+    "newItems": 50,
+    "oldAnnotations": 0,
+    "newAnnotations": 1
+  },
+  {
+    "format": 9,
+    "writer": "old",
+    "day": "2026-09-17",
+    "oldStatus": "fresh",
+    "newStatus": "fresh",
+    "oldItems": 50,
+    "newItems": 50,
+    "oldAnnotations": 0,
+    "newAnnotations": 0
+  },
+  {
+    "format": 9,
+    "writer": "old",
+    "day": "2026-09-18",
+    "oldStatus": "stale",
+    "newStatus": "stale",
+    "oldItems": 50,
+    "newItems": 50,
+    "oldAnnotations": 0,
+    "newAnnotations": 0
+  },
+  {
+    "format": 9,
+    "writer": "new",
+    "day": "2026-09-17",
+    "oldStatus": "fresh",
+    "newStatus": "fresh",
+    "oldItems": 50,
+    "newItems": 50,
+    "oldAnnotations": 0,
+    "newAnnotations": 1
+  },
+  {
+    "format": 9,
+    "writer": "new",
+    "day": "2026-09-18",
+    "oldStatus": "stale",
+    "newStatus": "stale",
+    "oldItems": 50,
+    "newItems": 50,
+    "oldAnnotations": 0,
+    "newAnnotations": 1
+  }
+]

@@ -1,0 +1,291 @@
+diff --git a/src/services/entdeckenDailyFeed.js b/src/services/entdeckenDailyFeed.js
+index 29b3609..fbec05e 100644
+--- a/src/services/entdeckenDailyFeed.js
++++ b/src/services/entdeckenDailyFeed.js
+@@ -275,7 +275,8 @@ export function createEntdeckenDailyFeedService({
+         headers: {
+           Authorization: `Bearer ${token}`,
+           apikey: publishableKey,
+-          Accept: "application/json",
++          // Explizite Leseform; alte Browser fordern weiterhin application/json an.
++          Accept: "application/json; kd-entdecken=oefi-v1",
+         },
+         signal: controller.signal,
+       });
+diff --git a/src/services/radarWebsearch.js b/src/services/radarWebsearch.js
+index 4e9e4d5..8e440f9 100644
+--- a/src/services/radarWebsearch.js
++++ b/src/services/radarWebsearch.js
+@@ -222,6 +222,7 @@ export function createRadarWebsearchService({
+           Authorization: `Bearer ${token}`,
+           apikey: publishableKey,
+           "Content-Type": "application/json",
++          "x-client-info": "kd-radar-result-v2",
+         },
+         body: JSON.stringify({ targetId: normalizedTargetId, ...(hasTargetText ? { targetText } : {}), ...(initial ? { initial: true } : {}) }),
+         signal: controller.signal,
+diff --git a/supabase/functions/ai-task/index.ts b/supabase/functions/ai-task/index.ts
+index 3e1626b..193372b 100644
+--- a/supabase/functions/ai-task/index.ts
++++ b/supabase/functions/ai-task/index.ts
+@@ -785,6 +785,19 @@ export const FILMWISSEN_KENNUNGSRAEUME = [
+   "kinodreieck",
+ ];
+ 
++// Numeric TMDB alone is ambiguous. Keep this recognizer separate from the
++// strict identity parser: it must never make an untyped request a movie.
++function istLegacyFilmwissenTmdbAnfrage(payload: unknown): string | null {
++  if (!istReinesObjekt(payload)
++      || Object.keys(payload).sort().join(",") !== "kennung,namespace"
++      || typeof payload.namespace !== "string"
++      || payload.namespace.trim().toLowerCase() !== "tmdb"
++      || typeof payload.kennung !== "string") return null;
++  const id = payload.kennung.trim();
++  return /^[0-9]{1,18}$/.test(id) && /[1-9]/.test(id)
++    ? id.replace(/^0+/, "") : null;
++}
++
+ export function leseFilmwissenSyntheseAnfrage(
+   payload: Record<string, unknown>,
+ ): { namespace: string; kennung: string } {
+@@ -2236,8 +2249,14 @@ export function leseForecastEingabe(
+   const filmkennungRoh = eigenerWert(payload, "filmkennung");
+   let filmkennung: { namespace: string; kennung: string } | null = null;
+   if (filmkennungRoh !== undefined && filmkennungRoh !== null) {
++    // Old PWAs sent a numeric TMDB ID, but the forecast also carries an
++    // explicit work type. Only this boundary has enough context to adapt it.
++    const legacyTmdb = istLegacyFilmwissenTmdbAnfrage(filmkennungRoh);
++    const typ = istReinesObjekt(film) ? film.typ : null;
+     filmkennung = leseFilmwissenSyntheseAnfrage(
+-      filmkennungRoh as Record<string, unknown>,
++      legacyTmdb && (typ === "film" || typ === "serie")
++        ? { namespace: "tmdb", kennung: `${typ === "film" ? "movie" : "tv"}:${legacyTmdb}` }
++        : filmkennungRoh as Record<string, unknown>,
+     );
+     if (!["imdb", "tmdb", "wikidata"].includes(filmkennung.namespace)) {
+       throw new AufrufFehler(
+@@ -4522,13 +4541,16 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
+         p_namespace: browserEingabe.filmkennung.namespace,
+         p_kennung: browserEingabe.filmkennung.kennung,
+       });
+-      if (error) {
++      const alterTmdbVertrag = error?.code === "22023"
++        && error?.message === "kennung_ungueltig"
++        && browserEingabe.filmkennung.namespace === "tmdb";
++      if (error && !alterTmdbVertrag) {
+         return fehlerAntwort(CODES.SERVER, origin, {
+           grund: "forecast-filmwissen-cache-rpc",
+           vorgangId,
+         });
+       }
+-      const cache = data as Record<string, unknown> | null;
++      const cache = (alterTmdbVertrag ? null : data) as Record<string, unknown> | null;
+       const version = cache && typeof cache.version === "object" && cache.version ? cache.version as Record<string, unknown> : null;
+       const warum = cache && typeof cache.warum === "object" && cache.warum ? cache.warum as Record<string, unknown> : null;
+       const fundstellen = Array.isArray(cache?.fundstellen) ? cache.fundstellen as Array<Record<string, unknown>> : [];
+@@ -4600,6 +4622,12 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
+         vorgangId,
+       });
+     }
++    // Unlike forecasts, legacy synthesis carries no work type. A movie
++    // mapping cannot disambiguate the caller's intent; stop before any read,
++    // source, reservation or provider operation.
++    if (istLegacyFilmwissenTmdbAnfrage(payload)) {
++      return jsonAntwort({ ok: true, task, vorgangId, data: { status: "nicht_zuordenbar" } }, 200, origin);
++    }
+     let eingabe: { namespace: string; kennung: string };
+     try {
+       eingabe = leseFilmwissenSyntheseAnfrage(payload);
+diff --git a/supabase/functions/entdecken-daily-task/index.ts b/supabase/functions/entdecken-daily-task/index.ts
+index 03544ce..e5b3347 100644
+--- a/supabase/functions/entdecken-daily-task/index.ts
++++ b/supabase/functions/entdecken-daily-task/index.ts
+@@ -7,7 +7,7 @@
+ import { createClient } from "npm:@supabase/supabase-js@2";
+ import { requestHasForbiddenBody, validateEntdeckenDailyFeed } from "./contract.js";
+ import { runEntdeckenDailyRefresh } from "./runner.js";
+-import { createEntdeckenDailyResponse } from "./responseContract.js";
++import { createEntdeckenDailyResponse, projectEntdeckenDailyReadResponse } from "./responseContract.js";
+ import { createMixedPublicChartAdapter, createOefiPublicChartAdapter } from "./publicMixAdapter.js";
+ import {
+   createFlixPatrolMixAdapter,
+@@ -53,7 +53,7 @@ function cors(origin: string | null): Record<string, string> {
+     "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${REFRESH_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}, ${ENTDECKEN_PROVIDER_PROBE_HEADER}, ${ENTDECKEN_FACTS_HEADER}`,
+     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+     "Access-Control-Max-Age": "86400",
+-    Vary: "Origin",
++    Vary: "Origin, Accept",
+   };
+   if (origin && ALLOWED_ORIGINS.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+   return headers;
+@@ -592,8 +592,11 @@ export function createEntdeckenDailyHandler({
+     if (providerDiagnostic.allowed && !publicProduct && typeof providerRawResponse !== "string") {
+       return json({ ok: false, status: "provider_error", feed: result.feed, writes: 0 }, 500, origin);
+     }
++    const response = createEntdeckenDailyResponse(result, telemetry);
+     return json({
+-      ...createEntdeckenDailyResponse(result, telemetry),
++      ...(requestMode === "read"
++        ? projectEntdeckenDailyReadResponse(response, req.headers.get("Accept"))
++        : response),
+       ...(providerDiagnostic.allowed && !publicProduct && typeof providerRawResponse === "string"
+         ? providerDiagnosticField(providerRawResponse)
+         : {}),
+diff --git a/supabase/functions/entdecken-daily-task/responseContract.js b/supabase/functions/entdecken-daily-task/responseContract.js
+index 51ada26..28c02d3 100644
+--- a/supabase/functions/entdecken-daily-task/responseContract.js
++++ b/supabase/functions/entdecken-daily-task/responseContract.js
+@@ -84,3 +84,15 @@ export function createEntdeckenDailyResponse(result = {}, telemetry = {}) {
+     ...(result.providerReceipt ? { providerReceipt: result.providerReceipt } : {}),
+   });
+ }
++
++/* Nur die Browser-Leseantwort wird projiziert. Persistenz und geschuetzter
++   Producer-Readback behalten den vollstaendigen, bereits validierten Feed.
++   Ohne exaktes Opt-in versteht der bestehende Format-8/9-Leser annotations
++   nicht und wuerde sonst alle 50 Basiseintraege verwerfen. */
++export function projectEntdeckenDailyReadResponse(response, accept) {
++  if (accept === "application/json; kd-entdecken=oefi-v1"
++      || ![8, 9].includes(response?.feed?.format)
++      || !Object.hasOwn(response.feed, "annotations")) return response;
++  const { annotations: _annotations, ...feed } = response.feed;
++  return Object.freeze({ ...response, feed: Object.freeze(feed) });
++}
+diff --git a/supabase/functions/radar-websearch-task/contract.js b/supabase/functions/radar-websearch-task/contract.js
+index def8ce5..87f0361 100644
+--- a/supabase/functions/radar-websearch-task/contract.js
++++ b/supabase/functions/radar-websearch-task/contract.js
+@@ -536,6 +536,44 @@ export function createTextRadarReleaseId(candidate) {
+   return `release:v2:${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
+ }
+ 
++// Public wire v1 identifies a work start, while the internal v2 key includes
++// platform. Event/version UUIDs distinguish platform findings in both clients.
++export function createTextRadarWireV1Id(candidate) {
++  const title = candidate.title.trim().replace(/ +/g, " ").replace(/[A-Z]/g, (c) => c.toLowerCase());
++  const basis = [title, candidate.date, candidate.eventType, candidate.targetType, candidate.seasonNumber ?? "-"].join("|");
++  let first = 0x811c9dc5;
++  let second = 0x9e3779b9;
++  const bytes = new TextEncoder().encode(basis);
++  for (let index = 0; index < bytes.length; index += 1) {
++    first = Math.imul(first ^ bytes[index], 0x01000193) >>> 0;
++    second = Math.imul(second ^ (bytes[index] + index), 0x85ebca6b) >>> 0;
++  }
++  return `release:v1:${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
++}
++
++export function projectRadarWireResult(result, { supportsPersistence = false } = {}) {
++  const project = (entry) => /^release:v[12]:[a-f0-9]{16}$/.test(entry.targetId)
++    ? { ...entry, targetId: createTextRadarWireV1Id(entry) } : entry;
++  const projected = {
++    ...result,
++    ...(result.feed ? { feed: { ...result.feed, events: result.feed.events.map(project) } } : {}),
++    ...(result.textResult ? { textResult: {
++      ...result.textResult, candidates: result.textResult.candidates.map(project),
++    } } : {}),
++  };
++  if (projected.persistence && !supportsPersistence) {
++    // Old clients cannot validate a storage partial or display its warning.
++    // Report the storage failure truthfully, preserving confirmed write count,
++    // persisted feed and the unmodified provider receipt for later reconciliation.
++    projected.status = "storage_error";
++    delete projected.persistence;
++    delete projected.responseMode;
++    delete projected.displayText;
++    delete projected.warnings;
++  }
++  return projected;
++}
++
+ function validateTextCandidateShape(candidate, request, errors) {
+   const required = ["title", "eventType", "eventDate", "evidence"];
+   const optional = ["targetId", "targetType", "year", "region", "platform", "seasonNumber", "relationEvidence", "category"];
+diff --git a/supabase/functions/radar-websearch-task/index.ts b/supabase/functions/radar-websearch-task/index.ts
+index 741de88..30e1a96 100644
+--- a/supabase/functions/radar-websearch-task/index.ts
++++ b/supabase/functions/radar-websearch-task/index.ts
+@@ -11,6 +11,7 @@ import {
+ import { runRadarWebsearchCheck } from "./runner.js";
+ import {
+   authorizeScheduledRadarRequest,
++  projectRadarWireResult,
+   resolveSupabaseAdminKey,
+ } from "./contract.js";
+ import {
+@@ -725,6 +726,9 @@ export function createRadarWebsearchHandler({
+         websearchRequests,
+       }, 200, origin);
+     }
++    result = projectRadarWireResult(result, {
++      supportsPersistence: req.headers.get("x-client-info") === "kd-radar-result-v2",
++    });
+     const status = result.status;
+     const httpStatus = status === "forbidden" ? 403 : 200;
+     const telemetry = typeof productAdapter.telemetry === "function"
+diff --git a/supabase/migrations/20260917095000_review_radar_client_compat.sql b/supabase/migrations/20260917095000_review_radar_client_compat.sql
+new file mode 100644
+index 0000000..96ee164
+--- /dev/null
++++ b/supabase/migrations/20260917095000_review_radar_client_compat.sql
+@@ -0,0 +1,43 @@
++begin;
++
++-- The public feed keeps the original v1 work-start contract. The stored v2
++-- platform identity and stable event/version UUIDs are deliberately unchanged.
++-- Both generations distinguish events by UUID, not by this work-start key.
++create or replace function public.kd_radar_text_wire_v1_key(
++  p_title text, p_date date, p_event_type text, p_target_type text,
++  p_season integer
++) returns text language plpgsql immutable set search_path=pg_catalog,public as $$
++declare
++  v_basis bytea := convert_to(translate(regexp_replace(btrim(p_title),' +',' ','g'),
++    'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz') || '|' ||
++    to_char(p_date,'YYYY-MM-DD') || '|' || p_event_type || '|' || p_target_type || '|' ||
++    coalesce(p_season::text,'-'),'UTF8');
++  v_first bigint := 2166136261;
++  v_second bigint := 2654435769;
++  v_byte integer;
++begin
++  if v_basis is null then raise exception 'radar_text_identity_invalid' using errcode='22023'; end if;
++  for i in 0..length(v_basis)-1 loop
++    v_byte := get_byte(v_basis,i);
++    v_first := mod((v_first # v_byte)::numeric * 16777619,4294967296)::bigint;
++    v_second := mod((v_second # (v_byte+i))::numeric * 2246822507,4294967296)::bigint;
++  end loop;
++  return 'release:v1:' || lpad(to_hex(v_first),8,'0') || lpad(to_hex(v_second),8,'0');
++end $$;
++revoke all on function public.kd_radar_text_wire_v1_key(text,date,text,text,integer)
++  from public,anon,authenticated;
++grant execute on function public.kd_radar_text_wire_v1_key(text,date,text,text,integer) to service_role;
++
++do $patch$
++declare v_definition text;
++begin
++  select pg_get_functiondef('public.kd_radar_pilot_feed(uuid[])'::regprocedure) into v_definition;
++  if position('''targetId'',f.release_key' in v_definition)>0 then
++    execute replace(v_definition,'''targetId'',f.release_key',
++      '''targetId'',public.kd_radar_text_wire_v1_key(f.title,f.event_date,f.event_type,f.target_type,f.season_number)');
++  elsif position('''targetId'',public.kd_radar_text_wire_v1_key(f.title,f.event_date,f.event_type,f.target_type,f.season_number)' in v_definition)=0 then
++    raise exception 'radar_text_wire_definition_drift';
++  end if;
++end $patch$;
++notify pgrst, 'reload schema';
++commit;
+diff --git a/supabase/migrations/20260917110000_review_filmwissen_identity.sql b/supabase/migrations/20260917110000_review_filmwissen_identity.sql
+index 6049367..46cfba6 100644
+--- a/supabase/migrations/20260917110000_review_filmwissen_identity.sql
++++ b/supabase/migrations/20260917110000_review_filmwissen_identity.sql
+@@ -254,6 +254,13 @@ begin
+   if not public.kd_account_active() then
+     raise exception 'account_inactive' using errcode = '42501';
+   end if;
++  -- An old numeric TMDB read has no work type. Even a verified movie
++  -- mapping cannot distinguish a movie caller from a television caller.
++  -- The existing terminal status also stops old clients before research.
++  if v_namespace = 'tmdb' and trim(p_kennung) ~ '^[0-9]{1,18}$'
++     and ltrim(trim(p_kennung), '0') <> '' then
++    return jsonb_build_object('format','filmwissen-cache-v1','status','gesperrt');
++  end if;
+   if v_kennung is null then
+     raise exception 'kennung_ungueltig' using errcode = '22023';
+   end if;

@@ -1,0 +1,5 @@
+# Immutable original evidence, verified by ARTIFACT_SHA256.json.
+# Keep patch context whitespace and Deno's original final blank line.
+# No product or executable test source is excluded from diff checks.
+product-delta.patch -diff
+review49_rollout_p06_function_test.log -diff

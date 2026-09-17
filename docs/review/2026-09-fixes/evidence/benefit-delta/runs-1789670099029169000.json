@@ -1,0 +1,37 @@
+[
+  {
+    "script": "review49_rollout_p05_pg17_test.mjs",
+    "exit": 0,
+    "seconds": 4.52
+  },
+  {
+    "script": "review49_p05_partial_test.mjs",
+    "exit": 0,
+    "seconds": 0.24
+  },
+  {
+    "script": "review49_rollout_p06_function_test.mjs",
+    "exit": 0,
+    "seconds": 1.1
+  },
+  {
+    "script": "review49_rollout_p06_sql_test.mjs",
+    "exit": 0,
+    "seconds": 1.18
+  },
+  {
+    "script": "review49_p06_sql_test.mjs",
+    "exit": 0,
+    "seconds": 1.02
+  },
+  {
+    "script": "/private/tmp/kd-review49-benefit-delta-20260917/probe-p08-read-matrix.mjs",
+    "exit": 1,
+    "seconds": 0.73
+  },
+  {
+    "script": "review49_p08_entdecken_test.mjs",
+    "exit": 0,
+    "seconds": 0.25
+  }
+]

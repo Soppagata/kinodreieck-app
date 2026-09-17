@@ -1,0 +1,56 @@
+[
+  {
+    "file": "src/services/entdeckenDailyFeed.js",
+    "candidateSha256": "c82b455b3e9b88069d6f1f41f25f2ffb91c83d39bf6936ea1866f3c686e2fd6a",
+    "previousSha256": "0077dbbc4a4ba90b776cc6dd243e86a3852c31f86abe1ce7ac11ab3db393ca95",
+    "snapshot": "source-snapshots/src/services/entdeckenDailyFeed.js"
+  },
+  {
+    "file": "src/services/radarWebsearch.js",
+    "candidateSha256": "983308d440f2c5eedc0e3e637081e81b592a39303b4c7e28a8f67ba8b1ec5113",
+    "previousSha256": "f0b50ce6ff49bff03370eafef1212f2573c17ca2ff01796213d458ece84e9e7d",
+    "snapshot": "source-snapshots/src/services/radarWebsearch.js"
+  },
+  {
+    "file": "supabase/functions/ai-task/index.ts",
+    "candidateSha256": "d16eda20ced73896db86a40a92b3c5ca91a5cb38ae73bc6810adaae29d0d86cd",
+    "previousSha256": "7d3aee5a2b6a75a187901351e135051895029a1f796d038c70a6521b8a4cdfb6",
+    "snapshot": "source-snapshots/supabase/functions/ai-task/index.ts"
+  },
+  {
+    "file": "supabase/functions/entdecken-daily-task/index.ts",
+    "candidateSha256": "55ff32b38db83d9a120bbcaaebee73002f7e6a3ce8e6225702e72573f1a47f07",
+    "previousSha256": "98e00d75f3897cc24df0e28bf43b89947d25545c6062c3c67fe36745962603e3",
+    "snapshot": "source-snapshots/supabase/functions/entdecken-daily-task/index.ts"
+  },
+  {
+    "file": "supabase/functions/entdecken-daily-task/responseContract.js",
+    "candidateSha256": "007511798092931da7579f0eb4cf0efedbf4ac4e9cfacf0b72dac0a49160b83e",
+    "previousSha256": "fe4cec399cf93ef5967c32a880f99249483e92b312cdd03da1460d9b54035b98",
+    "snapshot": "source-snapshots/supabase/functions/entdecken-daily-task/responseContract.js"
+  },
+  {
+    "file": "supabase/functions/radar-websearch-task/contract.js",
+    "candidateSha256": "2c81d29166a14d3f4493b1ead1015a207ede3c12a0c38d14424763742bd6c26b",
+    "previousSha256": "8db0a6b938e41fc44c13fe7caccc69bdd21d6152d391ad69c8c181d996fcf1e6",
+    "snapshot": "source-snapshots/supabase/functions/radar-websearch-task/contract.js"
+  },
+  {
+    "file": "supabase/functions/radar-websearch-task/index.ts",
+    "candidateSha256": "ab0c8a804c2a376cff52e098ccdf73a4925637d0cb0495be743e6eefb3602777",
+    "previousSha256": "5f469a72131ee43dc72dfe756878ac014369ed93806ceca3bdd0d09f829588d7",
+    "snapshot": "source-snapshots/supabase/functions/radar-websearch-task/index.ts"
+  },
+  {
+    "file": "supabase/migrations/20260917095000_review_radar_client_compat.sql",
+    "candidateSha256": "092c2d14f46ff2eed40aea4f4447ae8138da5295d08e2a5e5172642961ff6257",
+    "previousSha256": null,
+    "snapshot": "source-snapshots/supabase/migrations/20260917095000_review_radar_client_compat.sql"
+  },
+  {
+    "file": "supabase/migrations/20260917110000_review_filmwissen_identity.sql",
+    "candidateSha256": "e185b0e736836ae598f8675ee994dbc6502ae2c176c41a595aedd5ce8b06a55e",
+    "previousSha256": "2cd4740a1b1807012316db22b62bd2a947cc3929f94680116da59cdf95a49546",
+    "snapshot": "source-snapshots/supabase/migrations/20260917110000_review_filmwissen_identity.sql"
+  }
+]

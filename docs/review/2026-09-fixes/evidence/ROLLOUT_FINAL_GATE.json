@@ -1,0 +1,751 @@
+{
+  "schema": "kinodreieck-review49-final-benefit-and-rollout-gate-v1",
+  "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+  "acceptedAt": "2026-09-17T18:46:56.855439+00:00",
+  "status": "PASS_LOCAL_ALL49_WITH_DOCUMENTED_LEGACY_LIMIT",
+  "counts": {
+    "tickets": 49,
+    "criteria": 239,
+    "targetedDeltaIssues": 4,
+    "carriedForwardIssues": 45,
+    "ERLEDIGT": 49,
+    "OFFEN": 0,
+    "NICHT BELEGT": 0,
+    "localRolloutRemaindersClosed": 3,
+    "remoteRolloutsProven": 0
+  },
+  "independentReview": {
+    "path": "benefit-delta/DELTA_REVIEW.json",
+    "sha256": "7baedc9c4273344b5d90d742bb4794c60c1d33bee137583c618ba84d8fc04e8f",
+    "artifactManifestSha256": "91845946e0e2062fa4ad38e57490125a875f0cc228f835e03efe192472b24baf",
+    "artifactsVerified": 48,
+    "criteriaOriginalTextsVerified": 239,
+    "sourceLocationsVerified": true,
+    "sourceHashChecks": 122,
+    "focusedIssues": 4,
+    "sourceCarriedIssues": 45
+  },
+  "executions": [
+    {
+      "name": "npm-test",
+      "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "startedAt": "2026-09-17T18:38:53.363995+00:00",
+      "durationSeconds": 136.166,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-rollout-evidence-20260917/npm-test.log",
+      "sha256": "726e02ef9c10d1b982ffdfb3cef617e1d7fcdb84973ab0a0f45ef6bf88924d13",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/rollout-9d88b7d-npm-test.log.gz",
+      "archiveSha256": "d24c096fbd8d5a0f4d3bc364f3397917aee2a3face4ce2b8166d656a533ed4d3"
+    },
+    {
+      "name": "function-mocks",
+      "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+      "command": [
+        "npm",
+        "run",
+        "test:function",
+        "--",
+        "--cached-only"
+      ],
+      "startedAt": "2026-09-17T18:41:09.548020+00:00",
+      "durationSeconds": 0.84,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-rollout-evidence-20260917/function-mocks.log",
+      "sha256": "182109ed59a7d8f9d61a36b80e12c775a33f8dc1ed4ab8c617ee701b50b851c8",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/rollout-9d88b7d-function-mocks.log.gz",
+      "archiveSha256": "9a689ff51fd96877129d24cd13b2dd3be7d50281c8500fb349991dc0a1c85959"
+    },
+    {
+      "name": "browser-integration",
+      "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+      "command": [
+        "npm",
+        "run",
+        "test:review49:browser"
+      ],
+      "startedAt": "2026-09-17T18:41:10.392299+00:00",
+      "durationSeconds": 118.797,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-rollout-evidence-20260917/browser-integration.log",
+      "sha256": "f596b0aa15c0c160e6f3e9c9d2602db5adbe39c9cf34a3830f4d760bda98c56f",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/rollout-9d88b7d-browser-integration.log.gz",
+      "archiveSha256": "98dd24a401d659f9a983c02a1d9773ba6d6fb42f201ddff7c4840975fca5f743"
+    },
+    {
+      "name": "build",
+      "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "startedAt": "2026-09-17T18:43:09.191494+00:00",
+      "durationSeconds": 1.052,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-rollout-evidence-20260917/build.log",
+      "sha256": "1f6e4c3819ded1f5f07b585701d7a489daf7fcca761a7e3a28021f79e4da952c",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/rollout-9d88b7d-build.log.gz",
+      "archiveSha256": "749f8a692a18a2f90d423036038b24dc718bffa1b169d5d4a18848ccde0d971f"
+    },
+    {
+      "name": "function-release",
+      "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+      "command": [
+        "npm",
+        "run",
+        "check:function-release"
+      ],
+      "startedAt": "2026-09-17T18:43:10.244944+00:00",
+      "durationSeconds": 0.382,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-final-rollout-evidence-20260917/function-release.log",
+      "sha256": "c9e8431ac0fb4a834c4c2032f705da863528f77c3adca7de31ebe093309a8af4",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/rollout-9d88b7d-function-release.log.gz",
+      "archiveSha256": "0035b0ecefbf91a9962e593639e7dc2acabb30a6a7978d39cd75f17673a8f623"
+    }
+  ],
+  "freshDenoCache": {
+    "exitCode": 0,
+    "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/rollout-p06-fresh-deno-cache.log.gz",
+    "rawSha256": "7d8c7fe91fa4c492027f7a5b2b63dc06c8ad2a9a1598100d4633e0219914bee7",
+    "archiveSha256": "fa73073ec03f9bcb19e7982323e46711580c7c8e93863e01fa7e07c8ab3ec784"
+  },
+  "ticketMapping": [
+    {
+      "id": "KD-REV-E02-001",
+      "package": "P01",
+      "owner": "Baumeister-P01",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "e45e2baaefa175e97a36bed49eded5c8cb35c161"
+      ],
+      "evidence": "[P01](evidence/P01.md); lokal fokussiert belegt",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E03-002",
+      "package": "P02",
+      "owner": "Baumeister-P02",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b9b92a42b5e605218cfba19861f00c1ba58ff44"
+      ],
+      "evidence": "[P02](evidence/P02.md): 154 Checks; 22 neue Sollszenarien",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E03-001",
+      "package": "P02",
+      "owner": "Baumeister-P02",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b9b92a42b5e605218cfba19861f00c1ba58ff44"
+      ],
+      "evidence": "[P02](evidence/P02.md): 154 Checks; 22 neue Sollszenarien",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E09-001",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "evidence": "[P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E08-002",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994",
+        "b88c403cc290019ca01e0f1714486fe2c1711901"
+      ],
+      "evidence": "[P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen; [R-P05](evidence/R-P05.md): Mischbetrieb unabhaengig lokal abgenommen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E05-003",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "evidence": "[P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E10-004",
+      "package": "P06",
+      "owner": "Baumeister-P06",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "7def1b0ccd104826cd6fdb6965318fa46801f57d",
+        "f957fbe23052c9ebe84a06293d971c3ab23fbdaf",
+        "8f010e71c77d0d74662c8f48b8fd67f583cda5f2"
+      ],
+      "evidence": "[P06](evidence/P06.md); 36 echte Formular-/Prognosefaelle und 9 Parserfaelle; unabhaengig ERLEDIGT auf 114b268; [R-P06](evidence/R-P06.md): Mischbetrieb unabhaengig lokal abgenommen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E04-004",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "evidence": "[P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E04-005",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "evidence": "[P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E04-006",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "evidence": "[P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E04-001",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "evidence": "[P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E08-004",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "evidence": "[P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E02-002",
+      "package": "P01",
+      "owner": "Baumeister-P01",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "e45e2baaefa175e97a36bed49eded5c8cb35c161"
+      ],
+      "evidence": "[P01](evidence/P01.md); lokal fokussiert belegt",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E08-003",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "evidence": "[P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E06-002",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "evidence": "[P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E11-003",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "evidence": "[P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E05-001",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "evidence": "[P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E06-001",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "evidence": "[P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E14-002",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "evidence": "[P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E06-003",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "evidence": "[P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E07-001",
+      "package": "P08",
+      "owner": "Baumeister-P08",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "338948dcea6147dabcfdbef8a1c5309c120a92a9"
+      ],
+      "evidence": "[P08](evidence/P08.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E11-001",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "evidence": "[P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E12-003",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "evidence": "[P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E12-002",
+      "package": "P07",
+      "owner": "Baumeister-P07",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "cb6321974276a4c223f596d0083dde23d8ebba42"
+      ],
+      "evidence": "[P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E10-003",
+      "package": "P06",
+      "owner": "Baumeister-P06",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "7def1b0ccd104826cd6fdb6965318fa46801f57d"
+      ],
+      "evidence": "[P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E01-001",
+      "package": "P10b",
+      "owner": "Baumeister-P10b",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "79dfe15cffb38fd465ee69c2abe0f49dd57fdb14"
+      ],
+      "evidence": "[P10b](evidence/P10b.md): 48 reale Browserpfade plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E04-003",
+      "package": "P10a",
+      "owner": "p10a_focus",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2217e5a82f8c272af850bd6c7e8406f377e0425f"
+      ],
+      "evidence": "[P10a](evidence/P10a.md): 16 echte Komponentenpfade plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E11-004",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "evidence": "[P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E11-002",
+      "package": "P10b",
+      "owner": "Baumeister-P10b",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "79dfe15cffb38fd465ee69c2abe0f49dd57fdb14"
+      ],
+      "evidence": "[P10b](evidence/P10b.md): 48 reale Browserpfade plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E09-002",
+      "package": "P11",
+      "owner": "Baumeister-P11",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "8be8375ee4c8f6d3466f79ae194738cab3d9b19b"
+      ],
+      "evidence": "[P11](evidence/P11.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E09-003",
+      "package": "P11",
+      "owner": "Baumeister-P11",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "8be8375ee4c8f6d3466f79ae194738cab3d9b19b"
+      ],
+      "evidence": "[P11](evidence/P11.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E01-002",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "evidence": "[P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E04-002",
+      "package": "P04",
+      "owner": "Baumeister-P04",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "2b850aae699b5a61b3c9c102df1688d873ee6cb8"
+      ],
+      "evidence": "[P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E08-001",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994",
+        "b88c403cc290019ca01e0f1714486fe2c1711901"
+      ],
+      "evidence": "[P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen; [R-P05](evidence/R-P05.md): Mischbetrieb unabhaengig lokal abgenommen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E05-002",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "evidence": "[P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E14-001",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "evidence": "[P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E07-002",
+      "package": "P08",
+      "owner": "Baumeister-P08",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "338948dcea6147dabcfdbef8a1c5309c120a92a9",
+        "990e7797840e08d8363a72de38ce4470a7aa8b1a"
+      ],
+      "evidence": "[P08](evidence/P08.md): fokussierte Produkt-/Integrationsnachweise; [R-P08](evidence/R-P08.md): Mischbetrieb unabhaengig lokal abgenommen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E12-001",
+      "package": "P05",
+      "owner": "Baumeister-P05",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "9b3da55cb8c6bce44a73cbef6bb5ceef3dfec994"
+      ],
+      "evidence": "[P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E10-001",
+      "package": "P06",
+      "owner": "Baumeister-P06",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "7def1b0ccd104826cd6fdb6965318fa46801f57d"
+      ],
+      "evidence": "[P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E13-003",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "evidence": "[P03](evidence/P03.md); lokal fokussiert belegt",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E09-004",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "evidence": "[P03](evidence/P03.md); lokal fokussiert belegt",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E13-004",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "evidence": "[P03](evidence/P03.md); lokal fokussiert belegt",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E02-003",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "evidence": "[P03](evidence/P03.md); lokal fokussiert belegt",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E08-005",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "evidence": "[P03](evidence/P03.md); lokal fokussiert belegt",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E13-001",
+      "package": "P12",
+      "owner": "Baumeister-P12",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "dfabad991b6a60cc0a828331edccd709daf1090d"
+      ],
+      "evidence": "[P12](evidence/P12.md): Core/Workflow, 67 Monitorchecks, 13 PG17-Gruppen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E13-002",
+      "package": "P12",
+      "owner": "Baumeister-P12",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "dfabad991b6a60cc0a828331edccd709daf1090d"
+      ],
+      "evidence": "[P12](evidence/P12.md): Core/Workflow, 67 Monitorchecks, 13 PG17-Gruppen",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E10-002",
+      "package": "P06",
+      "owner": "Baumeister-P06",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "7def1b0ccd104826cd6fdb6965318fa46801f57d"
+      ],
+      "evidence": "[P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E11-005",
+      "package": "P09",
+      "owner": "Baumeister-P09",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "89e89187d9df7474a26af3978ca30e2ea871421d"
+      ],
+      "evidence": "[P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    },
+    {
+      "id": "KD-REV-E03-003",
+      "package": "P03",
+      "owner": "Baumeister-P03",
+      "status": "ERLEDIGT",
+      "fixCommits": [
+        "84cde78b18bc2ba060f348613ba4304668901ffc"
+      ],
+      "evidence": "[P03](evidence/P03.md); lokal fokussiert belegt",
+      "finalReview": "benefit-delta/DELTA_REVIEW.json"
+    }
+  ],
+  "diffCheck": {
+    "base": "4a5cc52a153605159c1b7629a65aac11333f5db5",
+    "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+    "exitCode": 0
+  },
+  "preservation": {
+    "userFilesPreserved": 5,
+    "originalTicketsUnchanged": 49,
+    "primaryHeadUnchanged": true,
+    "checkedAt": "2026-09-17T18:33:39.240963+00:00"
+  },
+  "rolloutDecisions": [
+    {
+      "id": "R-P05",
+      "issues": [
+        "KD-REV-E08-001",
+        "KD-REV-E08-002"
+      ],
+      "localStatus": "LOKAL GESCHLOSSEN",
+      "decision": "BEHALTEN",
+      "evidence": [
+        "review49_rollout_p05_pg17_test.log",
+        "review49_p05_partial_test.log"
+      ],
+      "remainingLimits": [
+        "Alte UI kann partial nicht ausdrücken; ehrliches storage_error bewahrt writes/Feed.",
+        "Gemeinsames Backend und Alt-PWA erfordern tatsächlichen Rolloutreadback. Öffentlicher v1-Werkstarthash darf Event-UUIDs nicht ersetzen."
+      ],
+      "requiredDeliveryOrder": "0950 vor 1000 (danach 1010); neue Radarfunction vor neuem Client. Gesamtes SQLpaket in normaler Reihenfolge, keine v2-Migration ohne0950.",
+      "remoteStatus": "NICHT DURCH DIESEN AUDIT AUSGEFUEHRT ODER BELEGT"
+    },
+    {
+      "id": "R-P06",
+      "issues": [
+        "KD-REV-E10-004"
+      ],
+      "localStatus": "LOKAL GESCHLOSSEN MIT BEWUSSTER ALTCLIENT-GRENZE",
+      "decision": "BEHALTEN",
+      "evidence": [
+        "review49_rollout_p06_function_test.log",
+        "review49_rollout_p06_sql_test.log",
+        "review49_p06_sql_test.log"
+      ],
+      "remainingLimits": [
+        "Keine vollständige Rückwärtskompatibilität: alte TMDB-only-PWA bleibt gesperrt bis Update, weil Film undSerie denselben Request senden.",
+        "Zwischen neuer Function und neuer SQL bleibt direkter Altclientread gegen alte SQL der alte fehlerhafte Vertrag; Sicherheitsabschluss erst nach SQL.",
+        "Neuer Client gegen alte Function ist nicht unterstützt; kein ungeprüfter Funktionsrollback.",
+        "1100 darf nur vor erstmaliger Remoteanwendung geändert werden; Master meldet frisch keine Migration>=0950."
+      ],
+      "requiredDeliveryOrder": "Neue ai-task-Function → neue 1100-SQL → neuer Client; typisierter Forecast toleriert allein den exakt bekannten alten TMDB-SQL-Vertrag ohne Filmwissenprovenienz.",
+      "remoteStatus": "NICHT DURCH DIESEN AUDIT AUSGEFUEHRT ODER BELEGT"
+    },
+    {
+      "id": "R-P08",
+      "issues": [
+        "KD-REV-E07-002"
+      ],
+      "localStatus": "LOKAL GESCHLOSSEN",
+      "decision": "BEHALTEN",
+      "evidence": [
+        "probe-p08-read-matrix.log",
+        "probe-p08-read-matrix.json",
+        "review49_p08_entdecken_test.log"
+      ],
+      "remainingLimits": [
+        "Alte Leser erhalten50 Basiseinträge ohne neue ÖFI-Annotation; neue Leser erhalten Annotation nur bei exaktem Accept-Opt-in.",
+        "Keine eigene neue Browser-/CORS-Sitzung in dieser Delta-Prüfung; Master besitzt Browsergesamtlauf. Eigene Probe verwendet echten Handler und echte Browserdienste unterNode.",
+        "Bestehende1300-SQL-Migration bleibt erforderlich; keine zusätzliche P08-Migration."
+      ],
+      "requiredDeliveryOrder": "Kompatibler vollständiger neuer Entdecken-Handler (Producer und GET-Projektion gemeinsam) plus benötigte 1300-Persistenz bevor neuer Feed gespeichert wird; danach neuer Client. Alte Producer/Feeds bleiben lesbar.",
+      "remoteStatus": "NICHT DURCH DIESEN AUDIT AUSGEFUEHRT ODER BELEGT"
+    }
+  ],
+  "deliveryScope": "rollout-delivery-scope.json",
+  "functionSourceClosures": "rollout-function-closure.json",
+  "readOnlyRemoteEvidence": "rollout-remote-read-only.json",
+  "boundaries": {
+    "localAll49Accepted": true,
+    "push": false,
+    "ci": false,
+    "deployment": false,
+    "sharedDataMutation": false,
+    "paidProviderRequests": false,
+    "physicalIphonePwaAcceptance": false,
+    "remainingApproval": "Explicit shared backend transition (7 migrations,3 Functions); staging web already authorized; production web conditional statement is not an unconditional approval"
+  },
+  "documentationRule": "Subsequent commits contain only docs/evidence; every non-doc product, test and configuration byte stays identical to candidate.",
+  "artifactDiffPolicy": "Only immutable benefit-delta/product-delta.patch and review49_rollout_p06_function_test.log use -diff to retain original patch context and Deno final blank line. Their original manifest hashes remain unchanged. No product or executable test source is excluded."
+}

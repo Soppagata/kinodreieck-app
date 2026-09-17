@@ -1,0 +1,51 @@
+{
+  "candidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+  "remoteEffect": false,
+  "orderedMigrations": [
+    {
+      "file": "supabase/migrations/20260917095000_review_radar_client_compat.sql",
+      "sha256": "092c2d14f46ff2eed40aea4f4447ae8138da5295d08e2a5e5172642961ff6257"
+    },
+    {
+      "file": "supabase/migrations/20260917100000_review_radar_text_identity.sql",
+      "sha256": "82661ea4f2d1f6c968b5a3f719e0684096597bada2a5006b7be7d7786ed1070d"
+    },
+    {
+      "file": "supabase/migrations/20260917101000_review_radar_context_year.sql",
+      "sha256": "738cbf27b9748e0ee5d2fd95631e8d2d4ad9a716d5f3a2edc3ebb674817c2d80"
+    },
+    {
+      "file": "supabase/migrations/20260917110000_review_filmwissen_identity.sql",
+      "sha256": "e185b0e736836ae598f8675ee994dbc6502ae2c176c41a595aedd5ce8b06a55e"
+    },
+    {
+      "file": "supabase/migrations/20260917120000_review_streaming_freshness_anchors.sql",
+      "sha256": "104a29402c3c442d7504093795904ce4414dc78f71a4dd19ebbec3eca75aec52"
+    },
+    {
+      "file": "supabase/migrations/20260917123000_review_mail_rate_bucket_retention.sql",
+      "sha256": "ae915a36f2686b9b2dbd15f0d553ba0c2d538fc76e6bf8796c642d1d3ac632aa"
+    },
+    {
+      "file": "supabase/migrations/20260917130000_review_entdecken_ofi_identity.sql",
+      "sha256": "3b4c03230e7afd9ef87be92b1bc7b419a61282f2fdd3072bc5b158bf01bbd07b"
+    }
+  ],
+  "sequence": [
+    "fresh remote preflight and explicit shared-backend scope approval",
+    "bounded backup and restore verification for affected identity records",
+    "deploy ai-task and verify source bytes plus JWT contract",
+    "apply missing migrations in orderedMigrations order and verify contracts plus unchanged UUIDs",
+    "deploy radar-websearch-task and entdecken-daily-task, verify full source bytes and auth contracts",
+    "force-free push same candidate to staging, await actual CI/deployment and domain/service-worker readbacks",
+    "separate physical iPhone/PWA acceptance",
+    "production web only after explicit subsequent approval"
+  ],
+  "knownTradeoffs": [
+    "Old TMDB-only Filmwissen reads stop safely until client updates; IMDb-backed reads and explicitly typed personal forecasts remain supported",
+    "Old Radar clients present partial persistence as storage_error with truthful write count and visible persisted finding",
+    "No blind rollback to strict old Entdecken feed reader after annotated feed has been saved"
+  ],
+  "paidProviderSmokeAuthorized": false,
+  "productionWebPermission": "conditional user statement cannot be fulfilled by a zero-risk promise"
+}

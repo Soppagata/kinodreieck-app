@@ -1,0 +1,21 @@
+PostgreSQL binaries: /Applications/Postgres.app/Contents/Versions/17/bin
+PASS old SQL rejects typed request (known old-server limit)
+PASS actual baseline helper/service reproduces byte-identical requests and wrong film read
+PASS legacy movie migrated and remains verified
+PASS legacy series quarantined
+PASS old service / new SQL / film / IMDb miss=false: no research
+PASS old service / new SQL / film / IMDb miss=true: no research
+PASS old service / new SQL / serie / IMDb miss=false: no research
+PASS old service / new SQL / serie / IMDb miss=true: no research
+PASS new service / new SQL / film / IMDb miss=false: no research
+PASS new service / new SQL / film / IMDb miss=true: no research
+PASS new service / new SQL / serie / IMDb miss=false: no research
+PASS new service / new SQL / serie / IMDb miss=true: no research
+PASS kd_filmwissen_aktuell_lesen movie:348 exact work
+PASS kd_filmwissen_aktuell_lesen tv:348 exact work
+PASS kd_filmwissen_aktuell_lesen no table grant
+PASS normalizer stays strict
+PASS leading zeros still terminal
+PASS write ACL remains service only
+PASS no work or version changed by reads
+32/32 SQL/actual client checks passed; local synthetic cluster only

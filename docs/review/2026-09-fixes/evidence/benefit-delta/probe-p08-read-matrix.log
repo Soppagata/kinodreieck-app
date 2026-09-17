@@ -1,0 +1,1 @@
+PASS: 8 producer/HTTP/old+new service paths, exact Accept fallback, source guards, account gates, no read mutation; no browser/server started

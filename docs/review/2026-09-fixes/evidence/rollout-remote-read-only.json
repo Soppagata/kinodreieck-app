@@ -1,0 +1,28 @@
+{
+  "recordedAt": "2026-09-17T18:34:59.475527+00:00",
+  "readOnly": true,
+  "refs": {
+    "main": "14804ce389d69114feed27b92fb11ac78423cc0e",
+    "staging": "14804ce389d69114feed27b92fb11ac78423cc0e"
+  },
+  "ledgerObservedThisTurn": {
+    "migrationCount": 87,
+    "latestVersion": "20260916193000",
+    "versionsAtOrAfter20260917095000": 0
+  },
+  "public": {
+    "staging": {
+      "url": "https://staging.kinodreieck.at",
+      "buildVersion": "14804ce389d69114feed27b92fb11ac78423cc0e",
+      "appEnvironment": "staging",
+      "serviceWorkerSha256": "03d32973a323f08eec6da83010f3137673331b0e431402f405c31ea9ebb4a0ef"
+    },
+    "production": {
+      "url": "https://kinodreieck.at",
+      "buildVersion": "14804ce389d69114feed27b92fb11ac78423cc0e",
+      "appEnvironment": "production",
+      "serviceWorkerSha256": "d8c41793aa39e718eb1f41b73cf49106dad58c90b820c81a58f94e7e3dff313e"
+    }
+  },
+  "initialTransport": "Python urllib returned HTTP403 on staging build-meta; bounded curl read follows"
+}

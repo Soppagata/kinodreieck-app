@@ -1,0 +1,2053 @@
+[
+  {
+    "id": "KD-REV-E01-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/tabs/StartTab.jsx",
+        "previousLine": 228,
+        "currentLine": 228,
+        "fileUnchanged": true,
+        "previousSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "candidateSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          208,
+          248
+        ],
+        "neighborhoodSha256": "4e1885edb193932afac320be27acf938432a17e247b069a983c8e515c7ece37f"
+      },
+      {
+        "file": "src/tabs/StartTab.jsx",
+        "previousLine": 241,
+        "currentLine": 241,
+        "fileUnchanged": true,
+        "previousSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "candidateSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          221,
+          261
+        ],
+        "neighborhoodSha256": "8d986f3c1f1cb75c6ec545a74705886a1641139b2d68cd5f0d7494d510666e3b"
+      },
+      {
+        "file": "src/App.jsx",
+        "previousLine": 1559,
+        "currentLine": 1559,
+        "fileUnchanged": true,
+        "previousSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "candidateSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1539,
+          1579
+        ],
+        "neighborhoodSha256": "62148bd31bb407e540421be07583c240e6c97c1017e3a85c3bc72dcf4a25e65c"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E01-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/tabs/StartTab.jsx",
+        "previousLine": 156,
+        "currentLine": 156,
+        "fileUnchanged": true,
+        "previousSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "candidateSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          136,
+          176
+        ],
+        "neighborhoodSha256": "57c4fb4dc9ed886d3ece42e1065b1aff35e47214a621370853e81b5f12af81e2"
+      },
+      {
+        "file": "src/tabs/StartTab.jsx",
+        "previousLine": 190,
+        "currentLine": 190,
+        "fileUnchanged": true,
+        "previousSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "candidateSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          170,
+          210
+        ],
+        "neighborhoodSha256": "fdb689de78e94f538569a2bcb66e70bce7d5d06d1890f56a26018d6391951cad"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E02-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/authDriver.js",
+        "previousLine": 109,
+        "currentLine": 109,
+        "fileUnchanged": true,
+        "previousSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "candidateSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          89,
+          129
+        ],
+        "neighborhoodSha256": "4b23f8c157ef783b556f49890cde995f39ecc1d0a7910b86fab927302d3befa2"
+      },
+      {
+        "file": "src/lib/authDriver.js",
+        "previousLine": 352,
+        "currentLine": 352,
+        "fileUnchanged": true,
+        "previousSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "candidateSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          332,
+          372
+        ],
+        "neighborhoodSha256": "99e4a7e3fb2cdda4483cef2cd88d124d0311a0b93e64ec940cf60e0d8cc1aebe"
+      },
+      {
+        "file": "src/lib/authDriver.js",
+        "previousLine": 395,
+        "currentLine": 395,
+        "fileUnchanged": true,
+        "previousSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "candidateSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          375,
+          415
+        ],
+        "neighborhoodSha256": "0166b04681e5749d809ef60e0f0e16a70da9190b756800e70421a5c85f28d46b"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E02-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/authDriver.js",
+        "previousLine": 352,
+        "currentLine": 352,
+        "fileUnchanged": true,
+        "previousSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "candidateSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          332,
+          372
+        ],
+        "neighborhoodSha256": "99e4a7e3fb2cdda4483cef2cd88d124d0311a0b93e64ec940cf60e0d8cc1aebe"
+      },
+      {
+        "file": "src/lib/authDriver.js",
+        "previousLine": 395,
+        "currentLine": 395,
+        "fileUnchanged": true,
+        "previousSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "candidateSha256": "499d94a5adf882598ce180c6c8d091f450dd1882e58c7599c44e72c49d55a946",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          375,
+          415
+        ],
+        "neighborhoodSha256": "0166b04681e5749d809ef60e0f0e16a70da9190b756800e70421a5c85f28d46b"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E02-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "tools/rls_test_personal.mjs",
+        "previousLine": 375,
+        "currentLine": 375,
+        "fileUnchanged": true,
+        "previousSha256": "6a9ce3e85a0e98e0cf410dc587ab60dc0fa6656949dea2dd594cd05b7a78888c",
+        "candidateSha256": "6a9ce3e85a0e98e0cf410dc587ab60dc0fa6656949dea2dd594cd05b7a78888c",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          355,
+          395
+        ],
+        "neighborhoodSha256": "1b23a3796e2c35fb11d142dc6a273d54c025920e3094d495ff5d8c0b76de06e7"
+      },
+      {
+        "file": "tools/rls_test_personal.mjs",
+        "previousLine": 416,
+        "currentLine": 416,
+        "fileUnchanged": true,
+        "previousSha256": "6a9ce3e85a0e98e0cf410dc587ab60dc0fa6656949dea2dd594cd05b7a78888c",
+        "candidateSha256": "6a9ce3e85a0e98e0cf410dc587ab60dc0fa6656949dea2dd594cd05b7a78888c",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          396,
+          436
+        ],
+        "neighborhoodSha256": "749b5943e2f9667a2dee1a115f03bd3339ad8b54cb6b072d1524c16dd5b34de1"
+      },
+      {
+        "file": "tools/rls_test_personal.mjs",
+        "previousLine": 932,
+        "currentLine": 932,
+        "fileUnchanged": true,
+        "previousSha256": "6a9ce3e85a0e98e0cf410dc587ab60dc0fa6656949dea2dd594cd05b7a78888c",
+        "candidateSha256": "6a9ce3e85a0e98e0cf410dc587ab60dc0fa6656949dea2dd594cd05b7a78888c",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          912,
+          950
+        ],
+        "neighborhoodSha256": "2b0d4d55ce96018b3545c28dfbb1989cc3fc1857561a01417355d41ea54be793"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E03-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/accountDriver.js",
+        "previousLine": 247,
+        "currentLine": 247,
+        "fileUnchanged": true,
+        "previousSha256": "d821d185b160d816b953d10fd9a9e2665aadd136add7db87b47e53fad2397d8e",
+        "candidateSha256": "d821d185b160d816b953d10fd9a9e2665aadd136add7db87b47e53fad2397d8e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          227,
+          267
+        ],
+        "neighborhoodSha256": "d36f86a4df6940198eae8450d08c5cfb04f06a47a640ffd473bc1c352ff88194"
+      },
+      {
+        "file": "src/lib/accountDriver.js",
+        "previousLine": 285,
+        "currentLine": 285,
+        "fileUnchanged": true,
+        "previousSha256": "d821d185b160d816b953d10fd9a9e2665aadd136add7db87b47e53fad2397d8e",
+        "candidateSha256": "d821d185b160d816b953d10fd9a9e2665aadd136add7db87b47e53fad2397d8e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          265,
+          305
+        ],
+        "neighborhoodSha256": "8872caf6c4340c1333cb48c0a9d14e57245c5accb0830d9dff5b08a307b6aa39"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E03-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/services/uebernahme.js",
+        "previousLine": 298,
+        "currentLine": 298,
+        "fileUnchanged": true,
+        "previousSha256": "924938c20f2b8297d07ec22030dbe1e8a458cf04e363720ad5a24fe371d4df7d",
+        "candidateSha256": "924938c20f2b8297d07ec22030dbe1e8a458cf04e363720ad5a24fe371d4df7d",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          278,
+          318
+        ],
+        "neighborhoodSha256": "5817b93a3eee6d0391b0231abb4f2c481f59a1faa9d8f7c609a624df3f96e897"
+      },
+      {
+        "file": "src/services/uebernahme.js",
+        "previousLine": 319,
+        "currentLine": 319,
+        "fileUnchanged": true,
+        "previousSha256": "924938c20f2b8297d07ec22030dbe1e8a458cf04e363720ad5a24fe371d4df7d",
+        "candidateSha256": "924938c20f2b8297d07ec22030dbe1e8a458cf04e363720ad5a24fe371d4df7d",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          299,
+          339
+        ],
+        "neighborhoodSha256": "17a252a0def7c5adae82828806c417e40dbe5d05ceb329d1339c9a864437f773"
+      },
+      {
+        "file": "src/lib/accountDriver.js",
+        "previousLine": 247,
+        "currentLine": 247,
+        "fileUnchanged": true,
+        "previousSha256": "d821d185b160d816b953d10fd9a9e2665aadd136add7db87b47e53fad2397d8e",
+        "candidateSha256": "d821d185b160d816b953d10fd9a9e2665aadd136add7db87b47e53fad2397d8e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          227,
+          267
+        ],
+        "neighborhoodSha256": "d36f86a4df6940198eae8450d08c5cfb04f06a47a640ffd473bc1c352ff88194"
+      },
+      {
+        "file": "src/services/storage.js",
+        "previousLine": 212,
+        "currentLine": 212,
+        "fileUnchanged": true,
+        "previousSha256": "4324eeb5480e0e3d2322a7b3540dbd7f58085f1250f0fdcbc54124411bcfea1d",
+        "candidateSha256": "4324eeb5480e0e3d2322a7b3540dbd7f58085f1250f0fdcbc54124411bcfea1d",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          192,
+          232
+        ],
+        "neighborhoodSha256": "41976264eece9165570283e64511c0b88cc31ac1e5a8439b0708ff4633782fbc"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E03-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "local_data_safety_test.mjs",
+        "previousLine": 85,
+        "currentLine": 85,
+        "fileUnchanged": true,
+        "previousSha256": "58bf642e43e2d49a6d6063ecd58a14265a6dcb44749ff1285d1ac692a7c34fea",
+        "candidateSha256": "58bf642e43e2d49a6d6063ecd58a14265a6dcb44749ff1285d1ac692a7c34fea",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          65,
+          105
+        ],
+        "neighborhoodSha256": "c6466cc6c300bd95dbc7263e46489f4213140eccaf94dd51d97969a30cf84e42"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E04-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/libraryProjection.js",
+        "previousLine": 19,
+        "currentLine": 19,
+        "fileUnchanged": true,
+        "previousSha256": "9baa3a25d8c978e069f8f04eb1753598d816962d66e3af89a28f2e746df488b8",
+        "candidateSha256": "9baa3a25d8c978e069f8f04eb1753598d816962d66e3af89a28f2e746df488b8",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          39
+        ],
+        "neighborhoodSha256": "f3a64fbbfd42207f442245673be6d2311cf411b7c2093c27f9b61ba0ec415edc"
+      },
+      {
+        "file": "src/lib/libraryProjection.js",
+        "previousLine": 245,
+        "currentLine": 245,
+        "fileUnchanged": true,
+        "previousSha256": "9baa3a25d8c978e069f8f04eb1753598d816962d66e3af89a28f2e746df488b8",
+        "candidateSha256": "9baa3a25d8c978e069f8f04eb1753598d816962d66e3af89a28f2e746df488b8",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          225,
+          265
+        ],
+        "neighborhoodSha256": "e04b7415bb73a307c86abe1ccef6d52eba43714f1fe4b95bdca59db0af881377"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E04-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/components/FilmCard.jsx",
+        "previousLine": 294,
+        "currentLine": 294,
+        "fileUnchanged": true,
+        "previousSha256": "c85ee47bab5e3a447500765fad9a259336d9ca48022ac0f0cd759e8fe4e848a3",
+        "candidateSha256": "c85ee47bab5e3a447500765fad9a259336d9ca48022ac0f0cd759e8fe4e848a3",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          274,
+          314
+        ],
+        "neighborhoodSha256": "01a20645cdb529f42c754165243bcbfa9136f18b8fb5f58e28456dbc1183656a"
+      },
+      {
+        "file": "src/lib/bewertungsvergleich.js",
+        "previousLine": 1,
+        "currentLine": 1,
+        "fileUnchanged": true,
+        "previousSha256": "3c4e191b02e023f90bc4895cfc459e1160aa1fcbc04657af869f1d5cb7909864",
+        "candidateSha256": "3c4e191b02e023f90bc4895cfc459e1160aa1fcbc04657af869f1d5cb7909864",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          11
+        ],
+        "neighborhoodSha256": "3078990332424889069f5929724a7e8a9942f95dfdc0ff80d08ced716cec6048"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E04-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/tabs/MediathekTab.jsx",
+        "previousLine": 226,
+        "currentLine": 226,
+        "fileUnchanged": true,
+        "previousSha256": "8b68f27976d01bd25d7a8d69532b598318b90e0692fc61337df2de3c206cd80d",
+        "candidateSha256": "8b68f27976d01bd25d7a8d69532b598318b90e0692fc61337df2de3c206cd80d",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          206,
+          246
+        ],
+        "neighborhoodSha256": "a5ef8b55a05dee3ab62751b39e5a21c3033495cc870521455d12f14594522056"
+      },
+      {
+        "file": "src/tabs/MediathekTab.jsx",
+        "previousLine": 415,
+        "currentLine": 415,
+        "fileUnchanged": true,
+        "previousSha256": "8b68f27976d01bd25d7a8d69532b598318b90e0692fc61337df2de3c206cd80d",
+        "candidateSha256": "8b68f27976d01bd25d7a8d69532b598318b90e0692fc61337df2de3c206cd80d",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          395,
+          435
+        ],
+        "neighborhoodSha256": "3ab93404e911e6aecd1d57ddbf80b3305f5c528c428373fa87a823c5191b13f4"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E04-004",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/components/MustWatchListe.jsx",
+        "previousLine": 57,
+        "currentLine": 57,
+        "fileUnchanged": true,
+        "previousSha256": "1bb02a86704abb70de4e231f5ee5065282c0d7078cab2c2b5e86c2f14b3003f8",
+        "candidateSha256": "1bb02a86704abb70de4e231f5ee5065282c0d7078cab2c2b5e86c2f14b3003f8",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          37,
+          77
+        ],
+        "neighborhoodSha256": "c315dc53205591e4bd666bdd355e2c943114c4eb1a26c598ac900e4e6d771069"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E04-005",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/stapelimport.js",
+        "previousLine": 268,
+        "currentLine": 268,
+        "fileUnchanged": true,
+        "previousSha256": "2ad7936420e751e5c5a70cde742a5e16739d914ab5377b06e60b9901aca486c1",
+        "candidateSha256": "2ad7936420e751e5c5a70cde742a5e16739d914ab5377b06e60b9901aca486c1",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          248,
+          288
+        ],
+        "neighborhoodSha256": "2ba182b6d340aae94aa61a3a2b0ca1f505a3d51c20d0aec6083bf57358c23a65"
+      },
+      {
+        "file": "src/components/StapelImport.jsx",
+        "previousLine": 133,
+        "currentLine": 133,
+        "fileUnchanged": true,
+        "previousSha256": "1f63a5e7f1109f5105f91add4535c409c925de0be299b0580a65a0ed7689164c",
+        "candidateSha256": "1f63a5e7f1109f5105f91add4535c409c925de0be299b0580a65a0ed7689164c",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          113,
+          153
+        ],
+        "neighborhoodSha256": "8f82a753ee7d2f66220b8e13266134ad730d65e8e05fef8c5e59cbafe0e4f586"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E04-006",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/components/EintragForm.jsx",
+        "previousLine": 45,
+        "currentLine": 45,
+        "fileUnchanged": true,
+        "previousSha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+        "candidateSha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          25,
+          65
+        ],
+        "neighborhoodSha256": "701384d99742c93ece32c8741fbbfb02305f1688838e8464829d22e9d9945beb"
+      },
+      {
+        "file": "src/components/EintragForm.jsx",
+        "previousLine": 64,
+        "currentLine": 64,
+        "fileUnchanged": true,
+        "previousSha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+        "candidateSha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          44,
+          84
+        ],
+        "neighborhoodSha256": "b6465153d36eaf37f92e6a4c466be6f0af206685b236b9a8e622f924754480e6"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E05-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/App.jsx",
+        "previousLine": 1559,
+        "currentLine": 1559,
+        "fileUnchanged": true,
+        "previousSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "candidateSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1539,
+          1579
+        ],
+        "neighborhoodSha256": "62148bd31bb407e540421be07583c240e6c97c1017e3a85c3bc72dcf4a25e65c"
+      },
+      {
+        "file": "src/lib/katalog.js",
+        "previousLine": 472,
+        "currentLine": 472,
+        "fileUnchanged": true,
+        "previousSha256": "1367de581b252463816bb769bcff75a00f09f1ba0411cf81db2bea62035d33b8",
+        "candidateSha256": "1367de581b252463816bb769bcff75a00f09f1ba0411cf81db2bea62035d33b8",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          452,
+          492
+        ],
+        "neighborhoodSha256": "30ce40fb5d4ce2b3387df7bfa52873f25b068c6f645f64557abe2df61ce54862"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E05-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "supabase/functions/_shared/flixpatrolFactsContext.js",
+        "previousLine": 266,
+        "currentLine": 266,
+        "fileUnchanged": true,
+        "previousSha256": "4350a9a8bf0c1e8c759e27725b2c67a5c26ffac906b5ac9f10286b3fdd643f62",
+        "candidateSha256": "4350a9a8bf0c1e8c759e27725b2c67a5c26ffac906b5ac9f10286b3fdd643f62",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          246,
+          286
+        ],
+        "neighborhoodSha256": "15e322988293a399892986b787658aac005eb451ee988d9463979ef539d414a9"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E05-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/match.js",
+        "previousLine": 138,
+        "currentLine": 138,
+        "fileUnchanged": true,
+        "previousSha256": "0f5f945ad6764b3984d3dd45e68df434fd9de194bae6ccf75b8c6f92ed8bb3e5",
+        "candidateSha256": "0f5f945ad6764b3984d3dd45e68df434fd9de194bae6ccf75b8c6f92ed8bb3e5",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          118,
+          158
+        ],
+        "neighborhoodSha256": "beca0bd1106afb5e530b76aaa96b18129457765484195688d634b267d0960208"
+      },
+      {
+        "file": "src/App.jsx",
+        "previousLine": 1238,
+        "currentLine": 1238,
+        "fileUnchanged": true,
+        "previousSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "candidateSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1218,
+          1258
+        ],
+        "neighborhoodSha256": "6d8079d210ab0ca1868541e37246c5658aab9caae978c320006595a3c9d8ec95"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E06-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/streamingPage.js",
+        "previousLine": 171,
+        "currentLine": 171,
+        "fileUnchanged": true,
+        "previousSha256": "c8609879f6efe2dff3a72282cb654d1ccdbcf56c60adf3e4489002ead9bace1b",
+        "candidateSha256": "c8609879f6efe2dff3a72282cb654d1ccdbcf56c60adf3e4489002ead9bace1b",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          151,
+          191
+        ],
+        "neighborhoodSha256": "3480b695c13dda2ae35f065e8178725cfb99bdf2aeb67004a41412353490fb92"
+      },
+      {
+        "file": "src/lib/streamingPage.js",
+        "previousLine": 218,
+        "currentLine": 218,
+        "fileUnchanged": true,
+        "previousSha256": "c8609879f6efe2dff3a72282cb654d1ccdbcf56c60adf3e4489002ead9bace1b",
+        "candidateSha256": "c8609879f6efe2dff3a72282cb654d1ccdbcf56c60adf3e4489002ead9bace1b",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          198,
+          238
+        ],
+        "neighborhoodSha256": "af8345a83d0be1f6b06c120e3951474ad4fa85467d5f72083f07027985967fe8"
+      },
+      {
+        "file": "src/controllers/useStreamingPageController.js",
+        "previousLine": 150,
+        "currentLine": 150,
+        "fileUnchanged": true,
+        "previousSha256": "f413285ce3846502bd096c0d9912eee957b0cfd5c1b9f6fa378db3c2a1f0f9d8",
+        "candidateSha256": "f413285ce3846502bd096c0d9912eee957b0cfd5c1b9f6fa378db3c2a1f0f9d8",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          130,
+          170
+        ],
+        "neighborhoodSha256": "1f68f04df9aed5176035bf79c78083adcd21ecb6d16fc668d6a3d559f3b761b8"
+      },
+      {
+        "file": "supabase/migrations/20260917120000_review_streaming_freshness_anchors.sql",
+        "previousLine": 5,
+        "currentLine": 5,
+        "fileUnchanged": true,
+        "previousSha256": "104a29402c3c442d7504093795904ce4414dc78f71a4dd19ebbec3eca75aec52",
+        "candidateSha256": "104a29402c3c442d7504093795904ce4414dc78f71a4dd19ebbec3eca75aec52",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          25
+        ],
+        "neighborhoodSha256": "b6a4832fc1736d188a0dd586c09e868144bf71a9cb9226e5dfc0b2b19a7d5595"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E06-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/tabs/StreamingTab.jsx",
+        "previousLine": 55,
+        "currentLine": 55,
+        "fileUnchanged": true,
+        "previousSha256": "9f09c61c2fa7323a5545cc48867caaf0d2671283acb1bb47302a7cf834185023",
+        "candidateSha256": "9f09c61c2fa7323a5545cc48867caaf0d2671283acb1bb47302a7cf834185023",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          35,
+          75
+        ],
+        "neighborhoodSha256": "4c1ef83c745acd897e33a81384d59af0d65c79519e2e2a7aab88feef936f1181"
+      },
+      {
+        "file": "src/lib/staffeln.js",
+        "previousLine": 49,
+        "currentLine": 49,
+        "fileUnchanged": true,
+        "previousSha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+        "candidateSha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          29,
+          69
+        ],
+        "neighborhoodSha256": "964f111bb831178d2150cbe6b5e087fc83e27f4d37b5bf65704786e8ee390200"
+      },
+      {
+        "file": "src/lib/staffeln.js",
+        "previousLine": 106,
+        "currentLine": 106,
+        "fileUnchanged": true,
+        "previousSha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+        "candidateSha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          86,
+          126
+        ],
+        "neighborhoodSha256": "ee21f9258edc1038901d2fafeb815a5a36ef7fcc756fb86fe589f96d7b129a30"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E06-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/controllers/useStreamingNeuController.js",
+        "previousLine": 21,
+        "currentLine": 21,
+        "fileUnchanged": true,
+        "previousSha256": "df8c2f0cfa92caa0f04127b2704ead4839550ee299443ad6429fccf9da98e20a",
+        "candidateSha256": "df8c2f0cfa92caa0f04127b2704ead4839550ee299443ad6429fccf9da98e20a",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          41
+        ],
+        "neighborhoodSha256": "90be20f11cc91be9c5cf5c02b657262f91543ba585caa990be99dd937f489471"
+      },
+      {
+        "file": "src/controllers/useStreamingNeuController.js",
+        "previousLine": 78,
+        "currentLine": 78,
+        "fileUnchanged": true,
+        "previousSha256": "df8c2f0cfa92caa0f04127b2704ead4839550ee299443ad6429fccf9da98e20a",
+        "candidateSha256": "df8c2f0cfa92caa0f04127b2704ead4839550ee299443ad6429fccf9da98e20a",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          58,
+          98
+        ],
+        "neighborhoodSha256": "b76c5ca40021e941b98988432a96391aa9fba5462a07260dc2cbd61517e12d9e"
+      },
+      {
+        "file": "src/App.jsx",
+        "previousLine": 922,
+        "currentLine": 922,
+        "fileUnchanged": true,
+        "previousSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "candidateSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          902,
+          942
+        ],
+        "neighborhoodSha256": "e0a7572e6f85b630216547cd3dd37c99f179831cbfda3005b06d618e3dda0997"
+      },
+      {
+        "file": "supabase/migrations/20260917120000_review_streaming_freshness_anchors.sql",
+        "previousLine": 5,
+        "currentLine": 5,
+        "fileUnchanged": true,
+        "previousSha256": "104a29402c3c442d7504093795904ce4414dc78f71a4dd19ebbec3eca75aec52",
+        "candidateSha256": "104a29402c3c442d7504093795904ce4414dc78f71a4dd19ebbec3eca75aec52",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          25
+        ],
+        "neighborhoodSha256": "b6a4832fc1736d188a0dd586c09e868144bf71a9cb9226e5dfc0b2b19a7d5595"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E07-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/entdeckenUi.js",
+        "previousLine": 647,
+        "currentLine": 647,
+        "fileUnchanged": true,
+        "previousSha256": "0b5ec8c42e2c023c6090f3d10689c29e49910b03d531e9404af7cf098e7ede02",
+        "candidateSha256": "0b5ec8c42e2c023c6090f3d10689c29e49910b03d531e9404af7cf098e7ede02",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          627,
+          667
+        ],
+        "neighborhoodSha256": "2db968e460bdffc5724968197e963d1217e964b2c592ea88672dba4924f4af14"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E07-002",
+    "originalTicketUnchanged": true,
+    "mode": "TARGETED_DELTA",
+    "sourceChecks": [
+      {
+        "file": "supabase/functions/entdecken-daily-task/runner.js",
+        "previousLine": 200,
+        "currentLine": 200,
+        "fileUnchanged": true,
+        "previousSha256": "7ea118ce1459570b1a4106fc95c90b7a6c68a7ab10ef7c7f7084fcddd80353e9",
+        "candidateSha256": "7ea118ce1459570b1a4106fc95c90b7a6c68a7ab10ef7c7f7084fcddd80353e9",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          180,
+          220
+        ],
+        "neighborhoodSha256": "d5036ff2f54e4ecfdd639a1cd0949aa581da981db83d11b98d014d95398cfa25"
+      },
+      {
+        "file": "supabase/functions/entdecken-daily-task/contract.js",
+        "previousLine": 657,
+        "currentLine": 657,
+        "fileUnchanged": true,
+        "previousSha256": "6be25a5065a4fa88ec84237102aeb457e63579cbc69365d3bee1a32d9c07e3cd",
+        "candidateSha256": "6be25a5065a4fa88ec84237102aeb457e63579cbc69365d3bee1a32d9c07e3cd",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          637,
+          677
+        ],
+        "neighborhoodSha256": "cafb95f18b7fa5c88128a9bdfc4137cd56a214064d57a42919ee241671fe7031"
+      },
+      {
+        "file": "src/lib/webDiscoveryFeed.js",
+        "previousLine": 657,
+        "currentLine": 657,
+        "fileUnchanged": true,
+        "previousSha256": "675b7ef8eee8362cc8a5681caca0791540a507ac7c7d3048163b7a697941772e",
+        "candidateSha256": "675b7ef8eee8362cc8a5681caca0791540a507ac7c7d3048163b7a697941772e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          637,
+          677
+        ],
+        "neighborhoodSha256": "e52d3312f273e2c04ba7c5463062faea108aafd6e20b3831032701f576b0326f"
+      },
+      {
+        "file": "src/lib/entdeckenUi.js",
+        "previousLine": 677,
+        "currentLine": 677,
+        "fileUnchanged": true,
+        "previousSha256": "0b5ec8c42e2c023c6090f3d10689c29e49910b03d531e9404af7cf098e7ede02",
+        "candidateSha256": "0b5ec8c42e2c023c6090f3d10689c29e49910b03d531e9404af7cf098e7ede02",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          657,
+          697
+        ],
+        "neighborhoodSha256": "b94d157a40d67915fd6cfbfa73422b91869cee066deff3fb9bd3a815ab39a20d"
+      },
+      {
+        "file": "supabase/migrations/20260917130000_review_entdecken_ofi_identity.sql",
+        "previousLine": 52,
+        "currentLine": 52,
+        "fileUnchanged": true,
+        "previousSha256": "3b4c03230e7afd9ef87be92b1bc7b419a61282f2fdd3072bc5b158bf01bbd07b",
+        "candidateSha256": "3b4c03230e7afd9ef87be92b1bc7b419a61282f2fdd3072bc5b158bf01bbd07b",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          32,
+          65
+        ],
+        "neighborhoodSha256": "dbccd3bb4777f91fa701c7b1120b0f0853d3aa8f42cf3e0c7a5ea13fba329592"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E08-001",
+    "originalTicketUnchanged": true,
+    "mode": "TARGETED_DELTA",
+    "sourceChecks": [
+      {
+        "file": "supabase/functions/radar-websearch-task/runner.js",
+        "previousLine": 285,
+        "currentLine": 285,
+        "fileUnchanged": true,
+        "previousSha256": "938c866e52ea59c81137423263d7cd4c8197d0556883196e1f0767e550241c0e",
+        "candidateSha256": "938c866e52ea59c81137423263d7cd4c8197d0556883196e1f0767e550241c0e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          265,
+          298
+        ],
+        "neighborhoodSha256": "baa6baeeb58afafbce46ad78a1de766d5bb0476cd6d33a573db103ecf5007b18"
+      },
+      {
+        "file": "src/services/radarWebsearch.js",
+        "previousLine": 132,
+        "currentLine": 132,
+        "fileUnchanged": false,
+        "previousSha256": "f0b50ce6ff49bff03370eafef1212f2573c17ca2ff01796213d458ece84e9e7d",
+        "candidateSha256": "983308d440f2c5eedc0e3e637081e81b592a39303b4c7e28a8f67ba8b1ec5113",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          112,
+          152
+        ],
+        "neighborhoodSha256": "6d7ca5a1541e1670935d48189cbcf16b7853059857f231ef40cd396cfe014ea9"
+      },
+      {
+        "file": "supabase/functions/radar-websearch-task/index.ts",
+        "previousLine": 761,
+        "currentLine": 765,
+        "fileUnchanged": false,
+        "previousSha256": "5f469a72131ee43dc72dfe756878ac014369ed93806ceca3bdd0d09f829588d7",
+        "candidateSha256": "ab0c8a804c2a376cff52e098ccdf73a4925637d0cb0495be743e6eefb3602777",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          741,
+          772
+        ],
+        "neighborhoodSha256": "883bb7a2dfc818a91122ef98f4b0191bd55b35f176229e1686373ad0782d989a"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E08-002",
+    "originalTicketUnchanged": true,
+    "mode": "TARGETED_DELTA",
+    "sourceChecks": [
+      {
+        "file": "supabase/functions/radar-websearch-task/contract.js",
+        "previousLine": 526,
+        "currentLine": 526,
+        "fileUnchanged": false,
+        "previousSha256": "8db0a6b938e41fc44c13fe7caccc69bdd21d6152d391ad69c8c181d996fcf1e6",
+        "candidateSha256": "2c81d29166a14d3f4493b1ead1015a207ede3c12a0c38d14424763742bd6c26b",
+        "sourceNeighborhoodUnchanged": false,
+        "oldNeighborhoodLines": [
+          506,
+          546
+        ],
+        "neighborhoodSha256": "4bbad11dc6028f5d7e0a9d8922e8ea68d601037bc03077e4c58d1e9bd9892306"
+      },
+      {
+        "file": "supabase/migrations/20260917100000_review_radar_text_identity.sql",
+        "previousLine": 5,
+        "currentLine": 5,
+        "fileUnchanged": true,
+        "previousSha256": "82661ea4f2d1f6c968b5a3f719e0684096597bada2a5006b7be7d7786ed1070d",
+        "candidateSha256": "82661ea4f2d1f6c968b5a3f719e0684096597bada2a5006b7be7d7786ed1070d",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          25
+        ],
+        "neighborhoodSha256": "39fd3b7d18be87b2fb57cef7b2342e231d2d7984066d57f4266022d9e7ee73ad"
+      },
+      {
+        "file": "src/lib/radarPilotContracts.js",
+        "previousLine": 297,
+        "currentLine": 297,
+        "fileUnchanged": true,
+        "previousSha256": "ac541672a1e41e89f1ce90539603118329dd1f26b494ff74587badb59ee9c945",
+        "candidateSha256": "ac541672a1e41e89f1ce90539603118329dd1f26b494ff74587badb59ee9c945",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          277,
+          317
+        ],
+        "neighborhoodSha256": "b0e3e949e6f211f8fdee51de06129d80b8690844bbf85ed5a7f26979041f25ae"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E08-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/controllers/useEntdeckenRadarController.js",
+        "previousLine": 414,
+        "currentLine": 414,
+        "fileUnchanged": true,
+        "previousSha256": "b5f12fb51aee38d471fb3017e8db57790637e6cdc45812081a975783f76497ba",
+        "candidateSha256": "b5f12fb51aee38d471fb3017e8db57790637e6cdc45812081a975783f76497ba",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          394,
+          434
+        ],
+        "neighborhoodSha256": "f4ae545af5dda0091b537de8493e36ed6c8d024068cd8ddf5b616604e766ab92"
+      },
+      {
+        "file": "src/tabs/EntdeckenTab.jsx",
+        "previousLine": 99,
+        "currentLine": 99,
+        "fileUnchanged": true,
+        "previousSha256": "bce5cdaebfcef257123c7903f5fc0baf097a691a9174b25917017dc77d7e5036",
+        "candidateSha256": "bce5cdaebfcef257123c7903f5fc0baf097a691a9174b25917017dc77d7e5036",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          79,
+          119
+        ],
+        "neighborhoodSha256": "64db67cd332603e78e60ccc320538b0b983d701d9a16138fcb436cfe76c69eca"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E08-004",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/radarPilotContracts.js",
+        "previousLine": 224,
+        "currentLine": 224,
+        "fileUnchanged": true,
+        "previousSha256": "ac541672a1e41e89f1ce90539603118329dd1f26b494ff74587badb59ee9c945",
+        "candidateSha256": "ac541672a1e41e89f1ce90539603118329dd1f26b494ff74587badb59ee9c945",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          204,
+          244
+        ],
+        "neighborhoodSha256": "27df6d0bc88b1d76ec7ca67ca9b2bd6abe08679f426a3fae7f9da98317f5cdf4"
+      },
+      {
+        "file": "supabase/migrations/20260917100000_review_radar_text_identity.sql",
+        "previousLine": 5,
+        "currentLine": 5,
+        "fileUnchanged": true,
+        "previousSha256": "82661ea4f2d1f6c968b5a3f719e0684096597bada2a5006b7be7d7786ed1070d",
+        "candidateSha256": "82661ea4f2d1f6c968b5a3f719e0684096597bada2a5006b7be7d7786ed1070d",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          25
+        ],
+        "neighborhoodSha256": "39fd3b7d18be87b2fb57cef7b2342e231d2d7984066d57f4266022d9e7ee73ad"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E08-005",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "tools/radar_freitext_live_contract.mjs",
+        "previousLine": 102,
+        "currentLine": 102,
+        "fileUnchanged": true,
+        "previousSha256": "eb4d08a47efaa551fd3d5aca16b8437ca2d8052b844be1bff243d994a70fd637",
+        "candidateSha256": "eb4d08a47efaa551fd3d5aca16b8437ca2d8052b844be1bff243d994a70fd637",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          82,
+          122
+        ],
+        "neighborhoodSha256": "a1902c897c8e6ec486949cd6d722530acc1c69d0823b5be5310e7209e0da418e"
+      },
+      {
+        "file": "tools/ai_smoke.mjs",
+        "previousLine": 1376,
+        "currentLine": 1376,
+        "fileUnchanged": true,
+        "previousSha256": "a7e8c3f096fb129a5bc7582d714bf22bd74dd0ad12748d53eb45edfe6c8f2f57",
+        "candidateSha256": "a7e8c3f096fb129a5bc7582d714bf22bd74dd0ad12748d53eb45edfe6c8f2f57",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1356,
+          1396
+        ],
+        "neighborhoodSha256": "d9844429f015b2146d3d9703d3aa71ad97a987aa84e858a1bcc9dda914b84da9"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E09-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/profil.js",
+        "previousLine": 708,
+        "currentLine": 708,
+        "fileUnchanged": true,
+        "previousSha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+        "candidateSha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          688,
+          728
+        ],
+        "neighborhoodSha256": "b839239e5fb9448db5b070227b29362183d8324b7381688be4e688d064c35606"
+      },
+      {
+        "file": "src/lib/profil.js",
+        "previousLine": 716,
+        "currentLine": 716,
+        "fileUnchanged": true,
+        "previousSha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+        "candidateSha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          696,
+          736
+        ],
+        "neighborhoodSha256": "a76eb8571fbdc1842f1b45fc47a0017ec5a21f71cad36f436c93f7bb0e11f581"
+      },
+      {
+        "file": "src/lib/profil.js",
+        "previousLine": 768,
+        "currentLine": 768,
+        "fileUnchanged": true,
+        "previousSha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+        "candidateSha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          748,
+          788
+        ],
+        "neighborhoodSha256": "2694d8bdb71d670c1c81e80c16f86a84ae302169abd5a32f6a8ce6c1aa85d58d"
+      },
+      {
+        "file": "src/components/GeschmackBereich.jsx",
+        "previousLine": 370,
+        "currentLine": 370,
+        "fileUnchanged": true,
+        "previousSha256": "1a752eff853c5df1eb54be8d4007f5e7da85685b0c8f1dad450404d1e1a18f11",
+        "candidateSha256": "1a752eff853c5df1eb54be8d4007f5e7da85685b0c8f1dad450404d1e1a18f11",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          350,
+          390
+        ],
+        "neighborhoodSha256": "0f29f32f6af184419a519887b9a705165d5f7440cff2d8ac529b93c0d4618fff"
+      },
+      {
+        "file": "src/components/DreiFragen.jsx",
+        "previousLine": 4,
+        "currentLine": 4,
+        "fileUnchanged": true,
+        "previousSha256": "f131f54b7cd6616da5227f6953d9d1a716c4c9f6be7ab0bef8ee303094425223",
+        "candidateSha256": "f131f54b7cd6616da5227f6953d9d1a716c4c9f6be7ab0bef8ee303094425223",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          24
+        ],
+        "neighborhoodSha256": "92bf8c18d6b12180e1e786962237acf0c9793d82b7bb72dfa3d3ca8d7ee0a68e"
+      },
+      {
+        "file": "src/lib/profil.js",
+        "previousLine": 730,
+        "currentLine": 730,
+        "fileUnchanged": true,
+        "previousSha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+        "candidateSha256": "72b87efbf41f4e29fd99e7587d38ccc07477ec1623e632314d4103f846d55a0e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          710,
+          750
+        ],
+        "neighborhoodSha256": "d5568b8bdd551ec150b28c1a57e48a934f19581fb91ec0f9f9b467b0c336951a"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E09-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/finder.js",
+        "previousLine": 328,
+        "currentLine": 328,
+        "fileUnchanged": true,
+        "previousSha256": "2d8c0a4e17e3b3b55f0753b2a2ac57ff292fafb87014269983d084528ee1f99f",
+        "candidateSha256": "2d8c0a4e17e3b3b55f0753b2a2ac57ff292fafb87014269983d084528ee1f99f",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          308,
+          348
+        ],
+        "neighborhoodSha256": "884a574f1203a94a3dd656148ea4cdff4c8dd65b879532d32dc6b3c4a71ce38d"
+      },
+      {
+        "file": "src/lib/finder.js",
+        "previousLine": 339,
+        "currentLine": 339,
+        "fileUnchanged": true,
+        "previousSha256": "2d8c0a4e17e3b3b55f0753b2a2ac57ff292fafb87014269983d084528ee1f99f",
+        "candidateSha256": "2d8c0a4e17e3b3b55f0753b2a2ac57ff292fafb87014269983d084528ee1f99f",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          319,
+          359
+        ],
+        "neighborhoodSha256": "ffed812dbf837dc4e7b1bff36237ee4380c70a361a9c27931f971ee1c398ffff"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E09-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/finder.js",
+        "previousLine": 503,
+        "currentLine": 503,
+        "fileUnchanged": true,
+        "previousSha256": "2d8c0a4e17e3b3b55f0753b2a2ac57ff292fafb87014269983d084528ee1f99f",
+        "candidateSha256": "2d8c0a4e17e3b3b55f0753b2a2ac57ff292fafb87014269983d084528ee1f99f",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          483,
+          523
+        ],
+        "neighborhoodSha256": "0eac623a01b4e4965365917d7bf715b39504b56ec1afc0cede104d05155f2efa"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E09-004",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "blogprofilanalyse_test.mjs",
+        "previousLine": 36,
+        "currentLine": 36,
+        "fileUnchanged": true,
+        "previousSha256": "57938ab873583c16162964d79b7e15f54fec25897a32c4411cd80659d7a9fa06",
+        "candidateSha256": "57938ab873583c16162964d79b7e15f54fec25897a32c4411cd80659d7a9fa06",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          16,
+          56
+        ],
+        "neighborhoodSha256": "584fd3659269575e250a1e98cb7b9e75e909780f644278ddecb45180c97871b4"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E10-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "supabase/functions/ai-task/index.ts",
+        "previousLine": 4041,
+        "currentLine": 4060,
+        "fileUnchanged": false,
+        "previousSha256": "7d3aee5a2b6a75a187901351e135051895029a1f796d038c70a6521b8a4cdfb6",
+        "candidateSha256": "d16eda20ced73896db86a40a92b3c5ca91a5cb38ae73bc6810adaae29d0d86cd",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          4021,
+          4061
+        ],
+        "neighborhoodSha256": "6cee8b26da6573b1e03e24deaa734d9fdff42ed4aa520cefef4be4d7c0b4cf6c"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E10-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "supabase/functions/ai-task/index.ts",
+        "previousLine": 4394,
+        "currentLine": 4413,
+        "fileUnchanged": false,
+        "previousSha256": "7d3aee5a2b6a75a187901351e135051895029a1f796d038c70a6521b8a4cdfb6",
+        "candidateSha256": "d16eda20ced73896db86a40a92b3c5ca91a5cb38ae73bc6810adaae29d0d86cd",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          4374,
+          4414
+        ],
+        "neighborhoodSha256": "ec8447987199e05214c5367bf1a57a82a27ff36dfcac59f0ab8ddd3af566467c"
+      },
+      {
+        "file": "supabase/functions/ai-task/index.ts",
+        "previousLine": 4431,
+        "currentLine": 4450,
+        "fileUnchanged": false,
+        "previousSha256": "7d3aee5a2b6a75a187901351e135051895029a1f796d038c70a6521b8a4cdfb6",
+        "candidateSha256": "d16eda20ced73896db86a40a92b3c5ca91a5cb38ae73bc6810adaae29d0d86cd",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          4411,
+          4451
+        ],
+        "neighborhoodSha256": "5c3e864a853d1692bd0b3932821c74af05667fc985b9a2eb60d42e549b42e25a"
+      },
+      {
+        "file": "supabase/functions/ai-task/index.ts",
+        "previousLine": 4453,
+        "currentLine": 4472,
+        "fileUnchanged": false,
+        "previousSha256": "7d3aee5a2b6a75a187901351e135051895029a1f796d038c70a6521b8a4cdfb6",
+        "candidateSha256": "d16eda20ced73896db86a40a92b3c5ca91a5cb38ae73bc6810adaae29d0d86cd",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          4433,
+          4473
+        ],
+        "neighborhoodSha256": "ee719e07d38a6f41961238191393db95c182a64de6837d000465f8445a08fe51"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E10-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "supabase/functions/filmwissen-task/quellen.ts",
+        "previousLine": 122,
+        "currentLine": 122,
+        "fileUnchanged": true,
+        "previousSha256": "0f30276e778beacdebcb209cf9f02677733a8d6e4189855f21be7545eb5fcb8f",
+        "candidateSha256": "0f30276e778beacdebcb209cf9f02677733a8d6e4189855f21be7545eb5fcb8f",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          102,
+          142
+        ],
+        "neighborhoodSha256": "fd58f9ddf563ac94996c889a53f36f553066d8bfca8ddc99bdb59480baa17239"
+      },
+      {
+        "file": "supabase/functions/filmwissen-task/quellen.ts",
+        "previousLine": 158,
+        "currentLine": 158,
+        "fileUnchanged": true,
+        "previousSha256": "0f30276e778beacdebcb209cf9f02677733a8d6e4189855f21be7545eb5fcb8f",
+        "candidateSha256": "0f30276e778beacdebcb209cf9f02677733a8d6e4189855f21be7545eb5fcb8f",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          138,
+          178
+        ],
+        "neighborhoodSha256": "919d3b23403f89125dbbf3a8b5f14528ba18b16694cfe994e410ba0457e06158"
+      },
+      {
+        "file": "supabase/functions/filmwissen-task/quellen.ts",
+        "previousLine": 232,
+        "currentLine": 232,
+        "fileUnchanged": true,
+        "previousSha256": "0f30276e778beacdebcb209cf9f02677733a8d6e4189855f21be7545eb5fcb8f",
+        "candidateSha256": "0f30276e778beacdebcb209cf9f02677733a8d6e4189855f21be7545eb5fcb8f",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          212,
+          252
+        ],
+        "neighborhoodSha256": "6b2aa5b7219873d62f92f108e7c8e4bf0fd670e31e8772c8ae7b3ec557b97f3b"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E10-004",
+    "originalTicketUnchanged": true,
+    "mode": "TARGETED_DELTA",
+    "sourceChecks": [
+      {
+        "file": "src/lib/filmwissen.js",
+        "previousLine": 23,
+        "currentLine": 23,
+        "fileUnchanged": true,
+        "previousSha256": "9560ca16e339060e1b30f08fa4acadc152b6b646033f57d934323c276e084e05",
+        "candidateSha256": "9560ca16e339060e1b30f08fa4acadc152b6b646033f57d934323c276e084e05",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          3,
+          43
+        ],
+        "neighborhoodSha256": "e96988df5f1bfae98f50da62a2d645723986862614aa0a8df7fd64e3b57dd847"
+      },
+      {
+        "file": "src/services/filmwissen.js",
+        "previousLine": 37,
+        "currentLine": 37,
+        "fileUnchanged": true,
+        "previousSha256": "88e62f36ad45d2d9b1f208b4d47369f66106d5169473906edf65cdf1ba4c6661",
+        "candidateSha256": "88e62f36ad45d2d9b1f208b4d47369f66106d5169473906edf65cdf1ba4c6661",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          17,
+          57
+        ],
+        "neighborhoodSha256": "b87047a39e7532e689969752cef4ad35d5e869120053fd1a641a2e8fed714c7c"
+      },
+      {
+        "file": "src/components/EintragForm.jsx",
+        "previousLine": 128,
+        "currentLine": 128,
+        "fileUnchanged": true,
+        "previousSha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+        "candidateSha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          108,
+          148
+        ],
+        "neighborhoodSha256": "17471c09623fb308b1c2153506ef464f7adf8404bac439ac9adec9d6f5471182"
+      },
+      {
+        "file": "src/components/EintragForm.jsx",
+        "previousLine": 158,
+        "currentLine": 158,
+        "fileUnchanged": true,
+        "previousSha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+        "candidateSha256": "4b2f6f562fdff060b744bd2f0443c23050e3a6cb409db4190a400a0e6980e805",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          138,
+          178
+        ],
+        "neighborhoodSha256": "9b9f79e5977db2346f5bf356055fce67e586e6fafa1427d90afb051551015429"
+      },
+      {
+        "file": "tools/filmwissen_live_target.mjs",
+        "previousLine": 57,
+        "currentLine": 57,
+        "fileUnchanged": true,
+        "previousSha256": "ee04e8272ea6ff137215268b148b6839fe9a4864ab1797c72aab6235a5f22af4",
+        "candidateSha256": "ee04e8272ea6ff137215268b148b6839fe9a4864ab1797c72aab6235a5f22af4",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          37,
+          77
+        ],
+        "neighborhoodSha256": "d9a435e34b14fe881621083c53da26392584c5cb5a34c683a2361c50ecf9fc64"
+      },
+      {
+        "file": "tools/ai_smoke.mjs",
+        "previousLine": 1010,
+        "currentLine": 1010,
+        "fileUnchanged": true,
+        "previousSha256": "a7e8c3f096fb129a5bc7582d714bf22bd74dd0ad12748d53eb45edfe6c8f2f57",
+        "candidateSha256": "a7e8c3f096fb129a5bc7582d714bf22bd74dd0ad12748d53eb45edfe6c8f2f57",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          990,
+          1030
+        ],
+        "neighborhoodSha256": "935ad31f8e59f07cc5808e1b9c9bab68309fdd472578af8c7f4bacb9362cf822"
+      },
+      {
+        "file": "supabase/migrations/20260917110000_review_filmwissen_identity.sql",
+        "previousLine": 10,
+        "currentLine": 10,
+        "fileUnchanged": false,
+        "previousSha256": "2cd4740a1b1807012316db22b62bd2a947cc3929f94680116da59cdf95a49546",
+        "candidateSha256": "e185b0e736836ae598f8675ee994dbc6502ae2c176c41a595aedd5ce8b06a55e",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          30
+        ],
+        "neighborhoodSha256": "82948f1d7a03b8302fa77cd0fd090dcd9f8d9410beebe9560095a8ee08d303ae"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E11-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/components/Wochenplan.jsx",
+        "previousLine": 209,
+        "currentLine": 209,
+        "fileUnchanged": true,
+        "previousSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "candidateSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          189,
+          229
+        ],
+        "neighborhoodSha256": "a77027bd3edbff8fb0756d30d6180c5892dc55c767acdd87c01c0c16a012d32e"
+      },
+      {
+        "file": "src/components/Wochenplan.jsx",
+        "previousLine": 213,
+        "currentLine": 213,
+        "fileUnchanged": true,
+        "previousSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "candidateSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          193,
+          233
+        ],
+        "neighborhoodSha256": "caecbdd90350c99345e8666a6581971a17e41e5214ac4c463eea29f18acdcdb5"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E11-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/tabs/KinoTab.jsx",
+        "previousLine": 111,
+        "currentLine": 111,
+        "fileUnchanged": true,
+        "previousSha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+        "candidateSha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          91,
+          131
+        ],
+        "neighborhoodSha256": "4cf9320425d9e37a360869cdd719ef31d4aa3c5c5c49d60c2bb38c19184722ce"
+      },
+      {
+        "file": "src/tabs/KinoTab.jsx",
+        "previousLine": 490,
+        "currentLine": 490,
+        "fileUnchanged": true,
+        "previousSha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+        "candidateSha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          470,
+          510
+        ],
+        "neighborhoodSha256": "a6658d7acfdedcdb16caf609011c805dabb973cc24fd70eee16c6d8159b463a6"
+      },
+      {
+        "file": "src/tabs/KinoTab.jsx",
+        "previousLine": 497,
+        "currentLine": 497,
+        "fileUnchanged": true,
+        "previousSha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+        "candidateSha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          477,
+          517
+        ],
+        "neighborhoodSha256": "a1a24c71525ea2318a185dda925137f8bc5c9f345265ebcd4649fc44f0d2a5ec"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E11-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/lib/staffeln.js",
+        "previousLine": 49,
+        "currentLine": 49,
+        "fileUnchanged": true,
+        "previousSha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+        "candidateSha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          29,
+          69
+        ],
+        "neighborhoodSha256": "964f111bb831178d2150cbe6b5e087fc83e27f4d37b5bf65704786e8ee390200"
+      },
+      {
+        "file": "src/lib/staffeln.js",
+        "previousLine": 106,
+        "currentLine": 106,
+        "fileUnchanged": true,
+        "previousSha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+        "candidateSha256": "db7052621a978f23c9998a00f673af928bcb6d83b549f4f222b1f0e211285ea5",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          86,
+          126
+        ],
+        "neighborhoodSha256": "ee21f9258edc1038901d2fafeb815a5a36ef7fcc756fb86fe589f96d7b129a30"
+      },
+      {
+        "file": "src/tabs/StreamingTab.jsx",
+        "previousLine": 55,
+        "currentLine": 55,
+        "fileUnchanged": true,
+        "previousSha256": "9f09c61c2fa7323a5545cc48867caaf0d2671283acb1bb47302a7cf834185023",
+        "candidateSha256": "9f09c61c2fa7323a5545cc48867caaf0d2671283acb1bb47302a7cf834185023",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          35,
+          75
+        ],
+        "neighborhoodSha256": "4c1ef83c745acd897e33a81384d59af0d65c79519e2e2a7aab88feef936f1181"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E11-004",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/components/Wochenplan.jsx",
+        "previousLine": 329,
+        "currentLine": 329,
+        "fileUnchanged": true,
+        "previousSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "candidateSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          309,
+          349
+        ],
+        "neighborhoodSha256": "2835afeff4fdab400c90744fbb41a8a295bd4ab50d4eed07d86b587f43d8f949"
+      },
+      {
+        "file": "src/tabs/StartTab.jsx",
+        "previousLine": 364,
+        "currentLine": 364,
+        "fileUnchanged": true,
+        "previousSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "candidateSha256": "630c4122cc8321a0806e2d02fd9aa50fecfcfe9807848217e566fd7c6e3e5570",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          344,
+          384
+        ],
+        "neighborhoodSha256": "314951595a0cc5aa2135600c6eafb7e007edd5e8f2bc7d82e007db23e555cc0b"
+      },
+      {
+        "file": "src/App.jsx",
+        "previousLine": 1923,
+        "currentLine": 1923,
+        "fileUnchanged": true,
+        "previousSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "candidateSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1903,
+          1943
+        ],
+        "neighborhoodSha256": "b3d782671d23963c8db2464e87df2c086815505dceabb7f7948a5902ea011bec"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E11-005",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/components/Wochenplan.jsx",
+        "previousLine": 99,
+        "currentLine": 99,
+        "fileUnchanged": true,
+        "previousSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "candidateSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          79,
+          119
+        ],
+        "neighborhoodSha256": "3d24741c04e6d1cde4e456e4e45e9af4a7a1f1f379c6e0aed871313e1764cfcb"
+      },
+      {
+        "file": "src/components/Wochenplan.jsx",
+        "previousLine": 156,
+        "currentLine": 156,
+        "fileUnchanged": true,
+        "previousSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "candidateSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          136,
+          176
+        ],
+        "neighborhoodSha256": "2941ea0ba15b23c9722ffca2712cfc4cd05780f868b4b4637092d78f8d7c81cb"
+      },
+      {
+        "file": "src/components/Wochenplan.jsx",
+        "previousLine": 306,
+        "currentLine": 306,
+        "fileUnchanged": true,
+        "previousSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "candidateSha256": "85127752e9f3a0e6dbceb012ecf3eafdfaab77dec918ad7ddaa224f00bf604aa",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          286,
+          326
+        ],
+        "neighborhoodSha256": "2e5fce8b2f9e832fa7963f4930c331f6f4f231f291cbaa70a6aea5d3aae7ea2e"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E12-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/styles/design-secondary.css",
+        "previousLine": 264,
+        "currentLine": 264,
+        "fileUnchanged": true,
+        "previousSha256": "d2bc02ee8a3645eb5fb36d3e8bea65f9b4b3e48d105eb1850024634b3ffb3866",
+        "candidateSha256": "d2bc02ee8a3645eb5fb36d3e8bea65f9b4b3e48d105eb1850024634b3ffb3866",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          244,
+          278
+        ],
+        "neighborhoodSha256": "6fcdf9884ae4d197f179ddab8343e55b5f2071d537cc9115c81d42bb90d1e19d"
+      },
+      {
+        "file": "src/styles/design-secondary.css",
+        "previousLine": 271,
+        "currentLine": 271,
+        "fileUnchanged": true,
+        "previousSha256": "d2bc02ee8a3645eb5fb36d3e8bea65f9b4b3e48d105eb1850024634b3ffb3866",
+        "candidateSha256": "d2bc02ee8a3645eb5fb36d3e8bea65f9b4b3e48d105eb1850024634b3ffb3866",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          251,
+          278
+        ],
+        "neighborhoodSha256": "ba3a5f7ffe7aed78991d7ebea84dfb1be8c0870997e71e91ebb4103822017694"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E12-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/tabs/KinoTab.jsx",
+        "previousLine": 631,
+        "currentLine": 631,
+        "fileUnchanged": true,
+        "previousSha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+        "candidateSha256": "c780a3faff32f03e1d0686cb3aff4f5c9953e86b0e0b032203302d98eac64c14",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          611,
+          651
+        ],
+        "neighborhoodSha256": "56ec237e6715a727972799f417a2e39e0d9cd2be97d3ed22dc005eee006f4b98"
+      },
+      {
+        "file": "src/tabs/StreamingTab.jsx",
+        "previousLine": 890,
+        "currentLine": 890,
+        "fileUnchanged": true,
+        "previousSha256": "9f09c61c2fa7323a5545cc48867caaf0d2671283acb1bb47302a7cf834185023",
+        "candidateSha256": "9f09c61c2fa7323a5545cc48867caaf0d2671283acb1bb47302a7cf834185023",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          870,
+          910
+        ],
+        "neighborhoodSha256": "d7d4e2babec1f002f71d6d3eebad5280f426b603963232383dff0ca127574693"
+      },
+      {
+        "file": "src/styles/streaming-progressive.css",
+        "previousLine": 46,
+        "currentLine": 46,
+        "fileUnchanged": true,
+        "previousSha256": "4810293c12df274815ecd343769706ba1e7cc1d50851a770a0badb093b246ffe",
+        "candidateSha256": "4810293c12df274815ecd343769706ba1e7cc1d50851a770a0badb093b246ffe",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          26,
+          62
+        ],
+        "neighborhoodSha256": "392d103394006138f46373998ffd4cd20f1dac4940adbc51161bd1613c094733"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E12-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/index.css",
+        "previousLine": 1514,
+        "currentLine": 1514,
+        "fileUnchanged": true,
+        "previousSha256": "f350073dfdc2a483678235089880665267bc8c731878394ad895662631a8f187",
+        "candidateSha256": "f350073dfdc2a483678235089880665267bc8c731878394ad895662631a8f187",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1494,
+          1534
+        ],
+        "neighborhoodSha256": "89dc9504c0e0248a83643ddd3077323be0799e548c55c47c6711afafbe4780d0"
+      },
+      {
+        "file": "src/index.css",
+        "previousLine": 1516,
+        "currentLine": 1516,
+        "fileUnchanged": true,
+        "previousSha256": "f350073dfdc2a483678235089880665267bc8c731878394ad895662631a8f187",
+        "candidateSha256": "f350073dfdc2a483678235089880665267bc8c731878394ad895662631a8f187",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1496,
+          1536
+        ],
+        "neighborhoodSha256": "b35c89eca79c485a6d701bd48ee4db5a83d7ebf0e1d9e9e4c7930438070acedf"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E13-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": ".github/workflows/automatic-ai-check.yml",
+        "previousLine": 118,
+        "currentLine": 118,
+        "fileUnchanged": true,
+        "previousSha256": "ded41dfca6211960b73657464fac2baeb647ab46e8a884df521c0a82864a10ba",
+        "candidateSha256": "ded41dfca6211960b73657464fac2baeb647ab46e8a884df521c0a82864a10ba",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          98,
+          138
+        ],
+        "neighborhoodSha256": "585d6d06053b9f9057a2ecdb1dd950edc386f8716eea08c2d88072360832c1b6"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E13-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "supabase/migrations/20260917123000_review_mail_rate_bucket_retention.sql",
+        "previousLine": 8,
+        "currentLine": 8,
+        "fileUnchanged": true,
+        "previousSha256": "ae915a36f2686b9b2dbd15f0d553ba0c2d538fc76e6bf8796c642d1d3ac632aa",
+        "candidateSha256": "ae915a36f2686b9b2dbd15f0d553ba0c2d538fc76e6bf8796c642d1d3ac632aa",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          28
+        ],
+        "neighborhoodSha256": "2c92a193d983efc05a444a713c8bdce835f4d18c4a39841ace3818dc7a142f96"
+      },
+      {
+        "file": "tools/private_ops_monitor_test.mjs",
+        "previousLine": 233,
+        "currentLine": 233,
+        "fileUnchanged": true,
+        "previousSha256": "0a65ec55ca394060d9f159fd8ea1d04593ac4e39c27bd054fdd81743609ef07c",
+        "candidateSha256": "0a65ec55ca394060d9f159fd8ea1d04593ac4e39c27bd054fdd81743609ef07c",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          213,
+          253
+        ],
+        "neighborhoodSha256": "015c6bfc01b2ed5793e6964de55889a78b0086b6005f1f0ce50ae4acba7269b9"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E13-003",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "tools/function-release-info.mjs",
+        "previousLine": 16,
+        "currentLine": 16,
+        "fileUnchanged": true,
+        "previousSha256": "a86f3e4c3fbc193145bf6806bfb012d33ba643ba9fb682a83c8ec7fc5df406a4",
+        "candidateSha256": "a86f3e4c3fbc193145bf6806bfb012d33ba643ba9fb682a83c8ec7fc5df406a4",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          36
+        ],
+        "neighborhoodSha256": "4037af09713850788a4195ae868598c150cbf01cb86d337377411ba8f4029079"
+      },
+      {
+        "file": "tools/function-release-info.mjs",
+        "previousLine": 191,
+        "currentLine": 191,
+        "fileUnchanged": true,
+        "previousSha256": "a86f3e4c3fbc193145bf6806bfb012d33ba643ba9fb682a83c8ec7fc5df406a4",
+        "candidateSha256": "a86f3e4c3fbc193145bf6806bfb012d33ba643ba9fb682a83c8ec7fc5df406a4",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          171,
+          211
+        ],
+        "neighborhoodSha256": "3fe9bb4396ac2653ed9a7dc18f8fa28cdffcd58b7f5fb26d982da8e0d6ae5b25"
+      },
+      {
+        "file": "tools/function-release-info.mjs",
+        "previousLine": 230,
+        "currentLine": 230,
+        "fileUnchanged": true,
+        "previousSha256": "a86f3e4c3fbc193145bf6806bfb012d33ba643ba9fb682a83c8ec7fc5df406a4",
+        "candidateSha256": "a86f3e4c3fbc193145bf6806bfb012d33ba643ba9fb682a83c8ec7fc5df406a4",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          210,
+          250
+        ],
+        "neighborhoodSha256": "bef28b01748ff86817e6a6beebecac432fbb5adfb9c9cc025fc182e31ff90c26"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E13-004",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "tests/private-v1/private-v1.spec.mjs",
+        "previousLine": 276,
+        "currentLine": 276,
+        "fileUnchanged": true,
+        "previousSha256": "2128d3148bb4c758353a3043cc749dd4ceeee36d90a4e85646b20421234be13a",
+        "candidateSha256": "2128d3148bb4c758353a3043cc749dd4ceeee36d90a4e85646b20421234be13a",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          256,
+          296
+        ],
+        "neighborhoodSha256": "37fee030d9d8e51475423a80f7c6b3518e18f30bacf0e1d8092d1ead4007b9b5"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E14-001",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "supabase/migrations/20260917101000_review_radar_context_year.sql",
+        "previousLine": 7,
+        "currentLine": 7,
+        "fileUnchanged": true,
+        "previousSha256": "738cbf27b9748e0ee5d2fd95631e8d2d4ad9a716d5f3a2edc3ebb674817c2d80",
+        "candidateSha256": "738cbf27b9748e0ee5d2fd95631e8d2d4ad9a716d5f3a2edc3ebb674817c2d80",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          1,
+          24
+        ],
+        "neighborhoodSha256": "0b4356404e70a7eadf2a4fbfaf55f418b9456aabce79fda6509d4322d6b77d51"
+      },
+      {
+        "file": "supabase/functions/_shared/flixpatrolFactsContext.js",
+        "previousLine": 266,
+        "currentLine": 266,
+        "fileUnchanged": true,
+        "previousSha256": "4350a9a8bf0c1e8c759e27725b2c67a5c26ffac906b5ac9f10286b3fdd643f62",
+        "candidateSha256": "4350a9a8bf0c1e8c759e27725b2c67a5c26ffac906b5ac9f10286b3fdd643f62",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          246,
+          286
+        ],
+        "neighborhoodSha256": "15e322988293a399892986b787658aac005eb451ee988d9463979ef539d414a9"
+      }
+    ]
+  },
+  {
+    "id": "KD-REV-E14-002",
+    "originalTicketUnchanged": true,
+    "mode": "CARRIED_FORWARD",
+    "sourceChecks": [
+      {
+        "file": "src/App.jsx",
+        "previousLine": 920,
+        "currentLine": 920,
+        "fileUnchanged": true,
+        "previousSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "candidateSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          900,
+          940
+        ],
+        "neighborhoodSha256": "ddfa7cfd50c92b87316602d8016d6fcb227fe3b4b9f0ffeafce1a7cc55962d86"
+      },
+      {
+        "file": "src/App.jsx",
+        "previousLine": 930,
+        "currentLine": 930,
+        "fileUnchanged": true,
+        "previousSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "candidateSha256": "aca5acd5d9b952d6f976cef358e797cbe9298f8cefed0324a8488235ec0effdb",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          910,
+          950
+        ],
+        "neighborhoodSha256": "7e0f4e5f0f1da098ced46c2680d92b58d7d1650d5f07d4b29ca9db629925af5e"
+      },
+      {
+        "file": "src/controllers/useStreamingPageController.js",
+        "previousLine": 414,
+        "currentLine": 414,
+        "fileUnchanged": true,
+        "previousSha256": "f413285ce3846502bd096c0d9912eee957b0cfd5c1b9f6fa378db3c2a1f0f9d8",
+        "candidateSha256": "f413285ce3846502bd096c0d9912eee957b0cfd5c1b9f6fa378db3c2a1f0f9d8",
+        "sourceNeighborhoodUnchanged": true,
+        "oldNeighborhoodLines": [
+          394,
+          434
+        ],
+        "neighborhoodSha256": "417f119f393255e05f894f8b5fdba8855b0e2ced4c74be14d462d848c0946ed2"
+      }
+    ]
+  }
+]
