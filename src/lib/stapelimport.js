@@ -269,22 +269,35 @@ export async function persistiereStapelAuswahl(
   kandidaten,
   { addFilme, addFilm, istAktuell = () => true } = {},
 ) {
-  const { mediathek } = baueStapelUebernahme(kandidaten);
-  if (!mediathek.length || !istAktuell()) return { eintraege: 0, abgebrochen: !istAktuell() };
+  const auswahl = (kandidaten || []).flatMap((kandidat) => {
+    const { mediathek } = baueStapelUebernahme([kandidat]);
+    return mediathek.length ? [{ kandidatId: kandidat.id, film: mediathek[0] }] : [];
+  });
+  const ergebnisse = [];
+  const ergebnis = (abgebrochen = false) => ({
+    eintraege: ergebnisse.filter((e) => e.status === "gespeichert").length,
+    fehlgeschlagen: ergebnisse.filter((e) => e.status === "fehlgeschlagen").length,
+    ergebnisse, abgebrochen,
+  });
+  if (!auswahl.length || !istAktuell()) return ergebnis(!istAktuell());
   if (typeof addFilme === "function") {
-    const ids = await addFilme(mediathek);
-    if (!istAktuell()) return { eintraege: 0, abgebrochen: true };
+    const ids = await addFilme(auswahl.map((e) => e.film));
+    if (!istAktuell()) return ergebnis(true);
     if (ids == null) return null;
-    if (!Array.isArray(ids)) throw new Error("Stapelimport: Speicherantwort ist nicht lesbar.");
-    return { eintraege: ids.length };
+    // Nur positionsgebundene Antworten lassen sich sicher einzelnen Kandidaten zuordnen.
+    if (!Array.isArray(ids) || ids.length !== auswahl.length) throw new Error("Stapelimport: Speicherantwort ist nicht eindeutig zuordenbar.");
+    ids.forEach((id, index) => ergebnisse.push({ kandidatId: auswahl[index].kandidatId,
+      status: typeof id === "string" && id.trim() ? "gespeichert" : "fehlgeschlagen", id }));
+    return ergebnis();
   }
-  let eintraege = 0;
-  for (const film of mediathek) {
-    if (!istAktuell()) return { eintraege, abgebrochen: true };
-    if (await addFilm?.(film)) eintraege += 1;
-    if (!istAktuell()) return { eintraege, abgebrochen: true };
+  for (const { kandidatId, film } of auswahl) {
+    if (!istAktuell()) return ergebnis(true);
+    let id = null;
+    try { id = await addFilm?.(film); } catch { /* Korrekturen für gezielten Wiederanlauf behalten. */ }
+    if (!istAktuell()) return ergebnis(true);
+    ergebnisse.push({ kandidatId, status: typeof id === "string" && id.trim() ? "gespeichert" : "fehlgeschlagen", id });
   }
-  return { eintraege };
+  return ergebnis();
 }
 
 export function externerStapelPrompt() {

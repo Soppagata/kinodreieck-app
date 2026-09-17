@@ -367,6 +367,7 @@ export function GeschmackBereich({
       {frage ? (
         <DreiFragen
           profilVorhanden={profil?.einwilligung?.erteilt === true}
+          bestehendeFilme={profil?.filme || []}
           laeuft={extraktLaeuft}
           fehler={extraktFehler}
           ergebnis={extrakt}
@@ -378,6 +379,7 @@ export function GeschmackBereich({
         <GeschmackOnboarding
           bekannteTitel={bekannteTitel}
           bestehendeAchsen={profil?.achsen || null}
+          bestehendeFilme={profil?.filme || []}
           bereitsEinverstanden={profil?.einwilligung?.erteilt === true}
           onFertig={uebernehmen}
           onAbbruch={() => setErhebe(false)}

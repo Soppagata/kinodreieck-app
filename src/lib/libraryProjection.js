@@ -22,8 +22,8 @@ export function baueRefUniversum(master, mustwatch) {
     ...(mustwatch || []).map((eintrag) => ({
       id: eintrag.id,
       titel: eintrag.titel,
-      jahr: null,
-      typ: "film",
+      jahr: eintrag.jahr ?? null,
+      typ: eintrag.typ || "film",
     })),
   ];
 }
@@ -271,12 +271,7 @@ export function planeMasterErsetzung(neuerMaster, artikel, mustwatch) {
     return geaendert ? { ...eintrag, liste, abgleichStat: undefined } : eintrag;
   });
   const bereinigt = artikelRefs ? bereinigtRoh : artikelListe;
-  const universum = [
-    ...filme,
-    ...nextMustwatch.map((eintrag) => ({
-      id: eintrag.id, titel: eintrag.titel, jahr: null, typ: "film",
-    })),
-  ];
+  const universum = baueRefUniversum(filme, nextMustwatch);
   const [geheilt, geheilteRefs] = heileRotlinks(bereinigt, universum);
   return {
     master: filme,

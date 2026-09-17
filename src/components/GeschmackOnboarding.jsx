@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
+import { profilFilmHinweis } from "../lib/profil.js";
 import { DreieckRegler } from "./DreieckRegler.jsx";
 import {
   gruppen, filmAuswahl, onboardingErgebnis,
@@ -69,6 +70,7 @@ function WahlChip({ beschriftung, richtung, onWechsel, titel }) {
 export function GeschmackOnboarding({
   bekannteTitel = [],
   bestehendeAchsen = null,
+  bestehendeFilme = [],
   optInText = null,
   /* Hat der Nutzer bereits zugestimmt? Dann ist der Einwilligungsschritt
      keine Frage mehr, sondern eine Klickstrecke: „Weitere Angaben machen"
@@ -254,6 +256,7 @@ export function GeschmackOnboarding({
       {name === "vorschau" && (
         <div>
           <h3 style={h}>Das käme ins Profil</h3>
+          {bestehendeFilme.length > 0 && <p style={p}>Bisherige Filme bleiben erhalten: {bestehendeFilme.map((f) => f.titel + (f.jahr ? ` (${f.jahr})` : "")).join(", ")}. Nur eine hier gewählte neue Richtung ändert den jeweiligen Film.</p>}
           {nichtsGewaehlt ? (
             <p style={p}>
               Du hast nichts ausgewählt — es gibt nichts zu übernehmen. Geh zurück und
@@ -278,6 +281,11 @@ export function GeschmackOnboarding({
                   {ergebnis.rahmen.filme.map((f) =>
                     (f.richtung === "stoesst_ab" ? "− " : "+ ") + f.titel).join(", ")}
                 </p>
+              )}
+              {bestehendeFilme.length > 0 && ergebnis.rahmen?.filme?.length > 0 && (
+                <ul style={p}>{ergebnis.rahmen.filme.map((f, i) => <li key={i}>
+                  {f.titel}: {profilFilmHinweis(bestehendeFilme, f)}
+                </li>)}</ul>
               )}
               {ergebnis.rahmen?.achsen && (
                 <p style={p}>

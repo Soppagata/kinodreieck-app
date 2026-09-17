@@ -4,6 +4,7 @@ import { hatDreieck } from "../lib/typen.js";
 import { Dreieck, AxisChips, KategorieTag, UnbewertetTag, IconDelete } from "./ui.jsx";
 import { EditPanel } from "./EditPanel.jsx";
 import { PrognoseBereich } from "./PrognoseBereich.jsx";
+import { prognosePasstZurBewertung } from "../lib/bewertungsvergleich.js";
 import { setzePrognoseStatus } from "../lib/prognose.js";
 import { QUELLEN_KLASSEN, quelleBadges } from "../lib/quellen.js";
 
@@ -290,12 +291,15 @@ export function FilmCard({
               onCancel={() => { if (!speichert) { setPrognoseEntwurf(false); setEditing(false); } }}
               onSave={async (changes) => {
                 let next = changes;
-                if (changes?.bewertung != null && film.prognose?.status === "offen") {
-                  const wechsel = setzePrognoseStatus(film.prognose, prognoseEntwurf ? "angenommen" : "korrigiert");
-                  if (wechsel.ok) next = { ...changes, prognose: wechsel.prognose };
-                } else if (changes?.bewertung != null && film.prognose?.status === "angenommen" && !prognoseEntwurf) {
-                  const wechsel = setzePrognoseStatus(film.prognose, "korrigiert");
-                  if (wechsel.ok) next = { ...changes, prognose: wechsel.prognose };
+                if (changes?.bewertung != null && ["offen", "angenommen"].includes(film.prognose?.status)) {
+                  const passend = prognosePasstZurBewertung(film.prognose, { ...film, ...changes });
+                  const zielStatus = passend ? "angenommen" : "korrigiert";
+                  const wechsel = setzePrognoseStatus(film.prognose, zielStatus);
+                  if (wechsel.ok || film.prognose.status === zielStatus) {
+                    next = { ...changes, prognose: wechsel.ok ? wechsel.prognose : film.prognose,
+                      ...(prognoseEntwurf ? { bewertet_von: passend ? "KI-Bewertung (übernommen)" : "KI-Bewertung (korrigiert)" } : {}),
+                    };
+                  }
                 }
                 return speichereAenderungen(next);
               }} />

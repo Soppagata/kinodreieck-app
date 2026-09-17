@@ -175,7 +175,7 @@ export function ensureIds(filme) {
     }
     const id = eindeutig(slugId(f.titel, f.jahr));
     vergeben.add(id);
-    return { id, ...f };
+    return { ...f, id };
   });
 }
 

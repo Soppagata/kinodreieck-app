@@ -31,17 +31,17 @@ const monoKlein = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: 
 
 /* Jahr und Art werden im Formular und in der Karte identisch angeboten, damit
    nachträgliches Ergänzen genauso aussieht wie das Anlegen. */
-function MetaFelder({ jahr, typ, onJahr, onTyp, farbeAufKarte = false }) {
+function MetaFelder({ jahr, typ, onJahr, onTyp, onJahrTaste, disabled = false, farbeAufKarte = false }) {
   const feldStil = farbeAufKarte
     ? { ...inputStyle, background: T.leinwandTief, color: T.tinte }
     : inputStyle;
   return (
     <>
-      <input value={jahr} onChange={(e) => onJahr(e.target.value)}
+      <input value={jahr} disabled={disabled} onKeyDown={onJahrTaste} onChange={(e) => onJahr(e.target.value)}
         className="kd-mustwatch-jahr"
         inputMode="numeric" placeholder="Jahr (optional)" aria-label="Jahr (optional)"
         style={{ ...feldStil, width: 150, minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }} />
-      <select value={typ} onChange={(e) => onTyp(e.target.value)} aria-label="Art"
+      <select value={typ} disabled={disabled} onChange={(e) => onTyp(e.target.value)} aria-label="Art"
         className="kd-mustwatch-art"
         style={{ ...feldStil, width: 150, minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}>
         <option value="">Art offen lassen</option>
@@ -50,6 +50,56 @@ function MetaFelder({ jahr, typ, onJahr, onTyp, farbeAufKarte = false }) {
       </select>
     </>
   );
+}
+
+/* Jahreszahlen bleiben bis zum ausdrücklichen Speichern String-Entwürfe.
+   Abbrechen/Escape verwirft nur den Entwurf, niemals den gespeicherten Wert. */
+function KartenMetadaten({ eintrag, onUpdate }) {
+  const aktuell = String(eintrag.jahr ?? "");
+  const [jahr, setJahr] = useState(aktuell);
+  const [basis, setBasis] = useState(aktuell);
+  const [beruehrt, setBeruehrt] = useState(false);
+  const [fehler, setFehler] = useState("");
+  const [speichert, setSpeichert] = useState(false);
+  const laufRef = useRef(false);
+  useEffect(() => {
+    if (!beruehrt) { setJahr(aktuell); setBasis(aktuell); }
+  }, [aktuell, beruehrt]);
+  const abbrechen = () => { setJahr(aktuell); setBasis(aktuell); setBeruehrt(false); setFehler(""); };
+  const speichern = async () => {
+    if (laufRef.current || !beruehrt) return;
+    if (jahr.trim() && mustwatchJahr(jahr) == null) {
+      setFehler("Bitte ein vollständiges Jahr zwischen 1870 und 2999 eingeben oder das Feld bewusst leeren.");
+      return;
+    }
+    laufRef.current = true; setSpeichert(true); setFehler("");
+    let konflikt = false;
+    try {
+      const ok = await onUpdate(eintrag.id, (stand) => {
+        if (String(stand.jahr ?? "") !== basis) { konflikt = true; return null; }
+        return { jahr: mustwatchJahr(jahr) };
+      });
+      if (konflikt) setFehler("Das gespeicherte Jahr hat sich geändert. Brich den Entwurf ab und prüfe den neuen Stand.");
+      else if (ok !== true) setFehler("Jahr konnte nicht bestätigt gespeichert werden. Dein Entwurf bleibt erhalten.");
+      else { setBeruehrt(false); setBasis(String(mustwatchJahr(jahr) ?? "")); }
+    } catch { setFehler("Jahr konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten."); }
+    finally { laufRef.current = false; setSpeichert(false); }
+  };
+  return <>
+    <MetaFelder farbeAufKarte jahr={jahr} typ={mustwatchTyp(eintrag.typ) || ""}
+      disabled={speichert}
+      onJahr={(wert) => { setJahr(wert); setBeruehrt(true); setFehler(""); }}
+      onJahrTaste={(event) => {
+        if (event.key === "Enter") { event.preventDefault(); void speichern(); }
+        if (event.key === "Escape" && !speichert) { event.preventDefault(); abbrechen(); }
+      }}
+      onTyp={(wert) => onUpdate(eintrag.id, { typ: wert })} />
+    {beruehrt && <>
+      <button type="button" style={btnStyle(false)} disabled={speichert} onClick={() => void speichern()}>Jahr speichern</button>
+      <button type="button" style={btnStyle(false)} disabled={speichert} onClick={abbrechen}>Jahr abbrechen</button>
+    </>}
+    {fehler && <div role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
+  </>;
 }
 
 /* Ein geoeffnetes Textfeld kann laenger leben als sein Server-/Storage-Stand.
@@ -552,11 +602,7 @@ export function MustWatchListe({
               {offen && (
                 <div onClick={(ev) => ev.stopPropagation()} style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <MetaFelder farbeAufKarte
-                      jahr={e.jahr == null ? "" : String(e.jahr)}
-                      typ={typ || ""}
-                      onJahr={(wert) => { if (wert !== (e.jahr == null ? "" : String(e.jahr))) onUpdate(e.id, { jahr: wert }); }}
-                      onTyp={(wert) => onUpdate(e.id, { typ: wert })} />
+                    <KartenMetadaten eintrag={e} onUpdate={onUpdate} />
                   </div>
                   <KonfliktTextfeld eintrag={e} feld="beschreibung" rows={2} placeholder="Beschreibung" onUpdate={onUpdate} />
                   <KonfliktTextfeld eintrag={e} feld="notiz" rows={1} placeholder="Notiz (frei)" onUpdate={onUpdate} />

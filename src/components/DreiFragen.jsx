@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { FRAGEN, ANTWORT_MAX_ZEICHEN, antwortenBrauchbar, frageZu } from "../lib/extraktion.js";
+import { profilFilmHinweis } from "../lib/profil.js";
 import { runtimeConfig } from "../config/runtime.js";
 
 /* ---------- Der KI-Weg: drei offene Fragen (Etappe 7, Phase 3) ----------
@@ -33,6 +34,7 @@ import { runtimeConfig } from "../config/runtime.js";
 export function DreiFragen({
   antworten: startAntworten = null,
   profilVorhanden = false,
+  bestehendeFilme = [],
   laeuft = false,
   fehler = null,
   ergebnis = null,
@@ -195,6 +197,7 @@ export function DreiFragen({
         {ergebnis.rahmen?.filme?.length > 0 && (
           <div style={{ marginTop: 10 }}>
             <span style={klein}>Genannte Filme:</span>
+            {bestehendeFilme.length > 0 && <p style={klein}>Bisherige Filme bleiben erhalten: {bestehendeFilme.map((f) => f.titel).join(", ")}.</p>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
               {ergebnis.rahmen.filme.map((f, index) => {
                 const weg = filmeAus.has(index);
@@ -210,6 +213,7 @@ export function DreiFragen({
                         return n;
                       })}>
                       {f.titel}{f.jahr ? " (" + f.jahr + ")" : ""}{weg ? " ✕" : ""}
+                      {" · "}{profilFilmHinweis(bestehendeFilme, f)}
                     </button>
                     {hinweis?.candidates?.length > 0 && (
                       <p data-film-fakten-hinweis={index} style={{ ...klein, margin: "5px 0 0" }}>

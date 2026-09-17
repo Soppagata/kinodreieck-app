@@ -701,6 +701,42 @@ export function vorschlagRahmen(p, rahmen, jetzt) {
   };
 }
 
+/* Filmidentität: gleiche stabile Master-ID hat Vorrang. Ohne beidseitige
+   ID nur exakter Unicode-Titel UND bekanntes Jahr; niemals Titel allein.
+   Verschiedene Master-IDs und mehrdeutiger Bestand werden nicht vereinigt.
+   Eine bestätigte neue Richtung ersetzt die alte; bloße Nennung bewahrt sie. */
+export function gleicherProfilFilm(a, b) {
+  if (a?.masterId && b?.masterId) return a.masterId === b.masterId;
+  return Number.isInteger(a?.jahr) && a.jahr === b?.jahr
+    && typeof a?.titel === "string" && typeof b?.titel === "string"
+    && a.titel.normalize("NFC").trim().toLocaleLowerCase("de")
+      === b.titel.normalize("NFC").trim().toLocaleLowerCase("de");
+}
+
+export function ergaenzeProfilFilme(bestand = [], vorschlaege = []) {
+  const filme = [...bestand];
+  for (const neu of vorschlaege) {
+    const treffer = filme.map((alt, i) => gleicherProfilFilm(alt, neu) ? i : -1).filter((i) => i >= 0);
+    if (treffer.length !== 1) { filme.push(neu); continue; }
+    const i = treffer[0], alt = filme[i];
+    filme[i] = { ...alt, ...neu,
+      masterId: neu.masterId || alt.masterId || null,
+      richtung: neu.richtung ?? alt.richtung,
+    };
+  }
+  return filme;
+}
+
+export function profilFilmHinweis(bestand, film) {
+  const treffer = (bestand || []).filter((alt) => gleicherProfilFilm(alt, film));
+  const wort = (richtung) => ({ zieht_an: "zieht mich an", stoesst_ab: "stößt mich ab", ambivalent: "zwiespältig" }[richtung] || "nur genannt");
+  if (treffer.length !== 1) return "wird ergänzt";
+  const alt = treffer[0];
+  return film.richtung != null && film.richtung !== alt.richtung
+    ? `Richtung ändern: ${wort(alt.richtung)} → ${wort(film.richtung)}`
+    : "bereits im Profil; bisherige Richtung bleibt";
+}
+
 /* `basis` ist das BESTEHENDE Profil, nicht `leeresProfil()`. Vorher mischte
    die Funktion gegen ein leeres Profil: Ein Vorschlag, der nur eine Achse
    nennt -- der Normalfall, denn die Extraktion kann selten alle drei belegen
@@ -708,7 +744,7 @@ export function vorschlagRahmen(p, rahmen, jetzt) {
    Verfeinerung und verlor zwei Drittel seiner Angaben, ohne dass die
    Bestaetigung das gezeigt haette. `null` im Vorschlag heisst "unbekannt,
    nicht aendern", nicht "loeschen". */
-function pickRahmen(r, basis) {
+function pickRahmen(r, basis, ergaenzen = false) {
   const alt = (basis && basis.achsen) || leeresProfil().achsen;
   const aus = {};
   if (r && typeof r === "object") {
@@ -719,7 +755,7 @@ function pickRahmen(r, basis) {
       }
       aus.achsen = neu;
     }
-    if (Array.isArray(r.filme)) aus.filme = r.filme;
+    if (Array.isArray(r.filme)) aus.filme = ergaenzen ? ergaenzeProfilFilme(basis?.filme || [], r.filme) : r.filme;
     if (Array.isArray(r.nichtDeutbar)) aus.nichtDeutbar = r.nichtDeutbar;
   }
   return aus;
@@ -735,7 +771,7 @@ export function uebernimmRahmen(p, jetzt, annehmen = true) {
   if (!rahmenOffenVorhanden(basis)) return { profil: basis, uebernommen: false, fehler: "kein Vorschlag offen" };
   const { rahmenOffen, ...ohne } = basis;
   if (!annehmen) return { profil: { ...ohne, geaendert: jetzt }, uebernommen: false, fehler: null };
-  const gewaehlt = pickRahmen(rahmenOffen, basis);
+  const gewaehlt = pickRahmen(rahmenOffen, basis, true);
   const ergebnis = { ...ohne, ...gewaehlt, version: naechsteVersion(basis.version), geaendert: jetzt };
   /* Das ERGEBNIS pruefen, nicht auf `vorschlagRahmen` vertrauen: Ein Profil,
      das ueber den Restore-Pfad ins System kam, hat diese Funktion nie

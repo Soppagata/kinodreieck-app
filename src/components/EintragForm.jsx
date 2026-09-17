@@ -8,6 +8,7 @@ import { normalisiereFilmkennung } from "../lib/filmwissen.js";
 import { lesePlausiblesJahr, plausiblerJahresbereich } from "../lib/match.js";
 import { QuellenWahl } from "./QuellenWahl.jsx";
 import { PrognoseBereich } from "./PrognoseBereich.jsx";
+import { prognosePasstZurBewertung } from "../lib/bewertungsvergleich.js";
 import { setzePrognoseStatus } from "../lib/prognose.js";
 
 function prognoseIdentitaet(f) {
@@ -17,17 +18,6 @@ function prognoseIdentitaet(f) {
     String(f.imdbId || "").trim(), String(f.tmdbId || "").trim(),
     String(f.wikidataId || "").trim(),
   ]);
-}
-
-function prognosePasstZurBewertung(prognose, eintrag) {
-  const vorschlag = prognose?.ergebnis;
-  const bewertung = eintrag?.bewertung;
-  return !!vorschlag && !!bewertung
-    && vorschlag.achsen?.wie === bewertung.wie
-    && vorschlag.achsen?.was === bewertung.was
-    && vorschlag.achsen?.warum === bewertung.warum
-    && vorschlag.kategorie_vorschlag === eintrag.kategorie
-    && (vorschlag.begruendung || "") === (eintrag.begruendung || "");
 }
 
 /* ---------- Adaptive Eingabemaske ----------
@@ -67,7 +57,14 @@ export function FilmForm({
     // Musik/Sonstiges
     art: "", sub: "", beschreibung: "",
   };
-  const [f, setF] = useState(leer);
+  const [entwurf, setF] = useState(leer);
+  // Einschränkung durch den Aufrufer wirkt sofort auf Anzeige, Prüfung und Save.
+  // Die übrigen Entwurfsfelder bleiben beim Film/Serien-Wechsel erhalten.
+  const f = typOptionen.includes(entwurf.typ) ? entwurf : { ...entwurf, typ: typOptionen[0] };
+  const effektiverTyp = f.typ;
+  useEffect(() => {
+    setF((alt) => alt.typ === effektiverTyp ? alt : { ...alt, typ: effektiverTyp });
+  }, [effektiverTyp]);
   const [fehler, setFehler] = useState("");
   const [speicherLauf, setSpeicherLauf] = useState(false);
   const speicherLaufRef = useRef(false);

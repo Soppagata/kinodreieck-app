@@ -1234,15 +1234,16 @@ export default function App() {
      Nach jedem neuen Eintrag: automatische Rotlink-Heilung über alle Artikel —
      nur eindeutige Exakt-Treffer, nichts wird geraten. */
   const addFilm = useCallback(async (film) => {
-    const id = film.id || slugId(film.titel, film.jahr);
+    const rohId = film.id || slugId(film.titel, film.jahr);
+    let id = null;
     let next = null, doppelt = false;
     const ok = await mutiereMaster((aktuell) => {
-      if (aktuell.some((eintrag) => eintrag.id === id)) {
+      if (rohId && aktuell.some((eintrag) => eintrag.id === rohId)) {
         doppelt = true;
         return { abgebrochen: true };
       }
-      const neu = ensureIds([{ ...film, id }])[0];
-      next = ensureIds(markNewPersonalMasterEntries(aktuell, [neu]));
+      next = ensureIds(markNewPersonalMasterEntries(aktuell, [{ ...film, id: rohId }]));
+      id = next[next.length - 1].id;
       return { master: next, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
     });
     if (!ok) {

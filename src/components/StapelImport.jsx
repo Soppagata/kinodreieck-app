@@ -86,6 +86,7 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
 
   const ladeExtern = async (text) => {
     if (vorschau) return;
+    setBericht(null);
     const generation = laufRef.current.generation;
     try { await mitVorhandenenFakten(normalisiereStapelAntwort(parseExterneAntwort(text), master), generation); if (istGenerationAktuell(generation)) { setExternText(""); setErr(""); } }
     catch (e) { if (istGenerationAktuell(generation)) setErr("Stapelimport: " + e.message); }
@@ -134,8 +135,15 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
         { addFilme, addFilm, istAktuell: () => istGenerationAktuell(generation) },
       );
       if (gespeichert == null || gespeichert.abgebrochen || !istGenerationAktuell(generation)) return;
-      setBericht({ eintraege: gespeichert.eintraege }); setVorschau(null);
-    } finally { uebernahmeRef.current = false; if (istGenerationAktuell(generation)) setUebernahmeLaeuft(false); }
+      setBericht((alt) => ({ eintraege: (alt?.eintraege || 0) + gespeichert.eintraege, fehlgeschlagen: gespeichert.fehlgeschlagen || 0 }));
+      if (gespeichert.fehlgeschlagen) {
+        const stati = new Map(gespeichert.ergebnisse.map((e) => [e.kandidatId, e.status]));
+        setVorschau((alt) => ({ ...alt, kandidaten: alt.kandidaten
+          .filter((k) => stati.get(k.id) !== "gespeichert")
+          .map((k) => ({ ...k, speicherStatus: stati.get(k.id) || k.speicherStatus })) }));
+      } else setVorschau(null);
+    } catch { if (istGenerationAktuell(generation)) setErr("Die Übernahme konnte nicht bestätigt werden. Die Vorschau bleibt erhalten."); }
+    finally { uebernahmeRef.current = false; if (istGenerationAktuell(generation)) setUebernahmeLaeuft(false); }
   };
 
   const hatImportierbareAuswahl = !!vorschau?.kandidaten?.some((kandidat) =>
@@ -144,7 +152,7 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
 
   return <div className="kd-stapelimport">
     <p className="kd-stapel-lead">Schreibe oder kopiere deine Titel hier hinein. Die KI ordnet Filme, Serien und CDs; gespeichert wird erst nach deiner Kontrolle und immer unbewertet.</p>
-    <textarea value={liste} onChange={(e) => { setListe(e.target.value); setBericht(null); }} rows={8}
+    <textarea value={liste} onChange={(e) => { setListe(e.target.value); if (!vorschau) setBericht(null); }} rows={8}
       placeholder={"Je Zeile ein Titel, zum Beispiel:\nAlien | 1979 | Blu-ray\nThe Expanse | Staffel 1–3 | DVD\nKind of Blue | CD"}
       style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
     <div className="kd-stapel-einstellungen">
@@ -194,7 +202,7 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
     </details>}
 
     {vorschau && <section className="kd-stapel-vorschau">
-      <h3>Vorschau – noch ist nichts gespeichert</h3>
+      <h3>{bericht?.eintraege ? "Vorschau – diese Einträge sind noch nicht gespeichert" : "Vorschau – noch ist nichts gespeichert"}</h3>
       {config.appEnvironment !== "production" && Number.isFinite(vorschau.kostenUsdCent) && <p className="kd-stapel-kosten">Dieser Lauf hat {Number(vorschau.kostenUsdCent).toLocaleString("de-AT", { maximumFractionDigits: 4 })} US-Cent verbraucht.</p>}
       {vorschau.displayText && <p className="kd-stapel-warnung" role="status">{vorschau.displayText}</p>}
       {vorschau.warnungen.map((w, i) => <p className="kd-stapel-warnung" key={i}>{w}</p>)}
@@ -203,13 +211,14 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
         <ul>{vorschau.fehlmenge.map((eintrag) => <li key={eintrag.id}>Zeile {eintrag.index + 1}: {eintrag.grund}</li>)}</ul>
       </div>}
       {vorschau.kandidaten.map((k) => <div className="kd-stapel-kandidat" key={k.id}>
-        <label className="kd-stapel-titel kd-touch-checkbox"><input type="checkbox" checked={k.ausgewaehlt} onChange={(e) => aktualisiere(k.id, "ausgewaehlt", e.target.checked)} /><span><strong>{k.titel}</strong>{k.jahr ? ` (${k.jahr})` : ""}<small>{k.typ} · Sicherheit {k.sicherheit}{k.vorbeurteilung !== "offen" ? ` · Voreindruck: ${k.vorbeurteilung === "passt" ? "passt" : "eher nicht"}` : ""}{k.begruendung ? ` · ${k.begruendung}` : ""}</small></span></label>
-        <div className="kd-stapel-felder"><select aria-label={`Typ für ${k.titel}`} value={k.typ} onChange={(e) => aktualisiere(k.id, "typ", e.target.value)}>{STAPEL_TYPEN.map((t) => <option key={t}>{t}</option>)}</select><select aria-label={`Quelle für ${k.titel}`} value={k.quelle} onChange={(e) => aktualisiere(k.id, "quelle", e.target.value)}>{STAPEL_QUELLEN.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}</select>{k.typ === "serie" && <input aria-label={`Staffeln für ${k.titel}`} placeholder="Staffeln optional, z. B. 1–3" value={k.staffeln || ""} onChange={(e) => aktualisiere(k.id, "staffeln", e.target.value)} />}</div>
-        {k.flixpatrolVorschlag && <label className="kd-touch-checkbox"><input type="checkbox" checked={k.flixpatrolVorschlag.ausgewaehlt} onChange={(e) => setzeFaktenVorschlag(k.id, e.target.checked)} /><span>{produktiv ? "Neutrale Fakten ergänzen:" : "Belegte FlixPatrol-Lücken ergänzen:"}{beschreibeFlixpatrolErgaenzungen(k.flixpatrolVorschlag.ergaenzungen).map((item) => <small key={item.feld}><strong>{item.label}:</strong> {item.wert}</small>)}{produktiv ? <small>Die Ergänzungen sind keine Bewertung oder Verfügbarkeitsangabe.</small> : <small>Abgleich über {k.flixpatrolVorschlag.matchedBy === "strong-id" ? "starke ID" : "exakten Titel, Jahr und Typ"}; Cache-Stand {k.flixpatrolVorschlag.fresh ? "aktuell" : "älter oder unbekannt"}{k.flixpatrolVorschlag.checkedAt ? `, geprüft ${k.flixpatrolVorschlag.checkedAt}` : ""}. Chartplatz ist keine Bewertung oder Verfügbarkeitsangabe.{k.flixpatrolVorschlag.sourceUrl && <> <a href={k.flixpatrolVorschlag.sourceUrl} target="_blank" rel="noreferrer">FlixPatrol-Beleg</a></>}</small>}</span></label>}
+        <label className="kd-stapel-titel kd-touch-checkbox"><input type="checkbox" disabled={uebernahmeLaeuft} checked={k.ausgewaehlt} onChange={(e) => aktualisiere(k.id, "ausgewaehlt", e.target.checked)} /><span><strong>{k.titel}</strong>{k.jahr ? ` (${k.jahr})` : ""}<small>{k.typ} · Sicherheit {k.sicherheit}{k.vorbeurteilung !== "offen" ? ` · Voreindruck: ${k.vorbeurteilung === "passt" ? "passt" : "eher nicht"}` : ""}{k.begruendung ? ` · ${k.begruendung}` : ""}</small></span></label>
+        <div className="kd-stapel-felder"><select disabled={uebernahmeLaeuft} aria-label={`Typ für ${k.titel}`} value={k.typ} onChange={(e) => aktualisiere(k.id, "typ", e.target.value)}>{STAPEL_TYPEN.map((t) => <option key={t}>{t}</option>)}</select><select disabled={uebernahmeLaeuft} aria-label={`Quelle für ${k.titel}`} value={k.quelle} onChange={(e) => aktualisiere(k.id, "quelle", e.target.value)}>{STAPEL_QUELLEN.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}</select>{k.typ === "serie" && <input disabled={uebernahmeLaeuft} aria-label={`Staffeln für ${k.titel}`} placeholder="Staffeln optional, z. B. 1–3" value={k.staffeln || ""} onChange={(e) => aktualisiere(k.id, "staffeln", e.target.value)} />}</div>
+        {k.flixpatrolVorschlag && <label className="kd-touch-checkbox"><input type="checkbox" disabled={uebernahmeLaeuft} checked={k.flixpatrolVorschlag.ausgewaehlt} onChange={(e) => setzeFaktenVorschlag(k.id, e.target.checked)} /><span>{produktiv ? "Neutrale Fakten ergänzen:" : "Belegte FlixPatrol-Lücken ergänzen:"}{beschreibeFlixpatrolErgaenzungen(k.flixpatrolVorschlag.ergaenzungen).map((item) => <small key={item.feld}><strong>{item.label}:</strong> {item.wert}</small>)}{produktiv ? <small>Die Ergänzungen sind keine Bewertung oder Verfügbarkeitsangabe.</small> : <small>Abgleich über {k.flixpatrolVorschlag.matchedBy === "strong-id" ? "starke ID" : "exakten Titel, Jahr und Typ"}; Cache-Stand {k.flixpatrolVorschlag.fresh ? "aktuell" : "älter oder unbekannt"}{k.flixpatrolVorschlag.checkedAt ? `, geprüft ${k.flixpatrolVorschlag.checkedAt}` : ""}. Chartplatz ist keine Bewertung oder Verfügbarkeitsangabe.{k.flixpatrolVorschlag.sourceUrl && <> <a href={k.flixpatrolVorschlag.sourceUrl} target="_blank" rel="noreferrer">FlixPatrol-Beleg</a></>}</small>}</span></label>}
+        {k.speicherStatus === "fehlgeschlagen" && <p role="alert" className="kd-stapel-warnung">Nicht bestätigt gespeichert. Prüfe den Bestand und übernimm diesen Eintrag erneut; deine Korrekturen bleiben erhalten.</p>}
         {k.vorhandenMediathek && <small className="kd-stapel-dublette">Schon in der Mediathek – wird übersprungen.</small>}
       </div>)}
       <div className="kd-stapel-aktionen"><button style={btnStyle(true)} disabled={uebernahmeLaeuft || !hatImportierbareAuswahl} onClick={uebernehmen}>{uebernahmeLaeuft ? "Übernimmt …" : "Auswahl übernehmen"}</button><button style={btnStyle(false)} disabled={uebernahmeLaeuft} onClick={() => setVorschau(null)}>Verwerfen</button></div>
     </section>}
-    {bericht && <p className="kd-stapel-bericht" role="status">Übernommen: {bericht.eintraege} neue Einträge in die Mediathek.</p>}
+    {bericht && <p className="kd-stapel-bericht" role="status">Übernommen: {bericht.eintraege} neue Einträge in die Mediathek.{bericht.fehlgeschlagen > 0 ? ` Nicht gespeichert: ${bericht.fehlgeschlagen}. Nur die verbliebene Auswahl wird erneut übernommen.` : ""}</p>}
   </div>;
 }
