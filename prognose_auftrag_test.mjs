@@ -117,5 +117,13 @@ check("ungültige externe Kennungen werden nicht in den Forecast-Auftrag kopiert
   return auftrag.ok && !("externeIds" in auftrag.payload.film);
 });
 
+
+check("TMDB-Film und -Serie erhalten getrennte serverlesbare Filmwissenkennungen", () => {
+  const f = bauePrognoseAuftrag({ ...film, typ: "film", tmdb_id: 348 }, profil);
+  const s = bauePrognoseAuftrag({ ...film, typ: "serie", tmdb_id: 348 }, profil);
+  return f.ok && s.ok && f.payload.filmkennung.kennung === "movie:348"
+    && s.payload.filmkennung.kennung === "tv:348";
+});
+
 console.log(`\n${ok}/${ok + rot.length} Prognose-Auftrag-Checks bestanden.`);
 if (rot.length) process.exit(1);

@@ -34,7 +34,7 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
     if (!ids.length) return filmwissenSonderstatus(FILMWISSEN_STATUS.NICHT_ZUORDENBAR);
     const accountId = auth.requireAccount("remoteStorage").account.id;
     const start = generation;
-    const key = accountId + "|" + ids.map((x) => x.namespace + ":" + x.kennung).join("|");
+    const key = accountId + "|" + (film.typ || "film") + "|" + ids.map((x) => x.namespace + ":" + x.kennung).join("|");
     if (offen.has(key)) return offen.get(key);
     const promise = (async () => {
       try {
@@ -46,7 +46,11 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
             if (!result?.status) throw new BoundaryError(ERROR_CODES.OFFLINE, { source: "filmwissen", operation: "read", reason: result?.grund || "netzwerk" });
             throw errorFromStatus(result?.status || 0, { source: "filmwissen", operation: "read", reason: result?.grund });
           }
-          const data = dekodiereFilmwissen(result.data);
+          let data = dekodiereFilmwissen(result.data);
+          // Auch bei starker Kennung muss der Werktyp zur Anfrage passen.
+          if (data.werk && data.werk.typ !== (film.typ || "film")) {
+            data = filmwissenSonderstatus(FILMWISSEN_STATUS.CACHE_MISS);
+          }
           if (generation !== start || kontoVon(auth.getSnapshot?.()) !== accountId) return filmwissenSonderstatus(FILMWISSEN_STATUS.VERALTET);
           if (data.status !== FILMWISSEN_STATUS.CACHE_MISS) return data;
           miss = data;
@@ -64,7 +68,7 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
     if (!id) return filmwissenSonderstatus(FILMWISSEN_STATUS.NICHT_ZUORDENBAR);
     const accountId = auth.requireAccount("personalAi").account.id;
     const start = generation;
-    const key = accountId + "|" + id.namespace + ":" + id.kennung;
+    const key = accountId + "|" + (film.typ || "film") + "|" + id.namespace + ":" + id.kennung;
     if (rechercheOffen.has(key)) return rechercheOffen.get(key);
     const promise = (async () => {
       try {
@@ -80,6 +84,9 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
         if (generation !== start || kiKontoVon(auth.getSnapshot?.()) !== accountId) {
           return filmwissenSonderstatus(FILMWISSEN_STATUS.VERALTET);
         }
+        // Die Rechercheadapter unterstützen nur Filme. Vorhandene Serienbelege
+        // bleiben über ihre eigene Cache-Identität lesbar.
+        if ((film.typ || "film") !== "film") return filmwissenSonderstatus(FILMWISSEN_STATUS.GESPERRT);
         const result = await ai.runTask("filmwissen-synthese", id, {
           signal: options.signal,
           vorgangId: options.vorgangId,

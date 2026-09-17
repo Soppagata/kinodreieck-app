@@ -33,7 +33,7 @@ const bereit = { format: "filmwissen-cache-v1", status: "belegt",
     veroeffentlichtAm: null, abgerufenAm: "2026-07-29T12:00:00Z", attribution: "Example", kernaussagen: ["Praegte das Genre nachhaltig."] }] };
 await check("Kennungen folgen dem kanonischen DB-Vertrag", () =>
   normalisiereFilmkennung("imdb", "TT0078748") === "tt0078748"
-  && normalisiereFilmkennung("tmdb", "000348") === "348"
+  && normalisiereFilmkennung("tmdb", "movie:000348") === "movie:348"
   && normalisiereFilmkennung("wikidata", "q24871") === "Q24871");
 await check("Titel und Jahr sind keine Identitaet", () =>
   filmwissenKennungen({ titel: "Alien", jahr: 1979 }).length === 0

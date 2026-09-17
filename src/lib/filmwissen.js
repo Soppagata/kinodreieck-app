@@ -23,7 +23,11 @@ function friere(v) {
 export function normalisiereFilmkennung(namespace, wert) {
   const ns = text(namespace).toLowerCase(); const roh = text(wert);
   if (ns === "imdb") return /^tt[0-9]{7,10}$/i.test(roh) ? roh.toLowerCase() : null;
-  if (["tmdb", "watchmode", "film_at"].includes(ns)) {
+  if (ns === "tmdb") {
+    const match = /^(movie|tv|collection):([0-9]{1,18})$/.exec(roh);
+    return match && /[1-9]/.test(match[2]) ? match[1] + ":" + match[2].replace(/^0+/, "") : null;
+  }
+  if (["watchmode", "film_at"].includes(ns)) {
     return /^[0-9]{1,18}$/.test(roh) && /[1-9]/.test(roh) ? roh.replace(/^0+/, "") : null;
   }
   if (ns === "wikidata") return /^Q[1-9][0-9]{0,17}$/i.test(roh) ? roh.toUpperCase() : null;
@@ -35,7 +39,9 @@ export function filmwissenKennungen(film) {
   const aus = [];
   for (const [namespace, felder] of PRIORITAET) {
     const roh = felder.map((f) => film[f]).find((v) => v !== null && v !== undefined && v !== "");
-    const kennung = normalisiereFilmkennung(namespace, String(roh ?? ""));
+    const typ = { film: "movie", serie: "tv", filmreihe: "collection" }[film.typ || "film"];
+    const wert = namespace === "tmdb" ? `${typ}:${roh ?? ""}` : String(roh ?? "");
+    const kennung = normalisiereFilmkennung(namespace, wert);
     if (kennung) aus.push(Object.freeze({ namespace, kennung }));
   }
   return Object.freeze(aus);

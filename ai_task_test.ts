@@ -208,6 +208,10 @@ function wikidataAntwort(url: string): Response {
             rank: "normal",
             mainsnak: { snaktype: "value", datavalue: { value: "tt0078748" } },
           }],
+          P4947: [{
+            rank: "normal",
+            mainsnak: { snaktype: "value", datavalue: { value: "348" } },
+          }],
           P577: [{
             rank: "normal",
             mainsnak: {
@@ -274,7 +278,7 @@ const z = {
   modelle: (() =>
     antwort({
       data: [{ id: "claude-sonnet-5", display_name: "Sonnet 5" }],
-    })) as () => Response,
+    })) as (init?: RequestInit) => Response | Promise<Response>,
 };
 
 function stelleZurueck() {
@@ -438,7 +442,7 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
   if (url.includes("api.anthropic.com/v1/messages")) {
     return await z.anbieter(init);
   }
-  if (url.includes("api.anthropic.com/v1/models")) return z.modelle();
+  if (url.includes("api.anthropic.com/v1/models")) return z.modelle(init);
 
   return antwort({ unerwartet: url }, 500);
 }) as typeof fetch;
@@ -8168,6 +8172,7 @@ test("FF3a belegtes Filmwissen kommt nur serverseitig in die Prognose und bindet
   z.filmwissenAktuell = {
     format: "filmwissen-cache-v1",
     status: "belegt",
+    werk: { typ: "film" },
     version: { id: versionId },
     warum: {
       wert: 5,
@@ -8259,6 +8264,7 @@ test("FF3c ein abweichender belegter WARUM-Wert wird feldweise verworfen", async
   z.filmwissenAktuell = {
     format: "filmwissen-cache-v1",
     status: "belegt",
+    werk: { typ: "film" },
     version: { id: "22222222-2222-4222-8222-222222222222" },
     warum: { wert: 5, sicherheit: "hoch", kurztext: "Institutionell belegt." },
     fundstellen: [{ kernaussagen: ["Ein starker institutioneller Beleg."] }],
@@ -8398,7 +8404,7 @@ test("FF3g FlixPatrol-Cachefehler erhält den bisherigen Prognoseweg", async () 
 test("FF3h widersprüchliche IMDb- und TMDB-Kennungen stoppen vor Cache und Kosten", async () => {
   for (const fall of [
     { namespace: "imdb", extern: "tt0078748", filmwissen: "tt0137523" },
-    { namespace: "tmdb", extern: "348", filmwissen: "550" },
+    { namespace: "tmdb", extern: "348", filmwissen: "movie:550" },
   ]) {
     const payload = ffAendere((p) => {
       (p.film as Record<string, unknown>).externeIds = { [fall.namespace]: fall.extern };
@@ -8419,7 +8425,7 @@ test("FF3h widersprüchliche IMDb- und TMDB-Kennungen stoppen vor Cache und Kost
 test("FF3i derselbe normalisierte IMDb- oder TMDB-Wert bleibt gültig", async () => {
   for (const fall of [
     { namespace: "imdb", extern: "TT0078748", filmwissen: "tt0078748" },
-    { namespace: "tmdb", extern: "00348", filmwissen: "348" },
+    { namespace: "tmdb", extern: "00348", filmwissen: "movie:348" },
   ]) {
     const payload = ffAendere((p) => {
       (p.film as Record<string, unknown>).externeIds = { [fall.namespace]: fall.extern };
@@ -10158,4 +10164,101 @@ test("BP10 verworfene Artikel- und Modellinhalte erreichen weder Hinweis noch DB
   falsch(logRoh.includes("privater_artikel_17a"), "keine Artikel-ID im DB-Log");
   gleich(startKoerper().p_prompt_version, "blog-profile-v2", "nur der Server bestimmt die Provenienz");
   pruefeKeinInhaltImProtokoll([geheim, "privater_artikel_17a", "frei erfundener Beleg"]);
+});
+
+/* Review49 P06: execute the complete handler with the existing local transport double. */
+test("P06 non-object JSON roots fail before Auth/DB/provider in either activation mode", async () => {
+  try {
+    for (const enabled of ['true', 'false']) {
+      Deno.env.set('KD_AI_TASK_ENABLED', enabled);
+      for (const body of ['null', ' \n null \t', '[]', '[{}]', '1', 'true', '"text"']) {
+        aufrufe.length = 0;
+        const response = await handhabeAnfrage(new Request('https://test.supabase.co/functions/v1/ai-task', { method: 'POST', body }));
+        gleich(response.status, 400, `${enabled}/${body}`);
+        gleich((await response.json()).code, 'invalid-response');
+        gleich(aufrufe.length, 0, 'no boundary calls');
+      }
+      const normal = await ruf({ task: 'echo-struct', payload: null }, { ohneToken: true });
+      gleich(normal.status, enabled === 'true' ? 401 : 503, 'nullable object fields remain valid roots');
+    }
+  } finally { Deno.env.set('KD_AI_TASK_ENABLED', 'true'); }
+});
+test("P06 model diagnostic rejects post-header errors and closes exactly once at zero cost", async () => {
+  for (const scenario of ['body-abort', 'body-error', 'json', 'null', 'array', 'missing', 'bad-data', 'bad-item']) {
+    stelleZurueck();
+    z.konfig.timeout_ms = 25;
+    let stream: ReadableStream | null = null;
+    z.modelle = (init) => {
+      if (scenario === 'body-abort' || scenario === 'body-error') {
+        stream = new ReadableStream({ start(c) {
+          if (scenario === 'body-error') c.error(new Error('body failed'));
+          else init?.signal?.addEventListener('abort', () => c.error(new DOMException('aborted', 'AbortError')));
+        } });
+        return new Response(stream, { headers: { 'content-type': 'application/json' } });
+      }
+      const values: Record<string, string> = { json: '{', null: 'null', array: '[]', missing: '{}', 'bad-data': '{"data":{}}', 'bad-item': '{"data":[null]}' };
+      return new Response(values[scenario], { headers: { 'content-type': 'application/json' } });
+    };
+    const r = await ruf({ task: 'anbieter-modelle', vorgangId: neueVorgangId() });
+    gleich(r.daten.ok, false, scenario);
+    wahr(r.status >= 400, 'error status');
+    gleich(r.daten.grund, scenario === 'body-abort' ? 'anbieter-zeitgrenze' : 'anbieter-antwort-ungueltig');
+    const end = genauEinAbschluss();
+    gleich(end.p_status, 'fehler');
+    gleich(end.p_fehlerklasse, r.daten.grund);
+    gleich(end.p_kosten, 0); gleich(end.p_input_tokens, 0); gleich(end.p_output_tokens, 0);
+    gleich(startKoerper().p_reservierung, 0);
+    gleich(anbieterAufrufe().length, 0, 'no paid mock request');
+  }
+});
+test("P06 valid empty diagnostic catalog remains valid; P8 still requires a model ID", async () => {
+  z.modelle = () => antwort({ data: [] });
+  const r = await ruf({ task: 'anbieter-modelle', vorgangId: neueVorgangId() });
+  gleich(r.status, 200); gleich(r.daten.ok, true);
+  gleich((r.daten.modelle as unknown[]).length, 0);
+  gleich(genauEinAbschluss().p_status, 'fertig');
+  const smoke = await Deno.readTextFile(new URL('./tools/ai_smoke.mjs', import.meta.url));
+  const block = smoke.slice(smoke.indexOf('const p8 = await ruf('), smoke.indexOf('const laufWache =', smoke.indexOf('const p8 = await ruf(')));
+  const runP8 = new Function('ruf', 'JSON_KOPF', 'token', 'ANON', 'pruefe', 'stoppeLiveLauf', 'LiveSicherheitsStopp', `return (async () => { ${block} })()`);
+  let stopped = false;
+  await runP8(async () => ({ status: r.status, daten: r.daten }), {}, 'fixture', 'fixture', () => {}, () => { stopped = true; }, Error);
+  wahr(stopped, 'real P8 guard stops an empty catalog');
+});
+test("P06 typed TMDB series synthesis stops before preparation, sources and costs", async () => {
+  const r = await filmwissenRuf({ namespace: 'tmdb', kennung: 'tv:348' });
+  gleich(r.status, 200); gleich(daten(r).status, 'quellen_nicht_verfuegbar');
+  gleich(rpc('kd_filmwissen_synthese_vorbereiten').length, 0);
+  gleich(aufrufe.filter(a => /wikidata|loc.gov/.test(a.url)).length, 0);
+  gleich(starten().length, 0); gleich(anbieterAufrufe().length, 0);
+});
+test("P06 forecast rejects mismatched TMDB type before cache and retains typed series identity", async () => {
+  const p = ffPayload({ filmkennung: { namespace: 'tmdb', kennung: 'movie:348' } });
+  (p.film as Record<string, unknown>).typ = 'serie';
+  let r = await forecastRuf(p);
+  gleich(r.status, 400); gleich(r.daten.grund, 'forecast-filmkennung-typ');
+  gleich(rpc('kd_filmwissen_aktuell_lesen').length, 0); gleich(starten().length, 0);
+  stelleZurueck();
+  (p as Record<string, unknown>).filmkennung = { namespace: 'tmdb', kennung: 'tv:348' };
+  z.filmwissenAktuell = { format: 'filmwissen-cache-v1', status: 'belegt', werk: { typ: 'film' },
+    version: { id: '22222222-2222-4222-8222-222222222222' },
+    warum: { wert: 5, sicherheit: 'hoch', kurztext: 'Movie evidence.' },
+    fundstellen: [{ kernaussagen: ['Movie evidence.'] }] };
+  forecastMit(FF_ANTWORT());
+  r = await forecastRuf(p);
+  gleich(r.status, 200);
+  gleich(rpc('kd_filmwissen_aktuell_lesen')[0].koerper?.p_kennung, 'tv:348');
+  gleich((forecastAusNutzertext() as Record<string, unknown>).filmwissen, null);
+  gleich((r.daten.provenienz as Record<string, unknown>).warumHerkunft, 'persoenlich_geschaetzt');
+});
+test("P06 movie TMDB synthesis retains typed identity through source and adapter RPC", async () => {
+  z.filmwissenAdapterStart = { status: 'neu', auftragId: crypto.randomUUID() };
+  z.anbieter = () => anbieterErfolg(filmwissenAnbieterAntwort());
+  const r = await filmwissenRuf({ namespace: 'tmdb', kennung: 'movie:348' });
+  gleich(r.status, 200); gleich(daten(r).status, 'belegt');
+  gleich(rpc('kd_filmwissen_synthese_vorbereiten')[0].koerper?.p_kennung, 'movie:348');
+  const start = rpc('kd_filmwissen_adapter_vorbereiten')[0].koerper;
+  gleich((start?.p_kennungen as Record<string, unknown>).tmdb, 'movie:348');
+  gleich((start?.p_werk as Record<string, unknown>).typ, 'film');
+  gleich(anbieterAufrufe().length, 1, 'one local provider mock');
+  wahr(aufrufe.some(a => new URL(a.url).searchParams.get('srsearch') === 'haswbstatement:P4947=348'), 'numeric P4947 lookup');
 });

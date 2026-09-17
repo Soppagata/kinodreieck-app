@@ -806,10 +806,14 @@ export function leseFilmwissenSyntheseAnfrage(
     kennung = roh.toLowerCase();
   }
   if (
-    ["tmdb", "watchmode", "film_at"].includes(namespace) &&
+    ["watchmode", "film_at"].includes(namespace) &&
     /^[0-9]{1,18}$/.test(roh) && !/^0+$/.test(roh)
   ) {
     kennung = roh.replace(/^0+/, "");
+  }
+  if (namespace === "tmdb") {
+    const match = /^(movie|tv|collection):([0-9]{1,18})$/.exec(roh);
+    if (match && /[1-9]/.test(match[2])) kennung = match[1] + ":" + match[2].replace(/^0+/, "");
   }
   if (namespace === "wikidata" && /^Q[1-9][0-9]{0,17}$/i.test(roh)) {
     kennung = roh.toUpperCase();
@@ -2241,6 +2245,10 @@ export function leseForecastEingabe(
         "forecast-filmkennung-ungueltig",
       );
     }
+  }
+  if (filmkennung?.namespace === "tmdb" && istReinesObjekt(film)
+      && filmkennung.kennung.split(":")[0] !== (film.typ === "serie" ? "tv" : "movie")) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "forecast-filmkennung-typ");
   }
   const filmwissenRoh = eigenerWert(payload, "filmwissen");
   const flixpatrolFakten = leseForecastFlixpatrolFakten(
@@ -4038,6 +4046,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     });
   }
 
+  if (!istReinesObjekt(koerper)) {
+    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, { grund: "json-wurzel-kein-objekt", status: 400 });
+  }
   const task = typeof koerper.task === "string" ? koerper.task : "";
   /* Der Default-off-Schalter sperrt alle eigentlichen KI-Aufgaben weiterhin
      vor Auth, DB, Budget und Anbieter. Nur `health` bleibt lesbar: Dieser
@@ -4402,26 +4413,23 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     let antwort: Response | null = null;
     let daten: unknown = null;
     let diagZeitUeberschritten = false;
+    let diagLesefehler = false;
     try {
       antwort = await fetch(ANBIETER_MODELLE_URL, {
         headers: { "x-api-key": key, "anthropic-version": ANBIETER_VERSION },
         signal: diagUhr.signal,
       });
-      try {
-        daten = await antwort.json();
-      } catch (e) {
-        if (diagUhr.signal.aborted || (e as Error)?.name === "AbortError") throw e;
-        daten = null;
-      }
+      daten = await antwort.json();
     } catch (e) {
+      diagLesefehler = true;
       diagZeitUeberschritten = diagUhr.signal.aborted ||
         (e as Error)?.name === "AbortError";
     }
     finally { clearTimeout(diagStopp); }
-    if (!antwort) {
+    if (!antwort || diagZeitUeberschritten || (diagLesefehler && antwort.ok)) {
       const grund = diagZeitUeberschritten
         ? "anbieter-zeitgrenze"
-        : "anbieter-nicht-erreichbar";
+        : antwort ? "anbieter-antwort-ungueltig" : "anbieter-nicht-erreichbar";
       await diagBeende("fehler", grund);
       return fehlerAntwort(CODES.SERVER, origin, {
         grund,
@@ -4438,10 +4446,14 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         diagnose: typ,
       });
     }
-    const liste = ((daten as
-      | { data?: Array<{ id?: string; display_name?: string }> }
-      | null)?.data ?? [])
-      .map((m) => ({ id: m.id ?? null, name: m.display_name ?? null }));
+    const katalog = istReinesObjekt(daten) ? daten.data : null;
+    if (!Array.isArray(katalog) || katalog.some((m) => !istReinesObjekt(m)
+      || typeof m.id !== "string" || !m.id.trim()
+      || (m.display_name !== undefined && typeof m.display_name !== "string"))) {
+      await diagBeende("fehler", "anbieter-antwort-ungueltig");
+      return fehlerAntwort(CODES.SERVER, origin, { grund: "anbieter-antwort-ungueltig", vorgangId });
+    }
+    const liste = katalog.map((m) => ({ id: m.id, name: m.display_name ?? null }));
     await diagBeende("fertig");
     return jsonAntwort(
       { ok: true, task, vorgangId, modelle: liste },
@@ -4482,7 +4494,10 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       jahr: browserEingabe.film.jahr,
       typ: browserEingabe.film.typ,
       externeIds: browserEingabe.film.externeIds,
-      filmkennung: browserEingabe.filmkennung,
+      // Der FlixPatrol-Vertrag erhält die numerische ID mit separatem Werktyp.
+      filmkennung: browserEingabe.filmkennung?.namespace === "tmdb"
+        ? { namespace: "tmdb", kennung: browserEingabe.filmkennung.kennung.split(":")[1] }
+        : browserEingabe.filmkennung,
     });
     if (!flixpatrolIdentitaet.ok) {
       return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
@@ -4528,7 +4543,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         kurztext: warum?.kurztext,
         kernaussagen,
       };
-      if (cache?.status === "belegt") {
+      const werk = cache && istReinesObjekt(cache.werk) ? cache.werk : null;
+      if (cache?.format === "filmwissen-cache-v1" && cache.status === "belegt"
+          && werk?.typ === browserEingabe.film.typ) {
         try {
           gemeinsamesWissen = leseForecastEingabe({
             film: payload.film,
@@ -4593,6 +4610,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         status: 400,
         vorgangId,
       });
+    }
+    if (eingabe.namespace === "tmdb" && !eingabe.kennung.startsWith("movie:")) {
+      return jsonAntwort({ ok: true, task, vorgangId, data: { status: "quellen_nicht_verfuegbar" } }, 200, origin);
     }
     const { data: vorbereitungsRoh, error: vorbereitungsFehler } = await admin
       .rpc(

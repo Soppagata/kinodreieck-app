@@ -106,7 +106,8 @@ function sichereKontaktangabe(kontakt: string): string {
 function pruefeKennung(eingabe: StarkeFilmkennung): void {
   if (eingabe.namespace === "wikidata" && QID.test(eingabe.kennung)) return;
   if (eingabe.namespace === "imdb" && IMDB.test(eingabe.kennung)) return;
-  if (eingabe.namespace === "tmdb" && TMDB.test(eingabe.kennung)) return;
+  if (eingabe.namespace === "tmdb" && /^movie:/.test(eingabe.kennung)
+      && TMDB.test(eingabe.kennung.slice(6))) return;
   throw new QuellenFehler("kennung-ungueltig");
 }
 
@@ -130,23 +131,28 @@ async function liesBegrenzt(
   const leser = antwort.body.getReader();
   const teile: Uint8Array[] = [];
   let gesamt = 0;
-  while (true) {
-    const { done, value } = await leser.read();
-    if (done) break;
-    gesamt += value.byteLength;
-    if (gesamt > maxBytes) {
-      await leser.cancel();
-      throw new QuellenFehler("antwort-zu-gross");
+  try {
+    while (true) {
+      const { done, value } = await leser.read();
+      if (done) break;
+      gesamt += value.byteLength;
+      if (gesamt > maxBytes) {
+        throw new QuellenFehler("antwort-zu-gross");
+      }
+      teile.push(value);
     }
-    teile.push(value);
+    const ausgabe = new Uint8Array(gesamt);
+    let offset = 0;
+    for (const teil of teile) {
+      ausgabe.set(teil, offset);
+      offset += teil.byteLength;
+    }
+    return ausgabe;
+  } finally {
+    // Auch bei Übergröße oder Lesefehlern abbrechen und den Reader freigeben.
+    void leser.cancel().catch(() => {});
+    leser.releaseLock();
   }
-  const ausgabe = new Uint8Array(gesamt);
-  let offset = 0;
-  for (const teil of teile) {
-    ausgabe.set(teil, offset);
-    offset += teil.byteLength;
-  }
-  return ausgabe;
 }
 
 async function holeJson(
@@ -173,7 +179,7 @@ async function holeJson(
     () => controller.abort(),
     optionen.timeoutMs ?? 8_000,
   );
-  let antwort: Response;
+  let antwort: Response | undefined;
   try {
     antwort = await (optionen.fetcher ?? fetch)(url, {
       method: "GET",
@@ -181,54 +187,56 @@ async function holeJson(
       redirect: "manual",
       signal: controller.signal,
     });
+    if (antwort.status >= 300 && antwort.status < 400) {
+      throw new QuellenFehler("adapter-redirect");
+    }
+    if (antwort.status === 429 || antwort.status === 503) {
+      throw new QuellenFehler(
+        "adapter-rate-limit",
+        antwort.headers.get("retry-after"),
+      );
+    }
+    if (!antwort.ok) throw new QuellenFehler("adapter-http-" + antwort.status);
+    if (antwort.url && antwort.url !== url) {
+      throw new QuellenFehler("adapter-antwort-url");
+    }
+    const contentType = (antwort.headers.get("content-type") ?? "").split(";")[0]
+      .trim().toLowerCase();
+    if (
+      !(contentType === "application/json" ||
+        /^application\/[^/]+\+json$/.test(contentType))
+    ) {
+      throw new QuellenFehler("adapter-content-type");
+    }
+    const bytes = await liesBegrenzt(antwort, maxBytes);
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new QuellenFehler("adapter-utf8");
+    }
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new QuellenFehler("adapter-json");
+    }
+    return {
+      json,
+      bytes,
+      etag: antwort.headers.get("etag"),
+      status: antwort.status,
+    };
   } catch (error) {
-    if ((error as { name?: string })?.name === "AbortError") {
+    if (controller.signal.aborted || (error as { name?: string })?.name === "AbortError") {
       throw new QuellenFehler("adapter-timeout");
     }
+    if (error instanceof QuellenFehler) throw error;
     throw new QuellenFehler("adapter-netzfehler");
   } finally {
     clearTimeout(timer);
+    if (antwort?.body && !antwort.body.locked) void antwort.body.cancel().catch(() => {});
   }
-  if (antwort.status >= 300 && antwort.status < 400) {
-    throw new QuellenFehler("adapter-redirect");
-  }
-  if (antwort.status === 429 || antwort.status === 503) {
-    throw new QuellenFehler(
-      "adapter-rate-limit",
-      antwort.headers.get("retry-after"),
-    );
-  }
-  if (!antwort.ok) throw new QuellenFehler("adapter-http-" + antwort.status);
-  if (antwort.url && antwort.url !== url) {
-    throw new QuellenFehler("adapter-antwort-url");
-  }
-  const contentType = (antwort.headers.get("content-type") ?? "").split(";")[0]
-    .trim().toLowerCase();
-  if (
-    !(contentType === "application/json" ||
-      /^application\/[^/]+\+json$/.test(contentType))
-  ) {
-    throw new QuellenFehler("adapter-content-type");
-  }
-  const bytes = await liesBegrenzt(antwort, maxBytes);
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    throw new QuellenFehler("adapter-utf8");
-  }
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    throw new QuellenFehler("adapter-json");
-  }
-  return {
-    json,
-    bytes,
-    etag: antwort.headers.get("etag"),
-    status: antwort.status,
-  };
 }
 
 function objekt(wert: unknown): Record<string, unknown> | null {
@@ -397,6 +405,8 @@ export async function holeWikidataFundstelle(
   optionen: WikimediaOptionen,
 ): Promise<WikidataErgebnis> {
   pruefeKennung(eingabe);
+  // Nur geprüfte Film-TMDB-Kennungen dürfen den Film-only-P4947-Weg nutzen.
+  const quellenKennung = eingabe.namespace === "tmdb" ? eingabe.kennung.slice(6) : eingabe.kennung;
   const header = wikimediaHeader(optionen);
   const rohteile: Uint8Array[] = [];
   let requestedQid: string | null = eingabe.namespace === "wikidata" ? eingabe.kennung : null;
@@ -406,7 +416,7 @@ export async function holeWikidataFundstelle(
       ...basisParameter(),
       action: "query",
       list: "search",
-      srsearch: `haswbstatement:${property}=${eingabe.kennung}`,
+      srsearch: `haswbstatement:${property}=${quellenKennung}`,
       srnamespace: "0",
       srlimit: "2",
       srinfo: "totalhits",
@@ -472,7 +482,7 @@ export async function holeWikidataFundstelle(
   }
   if (
     eingabe.namespace === "tmdb" &&
-    eindeutigeStringKennung(entity, "P4947") !== eingabe.kennung
+    eindeutigeStringKennung(entity, "P4947") !== quellenKennung
   ) {
     throw new QuellenFehler("wikidata-tmdb-widerspruch");
   }
