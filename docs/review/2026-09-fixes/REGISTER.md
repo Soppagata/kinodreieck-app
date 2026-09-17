@@ -29,14 +29,14 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 
 | Paket | Welle / Modus | Ergebnis | Abhaengigkeit | Owner / Worktree | Write-Ownership | Status | Basis / Commit |
 |---|---|---|---|---|---|---|---|
-| P01 | W1 / PARALLEL_WAVE | Sitzungen | keine | Baumeister-P01 / `/private/tmp/kd-review49-p01` | src/lib/authDriver.js; authdriver_test.mjs; neue review49_p01_* Tests | RUNNING | 4a5cc52 / — |
+| P01 | W1 / PARALLEL_WAVE | Sitzungen | keine | Baumeister-P01 / `/private/tmp/kd-review49-p01` | src/lib/authDriver.js inkl. lokalem atomarem Commit-Mutex ohne Web Locks; authdriver_test.mjs; neue review49_p01_* Tests | RUNNING | 4a5cc52 / — |
 | P02 | W1 / PARALLEL_WAVE | Kontodaten | keine | Baumeister-P02 / `/private/tmp/kd-review49-p02` | src/lib/accountDriver.js; src/services/uebernahme.js; src/services/storage.js; Konto-/Adoptiontests; neue review49_p02_* Tests | RUNNING | 4a5cc52 / — |
 | P03 | W1 / PARALLEL_WAVE | Pruefwerkzeuge | keine | Baumeister-P03 / `/private/tmp/kd-review49-p03` | blogprofilanalyse_test.mjs; local_data_safety_test.mjs; tests/private-v1/private-v1.spec.mjs; tools/rls_test_personal.mjs; tools/radar_freitext_live_contract.mjs; tools/function-release-info.mjs; zugehoerige Werkzeugtests; neue review49_p03_* Tests | RUNNING | 4a5cc52 / — |
 | P04 | W2 / PARALLEL_WAVE | Persoenliche Eingaben | W1/P02,P03 | Baumeister-P04 / bei DISPATCH | App.jsx; persoenliche Eingabekomponenten/-controller/-lib und deren Tests (bei DISPATCH praezisiert) | PLANNED | — |
-| P05 | W2 / PARALLEL_WAVE | Radar und Faktenkontext | W1; E05-002 vor E14-001 intern | Baumeister-P05 / bei DISPATCH | Radarclient/-contract/-runner, Faktencontext, Radarpreview, eigene Migrationen und Tests (bei DISPATCH praezisiert) | PLANNED | — |
+| P05 | W2 / PARALLEL_WAVE | Radar und Faktenkontext | W1; E05-002 vor E14-001 intern | Baumeister-P05 / bei DISPATCH | Radarclient/-contract/-runner, Faktencontext, Radarpreview; src/styles/design-secondary.css; eigene Migrationen und Tests (bei DISPATCH praezisiert) | PLANNED | — |
 | P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | Baumeister-P06 / bei DISPATCH | ai-task/index.ts; filmwissen-task; Filmwissenclient; eigene Migrationen und Tests | PLANNED | — |
 | P07 | W3 / PARALLEL_WAVE | Streaming und Katalog | P04/App | Baumeister-P07 / bei DISPATCH | App.jsx; Streamingcontroller/-libs; StreamingTab/KinoTab; TitelKartenAktionen; eigene Migrationen und Tests | PLANNED | — |
-| P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W2 | Baumeister-P08 / bei DISPATCH | entdeckenUi/Projection; webDiscoveryFeed; eigene Entdecken-Tests | PLANNED | — |
+| P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W2 | Baumeister-P08 / bei DISPATCH | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; eigene Format8/9-Migrationen und Entdecken-Tests | PLANNED | — |
 | P09 | W4 / PARALLEL_WAVE | Wochenplan und Termine | P07/App | Baumeister-P09 / bei DISPATCH | App.jsx; Wochenplan.jsx; StartTab.jsx; wochenplan/programm; eigene Termin-/Browsertests | PLANNED | — |
 | P10 | W5 / SOLO | Pins und Fokusnavigation | P09/App | Baumeister-P10 / bei DISPATCH | App.jsx; MediathekTab/KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
 | P11 | W4 / PARALLEL_WAVE | Finder-Zeitfilter | W3; programm read-only | Baumeister-P11 / bei DISPATCH | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | PLANNED | — |
@@ -103,5 +103,7 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 ## Integration und Abschluss
 
 Integration sequenziell je Welle in Paketnummernfolge; jede Lieferung wird auf Basis, Scope, tatsaechliche Dateien und fokussierte Nachweise geprueft. Abschlusspruefer erst nach allen Fixes auf exaktem Commit; pro Issue ERLEDIGT/OFFEN/NICHT BELEGT, nur betroffene Nachpruefungen nach Restkorrekturen. Anschliessend Master: relevante Integration, vollstaendige Mock-Suite, Build, Abschlussdiff und 49/49-Zuordnung auf finalem Kandidaten.
+
+P01 RESTAUFTRAG: treiberinterne IndexedDB-Koordination als begrenzter lokaler Commit-Mutex autorisiert; keine zusaetzliche Credentialablage, alle Credential-Commits koordinieren, Ausfallgrenzen und Mehrtab-Fall belegen. Keine Scope-Kollision.
 
 Finaler Kandidat: —. Lokaler Abschlusslauf: OFFEN. Push / CI / Deployment / praktische Geraeteabnahme: NICHT BEAUFTRAGT bzw. NICHT BELEGT.
