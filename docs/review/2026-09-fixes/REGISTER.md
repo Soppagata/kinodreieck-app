@@ -20,7 +20,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 | M2 | Persoenliche Eintraege und Profilangaben bleiben korrekt erhalten | GEBAUT | P04 | 2b850aa; P04 |
 | M3 | Katalog, Streaming, Entdecken und Radar zeigen identitaetstreue, frische Inhalte | GEBAUT | P05 P07 P08 | 9b3da55 + cb63219 + 338948d; P05/P07/P08 |
 | M4 | Filmwissen und KI behandeln Werkart und Fehler verlaesslich | GEBAUT | P06 | 7def1b0; P06 |
-| M5 | Pins, Terminplanung, Suche und Navigation erreichen das richtige Ziel | OFFEN | P09 P10a P10b P11 | — |
+| M5 | Pins, Terminplanung, Suche und Navigation erreichen das richtige Ziel | GEBAUT | P09 P10a P10b P11 | 89e8918 + 2217e5a + 79dfe15 + 8be8375; Paketbelege |
 | M6 | Pruefwerkzeuge und lokale Betriebsvertraege liefern belastbare Nachweise | GEBAUT | P03 P12 | 84cde78 + dfabad9; P03/P12 |
 
 ## Pakete und Parallelmatrix
@@ -39,7 +39,7 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W1; disjunkt zu W2 | p08_entdecken / `/private/tmp/kd-review49-p08` | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; Migration 20260917130000 und Entdecken-Tests | INTEGRATED | a2c6b60 / 338948d |
 | P09 | W3b / PARALLEL_WAVE | Wochenplan und Termine | App-Klickvertrag eingefroren; kein Output von P07 | p09_planning / `/private/tmp/kd-review49-p09` | Wochenplan.jsx; StartTab.jsx; enge Wochenplan-Editorregeln in index.css/design-primary.css; eigene Termin-/Browsertests | INTEGRATED | a2c6b60 / 89e8918 |
 | P10a | W3c / PARALLEL_WAVE | Sichtbares Mediathek-Sprungziel | App-Propvertrag read-only | p10a_focus / `/private/tmp/kd-review49-p10a` | MediathekTab.jsx; eigene Fokus-/Navigationstests | INTEGRATED | a2c6b60 / 2217e5a |
-| P10b | W4 / SOLO | Pins und Kinonavigation | P07/App und P09/StartTab | p10b_navigation / `/private/tmp/kd-review49-p10b` | App.jsx; KinoTab/StartTab; entdeckenPins und eng begrenzte Pinhelper; eigene Navigations-/Browsertests | RUNNING | 45ada41 / — |
+| P10b | W4 / SOLO | Pins und Kinonavigation | P07/App und P09/StartTab | p10b_navigation / `/private/tmp/kd-review49-p10b` | App.jsx; KinoTab/StartTab; entdeckenPins und eng begrenzte Pinhelper; eigene Navigations-/Browsertests | INTEGRATED | 45ada41 / 79dfe15 |
 | P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W1; programm read-only | p11_finder / `/private/tmp/kd-review49-p11` | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | INTEGRATED | a2c6b60 / 8be8375 |
 | P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | INTEGRATED | 4a5cc52 / dfabad9 |
 
@@ -76,10 +76,10 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 23 | [E12-003](../2026-09-vollreview/tickets/E12/KD-REV-E12-003.md) | P2 | P09 | Baumeister-P09 | GEBAUT | 89e8918 | [P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise |
 | 24 | [E12-002](../2026-09-vollreview/tickets/E12/KD-REV-E12-002.md) | P2 | P07 | Baumeister-P07 | GEBAUT | cb63219 | [P07](evidence/P07.md): fokussierte Produkt-/Integrationsnachweise |
 | 25 | [E10-003](../2026-09-vollreview/tickets/E10/KD-REV-E10-003.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 | [P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle |
-| 26 | [E01-001](../2026-09-vollreview/tickets/E01/KD-REV-E01-001.md) | P2 | P10b | Baumeister-P10b | OFFEN | — | — |
+| 26 | [E01-001](../2026-09-vollreview/tickets/E01/KD-REV-E01-001.md) | P2 | P10b | Baumeister-P10b | GEBAUT | 79dfe15 | [P10b](evidence/P10b.md): 48 reale Browserpfade plus Nachbarn |
 | 27 | [E04-003](../2026-09-vollreview/tickets/E04/KD-REV-E04-003.md) | P2 | P10a | p10a_focus | GEBAUT | 2217e5a | [P10a](evidence/P10a.md): 16 echte Komponentenpfade plus Nachbarn |
 | 28 | [E11-004](../2026-09-vollreview/tickets/E11/KD-REV-E11-004.md) | P2 | P09 | Baumeister-P09 | GEBAUT | 89e8918 | [P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise |
-| 29 | [E11-002](../2026-09-vollreview/tickets/E11/KD-REV-E11-002.md) | P2 | P10b | Baumeister-P10b | OFFEN | — | — |
+| 29 | [E11-002](../2026-09-vollreview/tickets/E11/KD-REV-E11-002.md) | P2 | P10b | Baumeister-P10b | GEBAUT | 79dfe15 | [P10b](evidence/P10b.md): 48 reale Browserpfade plus Nachbarn |
 | 30 | [E09-002](../2026-09-vollreview/tickets/E09/KD-REV-E09-002.md) | P2 | P11 | Baumeister-P11 | GEBAUT | 8be8375 | [P11](evidence/P11.md): fokussierte Produkt-/Integrationsnachweise |
 | 31 | [E09-003](../2026-09-vollreview/tickets/E09/KD-REV-E09-003.md) | P2 | P11 | Baumeister-P11 | GEBAUT | 8be8375 | [P11](evidence/P11.md): fokussierte Produkt-/Integrationsnachweise |
 | 32 | [E01-002](../2026-09-vollreview/tickets/E01/KD-REV-E01-002.md) | P2 | P09 | Baumeister-P09 | GEBAUT | 89e8918 | [P09](evidence/P09.md): fokussierte Produkt-/Integrationsnachweise |
@@ -142,3 +142,7 @@ INTEGRATED W3: P07 cb63219 → P08 338948d → P11 8be8375 → P09 89e8918, sequ
 DISPATCH P10b: 45ada414a822e72f3c68e79699e07104f7edb518, eigener Worktree/Branch. Ende-zu-Ende-Paket mit Start-Pinauflösung und Kino-Fokusvertrag; P10a besitzt weiterhin ausschliesslich MediathekTab. Keine gemeinsamen Schreibflaechen, kein optionaler Bauchat. P10b benoetigt den bereits integrierten P07/P09-Stand, nicht P10a.
 
 INTEGRATED P10a 2217e5a: Eine Produktdatei, gemounteter Solltest und Beleg; unveraenderter App-Vertrag, kein Konflikt mit P10b. Diff und 16 Fokus-/Sichtbarkeitsfaelle geprueft. 47/49 GEBAUT; nur P10b laeuft noch.
+
+INTEGRATED P10b 79dfe15: Zwei autorisierte Produktdateien plus Browserharness/-beleg, konfliktfrei. Beide Tickets mit 48 echten Browserpfaden und Nachbarn belegt. Alle 49 Tickets GEBAUT, alle sechs Nutzerergebnisse GEBAUT. Die Endabnahme ist noch offen.
+
+Kleine Master-Integrationsnaht: package.json registriert die gelieferten Logik-/SQL-Regressionen als test:review49 und als Teil von npm test; die fuenf neuen Browserharnesses plus der korrigierte private-v1-Teil laufen ueber test:review49:browser. Keine Abnahmekriterien oder Testassertionen geaendert. Der Integrationsworktree besitzt eigene unversionierte Cacheverzeichnisse unter node_modules; bestehende Dependencies bleiben read-only verlinkt. Abschlusspruefer folgt auf dem Commit dieser Naht.
