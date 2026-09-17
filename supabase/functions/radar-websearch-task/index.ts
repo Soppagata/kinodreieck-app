@@ -11,6 +11,7 @@ import {
 import { runRadarWebsearchCheck } from "./runner.js";
 import {
   authorizeScheduledRadarRequest,
+  projectRadarWireResult,
   resolveSupabaseAdminKey,
 } from "./contract.js";
 import {
@@ -725,6 +726,9 @@ export function createRadarWebsearchHandler({
         websearchRequests,
       }, 200, origin);
     }
+    result = projectRadarWireResult(result, {
+      supportsPersistence: req.headers.get("x-client-info") === "kd-radar-result-v2",
+    });
     const status = result.status;
     const httpStatus = status === "forbidden" ? 403 : 200;
     const telemetry = typeof productAdapter.telemetry === "function"

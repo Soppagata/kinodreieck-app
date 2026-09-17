@@ -536,6 +536,44 @@ export function createTextRadarReleaseId(candidate) {
   return `release:v2:${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
 }
 
+// Public wire v1 identifies a work start, while the internal v2 key includes
+// platform. Event/version UUIDs distinguish platform findings in both clients.
+export function createTextRadarWireV1Id(candidate) {
+  const title = candidate.title.trim().replace(/ +/g, " ").replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const basis = [title, candidate.date, candidate.eventType, candidate.targetType, candidate.seasonNumber ?? "-"].join("|");
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  const bytes = new TextEncoder().encode(basis);
+  for (let index = 0; index < bytes.length; index += 1) {
+    first = Math.imul(first ^ bytes[index], 0x01000193) >>> 0;
+    second = Math.imul(second ^ (bytes[index] + index), 0x85ebca6b) >>> 0;
+  }
+  return `release:v1:${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
+}
+
+export function projectRadarWireResult(result, { supportsPersistence = false } = {}) {
+  const project = (entry) => /^release:v[12]:[a-f0-9]{16}$/.test(entry.targetId)
+    ? { ...entry, targetId: createTextRadarWireV1Id(entry) } : entry;
+  const projected = {
+    ...result,
+    ...(result.feed ? { feed: { ...result.feed, events: result.feed.events.map(project) } } : {}),
+    ...(result.textResult ? { textResult: {
+      ...result.textResult, candidates: result.textResult.candidates.map(project),
+    } } : {}),
+  };
+  if (projected.persistence && !supportsPersistence) {
+    // Old clients cannot validate a storage partial or display its warning.
+    // Report the storage failure truthfully, preserving confirmed write count,
+    // persisted feed and the unmodified provider receipt for later reconciliation.
+    projected.status = "storage_error";
+    delete projected.persistence;
+    delete projected.responseMode;
+    delete projected.displayText;
+    delete projected.warnings;
+  }
+  return projected;
+}
+
 function validateTextCandidateShape(candidate, request, errors) {
   const required = ["title", "eventType", "eventDate", "evidence"];
   const optional = ["targetId", "targetType", "year", "region", "platform", "seasonNumber", "relationEvidence", "category"];

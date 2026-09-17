@@ -222,6 +222,7 @@ export function createRadarWebsearchService({
           Authorization: `Bearer ${token}`,
           apikey: publishableKey,
           "Content-Type": "application/json",
+          "x-client-info": "kd-radar-result-v2",
         },
         body: JSON.stringify({ targetId: normalizedTargetId, ...(hasTargetText ? { targetText } : {}), ...(initial ? { initial: true } : {}) }),
         signal: controller.signal,
