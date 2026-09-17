@@ -221,7 +221,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   }, [master, datenKontextKey, loeschDialog, resetteLokaleMediathekUi]);
 
   /* Sprung aus dem Blog: Must-Watch-Refs (mw_…) öffnen die Must-Watch-Ansicht,
-     Master-Refs die Bestand-Ansicht (dort ist jeder Eintrag sicher sichtbar). */
+     Master-Refs öffnen den passenden Typ ohne lokale Sichtfilter. */
   useEffect(() => {
     if (!fokusFilmId) return;
     beendeAuswahl();
@@ -237,13 +237,15 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     if (!master) return;
     setAnsicht("bestand");
     const f = master.find((x) => x.id === fokusFilmId);
-    if (f) setTypTab(tabVonTyp(f.typ));
-    const t = setTimeout(() => {
-      const el = document.getElementById("film-" + fokusFilmId);
-      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
-      if (onFokusVerbraucht) onFokusVerbraucht();
-    }, 150);
-    return () => clearTimeout(t);
+    if (!f) return; // Der sichtbare Hinweis unten hält das fehlende Ziel nachvollziehbar.
+    setTypTab(tabVonTyp(f.typ));
+    setExpandedId("b" + f.id);
+    setSuche("");
+    setGenreF(null);
+    setKatF(null);
+    setBesitz("alle");
+    setBuchstabe(null);
+    setDekade(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fokusFilmId, master]);
 
@@ -394,6 +396,24 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     return list.sort(aktiv);
   }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, genreF, katF, suche, sortier, buchstabe, dekade]);
 
+  /* Erst die fertige Sichtprojektion quittiert einen Master-Sprung. Bewahrte
+     Draftkarten können im DOM stehen und trotzdem hidden sein. */
+  useEffect(() => {
+    if (!fokusFilmId || istMustwatchId(fokusFilmId) || ansicht !== "bestand"
+        || auswahlmodus || expandedId !== "b" + fokusFilmId
+        || !mediathek.some((f) => f.id === fokusFilmId)) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById("film-" + fokusFilmId);
+      if (!el || el.closest('[hidden], [aria-hidden="true"], [inert]')
+          || typeof el.scrollIntoView !== "function") return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      onFokusVerbraucht?.();
+    }, 150);
+    return () => clearTimeout(t);
+  }, [fokusFilmId, ansicht, auswahlmodus, expandedId, mediathek, onFokusVerbraucht]);
+
+  const fokusZielFehlt = fokusFilmId && !istMustwatchId(fokusFilmId) && master
+    && !master.some((f) => f.id === fokusFilmId);
   const sichtbareObjekte = useMemo(() => new Set(mediathek), [mediathek]);
   const bewahrteKarte = useMemo(() => {
     if (!bewahrteExpandedId) return null;
@@ -663,6 +683,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           { id: "besitz", label: "Im Besitz", badge: besitzAnzahl },
           { id: "mustwatch", label: "Must-Watch", badge: mustwatchBadgeAnzahl(mustwatch, mustwatchGeladen) },
         ]} />
+
+      {fokusZielFehlt && <p role="status">
+        Der verknüpfte Eintrag ist in der aktuellen Mediathek nicht vorhanden.
+      </p>}
 
       {/* ===== Must-Watch: eigener Datentopf, eigene Liste ===== */}
       {ansicht === "mustwatch" && (
