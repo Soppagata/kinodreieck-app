@@ -7,7 +7,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 - Primaercheckout unveraendert: main `98b5eca18d15f0a4ec8bed52b1d952c7cc8ec383`; vorhandene Aenderungen bleiben dort.
 - Frisch mit `git ls-remote` bestaetigt: origin/main und origin/staging = `14804ce389d69114feed27b92fb11ac78423cc0e`. Derselbe Commit liegt auf `codex/automatic-ai-status-fix-20260916`.
 - Integrationsworktree: `/private/tmp/kd-review49-integration-20260917`; Zielbranch `codex/review49-integration-20260917`.
-- Vor Produktbau sauberer Nicht-main-Basiscommit: der initiale Register-/Ticket-Snapshotcommit auf diesem Branch (SHA folgt bei DISPATCH).
+- Vor Produktbau sauberer Nicht-main-Basiscommit: `4a5cc52` (Register-/Ticket-Snapshot; Produktcode identisch mit frisch bestaetigtem 14804ce).
 - Master Astra/xhigh; Baumeister Astra/high; Abschlusspruefer laut konkretem Abschlussauftrag Astra/xhigh. Maximal drei Baumeister; kein Nebenchat in Parallelwellen.
 - Lokal: Implementierung, Mock-/Browser-/isolierte SQL-Tests, Commits, Integration. Kein Push, Deployment, Live-Anbieteraufruf oder bestehender Serverdatenwrite.
 - Modus: PARALLEL_WAVE, W1–W4, danach gekoppeltes SOLO-Paket P10. Produktdateien waehrend Paketbau nur Baumeister.
@@ -29,9 +29,9 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 
 | Paket | Welle / Modus | Ergebnis | Abhaengigkeit | Owner / Worktree | Write-Ownership | Status | Basis / Commit |
 |---|---|---|---|---|---|---|---|
-| P01 | W1 / PARALLEL_WAVE | Sitzungen | keine | Baumeister-P01 / bei DISPATCH | src/lib/authDriver.js; authdriver_test.mjs; neue review49_p01_* Tests | PLANNED | — |
-| P02 | W1 / PARALLEL_WAVE | Kontodaten | keine | Baumeister-P02 / bei DISPATCH | src/lib/accountDriver.js; src/services/uebernahme.js; src/services/storage.js; Konto-/Adoptiontests; neue review49_p02_* Tests | PLANNED | — |
-| P03 | W1 / PARALLEL_WAVE | Pruefwerkzeuge | keine | Baumeister-P03 / bei DISPATCH | blogprofilanalyse_test.mjs; local_data_safety_test.mjs; tests/private-v1/private-v1.spec.mjs; tools/rls_test_personal.mjs; tools/radar_freitext_live_contract.mjs; tools/function-release-info.mjs; zugehoerige Werkzeugtests; neue review49_p03_* Tests | PLANNED | — |
+| P01 | W1 / PARALLEL_WAVE | Sitzungen | keine | Baumeister-P01 / `/private/tmp/kd-review49-p01` | src/lib/authDriver.js; authdriver_test.mjs; neue review49_p01_* Tests | RUNNING | 4a5cc52 / — |
+| P02 | W1 / PARALLEL_WAVE | Kontodaten | keine | Baumeister-P02 / `/private/tmp/kd-review49-p02` | src/lib/accountDriver.js; src/services/uebernahme.js; src/services/storage.js; Konto-/Adoptiontests; neue review49_p02_* Tests | RUNNING | 4a5cc52 / — |
+| P03 | W1 / PARALLEL_WAVE | Pruefwerkzeuge | keine | Baumeister-P03 / `/private/tmp/kd-review49-p03` | blogprofilanalyse_test.mjs; local_data_safety_test.mjs; tests/private-v1/private-v1.spec.mjs; tools/rls_test_personal.mjs; tools/radar_freitext_live_contract.mjs; tools/function-release-info.mjs; zugehoerige Werkzeugtests; neue review49_p03_* Tests | RUNNING | 4a5cc52 / — |
 | P04 | W2 / PARALLEL_WAVE | Persoenliche Eingaben | W1/P02,P03 | Baumeister-P04 / bei DISPATCH | App.jsx; persoenliche Eingabekomponenten/-controller/-lib und deren Tests (bei DISPATCH praezisiert) | PLANNED | — |
 | P05 | W2 / PARALLEL_WAVE | Radar und Faktenkontext | W1; E05-002 vor E14-001 intern | Baumeister-P05 / bei DISPATCH | Radarclient/-contract/-runner, Faktencontext, Radarpreview, eigene Migrationen und Tests (bei DISPATCH praezisiert) | PLANNED | — |
 | P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | Baumeister-P06 / bei DISPATCH | ai-task/index.ts; filmwissen-task; Filmwissenclient; eigene Migrationen und Tests | PLANNED | — |
