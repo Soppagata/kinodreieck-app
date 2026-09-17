@@ -10,7 +10,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 - Vor Produktbau sauberer Nicht-main-Basiscommit: `4a5cc52` (Register-/Ticket-Snapshot; Produktcode identisch mit frisch bestaetigtem 14804ce).
 - Master Astra/xhigh; Baumeister Astra/high; Abschlusspruefer laut konkretem Abschlussauftrag Astra/xhigh. Maximal drei Baumeister; kein Nebenchat in Parallelwellen.
 - Lokal: Implementierung, Mock-/Browser-/isolierte SQL-Tests, Commits, Integration. Kein Push, Deployment, Live-Anbieteraufruf oder bestehender Serverdatenwrite.
-- Modus: PARALLEL_WAVE, W1–W4, danach gekoppeltes SOLO-Paket P10. Produktdateien waehrend Paketbau nur Baumeister.
+- Modus: PARALLEL_WAVE, W1–W3 mit freiem Nachrueckplatz P09, danach gekoppeltes SOLO-Paket P10. Produktdateien waehrend Paketbau nur Baumeister.
 
 ## Nutzerergebnisse
 
@@ -37,8 +37,8 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | p06_filmwissen / `/private/tmp/kd-review49-p06` | ai-task/index.ts; filmwissen-task/*; lib/{filmwissen,filmwissenTransport,prognoseAuftrag}; services/{filmwissen,vorbewertung}; useIntelligenceController; components/{FilmwissenBereich,PrognoseBereich}; Migration 20260917110000; filmwissen*/ai_task/prognose_auftrag/vorbewertung Tests + review49_p06_* | INTEGRATED | 84cde78 / 7def1b0 |
 | P07 | W3 / PARALLEL_WAVE | Streaming und Katalog | P04/App | p07_streaming / `/private/tmp/kd-review49-p07` | App.jsx; Streamingcontroller/-libs; StreamingTab/KinoTab; TitelKartenAktionen; eigene Migrationen und Tests | RUNNING | a2c6b60 / — |
 | P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W1; disjunkt zu W2 | p08_entdecken / `/private/tmp/kd-review49-p08` | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; Migration 20260917130000 und Entdecken-Tests | RUNNING | a2c6b60 / — |
-| P09 | W4 / PARALLEL_WAVE | Wochenplan und Termine | P07/App | Baumeister-P09 / bei DISPATCH | App.jsx; Wochenplan.jsx; StartTab.jsx; wochenplan/programm; eigene Termin-/Browsertests | PLANNED | — |
-| P10 | W5 / SOLO | Pins und Fokusnavigation | P09/App | Baumeister-P10 / bei DISPATCH | App.jsx; MediathekTab/KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
+| P09 | W3b / PARALLEL_WAVE | Wochenplan und Termine | App-Klickvertrag eingefroren; kein Output von P07 | p09_planning / `/private/tmp/kd-review49-p09` | Wochenplan.jsx; StartTab.jsx; enge Wochenplan-Editorregeln in index.css/design-primary.css; eigene Termin-/Browsertests | RUNNING | a2c6b60 / — |
+| P10 | W4 / SOLO | Pins und Fokusnavigation | P07/App und P09/StartTab | Baumeister-P10 / bei DISPATCH | App.jsx; MediathekTab/KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
 | P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W1; programm read-only | p11_finder / `/private/tmp/kd-review49-p11` | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | DELIVERED | a2c6b60 / 9ff4fc1 |
 | P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | INTEGRATED | 4a5cc52 / dfabad9 |
 
@@ -127,3 +127,5 @@ INTEGRATED P05 9b3da55 und P06 7def1b0: Vollstaendige Produktdiffs, Migrationen,
 DISPATCH P08 und P11: Beide auf exakt a2c6b60, mit P07 maximal drei aktive Baumeister. P05/P06 hatten ihre Arbeit zuvor abgeschlossen. Keine Schreibkollision und keine Output-Abhaengigkeit; W2-Lieferungen sind nun vor W3 integriert.
 
 P11 DELIVERED 9ff4fc14f94f4e0f27584767c0613e61d382010b: Eine Produktdatei, echter Finder-/Projektions-/DOM-Solltest und Paketbeleg; Scope und Diff geprueft. 15 neue Sollgruppen und 239 bestehende Finderchecks gruen. Integration folgt gemaess W3-Queue auf P07/P08.
+
+DISPATCH P09 vorgezogen auf exakt a2c6b60 im frei gewordenen P11-Slot: Die gezielte Paarpruefung zeigt, dass E11-004 am Wochenplan-Klick mit vorhandener quelle.film_ref und unveraendertem App-Vertrag behoben werden kann. E01-002 kann den vorhandenen kinoPinTermin-Parser lesen. Damit entfallen App-/Parser-Schreibflaechen und die angenommene Output-Abhaengigkeit zu P07. Neue Ownership: Wochenplan/StartTab/enge Editor-CSS-Regeln exklusiv P09; P07 wurde ueber den eingefrorenen App-Klickvertrag informiert. P07/P08/P09 sind disjunkt, maximal drei aktiv. Integrationsfolge W3: P07 → P08 → P11 → P09; P10 danach SOLO.
