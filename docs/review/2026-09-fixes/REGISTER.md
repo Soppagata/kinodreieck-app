@@ -19,7 +19,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 | M1 | Sichere Sitzung und kontogetrennte, stabile Daten | GEBAUT | P01 P02 | e45e2ba + 2b9b92a; P01/P02 |
 | M2 | Persoenliche Eintraege und Profilangaben bleiben korrekt erhalten | GEBAUT | P04 | 2b850aa; P04 |
 | M3 | Katalog, Streaming, Entdecken und Radar zeigen identitaetstreue, frische Inhalte | OFFEN | P05 P07 P08 | — |
-| M4 | Filmwissen und KI behandeln Werkart und Fehler verlaesslich | OFFEN | P06 | — |
+| M4 | Filmwissen und KI behandeln Werkart und Fehler verlaesslich | GEBAUT | P06 | 7def1b0; P06 |
 | M5 | Pins, Terminplanung, Suche und Navigation erreichen das richtige Ziel | OFFEN | P09 P10 P11 | — |
 | M6 | Pruefwerkzeuge und lokale Betriebsvertraege liefern belastbare Nachweise | GEBAUT | P03 P12 | 84cde78 + dfabad9; P03/P12 |
 
@@ -33,16 +33,16 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P02 | W1 / PARALLEL_WAVE | Kontodaten | keine | Baumeister-P02 / `/private/tmp/kd-review49-p02` | src/lib/accountDriver.js; src/services/uebernahme.js; src/services/storage.js; Konto-/Adoptiontests; neue review49_p02_* Tests | INTEGRATED | 4a5cc52 / 2b9b92a |
 | P03 | W1 / PARALLEL_WAVE | Pruefwerkzeuge | keine | Baumeister-P03 / `/private/tmp/kd-review49-p03` | blogprofilanalyse_test.mjs; local_data_safety_test.mjs; tests/private-v1/private-v1.spec.mjs; tools/rls_test_personal.mjs; tools/radar_freitext_live_contract.mjs; tools/function-release-info.mjs; zugehoerige Werkzeugtests; neue review49_p03_* Tests | INTEGRATED | 4a5cc52 / 84cde78 |
 | P04 | W2 / PARALLEL_WAVE | Persoenliche Eingaben | W1/P02,P03 | p04_personal / `/private/tmp/kd-review49-p04` | src/App.jsx; components/{DreiFragen,GeschmackBereich,GeschmackOnboarding,ProfilAnsicht,MustWatchListe,StapelImport,EintragForm,FilmCard,EditPanel}; controllers/{useArticleController,useMustwatchController}; lib/{match,artikel,libraryProjection,stapelimport,profil,extraktion,personalEntryChronology,prognose}; BlogTab; entsprechende Tests + review49_p04_* | INTEGRATED | 84cde78 / 2b850aa |
-| P05 | W2 / PARALLEL_WAVE | Radar und Faktenkontext | W1; E05-002 vor E14-001 intern | p05_radar / `/private/tmp/kd-review49-p05` | lib/{localEventRadar,radarPilotContracts,personRadarCatalog}; services/{radarPilot,radarWebsearch}; useEntdeckenRadarController; Radar*.jsx; EntdeckenTab; design-secondary.css; radar-websearch-task/*; _shared/flixpatrolFactsContext.js; Migrationen 20260917100000/101000; Radar-/Faktencontexttests + review49_p05_* | RUNNING | 84cde78 / — |
-| P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | p06_filmwissen / `/private/tmp/kd-review49-p06` | ai-task/index.ts; filmwissen-task/*; lib/{filmwissen,filmwissenTransport,prognoseAuftrag}; services/{filmwissen,vorbewertung}; useIntelligenceController; components/{FilmwissenBereich,PrognoseBereich}; Migration 20260917110000; filmwissen*/ai_task/prognose_auftrag/vorbewertung Tests + review49_p06_* | RUNNING | 84cde78 / — |
-| P07 | W3 / PARALLEL_WAVE | Streaming und Katalog | P04/App | Baumeister-P07 / bei DISPATCH | App.jsx; Streamingcontroller/-libs; StreamingTab/KinoTab; TitelKartenAktionen; eigene Migrationen und Tests | PLANNED | — |
-| P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W2 | Baumeister-P08 / bei DISPATCH | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; eigene Format8/9-Migrationen und Entdecken-Tests | PLANNED | — |
+| P05 | W2 / PARALLEL_WAVE | Radar und Faktenkontext | W1; E05-002 vor E14-001 intern | p05_radar / `/private/tmp/kd-review49-p05` | lib/{localEventRadar,radarPilotContracts,personRadarCatalog}; services/{radarPilot,radarWebsearch}; useEntdeckenRadarController; Radar*.jsx; EntdeckenTab; design-secondary.css; radar-websearch-task/*; _shared/flixpatrolFactsContext.js; Migrationen 20260917100000/101000; Radar-/Faktencontexttests + review49_p05_* | INTEGRATED | 84cde78 / 9b3da55 |
+| P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | p06_filmwissen / `/private/tmp/kd-review49-p06` | ai-task/index.ts; filmwissen-task/*; lib/{filmwissen,filmwissenTransport,prognoseAuftrag}; services/{filmwissen,vorbewertung}; useIntelligenceController; components/{FilmwissenBereich,PrognoseBereich}; Migration 20260917110000; filmwissen*/ai_task/prognose_auftrag/vorbewertung Tests + review49_p06_* | INTEGRATED | 84cde78 / 7def1b0 |
+| P07 | W3 / PARALLEL_WAVE | Streaming und Katalog | P04/App | p07_streaming / `/private/tmp/kd-review49-p07` | App.jsx; Streamingcontroller/-libs; StreamingTab/KinoTab; TitelKartenAktionen; eigene Migrationen und Tests | RUNNING | a2c6b60 / — |
+| P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W1; disjunkt zu W2 | p08_entdecken / `/private/tmp/kd-review49-p08` | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; Migration 20260917130000 und Entdecken-Tests | RUNNING | a2c6b60 / — |
 | P09 | W4 / PARALLEL_WAVE | Wochenplan und Termine | P07/App | Baumeister-P09 / bei DISPATCH | App.jsx; Wochenplan.jsx; StartTab.jsx; wochenplan/programm; eigene Termin-/Browsertests | PLANNED | — |
 | P10 | W5 / SOLO | Pins und Fokusnavigation | P09/App | Baumeister-P10 / bei DISPATCH | App.jsx; MediathekTab/KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
-| P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W2; programm read-only | Baumeister-P11 / bei DISPATCH | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | PLANNED | — |
+| P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W1; programm read-only | p11_finder / `/private/tmp/kd-review49-p11` | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | RUNNING | a2c6b60 / — |
 | P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | INTEGRATED | 4a5cc52 / dfabad9 |
 
-Kollisionspruefung: Dateien/Generatoren, Exports, Schema/State, Config/Styles, Dependencies/Lockfile, Tests/Fixtures, Output-Abhaengigkeiten und Worktrees beruecksichtigt. W1: P01×P02×P03 disjunkt. W2: App/Persoenliches=P04, Radar/Faktencontext=P05, KI/Filmwissen=P06; gemeinsame read-only Identitaetsvertraege eingefroren. W3: App/Streaming/Kino=P07, Entdeckenprojektion=P08, Betrieb=P12. W4: App/Planung=P09, Finderlogik=P11. App-Schreiber laufen ausschliesslich in Folgewellen.
+Kollisionspruefung: Dateien/Generatoren, Exports, Schema/State, Config/Styles, Dependencies/Lockfile, Tests/Fixtures, Output-Abhaengigkeiten und Worktrees beruecksichtigt. W1: P01×P02×P03 disjunkt. W2: App/Persoenliches=P04, Radar/Faktencontext=P05, KI/Filmwissen=P06; gemeinsame read-only Identitaetsvertraege eingefroren. W3: App/Streaming/Kino=P07, Entdeckenprojektion=P08, Finderlogik=P11. W4: App/Planung=P09; P10 folgt auf dem integrierten App-Stand. App-Schreiber laufen ausschliesslich in Folgewellen.
 
 E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendiger E14-001-Serienabnahme innerhalb P05; E13-003 vor kuenftiger Function-Auslieferung; E13-004 vor Browserpflichtgate. Werkzeugkorrekturen P03 vor ihrer Verwendung als Abnahmenachweis.
 
@@ -54,16 +54,16 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 2 | [E03-002](../2026-09-vollreview/tickets/E03/KD-REV-E03-002.md) | P1 | P02 | Baumeister-P02 | GEBAUT | 2b9b92a | [P02](evidence/P02.md): 154 Checks; 22 neue Sollszenarien |
 | 3 | [E03-001](../2026-09-vollreview/tickets/E03/KD-REV-E03-001.md) | P2 | P02 | Baumeister-P02 | GEBAUT | 2b9b92a | [P02](evidence/P02.md): 154 Checks; 22 neue Sollszenarien |
 | 4 | [E09-001](../2026-09-vollreview/tickets/E09/KD-REV-E09-001.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
-| 5 | [E08-002](../2026-09-vollreview/tickets/E08/KD-REV-E08-002.md) | P2 | P05 | Baumeister-P05 | OFFEN | — | — |
+| 5 | [E08-002](../2026-09-vollreview/tickets/E08/KD-REV-E08-002.md) | P2 | P05 | Baumeister-P05 | GEBAUT | 9b3da55 | [P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen |
 | 6 | [E05-003](../2026-09-vollreview/tickets/E05/KD-REV-E05-003.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
-| 7 | [E10-004](../2026-09-vollreview/tickets/E10/KD-REV-E10-004.md) | P2 | P06 | Baumeister-P06 | OFFEN | — | — |
+| 7 | [E10-004](../2026-09-vollreview/tickets/E10/KD-REV-E10-004.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 | [P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle |
 | 8 | [E04-004](../2026-09-vollreview/tickets/E04/KD-REV-E04-004.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
 | 9 | [E04-005](../2026-09-vollreview/tickets/E04/KD-REV-E04-005.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
 | 10 | [E04-006](../2026-09-vollreview/tickets/E04/KD-REV-E04-006.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
 | 11 | [E04-001](../2026-09-vollreview/tickets/E04/KD-REV-E04-001.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
-| 12 | [E08-004](../2026-09-vollreview/tickets/E08/KD-REV-E08-004.md) | P2 | P05 | Baumeister-P05 | OFFEN | — | — |
+| 12 | [E08-004](../2026-09-vollreview/tickets/E08/KD-REV-E08-004.md) | P2 | P05 | Baumeister-P05 | GEBAUT | 9b3da55 | [P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen |
 | 13 | [E02-002](../2026-09-vollreview/tickets/E02/KD-REV-E02-002.md) | P2 | P01 | Baumeister-P01 | GEBAUT | e45e2ba | [P01](evidence/P01.md); lokal fokussiert belegt |
-| 14 | [E08-003](../2026-09-vollreview/tickets/E08/KD-REV-E08-003.md) | P2 | P05 | Baumeister-P05 | OFFEN | — | — |
+| 14 | [E08-003](../2026-09-vollreview/tickets/E08/KD-REV-E08-003.md) | P2 | P05 | Baumeister-P05 | GEBAUT | 9b3da55 | [P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen |
 | 15 | [E06-002](../2026-09-vollreview/tickets/E06/KD-REV-E06-002.md) | P2 | P07 | Baumeister-P07 | OFFEN | — | — |
 | 16 | [E11-003](../2026-09-vollreview/tickets/E11/KD-REV-E11-003.md) | P2 | P07 | Baumeister-P07 | OFFEN | — | — |
 | 17 | [E05-001](../2026-09-vollreview/tickets/E05/KD-REV-E05-001.md) | P2 | P07 | Baumeister-P07 | OFFEN | — | — |
@@ -74,7 +74,7 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 22 | [E11-001](../2026-09-vollreview/tickets/E11/KD-REV-E11-001.md) | P2 | P09 | Baumeister-P09 | OFFEN | — | — |
 | 23 | [E12-003](../2026-09-vollreview/tickets/E12/KD-REV-E12-003.md) | P2 | P09 | Baumeister-P09 | OFFEN | — | — |
 | 24 | [E12-002](../2026-09-vollreview/tickets/E12/KD-REV-E12-002.md) | P2 | P07 | Baumeister-P07 | OFFEN | — | — |
-| 25 | [E10-003](../2026-09-vollreview/tickets/E10/KD-REV-E10-003.md) | P2 | P06 | Baumeister-P06 | OFFEN | — | — |
+| 25 | [E10-003](../2026-09-vollreview/tickets/E10/KD-REV-E10-003.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 | [P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle |
 | 26 | [E01-001](../2026-09-vollreview/tickets/E01/KD-REV-E01-001.md) | P2 | P10 | Baumeister-P10 | OFFEN | — | — |
 | 27 | [E04-003](../2026-09-vollreview/tickets/E04/KD-REV-E04-003.md) | P2 | P10 | Baumeister-P10 | OFFEN | — | — |
 | 28 | [E11-004](../2026-09-vollreview/tickets/E11/KD-REV-E11-004.md) | P2 | P09 | Baumeister-P09 | OFFEN | — | — |
@@ -83,12 +83,12 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 31 | [E09-003](../2026-09-vollreview/tickets/E09/KD-REV-E09-003.md) | P2 | P11 | Baumeister-P11 | OFFEN | — | — |
 | 32 | [E01-002](../2026-09-vollreview/tickets/E01/KD-REV-E01-002.md) | P2 | P09 | Baumeister-P09 | OFFEN | — | — |
 | 33 | [E04-002](../2026-09-vollreview/tickets/E04/KD-REV-E04-002.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
-| 34 | [E08-001](../2026-09-vollreview/tickets/E08/KD-REV-E08-001.md) | P2 | P05 | Baumeister-P05 | OFFEN | — | — |
-| 35 | [E05-002](../2026-09-vollreview/tickets/E05/KD-REV-E05-002.md) | P2 | P05 | Baumeister-P05 | OFFEN | — | — |
-| 36 | [E14-001](../2026-09-vollreview/tickets/E14/KD-REV-E14-001.md) | P2 | P05 | Baumeister-P05 | OFFEN | — | — |
+| 34 | [E08-001](../2026-09-vollreview/tickets/E08/KD-REV-E08-001.md) | P2 | P05 | Baumeister-P05 | GEBAUT | 9b3da55 | [P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen |
+| 35 | [E05-002](../2026-09-vollreview/tickets/E05/KD-REV-E05-002.md) | P2 | P05 | Baumeister-P05 | GEBAUT | 9b3da55 | [P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen |
+| 36 | [E14-001](../2026-09-vollreview/tickets/E14/KD-REV-E14-001.md) | P2 | P05 | Baumeister-P05 | GEBAUT | 9b3da55 | [P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen |
 | 37 | [E07-002](../2026-09-vollreview/tickets/E07/KD-REV-E07-002.md) | P2 | P08 | Baumeister-P08 | OFFEN | — | — |
-| 38 | [E12-001](../2026-09-vollreview/tickets/E12/KD-REV-E12-001.md) | P2 | P05 | Baumeister-P05 | OFFEN | — | — |
-| 39 | [E10-001](../2026-09-vollreview/tickets/E10/KD-REV-E10-001.md) | P2 | P06 | Baumeister-P06 | OFFEN | — | — |
+| 38 | [E12-001](../2026-09-vollreview/tickets/E12/KD-REV-E12-001.md) | P2 | P05 | Baumeister-P05 | GEBAUT | 9b3da55 | [P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen |
+| 39 | [E10-001](../2026-09-vollreview/tickets/E10/KD-REV-E10-001.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 | [P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle |
 | 40 | [E13-003](../2026-09-vollreview/tickets/E13/KD-REV-E13-003.md) | P2 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
 | 41 | [E09-004](../2026-09-vollreview/tickets/E09/KD-REV-E09-004.md) | P2 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
 | 42 | [E13-004](../2026-09-vollreview/tickets/E13/KD-REV-E13-004.md) | P2 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
@@ -96,7 +96,7 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 44 | [E08-005](../2026-09-vollreview/tickets/E08/KD-REV-E08-005.md) | P2 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
 | 45 | [E13-001](../2026-09-vollreview/tickets/E13/KD-REV-E13-001.md) | P2 | P12 | Baumeister-P12 | GEBAUT | dfabad9 | [P12](evidence/P12.md): Core/Workflow, 67 Monitorchecks, 13 PG17-Gruppen |
 | 46 | [E13-002](../2026-09-vollreview/tickets/E13/KD-REV-E13-002.md) | P2 | P12 | Baumeister-P12 | GEBAUT | dfabad9 | [P12](evidence/P12.md): Core/Workflow, 67 Monitorchecks, 13 PG17-Gruppen |
-| 47 | [E10-002](../2026-09-vollreview/tickets/E10/KD-REV-E10-002.md) | P2 | P06 | Baumeister-P06 | OFFEN | — | — |
+| 47 | [E10-002](../2026-09-vollreview/tickets/E10/KD-REV-E10-002.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 | [P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle |
 | 48 | [E11-005](../2026-09-vollreview/tickets/E11/KD-REV-E11-005.md) | P3 | P09 | Baumeister-P09 | OFFEN | — | — |
 | 49 | [E03-003](../2026-09-vollreview/tickets/E03/KD-REV-E03-003.md) | P3 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
 
@@ -119,3 +119,9 @@ W2-Basis ist 84cde78b18bc2ba060f348613ba4304668901ffc. P04/P05 starten auf den z
 INTEGRATED P12 dfabad991b6a60cc0a828331edccd709daf1090d: Workflowdelta und additive Retention mit vorherigem effektivem Funktionskoerper verglichen; ausschliesslich Mail-Ratenbucket-Ergaenzung. Kleine Master-Naht: trailing whitespace in neuer PG-Testdatei entfernt. Keine semantische Aenderung, keine Testwiederholung daraus. 12/49 Tickets GEBAUT. P06 DISPATCH ebenfalls auf W2-Basis 84cde78; W2 nun mit drei Baumeistern.
 
 INTEGRATED P04 2b850aae699b5a61b3c9c102df1688d873ee6cb8: 13 autorisierte Produktdateien plus Pakettest/-beleg, kleine App-Naht konfliktfrei. Vollstaendiger Produktdiff und Solltestanbindung geprueft. Zusaetzliche Leerzeile am EOF des neuen Vergleichshelpers als rein formale Master-Naht entfernt. 19/49 GEBAUT.
+
+DISPATCH W3: P07 auf a2c6b60c4b4fbc59ccbaaa0745bd369eb4518583. P08/P11 erhalten dieselbe exakte Basis, sobald ein Slot frei wird; verbleibende W2-P05/P06 sind dazu disjunkt. Reihenfolge der Integration behaelt W2 vor W3. App-Ownership P04 beendet, jetzt ausschliesslich P07.
+
+INTEGRATED P05 9b3da55 und P06 7def1b0: Vollstaendige Produktdiffs, Migrationen, Scope und Sollbelege geprueft; konfliktfrei sequenziell uebernommen. 30/49 Tickets GEBAUT. P05-Faktenhelper und P06-Handler verwenden weiterhin denselben numerischen FlixPatrol-Vertrag mit separatem Werktyp; Filmwissen ist intern typisiert. Finaler Gesamtnachweis folgt nach allen Paketen.
+
+DISPATCH P08 und P11: Beide auf exakt a2c6b60, mit P07 maximal drei aktive Baumeister. P05/P06 hatten ihre Arbeit zuvor abgeschlossen. Keine Schreibkollision und keine Output-Abhaengigkeit; W2-Lieferungen sind nun vor W3 integriert.
