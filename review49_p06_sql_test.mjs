@@ -71,8 +71,8 @@ try {
   check('legacy series remains cache miss', `${auth} select kd_filmwissen_aktuell_lesen('tmdb','tv:99')->>'status';`, 'cache_miss');
   check('unknown television key never reads movie', `${auth} select kd_filmwissen_aktuell_lesen('tmdb','tv:555')->>'status';`, 'cache_miss');
   check('RPC and table ACLs retained', `select has_function_privilege('authenticated','kd_filmwissen_aktuell_lesen(text,text)','execute') and not has_function_privilege('anon','kd_filmwissen_aktuell_lesen(text,text)','execute') and not has_function_privilege('authenticated','kd_filmwissen_synthese_vorbereiten(text,text,uuid)','execute') and has_function_privilege('service_role','kd_filmwissen_synthese_vorbereiten(text,text,uuid)','execute') and not has_table_privilege('authenticated','kd_filmwerk_kennungen','select');`, 't');
+  check('untyped legacy read terminates without evidence', `${auth} select kd_filmwissen_aktuell_lesen('tmdb','348')->>'status';`, 'gesperrt');
   const rejects = [
-    ['untyped read', `${auth} select kd_filmwissen_aktuell_lesen('tmdb','348');`, 'kennung_ungueltig'],
     ['untyped synthesis', `set role service_role; select kd_filmwissen_synthese_vorbereiten('tmdb','348',gen_random_uuid());`, 'kennung_ungueltig'],
     ['wrong typed key for movie', `select kd_filmwissen_werk_sicherstellen('film','Wrong',null,2000,'{"tmdb":"tv:348"}');`, 'tmdb_werktyp_widerspruch'],
     ['direct mismatched key write', `insert into kd_filmwerk_kennungen(namespace,kennung,werk_id) values ('tmdb','tv:555','11111111-1111-4111-8111-111111111111');`, 'tmdb_werktyp_widerspruch'],

@@ -785,6 +785,19 @@ export const FILMWISSEN_KENNUNGSRAEUME = [
   "kinodreieck",
 ];
 
+// Numeric TMDB alone is ambiguous. Keep this recognizer separate from the
+// strict identity parser: it must never make an untyped request a movie.
+function istLegacyFilmwissenTmdbAnfrage(payload: unknown): string | null {
+  if (!istReinesObjekt(payload)
+      || Object.keys(payload).sort().join(",") !== "kennung,namespace"
+      || typeof payload.namespace !== "string"
+      || payload.namespace.trim().toLowerCase() !== "tmdb"
+      || typeof payload.kennung !== "string") return null;
+  const id = payload.kennung.trim();
+  return /^[0-9]{1,18}$/.test(id) && /[1-9]/.test(id)
+    ? id.replace(/^0+/, "") : null;
+}
+
 export function leseFilmwissenSyntheseAnfrage(
   payload: Record<string, unknown>,
 ): { namespace: string; kennung: string } {
@@ -2236,8 +2249,14 @@ export function leseForecastEingabe(
   const filmkennungRoh = eigenerWert(payload, "filmkennung");
   let filmkennung: { namespace: string; kennung: string } | null = null;
   if (filmkennungRoh !== undefined && filmkennungRoh !== null) {
+    // Old PWAs sent a numeric TMDB ID, but the forecast also carries an
+    // explicit work type. Only this boundary has enough context to adapt it.
+    const legacyTmdb = istLegacyFilmwissenTmdbAnfrage(filmkennungRoh);
+    const typ = istReinesObjekt(film) ? film.typ : null;
     filmkennung = leseFilmwissenSyntheseAnfrage(
-      filmkennungRoh as Record<string, unknown>,
+      legacyTmdb && (typ === "film" || typ === "serie")
+        ? { namespace: "tmdb", kennung: `${typ === "film" ? "movie" : "tv"}:${legacyTmdb}` }
+        : filmkennungRoh as Record<string, unknown>,
     );
     if (!["imdb", "tmdb", "wikidata"].includes(filmkennung.namespace)) {
       throw new AufrufFehler(
@@ -4522,13 +4541,16 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         p_namespace: browserEingabe.filmkennung.namespace,
         p_kennung: browserEingabe.filmkennung.kennung,
       });
-      if (error) {
+      const alterTmdbVertrag = error?.code === "22023"
+        && error?.message === "kennung_ungueltig"
+        && browserEingabe.filmkennung.namespace === "tmdb";
+      if (error && !alterTmdbVertrag) {
         return fehlerAntwort(CODES.SERVER, origin, {
           grund: "forecast-filmwissen-cache-rpc",
           vorgangId,
         });
       }
-      const cache = data as Record<string, unknown> | null;
+      const cache = (alterTmdbVertrag ? null : data) as Record<string, unknown> | null;
       const version = cache && typeof cache.version === "object" && cache.version ? cache.version as Record<string, unknown> : null;
       const warum = cache && typeof cache.warum === "object" && cache.warum ? cache.warum as Record<string, unknown> : null;
       const fundstellen = Array.isArray(cache?.fundstellen) ? cache.fundstellen as Array<Record<string, unknown>> : [];
@@ -4599,6 +4621,12 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         status: 400,
         vorgangId,
       });
+    }
+    // Unlike forecasts, legacy synthesis carries no work type. A movie
+    // mapping cannot disambiguate the caller's intent; stop before any read,
+    // source, reservation or provider operation.
+    if (istLegacyFilmwissenTmdbAnfrage(payload)) {
+      return jsonAntwort({ ok: true, task, vorgangId, data: { status: "nicht_zuordenbar" } }, 200, origin);
     }
     let eingabe: { namespace: string; kennung: string };
     try {

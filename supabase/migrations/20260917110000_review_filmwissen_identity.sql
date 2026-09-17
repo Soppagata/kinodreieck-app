@@ -254,6 +254,13 @@ begin
   if not public.kd_account_active() then
     raise exception 'account_inactive' using errcode = '42501';
   end if;
+  -- An old numeric TMDB read has no work type. Even a verified movie
+  -- mapping cannot distinguish a movie caller from a television caller.
+  -- The existing terminal status also stops old clients before research.
+  if v_namespace = 'tmdb' and trim(p_kennung) ~ '^[0-9]{1,18}$'
+     and ltrim(trim(p_kennung), '0') <> '' then
+    return jsonb_build_object('format','filmwissen-cache-v1','status','gesperrt');
+  end if;
   if v_kennung is null then
     raise exception 'kennung_ungueltig' using errcode = '22023';
   end if;
