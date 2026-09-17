@@ -294,6 +294,91 @@ check("Fehler bewahrt die wiederholbare Löschabsicht",
 check("Gezogene Snapshots verlangen niemals Remote-Löschung",
   !needsRemoteRemoval({ ...failed, herkunft: "gezogen" }));
 
+/* ---------- Blog-Publikation v1 ---------- */
+const blogFixture = JSON.parse(fs.readFileSync("tests/fixtures/blog-contract-v1.json", "utf8"));
+snapshot = aktiveSession();
+nextResponses = [response(200, blogFixture.capability)];
+calls = [];
+const capability = await service.capability();
+check("Capability aktiviert anonymes Publizieren nur beim exakten v1-Vertrag",
+  capability.ok && calls[0].url.endsWith("/rest/v1/rpc/kd_blog_publication_capabilities")
+  && JSON.stringify(JSON.parse(calls[0].options.body)) === "{}");
+
+nextResponses = [response(200, { ...blogFixture.capability, maxReferences: 16 })];
+const staleCapability = await service.capability();
+check("Altes oder abweichendes Backend bleibt fail-closed",
+  staleCapability.ok === false && staleCapability.reason === "contract-mismatch");
+
+nextResponses = [response(200, blogFixture.publicPage)];
+calls = [];
+const v1Page = await service.listV1({ cursor: null, limit: 20 });
+check("v1-Liste sendet nur Vertragsversion, Limit und Cursor",
+  v1Page.ok && v1Page.page.items.length === 1
+  && calls[0].url.endsWith("/rest/v1/rpc/kd_list_shared_articles_v1")
+  && JSON.stringify(JSON.parse(calls[0].options.body)) === JSON.stringify({ p_request: {
+    contractVersion: "blog-publication-v1", limit: 20, cursor: null,
+  } }));
+check("Akzeptierte v1-Liste enthält keine privaten Artikel- oder Zeilen-IDs",
+  !JSON.stringify(v1Page.page).includes(blogFixture.ownerArticle.privateArticleId)
+  && !JSON.stringify(v1Page.page).includes("row-01"));
+
+const opPublish = "30000000-0000-4000-8000-000000000001";
+const publishRequest = {
+  contractVersion: "blog-publication-v1", operationId: opPublish,
+  contentVersion: blogFixture.ownerArticle.contentVersion,
+  privateArticleId: blogFixture.ownerArticle.privateArticleId,
+  expectedPublicRevision: null,
+  article: { title: blogFixture.ownerArticle.title, text: blogFixture.ownerArticle.text, ordered: true, references: [] },
+};
+nextResponses = [response(200, {
+  contractVersion: "blog-publication-v1", outcome: "published", operationId: opPublish,
+  contentVersion: publishRequest.contentVersion,
+  publication: blogFixture.ownerReadbacks.currentWithoutOperation.currentPublication,
+  referenceResults: [], decisionRequests: [],
+})];
+calls = [];
+const v1Published = await service.publishV1(publishRequest);
+check("Publish-v1 kapselt den unveränderten Request ausschließlich als p_request",
+  v1Published.outcome === "published"
+  && calls[0].url.endsWith("/rest/v1/rpc/kd_publish_blog_v1")
+  && JSON.stringify(JSON.parse(calls[0].options.body)) === JSON.stringify({ p_request: publishRequest })
+  && !("accountId" in publishRequest) && !("author" in publishRequest));
+
+const opWithdraw = "30000000-0000-4000-8000-000000000003";
+const withdrawRequest = {
+  contractVersion: "blog-publication-v1", operationId: opWithdraw,
+  privateArticleId: blogFixture.ownerArticle.privateArticleId, expectedPublicRevision: 3,
+};
+nextResponses = [response(200, {
+  contractVersion: "blog-publication-v1", outcome: "withdrawn", operationId: opWithdraw,
+  publicationId: blogFixture.publicPage.items[0].publicationId, errorCode: null,
+})];
+calls = [];
+const withdrawn = await service.withdrawV1(withdrawRequest);
+check("Rücknahme nutzt Revision und eigene Artikel-ID ohne Account-ID",
+  withdrawn.outcome === "withdrawn"
+  && JSON.parse(calls[0].options.body).p_request.expectedPublicRevision === 3
+  && !("accountId" in JSON.parse(calls[0].options.body).p_request));
+
+nextResponses = [response(200, blogFixture.ownerReadbacks.currentWithoutOperation)];
+calls = [];
+const readback = await service.ownerReadback(blogFixture.ownerArticle.privateArticleId);
+check("Owner-Readback ist nach Reload auch ohne Operations-ID verfügbar",
+  readback.currentPublication.publicRevision === 3
+  && JSON.parse(calls[0].options.body).p_request.operationId === null);
+
+nextResponses = [response(200, {
+  ...blogFixture.publicPage,
+  items: [{ ...blogFixture.publicPage.items[0], article: {
+    ...blogFixture.publicPage.items[0].article,
+    references: [{ ...blogFixture.publicPage.items[0].article.references[0], rowId: "private-row" }],
+  } }],
+})];
+let privacyError = null;
+try { await service.listV1(); } catch (error) { privacyError = error; }
+check("v1-Leser verwirft öffentliche Payload mit privater rowId vollständig",
+  privacyError?.code === "invalid-response");
+
 const schema = fs.readFileSync("supabase/migrations/20260731120000_shared_articles.sql", "utf8");
 check("Migration bindet alle Schreibwege per RLS an auth.uid()",
   /for insert to authenticated[\s\S]*with check \(account_id = \(select auth\.uid\(\)\)\)/.test(schema)

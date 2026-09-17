@@ -18,6 +18,37 @@ import { normalisiereTyp } from "./typen.js";
 
 export const MAX_LISTE = 15;
 
+function neueStabileBlogId() {
+  try {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  } catch { /* Fallback unten */ }
+  const template = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+  return template.replace(/[xy]/g, (zeichen) => {
+    const zufall = Math.floor(Math.random() * 16);
+    const wert = zeichen === "x" ? zufall : ((zufall & 3) | 8);
+    return wert.toString(16);
+  });
+}
+
+export function neueBlogZeilenId(randomUUID) {
+  if (typeof randomUUID === "function") return randomUUID();
+  return neueStabileBlogId();
+}
+
+export function normalisiereBlogZeilen(liste, randomUUID) {
+  let gleich = true;
+  const gesehen = new Set();
+  const next = (Array.isArray(liste) ? liste : []).slice(0, MAX_LISTE).map((zeile) => {
+    const vorhanden = typeof zeile?.rowId === "string" ? zeile.rowId.trim() : "";
+    const rowId = vorhanden && !gesehen.has(vorhanden) ? vorhanden : neueBlogZeilenId(randomUUID);
+    gesehen.add(rowId);
+    if (rowId === vorhanden) return zeile;
+    gleich = false;
+    return { ...zeile, rowId };
+  });
+  return gleich && next.length === liste?.length ? liste : next;
+}
+
 /* Kanonische Schreibgrenze für importierte, wiederhergestellte und bereits
    gespeicherte Artikel. Unveränderte Listen behalten ihre Referenz, damit
    reine Lesevorgänge keinen unnötigen Storage-Write auslösen. */
@@ -38,6 +69,15 @@ export function normalisiereArtikelTypen(artikelListe) {
     return { ...artikel, liste };
   });
   return allesGleich ? artikelListe : normalisiert;
+}
+
+export function mitNeuerBlogFassung(article, contentVersion, nowIso = new Date().toISOString()) {
+  return {
+    ...article,
+    contentVersion: contentVersion || neueStabileBlogId(),
+    updatedAt: nowIso,
+    liste: normalisiereBlogZeilen(article?.liste || []),
+  };
 }
 
 export function neueArtikelId(titel, vorhandene) {

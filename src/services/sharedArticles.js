@@ -15,6 +15,17 @@ import { runtimeConfig } from "../config/runtime.js";
 import { authDriver, authService } from "./auth.js";
 import { BoundaryError, ERROR_CODES, errorFromStatus, normalizeBoundaryError } from "./errors.js";
 import { istSupabaseProjektUrl } from "../lib/supabasePublic.js";
+import {
+  BLOG_CONTRACT_VERSION,
+  BLOG_LIST_DEFAULT_LIMIT,
+  BLOG_LIST_MAX_LIMIT,
+  BLOG_NEUTRAL_AUTHOR,
+  BLOG_PUBLIC_OUTCOME,
+  BLOG_RPC,
+  hasBlogPublicationCapability,
+  isBlogPublicCinemaTarget,
+  isBlogPublicStreamingTarget,
+} from "../lib/blogContract.js";
 
 const TABLE = "kd_shared_articles";
 const LIST_RPC = "kd_list_shared_articles";
@@ -23,6 +34,100 @@ const MAX_REFERENZEN = 15;
 
 function text(wert) { return String(wert == null ? "" : wert).trim(); }
 function q(wert) { return encodeURIComponent(String(wert)); }
+function plain(wert) { return !!wert && typeof wert === "object" && !Array.isArray(wert); }
+function exactKeys(wert, keys) {
+  return plain(wert) && Object.keys(wert).length === keys.length
+    && Object.keys(wert).every((key) => keys.includes(key));
+}
+function rpcValue(data) { return Array.isArray(data) && data.length === 1 && plain(data[0]) ? data[0] : data; }
+
+function invalid(operation, reason) {
+  return new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+    source: "shared-articles", operation, reason,
+  });
+}
+
+function parseMutation(data, operationId, allowed) {
+  const value = rpcValue(data);
+  if (!plain(value) || value.contractVersion !== BLOG_CONTRACT_VERSION
+      || text(value.operationId) !== text(operationId)
+      || !allowed.includes(value.outcome)) throw invalid("blog.mutate", "invalid-v1-mutation");
+  return value;
+}
+
+function parseOwnerReadback(data, privateArticleId) {
+  const value = rpcValue(data);
+  if (!plain(value) || value.contractVersion !== BLOG_CONTRACT_VERSION
+      || text(value.privateArticleId) !== text(privateArticleId)
+      || !(value.currentPublication === null || plain(value.currentPublication))
+      || !(value.operation === null || plain(value.operation))
+      || typeof value.legacyReloadRequired !== "boolean") {
+    throw invalid("blog.owner-readback", "invalid-owner-readback");
+  }
+  return value;
+}
+
+function parsePublicReference(reference) {
+  if (!exactKeys(reference, ["referenceId", "rank", "title", "year", "mediaType", "resolution", "sources"])
+      || !text(reference.referenceId) || !Number.isInteger(reference.rank)
+      || !text(reference.title)
+      || !exactKeys(reference.resolution, ["status", "workKey"])
+      || !exactKeys(reference.sources, ["status", "checkedAt", "validUntil", "streamingRevision", "cinemaRevision", "streaming", "cinema"])) return null;
+  const streaming = Array.isArray(reference.sources.streaming) ? reference.sources.streaming : null;
+  const cinema = Array.isArray(reference.sources.cinema) ? reference.sources.cinema : null;
+  if (!streaming || !cinema || !streaming.every(isBlogPublicStreamingTarget)
+      || !cinema.every(isBlogPublicCinemaTarget)) return null;
+  return {
+    referenceId: reference.referenceId, rank: reference.rank, title: reference.title,
+    year: reference.year, mediaType: reference.mediaType,
+    resolution: { status: reference.resolution.status, workKey: reference.resolution.workKey },
+    sources: {
+      status: reference.sources.status,
+      checkedAt: reference.sources.checkedAt,
+      validUntil: reference.sources.validUntil,
+      streamingRevision: reference.sources.streamingRevision,
+      cinemaRevision: reference.sources.cinemaRevision,
+      streaming: streaming.map((target) => ({
+        kind: target.kind, sourceId: target.sourceId, art: target.art, ref: target.ref,
+        titel: target.titel, sourceRevision: target.sourceRevision,
+        checkedAt: target.checkedAt, validUntil: target.validUntil,
+      })),
+      cinema: cinema.map((target) => ({
+        kind: target.kind, art: target.art, ref: target.ref, titel: target.titel,
+        sourceRevision: target.sourceRevision, checkedAt: target.checkedAt, validUntil: target.validUntil,
+      })),
+    },
+  };
+}
+
+function parseV1Page(data) {
+  const value = rpcValue(data);
+  if (!plain(value) || value.contractVersion !== BLOG_CONTRACT_VERSION
+      || !text(value.snapshotAt) || !Array.isArray(value.items)
+      || !(value.nextCursor === null || typeof value.nextCursor === "string")
+      || typeof value.complete !== "boolean") throw invalid("blog.list", "invalid-v1-page");
+  const items = value.items.map((item) => {
+    const article = item?.article;
+    if (!exactKeys(item, ["publicationId", "shareToken", "author", "publicRevision", "contentVersion", "publishedAt", "updatedAt", "article"])
+        || !exactKeys(article, ["id", "title", "text", "ordered", "references"])
+        || !text(item.publicationId)
+        || !text(item.shareToken) || item.author !== BLOG_NEUTRAL_AUTHOR
+        || article.id !== item.publicationId || !text(article.title)
+        || typeof article.text !== "string" || typeof article.ordered !== "boolean"
+        || !Array.isArray(article.references)) {
+      throw invalid("blog.list", "unsafe-v1-item");
+    }
+    const references = article.references.map(parsePublicReference);
+    if (references.some((reference) => !reference)) throw invalid("blog.list", "unsafe-v1-reference");
+    return {
+      publicationId: item.publicationId, shareToken: item.shareToken, author: item.author,
+      publicRevision: item.publicRevision, contentVersion: item.contentVersion,
+      publishedAt: item.publishedAt, updatedAt: item.updatedAt,
+      article: { id: article.id, title: article.title, text: article.text, ordered: article.ordered, references },
+    };
+  });
+  return { ...value, items };
+}
 
 /* Ausschließlich die öffentliche Projektion erzeugen. Lokale IDs innerhalb
    der Referenzliste, Abgleichfelder und Publikationszustände verlassen das
@@ -179,13 +284,17 @@ export function createSharedArticlesService({
     };
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : null;
+    let requestStarted = false;
+    let responseReceived = false;
     try {
+      requestStarted = true;
       const res = await f(`${basis}/rest/v1/${path}`, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
         signal: ctrl?.signal,
       });
+      responseReceived = true;
       let data = null;
       try { data = await res.json(); } catch { /* 204 */ }
       if (kontoId() !== accountId) {
@@ -201,7 +310,10 @@ export function createSharedArticlesService({
       if (!res.ok) throw errorFromStatus(res.status, { source: "shared-articles", operation });
       return { status: res.status, data };
     } catch (error) {
-      throw normalizeBoundaryError(error, { source: "shared-articles", operation });
+      const normalized = normalizeBoundaryError(error, { source: "shared-articles", operation });
+      normalized.requestStarted = requestStarted;
+      normalized.responseReceived = responseReceived;
+      throw normalized;
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -288,6 +400,65 @@ export function createSharedArticlesService({
         },
       );
       return { ok: true, status: result.status };
+    },
+    async capability() {
+      if (!konfiguriert()) return { ok: false, capability: null, reason: "unconfigured" };
+      const result = await accountRequest("POST", `rpc/${BLOG_RPC.capability}`, {
+        body: {}, operation: "blog.capability",
+      });
+      const capability = rpcValue(result.data);
+      return hasBlogPublicationCapability(capability)
+        ? { ok: true, capability }
+        : { ok: false, capability: null, reason: "contract-mismatch" };
+    },
+    async listV1({ cursor = null, limit = BLOG_LIST_DEFAULT_LIMIT } = {}) {
+      const boundedLimit = Number.isInteger(limit) && limit >= 1 && limit <= BLOG_LIST_MAX_LIMIT
+        ? limit : BLOG_LIST_DEFAULT_LIMIT;
+      const result = await accountRequest("POST", `rpc/${BLOG_RPC.list}`, {
+        body: { p_request: { contractVersion: BLOG_CONTRACT_VERSION, limit: boundedLimit, cursor } },
+        operation: "blog.list",
+      });
+      return { ok: true, page: parseV1Page(result.data) };
+    },
+    async publishV1(request) {
+      const result = await accountRequest("POST", `rpc/${BLOG_RPC.publish}`, {
+        body: { p_request: request }, operation: "blog.publish",
+      });
+      return parseMutation(result.data, request?.operationId, [
+        BLOG_PUBLIC_OUTCOME.PUBLISHED, BLOG_PUBLIC_OUTCOME.DECISION_REQUIRED,
+        BLOG_PUBLIC_OUTCOME.CONFLICT,
+      ]);
+    },
+    async updateV1(request) {
+      const result = await accountRequest("POST", `rpc/${BLOG_RPC.update}`, {
+        body: { p_request: request }, operation: "blog.update",
+      });
+      return parseMutation(result.data, request?.operationId, [
+        BLOG_PUBLIC_OUTCOME.UPDATED, BLOG_PUBLIC_OUTCOME.DECISION_REQUIRED,
+        BLOG_PUBLIC_OUTCOME.CONFLICT,
+      ]);
+    },
+    async withdrawV1(request) {
+      const result = await accountRequest("POST", `rpc/${BLOG_RPC.withdraw}`, {
+        body: { p_request: request }, operation: "blog.withdraw",
+      });
+      return parseMutation(result.data, request?.operationId, [
+        BLOG_PUBLIC_OUTCOME.WITHDRAWN, BLOG_PUBLIC_OUTCOME.ABSENT,
+        BLOG_PUBLIC_OUTCOME.CONFLICT,
+      ]);
+    },
+    async ownerReadback(privateArticleId, operationId = null) {
+      const id = text(privateArticleId);
+      if (!id) throw invalid("blog.owner-readback", "missing-private-article-id");
+      const result = await accountRequest("POST", `rpc/${BLOG_RPC.ownerReadback}`, {
+        body: { p_request: {
+          contractVersion: BLOG_CONTRACT_VERSION,
+          privateArticleId: id,
+          operationId: operationId || null,
+        } },
+        operation: "blog.owner-readback",
+      });
+      return parseOwnerReadback(result.data, id);
     },
   });
 }

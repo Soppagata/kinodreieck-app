@@ -46,6 +46,7 @@ import {
   istMustwatchZeitAbgelaufen, useMustwatchCandidatesController,
 } from "./controllers/useMustwatchCandidatesController.js";
 import { useArticleController, useMasterPersistenceController } from "./controllers/useArticleController.js";
+import { useBlogPublicationController } from "./controllers/useBlogPublicationController.js";
 import { useErrorQueue } from "./controllers/useErrorQueue.js";
 import { useMasterStateController } from "./controllers/useMasterStateController.js";
 import { useBackupExportController } from "./controllers/useBackupExportController.js";
@@ -1262,6 +1263,44 @@ export default function App() {
     return id;
   }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, schreibeArtikel, setErr]);
 
+  const navigiereZuBlogReferenz = useCallback((ziel) => {
+    if (ziel?.kind === "library") {
+      springeZuFilm(ziel.ref);
+      return true;
+    }
+    if (ziel?.kind === "streaming" && ["programm", "entdecken"].includes(ziel.art)) {
+      void springeZuStreaming({ art: ziel.art, ref: ziel.ref, titel: ziel.titel });
+      return true;
+    }
+    if (ziel?.kind === "cinema" && ziel.art === "programm") {
+      setZeigeAlles(true);
+      setKinoFokus({ art: "programm", ref: ziel.ref, titel: ziel.titel });
+      navigiere("kino");
+      return true;
+    }
+    return false;
+  }, [navigiere, springeZuFilm, springeZuStreaming]);
+
+  const blogPublicationController = useBlogPublicationController({
+    accountScope: streamingKontextKey,
+    enabled: remoteKontoAktiv,
+    articles: artikelListe,
+    articlesReady: artikelGeladen,
+    writeArticles: schreibeArtikel,
+    library: master || [],
+    libraryReady: master != null && bootDone,
+    mustwatch,
+    mustwatchReady: mustwatchGeladen,
+    selectedServices: sichtbareAuswahl,
+    selectedServicesReady: sichtbareAuswahlGeladen,
+    service: sharedArticlesService,
+    addLibraryItem: addFilm,
+    navigateTarget: navigiereZuBlogReferenz,
+    focusedArticleId: blogFokus,
+    onFocusConsumed: () => setBlogFokus(null),
+    setError: setErr,
+  });
+
   const serienKatalog = useMemo(() => [
     ...((streamingBekannt && streamingBekannt.titel) || []),
     ...((streamingEntdecken && streamingEntdecken.titel) || []),
@@ -2024,13 +2063,7 @@ export default function App() {
             radarAutomaticAvailable={radarAutomaticAvailable} onRadarRejectedDismiss={verwerfeAbgelehnteRadarAenderung}
             onRadarTextAdd={fuegeRadarTextHinzu} recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu} onPersonRadarChange={aenderePersonRadar}
-            blogProps={{
-              artikel: artikelListe, master: refUniversum, angemeldet: remoteKontoAktiv,
-              onFokusVerbraucht: () => setBlogFokus(null),
-              onErstellen: erstelleArtikel, onAktualisieren: aktualisiereArtikel,
-              onSetzeRef: setzeArtikelRef, onFreigeben: freigebeArtikel, onLoeschen: loescheArtikel,
-              onRetryPublication: wiederholePublikation, onAddFilm: addFilm, onSpringeZuFilm: springeZuFilm,
-            }}
+            blogProps={blogPublicationController}
           />
         )}
 

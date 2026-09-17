@@ -63,6 +63,23 @@ check("Artikel-Schreibgrenze normalisiert Legacy-Filmreihen und lässt kanonisch
   kanonischeArtikelListe[0].liste[0].typ === "film"
   && A.normalisiereArtikelTypen(kanonischeArtikelListe) === kanonischeArtikelListe);
 
+const idFolge = ["40000000-0000-4000-8000-000000000001", "40000000-0000-4000-8000-000000000002"];
+const mitZeilenIds = A.normalisiereBlogZeilen([
+  { eingabe: "Alien", jahr: 1979, typ: "film" },
+  { eingabe: "Aliens", jahr: 1986, typ: "film" },
+], () => idFolge.shift());
+check("Blog-v1 ergänzt stabile Zeilen-IDs genau einmal",
+  mitZeilenIds.map((row) => row.rowId).join(",") === "40000000-0000-4000-8000-000000000001,40000000-0000-4000-8000-000000000002"
+  && A.normalisiereBlogZeilen(mitZeilenIds) === mitZeilenIds);
+check("Umordnen bewahrt Zeilen-IDs unabhängig vom Rang",
+  [...mitZeilenIds].reverse().map((row) => row.rowId).join(",")
+  === "40000000-0000-4000-8000-000000000002,40000000-0000-4000-8000-000000000001");
+const neueFassung = A.mitNeuerBlogFassung({ ...shared.artikel, liste: mitZeilenIds }, "50000000-0000-4000-8000-000000000001", "2032-05-04T12:00:00.000Z");
+check("Private Fassung bindet Content-Version und Änderungszeit an denselben bestätigten Artikelstand",
+  neueFassung.contentVersion === "50000000-0000-4000-8000-000000000001"
+  && neueFassung.updatedAt === "2032-05-04T12:00:00.000Z"
+  && neueFassung.liste[0].rowId === mitZeilenIds[0].rowId);
+
 /* ID-Kollision: zweimal dasselbe ziehen -> verschiedene lokale IDs */
 const a1 = A.blogZuArtikel(shared, [], master, "2026-01-01T00:00:00Z");
 const a2 = A.blogZuArtikel(shared, [a1], master, "2026-01-01T00:00:00Z");
