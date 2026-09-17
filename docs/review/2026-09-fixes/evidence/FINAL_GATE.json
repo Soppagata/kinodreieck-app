@@ -207,5 +207,14 @@
     "paidProviderRequests": "NOT_REQUESTED_NOT_PERFORMED",
     "physicalIphonePwaAcceptance": "NOT_PERFORMED",
     "E13-F005": "UNRESOLVED_OUTSIDE_49"
-  }
+  },
+  "verbatimReviewerLogArchives": [
+    {
+      "originalPath": "docs/review/2026-09-fixes/evidence/verification/deno-p06-handler.log",
+      "archivedPath": "docs/review/2026-09-fixes/evidence/verification/deno-p06-handler.log.gz",
+      "originalSha256": "0fad2c05570620e7d3cccaa044ff0ca0397f2a7f691cf9312f1d6995bf7af1fc",
+      "archiveSha256": "c8624085e85041a8f03f798e85ccc60e88612f22b05ea894060aeefb9cb78f8e",
+      "reason": "Preserve exact original stdout, including final blank line, in a lossless archive; no whitespace normalization of evidence."
+    }
+  ]
 }
