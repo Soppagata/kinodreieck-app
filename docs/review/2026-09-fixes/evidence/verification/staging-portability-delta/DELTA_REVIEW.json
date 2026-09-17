@@ -1,0 +1,262 @@
+{
+  "candidateCommit": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+  "acceptedReviewCommit": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+  "documentationBaseline": "8ae8c6e066bd5aeaf2e7746cef904dfb7797a0ae",
+  "reviewType": "Enge unabhängige Nachkontrolle der Staging-Testportabilität; kein neuer Vollreview.",
+  "worktree": "/private/tmp/kd-review49-verifier-portability-20260917",
+  "initialWorktreeState": "Exakter detached HEAD, sauber; einmal zu Beginn geprüft.",
+  "previousVerdictUnchanged": true,
+  "counts": {
+    "ERLEDIGT": 49,
+    "OFFEN": 0,
+    "NICHT BELEGT": 0
+  },
+  "criteriaCarriedForward": 239,
+  "affectedTickets": [
+    "KD-REV-E05-002",
+    "KD-REV-E08-002",
+    "KD-REV-E08-004",
+    "KD-REV-E14-001",
+    "KD-REV-E10-004",
+    "KD-REV-E06-001",
+    "KD-REV-E06-003"
+  ],
+  "retainedIssueIds": [
+    "KD-REV-E01-001",
+    "KD-REV-E01-002",
+    "KD-REV-E02-001",
+    "KD-REV-E02-002",
+    "KD-REV-E02-003",
+    "KD-REV-E03-001",
+    "KD-REV-E03-002",
+    "KD-REV-E03-003",
+    "KD-REV-E04-001",
+    "KD-REV-E04-002",
+    "KD-REV-E04-003",
+    "KD-REV-E04-004",
+    "KD-REV-E04-005",
+    "KD-REV-E04-006",
+    "KD-REV-E05-001",
+    "KD-REV-E05-002",
+    "KD-REV-E05-003",
+    "KD-REV-E06-001",
+    "KD-REV-E06-002",
+    "KD-REV-E06-003",
+    "KD-REV-E07-001",
+    "KD-REV-E07-002",
+    "KD-REV-E08-001",
+    "KD-REV-E08-002",
+    "KD-REV-E08-003",
+    "KD-REV-E08-004",
+    "KD-REV-E08-005",
+    "KD-REV-E09-001",
+    "KD-REV-E09-002",
+    "KD-REV-E09-003",
+    "KD-REV-E09-004",
+    "KD-REV-E10-001",
+    "KD-REV-E10-002",
+    "KD-REV-E10-003",
+    "KD-REV-E10-004",
+    "KD-REV-E11-001",
+    "KD-REV-E11-002",
+    "KD-REV-E11-003",
+    "KD-REV-E11-004",
+    "KD-REV-E11-005",
+    "KD-REV-E12-001",
+    "KD-REV-E12-002",
+    "KD-REV-E12-003",
+    "KD-REV-E13-001",
+    "KD-REV-E13-002",
+    "KD-REV-E13-003",
+    "KD-REV-E13-004",
+    "KD-REV-E14-001",
+    "KD-REV-E14-002"
+  ],
+  "changes": [
+    {
+      "package": "P05",
+      "commit": "bdc16fa9a0a1b35bd5db40fe8b36c2b302340132",
+      "testFile": "review49_p05_pg17_test.mjs",
+      "ticketIds": [
+        "KD-REV-E05-002",
+        "KD-REV-E08-002",
+        "KD-REV-E08-004",
+        "KD-REV-E14-001"
+      ],
+      "finding": "KD_TEST_PG_BIN explizit, sonst pg_config/Postgres.app/Linux17/Linux16; alle vier Programme mit --version auf ausführbare gleiche unterstützte Hauptversion 16/17 geprüft. Ungültiger expliziter Pfad oder fehlende Binaries werfen. os.tmpdir ersetzt macOS-festen temporären Pfad.",
+      "substantiveProof": "Ab const data= bleibt gesamter echter SQL-/Fixture-/RPC-/Assertion-/Cleanup-Teil bytegleich. Keine fachliche Guardlockerung.",
+      "packageExecutionEvidence": "P05-Bericht meldet realen lokalen PostgreSQL 17.10-Lauf aller vier Ticketgruppen plus 12 Pfadauswahlprüfungen. Im Deltareview nicht wiederholt.",
+      "sourceLocations": [
+        {
+          "file": "review49_p05_pg17_test.mjs",
+          "line": 19,
+          "excerpt": "const configuredPgBin=process.env.KD_TEST_PG_BIN?.trim();"
+        },
+        {
+          "file": "review49_p05_pg17_test.mjs",
+          "line": 20,
+          "excerpt": "const pgConfig=spawnSync('pg_config',['--bindir'],{encoding:'utf8',timeout:10000});"
+        },
+        {
+          "file": "review49_p05_pg17_test.mjs",
+          "line": 26,
+          "excerpt": "]).filter(Boolean);"
+        },
+        {
+          "file": "review49_p05_pg17_test.mjs",
+          "line": 37,
+          "excerpt": "const PG=selectedPg.directory;"
+        },
+        {
+          "file": "review49_p05_pg17_test.mjs",
+          "line": 39,
+          "excerpt": "const root=mkdtempSync(join(tmpdir(),'review49-p05-pg-'));"
+        },
+        {
+          "file": "review49_p05_pg17_test.mjs",
+          "line": 40,
+          "excerpt": "const data=join(root,'data'), socket=join(root,'socket'); mkdirSync(socket);"
+        }
+      ],
+      "status": "ERLEDIGT",
+      "packageEvidence": "docs/review/2026-09-fixes/evidence/P05.md"
+    },
+    {
+      "package": "P06",
+      "commit": "562720b89ee42df73813d4b1d1a800ac3eab98e3",
+      "testFile": "review49_p06_sql_test.mjs",
+      "ticketIds": [
+        "KD-REV-E10-004"
+      ],
+      "finding": "KD_TEST_PG_BIN/Legacy-PG17_BIN/pg_config/Postgres.app/Linux17/Linux16 werden auf vollständigen Serverprogrammsatz geprüft. Ohne vollständigen Kandidaten Assertion vor Clusteranlage; kein Skip. tmpdir blieb unverändert. Ergebnis nennt korrekt PostgreSQL ohne unbelegte feste17-Version.",
+      "substantiveProof": "Ab const root bleibt gesamter SQL-/Fixture-/Read-/Synthese-/ACL-/Trigger-/Cleanup-Teil identisch, ausgenommen die ausdrücklich angepasste Ergebnisbeschriftung. Auswahl prüft Dateiexistenz; Ausführungsfehler führen weiterhin im unveränderten run-Helper zum Fehler.",
+      "packageExecutionEvidence": "P06-Bericht meldet 19/19 reale PostgreSQL 17.10-Identitätsprüfungen und 9/9 Pfadauswahlfälle. Im Deltareview nicht wiederholt.",
+      "sourceLocations": [
+        {
+          "file": "review49_p06_sql_test.mjs",
+          "line": 7,
+          "excerpt": "const pgConfig = spawnSync('pg_config', ['--bindir'], { encoding: 'utf8', timeout: 5000 });"
+        },
+        {
+          "file": "review49_p06_sql_test.mjs",
+          "line": 8,
+          "excerpt": "const candidates = ["
+        },
+        {
+          "file": "review49_p06_sql_test.mjs",
+          "line": 16,
+          "excerpt": "const required = ['initdb', 'pg_ctl', 'postgres', 'psql'];"
+        },
+        {
+          "file": "review49_p06_sql_test.mjs",
+          "line": 17,
+          "excerpt": "const bin = [...new Set(candidates)].find(directory => required.every(binary => existsSync(join(directory, binary))));"
+        },
+        {
+          "file": "review49_p06_sql_test.mjs",
+          "line": 20,
+          "excerpt": "const root = mkdtempSync(join(tmpdir(), 'kd-p06-pg-'));"
+        },
+        {
+          "file": "review49_p06_sql_test.mjs",
+          "line": 85,
+          "excerpt": "console.log(`${checks}/${checks} real PostgreSQL identity checks passed`);"
+        }
+      ],
+      "status": "ERLEDIGT",
+      "packageEvidence": "docs/review/2026-09-fixes/evidence/P06.md"
+    },
+    {
+      "package": "P07",
+      "commit": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+      "testFile": "review49_p07_pg_test.mjs",
+      "ticketIds": [
+        "KD-REV-E06-001",
+        "KD-REV-E06-003"
+      ],
+      "finding": "KD_TEST_PG_BIN/Postgres.app/pg_config/Linux17 werden auf vollständige vier Binaries geprüft. Ungültige/unvollständige Kandidaten können zum nächsten vollständigen lokalen Pfad fallen; fehlt jeder vollständige Satz, harte Assertion. tmpdir unverändert.",
+      "substantiveProof": "Ab const folder bleiben Migrationen, Fixtures, Zeitsteuerung, echte RPC-/React-/Controller-/Anker-/Quellfristassertionen und Cleanup bytegleich; nur Gruppenname fresh PG17→fresh PostgreSQL angepasst. Kein Skip oder erwartungsändernder Testumbau.",
+      "packageExecutionEvidence": "P07-Bericht meldet 8/8 reale PostgreSQL 17.10-/React-Prüfgruppen, vier Seitenreads/null Vollfallbacks und 6 synthetische Pfadauswahlfälle. Im Deltareview nicht wiederholt.",
+      "sourceLocations": [
+        {
+          "file": "review49_p07_pg_test.mjs",
+          "line": 13,
+          "excerpt": "const configured=spawnSync('pg_config',['--bindir'],{encoding:'utf8'});"
+        },
+        {
+          "file": "review49_p07_pg_test.mjs",
+          "line": 14,
+          "excerpt": "const candidates=[process.env.KD_TEST_PG_BIN,'/Applications/Postgres.app/Contents/Versions/17/bin',"
+        },
+        {
+          "file": "review49_p07_pg_test.mjs",
+          "line": 16,
+          "excerpt": "const required=['initdb','pg_ctl','psql','postgres'];"
+        },
+        {
+          "file": "review49_p07_pg_test.mjs",
+          "line": 17,
+          "excerpt": "const PG=[...new Set(candidates)].find(dir=>required.every(name=>existsSync(join(dir,name))));"
+        },
+        {
+          "file": "review49_p07_pg_test.mjs",
+          "line": 20,
+          "excerpt": "const folder=mkdtempSync(join(tmpdir(),'review49-p07-pg-'));mkdirSync(join(folder,'s'));"
+        },
+        {
+          "file": "review49_p07_pg_test.mjs",
+          "line": 73,
+          "excerpt": "check('fresh PostgreSQL: additive migration and unchanged ACL',()=>{"
+        }
+      ],
+      "status": "ERLEDIGT",
+      "packageEvidence": "docs/review/2026-09-fixes/evidence/P07.md"
+    }
+  ],
+  "unchangedEvidence": {
+    "productCode": "git diff 114b268..ab8b563 enthält außerhalb docs ausschließlich genau die drei aufgeführten PostgreSQL-Testdateien. Damit sind src/,supabase/,tools/,.github/,package.json,Lockfile und sonstige Produkt-/Konfigurationsdateien bytegleich.",
+    "originalTickets": "49 Originalticket-SHA256 stimmen mit dem akzeptierten Bericht überein.",
+    "sourceLocations": "Sämtliche aktuellen Produktfundstellen/Excerpts des akzeptierten 49er-Berichts stimmen weiter exakt.",
+    "testAssertions": "Bytevergleich kompletter fachlicher Testkörper: 3/3 identisch nach genau zwei reinen Labelersetzungen. SQL und fachliche Assertions wurden nicht gelockert.",
+    "comparisonArtifact": "SOURCE_COMPARISON.json"
+  },
+  "targetedChecks": [
+    {
+      "command": "git rev-parse HEAD; git status --short",
+      "result": "Exakt ab8b563d32ee61e318eb2d034cc529d124f293f9, sauber"
+    },
+    {
+      "command": "git diff 114b268..ab8b563; vollständiger Diff 8ae8c6e..ab8b563 der drei PG-Tests und Paketbelege",
+      "result": "Nur portable Binary-/Temppfadwahl und Ergebnis-/Gruppenlabel; keine fachliche Änderung"
+    },
+    {
+      "command": "Mechanischer Git-Blob-/Sourcevergleich, Ticket-SHA256 und alle akzeptierten Source-Excerpts",
+      "result": "3 unveränderte fachliche Testkörper, 49 Originalhashes, 239 Kriterien weiter gültig",
+      "evidenceFile": "SOURCE_COMPARISON.json"
+    },
+    {
+      "command": "node --check review49_p05_pg17_test.mjs",
+      "result": "Exit 0"
+    },
+    {
+      "command": "node --check review49_p06_sql_test.mjs",
+      "result": "Exit 0"
+    },
+    {
+      "command": "node --check review49_p07_pg_test.mjs",
+      "result": "Exit 0"
+    },
+    {
+      "command": "git diff --check 8ae8c6e..ab8b563",
+      "result": "Exit 0"
+    }
+  ],
+  "conclusion": "Vorherige 49 Einzelurteile gelten unverändert auf dem exakten Kandidaten. Kein bestätigter lokaler Produktrestfehler und keine neu entstandene fachliche Beleglücke.",
+  "remainingLimitations": [
+    "Keine erneute SQL-/Browser-/Gesamtsuite und kein Build durch den Reviewer; die fachlichen Testkörper sind unverändert und vorhandene gezielte Paketbelege sind nachvollziehbar. Eine konkrete neue Beleglücke wurde nicht gefunden.",
+    "Native Ubuntu-/CI-Ausführung wird durch diese lokale Source-/Syntaxprüfung nicht behauptet. Binaryexistenz-Auswahl in P06/P07 garantiert allein keine Laufzeitkompatibilität; tatsächliche Start-/SQLfehler bleiben harte Fehler der unveränderten Testläufe.",
+    "Vollständige npm-Suite und Build führt der Meister aus. Kein Remotezugriff, keine Providerwirkung, kein Push/Deployment und keine neue Freigabeentscheidung durch diesen Reviewer.",
+    "Staging-Push ist wegen der offenen Nutzerentscheidung zur mit Produktion geteilten Datenbank zurückgestellt. Das ist eine Lieferentscheidung und öffnet keines der 49 lokalen Produktissues.",
+    "Der ursprüngliche 114b268-Bericht und seine Vorversionen wurden nicht verändert; dies ist ein zusätzlicher Deltabeleg."
+  ]
+}

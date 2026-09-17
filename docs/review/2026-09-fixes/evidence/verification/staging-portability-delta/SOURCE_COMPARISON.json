@@ -1,0 +1,59 @@
+{
+  "baselineCommit": "114b268c2ffe577f35b8ca52863b0d2980495f0e",
+  "documentationBaseline": "8ae8c6e066bd5aeaf2e7746cef904dfb7797a0ae",
+  "candidateCommit": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+  "baselineReviewSha256": "2de0beb8323ee0e7680a72c997590b377983acea9f513c8cb1b0a8a693a9f4b5",
+  "nonDocumentationChanges": [
+    "review49_p05_pg17_test.mjs",
+    "review49_p06_sql_test.mjs",
+    "review49_p07_pg_test.mjs"
+  ],
+  "testBodyComparisons": [
+    {
+      "file": "review49_p05_pg17_test.mjs",
+      "baselineSha256": "01b2b02f3d7b59b6a79c8625f75404d683b1d6f77440fcb7276349684c920a8e",
+      "candidateSha256": "153ec24fab73636f607c93b980e3e09650e4c18d058be8eeefba6fb0b96d44e7",
+      "semanticBodyStartsAtLine": 40,
+      "semanticBodyComparison": "byte-identical after only the explicitly listed output/test-label replacement",
+      "allowedBodyLabelReplacement": null,
+      "normalizedBodySha256": "5e472bd59e467d09ffd926c39f71549319a708b735383a1db6d220ebacbfd0ab",
+      "containsUnchanged": "All SQL setup/migrations, synthetic fixtures, actual RPC calls, product module usage, substantive assertions, failure exits, cluster stop and cleanup."
+    },
+    {
+      "file": "review49_p06_sql_test.mjs",
+      "baselineSha256": "bbeaa2f4dbd95f01203ac7996b69eb74453ad1ceeb88a7a44d76b5f5ac4e8a76",
+      "candidateSha256": "e19f6542a75073c81dc4b13d6d6f01e5962417e9bfd8f4fa46ff350efe3bbac0",
+      "semanticBodyStartsAtLine": 20,
+      "semanticBodyComparison": "byte-identical after only the explicitly listed output/test-label replacement",
+      "allowedBodyLabelReplacement": {
+        "from": "real PostgreSQL 17 identity checks passed",
+        "to": "real PostgreSQL identity checks passed"
+      },
+      "normalizedBodySha256": "144335a09226aa2390d94043853e46ceb3d918e4860f3a2a2e79464464648e9b",
+      "containsUnchanged": "All SQL setup/migrations, synthetic fixtures, actual RPC calls, product module usage, substantive assertions, failure exits, cluster stop and cleanup."
+    },
+    {
+      "file": "review49_p07_pg_test.mjs",
+      "baselineSha256": "55c3a7f068d69bde1b062319aa431ac2a24e4fd97dd315850f2131f3ae3f49fe",
+      "candidateSha256": "274e3d32a7edb4c86a70ea87fec86296d0a3890d8bd049810913e636655fccf0",
+      "semanticBodyStartsAtLine": 20,
+      "semanticBodyComparison": "byte-identical after only the explicitly listed output/test-label replacement",
+      "allowedBodyLabelReplacement": {
+        "from": "fresh PG17: additive migration and unchanged ACL",
+        "to": "fresh PostgreSQL: additive migration and unchanged ACL"
+      },
+      "normalizedBodySha256": "7aca358e4ddf4bf4adeb0bbfad2842291a9fb156e3e1fa427358f792bf3268fa",
+      "containsUnchanged": "All SQL setup/migrations, synthetic fixtures, actual RPC calls, product module usage, substantive assertions, failure exits, cluster stop and cleanup."
+    }
+  ],
+  "originalTickets": "49/49 hashes identical to accepted reviewer report",
+  "sourceLocations": "All original reviewer source excerpts still exact",
+  "priorCriteria": "239 criteria on49 issues remain bound by unchanged product bytes",
+  "checks": [
+    "accepted114b268 is ancestor of candidate",
+    "documentation8ae8c6e is ancestor of candidate",
+    "all non-doc deltas are exactly three allowed test files",
+    "three substantive test bodies byte-identical after two label-only normalizations",
+    "all49 accepted ticket hashes and current source excerpts match"
+  ]
+}

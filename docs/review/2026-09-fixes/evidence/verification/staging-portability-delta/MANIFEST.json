@@ -1,0 +1,17 @@
+{
+  "candidateCommit": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+  "files": [
+    {
+      "path": "DELTA_REVIEW.json",
+      "sha256": "11ed5e5839adc625de09b05a763a077b2506e3eb92c71ee82cd63b5c636b464a"
+    },
+    {
+      "path": "DELTA_REVIEW.md",
+      "sha256": "c2842cf87b2cc6eb8555c61cab2f85b51cd7fa5ff31094e6a1075d3f47c72ec5"
+    },
+    {
+      "path": "SOURCE_COMPARISON.json",
+      "sha256": "be7365c2c090298fe871e46f6bbf036c40f27cda2082af99f87b1155657a70fb"
+    }
+  ]
+}

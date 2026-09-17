@@ -1,0 +1,110 @@
+{
+  "candidate": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+  "executions": [
+    {
+      "name": "npm-test",
+      "candidate": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "startedAt": "2026-09-17T16:16:01.297469+00:00",
+      "durationSeconds": 128.172,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-staging-20260917/npm-test.log",
+      "sha256": "4603bd65e72a3b6c274e2699e4ef51dfc25270280b80c0176fb13868e22b3e51",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/staging-ab8b563-npm-test.log.gz",
+      "archiveSha256": "d53057bf84d4bcfdaec8ca3cfb5f1e2bc793184d943970dd067507e85a3d42d6"
+    },
+    {
+      "name": "build",
+      "candidate": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "startedAt": "2026-09-17T16:18:09.482496+00:00",
+      "durationSeconds": 1.021,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-staging-20260917/build.log",
+      "sha256": "71874e7a9f84e5e71760a4c829f96158fd2f221d1214d13f90c36ef6f43d86bf",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/staging-ab8b563-build.log.gz",
+      "archiveSha256": "f9971c7ea13b811a9cbe7a356a073f4f635e250c0a5d234f8e6f2d5ea113b023"
+    },
+    {
+      "name": "function-release",
+      "candidate": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+      "command": [
+        "npm",
+        "run",
+        "check:function-release"
+      ],
+      "startedAt": "2026-09-17T16:18:10.504770+00:00",
+      "durationSeconds": 0.38,
+      "exitCode": 0,
+      "log": "/private/tmp/kd-review49-staging-20260917/function-release.log",
+      "sha256": "ddeaab4d6f2b5a86d906cc630c3f6588bed56c06214ddbf358a6fea3dd428602",
+      "archivedLog": "docs/review/2026-09-fixes/evidence/acceptance/staging-ab8b563-function-release.log.gz",
+      "archiveSha256": "09ce6b25f646e75ba2b504f09aacbeafa9bef4cd117219c7637f672b365f54ea"
+    }
+  ],
+  "status": "PASS_LOCAL_STAGING_CANDIDATE",
+  "staticChecks": {
+    "observedAt": "2026-09-17T16:17:10.027293+00:00",
+    "candidate": "ab8b563d32ee61e318eb2d034cc529d124f293f9",
+    "productPaths": [
+      "src",
+      "supabase",
+      ".github",
+      "package.json",
+      "package-lock.json"
+    ],
+    "productDiffFromAcceptedCandidate": [],
+    "all49Done": true,
+    "originalTicketsUnchanged": true,
+    "diffCheckExit": 0,
+    "primaryHead": "98b5eca18d15f0a4ec8bed52b1d952c7cc8ec383",
+    "primaryTrackedStatus": [
+      " M .gitignore",
+      " M AGENTS.md",
+      " M docs/pruefagenten/LIESMICH.md",
+      " M docs/zukunft/NAECHSTER_MASTERCHAT_PRIVATRELEASE_ETAPPENPLAN.md",
+      " M docs/zukunft/README.md"
+    ]
+  },
+  "independentDeltaReview": [
+    {
+      "path": "docs/review/2026-09-fixes/evidence/verification/staging-portability-delta/DELTA_REVIEW.md",
+      "sha256": "c2842cf87b2cc6eb8555c61cab2f85b51cd7fa5ff31094e6a1075d3f47c72ec5"
+    },
+    {
+      "path": "docs/review/2026-09-fixes/evidence/verification/staging-portability-delta/DELTA_REVIEW.json",
+      "sha256": "11ed5e5839adc625de09b05a763a077b2506e3eb92c71ee82cd63b5c636b464a"
+    },
+    {
+      "path": "docs/review/2026-09-fixes/evidence/verification/staging-portability-delta/SOURCE_COMPARISON.json",
+      "sha256": "be7365c2c090298fe871e46f6bbf036c40f27cda2082af99f87b1155657a70fb"
+    },
+    {
+      "path": "docs/review/2026-09-fixes/evidence/verification/staging-portability-delta/MANIFEST.json",
+      "sha256": "a85b03ee95654996652b9bed9a34e8bc7929002987dfbdebc3b5bc4c31f423d3"
+    }
+  ],
+  "priorReviewAndUnchangedInputs": {
+    "source": "docs/review/2026-09-fixes/evidence/FINAL_GATE.json",
+    "functionMocks": "349 passed; source and test inputs unchanged",
+    "browserGate": "passed Chromium/WebKit; source and test inputs unchanged"
+  },
+  "boundaries": {
+    "localAcceptance": true,
+    "actualStagingPush": false,
+    "ci": false,
+    "deployment": false,
+    "sharedMigrationsApplied": false,
+    "paidProviderCalls": false,
+    "physicalIphonePwaAcceptance": false,
+    "pending": "User decision for shared-backend scope"
+  },
+  "finalDocumentationRule": "After ab8b563, only documentation and evidence change; product and all executable test/configuration bytes stay identical."
+}

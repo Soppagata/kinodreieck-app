@@ -4,7 +4,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 
 **Lokal abgeschlossen: 49/49 DONE.** Der unabhaengige Abschlusspruefer bestaetigt **49 ERLEDIGT, 0 OFFEN, 0 NICHT BELEGT** mit 239 einzelnen Kriterienabgleichen. Vollstaendige Mock-Suite, Function-Mocks, Browserabnahme, Build und Abschlussdiff sind bestanden.
 
-Abgenommener Kandidat: `114b268c2ffe577f35b8ca52863b0d2980495f0e` auf `codex/review49-integration-20260917`. Danach werden ausschliesslich diese Abschlussdokumente und ihre Belegdateien committed; Produkt-, Test- und Konfigurationsbytes bleiben identisch. DONE bezeichnet hier die lokale Abnahme.
+Urspruenglich abgenommener Kandidat: `114b268c2ffe577f35b8ca52863b0d2980495f0e` auf `codex/review49-integration-20260917`; die anschliessende Dokumentationsfinalisierung endete bei `8ae8c6e`. Aktueller lokal abgenommener Staging-Kandidat: **`ab8b563d32ee61e318eb2d034cc529d124f293f9`**. Er ergaenzt ausschliesslich drei portable SQL-Teststarter und Auslieferungsbelege; Produkt-, SQL-, Workflow-, npm- und Konfigurationsbytes sind gegenueber 114b268 identisch. DONE bezeichnet weiterhin die lokale Abnahme.
 
 Nachweise: [unabhaengiger Bericht](evidence/verification/FINAL_REVIEW.md), [49 Issues / 239 Kriterien mit Fundstellen](evidence/verification/FINAL_REVIEW.json), [Master-Abschlusslauf mit Logarchiven und Hashen](evidence/FINAL_GATE.json).
 
@@ -142,7 +142,9 @@ Max beauftragt jetzt die Staging-Lieferung zur eigenen iPhone/PWA-Abnahme. Der P
 
 Deshalb kann eine volle Staging-Lieferung mit unveraendertem Produktionsbackend noch nicht behauptet werden. Vor gemeinsamer Umstellung sind Ziel/Umfang und das Versionsfenster zu klaeren: Die neue Radar-Migration schreibt auch die von alten Prod-Clients gelesenen Fundschluessel um; der neue Filmwissenvertrag lehnt deren numerische TMDB-Anfragen ab. Max ist die Wahl zwischen getrenntem Staging-Backend und einer ausdruecklich vorgezogenen gemeinsamen Umstellung mit Wartungsfenster vorgelegt. Keine Serverdatenmutation, kein neuer Anbieterrequest und keine neue Infrastruktur wurden ausgefuehrt.
 
-Unabhaengige CI-Vorbereitung: Die drei neu eingebundenen SQL-Testskripte P05/P06/P07 besitzen Mac-spezifische PostgreSQL-Pfade. Die bestehenden Owner korrigieren parallel ausschliesslich jeweils ihre Testdatei und ihren Paketbeleg, alle von 8ae8c6e in neuen Worktrees. Keine gemeinsamen Schreibflaechen oder Produktaenderungen; Integration und passender Masterabschluss folgen nach Lieferung. Die urspruenglichen 49 Ticketfixes bleiben lokal DONE.
+Unabhaengige CI-Vorbereitung abgeschlossen: Die bestehenden Owner korrigierten parallel ausschliesslich die PostgreSQL-Pfadwahl ihrer Testdatei und den eigenen Paketbeleg, alle von 8ae8c6e in neuen Worktrees. Sequenziell integriert: P05 `bdc16fa`, P06 `562720b`, P07 `ab8b563`. Keine gemeinsamen Schreibflaechen oder Produktaenderungen; SQL, Fixtures und fachliche Assertions unveraendert. Ein tatsaechlicher Ubuntu-CI-Lauf bleibt bis zum Push offen.
+
+Der unabhaengige Abschlusspruefer bestaetigt auf exakt ab8b563 weiterhin **49 ERLEDIGT / 239 Kriterien, 0 OFFEN, 0 NICHT BELEGT**: [Deltabericht](evidence/verification/staging-portability-delta/DELTA_REVIEW.md). Der Master-Abschlusslauf auf demselben Commit bestand: komplette `npm test`-Suite (128,172 s), Build und Function-Quellpruefung jeweils Exit 0. Die frueheren 349 Function-Mocks und Browsernachweise gelten wegen bytegleicher Inputs weiter. [Staging-Kandidatenabnahme](evidence/STAGING_LOCAL_GATE.json) bindet Original-Logs, Hashes, Diff-/Bestandspruefung und Prueferbericht. Alle 49 Originaltickets und ihre Fixzuordnung bleiben erhalten. Nach ab8b563 folgen nur Abschlussdokumente; kein Push/Deploy und keine gemeinsame Datenmigration ohne geklaerte Zielgrenze.
 
 ## Konkret vorbereitete spaetere Auslieferung
 
