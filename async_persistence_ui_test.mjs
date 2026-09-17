@@ -785,38 +785,86 @@ check(!!knopf(wochenFixture.container, "Titel anlegen") && !wochenFixture.contai
   "fehlgeschlagener Wochenplan-Write lässt die Referenz sichtbar unverändert");
 await wochenFixture.cleanup();
 
-/* Streaming: Nach bestätigter Film-ID bleibt die Gesehen-Maske offen, solange
-   der Statuswrite aussteht, und ebenso nach dessen bestätigtem Fehlschlag. */
+/* Streaming: Ein geladener leerer Master erlaubt die Neuanlage. Erst die
+   bestätigte Film-ID startet den Statuswrite; dessen Fehlschlag lässt die
+   Gesehen-Maske offen. Der Legacy-Abgleich ist bei unverändertem Status ein
+   No-op, wie beim tatsächlichen bestätigten Statewriter. */
+let filmAnlageResolver = null;
+let filmAnlagen = 0;
 let statusResolver = null;
 let statusWrites = 0;
+let statusPayload = null;
+const streamingStartStatus = {};
 const streamingFixtureStand = new Date().toISOString();
-const streamingFixture = await mounte(StreamingTab, {
+const streamingProps = {
   bekannt: { stand: streamingFixtureStand, katalog_stand: streamingFixtureStand, titel: [] },
   entdecken: { stand: streamingFixtureStand, katalog_stand: streamingFixtureStand,
     katalogMengen: { umfang: "voll" }, titel: [{
-    watchmode_id: "wm_1", titel: "Testfilm", jahr: 2024, typ: "movie", genres: [], dienste: ["Testdienst"],
+    watchmode_id: 101, titel: "Testfilm", jahr: 2024, typ: "movie", genres: [], dienste: ["Testdienst"],
   }] },
-  auswahl: ["Testdienst"], merkliste: [], toggleMerk() {}, addFilm: async () => "master_1", master: null,
+  auswahl: ["Testdienst"], merkliste: [], toggleMerk() {}, master: [],
+  addFilm: () => {
+    filmAnlagen++;
+    return new Promise((resolve) => { filmAnlageResolver = resolve; });
+  },
   mustwatchIds: new Set(),
-  entdeckenStatus: {},
-  schreibeEntdeckenStatus: () => {
+  entdeckenStatus: streamingStartStatus,
+  schreibeEntdeckenStatus: (derive) => {
+    const next = derive(streamingStartStatus);
+    if (next === streamingStartStatus) return Promise.resolve(streamingStartStatus);
+    statusPayload = next;
     statusWrites++;
     return new Promise((resolve) => { statusResolver = resolve; });
   },
-});
+};
+const streamingFixture = await mounte(StreamingTab, streamingProps);
 await act(async () => { knopf(streamingFixture.container, "Alles").click(); await tick(); });
 await act(async () => {
   streamingFixture.container.querySelector('button[title="Als gesehen markieren"]').click();
   await tick();
 });
+check(!!knopf(streamingFixture.container, "Ja, in die Mediathek") && filmAnlagen === 0 && statusWrites === 0,
+  "geladener leerer Master erlaubt die Übernahmefrage ohne vorzeitigen Write");
 await act(async () => { knopf(streamingFixture.container, "Ja, in die Mediathek").click(); await tick(); });
-check(statusWrites === 1 && knopf(streamingFixture.container, "Speichert").disabled,
+check(filmAnlagen === 1 && statusWrites === 0 && knopf(streamingFixture.container, "Speichert").disabled,
+  "Streaming schreibt während einer noch unbestätigten Film-ID keinen Folgestatus");
+await act(async () => { filmAnlageResolver("master_1"); await tick(); });
+check(statusWrites === 1 && knopf(streamingFixture.container, "Speichert").disabled
+  && statusPayload[101].mediathek_id === "master_1" && statusPayload[101].status === "gesehen",
   "Streaming wartet nach addFilm auf die bestätigte Statuspersistenz");
 await act(async () => { statusResolver(false); await tick(); });
 check(!!knopf(streamingFixture.container, "Ja, in die Mediathek")
-  && !streamingFixture.container.textContent.includes("in deiner Mediathek"),
+  && !streamingFixture.container.textContent.includes("in deiner Mediathek")
+  && Object.keys(streamingStartStatus).length === 0,
 "fehlgeschlagener Streaming-Statuswrite zeigt keinen Scheinerfolg");
 await streamingFixture.cleanup();
+
+/* E06-002: null bedeutet noch ungeladen, nicht bestätigt leer. Weder
+   Neuanlage noch Gesehen-Übernahme dürfen daraus abgeleitet werden. */
+let ungeladeneAnlagen = 0;
+let ungeladeneStatusWrites = 0;
+const streamingUngeladen = await mounte(StreamingTab, {
+  ...streamingProps, master: null,
+  addFilm: async () => { ungeladeneAnlagen++; return "verbotene_id"; },
+  schreibeEntdeckenStatus: async () => { ungeladeneStatusWrites++; return {}; },
+});
+await act(async () => {
+  knopf(streamingUngeladen.container, "Alles").click();
+  await tick();
+  streamingUngeladen.container.querySelector('button[aria-label="Details zu Testfilm"]').click();
+  await tick();
+});
+check(!knopf(streamingUngeladen.container, "Eintrag erstellen")
+  && !streamingUngeladen.container.textContent.includes("in deiner Mediathek"),
+  "ungeladener Master bietet trotz offener Details weder Erstellung noch Zuordnung an");
+await act(async () => {
+  streamingUngeladen.container.querySelector('button[title="Als gesehen markieren"]').click();
+  await tick();
+});
+check(!knopf(streamingUngeladen.container, "Ja, in die Mediathek")
+  && ungeladeneAnlagen === 0 && ungeladeneStatusWrites === 0,
+  "ungeladener Master öffnet keine Übernahmefrage und startet weder Film- noch Statuswrite");
+await streamingUngeladen.cleanup();
 
 /* Exportmarker: Ein verspäteter Konto-A-Read und sogar ein alter A-Callback
    dürfen nach dem Wechsel weder B-Warnungen ausblenden noch in B schreiben. */
