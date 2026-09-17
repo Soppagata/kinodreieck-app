@@ -9,6 +9,17 @@ export const BLOG_LIST_DEFAULT_LIMIT = 20;
 export const BLOG_LIST_MAX_LIMIT = 50;
 export const BLOG_NEUTRAL_AUTHOR = "Ohne Namensangabe";
 
+/* IDs aus dem vorhandenen zentralen Streaming-Backend. Das Blog fuehrt keine
+   zweite Namens- oder Aliasliste ein. */
+export const BLOG_STREAMING_SOURCE_IDS = Object.freeze([
+  "netflix", "prime", "disney", "apple", "hbo", "paramount", "mubi",
+  "crunchyroll", "rtl",
+]);
+
+export const BLOG_IDENTITY_NAMESPACES = Object.freeze([
+  "imdb", "tmdb", "watchmode", "film_at",
+]);
+
 export const BLOG_RPC = Object.freeze({
   capability: "kd_blog_publication_capabilities",
   publish: "kd_publish_blog_v1",
@@ -94,6 +105,33 @@ function instantMs(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function nonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export function isBlogStreamingSourceId(value) {
+  return BLOG_STREAMING_SOURCE_IDS.includes(String(value || "").trim());
+}
+
+export function isBlogPublicStreamingTarget(target) {
+  return plain(target)
+    && target.kind === "streaming"
+    && isBlogStreamingSourceId(target.sourceId)
+    && ["programm", "entdecken"].includes(target.art)
+    && nonEmptyString(target.ref)
+    && nonEmptyString(target.titel);
+}
+
+/* Oeffentliche Kinoziele duerfen nur auf das zentrale Programm zeigen.
+   `art: film` waere eine private Mediathek-ID und ist deshalb ungueltig. */
+export function isBlogPublicCinemaTarget(target) {
+  return plain(target)
+    && target.kind === "cinema"
+    && target.art === "programm"
+    && nonEmptyString(target.ref)
+    && nonEmptyString(target.titel);
+}
+
 /* Der neue Einstieg bleibt bei alter, unvollstaendiger oder unerwartet
    erweiterter Capability geschlossen. Ein HTTP-200 allein genuegt nicht. */
 export function hasBlogPublicationCapability(value) {
@@ -151,15 +189,16 @@ export function projectBlogReferenceForReader(reference, {
   now,
 } = {}) {
   const selected = new Set((Array.isArray(selectedSourceIds) ? selectedSourceIds : [])
-    .map((sourceId) => String(sourceId || "").trim()).filter(Boolean));
+    .map((sourceId) => String(sourceId || "").trim()).filter(isBlogStreamingSourceId));
   const sources = plain(reference?.sources) ? reference.sources : {};
   const allStreaming = Array.isArray(sources.streaming) ? sources.streaming : [];
   const allCinema = Array.isArray(sources.cinema) ? sources.cinema : [];
-  const streaming = allStreaming
+  const validStreaming = allStreaming.filter(isBlogPublicStreamingTarget);
+  const validCinema = allCinema.filter(isBlogPublicCinemaTarget);
+  const selectedStreaming = validStreaming
     .filter((target) => selected.has(String(target?.sourceId || "").trim()))
-    .filter((target) => isBlogSourceTargetCurrent(target, now));
-  const cinema = allCinema
-    .filter((target) => isBlogSourceTargetCurrent(target, now));
+  const streaming = selectedStreaming.filter((target) => isBlogSourceTargetCurrent(target, now));
+  const cinema = validCinema.filter((target) => isBlogSourceTargetCurrent(target, now));
   const targets = libraryTarget ? [libraryTarget, ...streaming, ...cinema] : [...streaming, ...cinema];
   if (targets.length) {
     return Object.freeze({
@@ -171,14 +210,21 @@ export function projectBlogReferenceForReader(reference, {
   const resolution = reference?.resolution?.status;
   const projectedAt = instantMs(now);
   const sourcesCheckedAt = instantMs(sources.checkedAt);
+  const sourcesValidUntil = instantMs(sources.validUntil);
   const sourcesChecked = sources.status === BLOG_SOURCE_STATUS.CHECKED
-    && projectedAt !== null && sourcesCheckedAt !== null && sourcesCheckedAt <= projectedAt;
-  const listedTargets = [...allStreaming, ...allCinema];
-  const onlyExpiredTargets = listedTargets.length > 0
-    && !listedTargets.some((target) => isBlogSourceTargetCurrent(target, now));
-  if (!libraryReady || !sourcesChecked || onlyExpiredTargets
-      || [BLOG_REFERENCE_RESOLUTION.AMBIGUOUS, BLOG_REFERENCE_RESOLUTION.UNCHECKED,
-        BLOG_REFERENCE_RESOLUTION.ERROR].includes(resolution)) {
+    && projectedAt !== null && sourcesCheckedAt !== null && sourcesValidUntil !== null
+    && sourcesCheckedAt <= projectedAt && projectedAt < sourcesValidUntil;
+  const relevantTargets = [...selectedStreaming, ...validCinema];
+  const staleRelevantTarget = relevantTargets.length > 0
+    && !relevantTargets.some((target) => isBlogSourceTargetCurrent(target, now));
+  const targetsValid = validStreaming.length === allStreaming.length
+    && validCinema.length === allCinema.length;
+  const resolutionCanProveAbsence = [
+    BLOG_REFERENCE_RESOLUTION.MATCHED,
+    BLOG_REFERENCE_RESOLUTION.NOT_FOUND,
+  ].includes(resolution);
+  if (!libraryReady || !sourcesChecked || !targetsValid || staleRelevantTarget
+      || !resolutionCanProveAbsence) {
     return Object.freeze({
       state: BLOG_REFERENCE_VIEW.UNCHECKED,
       primaryTarget: null,

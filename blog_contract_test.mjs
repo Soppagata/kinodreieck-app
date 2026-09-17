@@ -2,14 +2,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   BLOG_CONTRACT_VERSION,
+  BLOG_IDENTITY_NAMESPACES,
   BLOG_MAX_REFERENCES,
   BLOG_NEUTRAL_AUTHOR,
   BLOG_PUBLICATION_DISPLAY,
   BLOG_REFERENCE_VIEW,
   BLOG_SAVE_INTENT,
+  BLOG_STREAMING_SOURCE_IDS,
   blogPublicationDisplayState,
   blogSaveIntent,
   hasBlogPublicationCapability,
+  isBlogPublicCinemaTarget,
+  isBlogPublicStreamingTarget,
   isBlogSourceTargetCurrent,
   projectBlogReferenceForReader,
 } from "./src/lib/blogContract.js";
@@ -34,6 +38,14 @@ check("Referenzgrenze und stabile Zeilenidentitaet gelten unabhaengig von Rangfo
   fixture.ownerArticle.references.length <= BLOG_MAX_REFERENCES
   && new Set(fixture.ownerArticle.references.map((entry) => entry.rowId)).size === fixture.ownerArticle.references.length
   && fixture.ownerArticle.references.every((entry, index) => entry.rank === index + 1));
+check("Optionale starke Identitaetshinweise bleiben neutral und katalogpruefbar",
+  fixture.ownerArticle.references.filter((entry) => entry.identityHints).every((entry) =>
+    entry.identityHints.length <= 4
+    && new Set(entry.identityHints.map((hint) => hint.namespace)).size === entry.identityHints.length
+    && entry.identityHints.every((hint) => BLOG_IDENTITY_NAMESPACES.includes(hint.namespace)
+      && typeof hint.value === "string" && hint.value.length > 0))
+  && !JSON.stringify(fixture.ownerArticle.references.flatMap((entry) => entry.identityHints || []))
+    .includes("alpha-local"));
 
 const article = fixture.publicPage.items[0].article;
 check("Oeffentliche Projektion ist neutral und enthaelt keine privaten Zeilen- oder Konto-IDs",
@@ -67,6 +79,7 @@ const streamingOnly = article.references[1];
 const cinemaOnly = article.references[2];
 const unknownSource = article.references[4];
 const expiredCinema = article.references[7];
+const selectedSourceExpired = article.references[9];
 check("Streamingziel nutzt die vorbereitete echte App-Zielform",
   projectBlogReferenceForReader(streamingOnly, {
     selectedSourceIds: ["disney"], libraryReady: true, now,
@@ -79,7 +92,18 @@ check("Streamingziel nutzt die vorbereitete echte App-Zielform",
   }).primaryTarget?.titel === "Star Wars: The Empire Strikes Back");
 check("Kinoziel nutzt film_at-kompatible Programmreferenz und explizite Gueltigkeit",
   projectBlogReferenceForReader(cinemaOnly, { libraryReady: true, now }).primaryTarget?.ref === "fixture-film-at-jedi"
-  && isBlogSourceTargetCurrent(cinemaOnly.sources.cinema[0], now));
+  && isBlogSourceTargetCurrent(cinemaOnly.sources.cinema[0], now)
+  && article.references.flatMap((reference) => reference.sources.cinema).every(isBlogPublicCinemaTarget));
+check("Oeffentliche Ziele verwenden nur kanonische Streaming-IDs und nie private Kinoziele",
+  article.references.flatMap((reference) => reference.sources.streaming)
+    .every((target) => isBlogPublicStreamingTarget(target)
+      && BLOG_STREAMING_SOURCE_IDS.includes(target.sourceId))
+  && article.references.flatMap((reference) => reference.sources.cinema)
+    .every((target) => target.art === "programm" && target.kind === "cinema")
+  && !isBlogPublicStreamingTarget({ kind: "streaming", sourceId: "Disney+", art: "programm", ref: "x", titel: "x" })
+  && !isBlogPublicCinemaTarget({ kind: "cinema", art: "film", ref: "private-library-id", titel: "x" })
+  && !JSON.stringify(fixture.publicPage).includes('"kind":"library"')
+  && !JSON.stringify(fixture.publicPage).includes("alpha-local"));
 check("Ungepruefte Quelle ist kein Rotlink",
   projectBlogReferenceForReader(unknownSource, { libraryReady: true, now }).state === BLOG_REFERENCE_VIEW.UNCHECKED
   && projectBlogReferenceForReader({
@@ -88,6 +112,25 @@ check("Ungepruefte Quelle ist kein Rotlink",
 check("Abgelaufener Kinotermin gilt an injizierter Uhr als ungeprueft statt aktuell oder Rotlink",
   !isBlogSourceTargetCurrent(expiredCinema.sources.cinema[0], now)
   && projectBlogReferenceForReader(expiredCinema, { libraryReady: true, now }).state === BLOG_REFERENCE_VIEW.UNCHECKED);
+check("Negativbeleg laeuft auch ohne Ziele ab und unbekannter Resolutionstatus bleibt ungeprueft",
+  article.references.every((reference) => Object.hasOwn(reference.sources, "validUntil"))
+  && projectBlogReferenceForReader({
+    ...article.references[3],
+    sources: { ...article.references[3].sources, validUntil: "2032-05-04T11:59:59.000Z" },
+  }, { libraryReady: true, now }).state === BLOG_REFERENCE_VIEW.UNCHECKED
+  && projectBlogReferenceForReader({
+    ...article.references[3], resolution: {},
+  }, { libraryReady: true, now }).state === BLOG_REFERENCE_VIEW.UNCHECKED
+  && projectBlogReferenceForReader({
+    ...article.references[3], resolution: { status: "future_status", workKey: null },
+  }, { libraryReady: true, now }).state === BLOG_REFERENCE_VIEW.UNCHECKED);
+check("Abgelaufenes gewaehltes Streamingziel wird nicht durch aktuellen fremden Dienst zum Rotlink",
+  projectBlogReferenceForReader(selectedSourceExpired, {
+    selectedSourceIds: ["disney"], libraryReady: true, now,
+  }).state === BLOG_REFERENCE_VIEW.UNCHECKED
+  && projectBlogReferenceForReader(selectedSourceExpired, {
+    selectedSourceIds: ["prime"], libraryReady: true, now,
+  }).state === BLOG_REFERENCE_VIEW.AVAILABLE);
 check("Ohne injizierte Uhr wird keine statische Fixture-Verfuegbarkeit behauptet",
   !isBlogSourceTargetCurrent(cinemaOnly.sources.cinema[0], undefined));
 
@@ -110,6 +153,30 @@ check("Ruecknahme und Loeschung bestaetigen oeffentlichen und privaten Ausgang g
   && fixture.actionOutcomes.withdraw.operationId
   && fixture.actionOutcomes.deleteBlockedAfterWithdrawFailure.publication.status === "failed"
   && fixture.actionOutcomes.deleteBlockedAfterWithdrawFailure.private.status === "kept");
+check("Withdraw-Konflikt ist eindeutig und enthaelt erwartete sowie aktuelle Revision",
+  fixture.actionOutcomes.withdrawConflict.status === "conflict"
+  && fixture.actionOutcomes.withdrawConflict.errorCode === "PUBLIC_REVISION_CONFLICT"
+  && fixture.actionOutcomes.withdrawConflict.expectedPublicRevision === 2
+  && fixture.actionOutcomes.withdrawConflict.actualPublicRevision === 3);
+check("Owner-Readback liefert aktuellen Stand auch ohne Operation und trennt Konflikt",
+  fixture.ownerReadbacks.absentWithoutOperation.currentPublication === null
+  && fixture.ownerReadbacks.absentWithoutOperation.operation === null
+  && fixture.ownerReadbacks.currentWithoutOperation.currentPublication.publicRevision === 3
+  && fixture.ownerReadbacks.currentWithoutOperation.operation === null
+  && fixture.ownerReadbacks.operationConflict.currentPublication.publicRevision === 3
+  && fixture.ownerReadbacks.operationConflict.operation.status === "conflict"
+  && fixture.ownerReadbacks.operationConflict.operation.errorCode === "OPERATION_ID_CONFLICT");
+check("Legacy-Readback erzwingt Reload ohne eine Content-Version zu erfinden",
+  fixture.ownerReadbacks.legacyReload.legacyReloadRequired === true
+  && fixture.ownerReadbacks.legacyReload.currentPublication.publishedContentVersion === null
+  && fixture.ownerReadbacks.legacyReload.operation === null);
+check("Kontrollierte Leser- und Rotlink-Props tragen Volltext und bestaetigten Write",
+  fixture.uiExamples.view.mode === "reader"
+  && fixture.uiExamples.reader.article.text === article.text
+  && fixture.uiExamples.reader.returnToken === fixture.uiExamples.view.returnToken
+  && fixture.uiExamples.redlinkForm.status === "open"
+  && fixture.uiExamples.redlinkConfirmed.mediaWriteConfirmed === true
+  && fixture.uiExamples.redlinkConfirmed.rowId === fixture.uiExamples.redlinkForm.rowId);
 check("Paginierte Liste ist begrenzt und hat einen opaken Folgekursor",
   fixture.publicPage.items.length === 1
   && Number.isFinite(Date.parse(fixture.publicPage.snapshotAt))

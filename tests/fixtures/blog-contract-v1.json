@@ -26,15 +26,16 @@
     "text": "Eine rein synthetische Vertragsprobe.",
     "ordered": true,
     "references": [
-      { "rowId": "row-01", "rank": 1, "title": "Star Wars: A New Hope", "year": 1977, "mediaType": "film", "resolutionIntent": { "kind": "auto" } },
-      { "rowId": "row-02", "rank": 2, "title": "Star Wars: The Empire Strikes Back", "year": 1980, "mediaType": "film", "resolutionIntent": { "kind": "auto" } },
-      { "rowId": "row-03", "rank": 3, "title": "Star Wars: Return of the Jedi", "year": 1983, "mediaType": "film", "resolutionIntent": { "kind": "auto" } },
+      { "rowId": "row-01", "rank": 1, "title": "Star Wars: A New Hope", "year": 1977, "mediaType": "film", "identityHints": [{ "namespace": "imdb", "value": "tt0076759" }, { "namespace": "tmdb", "value": "11" }], "resolutionIntent": { "kind": "auto" } },
+      { "rowId": "row-02", "rank": 2, "title": "Star Wars: The Empire Strikes Back", "year": 1980, "mediaType": "film", "identityHints": [{ "namespace": "watchmode", "value": "fixture-watchmode-empire" }], "resolutionIntent": { "kind": "auto" } },
+      { "rowId": "row-03", "rank": 3, "title": "Star Wars: Return of the Jedi", "year": 1983, "mediaType": "film", "identityHints": [{ "namespace": "film_at", "value": "fixture-film-at-jedi" }], "resolutionIntent": { "kind": "auto" } },
       { "rowId": "row-04", "rank": 4, "title": "Star Wars: Synthetic Missing Story", "year": 1984, "mediaType": "film", "resolutionIntent": { "kind": "keep_redlink" } },
       { "rowId": "row-05", "rank": 5, "title": "Rogue One: A Star Wars Story", "year": 2016, "mediaType": "film", "resolutionIntent": { "kind": "auto" } },
       { "rowId": "row-06", "rank": 6, "title": "Star Wars", "year": 1977, "mediaType": "film", "resolutionIntent": { "kind": "confirm_work", "workKey": "fixture:work:new-hope-1977" } },
       { "rowId": "row-07", "rank": 7, "title": "Star Wars", "year": 2025, "mediaType": "film", "resolutionIntent": { "kind": "keep_redlink" } },
       { "rowId": "row-08", "rank": 8, "title": "Star Wars: Synthetic Expired Screening", "year": 2031, "mediaType": "film", "resolutionIntent": { "kind": "auto" } },
-      { "rowId": "row-09", "rank": 9, "title": "Star Wars: A New Hope", "year": 1977, "mediaType": "film", "resolutionIntent": { "kind": "confirm_work", "workKey": "fixture:work:new-hope-1977" } }
+      { "rowId": "row-09", "rank": 9, "title": "Star Wars: A New Hope", "year": 1977, "mediaType": "film", "resolutionIntent": { "kind": "confirm_work", "workKey": "fixture:work:new-hope-1977" } },
+      { "rowId": "row-10", "rank": 10, "title": "Star Wars: Synthetic Source Choice", "year": 2030, "mediaType": "film", "resolutionIntent": { "kind": "auto" } }
     ]
   },
   "publicPage": {
@@ -58,53 +59,61 @@
             {
               "referenceId": "ref-public-01", "rank": 1, "title": "Star Wars: A New Hope", "year": 1977, "mediaType": "film",
               "resolution": { "status": "matched", "workKey": "fixture:work:new-hope-1977" },
-              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
+              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
             },
             {
               "referenceId": "ref-public-02", "rank": 2, "title": "Star Wars: The Empire Strikes Back", "year": 1980, "mediaType": "film",
               "resolution": { "status": "matched", "workKey": "fixture:work:empire-1980" },
-              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [
+              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [
                 { "kind": "streaming", "sourceId": "disney", "art": "programm", "ref": "fixture-stream-empire", "titel": "Star Wars: The Empire Strikes Back", "sourceRevision": "fixture-stream-12", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z" }
               ], "cinema": [] }
             },
             {
               "referenceId": "ref-public-03", "rank": 3, "title": "Star Wars: Return of the Jedi", "year": 1983, "mediaType": "film",
               "resolution": { "status": "matched", "workKey": "fixture:work:jedi-1983" },
-              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [
+              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-04T23:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [
                 { "kind": "cinema", "art": "programm", "ref": "fixture-film-at-jedi", "titel": "Star Wars: Return of the Jedi", "sourceRevision": "fixture-cinema-8", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-04T23:00:00.000Z" }
               ] }
             },
             {
               "referenceId": "ref-public-04", "rank": 4, "title": "Star Wars: Synthetic Missing Story", "year": 1984, "mediaType": "film",
               "resolution": { "status": "not_found", "workKey": null },
-              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
+              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
             },
             {
               "referenceId": "ref-public-05", "rank": 5, "title": "Rogue One: A Star Wars Story", "year": 2016, "mediaType": "film",
               "resolution": { "status": "matched", "workKey": "fixture:work:rogue-one-2016" },
-              "sources": { "status": "unchecked", "checkedAt": null, "streamingRevision": null, "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
+              "sources": { "status": "unchecked", "checkedAt": null, "validUntil": null, "streamingRevision": null, "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
             },
             {
               "referenceId": "ref-public-06", "rank": 6, "title": "Star Wars", "year": 1977, "mediaType": "film",
               "resolution": { "status": "matched", "workKey": "fixture:work:new-hope-1977" },
-              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
+              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
             },
             {
               "referenceId": "ref-public-07", "rank": 7, "title": "Star Wars", "year": 2025, "mediaType": "film",
               "resolution": { "status": "not_found", "workKey": null },
-              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
+              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
             },
             {
               "referenceId": "ref-public-08", "rank": 8, "title": "Star Wars: Synthetic Expired Screening", "year": 2031, "mediaType": "film",
               "resolution": { "status": "matched", "workKey": "fixture:work:expired-2031" },
-              "sources": { "status": "checked", "checkedAt": "2032-05-03T11:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-7", "streaming": [], "cinema": [
+              "sources": { "status": "checked", "checkedAt": "2032-05-03T11:00:00.000Z", "validUntil": "2032-05-04T09:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-7", "streaming": [], "cinema": [
                 { "kind": "cinema", "art": "programm", "ref": "fixture-film-at-expired", "titel": "Star Wars: Synthetic Expired Screening", "sourceRevision": "fixture-cinema-7", "checkedAt": "2032-05-03T11:00:00.000Z", "validUntil": "2032-05-04T09:00:00.000Z" }
               ] }
             },
             {
               "referenceId": "ref-public-09", "rank": 9, "title": "Star Wars: A New Hope", "year": 1977, "mediaType": "film",
               "resolution": { "status": "matched", "workKey": "fixture:work:new-hope-1977" },
-              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
+              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
+            },
+            {
+              "referenceId": "ref-public-10", "rank": 10, "title": "Star Wars: Synthetic Source Choice", "year": 2030, "mediaType": "film",
+              "resolution": { "status": "matched", "workKey": "fixture:work:source-choice-2030" },
+              "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [
+                { "kind": "streaming", "sourceId": "disney", "art": "programm", "ref": "fixture-stream-choice-expired", "titel": "Star Wars: Synthetic Source Choice", "sourceRevision": "fixture-stream-11", "checkedAt": "2032-05-03T10:00:00.000Z", "validUntil": "2032-05-04T09:00:00.000Z" },
+                { "kind": "streaming", "sourceId": "prime", "art": "programm", "ref": "fixture-stream-choice-current", "titel": "Star Wars: Synthetic Source Choice", "sourceRevision": "fixture-stream-12", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z" }
+              ], "cinema": [] }
             }
           ]
         }
@@ -132,8 +141,74 @@
     }
   ],
   "expectedReferenceViews": {
-    "fixture-account-alpha": ["available", "available", "available", "redlink", "unchecked", "available", "redlink", "unchecked", "available"],
-    "fixture-account-beta": ["redlink", "available", "available", "redlink", "unchecked", "redlink", "redlink", "unchecked", "redlink"]
+    "fixture-account-alpha": ["available", "available", "available", "redlink", "unchecked", "available", "redlink", "unchecked", "available", "unchecked"],
+    "fixture-account-beta": ["redlink", "available", "available", "redlink", "unchecked", "redlink", "redlink", "unchecked", "redlink", "available"]
+  },
+  "ownerReadbacks": {
+    "absentWithoutOperation": {
+      "contractVersion": "blog-publication-v1",
+      "privateArticleId": "fixture-private-never-published",
+      "currentPublication": null,
+      "operation": null,
+      "legacyReloadRequired": false
+    },
+    "currentWithoutOperation": {
+      "contractVersion": "blog-publication-v1",
+      "privateArticleId": "fixture-private-star-wars-order",
+      "currentPublication": {
+        "publicationId": "20000000-0000-4000-8000-000000000001",
+        "shareToken": "20000000-0000-4000-8000-000000000002",
+        "publicRevision": 3,
+        "publishedContentVersion": "10000000-0000-4000-8000-000000000002",
+        "updatedAt": "2032-05-04T11:00:00.000Z"
+      },
+      "operation": null,
+      "legacyReloadRequired": false
+    },
+    "operationConflict": {
+      "contractVersion": "blog-publication-v1",
+      "privateArticleId": "fixture-private-star-wars-order",
+      "currentPublication": {
+        "publicationId": "20000000-0000-4000-8000-000000000001",
+        "shareToken": "20000000-0000-4000-8000-000000000002",
+        "publicRevision": 3,
+        "publishedContentVersion": "10000000-0000-4000-8000-000000000002",
+        "updatedAt": "2032-05-04T11:00:00.000Z"
+      },
+      "operation": {
+        "operationId": "30000000-0000-4000-8000-000000000006",
+        "action": "withdraw",
+        "status": "conflict",
+        "result": null,
+        "errorCode": "OPERATION_ID_CONFLICT"
+      },
+      "legacyReloadRequired": false
+    },
+    "legacyReload": {
+      "contractVersion": "blog-publication-v1",
+      "privateArticleId": "fixture-private-legacy-article",
+      "currentPublication": {
+        "publicationId": "20000000-0000-4000-8000-000000000009",
+        "shareToken": "20000000-0000-4000-8000-000000000010",
+        "publicRevision": 1,
+        "publishedContentVersion": null,
+        "updatedAt": "2032-05-03T11:00:00.000Z"
+      },
+      "operation": null,
+      "legacyReloadRequired": true
+    }
+  },
+  "uiExamples": {
+    "view": { "area": "published", "mode": "reader", "articleId": "20000000-0000-4000-8000-000000000001", "returnToken": "fixture-back-to-published-page-1" },
+    "reader": {
+      "scope": "published",
+      "article": { "articleId": "20000000-0000-4000-8000-000000000001", "title": "Meine nummerierte Star-Wars-Reihenfolge", "text": "Eine rein synthetische Vertragsprobe.", "ordered": true },
+      "referenceViews": [{ "rowId": "ref-public-04", "rank": 4, "state": "redlink", "primaryTarget": null, "secondaryTargets": [] }],
+      "canEdit": false,
+      "returnToken": "fixture-back-to-published-page-1"
+    },
+    "redlinkForm": { "articleId": "fixture-private-star-wars-order", "rowId": "row-04", "status": "open", "initial": { "titel": "Star Wars: Synthetic Missing Story", "jahr": 1984, "typ": "film" }, "errorCode": null },
+    "redlinkConfirmed": { "status": "saved", "articleId": "fixture-private-star-wars-order", "rowId": "row-04", "mediaWriteConfirmed": true, "reference": { "rowId": "row-04", "title": "Star Wars: Synthetic Missing Story", "year": 1984, "mediaType": "film", "linked": true }, "errorCode": null }
   },
   "saveOutcomes": {
     "privateOnly": { "private": { "status": "saved", "contentVersion": "10000000-0000-4000-8000-000000000003" }, "publication": { "status": "not_requested", "operationId": null } },
@@ -143,6 +218,7 @@
   "actionOutcomes": {
     "referenceDecision": { "status": "saved", "articleId": "fixture-private-star-wars-order", "rowId": "row-04", "errorCode": null },
     "withdraw": { "status": "withdrawn", "operationId": "30000000-0000-4000-8000-000000000003", "publicationId": "20000000-0000-4000-8000-000000000001", "errorCode": null },
+    "withdrawConflict": { "status": "conflict", "operationId": "30000000-0000-4000-8000-000000000005", "publicationId": "20000000-0000-4000-8000-000000000001", "expectedPublicRevision": 2, "actualPublicRevision": 3, "errorCode": "PUBLIC_REVISION_CONFLICT" },
     "deleteBlockedAfterWithdrawFailure": { "publication": { "status": "failed", "operationId": "30000000-0000-4000-8000-000000000004", "errorCode": "SERVER" }, "private": { "status": "kept", "articleId": "fixture-private-star-wars-order", "errorCode": null } }
   }
 }

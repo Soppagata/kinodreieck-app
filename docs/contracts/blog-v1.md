@@ -22,11 +22,14 @@ behält pro Zeile eine stabile Identitaet, auch wenn der Rang geaendert wird.
   `watchmode_id`-/`imdb_id`-/`tmdb_id`-Kennungen, Titel-/Jahr-/Typ-Schluessel und
   Quellen-IDs. Der Blogabgleich liest diese vorhandene Projektion; er startet
   keinen Providerabruf.
-- Programmziele nutzen `film_at_id`, soweit vorhanden. Die bestehende App
-  navigiert zu Kino mit `{ kind: "cinema", art: "film"|"programm", ref,
-  titel }`, zu Streaming mit `{ kind: "streaming",
+- Oeffentliche Kinoziele nutzen ausschliesslich die vorhandene zentrale
+  `film_at_id` als `{ kind: "cinema", art: "programm", ref, titel }`.
+  `art: "film"` adressiert in der bestehenden App eine private Mediathek-ID
+  und darf deshalb nie in die oeffentliche Projektion gelangen. Die App
+  navigiert zu Streaming mit `{ kind: "streaming",
   art: "programm"|"entdecken", ref, titel }` und zur Mediathek mit
-  `{ kind: "library", ref, titel }`. v1 erfindet keine zweite Zielkennung.
+  `{ kind: "library", ref, titel }`. Letzteres erzeugt B ausschliesslich aus
+  dem Bestand des aktuellen Lesers; es wird weder publiziert noch gespeichert.
 - Private Artikelreferenzen (`liste[].ref` und die neue private `rowId`) bleiben
   kontogebunden. Eine gemeinsame Projektion erhaelt stattdessen eine
   servererzeugte `referenceId` und gegebenenfalls einen oeffentlichen,
@@ -43,6 +46,9 @@ Die kanonischen Werte stehen in `src/lib/blogContract.js`:
 - Fail-closed-Capabilitypruefung
 - Ableitung `private` / `published` / `private_changes`
 - genau eine leserseitige Referenzprojektion fuer B und C
+- kanonische Streaming-Quellen-IDs `netflix`, `prime`, `disney`, `apple`,
+  `hbo`, `paramount`, `mubi`, `crunchyroll`, `rtl`; sie entsprechen den
+  vorhandenen Backend-Service-IDs und sind keine neuen Anzeigenamen
 
 `contentVersion` und `operationId` sind UUIDs. `contentVersion` wird fuer jede
 erfolgreich privat gespeicherte Fassung neu erzeugt und bleibt fuer exakt diese
@@ -119,6 +125,10 @@ Beide erhalten dieselbe Requestform:
         "title": "1..240 Zeichen",
         "year": 1977,
         "mediaType": "film",
+        "identityHints": [
+          { "namespace": "imdb", "value": "tt0076759" },
+          { "namespace": "tmdb", "value": "11" }
+        ],
         "resolutionIntent": { "kind": "auto" }
       }
     ]
@@ -130,6 +140,17 @@ Beide erhalten dieselbe Requestform:
 `sonstiges`. `rowId` bleibt beim Umordnen stabil, `rank` ist innerhalb des
 Requests lueckenlos 1..n. Derselbe `workKey` darf in mehreren Zeilen stehen;
 Zeilen werden nicht nach Werk dedupliziert.
+
+`identityHints` ist optional, enthaelt hoechstens vier Eintraege und darf je
+Namespace hoechstens einen Wert fuehren. Erlaubt sind ausschliesslich
+`imdb`, `tmdb`, `watchmode` und `film_at`, jeweils mit der bereits am privaten
+Eintrag vorhandenen nichtleeren ID als String. Das Feld transportiert keine
+private Mediathek-Referenz, kein `rowId`-fremdes Ziel und keine Quelle. Der
+Server prueft jeden Hinweis gegen den zentralen Katalog bzw. das zentrale
+Programm und gegen Titel, Jahr und Medientyp; er vertraut keinen Client-IDs
+blind. Widerspruechliche starke IDs ergeben `decision_required` oder einen
+Fachfehler, niemals eine stille Titelzuordnung. Verifizierte gemeinsame starke
+IDs haben beim Abgleich Vorrang.
 
 `resolutionIntent` ist genau eine der Formen:
 
@@ -195,19 +216,97 @@ Gesamtloeschung anschliessend den privaten Artikel zu entfernen. Fehler oder
 `unknown` lassen den privaten Artikel und den moeglicherweise oeffentlichen
 Status sichtbar.
 
+Bei abweichender Revision ist die Antwort eindeutig und veraendert nichts:
+
+```json
+{
+  "contractVersion": "blog-publication-v1",
+  "outcome": "conflict",
+  "operationId": "UUID",
+  "publicationId": "UUID",
+  "expectedPublicRevision": 2,
+  "actualPublicRevision": 3,
+  "errorCode": "PUBLIC_REVISION_CONFLICT"
+}
+```
+
+B uebernimmt danach den aktuellen Owner-Readback. Es darf `conflict` weder als
+`withdrawn` noch als `absent` behandeln und darf den privaten Artikel nicht
+loeschen.
+
 ### Owner-Readback und gezielte Wiederholung
 
-`kd_read_own_blog_publication_v1(p_request jsonb)` erhaelt Version,
-`privateArticleId` und die zu klaerende `operationId`. Es liefert eine der
-atomaren Aussagen:
+`kd_read_own_blog_publication_v1(p_request jsonb)` liefert den aktuellen
+Owner-Publikationsstand unabhaengig davon, ob eine Operation aussteht. Der
+Request lautet exakt:
 
-- `applied`: dieselbe Operation wurde committed; die urspruengliche
-  Mutationantwort liegt bei.
-- `not_applied`: die Operation wurde serverseitig abgeschlossen, ohne die
-  Mutation anzuwenden; Fehlercode liegt bei.
-- `unknown`: es gibt noch keinen abschliessenden Ledgerstand. Der Client darf
-  keinen Erfolg behaupten und hoechstens den bytegleich normalisierten Request
-  mit derselben `operationId` wiederholen.
+```json
+{
+  "contractVersion": "blog-publication-v1",
+  "privateArticleId": "kontogebundene Artikel-ID",
+  "operationId": null
+}
+```
+
+`operationId` darf fehlen oder `null` sein. Eine UUID fragt zusaetzlich genau
+diese Operation ab. Die Antwortform bleibt in allen Faellen gleich:
+
+```json
+{
+  "contractVersion": "blog-publication-v1",
+  "privateArticleId": "kontogebundene Artikel-ID",
+  "currentPublication": {
+    "publicationId": "UUID",
+    "shareToken": "UUID",
+    "publicRevision": 3,
+    "publishedContentVersion": "UUID",
+    "updatedAt": "RFC-3339-Zeitpunkt"
+  },
+  "operation": null,
+  "legacyReloadRequired": false
+}
+```
+
+`currentPublication` ist entweder dieses Objekt oder `null`; es beschreibt
+immer den zum Antwortzeitpunkt committed Owner-Zustand. Die
+`publishedContentVersion` ist nur im unten beschriebenen Legacyfall `null`.
+Bei einer angefragten Operation ist `operation` entweder `null` (noch kein
+Ledger-Eintrag) oder:
+
+```json
+{
+  "operationId": "UUID",
+  "action": "publish",
+  "status": "applied",
+  "result": { "outcome": "published" },
+  "errorCode": null
+}
+```
+
+`action` ist `publish`, `update` oder `withdraw`; `status` ist `applied`,
+`not_applied`, `unknown` oder `conflict`. Bei `applied` enthaelt `result` die
+vollstaendige urspruengliche Mutationantwort. `not_applied` hat `result: null`
+und einen Fachfehlercode. `unknown` behauptet keinen Erfolg. `conflict` mit
+`OPERATION_ID_CONFLICT` bedeutet, dass dieselbe UUID bereits an einen anderen
+normalisierten Request gebunden ist; diese Operation wird nie wiederholt.
+
+Beim normalen Neu-/Reload fragt B mit `operationId: null` und ersetzt seinen
+lokalen Publikationsstand durch `currentPublication`, auch wenn lokal keine
+Operation aussteht. So bleiben Update und Ruecknahme nach Konto- oder
+Geraetewechsel moeglich. Eine alte eindeutig zuordenbare Publikation ohne
+Content-Version liefert das Objekt mit `publishedContentVersion: null` und
+`legacyReloadRequired: true`. B laedt zuerst den privaten Artikel neu, erzeugt
+beim naechsten privaten Speichern eine frische `contentVersion` und behandelt
+die Kopie bis zum erfolgreichen Update als `private_changes`. Ist keine
+Owner-Zuordnung vorhanden, lautet der Zustand `currentPublication: null`,
+`legacyReloadRequired: false`. Eine nicht eindeutig einem privaten Artikel
+zuordenbare Legacyzeile wird nicht als dessen Publikation ausgegeben; die
+Capability darf in diesem Serverzustand nicht `legacyProjectionSafe: true`
+melden.
+
+Bei `unknown` darf der Client hoechstens den bytegleich normalisierten Request
+mit derselben `operationId` wiederholen. Die aktuelle Publikation aus derselben
+Readback-Antwort bleibt trotzdem massgeblich fuer Anzeige und Revision.
 
 Der Server bindet eine Operation an Konto, Artikel, Aktionsart und Hash des
 normalisierten Requests. Dadurch ist Wiederholung idempotent. Eine neue lokale
@@ -240,6 +339,7 @@ Eine oeffentliche Referenz hat folgende Form:
   "sources": {
     "status": "checked",
     "checkedAt": "RFC-3339-Zeitpunkt",
+    "validUntil": "RFC-3339-Zeitpunkt",
     "streamingRevision": "vorhandene source_revision",
     "cinemaRevision": "vorhandener Programmstand",
     "streaming": [
@@ -259,12 +359,24 @@ Eine oeffentliche Referenz hat folgende Form:
 }
 ```
 
-Kinoziele verwenden dieselben Zeitfelder sowie `kind: "cinema"`,
-`art: "film"|"programm"` und als `ref` die bestaetigte Mediathek-ID oder
-`film_at_id`. Zielgueltigkeit ist ein halboffenes Intervall
-`checkedAt <= now < validUntil`; `sourceRevision` muss vorhanden sein. Sind
-nur abgelaufene Zielbelege vorhanden, lautet der Leserzustand bis zur
-Quellenauffrischung `unchecked`, nicht Rotlink. Im
+`sourceId` ist bei Streaming exakt eine der kanonischen vorhandenen
+Backend-Service-IDs aus `BLOG_STREAMING_SOURCE_IDS`. Unbekannte IDs und freie
+Provideranzeigenamen sind ungueltig. Kinoziele verwenden dieselben Zeitfelder
+sowie ausschliesslich `kind: "cinema"`, `art: "programm"` und als `ref` die
+zentrale `film_at_id`. Private Mediathek-IDs, `art: "film"` und
+`kind: "library"` sind in jeder oeffentlichen Payload verboten.
+
+Zielgueltigkeit ist ein halboffenes Intervall
+`checkedAt <= now < validUntil`; `sourceRevision` muss vorhanden sein.
+`sources.validUntil` begrenzt zusaetzlich den gesamten positiven wie negativen
+Quellennachweis. Es ist auch Pflicht, wenn `streaming` und `cinema` leer sind;
+nach Ablauf wird ein fehlendes Ziel zu `unchecked`, nicht zu einem dauerhaften
+Rotlink. Sind fuer eine vom Leser gewaehlte Streamingquelle nur abgelaufene
+Ziele vorhanden, bleibt diese Referenz `unchecked`, selbst wenn ein aktuelles
+Ziel eines nicht gewaehlten Dienstes vorliegt. Nicht gewaehlte Dienste duerfen
+weder `available` noch die Aktualitaet der Leserentscheidung begruenden.
+Fehlt `resolution.status` oder liegt er ausserhalb der definierten Werte,
+lautet der Leserzustand ebenfalls `unchecked`. Im
 Browser wird `now` ausdruecklich injiziert. Lokale SQL-Tests leiten die Zeiten
 relativ zu `clock_timestamp()` ab oder verschieben die Fixture-Zeiten als
 Ganzes. Die statischen Zeiten in `blog-contract-v1.json` duerfen niemals gegen
@@ -351,9 +463,23 @@ auf. Die Blogoberflaeche konsumiert folgende schmale Objekte:
 publicationCapability:
   { status: "checking"|"ready"|"unavailable", reason: string|null }
 
+view:
+  { area: "mine"|"published",
+    mode: "list"|"editor"|"reader"|"redlink_form",
+    articleId: string|null, returnToken: string|null }
+
 editor:
   { draftKey, accountScope, articleId, contentVersion, title, text, ordered,
     references, anonymousPublication, dirty, saveStatus }
+
+reader:
+  null|{ scope: "private"|"published",
+    article: { articleId, title, text, ordered },
+    referenceViews, canEdit: boolean, returnToken: string }
+
+redlinkForm:
+  null|{ articleId, rowId, status: "open"|"saving"|"failed",
+    initial: { titel, jahr, typ }, errorCode: string|null }
 
 articleCards:
   [{ articleId, title, excerpt, updatedAt, displayState,
@@ -363,11 +489,20 @@ publishedPage:
   { status, items, nextCursor, complete, errorCode }
 
 actions:
+  onNewArticle()
+  onEditArticle({ articleId })
+  onReadArticle({ scope, articleId, returnToken })
+  onBack({ returnToken })
   onEditorChange(patch)
+  onAddReference({ draftKey, reference })
+  onMoveReference({ draftKey, rowId, direction: "up"|"down" })
+  onRemoveReference({ draftKey, rowId })
   onSave({ draftKey, anonymousPublication }) -> Promise<SaveResult>
   onReferenceDecision({ articleId, rowId, decision }) -> Promise<ActionResult>
   onNavigateReference({ referenceId, target }) -> Promise<ActionResult>|void
-  onAddRedlink({ articleId, rowId }) -> Promise<ActionResult>
+  onOpenRedlinkForm({ articleId, rowId })
+  onCancelRedlinkForm({ articleId, rowId })
+  onConfirmRedlinkForm({ articleId, rowId, mediaInput }) -> Promise<ActionResult>
   onRetryPublication({ articleId, operationId }) -> Promise<SaveResult>
   onWithdraw({ articleId }) -> Promise<MutationResult>
   onDelete({ articleId }) -> Promise<DeleteResult>
@@ -379,6 +514,20 @@ einen fremden Entwurf uebernehmen. `anonymousPublication` startet fuer einen
 neuen Editor immer `false`; Umschalten allein ruft keine Aktion. B bewahrt den
 Wert innerhalb desselben offenen Entwurfs. C zeigt bei `checking` oder
 `unavailable` keinen aktivierbaren anonymen Publish-Einstieg.
+
+`view` ist die einzige kontrollierte Navigation innerhalb des Blogbereichs.
+B setzt sie fuer Neu, Bearbeiten, Lesen, Rotlinkformular und Zurueck; C haelt
+keinen zweiten Ansichtsautomaten. `reader.article.text` ist immer der volle
+Artikeltext der gewaehlten privaten oder oeffentlichen Fassung, kein Karten-
+Excerpt. `returnToken` ist opak und wird bei `onBack` unveraendert
+zurueckgegeben, damit Seite, Auswahl und Listenposition erhalten bleiben.
+
+`onNewArticle` oeffnet einen kontogebundenen Entwurf mit neuer stabiler
+`draftKey`, leerem Text und `anonymousPublication: false`.
+`onAddReference` fuegt eine Zeile mit von B erzeugter stabiler `rowId` und dem
+naechsten Rang hinzu. `onMoveReference` aendert nur die lueckenlosen `rank`-
+Werte; `rowId` bleibt gleich. `onRemoveReference` adressiert ebenfalls nur die
+`rowId`. C erzeugt oder ersetzt keine Zeilenidentitaet.
 
 `onSave` persistiert zuerst privat. Das Promise liefert beide Teilergebnisse:
 
@@ -404,17 +553,22 @@ Die uebrigen Promiseformen sind ebenfalls fest:
 
 ```text
 ActionResult:
-  { status: "saved"|"opened"|"loaded"|"failed",
-    articleId|null, rowId|null, errorCode|null }
+  { status: "saved"|"opened"|"cancelled"|"loaded"|"failed",
+    articleId|null, rowId|null, mediaWriteConfirmed: boolean|null,
+    reference: { rowId, title, year, mediaType, linked: boolean }|null,
+    errorCode|null }
 
 MutationResult fuer onWithdraw:
-  { status: "withdrawn"|"absent"|"failed"|"unknown",
-    operationId, publicationId|null, errorCode|null }
+  { status: "withdrawn"|"absent"|"conflict"|"failed"|"unknown",
+    operationId, publicationId|null,
+    expectedPublicRevision: number|null, actualPublicRevision: number|null,
+    errorCode|null }
 
 DeleteResult:
   { publication:
-      { status: "withdrawn"|"absent"|"failed"|"unknown",
-        operationId|null, errorCode|null },
+      { status: "withdrawn"|"absent"|"conflict"|"failed"|"unknown",
+        operationId|null, expectedPublicRevision: number|null,
+        actualPublicRevision: number|null, errorCode|null },
     private:
       { status: "deleted"|"kept"|"failed",
         articleId, errorCode|null } }
@@ -442,10 +596,19 @@ oder `private_changes` ab. B und C fuehren dafuer keinen zweiten Automaten.
 
 `onReferenceDecision` akzeptiert dieselben drei `resolutionIntent`-Formen wie
 der Write-Request. Umordnen aendert nur `rank`; `rowId`, bestaetigter `workKey`
-und oeffentliche `referenceId` bleiben stabil. `onAddRedlink` darf erst nach
-bestaetigtem eigenem Mediathek-Write die private Zeile verknuepfen; Abbruch
-erhaelt Entwurf und Rotlink. `onNavigateReference` akzeptiert nur die oben
-genannten Zielobjekte; C konstruiert keine IDs aus Titeltext.
+und oeffentliche `referenceId` bleiben stabil. `onOpenRedlinkForm` setzt die
+kontrollierte `view.mode = redlink_form` und `redlinkForm` mit den Daten der
+Zeile. C rendert darin die vorhandene `FilmForm` aus `EintragForm.jsx`.
+`onCancelRedlinkForm` liefert ohne Write zur vorherigen `view` zurueck und
+erhaelt Entwurf und Rotlink. `onConfirmRedlinkForm` uebergibt deren
+`mediaInput`; erst nach bestaetigtem eigenen Mediathek-Write und danach
+bestaetigtem privaten Artikelwrite liefert B `status: saved`,
+`mediaWriteConfirmed: true` und die aktualisierten neutralen Referenzdaten.
+Die private Mediathek-ID bleibt in B und wird nie Bestandteil der Props oder
+der oeffentlichen Referenz. Bei einem der Fehler bleibt das Formular mit
+`status: failed` offen. `onNavigateReference`
+akzeptiert nur die oben genannten Zielobjekte; C konstruiert keine IDs aus
+Titeltext.
 
 `onDelete` liefert getrennt `publication` und `private`; private Loeschung ist
 nur nach bestaetigtem `withdrawn`/`absent` zulaessig. Fremde Publikationen
