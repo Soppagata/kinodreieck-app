@@ -31,10 +31,16 @@ const request = ({ op, content, articleId, expected = null, title = "Fixture Art
 
 const harness = await startBlogPublicationPgHarness();
 try {
-  const capability = harness.callRpc("kd_blog_publication_capabilities", undefined, { role: "anon", accountId: null });
-  check("Capability ist anonym lesbar und meldet exakt die v1-RPCs",
+  const capability = harness.callRpc("kd_blog_publication_capabilities");
+  check("Capability ist fuer ein aktives Konto lesbar und meldet exakt die v1-RPCs",
     capability.contractVersion === "blog-publication-v1" && capability.enabled === true
     && capability.rpcs.length === 5 && capability.legacyProjectionSafe === true);
+  expectFailure("Anon erhaelt auch keine Blog-Capability-Metadaten",
+    () => harness.callRpc("kd_blog_publication_capabilities", undefined, { role: "anon", accountId: null }),
+    /permission denied|authenticated account required/);
+  expectFailure("Inaktives Konto erhaelt keine Blog-Capability",
+    () => harness.callRpc("kd_blog_publication_capabilities", undefined, { accountId: harness.accounts.inactive }),
+    /account_inactive/);
 
   const publishRequest = request({ op: 1, content: 1, articleId: "private-alpha-main", references: [newHope(), jedi()] });
   expectFailure("Anon kann nicht publizieren",
@@ -77,7 +83,15 @@ try {
 
   const publicPage = harness.callRpc("kd_list_shared_articles_v1", {
     contractVersion: "blog-publication-v1", limit: 20, cursor: null,
-  }, { role: "anon", accountId: null });
+  });
+  expectFailure("Anon kann die v1-Artikelliste nicht lesen",
+    () => harness.callRpc("kd_list_shared_articles_v1", {
+      contractVersion: "blog-publication-v1", limit: 20, cursor: null,
+    }, { role: "anon", accountId: null }), /permission denied|authenticated account required/);
+  expectFailure("Inaktives Konto kann die v1-Artikelliste nicht lesen",
+    () => harness.callRpc("kd_list_shared_articles_v1", {
+      contractVersion: "blog-publication-v1", limit: 20, cursor: null,
+    }, { accountId: harness.accounts.inactive }), /account_inactive/);
   const publicText = JSON.stringify(publicPage);
   const publicItem = publicPage.items.find((item) => item.publicationId === published.publication.publicationId);
   const cinemaTarget = publicItem.article.references.find((entry) => entry.title.includes("Jedi")).sources.cinema[0];
@@ -118,8 +132,24 @@ try {
   }] });
   const ambiguous = harness.callRpc("kd_publish_blog_v1", ambiguousRequest);
   check("Mehrdeutige starke Identitaeten blockieren statt falsch zu matchen",
-    ambiguous.outcome === "decision_required" && ambiguous.decisionRequests.length === 1);
-  const redlinkRequest = request({ op: 5, content: 5, articleId: "private-alpha-twin", references: [{
+    ambiguous.outcome === "decision_required" && ambiguous.decisionRequests.length === 1
+    && ambiguous.decisionRequests[0].candidates.length === 2
+    && new Set(ambiguous.decisionRequests[0].candidates.map((entry) => entry.workKey)).size === 2);
+  const chosenTwin = ambiguous.decisionRequests[0].candidates[0];
+  const selectedTwin = harness.callRpc("kd_publish_blog_v1", request({
+    op: 14, content: 14, articleId: "private-alpha-twin", references: [{
+      ...ambiguousRequest.article.references[0],
+      resolutionIntent: { kind: "confirm_work", workKey: chosenTwin.workKey },
+    }],
+  }));
+  const selectedTwinPage = harness.callRpc("kd_list_shared_articles_v1", {
+    contractVersion: "blog-publication-v1", limit: 20, cursor: null,
+  });
+  const selectedTwinReference = selectedTwinPage.items
+    .find((entry) => entry.publicationId === selectedTwin.publication.publicationId).article.references[0];
+  check("Ausdrueckliche Auswahl bestaetigt genau ein echtes Konfliktwerk mit getrennten Quellen",
+    selectedTwin.outcome === "published" && selectedTwinReference.sources.streaming.length === 1);
+  const redlinkRequest = request({ op: 5, content: 5, articleId: "private-alpha-redlink", references: [{
     ...ambiguousRequest.article.references[0], resolutionIntent: { kind: "keep_redlink" },
   }] });
   const redlink = harness.callRpc("kd_publish_blog_v1", redlinkRequest);
@@ -144,6 +174,19 @@ try {
     forgedIdentity.outcome === "decision_required"
     && !JSON.stringify(forgedIdentity).includes("private-library-id"));
 
+  const missingYear = harness.callRpc("kd_publish_blog_v1", request({
+    op: 15, content: 15, articleId: "private-alpha-yearless", references: [{
+      ...newHope(), rowId: "row-yearless", year: null,
+    }],
+  }));
+  const missingYearPage = harness.callRpc("kd_list_shared_articles_v1", {
+    contractVersion: "blog-publication-v1", limit: 20, cursor: null,
+  });
+  const enrichedYear = missingYearPage.items
+    .find((entry) => entry.publicationId === missingYear.publication.publicationId).article.references[0].year;
+  check("Eindeutiges Katalogwerk ergaenzt ein fehlendes oeffentliches Jahr",
+    missingYear.outcome === "published" && enrichedYear === 1977);
+
   const lostRequest = request({ op: 7, content: 7, articleId: "private-alpha-lost", references: [] });
   const lostPublished = harness.callRpc("kd_publish_blog_v1", lostRequest);
   const lostReadback = harness.callRpc("kd_read_own_blog_publication_v1", {
@@ -161,7 +204,7 @@ try {
   while (!complete) {
     const page = harness.callRpc("kd_list_shared_articles_v1", {
       contractVersion: "blog-publication-v1", limit: 2, cursor,
-    }, { role: "anon", accountId: null });
+    });
     pages += 1;
     for (const item of page.items) { assert.ok(!seen.has(item.publicationId)); seen.add(item.publicationId); }
     cursor = page.nextCursor; complete = page.complete;
@@ -173,7 +216,8 @@ try {
     values('private-legacy-secret','Echter Name','{"titel":"Legacy","text":"Alttext","geordnet":true,"liste":[{"eingabe":"Geheimfilm","jahr":1999,"typ":"film","ref":"private-media-secret"}],"account_id":"leak"}'::jsonb)
     returning publication_id,share_token) select to_jsonb(inserted) from inserted;`,
     { role: "service_role", accountId: harness.accounts.alpha });
-  const legacyRows = harness.callRpc("kd_list_shared_articles", undefined, { role: "anon", accountId: null });
+  const legacyRows = harness.callRpc("kd_list_shared_articles", undefined,
+    { accountId: harness.accounts.beta });
   const legacyRow = legacyRows.find((row) => row.publication_id === legacy.publication_id);
   check("Legacy-Liste behaelt Signatur und anonymisiert IDs, Autor und Payload",
     legacyRow.article_id === legacy.publication_id && legacyRow.author === "Ohne Namensangabe"
@@ -181,6 +225,12 @@ try {
     && !JSON.stringify(legacyRow).includes("private-legacy-secret")
     && !JSON.stringify(legacyRow).includes("private-media-secret")
     && !JSON.stringify(legacyRow).includes("Echter Name"));
+  expectFailure("Anon kann auch die Legacy-Liste nicht lesen",
+    () => harness.callRpc("kd_list_shared_articles", undefined, { role: "anon", accountId: null }),
+    /permission denied|authenticated account required/);
+  expectFailure("Inaktives Konto kann auch die Legacy-Liste nicht lesen",
+    () => harness.callRpc("kd_list_shared_articles", undefined, { accountId: harness.accounts.inactive }),
+    /account_inactive/);
   const legacyReadback = harness.callRpc("kd_read_own_blog_publication_v1", {
     contractVersion: "blog-publication-v1", privateArticleId: "private-legacy-secret", operationId: null,
   });
@@ -217,6 +267,26 @@ try {
   check("Erfolgreiche Ruecknahme entfernt nur die oeffentliche Kopie und bleibt ruecklesbar",
     withdrawn.outcome === "withdrawn" && afterWithdraw.currentPublication === null
     && afterWithdraw.operation.status === "applied");
+
+  const past = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  harness.sourceUpdate({ programPayload: { filme: [{
+    film_at_id: "fixture-expired-only", titel: "Expired Only Fixture", jahr: 2026,
+    vorstellungen: [{ kino: "Fixture Kino", zeit: past }],
+  }] } });
+  const expiredCinema = harness.callRpc("kd_publish_blog_v1", request({
+    op: 16, content: 16, articleId: "private-alpha-expired-cinema", references: [{
+      rowId: "row-expired-cinema", rank: 1, title: "Expired Only Fixture", year: 2026,
+      mediaType: "film", identityHints: [{ namespace: "film_at", value: "fixture-expired-only" }],
+      resolutionIntent: { kind: "auto" },
+    }],
+  }));
+  const expiredCinemaPage = harness.callRpc("kd_list_shared_articles_v1", {
+    contractVersion: "blog-publication-v1", limit: 20, cursor: null,
+  });
+  const expiredCinemaRef = expiredCinemaPage.items
+    .find((entry) => entry.publicationId === expiredCinema.publication.publicationId).article.references[0];
+  check("Frischer Kinokatalog ohne kuenftige Vorstellung erzeugt kein aktuelles Kinoziel",
+    expiredCinema.outcome === "published" && expiredCinemaRef.sources.cinema.length === 0);
 
   console.log(`blog_backend_pg_test: ${checks} Checks bestanden.`);
 } finally {

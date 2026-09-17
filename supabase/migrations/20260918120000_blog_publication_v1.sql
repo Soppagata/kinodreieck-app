@@ -58,21 +58,55 @@ create table if not exists public.kd_blog_publication_references (
   check ((resolution_status = 'matched') = (work_key is not null))
 );
 
+create table if not exists public.kd_blog_reference_refresh_state (
+  singleton boolean primary key default true check (singleton),
+  requested_generation bigint not null default 0 check (requested_generation >= 0),
+  completed_generation bigint not null default 0 check (completed_generation >= 0),
+  scan_cursor text,
+  scan_complete boolean not null default true,
+  last_source_event text,
+  updated_at timestamptz not null default now()
+);
+
+insert into public.kd_blog_reference_refresh_state(singleton)
+values(true) on conflict(singleton) do nothing;
+
+create table if not exists public.kd_blog_reference_refresh_queue (
+  unit_key text primary key,
+  unit_kind text not null check (unit_kind in ('work','reference')),
+  work_key text,
+  reference_id uuid,
+  target_generation bigint not null check (target_generation > 0),
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  available_at timestamptz not null default now(),
+  enqueued_at timestamptz not null default now(),
+  last_attempt_at timestamptz,
+  last_error text,
+  check ((unit_kind='work' and work_key is not null and reference_id is null)
+      or (unit_kind='reference' and work_key is null and reference_id is not null))
+);
+
 create index if not exists kd_blog_publication_operations_article
   on public.kd_blog_publication_operations(account_id, article_id, created_at desc);
 create index if not exists kd_blog_publication_references_work
   on public.kd_blog_publication_references(work_key)
   where work_key is not null;
+create index if not exists kd_blog_reference_refresh_queue_due
+  on public.kd_blog_reference_refresh_queue(available_at,enqueued_at,unit_key);
 
 alter table public.kd_blog_publication_operations enable row level security;
 alter table public.kd_blog_work_sources enable row level security;
 alter table public.kd_blog_publication_references enable row level security;
+alter table public.kd_blog_reference_refresh_state enable row level security;
+alter table public.kd_blog_reference_refresh_queue enable row level security;
 
 revoke all on public.kd_blog_publication_operations,
-  public.kd_blog_work_sources, public.kd_blog_publication_references
+  public.kd_blog_work_sources, public.kd_blog_publication_references,
+  public.kd_blog_reference_refresh_state, public.kd_blog_reference_refresh_queue
   from public, anon, authenticated;
 grant all on public.kd_blog_publication_operations,
-  public.kd_blog_work_sources, public.kd_blog_publication_references
+  public.kd_blog_work_sources, public.kd_blog_publication_references,
+  public.kd_blog_reference_refresh_state, public.kd_blog_reference_refresh_queue
   to service_role;
 
 create or replace function public.kd_blog_title_norm(p_value text) returns text
@@ -187,7 +221,8 @@ with stream_state as (
     null::text as watchmode_id, null::text as imdb_id, null::text as tmdb_id,
     nullif(btrim(f.value->>'film_at_id'),'') as film_at_id,
     '{}'::text[] as services, 0::bigint as source_revision, p.updated_at as generated_at,
-    least(p.catalog_valid_until, coalesce(times.last_showing + interval '3 hours',p.catalog_valid_until)) as cinema_valid_until,
+    case when times.last_showing is null then null
+      else least(p.catalog_valid_until, times.last_showing + interval '3 hours') end as cinema_valid_until,
     coalesce(p.stand::text,p.updated_at::text) as cinema_revision
   from program_root p cross join lateral jsonb_array_elements(p.filme) f(value)
   left join lateral (
@@ -205,41 +240,48 @@ with stream_state as (
 ), keyed as (
   select r.*, coalesce(r.title_norm,'') || '|' || coalesce(r.release_year::text,'') || '|' || r.media_type as composite
   from records r
+), composite_conflicts as (
+  select composite,
+    count(distinct watchmode_id)>1 or count(distinct imdb_id)>1
+      or count(distinct tmdb_id)>1 or count(distinct film_at_id)>1 as identity_conflict
+  from keyed group by composite
+), grouped as (
+  select k.*,
+    case when c.identity_conflict then k.composite || '|' || k.record_key else k.composite end as work_group
+  from keyed k join composite_conflicts c using(composite)
 ), keys as (
-  select distinct composite, title_norm, release_year, media_type from keyed
+  select distinct work_group,title_norm,release_year,media_type from grouped
 ), stream_targets as (
-  select k.composite, jsonb_build_object(
+  select k.work_group, jsonb_build_object(
     'kind','streaming','sourceId',public.kd_blog_streaming_source_id(svc),
     'art','programm','ref',k.output_key,'titel',k.title,
     'sourceRevision','streaming:' || k.source_revision::text,
     'checkedAt',k.generated_at,'validUntil',k.generated_at + interval '48 hours') as target
-  from keyed k cross join lateral unnest(k.services) svc
+  from grouped k cross join lateral unnest(k.services) svc
   where k.output_key is not null and public.kd_blog_streaming_source_id(svc) is not null
 ), cinema_targets as (
-  select k.composite, jsonb_build_object(
+  select k.work_group, jsonb_build_object(
     'kind','cinema','art','programm','ref',k.film_at_id,'titel',k.title,
     'sourceRevision',k.cinema_revision,'checkedAt',k.generated_at,
     'validUntil',k.cinema_valid_until) as target
-  from keyed k
+  from grouped k
   where k.film_at_id is not null and k.cinema_valid_until > now()
 )
 select
-  'work:' || md5(k.composite),
-  (select r.title from keyed r where r.composite=k.composite order by r.record_key limit 1),
+  'work:' || md5(k.work_group),
+  (select r.title from grouped r where r.work_group=k.work_group order by r.record_key limit 1),
   k.title_norm, k.release_year, k.media_type,
   jsonb_build_object(
-    'watchmode',coalesce((select jsonb_agg(distinct r.watchmode_id) from keyed r where r.composite=k.composite and r.watchmode_id is not null),'[]'::jsonb),
-    'imdb',coalesce((select jsonb_agg(distinct r.imdb_id) from keyed r where r.composite=k.composite and r.imdb_id is not null),'[]'::jsonb),
-    'tmdb',coalesce((select jsonb_agg(distinct r.tmdb_id) from keyed r where r.composite=k.composite and r.tmdb_id is not null),'[]'::jsonb),
-    'film_at',coalesce((select jsonb_agg(distinct r.film_at_id) from keyed r where r.composite=k.composite and r.film_at_id is not null),'[]'::jsonb)
+    'watchmode',coalesce((select jsonb_agg(distinct r.watchmode_id) from grouped r where r.work_group=k.work_group and r.watchmode_id is not null),'[]'::jsonb),
+    'imdb',coalesce((select jsonb_agg(distinct r.imdb_id) from grouped r where r.work_group=k.work_group and r.imdb_id is not null),'[]'::jsonb),
+    'tmdb',coalesce((select jsonb_agg(distinct r.tmdb_id) from grouped r where r.work_group=k.work_group and r.tmdb_id is not null),'[]'::jsonb),
+    'film_at',coalesce((select jsonb_agg(distinct r.film_at_id) from grouped r where r.work_group=k.work_group and r.film_at_id is not null),'[]'::jsonb)
   ),
   jsonb_build_object(
-    'streaming',coalesce((select jsonb_agg(distinct st.target) from stream_targets st where st.composite=k.composite),'[]'::jsonb),
-    'cinema',coalesce((select jsonb_agg(distinct ct.target) from cinema_targets ct where ct.composite=k.composite),'[]'::jsonb)
+    'streaming',coalesce((select jsonb_agg(distinct st.target) from stream_targets st where st.work_group=k.work_group),'[]'::jsonb),
+    'cinema',coalesce((select jsonb_agg(distinct ct.target) from cinema_targets ct where ct.work_group=k.work_group),'[]'::jsonb)
   ),
-  (select count(distinct r.watchmode_id)>1 or count(distinct r.imdb_id)>1
-      or count(distinct r.tmdb_id)>1 or count(distinct r.film_at_id)>1
-     from keyed r where r.composite=k.composite)
+  false
 from keys k
 $$;
 
@@ -689,7 +731,9 @@ begin
       sources,source_fingerprint)
     values(v_publication,v_ref->'input'->>'rowId',(v_ref->>'referenceId')::uuid,v_content,
       (v_ref->'input'->>'rank')::integer,v_ref->'input'->>'title',
-      public.kd_blog_int(v_ref->'input'->>'year'),v_ref->'input'->>'mediaType',v_ref->'input',
+      coalesce(public.kd_blog_int(v_ref->'input'->>'year'),
+        (select w.release_year from public.kd_blog_catalog_works() w where w.work_key=v_work)),
+      v_ref->'input'->>'mediaType',v_ref->'input',
       v_ref->>'inputHash',v_status,v_work,v_sources,v_fingerprint);
     if v_status='matched' then
       insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint)
@@ -829,6 +873,7 @@ declare
   v_row record;
   v_next text;
 begin
+  perform public.kd_blog_require_owner();
   if p_request is null or jsonb_typeof(p_request)<>'object'
     or not (p_request ?& array['contractVersion','limit','cursor'])
     or p_request-array['contractVersion','limit','cursor']<>'{}'::jsonb
@@ -882,12 +927,15 @@ end
 $$;
 
 create or replace function public.kd_blog_publication_capabilities() returns jsonb
-language sql stable security definer set search_path = pg_catalog as $$
-  select jsonb_build_object('contractVersion','blog-publication-v1','enabled',true,
+language plpgsql stable security definer set search_path = pg_catalog, public as $$
+begin
+  perform public.kd_blog_require_owner();
+  return jsonb_build_object('contractVersion','blog-publication-v1','enabled',true,
     'anonymousProjection',true,'maxReferences',15,'cursorPagination',true,
     'ownerReadback',true,'legacyProjectionSafe',true,'rpcs',jsonb_build_array(
       'kd_publish_blog_v1','kd_update_blog_publication_v1','kd_withdraw_blog_publication_v1',
-      'kd_read_own_blog_publication_v1','kd_list_shared_articles_v1'))
+      'kd_read_own_blog_publication_v1','kd_list_shared_articles_v1'));
+end
 $$;
 
 create or replace function public.kd_read_own_blog_publication_v1(p_request jsonb) returns jsonb
@@ -1001,12 +1049,15 @@ $$;
 drop function if exists public.kd_list_shared_articles();
 create function public.kd_list_shared_articles()
 returns table(publication_id uuid,share_token uuid,article_id text,author text,payload jsonb,updated_at timestamptz)
-language sql stable security definer
+language plpgsql stable security definer
 set search_path = pg_catalog, public
 as $$
-  select s.publication_id,s.share_token,s.publication_id::text,'Ohne Namensangabe'::text,
+begin
+  perform public.kd_blog_require_owner();
+  return query select s.publication_id,s.share_token,s.publication_id::text,'Ohne Namensangabe'::text,
     public.kd_blog_legacy_payload(s.publication_id),s.updated_at
-  from public.kd_shared_articles s order by s.updated_at desc,s.publication_id desc
+  from public.kd_shared_articles s order by s.updated_at desc,s.publication_id desc;
+end
 $$;
 
 create or replace function public.kd_claim_shared_article(p_share_token uuid)
@@ -1029,75 +1080,164 @@ begin
 end
 $$;
 
-create or replace function public.kd_refresh_blog_reference_sources_v1(p_request jsonb) returns jsonb
+create or replace function public.kd_blog_mark_reference_refresh_dirty(p_source text)
+returns bigint
+language plpgsql volatile security definer
+set search_path = pg_catalog, public
+as $$
+declare v_generation bigint;
+begin
+  update public.kd_blog_reference_refresh_state
+     set requested_generation=requested_generation+1,
+         scan_cursor=null,scan_complete=false,last_source_event=left(p_source,160),updated_at=clock_timestamp()
+   where singleton returning requested_generation into v_generation;
+  return v_generation;
+end
+$$;
+
+create or replace function public.kd_blog_reference_source_changed()
+returns trigger
+language plpgsql volatile security definer
+set search_path = pg_catalog, public
+as $$
+declare v_changed boolean:=false;
+begin
+  if tg_table_name='kd_streaming_page_state' then
+    v_changed:=tg_op<>'UPDATE' or old.source_revision is distinct from new.source_revision
+      or old.generated_at is distinct from new.generated_at or old.meta is distinct from new.meta;
+  elsif tg_table_name='kd_catalog' then
+    if tg_op='INSERT' then
+      v_changed:=new.name='programm';
+    elsif tg_op='DELETE' then
+      v_changed:=old.name='programm';
+    else
+      v_changed:=(old.name='programm' or new.name='programm') and (
+        old.name is distinct from new.name or old.payload is distinct from new.payload
+        or old.sha256 is distinct from new.sha256 or old.updated_at is distinct from new.updated_at
+        or old.stand is distinct from new.stand or old.gueltig_bis is distinct from new.gueltig_bis);
+    end if;
+  end if;
+  if v_changed then
+    perform public.kd_blog_mark_reference_refresh_dirty(tg_table_name||':'||lower(tg_op));
+  end if;
+  return coalesce(new,old);
+end
+$$;
+
+drop trigger if exists kd_blog_streaming_reference_dirty on public.kd_streaming_page_state;
+create trigger kd_blog_streaming_reference_dirty
+after insert or update or delete on public.kd_streaming_page_state
+for each row execute function public.kd_blog_reference_source_changed();
+
+drop trigger if exists kd_blog_program_reference_dirty on public.kd_catalog;
+create trigger kd_blog_program_reference_dirty
+after insert or update or delete on public.kd_catalog
+for each row execute function public.kd_blog_reference_source_changed();
+
+create or replace function public.kd_run_blog_reference_refresh_batch(p_limit integer default 50)
+returns jsonb
 language plpgsql volatile security definer
 set search_path = pg_catalog, public
 as $$
 declare
-  v_limit integer;
-  v_publication uuid;
+  v_state public.kd_blog_reference_refresh_state%rowtype;
   v_unit record;
+  v_queue public.kd_blog_reference_refresh_queue%rowtype;
   v_refrow public.kd_blog_publication_references%rowtype;
   v_resolved jsonb;
   v_status text;
   v_work_key text;
   v_sources jsonb;
   v_fingerprint text;
+  v_old_fingerprint text;
+  v_last_key text;
+  v_error text;
+  v_enqueued integer:=0;
   v_scanned integer:=0;
   v_updated integer:=0;
   v_unchanged integer:=0;
   v_errors integer:=0;
+  v_pending integer:=0;
 begin
-  if auth.role()<>'service_role' then raise exception 'service_role required' using errcode='42501'; end if;
-  if p_request is null or jsonb_typeof(p_request)<>'object'
-    or not (p_request ? 'limit')
-    or p_request-array['limit','publicationId']<>'{}'::jsonb
-    or jsonb_typeof(p_request->'limit')<>'number'
-    or public.kd_blog_int(p_request->>'limit') not between 1 and 500
-    or (p_request ? 'publicationId' and jsonb_typeof(p_request->'publicationId') not in ('string','null'))
-    or (p_request ? 'publicationId' and jsonb_typeof(p_request->'publicationId')='string'
-      and coalesce(p_request->>'publicationId','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') then
-    raise exception 'invalid_blog_refresh_request' using errcode='22023';
+  if p_limit not between 1 and 500 then
+    raise exception 'invalid_blog_refresh_limit' using errcode='22023';
   end if;
-  v_limit:=public.kd_blog_int(p_request->>'limit');
-  if nullif(p_request->>'publicationId','') is not null then v_publication:=(p_request->>'publicationId')::uuid; end if;
-  for v_unit in
-    with matched as (
-      select 'work'::text kind,r.work_key,null::uuid reference_id,min(r.updated_at) oldest,
-        min(w.source_fingerprint) old_fingerprint
-      from public.kd_blog_publication_references r
-      join public.kd_shared_articles s on s.publication_id=r.publication_id
-      left join public.kd_blog_work_sources w on w.work_key=r.work_key
-      where r.work_key is not null and (v_publication is null or r.publication_id=v_publication)
-      group by r.work_key
-    ), unresolved as (
-      select 'reference'::text kind,null::text work_key,r.reference_id,r.updated_at oldest,
-        r.source_fingerprint old_fingerprint
-      from public.kd_blog_publication_references r
-      join public.kd_shared_articles s on s.publication_id=r.publication_id
-      where r.work_key is null and (v_publication is null or r.publication_id=v_publication)
-    )
-    select * from (select * from matched union all select * from unresolved) units
-    order by oldest,kind,coalesce(work_key,reference_id::text) limit v_limit
+
+  select * into v_state from public.kd_blog_reference_refresh_state where singleton for update;
+  if not v_state.scan_complete then
+    for v_unit in
+      with units as (
+        select 'work:'||r.work_key as unit_key,'work'::text as unit_kind,
+          r.work_key,null::uuid as reference_id
+        from public.kd_blog_publication_references r
+        join public.kd_shared_articles s on s.publication_id=r.publication_id
+        where r.work_key is not null and r.content_version=s.published_content_version
+        group by r.work_key
+        union all
+        select 'reference:'||r.reference_id::text,'reference'::text,null::text,r.reference_id
+        from public.kd_blog_publication_references r
+        join public.kd_shared_articles s on s.publication_id=r.publication_id
+        where r.work_key is null and r.content_version=s.published_content_version
+      )
+      select * from units where unit_key>coalesce(v_state.scan_cursor,'')
+      order by unit_key limit p_limit
+    loop
+      insert into public.kd_blog_reference_refresh_queue(
+        unit_key,unit_kind,work_key,reference_id,target_generation)
+      values(v_unit.unit_key,v_unit.unit_kind,v_unit.work_key,v_unit.reference_id,
+        v_state.requested_generation)
+      on conflict(unit_key) do update set
+        unit_kind=excluded.unit_kind,work_key=excluded.work_key,reference_id=excluded.reference_id,
+        target_generation=excluded.target_generation,
+        attempt_count=case when public.kd_blog_reference_refresh_queue.target_generation
+          < excluded.target_generation then 0 else public.kd_blog_reference_refresh_queue.attempt_count end,
+        available_at=case when public.kd_blog_reference_refresh_queue.target_generation
+          < excluded.target_generation then now() else public.kd_blog_reference_refresh_queue.available_at end,
+        last_error=case when public.kd_blog_reference_refresh_queue.target_generation
+          < excluded.target_generation then null else public.kd_blog_reference_refresh_queue.last_error end;
+      v_enqueued:=v_enqueued+1;
+      v_last_key:=v_unit.unit_key;
+    end loop;
+    update public.kd_blog_reference_refresh_state set
+      scan_cursor=coalesce(v_last_key,scan_cursor),scan_complete=(v_enqueued<p_limit),updated_at=clock_timestamp()
+    where singleton;
+    v_state.scan_complete:=(v_enqueued<p_limit);
+  end if;
+
+  for v_queue in
+    select * from public.kd_blog_reference_refresh_queue
+    where target_generation<=v_state.requested_generation and available_at<=now()
+    order by available_at,enqueued_at,unit_key limit p_limit for update skip locked
   loop
     v_scanned:=v_scanned+1;
     begin
-      if v_unit.kind='work' then
-        v_sources:=public.kd_blog_source_envelope(v_unit.work_key);
-        v_fingerprint:=public.kd_blog_source_fingerprint(v_sources);
-        if v_fingerprint is not distinct from v_unit.old_fingerprint then
+      if v_queue.unit_kind='work' then
+        if not exists (
+          select 1 from public.kd_blog_publication_references r
+          join public.kd_shared_articles s on s.publication_id=r.publication_id
+          where r.work_key=v_queue.work_key and r.content_version=s.published_content_version
+        ) then
           v_unchanged:=v_unchanged+1;
         else
-          insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint)
-          values(v_unit.work_key,v_sources,v_fingerprint)
-          on conflict(work_key) do update set sources=excluded.sources,
-            source_fingerprint=excluded.source_fingerprint,updated_at=now();
-          v_updated:=v_updated+1;
+          select source_fingerprint into v_old_fingerprint
+          from public.kd_blog_work_sources where work_key=v_queue.work_key;
+          v_sources:=public.kd_blog_source_envelope(v_queue.work_key);
+          v_fingerprint:=public.kd_blog_source_fingerprint(v_sources);
+          if v_fingerprint is not distinct from v_old_fingerprint then
+            v_unchanged:=v_unchanged+1;
+          else
+            insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint)
+            values(v_queue.work_key,v_sources,v_fingerprint)
+            on conflict(work_key) do update set sources=excluded.sources,
+              source_fingerprint=excluded.source_fingerprint,updated_at=now();
+            v_updated:=v_updated+1;
+          end if;
         end if;
       else
+        v_refrow:=null;
         select r.* into v_refrow from public.kd_blog_publication_references r
-          join public.kd_shared_articles s on s.publication_id=r.publication_id
-         where r.reference_id=v_unit.reference_id and r.content_version=s.published_content_version;
+        join public.kd_shared_articles s on s.publication_id=r.publication_id
+        where r.reference_id=v_queue.reference_id and r.content_version=s.published_content_version;
         if v_refrow.reference_id is null then
           v_unchanged:=v_unchanged+1;
         else
@@ -1111,9 +1251,12 @@ begin
             v_unchanged:=v_unchanged+1;
           else
             update public.kd_blog_publication_references set resolution_status=v_status,
-              work_key=v_work_key,sources=v_sources,source_fingerprint=v_fingerprint,updated_at=now()
-             where publication_id=v_refrow.publication_id and reference_id=v_refrow.reference_id
-               and content_version=v_refrow.content_version;
+              work_key=v_work_key,
+              release_year=coalesce(release_year,(select w.release_year
+                from public.kd_blog_catalog_works() w where w.work_key=v_work_key)),
+              sources=v_sources,source_fingerprint=v_fingerprint,updated_at=now()
+            where publication_id=v_refrow.publication_id and reference_id=v_refrow.reference_id
+              and content_version=v_refrow.content_version;
             if v_status='matched' then
               insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint)
               values(v_work_key,v_sources,v_fingerprint)
@@ -1124,12 +1267,91 @@ begin
           end if;
         end if;
       end if;
+      delete from public.kd_blog_reference_refresh_queue
+      where unit_key=v_queue.unit_key and target_generation=v_queue.target_generation;
     exception when others then
+      get stacked diagnostics v_error=message_text;
+      update public.kd_blog_reference_refresh_queue set
+        attempt_count=attempt_count+1,last_attempt_at=clock_timestamp(),
+        available_at=clock_timestamp()+interval '1 minute'*least(attempt_count+1,60),
+        last_error=left(v_error,500)
+      where unit_key=v_queue.unit_key;
       v_errors:=v_errors+1;
     end;
   end loop;
-  return jsonb_build_object('status','completed','scanned',v_scanned,'updated',v_updated,
-    'unchanged',v_unchanged,'errors',v_errors,'limit',v_limit,'publicationId',v_publication);
+
+  select count(*) into v_pending from public.kd_blog_reference_refresh_queue
+  where target_generation<=v_state.requested_generation;
+  update public.kd_blog_reference_refresh_state set
+    completed_generation=case when scan_complete and v_pending=0 then requested_generation else completed_generation end,
+    updated_at=clock_timestamp()
+  where singleton;
+
+  return jsonb_build_object('status','completed','generation',v_state.requested_generation,
+    'enqueued',v_enqueued,'scanned',v_scanned,'updated',v_updated,
+    'unchanged',v_unchanged,'errors',v_errors,'pending',v_pending,
+    'scanComplete',v_state.scan_complete,'limit',p_limit);
+end
+$$;
+
+create or replace function public.kd_refresh_blog_reference_sources_v1(p_request jsonb) returns jsonb
+language plpgsql volatile security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_limit integer;
+  v_publication uuid;
+  v_generation bigint;
+  v_result jsonb;
+begin
+  if auth.role()<>'service_role' then raise exception 'service_role required' using errcode='42501'; end if;
+  if p_request is null or jsonb_typeof(p_request)<>'object'
+    or not (p_request ? 'limit')
+    or p_request-array['limit','publicationId']<>'{}'::jsonb
+    or jsonb_typeof(p_request->'limit')<>'number'
+    or public.kd_blog_int(p_request->>'limit') not between 1 and 500
+    or (p_request ? 'publicationId' and jsonb_typeof(p_request->'publicationId') not in ('string','null'))
+    or (p_request ? 'publicationId' and jsonb_typeof(p_request->'publicationId')='string'
+      and coalesce(p_request->>'publicationId','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') then
+    raise exception 'invalid_blog_refresh_request' using errcode='22023';
+  end if;
+  v_limit:=public.kd_blog_int(p_request->>'limit');
+  if nullif(p_request->>'publicationId','') is not null then
+    v_publication:=(p_request->>'publicationId')::uuid;
+    select requested_generation into v_generation from public.kd_blog_reference_refresh_state where singleton;
+    insert into public.kd_blog_reference_refresh_queue(
+      unit_key,unit_kind,work_key,reference_id,target_generation)
+    select case when r.work_key is null then 'reference:'||r.reference_id::text else 'work:'||r.work_key end,
+      case when r.work_key is null then 'reference' else 'work' end,
+      r.work_key,case when r.work_key is null then r.reference_id end,v_generation
+    from public.kd_blog_publication_references r
+    join public.kd_shared_articles s on s.publication_id=r.publication_id
+    where r.publication_id=v_publication and r.content_version=s.published_content_version
+    on conflict(unit_key) do update set target_generation=excluded.target_generation,
+      available_at=least(public.kd_blog_reference_refresh_queue.available_at,now());
+  end if;
+  v_result:=public.kd_run_blog_reference_refresh_batch(v_limit);
+  return v_result||jsonb_build_object('publicationId',v_publication);
+end
+$$;
+
+select public.kd_blog_mark_reference_refresh_dirty('migration:blog-publication-v1');
+
+do $$
+declare v_job bigint;
+begin
+  if to_regprocedure('cron.schedule(text,text,text)') is null
+    or to_regprocedure('cron.unschedule(bigint)') is null then
+    raise exception 'blog_reference_refresh_requires_pg_cron';
+  end if;
+  for v_job in execute 'select jobid from cron.job where jobname=$1'
+    using 'kd-blog-reference-refresh-v1'
+  loop
+    execute 'select cron.unschedule($1)' using v_job;
+  end loop;
+  execute 'select cron.schedule($1,$2,$3)'
+    using 'kd-blog-reference-refresh-v1','*/5 * * * *',
+      'select public.kd_run_blog_reference_refresh_batch(50);';
 end
 $$;
 
@@ -1141,8 +1363,13 @@ revoke all on function public.kd_blog_title_norm(text),public.kd_blog_media_type
   public.kd_blog_operation_prepare(uuid,uuid,text,text,jsonb),
   public.kd_blog_operation_finish(uuid,uuid,text,jsonb,text),
   public.kd_blog_apply_publication(jsonb,text),public.kd_blog_public_article(uuid),
-  public.kd_blog_legacy_payload(uuid),public.kd_blog_cursor_decode(text)
+  public.kd_blog_legacy_payload(uuid),public.kd_blog_cursor_decode(text),
+  public.kd_blog_mark_reference_refresh_dirty(text),public.kd_blog_reference_source_changed(),
+  public.kd_run_blog_reference_refresh_batch(integer)
   from public,anon,authenticated;
+revoke all on function public.kd_blog_mark_reference_refresh_dirty(text),
+  public.kd_blog_reference_source_changed(),public.kd_run_blog_reference_refresh_batch(integer)
+  from service_role;
 
 revoke all on function public.kd_publish_blog_v1(jsonb),
   public.kd_update_blog_publication_v1(jsonb),public.kd_withdraw_blog_publication_v1(jsonb),
@@ -1152,7 +1379,7 @@ revoke all on function public.kd_publish_blog_v1(jsonb),
   from public,anon,authenticated;
 grant execute on function public.kd_blog_publication_capabilities(),
   public.kd_list_shared_articles_v1(jsonb),public.kd_list_shared_articles()
-  to anon,authenticated,service_role;
+  to authenticated;
 grant execute on function public.kd_publish_blog_v1(jsonb),
   public.kd_update_blog_publication_v1(jsonb),public.kd_withdraw_blog_publication_v1(jsonb),
   public.kd_read_own_blog_publication_v1(jsonb),public.kd_claim_shared_article(uuid)

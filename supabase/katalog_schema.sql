@@ -13,6 +13,8 @@
 --   20260918120000  Blog v1 liest programm und den bestehenden zentralen
 --                   Streamingindex nur serverseitig; keine neue Quelle und
 --                   kein Browserrecht auf Vollkataloge werden eingeführt.
+--                   Revisionen markieren begrenzte Blog-Refresh-Batches fuer
+--                   den vorhandenen pg_cron-Scheduler, nicht den Listenleser.
 -- Wer diese Datei auf einer frischen Datenbank ausführt, bekommt einen
 -- Katalog OHNE diese Regeln. Danach zwingend beide Migrationen laufen lassen.
 

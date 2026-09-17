@@ -37,6 +37,18 @@ function baseSchemaSql() {
   return `
 create extension if not exists pgcrypto;
 create role anon; create role authenticated; create role service_role bypassrls;
+create schema cron;
+create table cron.job(
+  jobid bigint generated always as identity primary key,
+  jobname text not null unique,schedule text not null,command text not null
+);
+create function cron.schedule(p_jobname text,p_schedule text,p_command text) returns bigint
+language plpgsql as $$declare v_jobid bigint; begin
+  insert into cron.job(jobname,schedule,command) values(p_jobname,p_schedule,p_command)
+  returning jobid into v_jobid; return v_jobid;
+end$$;
+create function cron.unschedule(p_jobid bigint) returns boolean
+language plpgsql as $$begin delete from cron.job where jobid=p_jobid; return found; end$$;
 create schema auth;
 create table auth.users(id uuid primary key);
 create function auth.role() returns text language sql stable as $$
@@ -238,11 +250,21 @@ export async function startBlogPublicationPgHarness() {
         : `select coalesce(jsonb_agg(to_jsonb(r)),'[]'::jsonb) from ${invocation} r;`;
       return lastJson(session(select, { role, accountId }));
     };
+    const runScheduledRefresh = () => {
+      const command = rawSql("select command from cron.job where jobname='kd-blog-reference-refresh-v1';");
+      if (!command) throw new Error("blog refresh scheduler job missing");
+      return lastJson(rawSql(command));
+    };
+    const scheduledRefreshJob = () => lastJson(rawSql(`select to_jsonb(j) from (
+      select jobname,schedule,command from cron.job where jobname='kd-blog-reference-refresh-v1'
+    ) j;`));
 
     return Object.freeze({
       accounts: BLOG_TEST_ACCOUNTS,
       defaultStreamingRows: BLOG_DEFAULT_STREAMING_ROWS,
       callRpc,
+      runScheduledRefresh,
+      scheduledRefreshJob,
       sourceUpdate,
       sql(statement, options = {}) { return session(statement, options); },
       sqlJson(statement, options = {}) { return lastJson(session(statement, options)); },
