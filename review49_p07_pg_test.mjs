@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync,mkdirSync,mkdtempSync,rmSync} from 'node:fs';
+import {readFileSync,mkdirSync,mkdtempSync,rmSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -10,7 +10,13 @@ import {useStreamingNeuController} from './src/controllers/useStreamingNeuContro
 import {createStreamingPageController,useStreamingPageController} from './src/controllers/useStreamingPageController.js';
 import {normalizeStreamingPageResponse,normalizeStreamingPageRequest} from './src/lib/streamingPage.js';
 import {setStorageDriver} from './src/lib/storage.js';
-const PG='/Applications/Postgres.app/Contents/Versions/17/bin';
+const configured=spawnSync('pg_config',['--bindir'],{encoding:'utf8'});
+const candidates=[process.env.KD_TEST_PG_BIN,'/Applications/Postgres.app/Contents/Versions/17/bin',
+ configured.status===0?configured.stdout.trim():null,'/usr/lib/postgresql/17/bin'].filter(Boolean);
+const required=['initdb','pg_ctl','psql','postgres'];
+const PG=[...new Set(candidates)].find(dir=>required.every(name=>existsSync(join(dir,name))));
+assert.ok(PG,`PostgreSQL server binaries are required (${required.join(', ')})`);
+console.log(`PostgreSQL binaries: ${PG}`);
 const folder=mkdtempSync(join(tmpdir(),'review49-p07-pg-'));mkdirSync(join(folder,'s'));
 const port=String(57000+process.pid%7000);let running=false,root,controller;
 function run(bin,args,input){const r=spawnSync(join(PG,bin),args,{input,encoding:'utf8',timeout:30000,maxBuffer:10_000_000,env:{PATH:`${PG}:/usr/bin:/bin`,LANG:'C',LC_ALL:'C'}});assert.equal(r.status,0,`${bin}: ${r.stderr||r.error}`);return r.stdout.trim();}
@@ -64,7 +70,7 @@ try{
  for(const file of ['20260913200000_streaming_pages_backend.sql','20260914100000_streaming_pages_latency.sql','20260917120000_review_streaming_freshness_anchors.sql'])sql(readFileSync(new URL(`./supabase/migrations/${file}`,import.meta.url),'utf8'));
  // Install the actual migration twice to prove replacement safety, before time control.
  const migration=readFileSync(new URL('./supabase/migrations/20260917120000_review_streaming_freshness_anchors.sql',import.meta.url),'utf8');sql(migration);
- check('fresh PG17: additive migration and unchanged ACL',()=>{
+ check('fresh PostgreSQL: additive migration and unchanged ACL',()=>{
   assert.equal(sql("select has_function_privilege('anon','public.kd_streaming_page(jsonb)','execute')"),'f');
   assert.equal(sql("select has_function_privilege('authenticated','public.kd_streaming_page(jsonb)','execute')"),'t');
   assert.equal(sql("select has_function_privilege('authenticated','public.kd_streaming_page_new_state(jsonb,text[],jsonb,jsonb,timestamptz,timestamptz,timestamptz,boolean,timestamptz)','execute')"),'f');
