@@ -10,7 +10,9 @@ Maßgeblicher Registerstand ist dieses Dokument im Integrationsworktree
 /private/tmp/kd-blog-integration-20260918, Zielbranch
 codex/blog-integration-20260918. Die Kopie im Primärcheckout bleibt die
 Planungsreferenz. Startcode nach frischem Fetch: origin/staging und origin/main
-3725c33afaad58a711f94dffb511288f8237d31f. B0 wird nach F0 gebunden.
+3725c33afaad58a711f94dffb511288f8237d31f. B0 ist der gemeinsame
+Freeze-Commit dieses Registers nach Integration von F0 und wird im Dispatch
+mit vollständiger SHA gebunden.
 
 Produktvertrag: [Blogplan](BLOG_VEROEFFENTLICHUNG_OHNE_NAMEN_PLAN_2026-09-17.md).
 Arbeitsablauf: [Kinodreieck-Etappen-Orchestrierung](/Users/max/.agents/skills/kinodreieck-etappen-orchestrierung/SKILL.md).
@@ -113,7 +115,9 @@ Abos des Verfassers ab. Private Originale und Kontorechte bleiben geschützt.
 **Write-Ownership:** neue additive Migrationen
 `supabase/migrations/*_blog_publication_*.sql`, nötige Schemaabbilder
 `supabase/current_schema.sql` und `supabase/katalog_schema.sql`,
-neue `blog_backend_pg_test.mjs` und `blog_reference_refresh_pg_test.mjs`.
+neue `blog_backend_pg_test.mjs`, `blog_reference_refresh_pg_test.mjs` und
+`tools/blog-publication-pg-harness.mjs` als wiederverwendbare lokale Testumgebung
+für Pakettests und den späteren Gesamttest des Meisters.
 Bestehende Streaming- oder Shared-Migrationen werden nicht rückwirkend editiert.
 
 **Lieferumfang:** serverseitige Anonymisierung in Write/List/Claim,
@@ -139,8 +143,10 @@ neue `src/controllers/useBlogPublicationController.js`,
 `src/services/sharedArticles.js`, `src/lib/sharedPublication.js`,
 `src/lib/artikel.js`, `src/lib/libraryProjection.js`,
 neue `src/lib/blogReferenceProjection.js`;
-`article_transaction_test.mjs`, `sharedarticles_test.mjs`, `blog_test.mjs`,
-`review49_p03_blog_execution_test.mjs` und neue `blog_reference_projection_test.mjs`.
+`article_transaction_test.mjs`, `sharedarticles_test.mjs`, `blog_test.mjs`
+und neue `blog_reference_projection_test.mjs`. Der frühere Kandidat
+review49_p03_blog_execution_test.mjs gehört zur separaten Profilanalyse und
+ist keine neue Schreibfläche oder Pflichtprüfung dieses Pakets.
 
 **Lieferumfang:** Vertrag aus F0 im Service umsetzen; bestehende persistierte
 Publikationslogik ergänzen, nicht ersetzen; konto- und fassungsgebundene
@@ -201,7 +207,7 @@ nur die betroffenen Pakete an und wird über den Meister geklärt.
 
 | Paket | Geplanter Branch | Geplanter Worktree | Status / Commit |
 |---|---|---|---|
-| F0 | codex/blog-foundation-20260918 | /private/tmp/kd-blog-foundation-20260918 | PLANNED / — |
+| F0 | codex/blog-foundation-20260918 | /private/tmp/kd-blog-foundation-20260918 | INTEGRATED / 0574426 + 93411b7, 26 Vertragstests grün |
 | A | codex/blog-backend-20260918 | /private/tmp/kd-blog-backend-20260918 | PLANNED / — |
 | B | codex/blog-client-20260918 | /private/tmp/kd-blog-client-20260918 | PLANNED / — |
 | C | codex/blog-ui-20260918 | /private/tmp/kd-blog-ui-20260918 | PLANNED / — |
@@ -212,6 +218,19 @@ Der Meister-Worktree ist angelegt; Paket-Worktrees folgen mit dem Dispatch.
 Basis B0, finaler Kandidat und Lieferziel werden beim tatsächlichen Start gebunden.
 Modelle/Denktiefe werden erst beim Dispatch anhand des aktiven Skills und einer
 gegebenen ausdrücklichen Nutzerwahl zugeordnet.
+
+DISPATCH F0: Agent /root/blog_foundation, gpt-5.6-sol/high wegen des tragenden
+Privacy-/RPC-/Shared-State-Vertrags; exakte Startbasis
+feba4ae1d26a3c1f9b084b5b50488758a48ca663. Exklusiv: blogContract.js,
+blog-contract-v1.json, blog-v1.md und blog_contract_test.mjs. Keine Bauchats.
+
+F0-Delta vor Freeze: öffentliche Kinoziele ohne private Mediathek-ID,
+vollständiger Owner-Readback nach Reload, kontrollierter UI-/Ergänzungsweg,
+ablaufende negative Quellenbelege und neutrale starke Identitätshinweise.
+Die vier Dateien beider Lieferungen liegen innerhalb der Ownership. Delta
+777edb337559334d9eba90b996b31855cda61d31 schließt die genannten Nähte;
+26/26 fokussierte Vertragsprüfungen und diff --check sind grün. Der Vertrag
+unter docs/contracts/blog-v1.md ist für die Parallelwelle eingefroren.
 
 Kollisionsprüfung für die Welle: Gemeinsame Vertragsdateien/Fixtures sind
 read-only; Pakettests haben verschiedene Owner; SQL/Schema ausschließlich A;
