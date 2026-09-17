@@ -1,10 +1,22 @@
-/* Real PostgreSQL 17; fresh synthetic cluster, Unix socket only, no remote IO. */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+/* Real PostgreSQL; fresh synthetic cluster, Unix socket only, no remote IO. */
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-const bin = process.env.PG17_BIN || '/Applications/Postgres.app/Contents/Versions/17/bin';
+const pgConfig = spawnSync('pg_config', ['--bindir'], { encoding: 'utf8', timeout: 5000 });
+const candidates = [
+  process.env.KD_TEST_PG_BIN,
+  process.env.PG17_BIN,
+  pgConfig.status === 0 ? pgConfig.stdout.trim() : null,
+  '/Applications/Postgres.app/Contents/Versions/17/bin',
+  '/usr/lib/postgresql/17/bin',
+  '/usr/lib/postgresql/16/bin',
+].filter(Boolean);
+const required = ['initdb', 'pg_ctl', 'postgres', 'psql'];
+const bin = [...new Set(candidates)].find(directory => required.every(binary => existsSync(join(directory, binary))));
+assert.ok(bin, `PostgreSQL server binaries are required (${required.join(', ')}); set KD_TEST_PG_BIN`);
+console.log(`PostgreSQL binaries: ${bin}`);
 const root = mkdtempSync(join(tmpdir(), 'kd-p06-pg-'));
 const data = join(root, 'data');
 let started = false, checks = 0;
@@ -70,7 +82,7 @@ try {
     ['anon cannot read', `set role anon; select kd_filmwissen_aktuell_lesen('tmdb','movie:348');`, 'permission denied'],
   ];
   for (const [name, query, message] of rejects) { assert.throws(() => sql(query), e => e.message.includes(message), name); checks++; console.log(`PASS ${name}`); }
-  console.log(`${checks}/${checks} real PostgreSQL 17 identity checks passed`);
+  console.log(`${checks}/${checks} real PostgreSQL identity checks passed`);
 } finally {
   if (started) run('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']);
   rmSync(root, { recursive: true, force: true });
