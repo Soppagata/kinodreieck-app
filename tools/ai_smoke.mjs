@@ -35,7 +35,7 @@
      S2 persönliche Profilextraktion mit wörtlich belegtem Signal
      S3 persönliche Vorbewertung mit getrenntem WARUM
      S7 privater Entdecken-Tagesfeed mit genau einem Websearch-Request
-     S8 Radar-Freitext mit genau einem expliziten Websearch-Request
+     S8 Radar-Freitext mit einem Providerrequest und 1 bis 4 Websuchen
      S4 quellengeführte Filmwissen-Synthese plus enge Lese-RPC
      S5 Ein-Artikel-Blogprofilextraktion mit beleggebundenen Geschmackszügen
      S6 Text-Stapelimport ohne Bildpfad
@@ -1373,7 +1373,7 @@ async function pruefeKritischeEntdeckenRadarPfade() {
     && !("providerDiagnostic" in (p25.daten || {}))
     && radarReadback.ok;
   pruefe(
-    "Radar-Freitext liefert genau einen Websearch und einen sicheren Ziel-/Resultatreadback",
+    "Radar-Freitext liefert einen Providerrequest mit 1 bis 4 Websuchen und einen sicheren Ziel-/Resultatreadback",
     radarOk,
     p25Unbelegt
       ? providerPfadUnbelegtHinweis("P25 radar-websearch-task")

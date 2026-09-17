@@ -5,16 +5,59 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
-const DATEIEN = Object.freeze([
-  "supabase/functions/ai-task/index.ts",
-  "supabase/functions/ai-task/providerContract.ts",
-  "supabase/functions/ai-task/requestContract.ts",
-  "supabase/functions/filmwissen-task/quellen.ts",
-  "supabase/functions/filmwissen-task/vertrag.ts",
-  "supabase/functions/_shared/providerDiagnostic.js",
-  "supabase/functions/_shared/providerReceipt.js",
-  "supabase/functions/_shared/providerText.js",
-]);
+import { createRequire } from "node:module";
+import { posix } from "node:path";
+
+// Reuse the parser shipped by our declared Vite React plugin; no new package.
+const reactRequire = createRequire(import.meta.resolve("@vitejs/plugin-react"));
+const { parseSync } = reactRequire("@babel/core");
+const ENTRY_DATEI = "supabase/functions/ai-task/index.ts";
+
+export function localImportClosure(leseInhalt, entry = ENTRY_DATEI) {
+  const visited = new Set();
+  const visit = (datei) => {
+    if (visited.has(datei)) return;
+    visited.add(datei);
+    if (datei.endsWith(".json")) return;
+    const ast = parseSync(toBuffer(leseInhalt(datei)).toString("utf8"), {
+      filename: datei, configFile: false, babelrc: false, sourceType: "module",
+      parserOpts: { plugins: ["typescript", "importAttributes"] },
+    });
+    const imports = new Set();
+    const add = (source) => {
+      if (source?.type !== "StringLiteral") {
+        throw new Error(`Nicht statisch auflösbarer Import in ${datei}`);
+      }
+      const specifier = source.value;
+      if (/^(?:npm:|jsr:|https?:|node:)/.test(specifier)) return;
+      if (!specifier.startsWith("./") && !specifier.startsWith("../")) {
+        throw new Error(`Nicht relativer lokaler Import in ${datei}: ${specifier}`);
+      }
+      const dependency = posix.normalize(posix.join(posix.dirname(datei), specifier));
+      if (dependency.startsWith("../") || /[?#]/.test(dependency)) {
+        throw new Error(`Import außerhalb des Quellvertrags: ${specifier}`);
+      }
+      imports.add(dependency);
+    };
+    const walk = (node) => {
+      if (!node || typeof node !== "object") return;
+      if (["ImportDeclaration", "ExportNamedDeclaration", "ExportAllDeclaration"].includes(node.type)
+          && node.source) add(node.source);
+      if (node.type === "ImportExpression") add(node.source);
+      if (node.type === "CallExpression" && node.callee?.type === "Import") add(node.arguments[0]);
+      if (node.type === "TSImportType") add(node.argument);
+      if (node.type === "TSExternalModuleReference") add(node.expression);
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) value.forEach(walk);
+        else if (value && typeof value === "object") walk(value);
+      }
+    };
+    walk(ast);
+    for (const dependency of [...imports].sort()) visit(dependency);
+  };
+  visit(entry);
+  return [...visited].sort();
+}
 const CONFIG_DATEI = "supabase/config.toml";
 const DEPLOY_CONTRACT_VERSION = "release-contract-v1";
 
@@ -191,15 +234,21 @@ export function releaseInfo({
     }),
 } = {}) {
   const commit = runGitText(git, ["rev-parse", "HEAD"]);
-  const status = runGitText(git, ["status", "--short", "--", ...DATEIEN, CONFIG_DATEI]);
+  const blobs = new Map();
+  const leseBlob = (datei) => {
+    if (!blobs.has(datei)) blobs.set(datei, runGit(git, ["show", `${commit}:${datei}`], null));
+    return blobs.get(datei);
+  };
+  const dateien = localImportClosure(leseBlob);
+  const status = runGitText(git, ["status", "--short", "--", ...dateien, CONFIG_DATEI]);
   if (status) {
     throw new Error(
       "Function-Quellen sind nicht committed. Erst prüfen und committen, dann deployen.",
     );
   }
   const sourceSha256 = sourceHash(
-    DATEIEN,
-    (datei) => runGit(git, ["show", `${commit}:${datei}`], null),
+    dateien,
+    leseBlob,
   );
   const configBlob = runGit(git, ["show", `${commit}:${CONFIG_DATEI}`], null);
   const configSha256 = createHash("sha256").update(configBlob).digest("hex");
@@ -223,7 +272,7 @@ export function releaseInfo({
     functionName,
     verifyJwt,
     configDatei,
-    dateien: [...DATEIEN],
+    dateien,
   };
 }
 

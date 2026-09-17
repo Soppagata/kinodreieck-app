@@ -99,7 +99,8 @@ export function bewerteRadarFreitextLiveReadback({
   if (!Number.isInteger(body?.writes) || body.writes < 0 || body.writes > 6) {
     errors.push("function-writes-invalid");
   }
-  if (body?.providerRequests !== 1 || body?.searchRequests !== 1
+  if (body?.providerRequests !== 1 || !Number.isInteger(body?.searchRequests)
+      || body.searchRequests < 1 || body.searchRequests > 4
       || body?.phaseCode !== "provider-complete") {
     errors.push("function-request-count-invalid");
   }

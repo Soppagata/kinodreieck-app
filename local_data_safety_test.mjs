@@ -82,6 +82,7 @@ function fuelleGueltigenLoeschstand(h, prefix) {
     [K.master, JSON.stringify({ filme: [], gespeichertAm: 1 })],
     [K.artikel, JSON.stringify({ artikel: [], gespeichertAm: 1 })],
     [K.kinoPins, "[]"],
+    [K.entdeckenPins, "[]"],
     [K.wochenplan, JSON.stringify({ version: 1, eintraege: [] })],
     [K.radar, JSON.stringify(createEmptyLocalRadar({ authority: "guest" }))],
     [K.merkliste, "[]"],
@@ -98,6 +99,7 @@ function fuelleGueltigenLoeschstand(h, prefix) {
     [K.filterStreaming, "0"],
     [K.geschmacksprofil, "{}"],
   ]);
+  assert.ok(PERSONAL_DATA_KEYS.every((key) => registryRohwerte.has(key)), "Gültige Fixture deckt die ganze persönliche Registry ab");
   for (const [key, value] of registryRohwerte) h.values.set(key, value);
   return new Map(h.values);
 }
@@ -127,6 +129,17 @@ check("Auth, Katalog/PWA und größerer Browserreset liegen außerhalb des Lösc
     (error) => error?.code === LOCAL_DATA_SAFETY_ERROR.SAFETY_COPY_REQUIRED,
   );
   check("Ohne bestätigten Download bleibt die lokale Löschung gesperrt", h.downloads === 0 && h.reloads === 0);
+}
+
+{
+  const h = harness();
+  fuelleGueltigenLoeschstand(h, "ungueltige-pins");
+  h.values.set(K.entdeckenPins, "kein-json");
+  const vorher = new Map(h.values);
+  await assert.rejects(() => h.controller.download(),
+    (error) => error?.code === LOCAL_DATA_SAFETY_ERROR.SAFETY_COPY_FAILED);
+  check("Ungültige Titel-Pins sperren den Download und lassen alle Daten stehen",
+    h.reloads === 0 && [...vorher].every(([key, value]) => h.values.get(key) === value));
 }
 
 {

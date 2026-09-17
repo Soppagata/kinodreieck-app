@@ -35,6 +35,7 @@ const check = (name, wert) => {
 
 const checkAsync = async (name, promise) => {
   try {
+    if (typeof promise === "function") throw new TypeError("Testfunktion wurde nicht aufgerufen");
     return check(name, await promise);
   } catch (error) {
     rot.push(name);
@@ -681,7 +682,7 @@ await checkAsync("Hash-Fallback mit 64 Nullen wird abgelehnt", (async () => {
   });
 
   return !invalid.ok;
-}));
+})());
 
 await checkAsync("Clock-Fehler wird nicht nach außen geworfen", (async () => {
   const invalid = await erzeugeBlogProfilAnalyseVorschau({
@@ -696,7 +697,7 @@ await checkAsync("Clock-Fehler wird nicht nach außen geworfen", (async () => {
   });
 
   return !invalid.ok;
-}));
+})());
 
 await checkAsync("Revalidation verarbeitet editierte Vorschau mit frischem Hash und ohne neue Clock", (async () => {
   const first = await erzeugeBlogProfilAnalyseVorschau({
@@ -1015,7 +1016,7 @@ await checkAsync("Marker mit 64 Nullen wird abgelehnt", (async () => (
     contentHash: "0".repeat(64),
     analyzedAt: "2026-08-17T10:00:00.000Z",
   })
-)));
+))());
 
 await checkAsync("Marker mit nicht-string Typen wird explizit abgelehnt", (async () => {
   const storage = makeStorage();
@@ -1024,7 +1025,7 @@ await checkAsync("Marker mit nicht-string Typen wird explizit abgelehnt", (async
     contentHash: 123,
     analyzedAt: "2026-08-17T10:00:00.000Z",
   });
-}));
+})());
 
 await checkAsync("Unveränderten Artikel per Marker erkennen", (async () => {
   const storage = makeStorage();

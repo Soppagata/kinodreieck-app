@@ -273,7 +273,8 @@ test("Radar-Provenienz, Audit, Hilfe, Datum, Blogsemantik und Touchvertrag", asy
   const settingsHelp = page.locator("summary", { hasText: /^Hilfe & Anleitung$/ });
   const helpBox = await expectTouchTarget(settingsHelp, "Settings-Hilfe-Einstieg");
   await settingsHelp.click();
-  await expect(page.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toBeVisible();
+  await expect(page.getByText("PERSÖNLICHE FILM-PLATTFORM", { exact: true })).toBeVisible();
+  await expect(page.getByText("LOKALE FILM-PLATTFORM", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Menü öffnen" }).click();
   await expect(page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Anleitung & Hilfe", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Menü schließen" }).click();

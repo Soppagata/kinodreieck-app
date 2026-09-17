@@ -15,23 +15,20 @@ function check(name, wert) {
   console.log("✓ " + name);
 }
 
-const dateien = [
-  "supabase/functions/ai-task/index.ts",
-  "supabase/functions/ai-task/providerContract.ts",
-  "supabase/functions/ai-task/requestContract.ts",
-  "supabase/functions/filmwissen-task/quellen.ts",
-  "supabase/functions/filmwissen-task/vertrag.ts",
-  "supabase/functions/_shared/providerDiagnostic.js",
-  "supabase/functions/_shared/providerReceipt.js",
-  "supabase/functions/_shared/providerText.js",
-];
+// A synthetic graph, not a second copy of the production file list.
+const fixtureSources = {
+  "supabase/functions/ai-task/index.ts": 'import "./branch.ts"; export * from "../_shared/leaf.js";',
+  "supabase/functions/ai-task/branch.ts": 'import type { Leaf } from "../_shared/leaf.js";',
+  "supabase/functions/_shared/leaf.js": 'export const leaf = true;',
+};
+const dateien = Object.keys(fixtureSources).sort();
 const configDatei = "supabase/config.toml";
 const validConfig = Buffer.from(
   '# comment\nproject_id = "bscjgwcntapobyxsiyce"\n\n[functions.ai-task]\nverify_jwt = true\n',
   "utf8",
 );
 const validSource = new Map(
-  dateien.map((datei, index) => [datei, Buffer.from(`inhalt-${index}\n`)]),
+  dateien.map((datei) => [datei, Buffer.from(fixtureSources[datei])]),
 );
 
 function makeGitStub({ commit = "a1", source = validSource, config = validConfig, status = {} }) {
@@ -79,7 +76,7 @@ check(
 check(
   "Release-Info hasht exakt diese Closure mit Raw-Byte-Quelle in fester Reihenfolge",
   JSON.stringify(
-    basisRelease.aufrufe.filter(([args]) => args[0] === "show").map(([args, opts]) =>
+    basisRelease.aufrufe.filter(([args]) => args[0] === "show").sort(([a], [b]) => a[1].localeCompare(b[1])).map(([args, opts]) =>
       JSON.stringify({
         args: args[1],
         encoding: opts?.encoding,
@@ -94,7 +91,7 @@ check(
         }),
       ),
       JSON.stringify({ args: `${info.commit}:${configDatei}`, encoding: null }),
-    ]),
+    ].sort((a, b) => JSON.parse(a).args.localeCompare(JSON.parse(b).args))),
 );
 check(
   "Dirty-Gate prüft exakt Source-Closure plus Config in einem Status-Aufruf",
@@ -180,22 +177,12 @@ check(
 
 for (const dirtyPfad of [...dateien, configDatei]) {
   let gesperrt = false;
-  let blobZugriff = false;
   try {
-    releaseInfo({
-      git(args) {
-        if (args[0] === "rev-parse") return "b2";
-        if (args[0] === "status" && JSON.stringify(args) === statusKey) {
-          return ` M ${dirtyPfad}`;
-        }
-        blobZugriff = true;
-        throw new Error("Dirty-Gate muss vor Blobzugriff sperren");
-      },
-    });
-  } catch {
-    gesperrt = true;
+    releaseInfo({ git: makeGitStub({ status: { [statusKey]: ` M ${dirtyPfad}` } }).git });
+  } catch (error) {
+    gesperrt = /nicht committed/.test(error.message);
   }
-  check(`Dirty-Gate sperrt ${dirtyPfad}`, gesperrt && !blobZugriff);
+  check(`Dirty-Gate sperrt ${dirtyPfad}`, gesperrt);
 }
 
 function releaseWithConfig(config) {

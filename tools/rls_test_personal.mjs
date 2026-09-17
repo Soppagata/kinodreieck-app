@@ -29,6 +29,9 @@
    Exit-Code != 0 bei jeder Abweichung.
    ============================================================================ */
 
+import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+
 const URL = (process.env.KD_SB_URL || "").trim().replace(/\/+$/, "");
 const ANON = (process.env.KD_SB_ANON || "").trim();
 const A_USER = (process.env.KD_TESTA_USER || "testa").trim();
@@ -366,6 +369,40 @@ if (!TESTKEY) {
   process.exit(2);
 }
 
+// Register intent before each risky write: even a lost response may have committed.
+const probeId = crypto.randomUUID();
+const proben = [];
+function registriereProbe(account, key, values, table = "kd_personal") {
+  proben.push({ account, key, values, table });
+}
+
+async function raeumeEigeneProbe(probe) {
+  const { account, key, values, table } = probe;
+  const shared = table === "kd_shared_articles";
+  const keyColumn = shared ? "article_id" : "key";
+  const valueColumn = shared ? "payload" : "value";
+  const filter = `/${table}?account_id=eq.${account.id}&${keyColumn}=eq.${encodeURIComponent(key)}`;
+  const stand = await rest("GET", filter + `&select=${valueColumn}&limit=2`, { token: account.token });
+  if (stand.status !== 200 || !Array.isArray(stand.data)) return "cleanup-read-failed";
+  if (stand.data.length === 0) return "absent";
+  if (stand.data.length !== 1) return "cleanup-identity-ambiguous";
+  const raw = stand.data[0]?.[valueColumn];
+  const matches = (value) => shared
+    ? isDeepStrictEqual(raw, JSON.parse(value))
+    : raw === value;
+  const value = values.find(matches);
+  if (value === undefined) return "cleanup-value-changed";
+  const deleted = await rest("DELETE", filter + `&${valueColumn}=eq.${encodeURIComponent(value)}`, {
+    token: account.token, prefer: "return=representation",
+  });
+  if (deleted.status !== 200 || !Array.isArray(deleted.data)
+      || deleted.data.length !== 1) return "cleanup-delete-unconfirmed";
+  const actual = deleted.data[0]?.[valueColumn];
+  return (shared ? isDeepStrictEqual(actual, JSON.parse(value)) : actual === value)
+    ? "removed" : "cleanup-delete-mismatch";
+}
+
+try {
 /* --- T1/T2: anon darf gar nichts --------------------------------------- */
 const t1 = await rest("GET", "/kd_personal?select=key&limit=1");
 pruefe("T1 anon LESEN wird abgewiesen (kein 200)", t1.status === 401 || t1.status === 403,
@@ -375,8 +412,8 @@ const t2 = await rest("POST", "/kd_personal", { body: { key: TESTKEY, value: "x"
 pruefe("T2 anon SCHREIBEN wird abgewiesen", t2.status === 401 || t2.status === 403, "HTTP " + t2.status);
 
 /* --- T3/T7: A schreibt und liest eigene Zeilen -------------------------- */
-const probeId = crypto.randomUUID();
 const wertA = JSON.stringify([{ wort: "rls-test-a", probeId }]);
+registriereProbe(A, TESTKEY, [wertA, wertA + " ", wertA + " veraltet"]);
 const t7 = await rest("POST", "/kd_personal", {
   token: A.token, body: { key: TESTKEY, value: wertA }, prefer: "return=representation",
 });
@@ -395,6 +432,7 @@ pruefe("T3 A liest die eigene Zeile", t3.ok && Array.isArray(t3.data) && t3.data
 
 /* --- T4: A sieht nichts von B ------------------------------------------ */
 const wertB = JSON.stringify([{ wort: "rls-test-b", probeId }]);
+registriereProbe(B, TESTKEY, [wertB]);
 const anlageB = await rest("POST", "/kd_personal", {
   token: B.token, body: { key: TESTKEY, value: wertB }, prefer: "return=representation",
 });
@@ -491,10 +529,9 @@ const profilSchonDa = t10Vorher.status === 200
   && t10Vorher.data.length === 1
   && t10Vorher.data[0]?.account_id === A.id
   && t10Vorher.data[0]?.key === PROFILKEY;
-let profilAnlageVersucht = false;
 let t10b = t10Vorher;
 if (profilVorherLesbar && !profilSchonDa) {
-  profilAnlageVersucht = true;
+  registriereProbe(A, PROFILKEY, [profilProbeWert]);
   t10b = await rest("POST", "/kd_personal", {
     token: A.token,
     body: { key: PROFILKEY, value: profilProbeWert },
@@ -813,6 +850,7 @@ pruefe("T15a anon darf die Shared-Tabelle NICHT direkt lesen",
   t15a.status === 401 || t15a.status === 403,
   "HTTP " + t15a.status + (t15a.status === 200 ? " — LECK: account_id waere direkt abfragbar!" : ""));
 
+registriereProbe(A, sharedArticleId, [JSON.stringify(sharedPayload)], "kd_shared_articles");
 const t15b = await rest("POST", "/kd_shared_articles", {
   token: A.token,
   body: { article_id: sharedArticleId, author: "RLS Test", payload: sharedPayload },
@@ -888,57 +926,25 @@ pruefe("T15j B kann As öffentliche Projektion NICHT löschen",
   sharedAngelegt && t15j.status === 200 && Array.isArray(t15j.data) && t15j.data.length === 0,
   "HTTP " + t15j.status + " rows=" + (Array.isArray(t15j.data) ? t15j.data.length : "?"));
 
-/* --- Cleanup ------------------------------------------------------------- */
-async function raeumeEigeneProbe(token, accountId, key, erlaubteWerte, angelegt) {
-  if (!angelegt) return true;
-  const stand = await rest(
-    "GET",
-    `/kd_personal?account_id=eq.${accountId}&key=eq.${encodeURIComponent(key)}&select=value&limit=1`,
-    { token },
-  );
-  if (stand.status !== 200 || !Array.isArray(stand.data) || stand.data.length !== 1) return false;
-  const wert = stand.data[0]?.value;
-  if (!erlaubteWerte.includes(wert)) return false;
-  const geloescht = await rest(
-    "DELETE",
-    `/kd_personal?account_id=eq.${accountId}&key=eq.${encodeURIComponent(key)}&value=eq.${encodeURIComponent(wert)}`,
-    { token, prefer: "return=representation" },
-  );
-  return geloescht.status === 200
-    && Array.isArray(geloescht.data)
-    && geloescht.data.length === 1
-    && geloescht.data[0]?.value === wert;
+} catch {
+  // Fetch errors can contain URLs/headers. Keep the failure visible, never secrets.
+  pruefe("RLS_TEST_ABORTED: Transport- oder Laufzeitfehler; Cleanup folgt", false);
+} finally {
+  let cleanupOk = true;
+  for (const probe of proben) {
+    let status;
+    try { status = await raeumeEigeneProbe(probe); }
+    catch { status = "cleanup-transport-error"; }
+    if (status !== "removed" && status !== "absent") {
+      cleanupOk = false;
+      console.error("RLS_RECOVERY " + JSON.stringify({
+        runId: probeId, accountId: probe.account.id, table: probe.table,
+        key: probe.key, status,
+        expectedSha256: probe.values.map((value) => createHash("sha256").update(value).digest("hex")),
+      }));
+    }
+  }
+  pruefe("Cleanup: temporäre Testzeilen entfernt; vorhandenes Profil bewahrt", cleanupOk);
 }
-
-const cA = await raeumeEigeneProbe(
-  A.token, A.id, TESTKEY, [wertA, wertA + " ", wertA + " veraltet"], testAAngelegt,
-);
-const cB = await raeumeEigeneProbe(B.token, B.id, TESTKEY, [wertB], testBAngelegt);
-const cProfil = profilAnlageVersucht
-  ? await rest(
-    "DELETE",
-    `/kd_personal?account_id=eq.${A.id}&key=eq.${encodeURIComponent(PROFILKEY)}&value=eq.${encodeURIComponent(profilProbeWert)}`,
-    { token: A.token, prefer: "return=representation" },
-  )
-  : { ok: true, status: 204, data: [] };
-const profilCleanupOk = !profilAnlageVersucht
-  || (cProfil.status === 200
-    && Array.isArray(cProfil.data)
-    && (profilVomTestAngelegt ? cProfil.data.length === 1 : cProfil.data.length === 0)
-    && cProfil.data.every((zeile) => zeile?.value === profilProbeWert));
-const cShared = sharedAngelegt
-  ? await rest(
-    "DELETE",
-    `/kd_shared_articles?publication_id=eq.${encodeURIComponent(sharedRow.publication_id)}&article_id=eq.${encodeURIComponent(sharedArticleId)}`,
-    { token: A.token, prefer: "return=representation" },
-  )
-  : { status: 204, data: [] };
-const sharedCleanupOk = !sharedAngelegt
-  || (cShared.status === 200
-    && Array.isArray(cShared.data)
-    && cShared.data.length === 1
-    && cShared.data[0]?.publication_id === sharedRow.publication_id);
-pruefe("Cleanup: temporäre Testzeilen entfernt; vorhandenes Profil bewahrt",
-  cA && cB && profilCleanupOk && sharedCleanupOk);
 
 beende("Account-Isolation und aktiver Rollen-v1-Vertrag sind belegt.");
