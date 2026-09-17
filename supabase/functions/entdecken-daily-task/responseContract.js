@@ -84,3 +84,15 @@ export function createEntdeckenDailyResponse(result = {}, telemetry = {}) {
     ...(result.providerReceipt ? { providerReceipt: result.providerReceipt } : {}),
   });
 }
+
+/* Nur die Browser-Leseantwort wird projiziert. Persistenz und geschuetzter
+   Producer-Readback behalten den vollstaendigen, bereits validierten Feed.
+   Ohne exaktes Opt-in versteht der bestehende Format-8/9-Leser annotations
+   nicht und wuerde sonst alle 50 Basiseintraege verwerfen. */
+export function projectEntdeckenDailyReadResponse(response, accept) {
+  if (accept === "application/json; kd-entdecken=oefi-v1"
+      || ![8, 9].includes(response?.feed?.format)
+      || !Object.hasOwn(response.feed, "annotations")) return response;
+  const { annotations: _annotations, ...feed } = response.feed;
+  return Object.freeze({ ...response, feed: Object.freeze(feed) });
+}

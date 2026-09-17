@@ -275,7 +275,8 @@ export function createEntdeckenDailyFeedService({
         headers: {
           Authorization: `Bearer ${token}`,
           apikey: publishableKey,
-          Accept: "application/json",
+          // Explizite Leseform; alte Browser fordern weiterhin application/json an.
+          Accept: "application/json; kd-entdecken=oefi-v1",
         },
         signal: controller.signal,
       });

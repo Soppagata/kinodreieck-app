@@ -7,7 +7,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requestHasForbiddenBody, validateEntdeckenDailyFeed } from "./contract.js";
 import { runEntdeckenDailyRefresh } from "./runner.js";
-import { createEntdeckenDailyResponse } from "./responseContract.js";
+import { createEntdeckenDailyResponse, projectEntdeckenDailyReadResponse } from "./responseContract.js";
 import { createMixedPublicChartAdapter, createOefiPublicChartAdapter } from "./publicMixAdapter.js";
 import {
   createFlixPatrolMixAdapter,
@@ -53,7 +53,7 @@ function cors(origin: string | null): Record<string, string> {
     "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${REFRESH_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}, ${ENTDECKEN_PROVIDER_PROBE_HEADER}, ${ENTDECKEN_FACTS_HEADER}`,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
+    Vary: "Origin, Accept",
   };
   if (origin && ALLOWED_ORIGINS.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
   return headers;
@@ -592,8 +592,11 @@ export function createEntdeckenDailyHandler({
     if (providerDiagnostic.allowed && !publicProduct && typeof providerRawResponse !== "string") {
       return json({ ok: false, status: "provider_error", feed: result.feed, writes: 0 }, 500, origin);
     }
+    const response = createEntdeckenDailyResponse(result, telemetry);
     return json({
-      ...createEntdeckenDailyResponse(result, telemetry),
+      ...(requestMode === "read"
+        ? projectEntdeckenDailyReadResponse(response, req.headers.get("Accept"))
+        : response),
       ...(providerDiagnostic.allowed && !publicProduct && typeof providerRawResponse === "string"
         ? providerDiagnosticField(providerRawResponse)
         : {}),
