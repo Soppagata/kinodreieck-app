@@ -19,7 +19,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 | M1 | Sichere Sitzung und kontogetrennte, stabile Daten | GEBAUT | P01 P02 | e45e2ba + 2b9b92a; P01/P02 |
 | M2 | Persoenliche Eintraege und Profilangaben bleiben korrekt erhalten | GEBAUT | P04 | 2b850aa; P04 |
 | M3 | Katalog, Streaming, Entdecken und Radar zeigen identitaetstreue, frische Inhalte | GEBAUT | P05 P07 P08 | 9b3da55 + cb63219 + 338948d; P05/P07/P08 |
-| M4 | Filmwissen und KI behandeln Werkart und Fehler verlaesslich | GEBAUT | P06 | 7def1b0; P06 |
+| M4 | Filmwissen und KI behandeln Werkart und Fehler verlaesslich | GEBAUT | P06 | 7def1b0 + f957fbe; P06, unabh. Deltapruefung ausstehend |
 | M5 | Pins, Terminplanung, Suche und Navigation erreichen das richtige Ziel | GEBAUT | P09 P10a P10b P11 | 89e8918 + 2217e5a + 79dfe15 + 8be8375; Paketbelege |
 | M6 | Pruefwerkzeuge und lokale Betriebsvertraege liefern belastbare Nachweise | GEBAUT | P03 P12 | 84cde78 + dfabad9; P03/P12 |
 
@@ -34,7 +34,7 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P03 | W1 / PARALLEL_WAVE | Pruefwerkzeuge | keine | Baumeister-P03 / `/private/tmp/kd-review49-p03` | blogprofilanalyse_test.mjs; local_data_safety_test.mjs; tests/private-v1/private-v1.spec.mjs; tools/rls_test_personal.mjs; tools/radar_freitext_live_contract.mjs; tools/function-release-info.mjs; zugehoerige Werkzeugtests; neue review49_p03_* Tests | INTEGRATED | 4a5cc52 / 84cde78 |
 | P04 | W2 / PARALLEL_WAVE | Persoenliche Eingaben | W1/P02,P03 | p04_personal / `/private/tmp/kd-review49-p04` | src/App.jsx; components/{DreiFragen,GeschmackBereich,GeschmackOnboarding,ProfilAnsicht,MustWatchListe,StapelImport,EintragForm,FilmCard,EditPanel}; controllers/{useArticleController,useMustwatchController}; lib/{match,artikel,libraryProjection,stapelimport,profil,extraktion,personalEntryChronology,prognose}; BlogTab; entsprechende Tests + review49_p04_* | INTEGRATED | 84cde78 / 2b850aa |
 | P05 | W2 / PARALLEL_WAVE | Radar und Faktenkontext | W1; E05-002 vor E14-001 intern | p05_radar / `/private/tmp/kd-review49-p05` | lib/{localEventRadar,radarPilotContracts,personRadarCatalog}; services/{radarPilot,radarWebsearch}; useEntdeckenRadarController; Radar*.jsx; EntdeckenTab; design-secondary.css; radar-websearch-task/*; _shared/flixpatrolFactsContext.js; Migrationen 20260917100000/101000; Radar-/Faktencontexttests + review49_p05_* | INTEGRATED | 84cde78 / 9b3da55 |
-| P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | p06_filmwissen / `/private/tmp/kd-review49-p06` | ai-task/index.ts; filmwissen-task/*; lib/{filmwissen,filmwissenTransport,prognoseAuftrag}; services/{filmwissen,vorbewertung}; useIntelligenceController; components/{FilmwissenBereich,PrognoseBereich}; Migration 20260917110000; filmwissen*/ai_task/prognose_auftrag/vorbewertung Tests + review49_p06_* | INTEGRATED | 84cde78 / 7def1b0 |
+| P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | p06_filmwissen / `/private/tmp/kd-review49-p06` | ai-task/index.ts; filmwissen-task/*; lib/{filmwissen,filmwissenTransport,prognoseAuftrag}; services/{filmwissen,vorbewertung}; useIntelligenceController; components/{FilmwissenBereich,PrognoseBereich}; Migration 20260917110000; filmwissen*/ai_task/prognose_auftrag/vorbewertung Tests + review49_p06_* | INTEGRATED | 84cde78 / 7def1b0; Rest aeca490 / f957fbe |
 | P07 | W3 / PARALLEL_WAVE | Streaming und Katalog | P04/App | p07_streaming / `/private/tmp/kd-review49-p07` | App.jsx; Streamingcontroller/-libs; StreamingTab/KinoTab; TitelKartenAktionen; eigene Migrationen und Tests | INTEGRATED | a2c6b60 / cb63219 |
 | P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W1; disjunkt zu W2 | p08_entdecken / `/private/tmp/kd-review49-p08` | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; Migration 20260917130000 und Entdecken-Tests | INTEGRATED | a2c6b60 / 338948d |
 | P09 | W3b / PARALLEL_WAVE | Wochenplan und Termine | App-Klickvertrag eingefroren; kein Output von P07 | p09_planning / `/private/tmp/kd-review49-p09` | Wochenplan.jsx; StartTab.jsx; enge Wochenplan-Editorregeln in index.css/design-primary.css; eigene Termin-/Browsertests | INTEGRATED | a2c6b60 / 89e8918 |
@@ -57,7 +57,7 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 4 | [E09-001](../2026-09-vollreview/tickets/E09/KD-REV-E09-001.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
 | 5 | [E08-002](../2026-09-vollreview/tickets/E08/KD-REV-E08-002.md) | P2 | P05 | Baumeister-P05 | GEBAUT | 9b3da55 | [P05](evidence/P05.md): SQL-/Teilpersistenz-/Personen-/Browserpruefungen |
 | 6 | [E05-003](../2026-09-vollreview/tickets/E05/KD-REV-E05-003.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
-| 7 | [E10-004](../2026-09-vollreview/tickets/E10/KD-REV-E10-004.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 | [P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle |
+| 7 | [E10-004](../2026-09-vollreview/tickets/E10/KD-REV-E10-004.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 + f957fbe | [P06](evidence/P06.md); 36 echte Formular-/Prognosefaelle und 9 Parserfaelle; unabhaengige Deltapruefung offen |
 | 8 | [E04-004](../2026-09-vollreview/tickets/E04/KD-REV-E04-004.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
 | 9 | [E04-005](../2026-09-vollreview/tickets/E04/KD-REV-E04-005.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
 | 10 | [E04-006](../2026-09-vollreview/tickets/E04/KD-REV-E04-006.md) | P2 | P04 | Baumeister-P04 | GEBAUT | 2b850aa | [P04](evidence/P04.md): 112 neue Sollpruefungen plus Nachbarn |
@@ -107,7 +107,7 @@ Integration sequenziell je Welle in Paketnummernfolge; jede Lieferung wird auf B
 
 P01 RESTAUFTRAG: treiberinterne IndexedDB-Koordination als begrenzter lokaler Commit-Mutex autorisiert; keine zusaetzliche Credentialablage, alle Credential-Commits koordinieren, Ausfallgrenzen und Mehrtab-Fall belegen. Keine Scope-Kollision.
 
-Finaler Kandidat: —. Lokaler Abschlusslauf: OFFEN. Push / CI / Deployment / praktische Geraeteabnahme: NICHT BEAUFTRAGT bzw. NICHT BELEGT.
+Pruefkandidat: `aeca490f2317a7a3276ed8d3a3d445361af66c1c`. Unabhaengige Einzelabnahme: LAEUFT. Lokaler Abschlusslauf: OFFEN. Push / CI / Deployment / praktische Geraeteabnahme: NICHT BEAUFTRAGT bzw. NICHT BELEGT.
 
 P02 DELIVERED statisch geprueft: exakt drei autorisierte Produktdateien, zwei echte Produktintegrationstests und Paketbeleg; Diff whitespace-sauber. Interne optionale Pull-Erweiterung nur im gebundenen Adoptionspfad. Integration wartet gemaess Queue auf P01.
 
@@ -146,3 +146,32 @@ INTEGRATED P10a 2217e5a: Eine Produktdatei, gemounteter Solltest und Beleg; unve
 INTEGRATED P10b 79dfe15: Zwei autorisierte Produktdateien plus Browserharness/-beleg, konfliktfrei. Beide Tickets mit 48 echten Browserpfaden und Nachbarn belegt. Alle 49 Tickets GEBAUT, alle sechs Nutzerergebnisse GEBAUT. Die Endabnahme ist noch offen.
 
 Kleine Master-Integrationsnaht: package.json registriert die gelieferten Logik-/SQL-Regressionen als test:review49 und als Teil von npm test; die fuenf neuen Browserharnesses plus der korrigierte private-v1-Teil laufen ueber test:review49:browser. Keine Abnahmekriterien oder Testassertionen geaendert. Der Integrationsworktree besitzt eigene unversionierte Cacheverzeichnisse unter node_modules; bestehende Dependencies bleiben read-only verlinkt. Abschlusspruefer folgt auf dem Commit dieser Naht.
+
+## Unabhaengige Einzelabnahme
+
+DISPATCH `final_verifier`, Astra/xhigh, auf exakt `aeca490f2317a7a3276ed8d3a3d445361af66c1c`; eigener Worktree `/private/tmp/kd-review49-verifier-20260917`. Alle 49 Originaltickets und dieses Register uebergeben. Nur Einzelissue-Nachkontrolle, gezielte Beleglueckenpruefung und unmittelbare Wechselwirkungen; keine Produktwrites, weiteren Pruefer, Vollsuite oder Auslieferung. Ergebnis steht aus.
+
+## Konkret vorbereitete spaetere Auslieferung
+
+Noch nicht beauftragt oder ausgefuehrt. Der nach lokaler Abnahme festgelegte Produktcommit bleibt der gemeinsame Lieferkandidat. Alte Runbooks mit anderen Migrationsnamen/Functionstaenden sind kein Nachweis fuer diese Lieferung.
+
+1. Frische Ziel-Refs, Migrationsledger, Function-Quellstaende, Web-/Service-Worker-Version und laufende Scheduler read-only erheben. Nur die tatsaechlich fehlenden Migrationen anwenden. Vor der autorisierten Bestandsumschreibung die betroffenen Radar-/Filmwissen-Identitaeten sichern und die Ruecklese-/Wiederherstellungsprobe festlegen.
+2. Das Versionsfenster fuer Radar- und Filmwissen-Schluessel sowie Feedannotation koordinieren. Alte Radarwriter werden serverseitig normalisiert; alte Reader koennen v2-Schluessel nicht lesen. Alte numerische Filmwissen-TMDB-Anfragen werden bewusst abgewiesen. Strenge alte Entdecken-Clients verstehen angereicherte Format-8/9-Feeds nicht. Neue Writer duerfen erst nach passender DB und aktualisierten Readern ausgegeben werden; fuer Filmwissen ist ein abgestimmtes Wartungsfenster erforderlich. Laufende Scheduler/Requests vor dem Schema-/Writerwechsel kontrolliert auslaufen lassen.
+3. Die sechs neuen Migrationen in dieser Reihenfolge einsetzen und ihren jeweiligen Vertrag ruecklesen:
+   - `20260917100000_review_radar_text_identity.sql`: Plattformschluessel v2, UUIDs/Versionen/Quellen erhalten, Kollision stoppt atomar.
+   - `20260917101000_review_radar_context_year.sql`: belegtes Jahr im Kontext, Authgrenzen unveraendert.
+   - `20260917110000_review_filmwissen_identity.sql`: Film-TMDB `movie:`, Serie `tv:`, Filmreihe `collection:`; ungesicherte Nicht-Film-Altkennungen bleiben gesperrt.
+   - `20260917120000_review_streaming_freshness_anchors.sql`: Quellfrist und qualifizierte Neu-Anker im bestehenden Seitenvertrag.
+   - `20260917123000_review_mail_rate_bucket_retention.sql`: begrenzte Ratenbucket-Aufbewahrung unter bestehendem Purgegate, Operationsledger erhalten.
+   - `20260917130000_review_entdecken_ofi_identity.sql`: nur belegte OEFI-Annotationen in Format 8/9, unveraenderte Save-/Claim-/Fencegrenzen.
+4. Genau die betroffenen Functions aus demselben Commit deployen: `ai-task` (11 lokale Quelldateien), `entdecken-daily-task` (19), `radar-websearch-task` (10). Die Zuordnung wurde mit dem reparierten transitiven Importabschluss ermittelt. Danach Authmodus und vollstaendige heruntergeladene Quellen bytegenau vergleichen; ein ACTIVE-Status allein genuegt nicht. Den bestehenden Buildmarker fuer ai-task erst nach erfolgreichem Code-Deploy aktualisieren.
+5. Den gleichen Webcommit zuerst auf Staging liefern; Buildmetadaten, feste Domain, atomare Deployment-URL und Service Worker ruecklesen. Aktuelle Login-/Kontoload-, Pin-/Navigation-, Radar-/Filmwissen- und Streaming-Vertraege providerfrei pruefen. Erst danach waere Produktion mit denselben Readbacks an der Reihe. Die korrigierten Workflowbytes fuer automatic-ai-check gehoeren ebenfalls zur Lieferung; natuerlicher Schedulerlauf ist ein eigener Betriebsnachweis.
+6. Praktische iPhone/PWA-Abnahme getrennt: Sitzungswechsel/Reload, kontogetrennte Daten, frischer Start mit Pins, Must-Watch-/Kinospruenge, Wochentag-Touchflaechen und Streaming-Refresh/Neu-Fristen. Browsermock, Deployment und physisches Geraet bleiben getrennte Aussagen.
+
+Kostenpflichtige Anbieterproben sind fuer diese lokale Reparatur nicht erforderlich und nicht freigegeben. Der Ablauf oben fuehrt keinen dieser Schritte aus.
+
+RESTAUFTRAG P06 aus Einzelabnahme: E10-004 auf aeca490 OFFEN. Typisierter Filmwissen-Normalisierer verwirft im bisherigen FilmForm-Aufrufer numerische persoenliche TMDB-IDs beim Speichern/Prognoseauftrag. Prüfer-Repro nutzt echte gemountete FilmForm. P06 korrigiert auf exakt aeca490 im neuen Worktree `/private/tmp/kd-review49-p06-rest`; EintragForm.jsx ist fuer dieses Delta explizit zugeordnet. Numerische Medien-ID bleibt an der persoenlichen Grenze, Typisierung bleibt an Filmwissen. Keine Kollision; Abschlusspruefer setzt andere Issues fort.
+
+P06 RESTAUFTRAG-Scope erweitert: direkte Aufrufer tools/filmwissen_live_target.mjs und tools/ai_smoke.mjs sowie filmwissen_live_target_test.mjs. Deren alte Eingaberegex blockiert den typisierten TMDB-Vertrag vor dem Helper. Nur Parserkorrektur mit lokalen Mocks; alle Budget-/Lock-/Gategrenzen unveraendert, kein Live-Start. P03 ist abgeschlossen; keine aktive Schreibkollision. Abschlusspruefer ueber diese direkten Abhaengigkeiten informiert.
+
+INTEGRATED P06-Rest f957fbe (Lieferung 9cb2935): exakt EintragForm und zwei direkte Toolparser, zwei Solltests plus Beleg. Numerische persoenliche IDs und typisierte Filmwissen-IDs bleiben getrennte Vertraege. 36 echte Formular-/Prognosefaelle, 9 Parserfaelle und relevante Nachbarn beim Baumeister gruen. Scope, kompletter Produktdiff und whitespace geprueft, konfliktfrei integriert. Master registriert den neuen Formular-Solltest in test:review49; keine Produktkorrektur durch den Master. Abschlusspruefer erhaelt den neuen exakten Kandidaten fuer die betroffenen Stellen.
