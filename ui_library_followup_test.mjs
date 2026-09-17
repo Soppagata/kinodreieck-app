@@ -79,26 +79,66 @@ assert.deepEqual(changes, [["abc", "A"], ["dekade", 2000]], "beide Regler liefer
 assert.equal(app.querySelectorAll(".kd-quellenbadge").length, 2, "gespeicherte Quellen werden stabil dedupliziert");
 assert.ok(app.querySelector(".kd-quellenbadges--kompakt"), "kompakte Badgegröße ist optional verfügbar");
 
+// E06-002/E11-003: gespeicherte oder voraufgelöste IDs ersetzen keinen
+// aktuellen vollständigen Identitätsbeleg. Der gebündelte Export ist Produktcode.
+const alpha = { titel: "Alpha", watchmode_id: 101, imdb_id: "tt1234567", jahr: 2001, typ: "movie" };
 const master = [
-  { id: "film-a", titel: "Alpha", watchmode_id: 101 },
-  { id: "film-b", titel: "Beta", watchmode_id: 202 },
-  { id: "film-ohne-id", titel: "Streng voraufgelöst" },
+  { ...alpha, id: "film-a", typ: "film" },
+  { id: "film-b", titel: "Beta", watchmode_id: 202, jahr: 2002, typ: "film" },
+  { id: "film-ohne-id", titel: "Streng voraufgelöst", jahr: 2003, typ: "film" },
 ];
-assert.equal(bestaetigteMediathekNavigationId({
-  titel: { watchmode_id: 101 }, master, statusMap: { 101: { mediathek_id: "film-a" } },
-}), "film-a", "starke bestehende Watchmode-Zuordnung navigiert");
-assert.equal(bestaetigteMediathekNavigationId({
-  titel: { watchmode_id: 101 }, master, statusMap: { 101: { mediathek_id: "film-b" } },
-}), "film-a", "Resolver korrigiert eine gespeicherte fremde ID auf die starke Identität");
-assert.equal(bestaetigteMediathekNavigationId({
-  titel: { watchmode_id: 303 }, master, statusMap: { 303: { mediathek_id: "film-b" } },
-}), null, "fremde bestehende ID ohne gemeinsame Identität navigiert nicht");
-assert.equal(bestaetigteMediathekNavigationId({
-  titel: { watchmode_id: 404 }, master, statusMap: {}, bekannteId: "film-ohne-id",
-}), "film-ohne-id", "streng voraufgelöste Known-Zuordnung bleibt nutzbar");
-assert.equal(bestaetigteMediathekNavigationId({
-  titel: { watchmode_id: 404 }, master, statusMap: {}, bekannteId: "gelöscht",
-}), null, "gelöschte Known-ID behauptet keine Navigation");
+let navigationChecks = 0;
+const navigation = (input, expected, message) => {
+  assert.equal(bestaetigteMediathekNavigationId(input), expected, message);
+  navigationChecks++;
+};
+navigation({ titel: alpha, master, statusMap: { 101: { mediathek_id: "film-a" } } },
+  "film-a", "vollständige konfliktfreie Watchmode-Identität navigiert");
+navigation({ titel: alpha, master, statusMap: { 101: { mediathek_id: "film-b" } } },
+  "film-a", "aktuelle Identität korrigiert eine gespeicherte fremde ID");
+navigation({ titel: alpha, master, bekannteId: "film-b" },
+  "film-a", "eine falsche Known-ID überschreibt die aktuelle eindeutige Identität nicht");
+const knownTitle = { titel: "Streng voraufgelöst", jahr: 2003, typ: "movie" };
+navigation({ titel: knownTitle, master, bekannteId: "film-ohne-id" },
+  "film-ohne-id", "Known-Zuordnung bleibt mit bestätigtem Titel/Jahr/Typ nutzbar");
+navigation({ titel: knownTitle, master },
+  "film-ohne-id", "eindeutiger vollständiger Titelabgleich benötigt keinen Known-Shortcut");
+navigation({ titel: { titel: "Fremd", watchmode_id: 303, jahr: 2002, typ: "movie" }, master,
+  statusMap: { 303: { mediathek_id: "film-b" } } },
+  null, "fremde existente Status-ID ohne gemeinsame Identität navigiert nicht");
+navigation({ titel: { watchmode_id: 404 }, master, bekannteId: "film-ohne-id" },
+  null, "bloße existente Known-ID ohne Identitätsbeleg navigiert nicht");
+navigation({ titel: knownTitle, master: master.slice(0, 2), bekannteId: "film-ohne-id" },
+  null, "gelöschtes Known-Ziel navigiert trotz vollständigem externen Titel nicht");
+navigation({ titel: alpha, master: null, statusMap: { 101: { mediathek_id: "film-a" } }, bekannteId: "film-a" },
+  null, "ungeladener Master bestätigt weder Status- noch Known-ID");
+navigation({ titel: { watchmode_id: 101 }, master: [{ id: "film-a", titel: "Alpha", watchmode_id: 101 }],
+  statusMap: { 101: { mediathek_id: "film-a" } }, bekannteId: "film-a" },
+  null, "historische ID-only-Fixture ist ausdrücklich kein positiver Identitätsnachweis");
+for (const field of ["jahr", "typ"]) {
+  navigation({ titel: { ...alpha, [field]: undefined }, master, bekannteId: "film-a" },
+    null, `fehlendes externes ${field} wird nicht durch eine Known-ID ersetzt`);
+  navigation({ titel: alpha, master: [{ ...master[0], [field]: undefined }], bekannteId: "film-a" },
+    null, `fehlendes Master-${field} wird nicht durch eine Known-ID ersetzt`);
+}
+for (const [name, overrides] of [
+  ["Werkart", { typ: "serie" }], ["Jahr", { jahr: 2002 }], ["weitere starke ID", { imdb_id: "tt7654321" }],
+]) {
+  navigation({ titel: alpha, master: [{ ...master[0], ...overrides }],
+    statusMap: { 101: { status: "gesehen", mediathek_id: "film-a" } }, bekannteId: "film-a" },
+    null, `${name}-Konflikt bleibt trotz noch existenter Status-/Known-ID gesperrt`);
+}
+for (const candidates of [
+  [master[0], { ...master[0], id: "duplikat" }],
+  [master[0], { ...master[0], id: "konflikt", jahr: 2002 }],
+]) {
+  for (const records of [candidates, [...candidates].reverse()]) {
+    navigation({ titel: alpha, master: records, bekannteId: "film-a" },
+      null, "mehrdeutige oder widersprüchliche starke IDs bleiben in jeder Masterreihenfolge gesperrt");
+  }
+}
+navigation({ titel: knownTitle, master: [master[2], { ...master[2], id: "titelduplikat" }],
+  bekannteId: "film-ohne-id" }, null, "Known-ID löst keinen mehrdeutigen Titel/Jahr/Typ-Abgleich auf");
 
 const css = fs.readFileSync("src/styles/library-followup.css", "utf8");
 assert.match(css, /\.kd-streaming-tab > \.kd-streaming-ansichten\s*\{[\s\S]*grid-template-columns:/u);
@@ -187,5 +227,5 @@ assert.equal(app.querySelector('.kd-film-editor-shell textarea[placeholder^="Beg
   "reine erfüllte Prognose bewahrt dieselbe offene Editorinstanz");
 assert.equal(offenerEditor.value, "MEIN OFFENER ENTWURF", "offener Bewertungsentwurf bleibt unverändert");
 await act(async () => prognoseRoot.unmount());
-console.log("ui_library_followup_test: 27 Checks bestanden.");
+console.log(`ui_library_followup_test: ${22 + navigationChecks} Checks bestanden (${navigationChecks} Navigation, 22 UI-/Editor-Verträge).`);
 process.exit(0);
