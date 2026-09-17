@@ -41,7 +41,7 @@ const ANSICHTEN = Object.freeze([
 ]);
 
 const ROLLEN_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
-const RADAR_TEXT_FINDING_ID = /^release:v1:[a-f0-9]{16}$/;
+const RADAR_TEXT_FINDING_ID = /^release:v[12]:[a-f0-9]{16}$/;
 function descriptionEvidenceLabel(entry) {
   if (runtimeConfig.appEnvironment === "production") return null;
   const evidence = entry?.descriptionEvidence;
@@ -53,7 +53,7 @@ function descriptionEvidenceLabel(entry) {
 }
 function ereignisLabel(entry) {
   if (radarEpisodeIdentity(entry)?.episodeNumber) return "Staffel · Folge";
-  if (entry?.targetId?.startsWith("release:v1:")) {
+  if (RADAR_TEXT_FINDING_ID.test(entry?.targetId || "")) {
     const category = { film: "Film", series: "Serie", season: "Staffel", special: "Special" }[entry.category] || "Film/Serie";
     return `${category} · Start${entry.region === "AT" ? " Österreich" : entry.region === "global" ? " weltweit" : ""}`;
   }
@@ -90,6 +90,22 @@ function ManageDialog({
   syncStatus, onRadarPilotSync, onBlog, onClose, returnFocusRef,
 }) {
   const dialogRef = useRef(null);
+  const [personError, setPersonError] = useState("");
+  const [personBusy, setPersonBusy] = useState(false);
+  const changePerson = async (entry, action) => {
+    if (personBusy) return;
+    setPersonBusy(true); setPersonError("");
+    try {
+      const result = await onPersonRadarChange?.(entry, action);
+      if (result?.status !== (action === "remove" ? "removed" : action === "pause" ? "paused" : "active")) {
+        setPersonError(result?.status === "pending"
+          ? "Die Entfernung ist noch nicht im Konto bestätigt. Bitte erneut synchronisieren."
+          : "Die Personenänderung wurde nicht bestätigt. Das Abo bleibt erhalten; bitte erneut synchronisieren.");
+      }
+    } catch {
+      setPersonError("Die Personenänderung konnte nicht gespeichert werden. Bitte erneut versuchen.");
+    } finally { setPersonBusy(false); }
+  };
   const { subscriptions, people } = projectVisibleRadarGoals(radarState);
   const pending = radarState?.outbox || [];
   const syncProblem = radarSyncProblem(pending, syncStatus);
@@ -148,10 +164,11 @@ function ManageDialog({
             {people.length ? <ul className="kd-entdecken-verwalten-liste">{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
               <span><strong>{entry.name}</strong><small>{ROLLEN_LABEL[entry.role]} · {entry.syncPending ? "Bestätigung offen" : entry.status === "active" ? "Im Radar" : "Pausiert"}</small></span>
               {onPersonRadarChange && !entry.syncPending ? <div>
-                {entry.authority === "local" ? <button type="button" onClick={() => onPersonRadarChange(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button> : null}
-                <button type="button" onClick={() => onPersonRadarChange(entry, "remove")}>Aus dem Radar entfernen</button>
+                {entry.authority === "local" ? <button type="button" disabled={personBusy} onClick={() => void changePerson(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button> : null}
+                <button type="button" disabled={personBusy} onClick={() => void changePerson(entry, "remove")}>Aus dem Radar entfernen</button>
               </div> : <small>Änderung derzeit nicht verfügbar.</small>}
             </li>)}</ul> : null}
+            {personError ? <p className="kd-entdecken-fehler" role="alert">{personError}</p> : null}
             {syncProblem ? <RadarSyncProblem problem={syncProblem} onRetry={onRadarPilotSync} /> : null}
           </section> : null}
           <section>
@@ -435,7 +452,7 @@ function RadarView({
   const radarDay = radarViennaDay();
   const events = useMemo(() => projectRadarNews(radarPilotEvents, radarDay), [radarPilotEvents, radarDay]);
   // Der kontogebundene Feed ist bereits auf aktive eigene Textziele begrenzt,
-  // enthält für release:v1-Funde aber bewusst keine erratene Query-Zuordnung.
+  // enthält für Altfunde aber bewusst keine erratene Query-Zuordnung.
   const news = useMemo(() => events.map((entry) => Object.freeze({
     entry,
     target: radarSubscriptionForEvent(entry, subscriptions),

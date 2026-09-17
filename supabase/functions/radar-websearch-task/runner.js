@@ -289,7 +289,8 @@ export async function runRadarWebsearchCheck({
     ...(storageFailures && storedResults ? {
       responseMode: "partial",
       displayText: "Einzelne Funde konnten nicht gespeichert werden. Andere belegte Funde bleiben erhalten.",
-      warnings: [...(presentation.warnings || []), "text-finding-storage-dropped"].slice(0, 8),
+      warnings: ["text-finding-storage-dropped", ...(presentation.warnings || []).filter((item) => item !== "text-finding-storage-dropped")].slice(0, 8),
+      persistence: Object.freeze({ stored: storedResults, failed: storageFailures }),
     } : {}),
     ...providerEvidence,
     ...textDetails,

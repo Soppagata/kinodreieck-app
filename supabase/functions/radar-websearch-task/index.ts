@@ -758,6 +758,7 @@ export function createRadarWebsearchHandler({
         displayText: result.displayText,
         warnings: result.warnings,
       } : {}),
+      ...(result.persistence ? { persistence: result.persistence } : {}),
       ...(result.providerReceipt
         ? { providerReceipt: result.providerReceipt }
         : {}),

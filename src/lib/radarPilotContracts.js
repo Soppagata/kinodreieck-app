@@ -227,7 +227,9 @@ function validateSubscription(value) {
   if (!RADAR_TARGET_TYPES.includes(value.targetType) && !person && !textTarget) {
     errors.push("feed-subscription-type-invalid");
   }
-  if (!validTitle(value.title)) errors.push("feed-subscription-title-invalid");
+  if (textTarget
+    ? typeof value.title !== "string" || !value.title.trim() || value.title.length > 160
+    : !validTitle(value.title)) errors.push("feed-subscription-title-invalid");
   if (value.region !== RADAR_DEFAULT_REGION) errors.push("feed-subscription-region-invalid");
   if (!RADAR_SCOPES.includes(value.scope)) errors.push("feed-subscription-scope-invalid");
   if (!["active", "paused"].includes(value.status)) errors.push("feed-subscription-status-invalid");
@@ -292,7 +294,7 @@ export function validateRadarPilotEvent(value) {
   if (!exactKeysWithOptional(value, RADAR_PILOT_EVENT_KEYS, RADAR_PILOT_EVENT_OPTIONAL_KEYS)) {
     return result(["feed-event-shape-invalid"]);
   }
-  const textFinding = typeof value.targetId === "string" && /^release:v1:[a-f0-9]{16}$/.test(value.targetId);
+  const textFinding = typeof value.targetId === "string" && /^release:v[12]:[a-f0-9]{16}$/.test(value.targetId);
   if (!validUuid(value.eventId)) errors.push("feed-event-id-invalid");
   if (!validUuid(value.eventVersionId)) errors.push("feed-event-version-invalid");
   if (!validTargetKey(value.targetId)) errors.push("feed-event-target-invalid");

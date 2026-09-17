@@ -29,7 +29,7 @@ function exactResult(value, expectedPerson = null, expectedText = null) {
     "ok", "status", "writes", "providerRequests", "searchRequests", "phaseCode", "personResult",
     "reservationStatus", "reservationUsdCent", "reservationDecision",
     "responseMode", "displayText", "warnings", "providerReceipt", "feed",
-    ...(expectedText ? ["textResult", "textDiagnostics"] : []),
+    ...(expectedText ? ["textResult", "textDiagnostics", "persistence"] : []),
   ];
   if (!plain(value) || Object.keys(value).some((key) => !allowed.includes(key))) return null;
   if (value.ok !== true || !RADAR_WEBSEARCH_CLIENT_STATUSES.includes(value.status)
@@ -99,8 +99,6 @@ function exactResult(value, expectedPerson = null, expectedText = null) {
       warnings: Object.freeze([...value.warnings]),
     };
   }
-  if (providerReceipt && presentationCount !== 0
-      && providerReceipt.resultMode !== value.responseMode) return null;
   const feed = value.feed === undefined ? null : validateRadarPilotFeed(value.feed).ok
     ? frozenClone(value.feed) : null;
   if (value.feed !== undefined && !feed) return null;
@@ -123,13 +121,39 @@ function exactResult(value, expectedPerson = null, expectedText = null) {
             || typeof result.checkedAt !== "string" || !Number.isFinite(Date.parse(result.checkedAt))
             || !Array.isArray(result.candidates) || result.candidates.length !== diagnostic.acceptedCandidates
             || result.candidates.some((entry) => !plain(entry)
-              || !/^release:v1:[a-f0-9]{16}$/.test(entry.targetId)
+              || !/^release:v[12]:[a-f0-9]{16}$/.test(entry.targetId)
               || typeof entry.title !== "string" || !entry.title.trim() || entry.title.length > 200
               || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)
               || !["film", "series", "season", "special"].includes(entry.category)))) return null;
     // Model candidates are diagnostic only. UI state is exclusively the
     // validated, persisted pilot feed, never this uncommitted candidate list.
   }
+  // Provider receipt remains the pre-storage truth. Only this explicit,
+  // independently counted text persistence result may downgrade structured.
+  const persistence = value.persistence;
+  let storagePartial = false;
+  if (persistence !== undefined) {
+    const candidates = value.textResult?.candidates;
+    storagePartial = !!expectedText && plain(persistence)
+      && Object.keys(persistence).sort().join(",") === "failed,stored"
+      && Number.isInteger(persistence.stored) && persistence.stored > 0
+      && Number.isInteger(persistence.failed) && persistence.failed > 0
+      && persistence.stored + persistence.failed === value.textDiagnostics?.acceptedCandidates
+      && value.writes <= persistence.stored
+      && value.status === (value.writes > 0 ? "confirmed" : "no_change")
+      && value.responseMode === "partial"
+      && value.warnings.includes("text-finding-storage-dropped")
+      && Array.isArray(candidates)
+      && candidates.filter((candidate) => feed?.events.some((event) => (
+        event.targetId === candidate.targetId && event.title === candidate.title
+          && event.date === candidate.date && event.platform === candidate.platform
+          && event.sourceTargetKey === `text:${expectedText.targetId}`
+      ))).length >= persistence.stored;
+    if (!storagePartial) return null;
+  }
+  if (providerReceipt && presentationCount !== 0
+      && providerReceipt.resultMode !== value.responseMode
+      && !(storagePartial && providerReceipt.resultMode === "structured")) return null;
   if (!expectedPerson) {
     if (value.personResult !== undefined) return null;
     return Object.freeze({ status: value.status, writes: value.writes, ...presentation, ...feedResult });

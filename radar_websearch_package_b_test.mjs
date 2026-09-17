@@ -460,7 +460,7 @@ await check("Freitext-Codeblock rettet einen belegten Fund und verwirft ein kapu
   assert.match(result.displayText, /Nur belegte Funde/);
   assert.ok(result.warnings.includes("json-extracted-from-text"));
   assert.equal(repository.calls.upserts, 1);
-  assert.match(result.feed.events[0].targetKey, /^release:v1:/);
+  assert.match(result.feed.events[0].targetKey, /^release:v2:/);
   assert.equal(harness.fetchCalls.length, 1);
   assert.equal(harness.reserveCalls.length, 1);
   assert.equal(harness.settleCalls.length, 1);

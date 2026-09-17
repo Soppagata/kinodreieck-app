@@ -270,7 +270,7 @@ check("TEXT-Prompt steuert Suchauswahl, Zukunft und Werkvielfalt statt einer fes
 check("Interne starke Werk-ID bleibt aus der sichtbaren Fundkarte heraus", () => {
   const result = evaluateTextRadarWebsearchResponse(envelope([candidate()]), request, [source]);
   assert.equal(result.status, "confirmed", result.errors.join(","));
-  assert.match(result.textResult.candidates[0].targetId, /^release:v1:/);
+  assert.match(result.textResult.candidates[0].targetId, /^release:v2:/);
   assert.deepEqual(Object.keys(result.textResult.candidates[0]).filter((key) => (
     ["title", "date", "targetType", "platform"].includes(key)
   )), ["targetType", "title", "date", "platform"]);
@@ -307,7 +307,7 @@ check("Minimum ohne externe ID, Jahr, zweite Beleggruppe oder Plattform bleibt e
   const evaluated = evaluateTextRadarWebsearchResponse(envelope([minimal()]), request, [editorial]);
   assert.equal(evaluated.status, "confirmed");
   const found = evaluated.textResult.candidates[0];
-  assert.match(found.targetId, /^release:v1:[a-f0-9]{16}$/);
+  assert.match(found.targetId, /^release:v2:[a-f0-9]{16}$/);
   assert.equal(found.targetType, "series");
   assert.equal(found.year, null);
   assert.equal(found.platform, "-");

@@ -519,9 +519,13 @@ function selectEvidence(event, sourceRegistry, checkedAt, errors, minimum = 2) {
 
 // Internal release identity, never a fabricated catalogue ID. ASCII folding is
 // deliberately identical to the SQL implementation; no fuzzy title matching.
+function normalizeTextPlatform(platform) {
+  return !platform || /^(?:-|unknown|unbekannt|n\/a)$/iu.test(platform) ? "-" : platform;
+}
+
 export function createTextRadarReleaseId(candidate) {
   const title = candidate.title.trim().replace(/ +/g, " ").replace(/[A-Z]/g, (c) => c.toLowerCase());
-  const basis = [title, candidate.eventDate, candidate.eventType, candidate.targetType, candidate.seasonNumber ?? "-"].join("|");
+  const basis = [title, candidate.eventDate, candidate.eventType, candidate.targetType, candidate.seasonNumber ?? "-", normalizeTextPlatform(candidate.platform)].join("|");
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;
   const bytes = new TextEncoder().encode(basis);
@@ -529,7 +533,7 @@ export function createTextRadarReleaseId(candidate) {
     first = Math.imul(first ^ bytes[index], 0x01000193) >>> 0;
     second = Math.imul(second ^ (bytes[index] + index), 0x85ebca6b) >>> 0;
   }
-  return `release:v1:${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
+  return `release:v2:${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
 }
 
 function validateTextCandidateShape(candidate, request, errors) {
@@ -616,7 +620,7 @@ export function evaluateTextRadarWebsearchResponse(envelope, requestInput, sourc
         targetId: createTextRadarReleaseId(normalized),
         year: validYear(candidate.year) ? candidate.year : null,
         category: candidate.category || (candidate.eventType === "staffelstart" ? "season" : targetType === "series" ? "series" : "film"),
-        platform: !candidate.platform || /^(?:-|unknown|unbekannt|n\/a)$/iu.test(candidate.platform) ? "-" : candidate.platform,
+        platform: normalizeTextPlatform(candidate.platform),
       });
     }
   }
@@ -653,7 +657,7 @@ export function evaluateTextRadarWebsearchResponse(envelope, requestInput, sourc
   }
   const seen = new Map();
   const conflicts = new Set();
-  const candidateKey = (candidate) => [candidate.title.toLocaleLowerCase("de").replace(/ +/g, " "),
+  const candidateKey = (candidate) => [candidate.title.replace(/[A-Z]/g, (c) => c.toLowerCase()).replace(/ +/g, " "),
     candidate.targetType, candidate.eventType, candidate.platform, candidate.seasonNumber ?? "-"].join("|");
   for (const candidate of shapeValidCandidates) {
     if (outsidePracticalWindow.has(candidate)) continue;

@@ -275,7 +275,7 @@ await check("Mutter Teresa startet genau einen Suchpfad und der bestaetigte Fund
   assert.equal(repo.calls.upserts[0].textContext.targetText, "Mutter Teresa");
   assert.equal(repo.calls.upserts[0].textContext.relationEvidence.length, 1);
   assert.equal(result.feed.subscriptions[0].title, "Mutter Teresa");
-  assert.match(result.feed.events[0].targetId, /^release:v1:/);
+  assert.match(result.feed.events[0].targetId, /^release:v2:/);
   assert.equal(result.feed.events[0].title, "Mother Teresa: No Greater Love");
 });
 
@@ -293,7 +293,7 @@ await check("Zwei Freitextwerke derselben Plattform bleiben werkgebundene getren
   assert.equal(result.writes, 2);
   assert.equal(adapter.calls.length, 1);
   assert.equal(new Set(result.feed.events.map((event) => event.targetId)).size, 2);
-  assert.ok(result.feed.events.every((event) => /^release:v1:/.test(event.targetId)));
+  assert.ok(result.feed.events.every((event) => /^release:v2:/.test(event.targetId)));
 });
 
 await check("Unsicherer Freitextfund bleibt ehrlich leer und ohne Persistenz", async () => {

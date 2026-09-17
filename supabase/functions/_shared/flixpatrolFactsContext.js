@@ -19,7 +19,6 @@ const text = (value, max) => {
   return cleaned && cleaned.length <= max && !CONTROL.test(cleaned) ? cleaned : null;
 };
 const year = (value) => Number.isInteger(value) && value >= 1870 && value <= 2999 ? value : null;
-const mediaType = (value) => value === "film" ? "film" : value === "series" || value === "serie" ? "serie" : null;
 const positiveId = (value) => /^\d+$/.test(String(value ?? "").trim()) && /[1-9]/.test(String(value ?? ""))
   ? String(value).trim().replace(/^0+(?=\d)/, "") : null;
 const imdbId = (value) => /^(?:tt)?[0-9]{5,12}$/i.test(String(value ?? "").trim())
@@ -264,7 +263,7 @@ export function createFlixpatrolFactsContextReader({
       }
       if (identifiers.imdb || identifiers.tmdb) {
         try {
-          const expectedMediaType = mediaType(identity?.typ ?? identity?.mediaType);
+          const expectedMediaType = normalisiereExterneWerkart(identity);
           const lookup = await call("kd_title_facts_lookup", {
             p_identities: [{
               ...(identifiers.imdb ? { imdbId: identifiers.imdb } : {}),

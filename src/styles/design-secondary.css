@@ -260,6 +260,8 @@
 }
 
 @media (max-width: 760px) {
+  /* The generic full-height sheet must share the base stylesheet breakpoint. */
+  .kd-entdecken-layer { padding: 0; }
   .kd-profil-dialog-layer {
     padding-top: var(--kd-profil-dialog-top-gap, max(24px, env(safe-area-inset-top, 0px)));
   }

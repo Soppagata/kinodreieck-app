@@ -412,35 +412,67 @@ export function useEntdeckenRadarController({
   }, [fuegeRadarFreitextHinzu]);
 
   const aenderePersonRadar = useCallback(async (identity, action) => {
+    const context = contextRef.current;
+    const storage = captureStorageContext();
+    const current = () => mountedRef.current && contextRef.current === context && storage.isCurrent();
     if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
-    const canonical = localPersonRadarAvailable ? identity : findPersonRadarCatalogIdentity({
-      targetId: createPersonRadarTargetId(identity?.personExternalId, identity?.role),
-      personExternalId: identity?.personExternalId,
-      name: identity?.name,
-      role: identity?.role,
-    });
+    const existingIdentity = (state) => {
+      if (state?.authority !== "account-cache" || state.pilot?.status !== "ready"
+          || storage.owner !== `account:${session.account?.id}`) return null;
+      const matches = (state.personSubscriptions || []).filter((entry) => (
+        entry.authority === "server" && ["active", "paused"].includes(entry.status)
+          && entry.personExternalId === identity?.personExternalId
+          && entry.role === identity?.role && entry.name === identity?.name
+      ));
+      return matches.length === 1 ? {
+        personExternalId: matches[0].personExternalId, name: matches[0].name,
+        role: matches[0].role, canonical: true,
+      } : null;
+    };
+    const canonical = localPersonRadarAvailable ? identity
+      : action === "remove" ? existingIdentity(radarStateRef.current)
+        : findPersonRadarCatalogIdentity({
+          targetId: createPersonRadarTargetId(identity?.personExternalId, identity?.role),
+          personExternalId: identity?.personExternalId, name: identity?.name, role: identity?.role,
+        });
     if (!validatePersonIdentity(canonical).ok) return Object.freeze({ status: "unresolved", writes: 0 });
     let reason = "person-subscription-invalid";
+    const operationId = neueLokaleOperationId();
     const saved = await schreibeRadarState((previous) => {
+      if (!current() || previous.authority !== radarAuthority
+          || (radarAuthority === "account-cache" && action === "remove" && !existingIdentity(previous))) return null;
       const result = previous.authority === "guest"
         ? action === "remove"
           ? removeGuestPersonRadarSubscription(previous, canonical)
           : setGuestPersonRadarSubscriptionStatus(previous, canonical, action === "pause" ? "paused" : "active")
         : queueAccountPersonRadarChange(previous, {
-          operationId: neueLokaleOperationId(), action, identity: canonical,
+          operationId, action, identity: canonical,
           targetId: createPersonRadarTargetId(canonical.personExternalId, canonical.role),
         });
       reason = result.reason;
       return result.ok ? result.state : null;
     });
+    if (!current()) return Object.freeze({ status: "forbidden", writes: 0 });
     if (saved === false) return Object.freeze({
       status: reason === "outbox-person-invalid" ? "unresolved" : "storage_error", writes: 0,
     });
-    if (radarAuthority === "account-cache") await syncRadarPilot(saved);
+    if (radarAuthority === "account-cache") {
+      const synced = await syncRadarPilot(saved);
+      if (!current()) return Object.freeze({ status: "forbidden", writes: 0 });
+      const operation = synced?.state?.outbox?.find((entry) => entry.operationId === operationId);
+      if (operation?.status === "rejected") return Object.freeze({ status: "rejected", writes: 0 });
+      const remains = synced?.state?.personSubscriptions?.some((entry) => (
+        entry.personExternalId === canonical.personExternalId && entry.role === canonical.role
+      ));
+      if (synced?.status !== "ready" || operation?.status === "pending" || (action === "remove" && remains)) {
+        return Object.freeze({ status: "pending", writes: 0 });
+      }
+    }
     return Object.freeze({
       status: action === "remove" ? "removed" : action === "pause" ? "paused" : "active", writes: 1,
     });
-  }, [localPersonRadarAvailable, personRadarAvailable, radarAuthority, schreibeRadarState, syncRadarPilot]);
+  }, [localPersonRadarAvailable, personRadarAvailable, radarAuthority, schreibeRadarState,
+    syncRadarPilot, radarStateRef, session.account?.id]);
 
   const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {
     if (radarAuthority !== "account-cache" || !remoteKontoAktiv) {
