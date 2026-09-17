@@ -21,7 +21,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 | M3 | Katalog, Streaming, Entdecken und Radar zeigen identitaetstreue, frische Inhalte | OFFEN | P05 P07 P08 | — |
 | M4 | Filmwissen und KI behandeln Werkart und Fehler verlaesslich | OFFEN | P06 | — |
 | M5 | Pins, Terminplanung, Suche und Navigation erreichen das richtige Ziel | OFFEN | P09 P10 P11 | — |
-| M6 | Pruefwerkzeuge und lokale Betriebsvertraege liefern belastbare Nachweise | OFFEN | P03 P12 | — |
+| M6 | Pruefwerkzeuge und lokale Betriebsvertraege liefern belastbare Nachweise | GEBAUT | P03 P12 | 84cde78 + dfabad9; P03/P12 |
 
 ## Pakete und Parallelmatrix
 
@@ -34,13 +34,13 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P03 | W1 / PARALLEL_WAVE | Pruefwerkzeuge | keine | Baumeister-P03 / `/private/tmp/kd-review49-p03` | blogprofilanalyse_test.mjs; local_data_safety_test.mjs; tests/private-v1/private-v1.spec.mjs; tools/rls_test_personal.mjs; tools/radar_freitext_live_contract.mjs; tools/function-release-info.mjs; zugehoerige Werkzeugtests; neue review49_p03_* Tests | INTEGRATED | 4a5cc52 / 84cde78 |
 | P04 | W2 / PARALLEL_WAVE | Persoenliche Eingaben | W1/P02,P03 | Baumeister-P04 / `/private/tmp/kd-review49-p04` | App.jsx; persoenliche Eingabekomponenten/-controller/-lib und deren Tests (bei DISPATCH praezisiert) | RUNNING | 84cde78 / — |
 | P05 | W2 / PARALLEL_WAVE | Radar und Faktenkontext | W1; E05-002 vor E14-001 intern | Baumeister-P05 / `/private/tmp/kd-review49-p05` | Radarclient/-contract/-runner, Faktencontext, Radarpreview; src/styles/design-secondary.css; eigene Migrationen und Tests (bei DISPATCH praezisiert) | RUNNING | 84cde78 / — |
-| P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | Baumeister-P06 / bei DISPATCH | ai-task/index.ts; filmwissen-task; Filmwissenclient; eigene Migrationen und Tests | PLANNED | — |
+| P06 | W2 / PARALLEL_WAVE | Filmwissen und KI-Fehler | W1/P03 | Baumeister-P06 / `/private/tmp/kd-review49-p06` | ai-task/index.ts; filmwissen-task; Filmwissenclient; eigene Migrationen und Tests | RUNNING | 84cde78 / — |
 | P07 | W3 / PARALLEL_WAVE | Streaming und Katalog | P04/App | Baumeister-P07 / bei DISPATCH | App.jsx; Streamingcontroller/-libs; StreamingTab/KinoTab; TitelKartenAktionen; eigene Migrationen und Tests | PLANNED | — |
 | P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W2 | Baumeister-P08 / bei DISPATCH | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; eigene Format8/9-Migrationen und Entdecken-Tests | PLANNED | — |
 | P09 | W4 / PARALLEL_WAVE | Wochenplan und Termine | P07/App | Baumeister-P09 / bei DISPATCH | App.jsx; Wochenplan.jsx; StartTab.jsx; wochenplan/programm; eigene Termin-/Browsertests | PLANNED | — |
 | P10 | W5 / SOLO | Pins und Fokusnavigation | P09/App | Baumeister-P10 / bei DISPATCH | App.jsx; MediathekTab/KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
 | P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W2; programm read-only | Baumeister-P11 / bei DISPATCH | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | PLANNED | — |
-| P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | RUNNING | 4a5cc52 / — |
+| P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | INTEGRATED | 4a5cc52 / dfabad9 |
 
 Kollisionspruefung: Dateien/Generatoren, Exports, Schema/State, Config/Styles, Dependencies/Lockfile, Tests/Fixtures, Output-Abhaengigkeiten und Worktrees beruecksichtigt. W1: P01×P02×P03 disjunkt. W2: App/Persoenliches=P04, Radar/Faktencontext=P05, KI/Filmwissen=P06; gemeinsame read-only Identitaetsvertraege eingefroren. W3: App/Streaming/Kino=P07, Entdeckenprojektion=P08, Betrieb=P12. W4: App/Planung=P09, Finderlogik=P11. App-Schreiber laufen ausschliesslich in Folgewellen.
 
@@ -94,8 +94,8 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 42 | [E13-004](../2026-09-vollreview/tickets/E13/KD-REV-E13-004.md) | P2 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
 | 43 | [E02-003](../2026-09-vollreview/tickets/E02/KD-REV-E02-003.md) | P2 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
 | 44 | [E08-005](../2026-09-vollreview/tickets/E08/KD-REV-E08-005.md) | P2 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
-| 45 | [E13-001](../2026-09-vollreview/tickets/E13/KD-REV-E13-001.md) | P2 | P12 | Baumeister-P12 | OFFEN | — | — |
-| 46 | [E13-002](../2026-09-vollreview/tickets/E13/KD-REV-E13-002.md) | P2 | P12 | Baumeister-P12 | OFFEN | — | — |
+| 45 | [E13-001](../2026-09-vollreview/tickets/E13/KD-REV-E13-001.md) | P2 | P12 | Baumeister-P12 | GEBAUT | dfabad9 | [P12](evidence/P12.md): Core/Workflow, 67 Monitorchecks, 13 PG17-Gruppen |
+| 46 | [E13-002](../2026-09-vollreview/tickets/E13/KD-REV-E13-002.md) | P2 | P12 | Baumeister-P12 | GEBAUT | dfabad9 | [P12](evidence/P12.md): Core/Workflow, 67 Monitorchecks, 13 PG17-Gruppen |
 | 47 | [E10-002](../2026-09-vollreview/tickets/E10/KD-REV-E10-002.md) | P2 | P06 | Baumeister-P06 | OFFEN | — | — |
 | 48 | [E11-005](../2026-09-vollreview/tickets/E11/KD-REV-E11-005.md) | P3 | P09 | Baumeister-P09 | OFFEN | — | — |
 | 49 | [E03-003](../2026-09-vollreview/tickets/E03/KD-REV-E03-003.md) | P3 | P03 | Baumeister-P03 | GEBAUT | 84cde78 | [P03](evidence/P03.md); lokal fokussiert belegt |
@@ -115,3 +115,5 @@ DISPATCH P12 vorgezogen: P02 ist DELIVERED und sein Slot frei. P12 besitzt keine
 INTEGRATED W1: P01 e45e2ba → P02 2b9b92a → P03 84cde78, konfliktfrei und ohne Produktnaht. Je Lieferung Scope, realer Produktbezug der Tests und fokussierte Nachweise geprueft. 10/49 Tickets GEBAUT; finaler Abschlussstatus weiterhin offen.
 
 W2-Basis ist 84cde78b18bc2ba060f348613ba4304668901ffc. P04/P05 starten auf den zwei freien Plaetzen; P06 startet nach frei werdendem drittem Platz ebenfalls exakt dort. Der disjunkte P12-Rest aus W1 blockiert keine W2-Datei und bleibt auf seiner urspruenglichen Basis. Maximal drei aktive Baumeister; kein Paket wartet auf fachlich unabhaengige Ergebnisse.
+
+INTEGRATED P12 dfabad991b6a60cc0a828331edccd709daf1090d: Workflowdelta und additive Retention mit vorherigem effektivem Funktionskoerper verglichen; ausschliesslich Mail-Ratenbucket-Ergaenzung. Kleine Master-Naht: trailing whitespace in neuer PG-Testdatei entfernt. Keine semantische Aenderung, keine Testwiederholung daraus. 12/49 Tickets GEBAUT. P06 DISPATCH ebenfalls auf W2-Basis 84cde78; W2 nun mit drei Baumeistern.

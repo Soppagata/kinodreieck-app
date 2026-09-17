@@ -12,7 +12,7 @@ const pgCandidates = [
   "/Applications/Postgres.app/Contents/Versions/17/bin",
   pgConfig.status === 0 ? pgConfig.stdout.trim() : null,
   "/usr/lib/postgresql/17/bin",
-  
+
 ].filter(Boolean);
 const requiredPgBinaries = ["initdb", "pg_ctl", "postgres", "psql"];
 const PG = [...new Set(pgCandidates)].find((candidate) => (
