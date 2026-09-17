@@ -36,6 +36,14 @@ create table if not exists public.kd_blog_work_sources (
   updated_at timestamptz not null default now()
 );
 
+alter table public.kd_blog_work_sources
+  add column if not exists identity_hints jsonb not null default '[]'::jsonb;
+alter table public.kd_blog_work_sources
+  drop constraint if exists kd_blog_work_sources_identity_hints_valid;
+alter table public.kd_blog_work_sources
+  add constraint kd_blog_work_sources_identity_hints_valid
+  check (jsonb_typeof(identity_hints)='array' and jsonb_array_length(identity_hints)<=4);
+
 create table if not exists public.kd_blog_publication_references (
   publication_id uuid not null references public.kd_shared_articles(publication_id) on delete cascade,
   private_row_id text not null,
@@ -283,6 +291,22 @@ select
   ),
   false
 from keys k
+$$;
+
+create or replace function public.kd_blog_verified_identity_hints(p_work_key text)
+returns jsonb
+language sql stable security definer
+set search_path = pg_catalog, public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'namespace',n.namespace,'value',(w.identities->n.namespace)->>0)
+    order by n.ordinal),'[]'::jsonb)
+  from public.kd_blog_catalog_works() w
+  cross join (values ('imdb',1),('tmdb',2),('watchmode',3),('film_at',4)) n(namespace,ordinal)
+  where w.work_key=p_work_key
+    and jsonb_typeof(w.identities->n.namespace)='array'
+    and jsonb_array_length(w.identities->n.namespace)=1
+    and nullif(btrim((w.identities->n.namespace)->>0),'') is not null
 $$;
 
 create or replace function public.kd_blog_source_envelope(p_work_key text default null)
@@ -736,10 +760,13 @@ begin
       v_ref->'input'->>'mediaType',v_ref->'input',
       v_ref->>'inputHash',v_status,v_work,v_sources,v_fingerprint);
     if v_status='matched' then
-      insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint)
-      values(v_work,v_sources,v_fingerprint)
+      insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint,identity_hints)
+      values(v_work,v_sources,v_fingerprint,public.kd_blog_verified_identity_hints(v_work))
       on conflict(work_key) do update set sources=excluded.sources,
-        source_fingerprint=excluded.source_fingerprint,updated_at=now();
+        source_fingerprint=excluded.source_fingerprint,
+        identity_hints=case when jsonb_array_length(public.kd_blog_work_sources.identity_hints)>0
+          then public.kd_blog_work_sources.identity_hints else excluded.identity_hints end,
+        updated_at=now();
     end if;
     v_reference_results:=v_reference_results||jsonb_build_array(jsonb_build_object(
       'rowId',v_ref->'input'->>'rowId','referenceId',v_ref->>'referenceId',
@@ -782,7 +809,9 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object(
       'referenceId',r.reference_id,'rank',r.rank,'title',r.title,'year',r.release_year,
       'mediaType',r.media_type,'resolution',jsonb_build_object(
-        'status',r.resolution_status,'workKey',r.work_key),
+        'status',r.resolution_status,'workKey',r.work_key)
+        || case when r.resolution_status='matched' and jsonb_array_length(coalesce(w.identity_hints,'[]'::jsonb))>0
+          then jsonb_build_object('identityHints',w.identity_hints) else '{}'::jsonb end,
       'sources',coalesce(w.sources,r.sources)) order by r.rank),'[]'::jsonb)
       into v_refs
       from public.kd_blog_publication_references r
@@ -1150,6 +1179,8 @@ declare
   v_sources jsonb;
   v_fingerprint text;
   v_old_fingerprint text;
+  v_identity_hints jsonb;
+  v_old_identity_hints jsonb;
   v_last_key text;
   v_error text;
   v_enqueued integer:=0;
@@ -1219,17 +1250,21 @@ begin
         ) then
           v_unchanged:=v_unchanged+1;
         else
-          select source_fingerprint into v_old_fingerprint
+          select source_fingerprint,identity_hints into v_old_fingerprint,v_old_identity_hints
           from public.kd_blog_work_sources where work_key=v_queue.work_key;
           v_sources:=public.kd_blog_source_envelope(v_queue.work_key);
           v_fingerprint:=public.kd_blog_source_fingerprint(v_sources);
-          if v_fingerprint is not distinct from v_old_fingerprint then
+          v_identity_hints:=case when jsonb_array_length(coalesce(v_old_identity_hints,'[]'::jsonb))>0
+            then v_old_identity_hints else public.kd_blog_verified_identity_hints(v_queue.work_key) end;
+          if v_fingerprint is not distinct from v_old_fingerprint
+            and v_identity_hints is not distinct from v_old_identity_hints then
             v_unchanged:=v_unchanged+1;
           else
-            insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint)
-            values(v_queue.work_key,v_sources,v_fingerprint)
+            insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint,identity_hints)
+            values(v_queue.work_key,v_sources,v_fingerprint,v_identity_hints)
             on conflict(work_key) do update set sources=excluded.sources,
-              source_fingerprint=excluded.source_fingerprint,updated_at=now();
+              source_fingerprint=excluded.source_fingerprint,
+              identity_hints=excluded.identity_hints,updated_at=now();
             v_updated:=v_updated+1;
           end if;
         end if;
@@ -1258,10 +1293,13 @@ begin
             where publication_id=v_refrow.publication_id and reference_id=v_refrow.reference_id
               and content_version=v_refrow.content_version;
             if v_status='matched' then
-              insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint)
-              values(v_work_key,v_sources,v_fingerprint)
+              insert into public.kd_blog_work_sources(work_key,sources,source_fingerprint,identity_hints)
+              values(v_work_key,v_sources,v_fingerprint,public.kd_blog_verified_identity_hints(v_work_key))
               on conflict(work_key) do update set sources=excluded.sources,
-                source_fingerprint=excluded.source_fingerprint,updated_at=now();
+                source_fingerprint=excluded.source_fingerprint,
+                identity_hints=case when jsonb_array_length(public.kd_blog_work_sources.identity_hints)>0
+                  then public.kd_blog_work_sources.identity_hints else excluded.identity_hints end,
+                updated_at=now();
             end if;
             v_updated:=v_updated+1;
           end if;
@@ -1357,7 +1395,8 @@ $$;
 
 revoke all on function public.kd_blog_title_norm(text),public.kd_blog_media_type(text),
   public.kd_blog_int(text),public.kd_blog_time(text),public.kd_blog_streaming_source_id(text),
-  public.kd_blog_catalog_works(),public.kd_blog_source_envelope(text),
+  public.kd_blog_catalog_works(),public.kd_blog_verified_identity_hints(text),
+  public.kd_blog_source_envelope(text),
   public.kd_blog_source_fingerprint(jsonb),public.kd_blog_resolve_reference(jsonb),
   public.kd_blog_require_owner(),public.kd_blog_validate_write_request(jsonb,text),
   public.kd_blog_operation_prepare(uuid,uuid,text,text,jsonb),

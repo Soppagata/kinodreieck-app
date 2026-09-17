@@ -151,7 +151,9 @@ try {
     expired.article.text === mainRequest.article.text
     && expired.article.references.filter((entry) => ["Star Wars: A New Hope", "Future Catalog Arrival"].includes(entry.title))
       .every((entry) => entry.resolution.status === "matched" && entry.resolution.workKey
-        && entry.sources.status === "unchecked"));
+        && entry.sources.status === "unchecked")
+    && expired.article.references.find((entry) => entry.title === "Star Wars: A New Hope")
+      .resolution.identityHints.some((hint) => hint.namespace === "imdb" && hint.value === "tt0076759"));
 
   const withdrawn = harness.callRpc("kd_withdraw_blog_publication_v1", {
     contractVersion: "blog-publication-v1", operationId: id("3", 103),

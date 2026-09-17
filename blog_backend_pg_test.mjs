@@ -148,7 +148,8 @@ try {
   const selectedTwinReference = selectedTwinPage.items
     .find((entry) => entry.publicationId === selectedTwin.publication.publicationId).article.references[0];
   check("Ausdrueckliche Auswahl bestaetigt genau ein echtes Konfliktwerk mit getrennten Quellen",
-    selectedTwin.outcome === "published" && selectedTwinReference.sources.streaming.length === 1);
+    selectedTwin.outcome === "published" && selectedTwinReference.sources.streaming.length === 1
+    && selectedTwinReference.resolution.identityHints.length === 3);
   const redlinkRequest = request({ op: 5, content: 5, articleId: "private-alpha-redlink", references: [{
     ...ambiguousRequest.article.references[0], resolutionIntent: { kind: "keep_redlink" },
   }] });
@@ -173,6 +174,42 @@ try {
   check("Unbestaetigte starke Client-ID wird nicht blind als Werk oder Kinoziel uebernommen",
     forgedIdentity.outcome === "decision_required"
     && !JSON.stringify(forgedIdentity).includes("private-library-id"));
+
+  const twinARequest = request({ op: 17, content: 17, articleId: "private-alpha-twin-a-id", references: [{
+    rowId: "row-twin-a-id", rank: 1, title: "Synthetic Twin", year: 2000, mediaType: "film",
+    identityHints: [{ namespace: "imdb", value: "tt1000001" }], resolutionIntent: { kind: "auto" },
+  }] });
+  const twinA = harness.callRpc("kd_publish_blog_v1", twinARequest);
+  const twinAPage = harness.callRpc("kd_list_shared_articles_v1", {
+    contractVersion: "blog-publication-v1", limit: 20, cursor: null,
+  });
+  const twinAReference = twinAPage.items
+    .find((entry) => entry.publicationId === twinA.publication.publicationId).article.references[0];
+  check("Titelgleiches Werk projiziert nur seine serverbestaetigten starken Identitaeten",
+    twinA.outcome === "published"
+    && twinAReference.resolution.identityHints.some((hint) => hint.namespace === "imdb" && hint.value === "tt1000001")
+    && !JSON.stringify(twinAReference.resolution.identityHints).includes("tt1000002"));
+
+  const conflictingTwin = harness.callRpc("kd_publish_blog_v1", request({
+    op: 18, content: 18, articleId: "private-alpha-twin-conflict", references: [{
+      rowId: "row-twin-conflict", rank: 1, title: "Synthetic Twin", year: 2000, mediaType: "film",
+      identityHints: [{ namespace: "imdb", value: "tt1000001" }, { namespace: "tmdb", value: "1002" }],
+      resolutionIntent: { kind: "auto" },
+    }],
+  }));
+  const unknownTwin = harness.callRpc("kd_publish_blog_v1", request({
+    op: 19, content: 19, articleId: "private-alpha-twin-unknown", references: [{
+      rowId: "row-twin-unknown", rank: 1, title: "Synthetic Twin", year: 2000, mediaType: "film",
+      identityHints: [{ namespace: "imdb", value: "tt1999999" }], resolutionIntent: { kind: "auto" },
+    }],
+  }));
+  const identityPrivacyPage = harness.callRpc("kd_list_shared_articles_v1", {
+    contractVersion: "blog-publication-v1", limit: 20, cursor: null,
+  });
+  check("Widerspruechliche und unbekannte IDs werden weder gematcht noch oeffentlich kopiert",
+    conflictingTwin.outcome === "decision_required" && unknownTwin.outcome === "decision_required"
+    && !JSON.stringify(identityPrivacyPage).includes("tt1999999")
+    && !JSON.stringify(identityPrivacyPage).includes("private-library-id"));
 
   const missingYear = harness.callRpc("kd_publish_blog_v1", request({
     op: 15, content: 15, articleId: "private-alpha-yearless", references: [{
