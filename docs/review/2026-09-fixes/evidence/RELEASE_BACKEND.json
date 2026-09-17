@@ -1,0 +1,213 @@
+{
+  "observedAt": "2026-09-17T20:03:11.910336+00:00",
+  "authorization": "Max explicitly authorized all fixes on shared backend, staging and production on 2026-09-17",
+  "testedProductCandidate": "9d88b7dc1e27a8580f5b223400ac8b7535ed003a",
+  "functionSourceCommit": "0e8983179d11ea35d4f76e44517da6f851ecb954",
+  "project": "bscjgwcntapobyxsiyce",
+  "migrations": [
+    {
+      "version": "20260917095000",
+      "name": "review_radar_client_compat",
+      "sourceSha256": "092c2d14f46ff2eed40aea4f4447ae8138da5295d08e2a5e5172642961ff6257",
+      "executionWrapperSha256": "a54b3e2749a197a5a042c928b04b9037a0e9591e71a544c0f2813eeea593401f",
+      "startedAt": "2026-09-17T19:58:33.494267+00:00",
+      "status": "APPLIED_AND_VERIFIED",
+      "ledgerExactOriginalSource": true,
+      "contractReadback": true,
+      "completedAt": "2026-09-17T19:58:37.951116+00:00"
+    },
+    {
+      "version": "20260917100000",
+      "name": "review_radar_text_identity",
+      "sourceSha256": "82661ea4f2d1f6c968b5a3f719e0684096597bada2a5006b7be7d7786ed1070d",
+      "executionWrapperSha256": "78e2fda8ddc8a73c48ebac084b68cb11e60fa94de2565b2108055a78a5798506",
+      "startedAt": "2026-09-17T19:58:38.850556+00:00",
+      "status": "APPLIED_AND_VERIFIED",
+      "allOriginalRadarFieldsExceptReleaseKeyPreserved": true,
+      "ledgerExactOriginalSource": true,
+      "contractReadback": true,
+      "completedAt": "2026-09-17T19:58:43.725198+00:00"
+    },
+    {
+      "version": "20260917101000",
+      "name": "review_radar_context_year",
+      "sourceSha256": "738cbf27b9748e0ee5d2fd95631e8d2d4ad9a716d5f3a2edc3ebb674817c2d80",
+      "executionWrapperSha256": "f2b766f302824e813e0d64a624c83e70fb6d68234a416aa53e337d7cc4e5ab46",
+      "startedAt": "2026-09-17T19:58:44.846035+00:00",
+      "status": "APPLIED_AND_VERIFIED",
+      "ledgerExactOriginalSource": true,
+      "contractReadback": true,
+      "completedAt": "2026-09-17T19:58:48.350581+00:00"
+    },
+    {
+      "version": "20260917110000",
+      "name": "review_filmwissen_identity",
+      "sourceSha256": "e185b0e736836ae598f8675ee994dbc6502ae2c176c41a595aedd5ce8b06a55e",
+      "executionWrapperSha256": "984272fd9a6e5c7af2ccca54c61b5f691b0e87f33e5269763968db1a5fac7176",
+      "startedAt": "2026-09-17T19:58:49.371716+00:00",
+      "status": "APPLIED_AND_VERIFIED",
+      "ledgerExactOriginalSource": true,
+      "contractReadback": true,
+      "completedAt": "2026-09-17T19:58:52.618615+00:00"
+    },
+    {
+      "version": "20260917120000",
+      "name": "review_streaming_freshness_anchors",
+      "sourceSha256": "104a29402c3c442d7504093795904ce4414dc78f71a4dd19ebbec3eca75aec52",
+      "executionWrapperSha256": "056f92834e1ca2577cd92aaa1166980091589f29fe49255299287f9cc97f8159",
+      "startedAt": "2026-09-17T19:58:53.698776+00:00",
+      "status": "APPLIED_AND_VERIFIED",
+      "ledgerExactOriginalSource": true,
+      "contractReadback": true,
+      "completedAt": "2026-09-17T19:58:57.199933+00:00"
+    },
+    {
+      "version": "20260917123000",
+      "name": "review_mail_rate_bucket_retention",
+      "sourceSha256": "ae915a36f2686b9b2dbd15f0d553ba0c2d538fc76e6bf8796c642d1d3ac632aa",
+      "executionWrapperSha256": "5940efb63db6490dd07e618fe098511a24e694d797c8a1d736f0d1ac4785b549",
+      "startedAt": "2026-09-17T19:58:58.346245+00:00",
+      "status": "APPLIED_AND_VERIFIED",
+      "ledgerExactOriginalSource": true,
+      "contractReadback": true,
+      "completedAt": "2026-09-17T19:59:02.112039+00:00"
+    },
+    {
+      "version": "20260917130000",
+      "name": "review_entdecken_ofi_identity",
+      "sourceSha256": "3b4c03230e7afd9ef87be92b1bc7b419a61282f2fdd3072bc5b158bf01bbd07b",
+      "executionWrapperSha256": "08bf0a541ab031b834f92d885cfd14bfee01e700933eae2ca823140bdb82ea54",
+      "startedAt": "2026-09-17T19:59:03.393550+00:00",
+      "status": "APPLIED_AND_VERIFIED",
+      "ledgerExactOriginalSource": true,
+      "contractReadback": true,
+      "completedAt": "2026-09-17T19:59:06.856409+00:00"
+    }
+  ],
+  "ledgerAfter": {
+    "observedAt": "2026-09-17T20:02:02.792936+00:00",
+    "ledger": {
+      "latest": "20260917130000",
+      "new_count": 7,
+      "total": 94
+    }
+  },
+  "functions": {
+    "observedAt": "2026-09-17T20:00:49.675363+00:00",
+    "functions": [
+      {
+        "slug": "ai-task",
+        "version": 96,
+        "status": "ACTIVE",
+        "verify_jwt": true,
+        "updated_at": 1789674936047
+      },
+      {
+        "slug": "radar-websearch-task",
+        "version": 73,
+        "status": "ACTIVE",
+        "verify_jwt": false,
+        "updated_at": 1789675188576
+      },
+      {
+        "slug": "entdecken-daily-task",
+        "version": 77,
+        "status": "ACTIVE",
+        "verify_jwt": false,
+        "updated_at": 1789675211047
+      }
+    ]
+  },
+  "sourceByteReadbacks": [
+    {
+      "slug": "ai-task",
+      "fileCount": 11,
+      "sourceSha256": "df61ffe850592f2763d172bd4b16e586e4dadc63d03b700e198ee83aeab68474",
+      "byteParity": true,
+      "files": [
+        "supabase/functions/_shared/externalTitleIdentity.js",
+        "supabase/functions/_shared/flixpatrolFacts.js",
+        "supabase/functions/_shared/flixpatrolFactsContext.js",
+        "supabase/functions/_shared/providerDiagnostic.js",
+        "supabase/functions/_shared/providerReceipt.js",
+        "supabase/functions/_shared/providerText.js",
+        "supabase/functions/ai-task/index.ts",
+        "supabase/functions/ai-task/providerContract.ts",
+        "supabase/functions/ai-task/requestContract.ts",
+        "supabase/functions/filmwissen-task/quellen.ts",
+        "supabase/functions/filmwissen-task/vertrag.ts"
+      ]
+    },
+    {
+      "slug": "radar-websearch-task",
+      "fileCount": 10,
+      "sourceSha256": "9214768d8be079b70c7bd04a994dc6900c73577889951fa99c463515ed2a98d8",
+      "byteParity": true,
+      "files": [
+        "supabase/functions/_shared/externalTitleIdentity.js",
+        "supabase/functions/_shared/flixpatrolFacts.js",
+        "supabase/functions/_shared/flixpatrolFactsContext.js",
+        "supabase/functions/_shared/providerDiagnostic.js",
+        "supabase/functions/_shared/providerReceipt.js",
+        "supabase/functions/_shared/providerText.js",
+        "supabase/functions/radar-websearch-task/anthropicAdapter.js",
+        "supabase/functions/radar-websearch-task/contract.js",
+        "supabase/functions/radar-websearch-task/index.ts",
+        "supabase/functions/radar-websearch-task/runner.js"
+      ]
+    },
+    {
+      "slug": "entdecken-daily-task",
+      "fileCount": 19,
+      "sourceSha256": "05f230dbaa560383a400afb6d0f19927f33e1e05254d8c1f04b1706dcc77d37c",
+      "byteParity": true,
+      "files": [
+        "supabase/functions/_shared/entdeckenFacts.js",
+        "supabase/functions/_shared/flixpatrolClient.js",
+        "supabase/functions/_shared/flixpatrolData.js",
+        "supabase/functions/_shared/providerDiagnostic.js",
+        "supabase/functions/_shared/providerReceipt.js",
+        "supabase/functions/_shared/providerText.js",
+        "supabase/functions/entdecken-daily-task/anthropicFactsAdapter.js",
+        "supabase/functions/entdecken-daily-task/contract.js",
+        "supabase/functions/entdecken-daily-task/factsRequest.js",
+        "supabase/functions/entdecken-daily-task/flixpatrolMixAdapter.js",
+        "supabase/functions/entdecken-daily-task/index.ts",
+        "supabase/functions/entdecken-daily-task/providerFailureContract.js",
+        "supabase/functions/entdecken-daily-task/providerProbe.js",
+        "supabase/functions/entdecken-daily-task/publicChartAdapter.js",
+        "supabase/functions/entdecken-daily-task/publicMixAdapter.js",
+        "supabase/functions/entdecken-daily-task/readbackContract.js",
+        "supabase/functions/entdecken-daily-task/responseContract.js",
+        "supabase/functions/entdecken-daily-task/runner.js",
+        "supabase/functions/entdecken-daily-task/wikidataResolver.js"
+      ]
+    }
+  ],
+  "backup": {
+    "path": "/Users/max/Documents/Kinodreieck-Backups/review49-20260917-195224",
+    "files": 47,
+    "verified": true,
+    "privatePermissions": true
+  },
+  "restore": {
+    "checkedAt": "2026-09-17T19:54:12.552057+00:00",
+    "status": "PASS",
+    "postgresVersion": "postgres (PostgreSQL) 17.10 (Postgres.app)",
+    "restoredRows": {
+      "kd_radar_text_findings": 26,
+      "kd_filmwerk_kennungen": 0
+    },
+    "fullColumnRoundTrip": true,
+    "deleteAndRestoreIsolatedCopy": true,
+    "newRadarKeysDoNotCollideUnderActualUniqueConstraint": true,
+    "allRadarNonKeyFieldsAndUuidsPreserved": true,
+    "scope": "Bounded identity data restore; existing local migration/RLS tests remain separate proof. No remote mutation."
+  },
+  "bounds": {
+    "sharedBackendDeployed": true,
+    "webPush": "NEXT",
+    "paidProviderRequests": 0,
+    "physicalIphonePwaAcceptance": false
+  }
+}
