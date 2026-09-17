@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BLOG_MAX_REFERENCES, BLOG_SAVE_INTENT } from "../../lib/blogContract.js";
+import { lesePlausiblesJahr, plausiblerJahresbereich } from "../../lib/match.js";
 import { BlogReferenceList } from "./BlogReferenceList.jsx";
 
 const SAVE_LABELS = {
@@ -10,14 +11,23 @@ const SAVE_LABELS = {
 
 export function BlogEditor({ editor, capability, actions, intent, hasPublication, onSave, onBack }) {
   const [newReference, setNewReference] = useState("");
+  const [newReferenceYear, setNewReferenceYear] = useState("");
+  const [newReferenceType, setNewReferenceType] = useState("film");
+  const [referenceError, setReferenceError] = useState("");
   const references = Array.isArray(editor.references) ? editor.references : [];
   const saving = editor.saveStatus === "saving" || editor.saveStatus?.status === "saving";
   const publishReady = capability?.status === "ready";
   const addReference = () => {
     const title = newReference.trim();
     if (!title || references.length >= BLOG_MAX_REFERENCES) return;
-    actions.onAddReference({ draftKey: editor.draftKey, reference: { title, year: null, mediaType: "film" } });
-    setNewReference("");
+    const parsedYear = lesePlausiblesJahr(newReferenceYear, { typ: newReferenceType });
+    if (!parsedYear.ok) {
+      const { min, max } = plausiblerJahresbereich(newReferenceType);
+      setReferenceError(`Jahr muss leer oder eine ganze Zahl zwischen ${min} und ${max} sein.`);
+      return;
+    }
+    actions.onAddReference({ draftKey: editor.draftKey, reference: { title, year: parsedYear.jahr, mediaType: newReferenceType } });
+    setNewReference(""); setNewReferenceYear(""); setNewReferenceType("film"); setReferenceError("");
   };
   return <section className="kd-blog-editor" aria-labelledby="kd-blog-editor-heading">
     <div className="kd-blog-list-head"><h2 id="kd-blog-editor-heading">{editor.articleId ? "Artikel bearbeiten" : "Neuer Artikel"}</h2>
@@ -29,9 +39,15 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
       <label className="kd-blog-check"><input type="checkbox" checked={editor.ordered === true} onChange={(event) => actions.onEditorChange({ ordered: event.target.checked })} /><span>Als nummerierte Liste anzeigen</span></label>
       <BlogReferenceList references={references.map((reference) => ({ ...reference, articleId: editor.articleId }))} ordered={editor.ordered === true} editable actions={actions} draftKey={editor.draftKey} />
       <label className="kd-blog-field" htmlFor="kd-blog-add-reference">Titel hinzufügen</label>
-      <div className="kd-blog-add-reference"><input id="kd-blog-add-reference" value={newReference} placeholder="Filmtitel" onChange={(event) => setNewReference(event.target.value)}
+      <div className="kd-blog-add-reference"><input id="kd-blog-add-reference" className="kd-blog-add-reference-title" value={newReference} placeholder="Titel" onChange={(event) => { setNewReference(event.target.value); setReferenceError(""); }}
         onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addReference(); } }} />
+        <input value={newReferenceYear} placeholder="Jahr" inputMode="numeric" aria-label="Jahr (optional)"
+          aria-invalid={referenceError ? true : undefined} onChange={(event) => { setNewReferenceYear(event.target.value); setReferenceError(""); }} />
+        <select value={newReferenceType} aria-label="Typ" onChange={(event) => { setNewReferenceType(event.target.value); setReferenceError(""); }}>
+          <option value="film">Film</option><option value="serie">Serie</option><option value="musik">Musik</option><option value="sonstiges">Sonstiges</option>
+        </select>
         <button type="button" className="kd-blog-button" disabled={!newReference.trim() || references.length >= BLOG_MAX_REFERENCES} onClick={addReference}>Hinzufügen</button></div>
+      {referenceError ? <p className="kd-blog-error" role="alert">{referenceError}</p> : null}
       <p className="kd-blog-muted">{references.length}/{BLOG_MAX_REFERENCES} Titel</p>
     </section>
     <footer className="kd-blog-finish">

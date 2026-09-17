@@ -44,7 +44,7 @@ const entry = `
       onReadArticle:({scope,articleId,returnToken})=>{setReader({scope,article:{articleId,title:card.title,text:card.excerpt+"\\n\\nVoller gemeinsamer Lesertext.",ordered:true},referenceViews:refs,canEdit:scope==="private",returnToken:returnToken||"mine"});setView({area:scope==="published"?"published":"mine",mode:"reader",articleId,returnToken:returnToken||"mine"});},
       onBack:()=>setView({area:"mine",mode:"list",articleId:null,returnToken:null}),
       onEditorChange:(patch)=>setEditor(e=>({...e,...patch,dirty:true})),
-      onAddReference:()=>{},
+      onAddReference:(input)=>{globalThis.blogAddedReference=input;},
       onMoveReference:({rowId,direction})=>setEditor(e=>{const a=[...e.references].sort((x,y)=>x.rank-y.rank);const i=a.findIndex(x=>x.rowId===rowId);const j=direction==="up"?i-1:i+1;if(j<0||j>=a.length)return e;[a[i],a[j]]=[a[j],a[i]];return {...e,references:a.map((x,k)=>({...x,rank:k+1}))};}),
       onRemoveReference:({rowId})=>setEditor(e=>({...e,references:e.references.filter(x=>x.rowId!==rowId).map((x,k)=>({...x,rank:k+1}))})),
       onSave:async()=>editor.anonymousPublication ? fixtureOutcomes[saveOutcome] : {private:{status:"saved"},publication:{status:"not_requested",operationId:null}},
@@ -71,6 +71,18 @@ await page.evaluate(() => globalThis.mountBlogFixture(document.getElementById("r
 
 await page.getByRole("button", { name: "+ Neuer Artikel" }).click();
 await check("Neu startet mit ausgeschalteter Anonym-Checkbox", async () => assert.equal(await page.getByLabel("Anonym veröffentlichen").isChecked(), false));
+await page.getByLabel("Titel hinzufügen").fill("Andor"); await page.getByLabel("Typ").selectOption("serie");
+await page.getByLabel("Jahr (optional)").fill("1200"); await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
+await check("Unplausibles optionales Jahr bleibt im Hinzufügen-Bereich", async () => {
+  assert.equal(await page.getByLabel("Jahr (optional)").inputValue(), "1200");
+  assert.match(await page.getByRole("alert").innerText(), /Jahr muss leer oder eine ganze Zahl/);
+  assert.equal(await page.evaluate(() => globalThis.blogAddedReference), undefined);
+});
+await page.getByLabel("Jahr (optional)").fill("2022"); await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
+await check("Serie und Jahr werden über onAddReference konkret weitergegeben", async () => assert.deepEqual(
+  await page.evaluate(() => globalThis.blogAddedReference),
+  { draftKey: "draft-1", reference: { title: "Andor", year: 2022, mediaType: "serie" } },
+));
 await page.getByLabel("Titel", { exact: true }).fill("Ein Titel"); await page.getByLabel("Text", { exact: true }).fill("Ein Text");
 await page.getByLabel("Anonym veröffentlichen").check();
 await check("Der Publish-Intent hat die eindeutige Abschlussbeschriftung", async () => assert.equal(await page.getByRole("button", { name: "Speichern & veröffentlichen" }).isVisible(), true));
