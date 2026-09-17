@@ -9,8 +9,8 @@ import { FilmForm } from "../components/EintragForm.jsx";
 import { TitelKartenAktionen } from "../components/TitelKartenAktionen.jsx";
 import { KatalogRegler } from "../components/KatalogRegler.jsx";
 import {
-  statusVon, mediathekIdVon, mitMediathekEintrag, gleicheMediathekStatusAb,
-  neuerGesehenEintrag, toggleGesehenInStatus,
+  statusVon, mitMediathekEintrag, gleicheMediathekStatusAb,
+  neuerGesehenEintrag, toggleGesehenInStatus, ohneMediathekEintrag, ordneStreamingPageTitelZu,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import {
@@ -51,28 +51,10 @@ const PROGRESSIVE_JAHRZEHNTE = Object.freeze(Array.from(
   (_, index) => 1880 + (index * 10),
 ));
 
-export function bestaetigteMediathekNavigationId({ titel, master, statusMap, bekannteId = null }) {
-  const filme = Array.isArray(master) ? master : [];
-  const findeId = (id) => id == null || id === true ? null : filme.find((film) => (
-    film?.id != null && String(film.id) === String(id)
-  )) || null;
-
-  /* `streaming_bekannt` ist bereits streng einem Masterwerk zugeordnet. Auch
-     diese Zuordnung navigiert nur, solange die konkrete Master-ID noch lebt. */
-  const bekanntesWerk = findeId(bekannteId);
-  if (bekanntesWerk) return bekanntesWerk.id;
-
-  /* Der bestehende Resolver bleibt die Wahrheit für starke Watchmode-/IMDb-/
-     TMDb-Identitäten. Eine bloß gespeicherte, inzwischen fremde ID genügt nie. */
-  const abgeglichen = gleicheMediathekStatusAb(statusMap, [titel], filme);
-  const kandidat = findeId(mediathekIdVon(abgeglichen?.[streamingId(titel)]));
-  if (!kandidat) return null;
-  const gleicheKennung = [
-    [titel?.watchmode_id, kandidat.watchmode_id],
-    [titel?.imdb_id, kandidat.imdb_id],
-    [titel?.tmdb_id, kandidat.tmdb_id],
-  ].some(([links, rechts]) => links != null && rechts != null && String(links) === String(rechts));
-  return gleicheKennung ? kandidat.id : null;
+export function bestaetigteMediathekNavigationId({ titel, master }) {
+  // Eine gespeicherte oder früher projizierte ID ersetzt nie den aktuellen
+  // vollständigen Masterabgleich. Derselbe Resolver entscheidet alle Aktionen.
+  return ordneStreamingPageTitelZu(titel, Array.isArray(master) ? master : [])?.id ?? null;
 }
 
 function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className }) {
@@ -220,20 +202,11 @@ export function StreamingTab({
     (titel) => streamingId(titel) == null ? null : bekannteMediathekIds.get(String(streamingId(titel))) ?? null,
     [bekannteMediathekIds],
   );
-  const mediathekIdFuer = useCallback((titel) => (
-    mediathekIdVon(streamingStatus(entdeckenStatus, titel)) ?? bekannteMediathekIdFuer(titel)
-  ), [entdeckenStatus, bekannteMediathekIdFuer]);
   const masterIndex = useMemo(() => new Map((Array.isArray(master) ? master : [])
     .filter((film) => film?.id != null).map((film) => [String(film.id), film])), [master]);
-  const bestaetigteMediathekIdFuer = useCallback((titel) => {
-    if (progressiveEnabled) {
-      const id = bekannteMediathekIdFuer(titel);
-      return id != null && masterIndex.has(String(id)) ? id : null;
-    }
-    return bestaetigteMediathekNavigationId({
-      titel, master, statusMap: entdeckenStatus, bekannteId: bekannteMediathekIdFuer(titel),
-    });
-  }, [progressiveEnabled, masterIndex, master, entdeckenStatus, bekannteMediathekIdFuer]);
+  const bestaetigteMediathekIdFuer = useCallback((titel) => (
+    bestaetigteMediathekNavigationId({ titel, master })
+  ), [master]);
   const [sichtbarP, setSichtbarP] = useState(Math.max(STREAMING_PAGE_PORTION, Number(initialProgressiveState.visible) || STREAMING_PAGE_PORTION));
   const [sichtbarE, setSichtbarE] = useState(progressiveEnabled
     ? Math.max(STREAMING_PAGE_PORTION, Number(initialProgressiveState.visible) || STREAMING_PAGE_PORTION) : 200);
@@ -314,14 +287,14 @@ export function StreamingTab({
   };
   const toggleGesehen = async (t) => {
     const roh = streamingStatus(entdeckenStatusRef.current, t);
-    const bekannteId = bekannteMediathekIdFuer(t);
-    if (statusVon(roh) === "gesehen" || mediathekIdVon(roh) || bekannteId) {
+    if (!Array.isArray(master)) return false;
+    const bekannteId = bestaetigteMediathekIdFuer(t);
+    if (statusVon(roh) === "gesehen" || bekannteId) {
       return await schreibeEntdeckenStatus((prev) => {
         const aktuell = prev?.[streamingId(t)];
-        const mediathekId = mediathekIdVon(aktuell) ?? bekannteId;
-        const mitSichererZuordnung = mediathekIdVon(aktuell) != null || mediathekId == null
-          ? prev
-          : { ...(prev || {}), [streamingId(t)]: mitMediathekEintrag(aktuell, t, mediathekId) };
+        const bereinigt = bekannteId != null
+          ? mitMediathekEintrag(aktuell, t, bekannteId) : ohneMediathekEintrag(aktuell);
+        const mitSichererZuordnung = { ...(prev || {}), [streamingId(t)]: bereinigt };
         return toggleGesehenInStatus(mitSichererZuordnung, t);
       });
     }
@@ -694,10 +667,10 @@ export function StreamingTab({
       )}
 
       {/* Ein abgelaufener Schnappschuss ist kein aktueller Katalog — sagen statt zeigen. */}
-      {datenDa && katalogInfo?.abgelaufen && (
+      {datenDa && (progressiveEnabled ? streamingPage?.sourceExpired : katalogInfo?.abgelaufen) && (
         <div style={{ background: "rgba(217,106,90,0.12)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
           <strong style={{ color: T.gefahr }}>Verfügbarkeiten nicht mehr aktuell.</strong>
-          {katalogInfo.variante === "demo" ? " Mit einer Anmeldung siehst du den laufenden Katalog." : ""}
+          {katalogInfo?.variante === "demo" ? " Mit einer Anmeldung siehst du den laufenden Katalog." : ""}
         </div>
       )}
       {runtimeConfig.appEnvironment !== "production" && datenDa && katalogInfo?.ausCache && (
@@ -914,7 +887,15 @@ export function StreamingTab({
                 <div className="kd-entdecken-kopf">
                   <div className="kd-entdecken-inhalt">
                     <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2 }}>
-                      {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
+                      <button type="button" className="kd-streaming-disclosure"
+                        aria-label={`Details zu ${t.titel}`}
+                        aria-expanded={expandedId === "e" + streamingId(t)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setExpandedId(expandedId === "e" + streamingId(t) ? null : "e" + streamingId(t));
+                        }}>
+                        {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{istStreamingSerie(t) ? " · Serie" : ""}
+                      </button>
                       {(streamingStatus(entdeckenStatus, t) || bekannteMediathekIdFuer(t)) && (
                         <span style={{ ...mono, color: T.kartenTextWeich, marginLeft: 8 }}>
                           {statusVon(streamingStatus(entdeckenStatus, t)) === "gesehen" ? "gesehen" : ""}
@@ -954,7 +935,7 @@ export function StreamingTab({
                 {expandedId === "e" + streamingId(t) && (
                   <div style={{ marginTop: 6, fontSize: 12, color: T.kartenTextWeich }} onClick={(e) => e.stopPropagation()}>
                     <TitleFactsDetails titel={t} />
-                    {addFilm && formFuer !== streamingId(t) && !mediathekIdFuer(t) && (
+                    {addFilm && formFuer !== streamingId(t) && Array.isArray(master) && !bestaetigteMediathekIdFuer(t) && (
                       <button style={{ ...btnStyle(true), padding: "6px 11px", marginTop: 8 }}
                         onClick={() => setFormFuer(streamingId(t))}>
                         {statusVon(streamingStatus(entdeckenStatus, t)) === "gesehen" ? "In Mediathek übernehmen" : "Eintrag erstellen"}

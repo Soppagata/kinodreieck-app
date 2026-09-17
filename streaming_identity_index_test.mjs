@@ -19,8 +19,8 @@ check("derselbe Masterstand verwendet denselben Kandidatenindex", () => {
   assert.equal(erstelleMediathekIdentitaetsIndex(master), erstelleMediathekIdentitaetsIndex(master));
 });
 
-check("bestehender Watchmode-Statusabgleich bleibt paritaetisch", () => {
-  const result = gleicheMediathekStatusAb({}, [{ watchmode_id: 10, titel: "Beliebig" }], master);
+check("Watchmode-Statusabgleich verlangt vollständige konfliktfreie Werkidentität", () => {
+  const result = gleicheMediathekStatusAb({}, [{ watchmode_id: 10, titel: "Beliebig", jahr: 1995, typ: "movie" }], master);
   assert.equal(mediathekIdVon(result[10]), "heat");
 });
 

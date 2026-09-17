@@ -105,19 +105,8 @@ export function ohneMediathekEintrag(rohStatus) {
    kein Beleg dafür, dass der Film bereits angesehen wurde. */
 export function gleicheMediathekStatusAb(statusMap, titel, master) {
   const index = erstelleMediathekIdentitaetsIndex(master);
-  const filme = index.filme;
   let next = statusMap || {};
-  const findeFilm = (t) => {
-    if (t.motn_id) {
-      const match = ordneExternenTitelZu(t, index.candidates(t));
-      return match.status === "matched" && match.matchedBy === "strong-id" ? match.match : null;
-    }
-    return index.candidates(t).find((film) => (
-      t.watchmode_id != null && film.watchmode_id != null
-      && String(film.watchmode_id) === String(t.watchmode_id)
-    ) || (t.imdb_id && film.imdb_id && String(film.imdb_id) === String(t.imdb_id))
-      || (t.tmdb_id && film.tmdb_id && String(film.tmdb_id) === String(t.tmdb_id)));
-  };
+  const findeFilm = (t) => ordneStreamingPageTitelZu(t, index);
 
   for (const t of Array.isArray(titel) ? titel : []) {
     const key = streamingTitelKennung(t);
@@ -128,7 +117,16 @@ export function gleicheMediathekStatusAb(statusMap, titel, master) {
       next[key] = prior;
     }
     const film = findeFilm(t);
-    if (!film || mediathekIdVon(next[key]) === film.id) continue;
+    if (!film) {
+      const bereinigt = ohneMediathekEintrag(next[key]);
+      if (bereinigt !== next[key]) {
+        if (next === statusMap) next = { ...(statusMap || {}) };
+        if (bereinigt) next[key] = bereinigt;
+        else delete next[key];
+      }
+      continue;
+    }
+    if (mediathekIdVon(next[key]) === film.id) continue;
     if (next === statusMap) next = { ...(statusMap || {}) };
     next[key] = mitMediathekEintrag(next[key], t, film.id);
   }

@@ -32,6 +32,8 @@ function initialState(enabled = false) {
     fromCache: false,
     error: null,
     nextExpiryAt: null,
+    sourceExpiresAt: null,
+    sourceExpired: false,
   });
 }
 
@@ -44,6 +46,7 @@ export function createStreamingPageController({
   service = streamingPagesService,
   mapItems = (items) => items,
   legacyFallback = null,
+  onPageAccepted = null,
   yieldMainThread = defaultYield,
   now = () => Date.now(),
   setTimer = setTimeout,
@@ -117,6 +120,8 @@ export function createStreamingPageController({
     fromCache: record.fromCache === true,
     error: record.error,
     nextExpiryAt: record.nextExpiryAt,
+    sourceExpiresAt: record.sourceExpiresAt,
+    sourceExpired: sourceExpired(record),
   });
   const publish = (record) => { if (isCurrent(record)) emit(publicState(record)); };
 
@@ -142,6 +147,10 @@ export function createStreamingPageController({
     record.status = record.items.length ? "refreshing" : "idle";
   };
 
+  const sourceExpired = (record) => {
+    const expiry = Date.parse(record.sourceExpiresAt || "");
+    return Number.isFinite(expiry) && expiry <= now();
+  };
   const hasExpired = (record) => {
     const expiry = Date.parse(record.nextExpiryAt || "");
     return Number.isFinite(expiry) && expiry <= now();
@@ -149,9 +158,11 @@ export function createStreamingPageController({
 
   const scheduleExpiry = (record) => {
     clearExpiry();
-    if (!isCurrent(record) || !record.nextExpiryAt) return;
-    const expiry = Date.parse(record.nextExpiryAt);
-    if (!Number.isFinite(expiry)) return;
+    if (!isCurrent(record) || sourceExpired(record)) return;
+    const deadlines = [record.nextExpiryAt, record.sourceExpiresAt]
+      .map((value) => Date.parse(value || "")).filter(Number.isFinite);
+    if (!deadlines.length) return;
+    const expiry = Math.min(...deadlines);
     const epoch = record.epoch;
     const expire = () => {
       expiryTimer = null;
@@ -179,13 +190,17 @@ export function createStreamingPageController({
       record.nextExpiryAt = Date.parse(record.nextExpiryAt) <= Date.parse(page.nextExpiryAt)
         ? record.nextExpiryAt : page.nextExpiryAt;
     } else if (!append || !record.nextExpiryAt) record.nextExpiryAt = page.nextExpiryAt;
+    record.sourceExpiresAt = page.sourceExpiresAt ?? page.meta?.gueltig_bis ?? null;
     record.fromCache = fromCache;
     if (!fromCache) record.lastValidatedAt = now();
     record.error = null;
-    record.status = fromCache ? "refreshing" : "ready";
+    record.status = sourceExpired(record) ? "stale" : fromCache ? "refreshing" : "ready";
     record.backgroundLoading = false;
     publish(record);
     scheduleExpiry(record);
+    if (!fromCache && !sourceExpired(record) && typeof onPageAccepted === "function") {
+      onPageAccepted(page, { ...context, isCurrent: () => isAttemptCurrent(record, epoch) });
+    }
     return true;
   };
 
@@ -204,10 +219,10 @@ export function createStreamingPageController({
   const loadBackground = async (record) => {
     const epoch = record.epoch;
     if (record.pumpingEpoch === epoch || !active || !isAttemptCurrent(record, epoch)
-        || !record.nextCursor || record.complete) return;
+        || sourceExpired(record) || !record.nextCursor || record.complete) return;
     record.pumpingEpoch = epoch;
     try {
-      while (active && isAttemptCurrent(record, epoch) && record.nextCursor && !record.complete) {
+      while (active && isAttemptCurrent(record, epoch) && !sourceExpired(record) && record.nextCursor && !record.complete) {
         const cursor = record.nextCursor;
         record.status = "refreshing";
         record.backgroundLoading = true;
@@ -252,7 +267,7 @@ export function createStreamingPageController({
         record.backgroundLoading = false;
         publish(record);
       }
-      if (active && isAttemptCurrent(record, epoch) && record.nextCursor && !record.complete && !record.error) {
+      if (active && isAttemptCurrent(record, epoch) && !sourceExpired(record) && record.nextCursor && !record.complete && !record.error) {
         void loadBackground(record);
       }
     }
@@ -288,7 +303,7 @@ export function createStreamingPageController({
         throw new Error("Streaming-Katalog änderte sich während des Neustarts");
       }
       applyPage(record, page, { epoch });
-      record.status = "ready";
+      if (sourceExpired(record)) record.status = "stale";
       publish(record);
     } catch (error) {
       if (!isAttemptCurrent(record, epoch)) return;
@@ -307,7 +322,7 @@ export function createStreamingPageController({
 
   const resumeRecord = (record) => {
     if (!isCurrent(record)) return;
-    if (hasExpired(record)) {
+    if (hasExpired(record) || sourceExpired(record)) {
       resetForRefresh(record, { expired: true });
       publish(record);
       if (active) void loadInitial(record, { allowVersionRestart: false, skipCache: true });
@@ -380,7 +395,7 @@ export function createStreamingPageController({
       record = {
         key, publicKey: streamingPageQueryKey(request, context.accountKey), request, generation,
         epoch: 0, status: "idle", items: [], counts: null, total: null,
-        version: null, nextCursor: null, complete: false, nextExpiryAt: null,
+        version: null, nextCursor: null, complete: false, nextExpiryAt: null, sourceExpiresAt: null,
         fromCache: false, error: null, backgroundLoading: false,
         initialEpoch: null, refreshStarted: false, pumpingEpoch: null, lastValidatedAt: 0,
       };
@@ -468,17 +483,21 @@ export function useStreamingPageController({
   personal,
   revision,
   legacyFallback,
+  onPageAccepted,
   service = streamingPagesService,
   mapItems,
 } = {}) {
   const fallbackRef = useRef(legacyFallback);
   fallbackRef.current = legacyFallback;
+  const acceptedRef = useRef(onPageAccepted);
+  acceptedRef.current = onPageAccepted;
   const controllerRef = useRef(null);
   if (!controllerRef.current) {
     controllerRef.current = createStreamingPageController({
       service,
       mapItems,
       legacyFallback: () => fallbackRef.current?.(),
+      onPageAccepted: (page, context) => acceptedRef.current?.(page, context),
     });
   }
   const controller = controllerRef.current;

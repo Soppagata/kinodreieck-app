@@ -6,7 +6,7 @@ import {
 
 let checks = 0;
 const ok = (name, fn) => { fn(); checks++; console.log("✓ " + name); };
-const serie = (extra = {}) => ({ watchmode_id: 42, titel: "Testserie", typ: "tv_series", ...extra });
+const serie = (extra = {}) => ({ watchmode_id: 42, titel: "Testserie", jahr: 2026, typ: "tv_series", ...extra });
 
 ok("Alte und neue Gesehen-Status bleiben lesbar", () => {
   assert.equal(statusVon("gesehen"), "gesehen");
@@ -25,7 +25,7 @@ ok("Legacy-Erstellt lässt sich nach einer Filmlöschung vollständig lösen", (
   assert.equal(ohneMediathekEintrag("erstellt"), null);
 });
 ok("Mediathek-Abgleich verknüpft starke IDs, ohne gesehen zu erfinden", () => {
-  const result = gleicheMediathekStatusAb({}, [serie()], [{ id: "testserie_2026", watchmode_id: 42 }]);
+  const result = gleicheMediathekStatusAb({}, [serie()], [{ ...serie(), id: "testserie_2026" }]);
   assert.equal(mediathekIdVon(result[42]), "testserie_2026");
   assert.equal(statusVon(result[42]), "erstellt");
 });
@@ -45,6 +45,11 @@ ok("Gesehen-Toggle bewahrt unbekannte historische Zusatzfelder ohne sie auszuwer
   const initial = { 42: { status: "gesehen", historisch: true, mediathek_id: "x" } };
   const result = toggleGesehenInStatus(initial, serie());
   assert.deepEqual(result[42], { historisch: true, mediathek_id: "x" });
+});
+
+ok("Historische IDs ohne Typ/Jahr bleiben ohne automatische Zuordnung", () => {
+  const result = gleicheMediathekStatusAb({}, [serie()], [{ id: "old", watchmode_id: 42 }]);
+  assert.equal(mediathekIdVon(result[42]), null);
 });
 
 console.log(`\n${checks}/${checks} Checks bestanden.`);

@@ -467,6 +467,10 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
   const objekt = (wert) => wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {};
   const gleicherKatalogStand = !!bekanntAlt.katalog_stand
     && bekanntAlt.katalog_stand === entdeckenAlt.katalog_stand;
+  // Ein unpassendes Paar besitzt keinen gemeinsamen aktuellen Angebotsstand.
+  // Auch Known-exklusive Angebote dürfen nicht in eine neuere Lane wandern.
+  const generationKonflikt = streaming?.generationKonflikt === true
+    || !!bekanntAlt.katalog_stand && !!entdeckenAlt.katalog_stand && !gleicherKatalogStand;
   const vereinigeMetadaten = (feld) => {
     if (bekanntAlt.katalog_stand && entdeckenAlt.katalog_stand && !gleicherKatalogStand) {
       /* Zwei Publikationsstände dürfen keinen künstlich vollständigen
@@ -489,11 +493,11 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
     return map.size ? [...map.values()] : undefined;
   };
   const map = new Map();
-  for (const t of entdeckenAlt.titel || []) {
+  for (const t of generationKonflikt ? [] : entdeckenAlt.titel || []) {
     const projected = projectFacts(t);
     map.set(streamingTitelKennung(projected), { ...projected });
   }
-  for (const t of bekanntAlt.titel || []) {
+  for (const t of generationKonflikt ? [] : bekanntAlt.titel || []) {
     const key = streamingTitelKennung(t);
     const entdeckenTitel = map.get(key) || {};
     const katalogGenres = vereinigeListen(
@@ -542,7 +546,7 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
   }
 
   const meine = [], entdecken = [];
-  const motn = motnEnvelope(streaming?.motn, bekanntAlt.motn, entdeckenAlt.motn);
+  const motn = generationKonflikt ? null : motnEnvelope(streaming?.motn, bekanntAlt.motn, entdeckenAlt.motn);
   for (const t of applyMotnStreaming([...map.values()], motn)) {
     const zuordnung = ordneExternenTitelZu(t, kandidatenFuer(t));
     if (zuordnung.status === "matched") {
@@ -596,6 +600,7 @@ export function baueStreamingAnsichten(streaming, master = [], flixpatrolFakten 
     vergleich_stand_pro_quelle: vereinigeMetadaten("vergleich_stand_pro_quelle"),
     katalog_stand_bekannt: bekanntAlt.katalog_stand ?? null,
     katalog_stand_entdecken: entdeckenAlt.katalog_stand ?? null,
+    generationKonflikt,
     katalog_stand_konsistent: !!bekanntAlt.katalog_stand
       && bekanntAlt.katalog_stand === entdeckenAlt.katalog_stand,
     motn,

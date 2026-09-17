@@ -310,7 +310,7 @@ export default function App() {
      Kontos sichtbar. */
   const sichtbareAuswahl = auswahlKontextKey === streamingKontextKey ? auswahl : [];
   const sichtbareAuswahlGeladen = auswahlKontextKey === streamingKontextKey && auswahlGeladen;
-  const { streamingNeu, streamingPagePersonal, uebernehmeVollkatalog } = useStreamingNeuController({
+  const { streamingNeu, streamingPagePersonal, streamingPagePersonalReady, uebernehmeVollkatalog, uebernehmeSeitenAnker } = useStreamingNeuController({
     kontextKey: streamingKontextKey,
     auswahl: sichtbareAuswahl,
     auswahlGeladen: sichtbareAuswahlGeladen,
@@ -917,8 +917,9 @@ export default function App() {
     newEntries: streamingPagePersonal.newEntries,
     legacyNew: streamingPagePersonal.legacyNew,
   }), [entdeckenStatus, master, mustwatchMasterIds, streamingPagePersonal]);
+  const [streamingRefreshRevision, setStreamingRefreshRevision] = useState(0);
   const streamingPageBereit = remoteKontoAktiv && bootDone && snapshotFreigabe
-    && sichtbareAuswahlGeladen;
+    && sichtbareAuswahlGeladen && streamingPagePersonalReady;
   const { streamingPage, onStreamingPageQuery } = useStreamingPageController({
     tab,
     enabled: streamingPageBereit,
@@ -926,7 +927,8 @@ export default function App() {
     services: sichtbareAuswahl,
     library: streamingPageLibrary,
     personal: streamingPagePersonalRequest,
-    revision: `${streamingKontextKey}:${storageOwnerKennung()}`,
+    revision: `${streamingKontextKey}:${storageOwnerKennung()}:${streamingRefreshRevision}`,
+    onPageAccepted: uebernehmeSeitenAnker,
     legacyFallback: () => streamingLegacyFallbackRef.current?.(),
     mapItems: (items, pageContext) => verknuepfeStreamingPageMitMediathek(items, pageContext.library),
   });
@@ -938,7 +940,7 @@ export default function App() {
     tab: knownEntscheidungsTab,
     accountReady: remoteKontoAktiv,
     accountBootPending: !!ausstehenderStartTabIstAktuell && !remoteKontoAktiv,
-    servicesReady: sichtbareAuswahlGeladen,
+    servicesReady: sichtbareAuswahlGeladen && streamingPagePersonalReady,
     pageEnabled: streamingPageBereit,
     pageStatus: streamingPage.status,
   });
@@ -1554,10 +1556,18 @@ export default function App() {
             meldeFehler(e, ERROR_SCOPE.STREAMING_KNOWN);
           }
         }
-        roh = { ...roh, bekannt: passenderBekanntStand, entdecken: vollerEntdeckenStand, entdeckenUmfang: "voll" };
+        const generationKonflikt = !!entdeckenKatalogStand
+          && String(passenderBekanntStand?.katalog_stand || "").trim() !== entdeckenKatalogStand;
+        roh = { ...roh, bekannt: passenderBekanntStand, entdecken: vollerEntdeckenStand,
+          entdeckenUmfang: generationKonflikt ? "begrenzt" : "voll", generationKonflikt };
         streamingRohRef.current = roh;
-        entdeckenGeladen.current = true;
-        uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);
+        entdeckenGeladen.current = !generationKonflikt;
+        if (generationKonflikt) {
+          reportError(ERROR_SCOPE.STREAMING_DISCOVER, "Streaming-Katalogstände passen noch nicht zusammen. Bitte den Katalog erneut laden.");
+          setStreamingInfo((vorher) => ({ ...vorher, generationKonflikt: true,
+            abgelaufen: true, fehler: "Streaming-Katalogstände passen noch nicht zusammen." }));
+          uebernehmeVollkatalog();
+        } else uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);
         if (veraltet() || !snapshotFreigabeRef.current) return;
       } catch (e) {
         if (veraltet()) return;
@@ -1568,8 +1578,9 @@ export default function App() {
 
     const hatGeladenenEntdeckenStand = entdeckenGeladen.current && !!roh.entdecken;
     const anzeigeRoh = {
+      generationKonflikt: roh.generationKonflikt === true,
       bekannt: roh.bekannt,
-      entdecken: hatGeladenenEntdeckenStand
+      entdecken: (hatGeladenenEntdeckenStand || roh.generationKonflikt)
         ? roh.entdecken
         : EINZELDATEI_BUILD ? streamingEntdeckenSnapshot : { titel: [] },
       entdeckenUmfang: hatGeladenenEntdeckenStand && roh.entdeckenUmfang === "voll" ? "voll" : "begrenzt",
@@ -1593,6 +1604,7 @@ export default function App() {
         const aktuell = streamingRohRef.current;
         if (!aktuell?.bekannt) return;
         const mitFakten = catalogService.buildStreamingViews({
+          generationKonflikt: aktuell.generationKonflikt === true,
           bekannt: aktuell.bekannt,
           entdecken: aktuell.entdecken || (EINZELDATEI_BUILD ? streamingEntdeckenSnapshot : { titel: [] }),
           entdeckenUmfang: aktuell.entdeckenUmfang || "begrenzt",
@@ -1793,6 +1805,7 @@ export default function App() {
   const effektiverModus = deepSpaceSichtbar ? "deep-space-horror" : einstellungen.modus;
 
   const refreshKatalog = useCallback(async () => {
+    setStreamingRefreshRevision((revision) => revision + 1);
     /* Laufende Antworten gehören ab hier zum alten manuellen Ladeversuch. */
     betriebsartGen.current++;
     streamingGeladen.current = false;

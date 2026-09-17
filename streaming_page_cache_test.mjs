@@ -246,6 +246,21 @@ await check("abgelaufene Neu-Frist wird nicht durch den Cachezeitpunkt verlaenge
   assert.equal(h.cache.values.size, 0);
 });
 
+await check("Quellfrist bleibt in Service/Cache erhalten und stale200 erneuert sie nicht", async () => {
+  const shared = cacheStorage();
+  const expiry = "2026-09-13T13:01:00.000Z";
+  const first = harness({ cache: shared, response: ready({ nextExpiryAt: null, meta: { gueltig_bis: expiry } }) });
+  assert.equal((await first.service.loadPage(request)).sourceExpiresAt, expiry);
+  await flush();
+  assert.equal((await first.service.loadCachedPage(request)).sourceExpiresAt, expiry);
+  const after = harness({ cache: shared, now: Date.parse(expiry) + 1,
+    response: ready({ nextExpiryAt: null, meta: { gueltig_bis: expiry } }) });
+  assert.equal(await after.service.loadCachedPage(request), null);
+  assert.equal((await after.service.loadPage(request)).sourceExpiresAt, expiry);
+  await flush();
+  assert.equal(await after.service.loadCachedPage(request), null);
+});
+
 await check("nur ein eindeutig fehlendes RPC traegt die Legacy-Fallback-Marke", async () => {
   const session = { value: { mode: "account", state: "ready", account: { id: "a" }, capabilities: { remoteStorage: true } } };
   const service = createStreamingPagesService({

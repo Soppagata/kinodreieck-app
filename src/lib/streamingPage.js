@@ -207,6 +207,10 @@ export function normalizeStreamingPageResponse(raw) {
     nextCursor,
     complete,
     nextExpiryAt: timestamp(value.nextExpiryAt),
+    sourceExpiresAt: timestamp(value.sourceExpiresAt ?? value.meta?.gueltig_bis),
+    newAnchors: Object.freeze((Array.isArray(value.newAnchors) ? value.newAnchors : [])
+      .filter((entry) => Number.isFinite(entry?.fensterBeginn) && Number.isFinite(entry?.verbrauchtBis))
+      .map(personalEntry).filter(Boolean)),
     meta: Object.freeze(value.meta && typeof value.meta === "object" ? { ...value.meta } : {}),
   });
 }
@@ -216,6 +220,8 @@ export function streamingPageCacheExpiry(page, cachedAt, maxAgeMs = STREAMING_PA
   if (Number.isFinite(cachedAt) && Number.isFinite(maxAgeMs) && maxAgeMs > 0) limits.push(cachedAt + maxAgeMs);
   const semanticExpiry = Date.parse(page?.nextExpiryAt || "");
   if (Number.isFinite(semanticExpiry)) limits.push(semanticExpiry);
+  const sourceExpiry = Date.parse(page?.sourceExpiresAt ?? page?.meta?.gueltig_bis ?? "");
+  if (Number.isFinite(sourceExpiry)) limits.push(sourceExpiry);
   return limits.length ? Math.min(...limits) : null;
 }
 

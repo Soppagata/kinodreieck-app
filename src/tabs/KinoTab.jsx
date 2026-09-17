@@ -619,7 +619,11 @@ function KompaktEintrag({
               ...(offen ? { paddingTop: 6, marginTop: 6, borderTop: "1px dashed " + T.saal } : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>{pf.b}</div>
           )}
         </div>
-        <span style={{ color: offen ? T.wolfram : T.rauch, fontSize: 15, flexShrink: 0, transform: offen ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+        <button type="button" aria-label={`Details zu ${pf.t}`} aria-expanded={offen}
+          onClick={(event) => { event.stopPropagation(); setOffen(!offen); if (offen) setFormAn(false); }}
+          style={{ ...btnStyle(false), minWidth: 44, minHeight: 44, flexShrink: 0 }}>
+          <span aria-hidden="true">{offen ? "▴" : "▾"}</span>
+        </button>
       </div>
       {offen && (
         <div style={{ marginTop: 8, borderTop: "1px solid " + T.saal, paddingTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>

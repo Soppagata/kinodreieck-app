@@ -83,7 +83,7 @@ const basePage = {
 };
 const baseProps = {
   bekannt: null, entdecken: null, auswahl: ["Netflix"], auswahlGeladen: true,
-  master: [{ id: "library-0", watchmode_id: 90000, titel: items[0].titel, typ: "film" }],
+  master: [{ id: "library-0", watchmode_id: 90000, titel: items[0].titel, jahr: items[0].jahr, typ: "film" }],
   merkliste: [], toggleMerk: (entry) => actions.push(["merk", entry.watchmode_id]),
   mustwatchIds: new Set(), recommendationPins: [],
   onRecommendationPinToggle: (entry) => actions.push(["pin", entry.watchmode_id]),

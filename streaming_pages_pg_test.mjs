@@ -171,6 +171,8 @@ try {
     assert.deepEqual(parityRequests.map((value) => call(value)), baselineResponses);
   });
 
+  sql(readFileSync(join("supabase/migrations", "20260917120000_review_streaming_freshness_anchors.sql"), "utf8"));
+
   check("initialization preserves original catalog bytes", () => assert.equal(
     sql("select md5(string_agg(name||payload::text,'|' order by name)) from public.kd_catalog"), before));
   const first = call(request());

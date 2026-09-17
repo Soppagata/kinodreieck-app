@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   aktualisiereStreamingNeuFristenbuch,
+  STREAMING_NEU_DAUER_MS,
   parseStreamingNeuFristenbuch,
   parseStreamingNeuUebergang,
   projiziereStreamingNeu,
@@ -15,6 +16,33 @@ import {
   subscribeStorageContext,
 } from "../lib/storage.js";
 
+/* Nur qualifizierte RPC-Anker, nie Abrufzeit oder das bloße neu_seit-Label.
+   Ein jüngerer Restdiff darf einen bereits verbrauchten Zugang nicht neu datieren. */
+export function uebernehmeStreamingSeitenAnker(vorher, anchors, { owner, auswahl, now = Date.now() }) {
+  const alt = parseStreamingNeuFristenbuch(vorher, owner, auswahl);
+  const map = new Map((alt?.eintraege || []).map((entry) => [entry.id, entry]));
+  for (const entry of Array.isArray(anchors) ? anchors : []) {
+    const id = String(entry?.id || "");
+    const start = entry?.fensterBeginn, consumed = entry?.verbrauchtBis;
+    if (!/^[1-9][0-9]*$/.test(id) || !Number.isSafeInteger(Number(id))
+        || !Number.isFinite(start) || !Number.isFinite(consumed)
+        || start > now || consumed > now || consumed < start) continue;
+    const prior = map.get(id);
+    if (prior && consumed < prior.verbrauchtBis) continue;
+    const fensterBeginn = prior && consumed < prior.fensterBeginn + STREAMING_NEU_DAUER_MS
+      ? Math.min(prior.fensterBeginn, start)
+      : prior && consumed === prior.verbrauchtBis ? prior.fensterBeginn : start;
+    map.set(id, { id, fensterBeginn, verbrauchtBis: consumed });
+  }
+  const next = parseStreamingNeuFristenbuch({
+    format: 1, owner, auswahl: streamingNeuAuswahlSignatur(auswahl),
+    v2Uebernommen: alt?.v2Uebernommen ?? false,
+    eintraege: [...map.values()],
+  }, owner, auswahl);
+  return { fristenbuch: next, geaendert: !!next && JSON.stringify(next) !== JSON.stringify(alt)
+    && (next.eintraege.length > 0 || !!alt) };
+}
+
 /* Der Producer liefert kleine, quellenbezogene Diffbelege. Der Controller
    projiziert Auswahl und Ablauf und liest ergänzend den liegen gebliebenen
    v2-Übergangsstand. Nur Fensteranker und bereits verbrauchte Diffzeitpunkte
@@ -25,6 +53,7 @@ export function useStreamingNeuController({
   auswahlGeladen = false,
 } = {}) {
   const [beleg, setBeleg] = useState(null);
+  const [seitenBeleg, setSeitenBeleg] = useState(null);
   const [uebergang, setUebergang] = useState(null);
   const [fristenbuch, setFristenbuch] = useState(null);
   const [jetzt, setJetzt] = useState(() => Date.now());
@@ -40,6 +69,29 @@ export function useStreamingNeuController({
   const aktivesFristenbuch = fristenbuch?.kontextKey === kontextKey
     && fristenbuch?.storageGeneration === storageGeneration
     && fristenbuch?.auswahlSignatur === aktuelleAuswahlSignatur ? fristenbuch.snapshot : null;
+  const aktiveSeitenAnker = seitenBeleg?.kontextKey === kontextKey
+    && seitenBeleg?.storageGeneration === storageGeneration
+    && seitenBeleg?.auswahlSignatur === aktuelleAuswahlSignatur ? seitenBeleg : null;
+  const streamingPagePersonalReady = fristenbuch?.kontextKey === kontextKey
+    && fristenbuch?.storageGeneration === storageGeneration
+    && fristenbuch?.auswahlSignatur === aktuelleAuswahlSignatur;
+  const uebernehmeSeitenAnker = useCallback((page, context) => {
+    const kontext = captureStorageContext();
+    if (!auswahlGeladen || context?.accountKey !== kontextKey || !context.isCurrent?.()
+        || streamingNeuAuswahlSignatur(context.services) !== aktuelleAuswahlSignatur
+        || page?.status !== "ready" || !page.version || !Array.isArray(page.newAnchors)
+        || !page.newAnchors.length || !kontext.isCurrent()) return false;
+    setSeitenBeleg((vorher) => {
+      const passend = vorher?.kontextKey === kontextKey && vorher?.storageGeneration === storageGeneration
+        && vorher?.auswahlSignatur === aktuelleAuswahlSignatur;
+      const merged = uebernehmeStreamingSeitenAnker(passend ? vorher.snapshot : null,
+        page.newAnchors, { owner: kontext.owner, auswahl });
+      if (!merged.geaendert) return vorher;
+      return { kontextKey, storageGeneration, auswahlSignatur: aktuelleAuswahlSignatur,
+        snapshot: merged.fristenbuch };
+    });
+    return true;
+  }, [kontextKey, storageGeneration, aktuelleAuswahlSignatur, auswahl, auswahlGeladen]);
   const streamingNeu = useMemo(() => projiziereStreamingNeu({
     bekannt: aktiverBeleg?.bekannt,
     entdecken: aktiverBeleg?.entdecken,
@@ -67,6 +119,7 @@ export function useStreamingNeuController({
 
   useEffect(() => {
     setBeleg(null);
+    setSeitenBeleg(null);
     setJetzt(Date.now());
   }, [kontextKey]);
 
@@ -75,7 +128,11 @@ export function useStreamingNeuController({
     const kontext = captureStorageContext();
     const uebergangKey = streamingNeuUebergangStorageKey(kontext.owner);
     const fristenKey = streamingNeuFristenbuchStorageKey(kontext.owner, auswahl);
-    if (!uebergangKey || !fristenKey || !auswahlGeladen) return () => { aktiv = false; };
+    if (!auswahlGeladen) return () => { aktiv = false; };
+    if (!uebergangKey || !fristenKey) {
+      setFristenbuch({ kontextKey, storageGeneration, auswahlSignatur: aktuelleAuswahlSignatur, snapshot: null });
+      return () => { aktiv = false; };
+    }
     Promise.allSettled([kontext.get(uebergangKey), kontext.get(fristenKey)]).then(async ([v2Ergebnis, fristenErgebnis]) => {
       if (!aktiv || !kontext.isCurrent()) return;
       const snapshot = v2Ergebnis.status === "fulfilled"
@@ -89,7 +146,9 @@ export function useStreamingNeuController({
         entdecken: aktiverBeleg.entdecken,
         uebergang: snapshot,
       }) : null;
-      const naechstesFristenbuch = aktualisiert?.fristenbuch || bisher;
+      const seitenUpdate = uebernehmeStreamingSeitenAnker(aktualisiert?.fristenbuch || bisher,
+        aktiveSeitenAnker?.snapshot?.eintraege, { owner: kontext.owner, auswahl });
+      const naechstesFristenbuch = seitenUpdate.fristenbuch || aktualisiert?.fristenbuch || bisher;
       setUebergang({
         kontextKey,
         storageGeneration,
@@ -99,7 +158,7 @@ export function useStreamingNeuController({
         kontextKey, storageGeneration, auswahlSignatur: aktuelleAuswahlSignatur,
         snapshot: naechstesFristenbuch,
       });
-      if (aktualisiert?.geaendert) {
+      if (aktualisiert?.geaendert || seitenUpdate.geaendert) {
         try {
           await kontext.set(fristenKey, JSON.stringify(naechstesFristenbuch));
         } catch {
@@ -116,7 +175,7 @@ export function useStreamingNeuController({
       }
     });
     return () => { aktiv = false; };
-  }, [aktiverBeleg, aktuelleAuswahlSignatur, auswahl, auswahlGeladen, kontextKey, storageGeneration]);
+  }, [aktiverBeleg, aktiveSeitenAnker, aktuelleAuswahlSignatur, auswahl, auswahlGeladen, kontextKey, storageGeneration]);
 
   const uebernehmeVollkatalog = useCallback(({ bekannt, entdecken } = {}) => {
     if (!bekannt || !entdecken || entdecken?.katalogMengen?.umfang !== "voll"
@@ -139,5 +198,5 @@ export function useStreamingNeuController({
     return () => window.clearTimeout(timer);
   }, [streamingNeu.naechsterAblauf]);
 
-  return { streamingNeu, streamingPagePersonal, uebernehmeVollkatalog };
+  return { streamingNeu, streamingPagePersonal, streamingPagePersonalReady, uebernehmeVollkatalog, uebernehmeSeitenAnker };
 }
