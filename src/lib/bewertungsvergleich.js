@@ -9,4 +9,3 @@ export function prognosePasstZurBewertung(prognose, eintrag) {
     && vorschlag.kategorie_vorschlag === eintrag.kategorie
     && (vorschlag.begruendung || "") === (eintrag.begruendung || "");
 }
-
