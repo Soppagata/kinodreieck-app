@@ -12,6 +12,10 @@
 -- Datei bildet nur die Basis bis 20260809121000 ab und ist seit den späteren
 -- Radar-/Private-/Entdecken-Migrationen KEIN aktueller Ist-Stand und KEINE
 -- alleinige Wiederherstellungsreferenz für neue Umgebungen.
+-- Die additive anonyme Blogprojektion v1 samt Operationsledger, Referenzcache
+-- und RPC-Rechten liegt in
+-- migrations/20260918120000_blog_publication_v1.sql und wird hier bewusst
+-- nicht in den historischen Basisdump zurückkopiert.
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;

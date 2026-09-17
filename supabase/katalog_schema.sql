@@ -10,6 +10,9 @@
 --                   der Lesezugriff ist getrennt — anon sieht nur noch
 --                   manifest + *_demo, programm/streaming verlangen eine Sitzung.
 --   20260726120000  Herkunftspflicht, Feldfreigabe, Löschfristen.
+--   20260918120000  Blog v1 liest programm und den bestehenden zentralen
+--                   Streamingindex nur serverseitig; keine neue Quelle und
+--                   kein Browserrecht auf Vollkataloge werden eingeführt.
 -- Wer diese Datei auf einer frischen Datenbank ausführt, bekommt einen
 -- Katalog OHNE diese Regeln. Danach zwingend beide Migrationen laufen lassen.
 
