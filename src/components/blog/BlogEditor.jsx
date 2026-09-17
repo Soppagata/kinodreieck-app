@@ -8,7 +8,7 @@ const SAVE_LABELS = {
   [BLOG_SAVE_INTENT.UPDATE]: "Speichern & aktualisieren",
 };
 
-export function BlogEditor({ editor, capability, actions, intent, onSave, onBack }) {
+export function BlogEditor({ editor, capability, actions, intent, hasPublication, onSave, onBack }) {
   const [newReference, setNewReference] = useState("");
   const references = Array.isArray(editor.references) ? editor.references : [];
   const saving = editor.saveStatus === "saving" || editor.saveStatus?.status === "saving";
@@ -39,9 +39,10 @@ export function BlogEditor({ editor, capability, actions, intent, onSave, onBack
         onChange={(event) => actions.onEditorChange({ anonymousPublication: event.target.checked })} />
         <span><strong>Anonym veröffentlichen</strong><small>{publishReady ? "Für angemeldete Nutzer sichtbar. Dein Kontoname wird nicht angezeigt."
           : capability?.status === "checking" ? "Veröffentlichung wird geprüft. Privat speichern ist bereits möglich." : "Veröffentlichung ist derzeit nicht verfügbar. Privat speichern bleibt möglich."}</small></span></label>
+      {hasPublication && !editor.anonymousPublication ? <p className="kd-blog-private-publication-note">Die veröffentlichte Fassung bleibt unverändert.</p> : null}
       <div className="kd-blog-footer-actions"><button type="button" className="kd-blog-button kd-blog-button-quiet" disabled={saving} onClick={onBack}>← Zurück</button>
         <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={saving || !String(editor.title || "").trim() || !String(editor.text || "").trim() || (editor.anonymousPublication && !publishReady)} onClick={() => void onSave()}>
-          {saving ? "Speichert …" : SAVE_LABELS[intent]}</button></div>
+          {saving ? "Speichert …" : hasPublication && intent === BLOG_SAVE_INTENT.PRIVATE_ONLY ? "Änderungen privat speichern" : SAVE_LABELS[intent]}</button></div>
     </footer>
   </section>;
 }

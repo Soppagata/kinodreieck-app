@@ -52,7 +52,8 @@
 .kd-blog-reference-link { display: inline; width: 100%; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--kd-leinwand); text-align: left; font-size: 14px; line-height: 1.45; cursor: pointer; }
 .kd-blog-reference-link.is-static { cursor: default; }
 .kd-blog-reference-title { font-weight: 600; text-decoration: underline; text-decoration-color: var(--kd-wolfram); text-underline-offset: 3px; }
-.kd-blog-reference-source { color: var(--kd-rauch); font-size: 12px; font-weight: 400; text-decoration: none; }
+.kd-blog-reference-source, .kd-blog-reference-sources { color: var(--kd-rauch); font-size: 12px; font-weight: 400; text-decoration: none; }
+.kd-blog-target-link { min-height: 44px; margin: -8px 0; padding: 8px 1px; border: 0; background: transparent; color: inherit; font-size: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .kd-blog-reference-link.is-redlink .kd-blog-reference-title { text-decoration-color: var(--kd-gefahr); }
 .kd-blog-reference-menu { position: relative; }
 .kd-blog-reference-decision { display: flex; gap: var(--kd-space-2); flex-wrap: wrap; margin: 0 0 var(--kd-space-2); }
@@ -62,6 +63,7 @@
 .kd-blog-add-reference { display: flex; gap: var(--kd-space-2); margin-top: var(--kd-space-1); }
 .kd-blog-add-reference input { flex: 1; }
 .kd-blog-finish { display: grid; gap: var(--kd-space-4); }
+.kd-blog-private-publication-note { margin: -8px 0 0 29px; color: var(--kd-rauch); font-size: 12px; }
 .kd-blog-footer-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--kd-space-2); }
 .kd-blog-reader { padding: clamp(16px, 5vw, 28px); border-radius: var(--kd-radius-karte); background: var(--kd-kartenFeld); color: var(--kd-kartenText); }
 .kd-blog-reader .kd-blog-button { color: var(--kd-kartenText); border-color: var(--kd-kartenTextWeich); }
@@ -76,6 +78,8 @@
 .kd-blog-notice-success { color: var(--kd-leinwandTief); }
 .kd-blog-notice-warning { color: var(--kd-wolfram); }
 .kd-blog-load-more { margin-top: var(--kd-space-4); width: 100%; }
+.kd-blog-search { margin-bottom: var(--kd-space-4); }
+.kd-blog-search small { color: var(--kd-rauch); font-size: 12px; font-weight: 400; }
 
 body[style*="color-scheme: light"] .kd-blog-v1 {
   color: var(--kd-tinte);

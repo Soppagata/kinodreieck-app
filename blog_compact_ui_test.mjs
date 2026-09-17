@@ -17,9 +17,10 @@ const check = async (name, fn) => { await fn(); checks++; console.log(`✓ ${nam
 const entry = `
   import React, { useState } from "react";
   import { createRoot } from "react-dom/client";
+  import "./src/styles/design-foundation.css";
   import { BlogTab } from "./src/tabs/BlogTab.jsx";
   const refs = [
-    { rowId:"row-01", rank:1, title:"Star Wars: A New Hope", year:1977, mediaType:"film", state:"available", primaryTarget:{kind:"library",ref:"local-1",titel:"Star Wars"}, secondaryTargets:[] },
+    { rowId:"row-01", rank:1, title:"Star Wars: A New Hope", year:1977, mediaType:"film", state:"available", primaryTarget:{kind:"library",ref:"local-1",titel:"Star Wars"}, secondaryTargets:[{kind:"streaming",sourceId:"disney",ref:"stream-1",titel:"Star Wars"},{kind:"cinema",ref:"kino-1",titel:"Star Wars"}] },
     { rowId:"row-02", rank:2, title:"Star Wars: The Empire Strikes Back – eine absichtlich sehr lange Titelprobe für schmale Bildschirme", year:1980, mediaType:"film", state:"available", primaryTarget:{kind:"streaming",sourceId:"disney",ref:"stream-2",titel:"Empire"}, secondaryTargets:[] },
     { rowId:"row-03", rank:3, title:"Star Wars: Return of the Jedi", year:1983, mediaType:"film", state:"available", primaryTarget:{kind:"cinema",ref:"kino-3",titel:"Jedi"}, secondaryTargets:[] },
     { rowId:"row-04", rank:4, title:"Star Wars: Synthetic Missing Story", year:1984, mediaType:"film", state:"redlink", primaryTarget:null, secondaryTargets:[] },
@@ -29,12 +30,17 @@ const entry = `
   function Harness(){
     const [view,setView]=useState({area:"mine",mode:"list",articleId:null,returnToken:null});
     const [editor,setEditor]=useState({draftKey:"draft-1",articleId:null,contentVersion:null,title:"",text:"",ordered:true,references:refs,anonymousPublication:false,dirty:false,saveStatus:"idle"});
-    const [reader,setReader]=useState(null); const [redlinkForm,setRedlink]=useState(null); const [saveOutcome,setSaveOutcome]=useState("failed");
-    globalThis.blogSetSaveOutcome=setSaveOutcome;
-    const card={articleId:"article-1",title:"Meine sehr lange Star-Wars-Rangliste für einen schmalen Bildschirm",excerpt:"Eine vollständige Probe mit mehreren Referenzen und einem langen Auszug, der auf der Karte knapp bleibt.",updatedAt:"2032-05-04T11:00:00Z",displayState:"private_changes",ordered:true,referencePreview:refs};
+    const [reader,setReader]=useState(null); const [redlinkForm,setRedlink]=useState(null); const [redlinkReturn,setRedlinkReturn]=useState(null);
+    const [saveOutcome,setSaveOutcome]=useState("failed"); const [redlinkFails,setRedlinkFails]=useState(false);
+    globalThis.blogSetSaveOutcome=setSaveOutcome; globalThis.blogSetRedlinkFails=setRedlinkFails;
+    globalThis.blogShowPublished=()=>setView({area:"published",mode:"list",articleId:null,returnToken:null});
+    globalThis.blogNavigations=globalThis.blogNavigations||[];
+    const cardRefs=refs.map(reference=>reference.rowId==="row-03"?{...reference,state:"redlink",primaryTarget:null,secondaryTargets:[]}:reference);
+    const card={articleId:"article-1",title:"Meine sehr lange Star-Wars-Rangliste für einen schmalen Bildschirm",excerpt:"Eine vollständige Probe mit mehreren Referenzen und einem langen Auszug, der auf der Karte knapp bleibt.",updatedAt:"2032-05-04T11:00:00Z",displayState:"private_changes",ordered:false,referencePreview:cardRefs,publicationError:{status:"unknown",operationId:"operation-card-1",errorCode:null}};
+    const otherCard={...card,articleId:"article-2",title:"Ein anderer geladener Artikel",referencePreview:[]};
     const actions={
       onNewArticle:()=>{setEditor(e=>({...e,articleId:null,title:"",text:"",anonymousPublication:false}));setView({area:"mine",mode:"editor",articleId:null,returnToken:"mine"});},
-      onEditArticle:({articleId})=>{setEditor(e=>({...e,articleId,title:card.title,text:card.excerpt}));setView({area:"mine",mode:"editor",articleId,returnToken:"mine"});},
+      onEditArticle:({articleId})=>{setEditor(e=>({...e,articleId,title:card.title,text:card.excerpt,anonymousPublication:false,saveStatus:{publicationId:"publication-1"}}));setView({area:"mine",mode:"editor",articleId,returnToken:"mine"});},
       onReadArticle:({scope,articleId,returnToken})=>{setReader({scope,article:{articleId,title:card.title,text:card.excerpt+"\\n\\nVoller gemeinsamer Lesertext.",ordered:true},referenceViews:refs,canEdit:scope==="private",returnToken:returnToken||"mine"});setView({area:scope==="published"?"published":"mine",mode:"reader",articleId,returnToken:returnToken||"mine"});},
       onBack:()=>setView({area:"mine",mode:"list",articleId:null,returnToken:null}),
       onEditorChange:(patch)=>setEditor(e=>({...e,...patch,dirty:true})),
@@ -42,14 +48,14 @@ const entry = `
       onMoveReference:({rowId,direction})=>setEditor(e=>{const a=[...e.references].sort((x,y)=>x.rank-y.rank);const i=a.findIndex(x=>x.rowId===rowId);const j=direction==="up"?i-1:i+1;if(j<0||j>=a.length)return e;[a[i],a[j]]=[a[j],a[i]];return {...e,references:a.map((x,k)=>({...x,rank:k+1}))};}),
       onRemoveReference:({rowId})=>setEditor(e=>({...e,references:e.references.filter(x=>x.rowId!==rowId).map((x,k)=>({...x,rank:k+1}))})),
       onSave:async()=>editor.anonymousPublication ? fixtureOutcomes[saveOutcome] : {private:{status:"saved"},publication:{status:"not_requested",operationId:null}},
-      onReferenceDecision:async()=>({status:"saved"}), onNavigateReference:()=>{},
-      onOpenRedlinkForm:({articleId,rowId})=>{setRedlink({articleId:articleId||"article-1",rowId,status:"open",initial:{titel:"Star Wars: Synthetic Missing Story",jahr:1984,typ:"film"},errorCode:null});setView({area:"mine",mode:"redlink_form",articleId:articleId||"article-1",returnToken:"editor"});},
-      onCancelRedlinkForm:()=>setView({area:"mine",mode:"editor",articleId:editor.articleId,returnToken:"mine"}),
-      onConfirmRedlinkForm:async()=>{setEditor(e=>({...e,references:e.references.map(x=>x.rowId==="row-04"?{...x,state:"available",primaryTarget:{kind:"library",ref:"local-4",titel:x.title}}:x)}));setView({area:"mine",mode:"editor",articleId:editor.articleId,returnToken:"mine"});return {status:"saved",mediaWriteConfirmed:true};},
-      onRetryPublication:async()=>null,onWithdraw:async()=>({status:"withdrawn"}),onDelete:async()=>({private:{status:"deleted"}}),onLoadPublished:async()=>({status:"loaded"}),
+      onReferenceDecision:async()=>({status:"saved"}), onNavigateReference:({target})=>globalThis.blogNavigations.push(target),
+      onOpenRedlinkForm:({articleId,rowId})=>{setRedlinkReturn(view);setRedlink({articleId:articleId||"article-1",rowId,status:"open",initial:{titel:"Star Wars: Synthetic Missing Story",jahr:1984,typ:"film"},errorCode:null});setView({area:view.area,mode:"redlink_form",articleId:articleId||"article-1",returnToken:"redlink"});},
+      onCancelRedlinkForm:()=>setView(redlinkReturn||{area:"mine",mode:"list",articleId:null,returnToken:null}),
+      onConfirmRedlinkForm:async()=>{if(redlinkFails)return {status:"failed",mediaWriteConfirmed:false,errorCode:"FIXTURE"};setEditor(e=>({...e,references:e.references.map(x=>x.rowId==="row-04"?{...x,state:"available",primaryTarget:{kind:"library",ref:"local-4",titel:x.title}}:x)}));setView(redlinkReturn||{area:"mine",mode:"editor",articleId:editor.articleId,returnToken:"mine"});return {status:"saved",mediaWriteConfirmed:true};},
+      onRetryPublication:async(input)=>{globalThis.blogRetry=input;return null;},onWithdraw:async()=>({status:"withdrawn"}),onDelete:async()=>({private:{status:"deleted"}}),onLoadPublished:async()=>({status:"loaded"}),
     };
     return <BlogTab publicationCapability={{status:"ready",reason:null}} view={view} editor={editor} reader={reader} redlinkForm={redlinkForm} articleCards={[card]}
-      publishedPage={{status:"ready",items:[card],nextCursor:null,complete:true,errorCode:null}} actions={actions}/>;
+      publishedPage={{status:"ready",items:[card,otherCard],nextCursor:"fixture-next",complete:false,errorCode:null}} actions={actions}/>;
   }
   globalThis.mountBlogFixture=(node)=>createRoot(node).render(<Harness/>);
 `;
@@ -84,12 +90,20 @@ await page.getByRole("button", { name: "Nach oben" }).click();
 const after = await page.locator(".kd-blog-reference-title").allTextContents();
 await check("Umordnen adressiert die stabile Zeile", () => assert.notDeepEqual(after, before));
 
-await page.getByRole("button", { name: /Star Wars: Synthetic Missing Story.*Rotlink/ }).click();
+await page.locator(".kd-blog-editor .kd-blog-reference-link.is-redlink").click();
 await page.getByRole("heading", { name: "Rotlink ergänzen" }).waitFor();
 await page.getByRole("button", { name: "← Zurück" }).click();
 await check("Rotlink-Abbruch kehrt mit erhaltenem Entwurf zurück", async () => assert.equal(await page.getByLabel("Titel", { exact: true }).inputValue(), "Ein Titel"));
-await page.getByRole("button", { name: /Star Wars: Synthetic Missing Story.*Rotlink/ }).click();
+await page.locator(".kd-blog-editor .kd-blog-reference-link.is-redlink").click();
+await page.evaluate(() => globalThis.blogSetRedlinkFails(true));
 await page.getByText("Ohne Bewertung speichern").click(); await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
+await page.getByText("Eintrag und Rotlink konnten nicht bestätigt gespeichert werden. Deine Eingabe bleibt erhalten.").waitFor();
+await check("Fehlgeschlagene Rotlink-Bestätigung hält FilmForm und Eingabe offen", async () => {
+  assert.equal(await page.getByPlaceholder("Titel *").inputValue(), "Star Wars: Synthetic Missing Story");
+  assert.equal(await page.getByRole("heading", { name: "Rotlink ergänzen" }).isVisible(), true);
+});
+await page.evaluate(() => globalThis.blogSetRedlinkFails(false));
+await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
 await page.getByRole("heading", { name: "Neuer Artikel" }).waitFor();
 await check("Bestätigte Rotlink-Ergänzung kehrt in denselben Editor zurück", async () => assert.match(await page.locator(".kd-blog-reference-list").innerText(), /Mediathek/));
 
@@ -102,18 +116,46 @@ for (const width of [320, 393, 736]) {
       controls: [...document.querySelectorAll("button, summary")].filter((el) => el.offsetParent).map((el) => el.getBoundingClientRect().height) }));
     await check(`${width}px ${scheme}: keine horizontale Überlappung`, () => assert.ok(metrics.scroll <= metrics.client));
     await check(`${width}px ${scheme}: sichtbare Touchziele mindestens 44px`, () => assert.ok(metrics.controls.every((height) => height >= 43.5)));
+    if (width === 320 && scheme === "dark") await page.screenshot({ path: "/private/tmp/kd-blog-ui-320-dark.png", fullPage: true });
   }
 }
 
 await page.getByRole("button", { name: "← Zurück" }).click();
 await check("Karten zeigen höchstens drei schlichte Referenzzeilen", async () => assert.equal(await page.locator(".kd-blog-card .kd-blog-reference-row").count(), 3));
+await check("Ränge auf Karten folgen nur ordered", async () => assert.equal(await page.locator(".kd-blog-card .kd-blog-reference-rank").first().innerText(), "·"));
+await check("Karten lesen unknown aus publicationError.status", async () => assert.match(await page.locator(".kd-blog-card").getByText(/Veröffentlichung:/).innerText(), /Ergebnis wird geprüft/));
+await page.getByLabel("Weitere Aktionen für Meine sehr lange Star-Wars-Rangliste für einen schmalen Bildschirm").click();
+await page.getByRole("button", { name: "Veröffentlichung prüfen" }).click();
+await check("Gezielte Wiederholung verwendet die kontrollierte operationId", async () => assert.equal(await page.evaluate(() => globalThis.blogRetry?.operationId), "operation-card-1"));
+await page.getByLabel("Weitere Aktionen für Meine sehr lange Star-Wars-Rangliste für einen schmalen Bildschirm").click();
+await page.locator(".kd-blog-card .kd-blog-reference-link.is-redlink").click();
+await check("Karten-Rotlinks öffnen die Ergänzung mit Artikelkontext", async () => assert.equal(await page.getByRole("heading", { name: "Rotlink ergänzen" }).isVisible(), true));
+await page.getByRole("button", { name: "← Zurück" }).click();
 await page.getByRole("button", { name: "Lesen", exact: true }).click();
 await check("Lesen zeigt den vollen Text und alle fünf Referenzen ohne Klappe", async () => {
   assert.match(await page.locator(".kd-blog-reader-text").innerText(), /Voller gemeinsamer Lesertext/);
   assert.equal(await page.locator(".kd-blog-reader .kd-blog-reference-row").count(), 5);
 });
+await check("Leser enthält keine Sortier- oder Löschmenüs", async () => assert.equal(await page.locator(".kd-blog-reader .kd-blog-reference-menu").count(), 0));
+await page.getByRole("button", { name: "Star Wars: A New Hope: Kino öffnen" }).click();
+await check("Sekundäres Kinoziel ist ein eigener dezenter Link", async () => assert.equal(await page.evaluate(() => globalThis.blogNavigations.at(-1)?.kind), "cinema"));
+await page.setViewportSize({ width: 736, height: 760 }); await page.emulateMedia({ colorScheme: "light" });
+await page.evaluate(() => { document.body.style.colorScheme = "light"; document.body.style.background = "#edeae3"; });
+await page.screenshot({ path: "/private/tmp/kd-blog-reader-736-light.png", fullPage: true });
 await page.getByRole("button", { name: "← Zurück" }).click(); await page.getByRole("button", { name: "Bearbeiten", exact: true }).click();
 await check("Neu, Lesen, Zurück und Bearbeiten bleiben direkte Wege", async () => assert.equal(await page.getByRole("heading", { name: "Artikel bearbeiten" }).isVisible(), true));
+await check("Öffentliche Kopie plus Checkbox aus benennt die private Änderung", async () => {
+  assert.equal(await page.getByRole("button", { name: "Änderungen privat speichern" }).isVisible(), true);
+  assert.equal(await page.getByText("Die veröffentlichte Fassung bleibt unverändert.").isVisible(), true);
+});
+
+await page.evaluate(() => globalThis.blogShowPublished());
+await page.getByLabel("Nach Titel suchen").fill("anderer");
+await check("Veröffentlicht filtert nur geladene Titel und erklärt die Seitengrenze", async () => {
+  assert.equal(await page.locator(".kd-blog-card").count(), 1);
+  assert.match(await page.locator(".kd-blog-search").innerText(), /bereits geladenen Artikel/);
+  assert.equal(await page.getByRole("button", { name: "Weitere laden" }).isVisible(), true);
+});
 
 await browser.close(); fs.rmSync(outdir, { recursive: true, force: true });
 console.log(`blog_compact_ui_test: ${checks} Checks bestanden (echter Chromium, nur Fixtures).`);

@@ -29,8 +29,11 @@ function saveNotice(result) {
 
 function PublishedList({ page, actions, onNotice }) {
   const items = Array.isArray(page?.items) ? page.items : [];
+  const [search, setSearch] = useState("");
   const loading = page?.status === "loading";
   const failed = page?.status === "failed";
+  const query = search.trim().toLocaleLowerCase("de-AT");
+  const visibleItems = query ? items.filter((item) => String(item.title || "").toLocaleLowerCase("de-AT").includes(query)) : items;
   useEffect(() => {
     if (page?.status === "idle" && actions.onLoadPublished) void actions.onLoadPublished({ cursor: null, replace: true });
   }, [actions, page?.status]);
@@ -46,7 +49,12 @@ function PublishedList({ page, actions, onNotice }) {
     {loading && !items.length ? <p role="status" className="kd-blog-muted">Veröffentlichte Blogs werden geladen …</p> : null}
     {failed ? <p role="alert" className="kd-blog-error">Veröffentlichte Blogs sind derzeit nicht verfügbar.</p> : null}
     {!loading && !failed && !items.length ? <p className="kd-blog-muted">Noch keine veröffentlichten Blogs.</p> : null}
-    <BlogArticleCards cards={items} scope="published" actions={actions} onNotice={onNotice} />
+    {items.length ? <label className="kd-blog-field kd-blog-search">Nach Titel suchen
+      <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
+      {!page?.complete ? <small>Die Suche berücksichtigt die bereits geladenen Artikel.</small> : null}
+    </label> : null}
+    {query && !visibleItems.length ? <p className="kd-blog-muted">Kein geladener Artikel passt zu deiner Suche.</p> : null}
+    <BlogArticleCards cards={visibleItems} scope="published" actions={actions} onNotice={onNotice} />
     {!page?.complete && page?.nextCursor ? <button type="button" className="kd-blog-button kd-blog-load-more" disabled={loading}
       onClick={() => void load(false)}>{loading ? "Lädt …" : "Weitere laden"}</button> : null}
   </section>;
@@ -78,9 +86,10 @@ export function BlogTab({
 
   let content;
   if (view.mode === "editor" && editor) {
-    const intent = blogSaveIntent({ hasPublication: !!publicationIdFrom(editor), anonymousPublication: editor.anonymousPublication === true });
+    const hasPublication = !!publicationIdFrom(editor);
+    const intent = blogSaveIntent({ hasPublication, anonymousPublication: editor.anonymousPublication === true });
     content = <BlogEditor editor={editor} capability={publicationCapability} actions={actions} intent={intent}
-      onSave={save} onBack={() => actions.onBack({ returnToken: view.returnToken })} />;
+      hasPublication={hasPublication} onSave={save} onBack={() => actions.onBack({ returnToken: view.returnToken })} />;
   } else if (view.mode === "reader" && reader) {
     content = <BlogReader reader={reader} actions={actions} />;
   } else if (view.mode === "redlink_form" && redlinkForm) {

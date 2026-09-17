@@ -10,7 +10,7 @@ export function BlogReader({ reader, actions }) {
     {reader.referenceViews?.length ? <section className="kd-blog-reader-references" aria-labelledby="kd-blog-reader-references-heading">
       <h3 id="kd-blog-reader-references-heading">Titelliste & Verknüpfungen</h3>
       <BlogReferenceList references={reader.referenceViews.map((reference) => ({ ...reference, articleId: article.articleId }))} ordered={article.ordered === true}
-        editable={reader.scope === "private" && reader.canEdit} redlinksEnabled actions={actions} />
+        editable={false} redlinksEnabled actions={actions} />
     </section> : null}
   </article>;
 }
