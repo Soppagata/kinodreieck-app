@@ -39,7 +39,7 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W1; disjunkt zu W2 | p08_entdecken / `/private/tmp/kd-review49-p08` | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; Migration 20260917130000 und Entdecken-Tests | RUNNING | a2c6b60 / — |
 | P09 | W4 / PARALLEL_WAVE | Wochenplan und Termine | P07/App | Baumeister-P09 / bei DISPATCH | App.jsx; Wochenplan.jsx; StartTab.jsx; wochenplan/programm; eigene Termin-/Browsertests | PLANNED | — |
 | P10 | W5 / SOLO | Pins und Fokusnavigation | P09/App | Baumeister-P10 / bei DISPATCH | App.jsx; MediathekTab/KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
-| P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W1; programm read-only | p11_finder / `/private/tmp/kd-review49-p11` | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | RUNNING | a2c6b60 / — |
+| P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W1; programm read-only | p11_finder / `/private/tmp/kd-review49-p11` | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | DELIVERED | a2c6b60 / 9ff4fc1 |
 | P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | INTEGRATED | 4a5cc52 / dfabad9 |
 
 Kollisionspruefung: Dateien/Generatoren, Exports, Schema/State, Config/Styles, Dependencies/Lockfile, Tests/Fixtures, Output-Abhaengigkeiten und Worktrees beruecksichtigt. W1: P01×P02×P03 disjunkt. W2: App/Persoenliches=P04, Radar/Faktencontext=P05, KI/Filmwissen=P06; gemeinsame read-only Identitaetsvertraege eingefroren. W3: App/Streaming/Kino=P07, Entdeckenprojektion=P08, Finderlogik=P11. W4: App/Planung=P09; P10 folgt auf dem integrierten App-Stand. App-Schreiber laufen ausschliesslich in Folgewellen.
@@ -125,3 +125,5 @@ DISPATCH W3: P07 auf a2c6b60c4b4fbc59ccbaaa0745bd369eb4518583. P08/P11 erhalten 
 INTEGRATED P05 9b3da55 und P06 7def1b0: Vollstaendige Produktdiffs, Migrationen, Scope und Sollbelege geprueft; konfliktfrei sequenziell uebernommen. 30/49 Tickets GEBAUT. P05-Faktenhelper und P06-Handler verwenden weiterhin denselben numerischen FlixPatrol-Vertrag mit separatem Werktyp; Filmwissen ist intern typisiert. Finaler Gesamtnachweis folgt nach allen Paketen.
 
 DISPATCH P08 und P11: Beide auf exakt a2c6b60, mit P07 maximal drei aktive Baumeister. P05/P06 hatten ihre Arbeit zuvor abgeschlossen. Keine Schreibkollision und keine Output-Abhaengigkeit; W2-Lieferungen sind nun vor W3 integriert.
+
+P11 DELIVERED 9ff4fc14f94f4e0f27584767c0613e61d382010b: Eine Produktdatei, echter Finder-/Projektions-/DOM-Solltest und Paketbeleg; Scope und Diff geprueft. 15 neue Sollgruppen und 239 bestehende Finderchecks gruen. Integration folgt gemaess W3-Queue auf P07/P08.
