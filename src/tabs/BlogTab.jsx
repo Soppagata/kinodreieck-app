@@ -1,545 +1,113 @@
-import { useState, useMemo, useEffect, useRef } from "react";
-import { persoenlicherAutorName } from "../services/auth.js";
-import { sharedArticlesService } from "../services/sharedArticles.js";
-import { errorText } from "../services/errors.js";
-import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
-import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
-import { SHARED_PUBLICATION_STATUS, publicationState } from "../lib/sharedPublication.js";
-import { hatDreieck, ALLE_TYPEN, normalisiereTyp } from "../lib/typen.js";
-import { FilmForm } from "../components/EintragForm.jsx";
-import { MedienForm } from "../components/MedienForm.jsx";
-import { IconClose, IconDelete } from "../components/ui.jsx";
-import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
-import { formatPresentationDate } from "../lib/presentationDate.js";
-import { lesePlausiblesJahr, plausiblerJahresbereich } from "../lib/match.js";
+import { useEffect, useMemo, useState } from "react";
+import { blogSaveIntent, BLOG_SAVE_INTENT } from "../lib/blogContract.js";
+import { BlogArticleCards } from "../components/blog/BlogArticleCards.jsx";
+import { BlogEditor } from "../components/blog/BlogEditor.jsx";
+import { BlogReader } from "../components/blog/BlogReader.jsx";
+import { BlogRedlinkForm } from "../components/blog/BlogRedlinkForm.jsx";
+import "../styles/blog.css";
 
-/* ================= BLOG =================
-   Flow (Spec): "Erstellen" speichert sofort mit status "wartet" -> Abgleich
-   -> Popup. Rotlinks blockieren die Freigabe NIE; offene Mehrfachtreffer
-   schon. Wartende Artikel sind ausgegraut, Klick führt zurück ins Popup.
-   Bearbeiten nach Freigabe: Maske vorbefüllt, Speichern -> wartet,
-   unveränderte refs bleiben stabil. */
+const NOOP = () => {};
 
-const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", fontWeight: 600, lineHeight: 1.2, letterSpacing: 0, textTransform: "none", get color() { return T.leinwand; }, margin: "0 0 10px" };
-const mono = { fontFamily: "'Space Grotesk', sans-serif", fontSize: "calc(12px * var(--kd-schriftfaktor, 1))", get color() { return T.rauch; } };
-/* ---------- Eingabemaske ---------- */
-export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
-  const [titel, setTitel] = useState(vorlage ? vorlage.titel : "");
-  const [autor, setAutor] = useState(vorlage ? vorlage.autor : persoenlicherAutorName());
-  const [text, setText] = useState(vorlage ? vorlage.text : "");
-  const [geordnet, setGeordnet] = useState(vorlage ? !!vorlage.geordnet : false);
-  const [liste, setListe] = useState(vorlage ? vorlage.liste.map((l) => ({ eingabe: l.eingabe, jahr: l.jahr ? String(l.jahr) : "", typ: l.typ ? normalisiereTyp(l.typ) : "" })) : []);
-  const [fehler, setFehler] = useState("");
-  const [speichert, setSpeichert] = useState(false);
-  const speichertRef = useRef(false);
+function publicationIdFrom(editor) {
+  return editor?.publicationId || editor?.saveStatus?.publicationId
+    || editor?.saveStatus?.publication?.publicationId || null;
+}
 
-  const setzeZeile = (i, k, v) => setListe(liste.map((z, j) => (j === i ? { ...z, [k]: v } : z)));
-  const speichern = async () => {
-    if (speichertRef.current) return;
-    if (!titel.trim() || !autor.trim() || !text.trim()) { setFehler("Titel, Autor und Text sind Pflicht."); return; }
-    const ungueltigeZeile = liste.findIndex((z) => z.eingabe.trim()
-      && !lesePlausiblesJahr(z.jahr, { typ: z.typ || null }).ok);
-    if (ungueltigeZeile >= 0) {
-      const { min, max } = plausiblerJahresbereich(liste[ungueltigeZeile].typ || null);
-      setFehler(`Referenz ${ungueltigeZeile + 1}: Jahr muss leer oder eine ganze Zahl zwischen ${min} und ${max} sein.`);
-      return;
-    }
-    const l = liste.filter((z) => z.eingabe.trim()).map((z) => ({
-      eingabe: z.eingabe.trim(), jahr: lesePlausiblesJahr(z.jahr, { typ: z.typ || null }).jahr, typ: z.typ || null, ref: null,
-    }));
-    speichertRef.current = true; setSpeichert(true); setFehler("");
-    try {
-      const id = await onErstellen({
-        titel: titel.trim(), autor: autor.trim(), text, geordnet,
-        geteilt: vorlage ? !!vorlage.geteilt : false,
-        liste: l,
-      });
-      if (!id) setFehler("Artikel konnte nicht bestätigt gespeichert werden; deine Eingabe bleibt erhalten.");
-    } catch (error) { setFehler(error?.message || "Artikel konnte nicht gespeichert werden."); }
-    finally { speichertRef.current = false; setSpeichert(false); }
+function saveNotice(result) {
+  const privateStatus = result?.private?.status;
+  const publicStatus = result?.publication?.status;
+  if (privateStatus === "failed") return { kind: "error", text: "Privates Speichern fehlgeschlagen. Deine Eingabe bleibt erhalten." };
+  if (privateStatus !== "saved") return null;
+  if (publicStatus === "failed") return { kind: "error", text: "Privat gespeichert, Veröffentlichung fehlgeschlagen." };
+  if (publicStatus === "unknown") return { kind: "warning", text: "Privat gespeichert. Ob die Veröffentlichung angekommen ist, wird geprüft." };
+  if (publicStatus === "decision_required") return { kind: "warning", text: "Privat gespeichert. Vor der Veröffentlichung sind noch Referenzentscheidungen nötig." };
+  if (publicStatus === "conflict") return { kind: "warning", text: "Privat gespeichert. Die öffentliche Fassung wurde inzwischen geändert." };
+  if (publicStatus === "published") return { kind: "success", text: "Privat gespeichert und anonym veröffentlicht." };
+  if (publicStatus === "updated") return { kind: "success", text: "Privat gespeichert und Veröffentlichung aktualisiert." };
+  return { kind: "success", text: "Privat gespeichert." };
+}
+
+function PublishedList({ page, actions, onNotice }) {
+  const items = Array.isArray(page?.items) ? page.items : [];
+  const loading = page?.status === "loading";
+  const failed = page?.status === "failed";
+  useEffect(() => {
+    if (page?.status === "idle" && actions.onLoadPublished) void actions.onLoadPublished({ cursor: null, replace: true });
+  }, [actions, page?.status]);
+  const load = async (replace) => {
+    const result = await actions.onLoadPublished?.({ cursor: replace ? null : page?.nextCursor || null, replace });
+    if (result?.status === "failed") onNotice({ kind: "error", text: "Veröffentlichte Artikel konnten nicht geladen werden." });
   };
-
-  return (
-    <div className="kd-blog kd-blog-formular" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <h2 style={h2}>{vorlage ? "Artikel bearbeiten" : "Neuer Artikel"}</h2>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <input placeholder="Titel *" value={titel} onChange={(e) => setTitel(e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 220 }} />
-        <input placeholder="Autor *" value={autor} onChange={(e) => setAutor(e.target.value)} style={{ ...inputStyle, width: 120 }} />
-      </div>
-      <textarea placeholder="Text * (beliebig lang — Absätze per Leerzeile)" rows={10} value={text} onChange={(e) => setText(e.target.value)}
-        style={{ ...inputStyle, boxSizing: "border-box", lineHeight: 1.6 }} />
-      <label className="kd-touch-checkbox" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer" }}>
-        <input type="checkbox" checked={geordnet} onChange={() => setGeordnet(!geordnet)} />
-        Liste ist eine Reihenfolge (nummeriert — z.B. Watch-Order) statt einer Sammlung
-      </label>
-      <div style={mono}>Referenzen ({liste.length}/{MAX_LISTE}) — Titel Pflicht, Typ/Jahr optional. Der Abgleich läuft nach „Erstellen“.</div>
-      {liste.map((z, i) => (
-        <div key={i} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <input placeholder="Titel *" value={z.eingabe} onChange={(e) => setzeZeile(i, "eingabe", e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 180 }} />
-          <select value={z.typ} onChange={(e) => setzeZeile(i, "typ", e.target.value)} style={{ ...inputStyle, padding: "9px 6px" }}>
-            <option value="">Typ (optional)</option>
-            {ALLE_TYPEN.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <input placeholder="Jahr" value={z.jahr} onChange={(e) => setzeZeile(i, "jahr", e.target.value)}
-            inputMode="numeric" aria-label={`Erscheinungsjahr für Referenz ${i + 1} (optional)`}
-            aria-invalid={!!z.jahr.trim() && !lesePlausiblesJahr(z.jahr, { typ: z.typ || null }).ok}
-            style={{ ...inputStyle, width: 70 }} />
-          <button type="button" aria-label={`Referenz ${i + 1} entfernen`} title="Referenz entfernen"
-            style={{ ...btnStyle(false), padding: "5px 9px" }}
-            onClick={() => setListe(liste.filter((_, j) => j !== i))}><IconClose /></button>
-        </div>
-      ))}
-      {liste.length < MAX_LISTE && (
-        <button style={{ ...btnStyle(false), alignSelf: "flex-start", padding: "6px 12px" }}
-          onClick={() => setListe([...liste, { eingabe: "", jahr: "", typ: "" }])}>+ Referenz</button>
-      )}
-      {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
-      <div className="kd-blog-form-actions">
-        <button style={btnStyle(true)} disabled={speichert} onClick={() => void speichern()}>{speichert ? "Speichert …" : vorlage ? "Speichern" : "Erstellen"}</button>
-        <button className="kd-blog-zurueck" style={btnStyle(false)} disabled={speichert} onClick={onAbbrechen} aria-label="Bearbeitung abbrechen und zurück">← Zurück</button>
-      </div>
+  return <section className="kd-blog-list" aria-labelledby="kd-blog-published-heading">
+    <div className="kd-blog-list-head">
+      <h2 id="kd-blog-published-heading">Veröffentlichte Blogs</h2>
+      <button type="button" className="kd-blog-button kd-blog-button-quiet" disabled={loading} onClick={() => void load(true)}>Neu laden</button>
     </div>
-  );
-}
-
-/* ---------- Abgleich-Popup ---------- */
-function AbgleichPopup({ artikel, master, onSetzeRef, onFreigeben, onLoeschen, onSchliessen, onAddFilm }) {
-  const [neuFuer, setNeuFuer] = useState(null); // Index des Eintrags, für den neu angelegt wird
-  const [neuTyp, setNeuTyp] = useState("film");
-  const abg = useMemo(() => gleicheArtikelAb(artikel, master), [artikel, master]);
-  const s = abg.abgleichStat;
-  const frei = s.mehrfach === 0;
-
-  return (
-    <div className="kd-blog kd-blog-abgleich" style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", border: "1px solid " + T.wolfram }}>
-      <h2 style={h2}>Abgleich abgeschlossen — „{artikel.titel}“</h2>
-      <div style={{ fontSize: 14, marginBottom: 10, color: T.leinwandTief }}>
-        {s.mehrfach > 0
-          ? <>Es gibt <strong style={{ color: T.wolfram }}>{s.mehrfach} offene Mehrfachtreffer</strong> — Freigabe erst nach Entscheidung.</>
-          : s.rotlink > 0
-            ? <>{s.rotlink} Rotlink(s) — <strong>blockieren die Freigabe nicht</strong>, jederzeit ergänzbar.</>
-            : <strong style={{ color: T.wolfram }}>Alles sauber!</strong>}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-        {abg.liste.map((le, i) => (
-          <div key={i} style={{ background: T.saal, borderRadius: 4, padding: "8px 10px" }}>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 13 }}>
-              <span style={{
-                fontFamily: "'Space Mono', monospace", fontSize: 11, padding: "2px 7px", borderRadius: 3,
-                color: T.tinte, background: le.abgleich.status === "verlinkt" ? T.wolfram : le.abgleich.status === "rotlink" ? ROTLINK : T.rauch,
-              }}>
-                {le.abgleich.status === "verlinkt" ? "✓ verlinkt" : le.abgleich.status === "rotlink" ? "Rotlink" : "Mehrfach?"}
-              </span>
-              <span style={{ flex: 1, minWidth: 160 }}>{le.eingabe}{le.jahr ? " (" + le.jahr + ")" : ""}</span>
-              {le.abgleich.status === "verlinkt" && <span style={mono}>{le.ref}</span>}
-            </div>
-            {le.abgleich.status !== "verlinkt" && (
-              <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                {le.abgleich.kandidaten.length > 0 && (
-                  <select defaultValue="" onChange={(e) => {
-                    if (e.target.value === "__rot__") onSetzeRef(artikel.id, i, null, true);
-                    else if (e.target.value) onSetzeRef(artikel.id, i, e.target.value, false);
-                  }} style={{ ...inputStyle, padding: "7px 6px" }}>
-                    <option value="" disabled>Kandidat wählen …</option>
-                    {le.abgleich.kandidaten.map((k) => <option key={k.id} value={k.id}>{k.titel} ({k.jahr}){k.typ !== "film" ? " · " + k.typ : ""}</option>)}
-                    <option value="__rot__">Keiner davon → Rotlink</option>
-                  </select>
-                )}
-                <button style={{ ...btnStyle(false), padding: "5px 10px" }}
-                  onClick={() => { setNeuFuer(neuFuer === i ? null : i); setNeuTyp(normalisiereTyp(le.typ)); }}>
-                  {neuFuer === i ? "Schließen" : "+ Neu anlegen"}
-                </button>
-              </div>
-            )}
-            {neuFuer === i && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                  <span style={mono}>Typ des neuen Eintrags:</span>
-                  <select value={neuTyp} onChange={(e) => setNeuTyp(e.target.value)} style={{ ...inputStyle, padding: "6px" }}>
-                    {ALLE_TYPEN.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                {hatDreieck(neuTyp) ? (
-                  <FilmForm startOffen typOptionen={[neuTyp]} initial={{ titel: le.eingabe, jahr: le.jahr || "" }}
-                    onAdd={(film) => mitBestaetigterStringId(
-                      () => onAddFilm(film), (id) => onSetzeRef(artikel.id, i, id, false),
-                    )}
-                    onDone={() => setNeuFuer(null)} />
-                ) : (
-                  <MedienForm typ={neuTyp} startOffen initial={{ titel: le.eingabe, jahr: le.jahr || "" }}
-                    onAdd={(m) => mitBestaetigterStringId(
-                      () => onAddFilm(m), (id) => onSetzeRef(artikel.id, i, id, false),
-                    )}
-                    onDone={() => setNeuFuer(null)} />
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-        {abg.liste.length === 0 && <div style={mono}>Keine Referenzen erfasst.</div>}
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button style={{ ...btnStyle(true), opacity: frei ? 1 : 0.4, cursor: frei ? "pointer" : "not-allowed" }}
-          disabled={!frei} title={frei ? "" : "Erst alle Mehrfachtreffer entscheiden"}
-          onClick={() => onFreigeben(artikel.id)}>Freigeben</button>
-        <button style={btnStyle(false)} onClick={onSchliessen}>Später (bleibt wartend)</button>
-        <button style={{ ...btnStyle(false), borderColor: T.gefahr, color: T.gefahr }}
-          onClick={() => { if (window.confirm("Nach Abbruch gehen alle Eingaben dieses Artikels verloren. Sicher?")) onLoeschen(artikel.id); }}>
-          Abbrechen & löschen
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Lese-Ansicht ---------- */
-function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm, onAddFilm, onSetzeRef, nurLesen = false }) {
-  const [rotFuer, setRotFuer] = useState(null);
-  const [rotTyp, setRotTyp] = useState("film");
-  const proId = useMemo(() => new Map(master.map((f) => [f.id, f])), [master]);
-  return (
-    <div className="kd-blog kd-blog-leseansicht" style={{ background: T.leinwand, color: T.tinte, borderRadius: "var(--kd-radius-karte)", padding: "24px", maxWidth: 760, margin: "0 auto" }}>
-      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", flexWrap: "wrap", marginBottom: 6 }}>
-        <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, padding: "6px 12px" }} onClick={onZurueck}>{nurLesen ? "← Veröffentlicht" : "← Blog"}</button>
-        {!nurLesen && <button style={{ ...btnStyle(false), color: T.tinte, borderColor: T.tinteWeich, padding: "6px 12px" }} onClick={() => onBearbeiten(artikel.id)}>✎ Bearbeiten</button>}
-      </div>
-      <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0, margin: "6px 0 4px" }}>
-        {artikel.titel}
-      </h1>
-      <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, marginBottom: 18 }}>
-        {artikel.autor}{artikel.erstellt_am ? " · " + formatPresentationDate(artikel.erstellt_am) : ""}
-      </div>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 16, lineHeight: 1.75 }}>
-        {artikel.text.split(/\n\s*\n/).map((abs, i) => <p key={i} style={{ margin: "0 0 14px" }}>{abs}</p>)}
-      </div>
-      {artikel.liste.length > 0 && (
-        <div style={{ marginTop: 22, borderTop: "2px solid " + T.tinte, paddingTop: 12 }}>
-          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 18, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-            Referenzen{artikel.geordnet ? " (Reihenfolge)" : ""}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {artikel.liste.map((le, i) => {
-              const f = le.ref && proId.get(le.ref);
-              return (
-                <div key={i} style={{ fontSize: 15 }}>
-                  {artikel.geordnet && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, marginRight: 8 }}>{i + 1}.</span>}
-                  {nurLesen ? (
-                    <span>{le.eingabe}{le.jahr ? " (" + le.jahr + ")" : ""}</span>
-                  ) : f ? (
-                    <a href="#" onClick={(e) => { e.preventDefault(); onSpringeZuFilm(f.id); }}
-                      style={{ color: T.tinte, textDecorationColor: T.wolfram, textUnderlineOffset: 3, fontWeight: 600 }}>
-                      {f.titel}{f.jahr ? " (" + f.jahr + ")" : ""}
-                    </a>
-                  ) : (
-                    <>
-                      <a href="#" onClick={(e) => { e.preventDefault(); setRotFuer(rotFuer === i ? null : i); setRotTyp(normalisiereTyp(le.typ)); }}
-                        style={{ color: ROTLINK, textDecorationColor: ROTLINK, textUnderlineOffset: 3, fontWeight: 600 }}
-                        title="Eintrag existiert noch nicht in der Mediathek — klicken zum Ergänzen">
-                        {le.eingabe}{le.jahr ? " (" + le.jahr + ")" : ""}
-                      </a>
-                      {rotFuer === i && (
-                        <div style={{ margin: "8px 0", padding: 10, background: T.leinwandTief, borderRadius: 4 }}>
-                          <div style={{ fontSize: 12, color: T.tinteWeich, marginBottom: 6 }}>
-                            Eintrag existiert noch nicht — hier ergänzen:
-                            <select value={rotTyp} onChange={(e) => setRotTyp(e.target.value)} style={{ marginLeft: 8, fontSize: 12 }}>
-                              {ALLE_TYPEN.map((t) => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                          </div>
-                          {hatDreieck(rotTyp) ? (
-                            <FilmForm startOffen typOptionen={[rotTyp]} initial={{ titel: le.eingabe, jahr: le.jahr || "" }}
-                              onAdd={(film) => mitBestaetigterStringId(
-                                () => onAddFilm(film), (id) => onSetzeRef(artikel.id, i, id, false),
-                              )}
-                              onDone={() => setRotFuer(null)} />
-                          ) : (
-                            <MedienForm typ={rotTyp} startOffen initial={{ titel: le.eingabe, jahr: le.jahr || "" }}
-                              onAdd={(m) => mitBestaetigterStringId(
-                                () => onAddFilm(m), (id) => onSetzeRef(artikel.id, i, id, false),
-                              )}
-                              onDone={() => setRotFuer(null)} />
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ---------- Haupt-Tab ---------- */
-function EigeneArtikel({ artikel, master, fokusId, onFokusVerbraucht,
-  onErstellen, onAktualisieren, onSetzeRef, onFreigeben, onLoeschen, onAddFilm, onSpringeZuFilm }) {
-  const [ansicht, setAnsicht] = useState({ typ: "liste" });
-  const [offenId, setOffenId] = useState(null); // aufgeklappte Karte in der Hub-Liste
-  const [loeschFuer, setLoeschFuer] = useState(null); // Artikel-ID mit offener Lösch-Bestätigung
-  const [loeschName, setLoeschName] = useState("");
-  const [loeschLaeuft, setLoeschLaeuft] = useState(false);
-  /* Sprung von außen ("Kommt vor in", offene Referenzen): wartend -> Popup,
-     freigegeben -> Lese-Ansicht. Als Effekt — nie während des Renderns. */
-  useEffect(() => {
-    if (!fokusId) return;
-    const a = artikel.find((x) => x.id === fokusId);
-    setAnsicht(a ? (a.status === "freigegeben" ? { typ: "lese", id: a.id } : { typ: "popup", id: a.id }) : { typ: "liste" });
-    if (onFokusVerbraucht) onFokusVerbraucht();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fokusId]);
-
-  /* KD-029: Zeigt die aktive Ansicht (Popup/Lese) auf einen fehlenden Artikel —
-     z.B. gelöscht oder per Import ersetzt —, Reset auf die Liste. Als Effekt,
-     NIE während des Renders (sonst Render-Phase-Update / StrictMode-Warnung). */
-  useEffect(() => {
-    if ((ansicht.typ === "popup" || ansicht.typ === "lese") && !artikel.find((x) => x.id === ansicht.id)) {
-      setAnsicht({ typ: "liste" });
-    }
-  }, [ansicht, artikel]);
-
-  const aktiv = (id) => artikel.find((a) => a.id === id);
-
-  if (ansicht.typ === "maske") {
-    return <ArtikelMaske vorlage={ansicht.id ? aktiv(ansicht.id) : null}
-      onErstellen={async (daten) => {
-        const id = await (ansicht.id ? onAktualisieren(ansicht.id, daten) : onErstellen(daten));
-        if (id) setAnsicht({ typ: "popup", id });
-        return id;
-      }}
-      onAbbrechen={() => setAnsicht(ansicht.id ? { typ: "lese", id: ansicht.id } : { typ: "liste" })} />;
-  }
-  if (ansicht.typ === "popup") {
-    const a = aktiv(ansicht.id);
-    if (!a) return null; // KD-029: Reset läuft im Effekt, hier nur nichts rendern
-    return <AbgleichPopup artikel={a} master={master}
-      onSetzeRef={onSetzeRef}
-      onFreigeben={async (id) => {
-        if (await onFreigeben(id, { synchronisierePublikation: false })) {
-          setAnsicht({ typ: "lese", id });
-        }
-      }}
-      onLoeschen={async (id) => { if (await onLoeschen(id)) setAnsicht({ typ: "liste" }); }}
-      onSchliessen={() => setAnsicht({ typ: "liste" })}
-      onAddFilm={onAddFilm} />;
-  }
-  if (ansicht.typ === "lese") {
-    const a = aktiv(ansicht.id);
-    if (!a) return null; // KD-029: Reset läuft im Effekt, hier nur nichts rendern
-    return <LeseAnsicht artikel={a} master={master}
-      onZurueck={() => setAnsicht({ typ: "liste" })}
-      onBearbeiten={(id) => setAnsicht({ typ: "maske", id })}
-      onSpringeZuFilm={onSpringeZuFilm} onAddFilm={onAddFilm} onSetzeRef={onSetzeRef} />;
-  }
-  /* Liste — der Hub: Ein eigener Button klappt Vorschau und Aktionen auf.
-     Die Karte selbst bleibt ein semantischer Artikel, damit Lesen, Bearbeiten,
-     Löschen und Eingabefelder keine verschachtelten Bedienelemente sind. */
-  return (
-    <section className="kd-blog">
-      <div data-tour="blog" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-        <h2 style={{ ...h2, margin: 0 }}>Blog ({artikel.length})</h2>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={btnStyle(true)} onClick={() => setAnsicht({ typ: "maske" })}>+ Neuer Artikel</button>
-        </div>
-      </div>
-      {artikel.length === 0 && (
-        <p style={{ color: T.rauch, fontSize: 14 }}>Noch keine Artikel. „+ Neuer Artikel“ — der Abgleich mit der Mediathek läuft nach dem Erstellen automatisch.</p>
-      )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {artikel.map((a) => {
-          const wartend = a.status !== "freigegeben";
-          const rot = a.liste.filter((le) => !le.ref).length;
-          const offen = offenId === a.id;
-          const auszug = a.text.length > 280 ? a.text.slice(0, 280).replace(/\s+\S*$/, "") + " …" : a.text;
-          const publikation = publicationState(a);
-          const publiziert = publikation.status === SHARED_PUBLICATION_STATUS.PUBLISHED;
-          const publiziertLaufend = publikation.status === SHARED_PUBLICATION_STATUS.PUBLISHING;
-          const unpubliziertLaufend = publikation.status === SHARED_PUBLICATION_STATUS.UNPUBLISHING;
-          const publikationsFehler = publikation.status === SHARED_PUBLICATION_STATUS.ERROR;
-          const domId = `kd-blog-artikel-${String(a.id).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-          const titelId = `${domId}-titel`;
-          const detailsId = `${domId}-details`;
-          return (
-            <article key={a.id} className="kd-blog-karte"
-              style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: "16px", opacity: wartend ? 0.6 : 1 }}>
-              <div className="kd-blog-kartenkopf">
-                <div style={{ minWidth: 0 }}>
-                  <h3 id={titelId} style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(22px * var(--kd-schriftfaktor, 1))", lineHeight: 1.2, textTransform: "none", letterSpacing: 0, margin: 0 }}>
-                    {a.titel}{wartend && <span style={{ color: T.wolfram, fontSize: 13, marginLeft: 10 }}>· WARTET</span>}
-                  </h3>
-                  <div style={{ ...mono, marginTop: 3 }}>
-                    {a.autor}{a.erstellt_am ? " · " + formatPresentationDate(a.erstellt_am) : ""} · {a.liste.length} Referenzen{rot > 0 ? " · " + rot + " offen" : ""}{a.geordnet ? " · Reihenfolge" : ""}
-                    {publiziert ? " · öffentlich" : publiziertLaufend ? " · wird veröffentlicht …" : unpubliziertLaufend ? " · wird öffentlich entfernt …" : publikationsFehler ? " · Veröffentlichung fehlerhaft" : ""}
-                  </div>
-                </div>
-                <button type="button" className="kd-blog-expand"
-                  aria-expanded={offen} aria-controls={detailsId}
-                  onClick={() => setOffenId(offen ? null : a.id)}>
-                  {offen ? "Vorschau schließen" : "Vorschau öffnen"}
-                </button>
-              </div>
-              {offen && (
-                <div id={detailsId} role="region" aria-labelledby={titelId} style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 14, lineHeight: 1.6, color: T.leinwandTief }}>{auszug}</div>
-                  {a.liste.length > 0 && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                      {a.liste.map((le, i) => (
-                        <span key={i} style={{
-                          fontFamily: "'Space Mono', monospace", fontSize: 10, padding: "2px 7px", borderRadius: 3,
-                          border: "1px solid " + (le.ref ? T.wolfram : ROTLINK), color: le.ref ? T.wolfram : ROTLINK,
-                        }}>{le.eingabe}</span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="kd-blog-aktionen" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                    {wartend
-                      ? <button style={{ ...btnStyle(true), padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "popup", id: a.id })}>Abgleich öffnen</button>
-                      : <button style={{ ...btnStyle(true), minWidth: 118, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "lese", id: a.id })}>Lesen</button>}
-                    <button style={{ ...btnStyle(false), minWidth: 118, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "maske", id: a.id })}>✎ Bearbeiten</button>
-                    <button style={{ ...btnStyle(false), width: 36, minWidth: 36, padding: 0, borderColor: T.gefahr, color: T.gefahr, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                      disabled={publiziertLaufend || unpubliziertLaufend}
-                      aria-label="Artikel löschen" title="Artikel löschen"
-                      onClick={() => { setLoeschFuer(loeschFuer === a.id ? null : a.id); setLoeschName(""); }}>
-                      <IconDelete size={16} />
-                    </button>
-                  </div>
-                  {publikationsFehler && (
-                    <div style={{ marginTop: 10, padding: "9px 11px", background: T.saal, borderRadius: 4, border: "1px solid " + T.gefahr }}>
-                      <div style={{ color: T.gefahr, fontSize: 12, lineHeight: 1.5 }}>
-                        {publikation.action === "publish"
-                          ? "Die öffentliche Kopie konnte nicht bestätigt werden."
-                          : "Die öffentliche Kopie konnte nicht entfernt werden. Der lokale Artikel bleibt deshalb erhalten."}
-                      </div>
-                    </div>
-                  )}
-                  {loeschFuer === a.id && (
-                    <div style={{ marginTop: 10, padding: "10px 12px", background: T.saal, borderRadius: 4, border: "1px solid " + T.gefahr }}>
-                      <div style={{ fontSize: 12, color: T.rauch, marginBottom: 6, lineHeight: 1.5 }}>
-                        {needsPublicRemoval(a, publikation)
-                          ? "Entfernt zuerst die öffentliche Kopie und löscht den Artikel erst nach der Bestätigung. "
-                          : "Löscht den Artikel restlos — "}
-                        inklusive seiner Rotlinks (offene Referenzen verschwinden mit).
-                        Bereits angelegte Mediathek-Einträge bleiben unberührt.
-                        Zur Bestätigung den Autorennamen (<strong>{a.autor}</strong>) eintippen:
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <input value={loeschName} onChange={(e) => setLoeschName(e.target.value)} placeholder="Autor"
-                          style={{ ...inputStyle, width: 140, padding: "6px 9px" }} />
-                        <button
-                          disabled={loeschLaeuft || loeschName.trim().toLowerCase() !== a.autor.trim().toLowerCase()}
-                          style={{ ...btnStyle(true), padding: "7px 14px", background: T.gefahr,
-                            opacity: loeschName.trim().toLowerCase() === a.autor.trim().toLowerCase() ? 1 : 0.35 }}
-                          onClick={async () => {
-                            if (loeschLaeuft) return;
-                            setLoeschLaeuft(true);
-                            try {
-                              if (await onLoeschen(a.id)) { setLoeschFuer(null); setOffenId(null); }
-                            } finally { setLoeschLaeuft(false); }
-                          }}>
-                          {loeschLaeuft ? "Löscht …" : "Endgültig löschen"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </div>
-
-    </section>
-  );
-}
-
-function needsPublicRemoval(article, publikation = publicationState(article)) {
-  return article?.herkunft !== "gezogen"
-    && (!!article?.geteilt || publikation.status !== SHARED_PUBLICATION_STATUS.LOCAL);
-}
-
-/* Die veröffentlichte Kopie wird nur gelesen. Weder private Artikel-IDs noch
-   deren Bearbeitungs-/Übernahmecallbacks werden mit dieser Ansicht verbunden. */
-function lesbarePublikation(blog) {
-  const artikel = blog.artikel || {};
-  return {
-    id: blog.publication_id,
-    titel: String(artikel.titel || ""),
-    autor: String(blog.author || artikel.autor || ""),
-    text: String(artikel.text || ""),
-    erstellt_am: artikel.erstellt_am || blog.updated_at || null,
-    geordnet: artikel.geordnet === true,
-    liste: (Array.isArray(artikel.liste) ? artikel.liste : [])
-      .filter((entry) => entry && typeof entry.eingabe === "string")
-      .map((entry) => ({ eingabe: entry.eingabe, jahr: Number.isInteger(entry.jahr) ? entry.jahr : null })),
-  };
-}
-
-function VeroeffentlichteArtikel({ service }) {
-  const [zustand, setZustand] = useState({ loading: true, artikel: [], fehler: null });
-  const [ladeVersion, setLadeVersion] = useState(0);
-  const [suche, setSuche] = useState("");
-  const [offenId, setOffenId] = useState(null);
-  useEffect(() => {
-    let aktiv = true;
-    setZustand({ loading: true, artikel: [], fehler: null });
-    Promise.resolve().then(() => aktiv ? service.list() : null).then((result) => {
-      if (!aktiv) return;
-      setZustand(result.ok
-        ? { loading: false, artikel: result.blogs.map(lesbarePublikation), fehler: null }
-        : { loading: false, artikel: [], fehler: "Veröffentlichte Blogs sind derzeit nicht verfügbar." });
-    }).catch((error) => {
-      if (aktiv) setZustand({ loading: false, artikel: [], fehler: errorText(error) });
-    });
-    return () => { aktiv = false; };
-  }, [service, ladeVersion]);
-  const filter = suche.trim().toLocaleLowerCase("de-AT");
-  const sichtbar = zustand.artikel.filter((artikel) =>
-    `${artikel.titel} ${artikel.autor}`.toLocaleLowerCase("de-AT").includes(filter));
-  const offen = zustand.artikel.find((artikel) => artikel.id === offenId);
-  if (offen) return <LeseAnsicht artikel={offen} master={[]} nurLesen onZurueck={() => setOffenId(null)} />;
-  return <section className="kd-blog kd-blog-veroeffentlicht" aria-labelledby="kd-blog-veroeffentlicht-titel">
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
-      <h2 id="kd-blog-veroeffentlicht-titel" style={{ ...h2, margin: 0 }}>Veröffentlichte Blogs</h2>
-      <button type="button" style={btnStyle(false)} disabled={zustand.loading}
-        onClick={() => setLadeVersion((version) => version + 1)}>Neu laden</button>
-    </div>
-    <label style={{ display: "grid", gap: 6, marginBottom: 14, fontSize: 13, color: T.rauch }}>
-      Nach Titel oder Autor suchen
-      <input type="search" value={suche} onChange={(event) => setSuche(event.target.value)}
-        style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
-    </label>
-    {zustand.loading ? <p role="status">Veröffentlichte Blogs werden geladen …</p> : null}
-    {zustand.fehler ? <p role="alert" style={{ color: T.gefahr }}>Blogs konnten nicht geladen werden: {zustand.fehler}</p> : null}
-    {!zustand.loading && !zustand.fehler && !sichtbar.length
-      ? <p style={{ color: T.rauch }}>{filter ? "Kein veröffentlichter Blog passt zu deiner Suche." : "Noch keine veröffentlichten Blogs."}</p> : null}
-    <div style={{ display: "grid", gap: 10 }}>
-      {sichtbar.map((artikel) => <article key={artikel.id} className="kd-blog-karte"
-        style={{ background: T.saalHoch, borderRadius: "var(--kd-radius-karte)", padding: 16, minWidth: 0 }}>
-        <h3 style={{ ...h2, marginBottom: 4 }}>{artikel.titel}</h3>
-        <div style={mono}>{artikel.autor}{artikel.erstellt_am ? ` · ${formatPresentationDate(artikel.erstellt_am)}` : ""}</div>
-        <p style={{ color: T.leinwandTief, fontSize: 14, lineHeight: 1.6, overflowWrap: "anywhere" }}>
-          {artikel.text.length > 280 ? artikel.text.slice(0, 280).replace(/\s+\S*$/, "") + " …" : artikel.text}
-        </p>
-        <button type="button" style={btnStyle(true)} aria-label={`${artikel.titel} lesen`}
-          onClick={() => setOffenId(artikel.id)}>Lesen</button>
-      </article>)}
-    </div>
+    {loading && !items.length ? <p role="status" className="kd-blog-muted">Veröffentlichte Blogs werden geladen …</p> : null}
+    {failed ? <p role="alert" className="kd-blog-error">Veröffentlichte Blogs sind derzeit nicht verfügbar.</p> : null}
+    {!loading && !failed && !items.length ? <p className="kd-blog-muted">Noch keine veröffentlichten Blogs.</p> : null}
+    <BlogArticleCards cards={items} scope="published" actions={actions} onNotice={onNotice} />
+    {!page?.complete && page?.nextCursor ? <button type="button" className="kd-blog-button kd-blog-load-more" disabled={loading}
+      onClick={() => void load(false)}>{loading ? "Lädt …" : "Weitere laden"}</button> : null}
   </section>;
 }
 
-export function BlogTab({ sharedService = sharedArticlesService, ...props }) {
-  const [bereich, setBereich] = useState("eigene");
-  useEffect(() => { if (props.fokusId) setBereich("eigene"); }, [props.fokusId]);
-  return <div>
-    {props.angemeldet && <nav aria-label="Blog-Bereiche"
-      style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-      <button type="button" style={btnStyle(bereich === "eigene")} aria-current={bereich === "eigene" ? "page" : undefined}
-        onClick={() => setBereich("eigene")}>Meine Artikel</button>
-      <button type="button" style={btnStyle(bereich === "veroeffentlicht")} aria-current={bereich === "veroeffentlicht" ? "page" : undefined}
-        onClick={() => setBereich("veroeffentlicht")}>Veröffentlicht</button>
-    </nav>}
-    <div hidden={bereich === "veroeffentlicht" && props.angemeldet}><EigeneArtikel {...props} /></div>
-    {bereich === "veroeffentlicht" && props.angemeldet && <VeroeffentlichteArtikel service={sharedService} />}
+export function BlogTab({
+  publicationCapability = { status: "unavailable", reason: null },
+  view = { area: "mine", mode: "list", articleId: null, returnToken: null },
+  editor = null, reader = null, redlinkForm = null, articleCards = [],
+  publishedPage = { status: "idle", items: [], nextCursor: null, complete: true, errorCode: null },
+  actions: suppliedActions = {},
+}) {
+  const actions = useMemo(() => ({
+    onNewArticle: NOOP, onEditArticle: NOOP, onReadArticle: NOOP, onBack: NOOP,
+    onEditorChange: NOOP, onAddReference: NOOP, onMoveReference: NOOP,
+    onRemoveReference: NOOP, onSave: async () => null, onReferenceDecision: async () => null,
+    onNavigateReference: NOOP, onOpenRedlinkForm: NOOP, onCancelRedlinkForm: NOOP,
+    onConfirmRedlinkForm: async () => null, onRetryPublication: async () => null,
+    onWithdraw: async () => null, onDelete: async () => null, onLoadPublished: async () => null,
+    ...suppliedActions,
+  }), [suppliedActions]);
+  const [notice, setNotice] = useState(null);
+  useEffect(() => { setNotice(null); }, [view.area, view.mode, view.articleId]);
+  const save = async () => {
+    const result = await actions.onSave({ draftKey: editor?.draftKey, anonymousPublication: editor?.anonymousPublication === true });
+    setNotice(saveNotice(result));
+    return result;
+  };
+
+  let content;
+  if (view.mode === "editor" && editor) {
+    const intent = blogSaveIntent({ hasPublication: !!publicationIdFrom(editor), anonymousPublication: editor.anonymousPublication === true });
+    content = <BlogEditor editor={editor} capability={publicationCapability} actions={actions} intent={intent}
+      onSave={save} onBack={() => actions.onBack({ returnToken: view.returnToken })} />;
+  } else if (view.mode === "reader" && reader) {
+    content = <BlogReader reader={reader} actions={actions} />;
+  } else if (view.mode === "redlink_form" && redlinkForm) {
+    content = <BlogRedlinkForm form={redlinkForm} actions={actions} />;
+  } else if (view.area === "published") {
+    content = <PublishedList page={publishedPage} actions={actions} onNotice={setNotice} />;
+  } else {
+    content = <section className="kd-blog-list" aria-labelledby="kd-blog-mine-heading">
+      <div className="kd-blog-list-head"><h2 id="kd-blog-mine-heading">Meine Artikel</h2>
+        <button type="button" className="kd-blog-button kd-blog-button-primary" onClick={actions.onNewArticle}>+ Neuer Artikel</button></div>
+      {!articleCards.length ? <p className="kd-blog-muted">Noch keine Artikel.</p> : null}
+      <BlogArticleCards cards={articleCards} scope="private" actions={actions} onNotice={setNotice} />
+    </section>;
+  }
+
+  return <div className="kd-blog-v1">
+    <header className="kd-blog-header"><p className="kd-blog-kicker">KINODREIECK</p><h1>Blog</h1>
+      <nav className="kd-blog-tabs" aria-label="Blog-Bereiche">
+        <button type="button" aria-current={view.area === "mine" ? "page" : undefined}
+          onClick={() => actions.onBack({ returnToken: view.area === "mine" ? view.returnToken : null })}>Meine Artikel</button>
+        <button type="button" aria-current={view.area === "published" ? "page" : undefined}
+          onClick={() => void actions.onLoadPublished({ cursor: null, replace: true })}>Veröffentlicht</button>
+      </nav>
+      {notice ? <p className={`kd-blog-notice kd-blog-notice-${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}>{notice.text}</p> : null}
+    </header>
+    <main className="kd-blog-content">{content}</main>
   </div>;
 }
+
+export { BLOG_SAVE_INTENT };
