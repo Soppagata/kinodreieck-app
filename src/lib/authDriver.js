@@ -95,6 +95,77 @@ function loescheSitzung() {
 }
 export function hatGespeicherteSitzung() { return !!leseSitzung(); }
 
+/* Login-Lebensdauer und Tokenrotation sind unterschiedliche Identitäten.
+   Alte schema-1-Sitzungen bleiben lesbar; jeder neue Login bekommt eine ID. */
+function gleicheAnmeldung(a, b) {
+  return !!a && !!b && a.kontoId === b.kontoId
+    && a.mail === b.mail
+    && (a.sitzungsId || null) === (b.sitzungsId || null);
+}
+function gleicheVersion(a, b) {
+  return gleicheAnmeldung(a, b) && a.access_token === b.access_token
+    && a.refresh_token === b.refresh_token;
+}
+function neueSitzungsId() {
+  return globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random()}-${Math.random()}`;
+}
+
+/* Nur synchrone Credential-Commits laufen in dieser Transaktion, niemals HTTP
+   oder die asynchrone Cache-Trennung. Der leere Store enthält keine Nutzdaten.
+   Auch Web-Lock-Tabs nutzen ihn, damit ein Tab ohne Web Locks denselben Mutex
+   teilt. Eine fehlgeschlagene Primitive wird nicht ungesperrt umgangen. */
+function mitIndexedDbCommit(auftrag) {
+  return new Promise((resolve, reject) => {
+    let db, tx, beendet = false;
+    const ende = (error, wert) => {
+      if (beendet) return;
+      beendet = true;
+      clearTimeout(timer);
+      db?.close();
+      if (error) reject(error); else resolve(wert);
+    };
+    const timer = setTimeout(() => {
+      try { tx?.abort(); } catch { /* bereits beendet */ }
+      ende(new Error("Auth-Commit-Sperre nicht erreichbar."));
+    }, TIMEOUT_MS);
+    let open;
+    try { open = globalThis.indexedDB.open("kd-auth-commit", 1); }
+    catch (error) { ende(error); return; }
+    open.onupgradeneeded = () => open.result.createObjectStore("mutex");
+    open.onerror = () => ende(open.error);
+    open.onblocked = () => ende(new Error("Auth-Commit-Sperre blockiert."));
+    open.onsuccess = () => {
+      db = open.result;
+      if (beendet) { db.close(); return; }
+      db.onversionchange = () => db.close();
+      let wert;
+      try {
+        tx = db.transaction("mutex", "readwrite");
+        tx.onabort = () => ende(tx.error || new Error("Auth-Commit abgebrochen."));
+        tx.onerror = () => ende(tx.error || new Error("Auth-Commit fehlgeschlagen."));
+        tx.oncomplete = () => ende(null, wert);
+        /* Erst das Request-Event besitzt die aktive, tabweit exklusive
+           Transaktion; transaction() allein hat den Mutex noch nicht. */
+        tx.objectStore("mutex").get("commit").onsuccess = () => {
+          if (beendet) return;
+          try { wert = auftrag(); }
+          catch (error) { try { tx.abort(); } catch { /* beendet */ } ende(error); }
+        };
+      } catch (error) { ende(error); }
+    };
+  });
+}
+
+/* Außerhalb des Browsers gibt es keinen tabgeteilten Storage. Diese Queue
+   serialisiert dort die Treiber desselben Prozesses (u. a. lokale Mocktests). */
+let prozessCommit = Promise.resolve();
+function mitProzessCommit(auftrag) {
+  const lauf = prozessCommit.catch(() => {}).then(auftrag);
+  prozessCommit = lauf.catch(() => {});
+  return lauf;
+}
+
 /* `jetztMs` kommt immer von der Uhr des Treibers — nie direkt von Date.now().
    Sonst liefen Ablaufrechnung und Ablaufprüfung auf zwei verschiedenen Uhren. */
 function sitzungAus(daten, {
@@ -144,6 +215,16 @@ export function createAuthDriver({
   const anon = String(config.supabasePublishableKey || "").trim();
   let zustand = leseSitzung() ? AUTH_ZUSTAND.ANGEMELDET : AUTH_ZUSTAND.GAST;
   let refreshLaeuft = null;
+
+  function commit(auftrag) {
+    const lokal = () => {
+      if (globalThis.indexedDB) return mitIndexedDbCommit(auftrag);
+      if (typeof window === "undefined") return mitProzessCommit(auftrag);
+      if (locks?.request) return auftrag(); // bereits im Web Lock
+      throw new Error("Keine sichere Auth-Commit-Sperre verfügbar.");
+    };
+    return locks?.request ? locks.request("kd:auth:session", lokal) : Promise.resolve().then(lokal);
+  }
 
   function netz() { return fetchImpl || (typeof fetch === "function" ? fetch : null); }
   function konfiguriert() { return istSupabaseProjektUrl(basis) && anon.length > 0; }
@@ -232,7 +313,8 @@ export function createAuthDriver({
     if (!antwort.ok) throw fehlerAus(antwort.status, antwort.data, "auth.sign-in");
     const s = sitzungAus(antwort.data, { jetztMs: jetzt(), erwarteteMail: mail });
     if (!s) throw unvollstaendigeSitzungsantwort("auth.sign-in");
-    if (!schreibeSitzung(s)) {
+    s.sitzungsId = neueSitzungsId();
+    if (!await commit(() => schreibeSitzung(s))) {
       throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
         source: "auth", operation: "auth.sign-in", reason: "storage-blocked",
         message: "Die Anmeldung konnte auf diesem Gerät nicht gespeichert werden.",
@@ -258,7 +340,8 @@ export function createAuthDriver({
       jetztMs: jetzt(), erwarteteKontoId: vorher.kontoId, erwarteteMail: vorher.mail,
     });
     if (!neu) throw unvollstaendigeSitzungsantwort("auth.reauthenticate");
-    if (!schreibeSitzung(neu)) {
+    neu.sitzungsId = vorher.sitzungsId;
+    if (!await commit(() => gleicheVersion(vorher, leseSitzung()) && schreibeSitzung(neu))) {
       throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "auth", operation: "auth.reauthenticate", reason: "storage-blocked" });
     }
     zustand = AUTH_ZUSTAND.ANGEMELDET;
@@ -266,66 +349,78 @@ export function createAuthDriver({
   }
 
   /* ---------- Erneuern (single-flight, tab-übergreifend abgesichert) ---------- */
-  async function refreshIntern() {
-    /* Im Lock zuerst neu lesen: ein anderer Tab kann inzwischen rotiert haben —
-       dann ist dessen Ergebnis zu übernehmen statt ein zweites Mal zu rotieren. */
-    const frisch = leseSitzung();
+  async function refreshIntern(lauf) {
+    const frisch = await commit(() => leseSitzung());
     if (!frisch) { zustand = AUTH_ZUSTAND.GAST; return null; }
-    if (frisch.gueltigBis - jetzt() > REFRESH_PUFFER_MS) {
+    if (!gleicheAnmeldung(lauf.sitzung, frisch)) return null;
+    if (frisch.gueltigBis - jetzt() > REFRESH_PUFFER_MS
+        && (!lauf.forceToken || frisch.access_token !== lauf.forceToken)) {
       zustand = AUTH_ZUSTAND.ANGEMELDET;
       return frisch;
     }
     let antwort;
+    lauf.angefragt = true;
     try {
       antwort = await ruf("/token?grant_type=refresh_token", { body: { refresh_token: frisch.refresh_token } });
-    } catch {
-      /* Netz weg / Timeout: Sitzung BEHALTEN. Das ist der Unterschied zwischen
-         "kurz offline" und "ausgeloggt" — und der Grund, warum ein pausiertes
-         Supabase-Projekt niemanden aus seinen Daten aussperrt. */
+    } catch { /* Offline erhält nur die noch aktuelle Sitzung. */ }
+    return commit(() => {
+      const aktuell = leseSitzung();
+      if (!gleicheVersion(frisch, aktuell)) {
+        // Ein neuer Login (auch desselben Kontos) gehört niemals diesem Lauf.
+        if (!aktuell) zustand = AUTH_ZUSTAND.GAST;
+        return gleicheAnmeldung(frisch, aktuell) ? aktuell : null;
+      }
+      if (antwort?.ok) {
+        const neu = sitzungAus(antwort.data, {
+          jetztMs: jetzt(), erwarteteKontoId: frisch.kontoId, erwarteteMail: frisch.mail,
+        });
+        if (neu) {
+          neu.sitzungsId = frisch.sitzungsId;
+          if (schreibeSitzung(neu)) {
+            zustand = AUTH_ZUSTAND.ANGEMELDET;
+            return neu;
+          }
+        }
+      } else if (antwort && istEndgueltigUngueltig(antwort.status, antwort.data)) {
+        if (loescheSitzung()) {
+          zustand = AUTH_ZUSTAND.ABGELAUFEN;
+          return null;
+        }
+      }
       zustand = AUTH_ZUSTAND.DEGRADIERT;
       return frisch;
-    }
-    if (antwort.ok) {
-      const neu = sitzungAus(antwort.data, {
-        jetztMs: jetzt(), erwarteteKontoId: frisch.kontoId, erwarteteMail: frisch.mail,
-      });
-      if (!neu) {
-        zustand = AUTH_ZUSTAND.DEGRADIERT;
-        return frisch;
-      }
-      if (!schreibeSitzung(neu)) {
-        zustand = AUTH_ZUSTAND.DEGRADIERT;
-        return frisch;
-      }
-      zustand = AUTH_ZUSTAND.ANGEMELDET;
-      return neu;
-    }
-    if (istEndgueltigUngueltig(antwort.status, antwort.data)) {
-      if (loescheSitzung()) {
-        zustand = AUTH_ZUSTAND.ABGELAUFEN;
-        return null;
-      }
-      /* Ein nicht entfernbares Credential darf nie als Guest behauptet
-         werden. Die bestehende Sitzung bleibt lokal gebunden und die
-         Privacy-Grenze kann beim nächsten Versuch erneut greifen. */
-      zustand = AUTH_ZUSTAND.DEGRADIERT;
-      return frisch;
-    }
-    zustand = AUTH_ZUSTAND.DEGRADIERT;   // 5xx / 429 / unklar: Sitzung behalten
-    return frisch;
+    });
   }
 
-  async function refresh() {
-    if (refreshLaeuft) return refreshLaeuft;
-    const lauf = async () => {
-      if (locks && typeof locks.request === "function") {
-        try { return await locks.request("kd:auth:refresh", refreshIntern); }
-        catch { return await refreshIntern(); }
-      }
-      return await refreshIntern();
-    };
-    refreshLaeuft = lauf().finally(() => { refreshLaeuft = null; });
-    return refreshLaeuft;
+  async function refresh({ erzwingeErneuerung = false, sitzung = leseSitzung() } = {}) {
+    if (!sitzung) { zustand = AUTH_ZUSTAND.GAST; return null; }
+    if (!erzwingeErneuerung && sitzung.gueltigBis - jetzt() > REFRESH_PUFFER_MS) {
+      zustand = AUTH_ZUSTAND.ANGEMELDET;
+      return sitzung;
+    }
+    let lauf = refreshLaeuft;
+    if (lauf && !gleicheVersion(lauf.sitzung, sitzung)) {
+      // Ein neuer Login oder abgelehnter neuer Bearer gehört nicht zum alten Lauf.
+      lauf = null;
+    }
+    if (!lauf) {
+      lauf = { sitzung, forceToken: erzwingeErneuerung ? sitzung.access_token : null, angefragt: false };
+      const ausfuehren = () => refreshIntern(lauf);
+      lauf.promise = Promise.resolve().then(() => locks?.request
+        ? locks.request("kd:auth:refresh", ausfuehren) : ausfuehren())
+        .catch(() => { zustand = AUTH_ZUSTAND.DEGRADIERT; return null; })
+        .finally(() => { if (refreshLaeuft === lauf) refreshLaeuft = null; });
+      refreshLaeuft = lauf;
+    } else if (erzwingeErneuerung) {
+      lauf.forceToken = sitzung.access_token;
+    }
+    const neu = await lauf.promise;
+    // Force kann nach dem regulären Schnellpfad, aber vor dessen Promise-
+    // Abschluss eintreffen. Nur dieser requestfreie Lauf braucht einen Nachlauf.
+    if (erzwingeErneuerung && !lauf.angefragt && gleicheVersion(sitzung, neu)) {
+      return refresh({ erzwingeErneuerung: true, sitzung });
+    }
+    return neu;
   }
 
   /* ---------- Zugriffstoken für den Datentreiber ---------- */
@@ -338,7 +433,8 @@ export function createAuthDriver({
       zustand = AUTH_ZUSTAND.ANGEMELDET;
       return s.access_token;
     }
-    const neu = await refresh();
+    const neu = await refresh({ erzwingeErneuerung, sitzung: s });
+    if (!gleicheVersion(neu, leseSitzung())) return null;
     if (erwartet && String(neu?.kontoId || "") !== erwartet) return null;
     return neu ? neu.access_token : null;
   }
@@ -376,7 +472,11 @@ export function createAuthDriver({
        abgeschlossenem Serverversuch und lokaler Credential-Löschung trennen.
        Wirft diese Privacy-Grenze, bleiben die lokalen Zugangsdaten erhalten. */
     if (typeof beforeLocalCommit === "function") await beforeLocalCommit();
-    if (!loescheSitzung()) {
+    if (!await commit(() => {
+      const aktuell = leseSitzung();
+      if (aktuell && !gleicheAnmeldung(s, aktuell)) return false;
+      return loescheSitzung();
+    })) {
       const error = new Error("Die lokale Anmeldung konnte nicht sicher entfernt werden.");
       error.code = "AUTH_CREDENTIAL_PERSISTENCE_FAILED";
       throw error;
