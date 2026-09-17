@@ -28,6 +28,9 @@ import {
 } from "./src/controllers/useMustwatchController.js";
 import * as R from "./src/lib/localEventRadar.js";
 import { projectEntdeckenRadarPilot } from "./src/lib/radarPilotContracts.js";
+import { ensureIds, slugId } from "./src/lib/match.js";
+import { heileRotlinks } from "./src/lib/artikel.js";
+import { markNewPersonalMasterEntries, mergePersonalMasterEntry } from "./src/lib/personalEntryChronology.js";
 
 let ok = 0;
 function check(name, wert) {
@@ -640,10 +643,58 @@ check("App besitzt keinen Demo-seitigen Must-Watch-Seed; normales Laden und Schr
   && /ladeKontext\.get\(K\.mustwatch\)[\s\S]*parseMustwatchSicher\(r\.value\)[\s\S]*uebernehmeState\(liste\)/.test(mustwatchController)
   && /await kontext\.set\(K\.mustwatch, payload\)[\s\S]*return true/.test(mustwatchController)
   && /if \(!await persistMustwatch\(next, auftragKontext\)\) return false;[\s\S]*uebernehmeState\(next\)/.test(mustwatchController));
-check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",
-  /next = ensureIds\(markNewPersonalMasterEntries\(aktuell, \[neu\]\)\)/.test(app)
-  && /film\.id === id \? mergePersonalMasterEntry\(film, changes\) : film/.test(app)
-);
+/* Aktuelle App-Callbacks ausführen: Das Soll ist der kanonische Schreibpayload,
+   nicht der Name eines lokalen Zwischenwerts. Die echte Queue/Persistenz und
+   Profilergänzung sind zusätzlich in review49_p04_personal_test.mjs gedeckt. */
+{
+  let bestand = [{ id: "bestand", titel: "Bleibt", typ: "film", notiz: "privat" }];
+  const writes = [];
+  const umgebung = {
+    useCallback: (fn) => fn,
+    ensureIds, slugId, heileRotlinks, markNewPersonalMasterEntries, mergePersonalMasterEntry,
+    masterMetaRef: { current: null },
+    naechsteHerkunft: () => ({ art: "test" }),
+    mitMustwatch: baueRefUniversum,
+    mustwatchRef: { current: [] },
+    schreibeArtikel: async (berechne) => { berechne([]); return true; },
+    setErr: () => {},
+    mutiereMaster: async (berechne) => {
+      const plan = berechne(bestand);
+      if (plan.abgebrochen) return false;
+      writes.push(JSON.parse(JSON.stringify(plan.master)));
+      bestand = plan.master;
+      return true;
+    },
+  };
+  const callback = (name, folge) => {
+    const start = app.indexOf(`  const ${name} = `);
+    const ende = app.indexOf(folge, start);
+    if (start < 0 || ende < 0) throw new Error(`App-Callback nicht auffindbar: ${name}`);
+    const deklaration = app.slice(start, ende).trim();
+    const ausdruck = deklaration.slice(deklaration.indexOf("=") + 1).trim().replace(/;$/, "");
+    return Function(...Object.keys(umgebung), `return (${ausdruck});`)(...Object.values(umgebung));
+  };
+  const add = callback("addFilm", "\n\n  const serienKatalog");
+  const update = callback("updateFilm", "\n  const deleteFilm");
+  for (const [roh, erwartet] of [
+    ["trilogie", "film"], ["filmreihe", "film"], ["franchise", "serie"],
+    ["film", "film"], ["serie", "serie"], ["musik", "musik"], ["sonstiges", "sonstiges"],
+  ]) {
+    const id = await add({ titel: `Typ ${roh}`, typ: roh, jahr: 2000, notiz: "Entwurf" });
+    const angelegt = writes.at(-1).find((film) => film.id === id);
+    check(`Master-Add kanonisiert ${roh} zu ${erwartet} im Schreibpayload`,
+      !!id && angelegt?.typ === erwartet && angelegt.notiz === "Entwurf"
+      && angelegt.zuletzt_ticker === 1);
+    await update(id, { typ: erwartet === "musik" ? "film" : "musik" });
+    const geschrieben = await update(id, { typ: roh, notiz: "Bearbeitet", zuletzt_ticker: 5 });
+    const geaendert = writes.at(-1).find((film) => film.id === id);
+    check(`Master-Update kanonisiert ${roh} zu ${erwartet} im Schreibpayload`,
+      geschrieben === true && geaendert?.typ === erwartet
+      && geaendert.notiz === "Bearbeitet" && geaendert.zuletzt_ticker === 1);
+  }
+  check("Master-Add und -Update erhalten den unbeteiligten persönlichen Bestand",
+    JSON.stringify(bestand[0]) === JSON.stringify({ id: "bestand", titel: "Bleibt", typ: "film", notiz: "privat" }));
+}
 const prognoseDraft = intelligenceController.slice(
   intelligenceController.indexOf("const addFilmMitPrognose"),
   intelligenceController.indexOf("const ladeFilmwissen"),
