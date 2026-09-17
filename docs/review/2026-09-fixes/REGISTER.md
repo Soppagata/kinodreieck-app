@@ -10,7 +10,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 - Vor Produktbau sauberer Nicht-main-Basiscommit: `4a5cc52` (Register-/Ticket-Snapshot; Produktcode identisch mit frisch bestaetigtem 14804ce).
 - Master Astra/xhigh; Baumeister Astra/high; Abschlusspruefer laut konkretem Abschlussauftrag Astra/xhigh. Maximal drei Baumeister; kein Nebenchat in Parallelwellen.
 - Lokal: Implementierung, Mock-/Browser-/isolierte SQL-Tests, Commits, Integration. Kein Push, Deployment, Live-Anbieteraufruf oder bestehender Serverdatenwrite.
-- Modus: PARALLEL_WAVE, W1–W3 mit freiem Nachrueckplatz P09, danach gekoppeltes SOLO-Paket P10. Produktdateien waehrend Paketbau nur Baumeister.
+- Modus: PARALLEL_WAVE, W1–W3 mit freiem Nachrueckplatz P09, danach gekoppeltes SOLO-Paket P10b. Produktdateien waehrend Paketbau nur Baumeister.
 
 ## Nutzerergebnisse
 
@@ -20,7 +20,7 @@ Einziges zentrales Register. Originaltickets bleiben unveraendert unter `../2026
 | M2 | Persoenliche Eintraege und Profilangaben bleiben korrekt erhalten | GEBAUT | P04 | 2b850aa; P04 |
 | M3 | Katalog, Streaming, Entdecken und Radar zeigen identitaetstreue, frische Inhalte | OFFEN | P05 P07 P08 | — |
 | M4 | Filmwissen und KI behandeln Werkart und Fehler verlaesslich | GEBAUT | P06 | 7def1b0; P06 |
-| M5 | Pins, Terminplanung, Suche und Navigation erreichen das richtige Ziel | OFFEN | P09 P10 P11 | — |
+| M5 | Pins, Terminplanung, Suche und Navigation erreichen das richtige Ziel | OFFEN | P09 P10a P10b P11 | — |
 | M6 | Pruefwerkzeuge und lokale Betriebsvertraege liefern belastbare Nachweise | GEBAUT | P03 P12 | 84cde78 + dfabad9; P03/P12 |
 
 ## Pakete und Parallelmatrix
@@ -38,7 +38,8 @@ Gemeinsame Vertraege bleiben innerhalb einer Welle eingefroren. Ein Paket besitz
 | P07 | W3 / PARALLEL_WAVE | Streaming und Katalog | P04/App | p07_streaming / `/private/tmp/kd-review49-p07` | App.jsx; Streamingcontroller/-libs; StreamingTab/KinoTab; TitelKartenAktionen; eigene Migrationen und Tests | RUNNING | a2c6b60 / — |
 | P08 | W3 / PARALLEL_WAVE | Entdecken-Belege | W1; disjunkt zu W2 | p08_entdecken / `/private/tmp/kd-review49-p08` | entdeckenUi/Projection; webDiscoveryFeed; entdecken-daily-task Producervertrag; Migration 20260917130000 und Entdecken-Tests | DELIVERED | a2c6b60 / 34259b8 |
 | P09 | W3b / PARALLEL_WAVE | Wochenplan und Termine | App-Klickvertrag eingefroren; kein Output von P07 | p09_planning / `/private/tmp/kd-review49-p09` | Wochenplan.jsx; StartTab.jsx; enge Wochenplan-Editorregeln in index.css/design-primary.css; eigene Termin-/Browsertests | RUNNING | a2c6b60 / — |
-| P10 | W4 / SOLO | Pins und Fokusnavigation | P07/App und P09/StartTab | Baumeister-P10 / bei DISPATCH | App.jsx; MediathekTab/KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
+| P10a | W3c / PARALLEL_WAVE | Sichtbares Mediathek-Sprungziel | App-Propvertrag read-only | p10a_focus / `/private/tmp/kd-review49-p10a` | MediathekTab.jsx; eigene Fokus-/Navigationstests | RUNNING | a2c6b60 / — |
+| P10b | W4 / SOLO | Pins und Kinonavigation | P07/App und P09/StartTab | Baumeister-P10b / bei DISPATCH | App.jsx; KinoTab/StartTab; entdeckenPins; eigene Navigations-/Browsertests | PLANNED | — |
 | P11 | W3 / PARALLEL_WAVE | Finder-Zeitfilter | W1; programm read-only | p11_finder / `/private/tmp/kd-review49-p11` | src/lib/finder.js; Finder-Tests; keine App-/programm-Aenderung | DELIVERED | a2c6b60 / 9ff4fc1 |
 | P12 | W1b / PARALLEL_WAVE | Betriebsvertraege | keine; disjunkt zu P01/P03 | Baumeister-P12 / `/private/tmp/kd-review49-p12` | .github/workflows/automatic-ai-check.yml; neue Retentionmigration; private-ops-check; zugehoerige Tests | INTEGRATED | 4a5cc52 / dfabad9 |
 
@@ -75,10 +76,10 @@ E14-Abhaengigkeiten: E02-001 vor E02-002 innerhalb P01; E05-002 vor vollstaendig
 | 23 | [E12-003](../2026-09-vollreview/tickets/E12/KD-REV-E12-003.md) | P2 | P09 | Baumeister-P09 | OFFEN | — | — |
 | 24 | [E12-002](../2026-09-vollreview/tickets/E12/KD-REV-E12-002.md) | P2 | P07 | Baumeister-P07 | OFFEN | — | — |
 | 25 | [E10-003](../2026-09-vollreview/tickets/E10/KD-REV-E10-003.md) | P2 | P06 | Baumeister-P06 | GEBAUT | 7def1b0 | [P06](evidence/P06.md): 39 Modul-/Transporttests, 19 PG17- und 41 Handlerfaelle |
-| 26 | [E01-001](../2026-09-vollreview/tickets/E01/KD-REV-E01-001.md) | P2 | P10 | Baumeister-P10 | OFFEN | — | — |
-| 27 | [E04-003](../2026-09-vollreview/tickets/E04/KD-REV-E04-003.md) | P2 | P10 | Baumeister-P10 | OFFEN | — | — |
+| 26 | [E01-001](../2026-09-vollreview/tickets/E01/KD-REV-E01-001.md) | P2 | P10b | Baumeister-P10b | OFFEN | — | — |
+| 27 | [E04-003](../2026-09-vollreview/tickets/E04/KD-REV-E04-003.md) | P2 | P10a | p10a_focus | OFFEN | — | — |
 | 28 | [E11-004](../2026-09-vollreview/tickets/E11/KD-REV-E11-004.md) | P2 | P09 | Baumeister-P09 | OFFEN | — | — |
-| 29 | [E11-002](../2026-09-vollreview/tickets/E11/KD-REV-E11-002.md) | P2 | P10 | Baumeister-P10 | OFFEN | — | — |
+| 29 | [E11-002](../2026-09-vollreview/tickets/E11/KD-REV-E11-002.md) | P2 | P10b | Baumeister-P10b | OFFEN | — | — |
 | 30 | [E09-002](../2026-09-vollreview/tickets/E09/KD-REV-E09-002.md) | P2 | P11 | Baumeister-P11 | OFFEN | — | — |
 | 31 | [E09-003](../2026-09-vollreview/tickets/E09/KD-REV-E09-003.md) | P2 | P11 | Baumeister-P11 | OFFEN | — | — |
 | 32 | [E01-002](../2026-09-vollreview/tickets/E01/KD-REV-E01-002.md) | P2 | P09 | Baumeister-P09 | OFFEN | — | — |
@@ -131,3 +132,5 @@ P11 DELIVERED 9ff4fc14f94f4e0f27584767c0613e61d382010b: Eine Produktdatei, echte
 DISPATCH P09 vorgezogen auf exakt a2c6b60 im frei gewordenen P11-Slot: Die gezielte Paarpruefung zeigt, dass E11-004 am Wochenplan-Klick mit vorhandener quelle.film_ref und unveraendertem App-Vertrag behoben werden kann. E01-002 kann den vorhandenen kinoPinTermin-Parser lesen. Damit entfallen App-/Parser-Schreibflaechen und die angenommene Output-Abhaengigkeit zu P07. Neue Ownership: Wochenplan/StartTab/enge Editor-CSS-Regeln exklusiv P09; P07 wurde ueber den eingefrorenen App-Klickvertrag informiert. P07/P08/P09 sind disjunkt, maximal drei aktiv. Integrationsfolge W3: P07 → P08 → P11 → P09; P10 danach SOLO.
 
 P08 DELIVERED 34259b894408de0d0cb0644a70925b539ebb7a52: Vier autorisierte Produktmodule, additive SQL-Validatorerweiterung und eigene Tests/Fixture/Beleg; Produktdiff, Migration und Provenienzweg statisch geprueft. 34 neue Sollgruppen und 7 PG17-Gruppen plus acht Nachbartests gruen. Keine Lockerung des Kino-Identitaetsmatchers. Integration wartet gemaess Queue auf P07.
+
+DISPATCH P10a im frei gewordenen P08-Slot auf exakt a2c6b60: E04-003 besitzt ausschliesslich MediathekTab-State/Sichtbarkeitslogik; der bestehende App-Sprungvertrag bleibt unveraendert. P10 wird deshalb ohne Ticketverlust aufgeteilt: E04-003 → P10a, E01-001/E11-002 → anschliessendes P10b. Aktive Schreiber P07/App+Streaming, P09/Start+Wochenplan und P10a/Mediathek sind disjunkt. Integrationsfolge P07 → P08 → P11 → P09 → P10a, dann P10b auf dem zusammengefuehrten Stand.
