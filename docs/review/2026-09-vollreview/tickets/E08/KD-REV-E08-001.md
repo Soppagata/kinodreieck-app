@@ -1,0 +1,69 @@
+# KD-REV-E08-001 · Browser verwirft einen belegten Speicher-Teilerfolg als `unavailable`
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — ein vorgesehener, wiederherstellbarer Einzel-Write-Fehler führt zu einer falschen Verfügbarkeitsmeldung, obwohl ein bestätigter Fund gespeichert wurde; keine Berechtigungsumgehung und kein dauerhafter Datenverlust belegt.
+- Finding: E08-F001
+- Prüfstand: `14804ce389d69114feed27b92fb11ac78423cc0e`
+- Zuständige Etappe: E08
+
+## Fehler und Auswirkung
+
+Bei einer kontogebundenen initialen Freitext-Radarsuche kann ein strukturierter Anbieterbefund teilweise gespeichert werden: mindestens ein Fund wird bestätigt und gelangt in den persistierten Feed, während ein anderer, separater Upsert fehlschlägt. Der Server liefert diesen Teilerfolg korrekt mit `status: confirmed`, `writes: 1`, einem Feedfund und einer Speicherwarnung. Der Browser verwirft jedoch die gesamte HTTP-200-Antwort und meldet die Suche als `unavailable` mit `writes: 0`.
+
+Dadurch sieht die Person sinngemäß „Ziel bleibt gespeichert. Die Suche ist derzeit nicht verfügbar.“, obwohl ein bestätigter Fund bereits gespeichert sein kann. Der anschließende Feed-Sync kann diesen Fund weiterhin anzeigen. Belegt ist daher eine irreführende Statusmeldung und das Verwerfen sicherer Antwortdaten, nicht ein dauerhafter Datenverlust oder eine fehlende Speicherung.
+
+## Auslöser, Soll und Ist
+
+**Auslöser.** Ein autorisiertes, neu angelegtes Freitext-Radarziel startet die initiale Suche. Der Anbieter liefert mindestens zwei vollständig akzeptierte Kandidaten. Ein unabhängiger Upsert gelingt, mindestens ein anderer schlägt fehl; Feedabruf und Claim-Finish gelingen. Das ist eine realistische Fehlergrenze, weil die Upserts einzelne RPC-/Netzwerkanfragen ohne gemeinsamen Rollback sind.
+
+**Soll.** Der Browser akzeptiert den belegten Teilerfolg samt `writes: 1`, validem Feed und Speicherwarnung. Provider-Ergebnisqualität und nachgelagerter Speicherzustand bleiben getrennt nachvollziehbar; die initiale Suche wird nicht insgesamt als nicht verfügbar eingestuft.
+
+**Ist.** Bei `providerReceipt.resultMode: structured` und serverseitigem `responseMode: partial` verwirft die Browser-Validierung die vollständige Antwort. `checkNow` gibt ausschließlich `{ status: "unavailable", writes: 0 }` zurück. Der Controller synchronisiert zwar anschließend den Feed, übernimmt danach aber diesen Fehlerstatus für die UI-Meldung.
+
+## Ursache und Fundstellen
+
+Der Provider-Receipt beschreibt den tatsächlich geparsten Anbieterbefund, bevor die Speicherung beginnt. Bei einem nachgelagerten gemischten Speichererfolg setzt der Runner nur den Präsentationsmodus auf `partial`, lässt den Receipt aber absichtlich unverändert. Der Handler serialisiert beide Werte. Die Browser-Validierung verlangt fälschlich Gleichheit beider Modi, obwohl genau dieser Speicherteilfehler eine zulässige Abweichung erzeugt.
+
+- Der echte Adapter bildet den Receipt aus `parsed.envelope.responseMode`: [eingefrorene Quelle: `/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/anthropicAdapter.js:903`](/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/anthropicAdapter.js:903) — Repository-Pfad `supabase/functions/radar-websearch-task/anthropicAdapter.js:903`, Prüfcommit `14804ce389d69114feed27b92fb11ac78423cc0e`.
+- Der Runner kennzeichnet bei `storageFailures && storedResults` die Gesamtpräsentation als `partial`, bewahrt den Providerbeleg aber: [eingefrorene Quelle: `/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/runner.js:285`](/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/runner.js:285) und [Zeile 289](/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/runner.js:289) — Repository-Pfad `supabase/functions/radar-websearch-task/runner.js:285-295`, gleicher Prüfcommit.
+- Der Handler reicht Präsentation und Receipt ohne Modusangleichung weiter: [eingefrorene Quelle: `/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/index.ts:756`](/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/index.ts:756) und [Zeile 761](/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/index.ts:761) — Repository-Pfad `supabase/functions/radar-websearch-task/index.ts:756-763`, gleicher Prüfcommit.
+- Der Browser verwirft die Abweichung in `exactResult`; anschließend wird ein nicht validiertes HTTP-200-Payload zu `unavailable`: [eingefrorene Quelle: `/private/tmp/kd-vollreview-20260916/source/src/services/radarWebsearch.js:102`](/private/tmp/kd-vollreview-20260916/source/src/services/radarWebsearch.js:102) und [Zeile 226](/private/tmp/kd-vollreview-20260916/source/src/services/radarWebsearch.js:226) — Repository-Pfad `src/services/radarWebsearch.js:76-106, 221-231`, gleicher Prüfcommit.
+- Der initiale Controllerpfad ruft `checkNow(..., { initial: true })` auf, synchronisiert den Feed und gibt dennoch den Servicestatus zurück: [eingefrorene Quelle: `/private/tmp/kd-vollreview-20260916/source/src/controllers/useEntdeckenRadarController.js:327`](/private/tmp/kd-vollreview-20260916/source/src/controllers/useEntdeckenRadarController.js:327) und [Zeile 333](/private/tmp/kd-vollreview-20260916/source/src/controllers/useEntdeckenRadarController.js:333) — Repository-Pfad `src/controllers/useEntdeckenRadarController.js:309-335`, gleicher Prüfcommit.
+- Die UI baut aus diesem Status die nachweislich irreführende Meldung: [eingefrorene Quelle: `/private/tmp/kd-vollreview-20260916/source/src/tabs/EntdeckenTab.jsx:409`](/private/tmp/kd-vollreview-20260916/source/src/tabs/EntdeckenTab.jsx:409) und [Zeile 466](/private/tmp/kd-vollreview-20260916/source/src/tabs/EntdeckenTab.jsx:466) — Repository-Pfad `src/tabs/EntdeckenTab.jsx:396-418, 462-468`, gleicher Prüfcommit.
+- Die SQL-Funktion bestätigt nur die Fehlergrenze: Jeder Fund durchläuft eine eigene, berechtigungs- und datenprüfende RPC-Transaktion. Sie ist nicht Ursache einer HTTP-Modusänderung: [eingefrorene Quelle: `/private/tmp/kd-vollreview-20260916/source/supabase/migrations/20260830140000_radar_text_findings.sql:66`](/private/tmp/kd-vollreview-20260916/source/supabase/migrations/20260830140000_radar_text_findings.sql:66) — Repository-Pfad `supabase/migrations/20260830140000_radar_text_findings.sql:66-135`, gleicher Prüfcommit.
+
+## Belege und Gegenproben
+
+**Ausgeführte, isolierte Reproduktion des Validators.** `node /private/tmp/kd-vollreview-20260916/tests/E08-F001/validator/repro.mjs` endete mit Exit 0. Ausgeführt wurde der unveränderte Produktpfad „echter Anthropic-Adapter mit Receipt-Erzeugung → echter Function-Handler/Repository/Runner → echter Browser-Service“. Auth, Providertransport, Reservierung/Settlement und Supabase-RPCs waren lokal gemockt; globales `fetch` war gegen versehentlichen Netzwerkzugriff gesperrt. Das Ergebnisartefakt [`/private/tmp/kd-vollreview-20260916/tests/E08-F001/validator/result.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E08-F001/validator/result.json) belegt für den gemischten Speichererfolg: Server `confirmed`, `writes: 1`, ein Feed-Event, Präsentation `partial`, Receipt `structured`; Browser `unavailable`, `writes: 0`.
+
+**Ausgeführte Kontrollen.** Ohne Speicherfehler akzeptiert der Browser `confirmed` mit `writes: 2` und beide Modi `structured`. In einer Kopie derselben Fehlerantwort führte allein das Ändern von `providerReceipt.resultMode` auf `partial` zur Browser-Akzeptanz von `confirmed`, `writes: 1` und dem einen Feedfund. Das isoliert die Ablehnungsbedingung; es ist ausdrücklich keine Empfehlung, den Providerbeleg umzuschreiben. Eine weitere ausgeführte Gegenprobe lieferte bereits providerseitig `partial` plus einen fehlerhaften Upsert: beide Modi waren dann `partial`, der Browser akzeptierte `confirmed`, `writes: 1`. Das zugehörige Payload ist [`provider-partial-payload.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E08-F001/validator/provider-partial-payload.json).
+
+**Statische Gegenbelege und Grenzen.** Der Feed-Sync kann den gespeicherten Fund erhalten; ein dauerhafter Verlust ist nicht belegt. Geplante Antworten verlassen den Handler als `processed` und nutzen diesen Browservertrag nicht; belegt ist der initiale Kontopfad. Der bestehende Test [eingefrorene Quelle: `/private/tmp/kd-vollreview-20260916/source/radar_freetext_contract_test.mjs:535`](/private/tmp/kd-vollreview-20260916/source/radar_freetext_contract_test.mjs:535) — Repository-Pfad `radar_freetext_contract_test.mjs:535-563`, gleicher Prüfcommit — deckt einen Speicherfehler mit Minimaladapter und erhaltenem Geschwisterfund ab, aber weder einen echten Provider-Receipt noch den Browser-Service. Er ist kein Gegenbeleg zu diesem Vertragspfad.
+
+Die Source-Parität für acht zentrale Dateien ist im Artefakt [`/private/tmp/kd-vollreview-20260916/tests/E08-F001/validator/source-parity.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E08-F001/validator/source-parity.json) als bytegleich zum Prüfcommit festgehalten. Das ist ein Produktfehler im Server-/Browservertrag; kein Testwerkzeugfehler. Fehlende Live- und Gerätebelege sind davon getrennte Betriebsbeleglücken.
+
+## Korrekturziel und Abnahme
+
+Den Vertrag eng so präzisieren, dass Provider-Ergebnisqualität (`providerReceipt.resultMode`) und nachgelagerter Speicherstatus getrennt, aber konsistent validierbar bleiben. Eine Abweichung `structured` im Receipt zu `partial` in der Gesamtpräsentation darf nur für den explizit belegten Speicherteilfall akzeptiert werden; der Receipt muss unverändert ein wahrer Nachweis des Anbieterresultats bleiben. Die Änderung auf Runner/Antwortvertrag/Browservalidierung samt fokussiertem Integrationstest beschränken. Eine UI-Anzeige der konkreten Teilwarnung ist nur dann Teil dieses Tickets, wenn sie ausdrücklich als zusätzlicher Akzeptanzumfang gewählt wird.
+
+- Ein fokussierter Integrationstest mit echtem Adapter/Receipt, Handler und Browser-Service akzeptiert bei zwei gültigen Kandidaten, einem erfolgreichen und einem fehlschlagenden Mock-Upsert den Teilerfolg: `confirmed`, `writes: 1`, ein gespeicherter Feedfund und `partial`.
+- Dieser Fall liefert nicht pauschal `unavailable`; der Browser-Service hält die Speicherwarnung verfügbar und der Controller klassifiziert die initiale Suche nicht insgesamt als nicht verfügbar.
+- Vollständiger `structured`-Erfolg und bereits providerseitig `partial` klassifizierte Antworten bleiben akzeptiert. Unzulässige oder manipulierte Moduskombinationen bleiben abgewiesen.
+- Der Receipt bleibt unverändert als Nachweis des konsumierten Providerresultats. Kein zusätzlicher Providerrequest und kein automatischer Retry werden eingeführt.
+- Der persistierte Geschwisterfund bleibt nach regulärem Feed-Sync sichtbar; Modellkandidaten werden weiterhin nicht direkt als gespeicherte UI-Daten übernommen.
+
+## Abhängigkeiten und offene Punkte
+
+- Keine abhängigen oder duplizierten Findings bekannt.
+- Keine Provider-, Remote- oder Live-Datenbankaufrufe in der Validierung; die tatsächliche Häufigkeit von Speicherteilfehlern und die Live-Deploymentparität sind nicht festgestellt.
+- Der konkrete RPC-Ausfall wurde injiziert. SQL wurde statisch geprüft, nicht ausgeführt; das Ticket behauptet keinen bestimmten produktiven PostgreSQL-Fehler.
+- React-UI und physisches Gerät wurden nicht ausgeführt. Die UI-Folge ist aus Controller und Meldung statisch abgeleitet.
+- Der aktuelle Controller reicht `displayText` und `warnings` auch für akzeptierte Teilantworten nicht sichtbar durch. Ein Anspruch auf eine konkrete Teilwarnung in der UI wäre zusätzlicher Scope; bestätigt sind die Vertragsablehnung und die falsche `unavailable`-Meldung.
+- Dieses Ticket dokumentiert den unabhängig validierten Finding-Pfad; die vollständige primäre E08-Lektüre ist separat in `READING_COMPLETE.json` und den Attestationen belegt.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: [`/private/tmp/kd-vollreview-20260916/validations/E08-F001.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/validations/E08-F001.json) (`confirmed`). Ursprüngliches Master-Proposal: [`/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E08-F001.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E08-F001.json). Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die Master-Abnahme ist bestätigt, bis dessen gesonderter Abgleich vorliegt.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E08/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E08/KD-REV-E08-001.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

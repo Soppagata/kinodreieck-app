@@ -1,0 +1,81 @@
+# KD-REV-E11-004 · Persönlicher Kinoreminder verliert beim Öffnen die Filmreferenz eines Mediathektreffers
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 – der reguläre persönliche Kino-Reminder öffnet bei einem aktuellen Mediathekmatch nicht die vorhandene Kinokarte. Der Nutzer kann die Karte nach der gesetzten Titelsuche manuell öffnen; Datenverlust ist nicht belegt.
+- Finding: E11-F004
+- Prüfstand: 14804ce389d69114feed27b92fb11ac78423cc0e
+- Zuständige Etappe: E11
+
+## Fehler und Auswirkung
+
+Ein persönlicher Kino-Reminder mit aufgelöster Programmverknüpfung verliert beim Öffnen die bereits aufgelöste Filmreferenz. Ist sein Programmeintrag aktuell einem Mediathekfilm zugeordnet, navigiert der Auftrag zu programm:<film_at_id>, während die vorhandene Karte ausschließlich als film:<Master-ID> gerendert ist. Daher passieren weder Fokus noch scrollIntoView oder automatisches Öffnen; der Fokusauftrag wird trotzdem verbraucht.
+
+Betroffen sind automatische und manuelle persönliche Kino-Reminder mit Programm-ID sowie derselbe titelbasierte Altpfad, sobald das aufgelöste Programm mit einem Mediathekfilm gematcht ist. Echte Kino-Pins, Vorschläge, gelöste oder fehlende Ziele und neutrale ungematchte Programmeinträge gehören nicht zu dieser Ursache. Dies ist ein Produktfehler im lokalen Referenztransport, kein Provider-, Backend- oder Datenverlustfehler.
+
+## Auslöser, Soll und Ist
+
+Voraussetzung ist ein angemeldetes Dashboard mit aktuellem Kinoprogramm und einem darin gematchten Mediathekfilm.
+
+1. Einen persönlichen Kino-Reminder automatisch oder manuell mit der Programm-ID dieses Titels verknüpfen.
+2. Im Wochenplan „Eintrag ansehen“ wählen.
+
+Soll: Der Sprung wechselt zu Kino und adressiert die vorhandene Karte film:<Master-ID>, öffnet sie, fokussiert sie und scrollt sie in den sichtbaren Bereich.
+
+Ist: Tabwechsel und Titelsuche erfolgen. Der Auftrag enthält jedoch programm:<film_at_id>, obwohl nur der Filmanker existiert. Die vorher geschlossene Karte bleibt zu; onFokusVerbraucht wird aufgerufen. Die Karte kann über die Suche sichtbar sein und manuell geöffnet werden.
+
+## Ursache und Fundstellen
+
+StartTab baut für gematchte Kinofilme einen kinoKatalog-Eintrag mit programm_ref und film_ref. reminderVerknuepfung bewahrt diese Quelle, erzeugt als Ziel aber nur die Programmreferenz. wochenansicht hält film_ref ausschließlich in quelle. Wochenplan.ansehen erweitert den Reminder nur um programm_ref. Der unverändert durch StartTab an App weitergereichte Callback wählt die Fokusart allein anhand eines obersten film_ref; dieses fehlt beim persönlichen Reminder. Der Normalisierer übernimmt auch aus alten gespeicherten Daten keine oberste film_ref, sodass kein späterer Reparaturpfad vorhanden ist.
+
+- Eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/tabs/StartTab.jsx, Zeilen 142-162 (Katalog mit programm_ref und film_ref), 333-345 (unveränderte Callback-Weitergabe). Übertragbar: src/tabs/StartTab.jsx am Commit 14804ce389d69114feed27b92fb11ac78423cc0e.
+- Eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/lib/wochenplan.js, Zeilen 402-407 (Kinoziel nur mit Programmreferenz) und 537-554 (Projektion mit quelle und ziel). Übertragbar: src/lib/wochenplan.js am Prüfcommit.
+- Eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/components/Wochenplan.jsx, Zeilen 317-321 (Ansehen-Transport). Übertragbar: src/components/Wochenplan.jsx am Prüfcommit.
+- Eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/App.jsx, Zeilen 1909-1915 (Fokusart aus oberstem film_ref). Übertragbar: src/App.jsx am Prüfcommit.
+- Eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/tabs/KinoTab.jsx, Zeilen 101-115 (Fokussuche und Verbrauch) sowie 423-436 (tatsächlicher Filmanker). Übertragbar: src/tabs/KinoTab.jsx am Prüfcommit.
+
+## Belege und Gegenproben
+
+Statische Beweiskette:
+
+- baueKinoMatches → StartTab-kinoKatalog → automatischeReminderRef/normalisiereWochenplan → reminderVerknuepfung/wochenansicht → Wochenplan.ansehen → StartTab-Callback → App-Fokuswahl → KinoTab-Anker bildet einen erreichbaren Standardpfad.
+- App hebt die Zeitgrenze auf und KinoTab setzt lokale Filter zurück. Das behebt keine falsche Zielart.
+
+Ausgeführte Reproduktion:
+
+- node /private/tmp/kd-vollreview-20260916/tests/E11-F004/validator/repro.cjs lief mit Exit 0. Der unabhängige JSDOM-Harness verwendete echte Wochenplan- und KinoTab-Komponenten, produktive Matching-/Reminderfunktionen, die bytegenau extrahierte StartTab-Katalogexpression sowie den App-Callback. „Eintrag ansehen“ wurde tatsächlich geklickt; es gab keine Netzwerkrequests.
+- Im Fehlerfall war quelle.film_ref=validator-film, aber die gesendete film_ref fehlte. Der Auftrag war programm:987654, der vorhandene Anker film:validator-film; scroll=[], activeAnchor=null, expandedId=null und consumed=1.
+- Ergebnis: /private/tmp/kd-vollreview-20260916/tests/E11-F004/validator/result.json. Ergänzte der Harness ausschließlich die bereits aufgelöste quelle.film_ref beim Weiterreichen, adressierte der Auftrag film:validator-film, scrollte zum Filmanker und öffnete ihn. Produktcode wurde dafür nicht geändert.
+- Negative Kontrolle: Derselbe persönliche Reminder ohne Mediathekmatch fokussierte seinen vorhandenen Programmanker korrekt. Die verwendeten Quellen stammen vollständig aus der eingefrorenen Kopie; Prüfsummen: /private/tmp/kd-vollreview-20260916/tests/E11-F004/validator/source-sha256.json.
+
+Gegenproben:
+
+- Echte Kino-Pins transportieren film_ref in der Wochenansicht bewusst; StartTab-Vorschläge besitzen ihn bereits. Das widerlegt den fehlenden Transport bei persönlichen Remindern nicht.
+- Fehlende Katalogziele unterdrücken die Aktion; hier waren Quelle und Aktion vorhanden.
+- Link-Modus keiner und master_id-Verknüpfungen besitzen getrennte Pfade.
+- E11-F002 betrifft einen fehlenden Anker in der persönlichen Empfehlungslane. Hier ist der Filmanker vorhanden, die zugestellte Fokusart ist falsch und der Lauf verwendet kein Geschmacksprofil: eigenständige Ursache.
+- Vorhandene Wochenplantests decken Verknüpfungs-/fehlende Zielregeln und film_ref bei Vorschlägen ab, nicht den kompletten persönlichen Reminder-Klick bis zur gematchten Karte; keine Testsuite wurde ausgeführt.
+
+Der JSDOM-Lauf ist ein lokaler Fehlernachweis und keine Live-, Browser- oder iPhone-Abnahme.
+
+## Korrekturziel und Abnahme
+
+Am Übergang von aufgelöster Reminderquelle zum Kino-Navigationsauftrag die aktuelle quelle.film_ref bei Mediathekmatches weitergeben oder einen gleichwertig expliziten Zielvertrag schaffen. Die Programm-ID für ungematchte Ziele bleibt erhalten. Keine Persistenz-, Schema-, Provider- oder Infrastrukturänderung ist Teil dieses Tickets.
+
+Abnahmekriterien:
+
+1. Ein automatisch verknüpfter persönlicher Kinoreminder zu einem Mediathekmatch öffnet, fokussiert und scrollt zu film:<Master-ID>.
+2. Das gilt für manuelle Verknüpfung und für einen zuvor ungematchten, inzwischen zur Mediathek hinzugefügten Film anhand der aktuell aufgelösten Filmreferenz.
+3. Ein neutraler Programmeintrag ohne Mediathekmatch behält programm:<Programm-ID>; Pins und Vorschläge bleiben funktionsfähig.
+4. Fehlende oder explizit gelöste Ziele zeigen keinen irreführenden Öffnungsbutton.
+5. Ein Regressionstest durchläuft Reminderprojektion, Klicktransport und tatsächliche Zielkarte; das Prüfen von quelle oder ziel allein genügt nicht.
+
+## Abhängigkeiten und offene Punkte
+
+Nicht ausgeführt wurden vollständige App-/Auth-Shell und eine echte Persistenz. Im Harness liefen die StartTab-Katalogexpression und der genaue App-Callback; der dazwischenliegende unveränderte Callback wurde statisch geprüft. JSDOM belegt DOM-Fokus, Öffnungszustand und scrollIntoView-Aufruf, nicht physische Browser-/iPhone-Pixel. Keine Remote-/Liveprüfung oder Häufigkeit in Produktkonten ist belegt.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: /private/tmp/kd-vollreview-20260916/validations/E11-F004.json. Master-Proposal: /Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E11-F004.json. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E11/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E11/KD-REV-E11-004.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

@@ -1,0 +1,79 @@
+# KD-REV-E06-002 · Verwaiste Mediathek-Status-ID verhindert erneute Eintragserstellung im progressiven Streaming
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — ein regulär gelöschter, zuvor aus Streaming angelegter Titel kann in den progressiven Ansichten nicht erneut angelegt oder als gesehen in die Mediathek übernommen werden. Kein globaler Mediathek-Ausfall, Datenverlust oder Providerzugriff belegt.
+- Finding: E06-F002
+- Prüfstand: `14804ce389d69114feed27b92fb11ac78423cc0e`
+- Zuständige Etappe: E06
+
+## Fehler und Auswirkung
+
+Nach dem regulären Löschen eines zuvor über Streaming erstellten Mediathek-Eintrags bleibt dessen ID im separaten persistenten `entdeckenStatus` stehen. Die progressive Seitenzuordnung entfernt die nicht mehr bestätigte `library_id` korrekt. Die Erstellbarkeitsprüfung zieht jedoch die ungeprüfte Status-ID vor und versteckt deshalb die Schaltfläche zum erneuten Anlegen. Die Navigation bleibt dagegen sicher verborgen, weil sie die ID gegen den aktuellen Master prüft. Beim Umschalten auf Gesehen blockiert dieselbe verwaiste ID die Übernahmefrage.
+
+Der Fehler ist für die fertigen progressiven Ansichten Alles und Neu mit einem sichtbaren betroffenen Titel bestätigt. Nicht betroffen ist ein allgemeiner Mediathek-Ausfall; im Legacy-/Fallback-Betrieb kann dessen aktivierte Bereinigung den Status heilen. Andere manuelle Wege, einen Film in der Mediathek anzulegen, bleiben grundsätzlich vorhanden.
+
+## Auslöser, Soll und Ist
+
+1. In einem angemeldeten und fertig geladenen Konto wird ein Streamingtitel in Alles oder Neu ohne KI angelegt; `markiereAlsErstellt` speichert die zurückgegebene `mediathek_id` im Status.
+2. Der Eintrag wird regulär in der Mediathek gelöscht.
+3. Progressive Streaming-Seiten bleiben aktiv; der Titel ist weiter im Katalog, hat nach Neuverknüpfung aber keine `library_id` mehr. Der Status enthält weiterhin die gelöschte ID.
+
+Soll: Für den nicht mehr vorhandenen Titel ist wieder „Eintrag erstellen“ beziehungsweise bei Gesehen „In Mediathek übernehmen“ verfügbar. Eine verwaiste ID darf weder Navigation noch Erstellbarkeit oder die Gesehen-Übernahme als bestehenden Eintrag behandeln. Der Gesehen-Status selbst bleibt erhalten.
+
+Ist: In Alles und Neu fehlen sowohl Navigationslink als auch Erstellen-Schaltfläche. Beim Gesehen-Klick wird nur der Status umgeschaltet; es gibt keine Übernahmefrage. Die Reproduktion verwendet ausdrücklich eine vollständig geladene aktuelle Seite, nicht einen Ladezwischenstand.
+
+## Ursache und Fundstellen
+
+Zwei unterschiedliche Wahrheiten werden verwendet: `bestaetigteMediathekIdFuer` prüft im progressiven Modus `library_id` gegen den aktuellen `masterIndex` und schützt damit die Navigation. `mediathekIdFuer` nimmt für die Erstellbarkeitsprüfung dagegen zuerst die rohe Status-ID. Der vorhandene Bereinigungsmechanismus wird bei `progressiveEnabled` vollständig übersprungen.
+
+- Priorisierung der ungeprüften Status-ID und sichere Navigationsprüfung: [eingefrorene Quelle: `src/tabs/StreamingTab.jsx:223`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:223) und [`:228`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:228), repository-relativ `src/tabs/StreamingTab.jsx`, Zeilen 223–236 am Prüfcommit.
+- Status-ID wird nach erfolgreichem Anlegen gespeichert: [eingefrorene Quelle: `src/tabs/StreamingTab.jsx:245`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:245), repository-relativ gleicher Pfad/Zeilen 245–252 am Prüfcommit.
+- Gesehen-Pfad behandelt eine vorhandene rohe Status-ID als bestehende Mediathek-Zuordnung: [eingefrorene Quelle: `src/tabs/StreamingTab.jsx:315`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:315), repository-relativ gleicher Pfad/Zeilen 315–323 am Prüfcommit.
+- Im progressiven Modus wird der vorhandene Statusabgleich nicht aufgerufen: [eingefrorene Quelle: `src/tabs/StreamingTab.jsx:466`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:466), repository-relativ gleicher Pfad/Zeilen 466–469 am Prüfcommit.
+- Die Erstellen-Schaltfläche hängt direkt an `!mediathekIdFuer(t)`: [eingefrorene Quelle: `src/tabs/StreamingTab.jsx:957`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:957), repository-relativ gleicher Pfad/Zeilen 957–973 am Prüfcommit.
+- Die Seitenneuzuordnung entfernt nicht bestätigte `library_id` aus dem aktuellen Item: [eingefrorene Quelle: `src/lib/staffeln.js:56`](/private/tmp/kd-vollreview-20260916/source/src/lib/staffeln.js:56), repository-relativ gleicher Pfad/Zeilen 56–64 am Prüfcommit.
+- Der vorhandene Abgleich könnte verwaiste IDs entfernen, wird im progressiven Effekt jedoch umgangen: [eingefrorene Quelle: `src/lib/staffeln.js:136`](/private/tmp/kd-vollreview-20260916/source/src/lib/staffeln.js:136), repository-relativ gleicher Pfad/Zeilen 136–146 am Prüfcommit.
+- `entdeckenStatus` ist ein eigener persistierter Topf, während die Löschung durch den Dreitopf-Controller die Master-Transaktion ausführt: [eingefrorene Quelle: `src/App.jsx:462`](/private/tmp/kd-vollreview-20260916/source/src/App.jsx:462), [`:1206`](/private/tmp/kd-vollreview-20260916/source/src/App.jsx:1206) und [eingefrorene Quelle: `src/controllers/personalDataTransactionController.js:170`](/private/tmp/kd-vollreview-20260916/source/src/controllers/personalDataTransactionController.js:170), repository-relativ gleiche Pfade/Zeilen am Prüfcommit.
+
+## Belege und Gegenproben
+
+Ausgeführte lokale Reproduktion:
+
+- `node /private/tmp/kd-vollreview-20260916/tests/E06-F002/validator/reproduce.mjs` führte den echten Löschcontroller, den echten Mapper und einen React/JSDOM-Render des eingefrorenen Produktcodes mit isolierten Transaktions-Mocks aus. Ergebnis: Exit 0; nach der Löschung ist der Master leer, die gespeicherte Status-ID bleibt bestehen und der Mapper entfernt `library_id`. In All und Neu sind `create=false`, `link=false` und automatische Cleanup-Writes `0`; der Gesehen-Klick stellt keine Übernahmefrage.
+- Kontrollen in `/private/tmp/kd-vollreview-20260916/tests/E06-F002/validator/results.json`: Ohne alte ID wird die Erstellung angeboten; ein expliziter Aufruf von `gleicheMediathekStatusAb` stellt sie wieder her; für einen real vorhandenen Film mit `library_id` bleibt Navigation verfügbar und erneute Erstellung verborgen. Alle sechs DOM-Fälle dokumentieren die erwarteten Beobachtungen.
+- Der ungekürzte lokale Laufnachweis liegt unter `/private/tmp/kd-vollreview-20260916/tests/E06-F002/validator/run.log`; der Harness sperrte `fetch`, es gab keine Provider- oder Remote-Writes.
+
+Gegenproben und Grenzen:
+
+- `gleicheMediathekStatusAb` kann verwaiste IDs korrekt entfernen. Das widerlegt den Befund nicht, weil der progressive Effekt die Funktion explizit überspringt.
+- Die Navigation zu einer toten ID wird korrekt verhindert. Der Fehler besteht gerade darin, dass danach auch der Wiederanlageweg fehlt.
+- Eine Teilseite ist kein vollständiger Master: Eine Korrektur darf gültige Zuordnungen nicht während unvollständigem Master, Accountwechsel oder unvollständig geladenen Katalogseiten voreilig entfernen.
+- Es lief kein vollständiger App-/Browser-End-to-End-Fall, keine reale Kontosynchronisation und keine physische iPhone/PWA-Abnahme. Die Erreichbarkeit ist statisch verfolgt; Löschcontroller, Mapper und DOM-Komponente wurden lokal aus dem eingefrorenen Produktcode ausgeführt. Das ist eine Betriebsbeleglücke, kein nachgewiesener Gegenbefund.
+
+## Korrekturziel und Abnahme
+
+Im progressiven Streaming für Navigation, Erstellbarkeit und Gesehen-Übernahme dieselbe gegen den vollständig geladenen aktuellen Master bestätigte Mediathek-Zuordnung verwenden oder verwaiste Status-Verknüpfungen gezielt bereinigen. Gesehen-Metadaten bleiben erhalten. Teilseiten dürfen nicht als vollständiger Master missverstanden werden. Nicht Teil des Tickets sind Matchingregeländerungen, Providerzugriffe oder ein Umbau der globalen Löscharchitektur.
+
+Abnahmekriterien:
+
+- Einen Titel über Alles anlegen, regulär löschen und auf einer fertig geladenen progressiven Seite erneut anzeigen: „Zum Eintrag“ fehlt, „Eintrag erstellen“ ist verfügbar und eine erneute Anlage funktioniert.
+- Derselbe Ablauf funktioniert in Neu, sofern der Titel weiter zur Neu-Auswahl gehört.
+- Ein als gesehen markierter Titel behält den Gesehen-Status nach der Löschung und bietet „In Mediathek übernehmen“; eine verwaiste ID blockiert die Übernahme nicht.
+- Bei einem tatsächlich vorhandenen Mediathek-Eintrag bleiben sichere Navigation und das Verbergen doppelter Erstellung erhalten.
+- Keine gültige Verknüpfung wird bei noch nicht geladenem Master, Accountwechsel oder teilweiser Seite voreilig entfernt; die vorhandene Legacy-Bereinigung bleibt wirksam.
+
+## Abhängigkeiten und offene Punkte
+
+- Verwandte Komponenten: StreamingTab, Statuspersistenz, Seitenneuzuordnung und der bestehende Mediathek-Transaktionscontroller. Kein globaler Löschfehler wird behauptet.
+- Produktfehler: verwaiste Status-ID wird im progressiven Erstellen-/Gesehen-Pfad als reale Mediathek-Zuordnung behandelt.
+- Testwerkzeug: Der isolierte React/JSDOM- und Transaktions-Mock-Harness ist kein Produktfehler und ersetzt keinen Browser-/Synchronisationsnachweis.
+- Betriebsbeleglücken: keine reale Kontosynchronisation, kein deployter Stand, keine Häufigkeitsmessung und keine iPhone/PWA-Abnahme geprüft.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: `/private/tmp/kd-vollreview-20260916/validations/E06-F002.json` (`confirmed`). Ursprüngliches eingefrorenes Proposal: `/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E06-F002.json`.
+
+Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E06/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E06/KD-REV-E06-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

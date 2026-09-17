@@ -1,0 +1,83 @@
+# KD-REV-E12-002 · Kino- und Streaming-Katalogkarten haben keinen direkten Tastatur-Detailzugang
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — sichtbare Kino-/Streaming-Titel lassen sich per Maus aufklappen, aber die jeweilige direkte Detailaktion ist in den bestätigten Listen weder per Tab erreichbar noch mit Enter/Leertaste auslösbar.
+- Finding: E12-F002
+- Prüfstand: `14804ce389d69114feed27b92fb11ac78423cc0e`
+- Zuständige Etappe: E12
+
+## Fehler und Auswirkung
+
+Betroffen sind zwei regulär gerenderte Disclosure-Varianten:
+
+- Kino: `KompaktEintrag` in „Läuft auch“; derselbe Renderer wird auch für Profil-Empfehlungen außerhalb der Mediathek verwendet.
+- Streaming: Katalogkarten in „Alles“ und „Neu“; progressiver und Legacy-Zweig verwenden dafür denselben Kartenblock.
+
+In beiden Bereichen fehlt eine auffindbare, fokussierbare und benannte Aktion zum neutralen Öffnen der sichtbaren Karte. In Kino bleiben damit Terminpins und „Eintrag erstellen“ außerhalb des direkten Tastaturwegs. In Streaming sind Providerlinks sowie Pin-, Merk- und Gesehen-Buttons erreichbar, nicht jedoch der Detailtrigger.
+
+Dies ist kein Befund über alle Kino- oder Streaming-Ansichten, alle Screenreader, den Produktivbetrieb oder Datenverlust. „Mein Programm“ verwendet einen anderen, hier ausgeschlossenen Kartentyp mit eigenem Tastaturzugang.
+
+## Auslöser, Soll und Ist
+
+**Auslöser.** Mit angemeldetem Konto einen Film außerhalb der Mediathek unter Kino/„Läuft auch“ sichtbar haben und per Tab Details lesen wollen. Alternativ Streaming/„Alles“ oder „Neu“ mit mindestens einem ausgewählten Dienst und sichtbaren Katalogtiteln öffnen und ohne vorherigen Such-Fokusauftrag per Tastatur Details aufklappen wollen.
+
+**Soll.** Jede per Maus aufklappbare Karte hat eine semantisch benannte, fokussierbare Detailaktion. Enter und Leertaste öffnen und schließen die Details, ohne vorher eine Gesehen-Aktion oder neue Suche auszulösen. Danach sind Terminpins und gegebenenfalls der Formularzugang erreichbar.
+
+**Ist.** Die Kino-Kompaktkarte rendert den Kopf als nicht fokussierbares `div` mit reinem `onClick`. Die Streaming-Karte ist ein `div` mit `tabIndex={-1}` und `onClick`, ohne Rolle oder Tastaturhandler. Details, Formularzugang und in Kino die Terminpins werden erst nach dem jeweiligen Öffnungszustand gerendert.
+
+## Ursache und Fundstellen
+
+- [`/private/tmp/kd-vollreview-20260916/source/src/tabs/KinoTab.jsx:585`](/private/tmp/kd-vollreview-20260916/source/src/tabs/KinoTab.jsx:585)–[`...:624`](/private/tmp/kd-vollreview-20260916/source/src/tabs/KinoTab.jsx:624) (`src/tabs/KinoTab.jsx:585-624`): `KompaktEintrag` startet mit `offen=false`; der Kartenkopf in Zeilen 597–599 schaltet ausschließlich per Maus-`onClick`. Der an `offen` gebundene Block ab Zeile 624 enthält Terminbuttons und Formularzugang.
+
+- Der Nebenlisten-Wrapper dient nur dem programmgesteuerten Suchfokus mit `tabIndex={-1}`: [`.../KinoTab.jsx:547`](/private/tmp/kd-vollreview-20260916/source/src/tabs/KinoTab.jsx:547)–[`...:560`](/private/tmp/kd-vollreview-20260916/source/src/tabs/KinoTab.jsx:560).
+
+- [`/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:908`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:908)–[`...:983`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:983) (`src/tabs/StreamingTab.jsx:908-983`): Der gemeinsame Alles/Neu-Kartenroot ist `tabIndex={-1}` und besitzt nur einen Click-Handler. `TitleFactsDetails` sowie „Eintrag erstellen“ hängen an `expandedId` (Zeilen 954–980).
+
+- Provider-/Mediathekslinks und Kartenaktionen stoppen die Click-Propagation und sind keine neutrale Offenlegungsaktion, u.a. [`.../StreamingTab.jsx:921`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:921)–[`...:929`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:929) sowie [`/private/tmp/kd-vollreview-20260916/source/src/components/TitelKartenAktionen.jsx:33`](/private/tmp/kd-vollreview-20260916/source/src/components/TitelKartenAktionen.jsx:33)–[`...:50`](/private/tmp/kd-vollreview-20260916/source/src/components/TitelKartenAktionen.jsx:50).
+
+- Die regulären Kontopfad-Anbindungen liegen in `src/App.jsx:1926-1955` für Kino und `src/App.jsx:2023-2060` für Streaming. Ein globaler Suchauftrag kann die Renderer gezielt öffnen (`src/App.jsx:1398-1418`, Kino `src/tabs/KinoTab.jsx:101-124`, Streaming `src/tabs/StreamingTab.jsx:253-294`), ersetzt aber keinen Tastaturzugang der sichtbaren Liste.
+
+Alle repository-relativen Fundstellen beziehen sich auf `14804ce389d69114feed27b92fb11ac78423cc0e`; die verlinkten Originale liegen in der unveränderlichen Quelle unter `/private/tmp/kd-vollreview-20260916/source/`.
+
+## Belege und Gegenproben
+
+**Quellidentität und Aufrufpfad.** Die eingefrorenen Primärquellen `src/tabs/KinoTab.jsx` und `src/tabs/StreamingTab.jsx` wurden bytegleich gegen die Git-Blobs des Prüfcommits geprüft (`a7090d8ab124fa33e7fc403511f1facaba07de69` beziehungsweise `240dae7ed347ba57e841c43232511d4ec3ac9aac`). Der Validator verfolgte außerdem die reguläre Tab-Anbindung und die identischen Renderer.
+
+**Ausgeführte Browser-Reproduktion.** [`repro.mjs`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E12-F002/validator/repro.mjs) baut ausschließlich aus Snapshot-Produktcode einen lokalen esbuild/React-Komponentenharness mit synthetischen Titeln und Mock-Schreibcallbacks. Der abschließende Playwright-Chromium-Lauf endete mit Exit 0, führte sechs Fälle aus, zeigte `remoteRequests=0` und keine Page-Errors. Tabfolgen und Ergebnisse stehen in [`results.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E12-F002/validator/results.json):
+
+- Kino/„Läuft auch“: Tab überspringt den Disclosure-Trigger; Enter/Leertaste auf Kinolink öffnen nicht. Mausklick öffnet; danach ruft Enter auf einem Terminpin den Mock auf.
+- Streaming „Alles“ und „Neu“: Tab überspringt den Kartenroot; Enter/Leertaste auf dem programmatisch fokussierten Root bewirken nichts. Providerlinks sowie die drei inneren Aktionen sind eigene Tab-Stopps.
+
+Der erste Browserstart scheiterte vor der Testausführung an einer Sandbox-Berechtigung. Das ist weder Produktfehler noch Test-PASS. Die zwei nachfolgenden lokalen Browserläufe waren erfolgreich; `results.json` stammt vom abschließenden, mit React-Render-Synchronisierung ergänzten Lauf. Die bestehende Regression `streaming_pin_neu_test.mjs:739-775` wurde nur gelesen: Sie öffnet Karten per `click()` und ist kein Gegenbeleg für nativen Tab/Enter-Zugang.
+
+**Eingegrenzter Umfang.** Für ungesehene Streaming-Titel ohne bekannte Mediathekzuordnung setzt [`.../StreamingTab.jsx:315`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:315)–[`...:330`](/private/tmp/kd-vollreview-20260916/source/src/tabs/StreamingTab.jsx:330) über „Als gesehen markieren“ `expandedId` und zeigt die Nachfrage. Dies wurde in Alles und Neu mit Enter bestätigt: Abbrechen ließ Fakten und „Eintrag erstellen“ offen, ohne Mock-Schreibcallback.
+
+Damit ist eine pauschale Behauptung, Streaming-Details oder „Eintrag erstellen“ seien in jedem Zustand ohne Maus unerreichbar, ausdrücklich widerlegt. Bei bereits gesehenen oder bekannten Mediathektiteln führt derselbe Handler dagegen den Status-Schreibzweig aus und öffnet nicht (`src/tabs/StreamingTab.jsx:316-326`); dies wurde für einen gesehenen Titel ohne Mediathekzuordnung im Browser bestätigt. Eine Statusänderung und ein erneuter Aufruf wären kein neutraler Detailzugang.
+
+Der Fehler betrifft somit den fehlenden direkten, passend bezeichneten Tastatur-Detailtrigger — nicht eine absolute Unzugänglichkeit sämtlicher Informationen oder einen Fehler der Testwerkzeuge.
+
+## Korrekturziel und Abnahme
+
+Die beiden Disclosure-Trigger erhalten einen direkten, semantischen Tastaturzugang — vorzugsweise je ein nativer, benannter Button mit `aria-expanded` und bei Bedarf `aria-controls`. Kindlinks sowie Pin-, Merk-, Gesehen-, Formular- und Terminaktionen bleiben separat; interaktive Elemente dürfen nicht in einen umfassenden neuen Button geschachtelt werden. Programmatischer Suchfokus und bestehende OnClick-/Formzustände bleiben erhalten. Ein Backend-, Datenmigrations- oder Providerumbau gehört nicht zum Korrekturumfang.
+
+- In Kino/„Läuft auch“ und bei Kino-Profil-Empfehlungen außerhalb der Mediathek erreicht Tab einen benannten Detailtrigger; Enter und Leertaste öffnen und schließen. Anschließend sind vorhandene Terminpins und „Eintrag erstellen“ erreichbar.
+- In Streaming/„Alles“ und „Neu“ funktioniert derselbe direkte Weg für ungesehene, gesehene und bereits zugeordnete Titel — ohne Statusänderung, zusätzliche Suche oder Mausklick.
+- Das Aktivieren innerer Links, Pin-, Merk-, Gesehen-, Formular- oder Terminaktionen löst nicht zusätzlich das Disclosure aus. Bestehender Suchfokus darf weiter gezielt öffnen.
+- Fokussierte lokale Browsertests verwenden native Tab-, Enter- und Leertasten-Eingaben, prüfen `aria-expanded` sowie den sichtbaren Zustand und bewahren die bestehenden Gesehen-/Zuordnungsbedingungen.
+
+## Abhängigkeiten und offene Punkte
+
+- Keine Abhängigkeit zu Backend, Datenmigrationen, Providern, Mail oder Remote-Schreibvorgängen festgestellt.
+- Die Reproduktion ist ein lokaler Komponentenharness mit synthetischen Daten und ausgelassenen CSS-Imports, kein vollständiger App-/Login-End-to-End-Test. Das fehlende DOM-Tastaturverhalten wurde am echten Komponentenmarkup mit nativen Browser-Tastatureingaben geprüft.
+- Legacy-Streaming und persönliche Kinoempfehlungen sind über den identischen Renderer statisch abgedeckt, nicht als zusätzliche Browserfälle gelaufen.
+- Nicht belegt sind Produktion, physische iPhone- oder Screenreader-Akzeptanz. Keine globale Testsuite und keine Produktänderung wurden ausgeführt. Keine Duplicate-Zuordnung belegt.
+- Master-Abnahme ist bestätigt.
+
+## Herkunft und Master-Abnahme
+
+- Validatorergebnis: [`/private/tmp/kd-vollreview-20260916/validations/E12-F002.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/validations/E12-F002.json), Status `confirmed`.
+- Eingefrorenes Master-Proposal: [`/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E12-F002.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E12-F002.json).
+- Autor: Terra/xhigh. Zuständiger Master: Astra/high. Master-Abnahme: **bestätigt**.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E12/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E12/KD-REV-E12-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

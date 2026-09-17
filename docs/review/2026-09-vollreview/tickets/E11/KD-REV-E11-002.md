@@ -1,0 +1,75 @@
+# KD-REV-E11-002 · Persönliche Kinoempfehlungen verlieren Fokusnavigation
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 – ein regulärer Such- und Pinboard-Sprung findet bei persönlich empfohlenen Kino-Programmkarten kein Ziel, obwohl derselbe Programmeintrag ohne Profil erreichbar ist. Manuelles Öffnen bleibt möglich; Datenverlust ist nicht belegt.
+- Finding: E11-F002
+- Prüfstand: 14804ce389d69114feed27b92fb11ac78423cc0e
+- Zuständige Etappe: E11
+
+## Fehler und Auswirkung
+
+Persönliche Empfehlungen außerhalb der Mediathek erscheinen korrekt, erfüllen aber nicht den Fokusvertrag für Programmfilme. Bei einem art:programm-Fokusauftrag wird die Suchzeichenfolge gesetzt, die Karte bleibt jedoch geschlossen; weder DOM-Fokus noch scrollIntoView finden statt. Der Fokusauftrag wird trotzdem quittiert und in App gelöscht. Dadurch verliert die globale Suche für diese Darstellungsvariante ihre Navigation; ein auflösbarer aktiver Kino-Pin nutzt denselben Fokusvertrag.
+
+Betroffen sind als persönliche Empfehlung gerenderte, nicht mit der Mediathek gematchte Programmfilme mit passenden Profildaten. Neutrale Restkarten und gematchte Mediathek-Karten sind nicht von dieser Ursache betroffen. Dies ist ein lokaler Produktfehler in KinoTab, kein Daten-, Provider- oder Backenddefekt.
+
+## Auslöser, Soll und Ist
+
+Voraussetzungen: angemeldetes Konto mit geladenem master (auch []), aktuellem nicht archiviertem Kinoprogramm, passendem Profil sowie eindeutigem Programmeintrag außerhalb der Mediathek mit gültiger film.at-ID, Jahr, Genre und Termin. Der Eintrag wird in höchstens sechs persönlichen Empfehlungen gerankt.
+
+Über die globale Suche den Titel öffnen; der gleiche Zielvertrag wird bei einem auflösbaren Kino-Pin aus dem Start-Pinboard verwendet.
+
+Soll: Der Programmeintrag bleibt als programm:<film_at_id> erreichbar; der Auftrag fokussiert die Karte, führt scrollIntoView aus und öffnet ihre Details.
+
+Ist: Mit Profil existiert eine persönliche Karte ohne passenden data-kino-suchtreffer-Anker. Fokus und scrollIntoView bleiben aus, KompaktEintrag wird nicht geöffnet, onFokusVerbraucht wird trotzdem aufgerufen. Ohne Profil funktionieren am identischen Programmeintrag Anker, Fokus, Scrollen und Öffnen.
+
+## Ursache und Fundstellen
+
+KinoTab entfernt empfohlene film.at-IDs aus restGefiltert, rendert deren Ersatzkarten aber ohne Wrapper-Anker, tabIndex und fokusAktiv. Der Fokus-Effect sucht ausschließlich data-kino-suchtreffer und quittiert auch den Fall ohne Ziel. KompaktEintrag öffnet nur bei truthy fokusAktiv, dessen Default im Empfehlungspfad false bleibt.
+
+- Eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/tabs/KinoTab.jsx, Zeilen 101-122 (Fokus-Effect), 235-245 (Aussonderung aus der Restliste), 481-490 (Empfehlungspfad ohne Fokusvertrag), 549-560 (neutrale Kontrollkarte mit Anker und fokusAktiv), 585-594 (Öffnungsguard). Übertragbar: src/tabs/KinoTab.jsx am Commit 14804ce389d69114feed27b92fb11ac78423cc0e.
+- Eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/App.jsx, Zeilen 1411-1414 (globaler Kino-Sprung), 1909-1914 (Pinboard-Sprung) und 1927-1952 (Übergabe von kinoFokus und Verbrauchs-Callback). Übertragbar: src/App.jsx am Prüfcommit.
+
+## Belege und Gegenproben
+
+Ausgeführte Reproduktion:
+
+- node /private/tmp/kd-vollreview-20260916/tests/E11-F002/validator/reproduce.mjs lief mit Exit 0. Der React/JSDOM-Harness verwendete die eingefrorene KinoTab-Komponente sowie baueKinoMatches, erstelleFinderAntwort und kompakteFinderTreffer; zwei isolierte DOM-Instanzen testeten denselben Film ohne und mit Drama-Profil. Der Fokusauftrag wurde nach Mount zugestellt und nach zwei kontrollierten RAFs wie in App gelöscht.
+- Ergebnis: /private/tmp/kd-vollreview-20260916/tests/E11-F002/validator/result.json. Ohne Profil: Anker vorhanden, activeElement=programm:800001, Details offen, ein scrollIntoView-Aufruf. Mit Profil: eine persönliche Karte, kein Anker, Fokus bleibt auf origin, Details geschlossen, null Scroll-Aufrufe. In beiden Fällen consumed=1 und pending=null; networkCalls=0.
+
+Statische Beweiskette:
+
+- FinderTab erzeugt den regulären kino/programm-Treffer; App hebt vor Navigation die Zeitgrenze auf und setzt kinoFokus. Dieser Aufrufer wurde im Harness zusätzlich über die echten Finderfunktionen erzeugt.
+- StartTab projiziert Restprogrammfilme zu Kino-Pin-Zielen; sein Pinboard-Aufrufer ist statisch belegt, jedoch nicht als eigener End-to-End-Lauf ausgeführt.
+- Die sechs zentralen Quelldateien wurden bytegleich zum Prüfcommit nachgewiesen: /private/tmp/kd-vollreview-20260916/tests/E11-F002/validator/provenance.json.
+
+Gegenproben:
+
+- App hebt Zeitgrenze auf und KinoTab setzt lokale Filter sowie zeigeMehr zurück; ausgeblendete Restzeilen oder Filter erklären den fehlenden Anker nicht.
+- Ranking-Guards begrenzen den Scope, blockieren den normalen Fall nicht; die persönliche Karte entstand in der Reproduktion.
+- Die neutrale Kontrolle mit exakt derselben Zielidentität funktioniert; gematchte Mediathek- und neutrale Restkarten behalten ihren Fokusvertrag.
+- Manuelles Aufklappen bleibt möglich. Vorhandene Tests decken entweder Empfehlungslanewechsel/Links oder Fokus ohne Profil ab, aber nicht die Kombination persönliche Empfehlung plus Fokus; sie wurden hier nicht als Suite ausgeführt.
+
+Der lokale JSDOM-Lauf ist ein Fehlernachweis, kein Produkt-PASS. Er belegt DOM-Fokus, Detailzustand und scrollIntoView-Aufrufe, nicht physische Browser-Scrollposition.
+
+## Korrekturziel und Abnahme
+
+In KinoTab die persönlichen Empfehlungskarten an denselben Fokusvertrag wie neutrale Programmrestkarten anbinden: stabiler programm-Anker, fokussierbarer Wrapper und fokusAktiv aus derselben Identität. Ranking, Quellen, Profilmodell, Migrationen und Provider bleiben unberührt. Das Verbrauchsverhalten ohne Ziel separat absichern, ohne eine unbeschränkte Retry-Schleife einzuführen.
+
+Abnahmekriterien:
+
+1. Derselbe gültige Programmeintrag wird mit und ohne passendes Profil nach art:programm-Fokusauftrag fokussiert, mit scrollIntoView adressiert und geöffnet.
+2. Das gilt sowohl bei Fokus bereits beim Mount (Tabwechsel) als auch bei einem neuen Auftrag im geöffneten KinoTab.
+3. App darf den erfolgreich zugestellten Fokusauftrag löschen, ohne die geöffneten Details wieder zu schließen.
+4. Globale Suche und auflösbarer Kino-Pin verwenden dieselbe stabile Programmidentität; der Film erscheint weiter genau einmal.
+5. Neutrale Restkarten und gematchte Mediathek-Karten behalten ihr bisheriges Fokusverhalten.
+
+## Abhängigkeiten und offene Punkte
+
+Keine Backend- oder Providerabhängigkeit. Nicht ausgeführt wurden vollständiger App-/Auth- oder Pinboard-End-to-End-Lauf, echte Browserlayout-Geometrie, physische Scrollposition, iPhone/PWA, aktuelle Deployment-Prüfung und Tests gegen reale private Konto- oder Programmdaten. Keine Remote-Writes oder Provideranfragen erfolgten.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: /private/tmp/kd-vollreview-20260916/validations/E11-F002.json. Master-Proposal: /Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E11-F002.json. Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E11/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E11/KD-REV-E11-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

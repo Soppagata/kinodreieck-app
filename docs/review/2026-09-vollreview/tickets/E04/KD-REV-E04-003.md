@@ -1,0 +1,71 @@
+# KD-REV-E04-003 · Must-Watch-Masterlink verliert sein Ziel hinter Mediathekfiltern
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — ein regulär verknüpfter Must-Watch-Link kann einen vorhandenen Mediathek-Eintrag unsichtbar öffnen; die Navigation wird danach still verbraucht. Datenverlust, Provider- oder Serverwirkung sind nicht belegt.
+- Finding: E04-F003
+- Prüfstand: 14804ce389d69114feed27b92fb11ac78423cc0e
+- Zuständige Etappe: E04
+
+## Fehler und Auswirkung
+
+In derselben gemounteten MediathekTab-Instanz kann ein sichtbarer Must-Watch-Link auf einen vorhandenen Mastereintrag springen, obwohl ein zuvor gesetzter Mediathekfilter dieses Ziel ausschließt. Die Ansicht wechselt zwar zu Einträge und setzt expandedId sowie fokusFilmId, die Zielkarte ist aber nicht im DOM. Nach dem Timer wird der Fokus ohne Scrollen gelöscht. Erst manuelles Leeren der Suche macht die Karte sichtbar.
+
+Der validierte Fall nutzt die eigenständige Must-Watch-Suche und eine ausschließende Mediathek-Suche. Der gleiche Mechanismus ist für Genre-, Kategorie- und Besitzfilter statisch belegt, aber nicht einzeln ausgeführt. A-Z und Jahrzehnt haben zusätzliche gemeinsame Filterbedingungen und sind daher nicht pauschal vom ausgeführten Fall abgedeckt.
+
+## Auslöser, Soll und Ist
+
+Auslöser: Master enthält Alpha und Zulu. Ein Must-Watch-Eintrag besitzt eine gültige explizite Masterverknüpfung zu Zulu. In Einträge ist nach Alpha gesucht; danach wird innerhalb derselben MediathekTab-Instanz Must-Watch geöffnet und der sichtbare Zulu-Link angeklickt. Konto-, Haupttab- oder Datenwechsel sind nicht erforderlich.
+
+Soll: Der explizit verlinkte vorhandene Mastereintrag wird sichtbar geöffnet und angesprungen, auch wenn vorher ein anderer Titel gesucht wurde.
+
+Ist: Ansicht bestand, expandedId bzulu_1999 und fokusFilmId zulu_1999 werden gesetzt, die Suche Alpha bleibt jedoch erhalten. film-zulu_1999 existiert dadurch nicht im DOM. Nach 150 ms wird fokusFilmId ohne Scroll-Aufruf gelöscht.
+
+## Ursache und Fundstellen
+
+Die Fokusbehandlung stellt Ansicht und Typ ein, räumt aber keine ausschließenden Filter auf und quittiert den Fokus unabhängig davon, ob das Ziel sichtbar aufgelöst wurde:
+
+- Fokuseffekt für Masterziele und unbedingte Fokusquittierung: [eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:225](/private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:225), repository-relativ src/tabs/MediathekTab.jsx:225-248, Commit 14804ce389d69114feed27b92fb11ac78423cc0e.
+- Persistente Filterzustände und die Suche: [eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:278](/private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:278), repository-relativ src/tabs/MediathekTab.jsx:278-284.
+- Sichtbarkeitsprojektion filtert nach Typ, Buchstabe, Dekade, Besitz, Genre, Kategorie und Suche: [eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:357](/private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:357), repository-relativ src/tabs/MediathekTab.jsx:357-410.
+- Ansichtswechsel bewahrt Filter und setzt nur expandedId zurück: [eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:632](/private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:632), repository-relativ src/tabs/MediathekTab.jsx:632-636.
+- Selbst zusätzlich bewahrte Karten bleiben bei fehlender Sichtbarkeit hidden und aria-hidden: [eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:852](/private/tmp/kd-vollreview-20260916/source/src/tabs/MediathekTab.jsx:852), repository-relativ src/tabs/MediathekTab.jsx:852-867.
+
+MustWatchListe besitzt eine eigene Suche und rendert den Link separat: [eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/components/MustWatchListe.jsx:278](/private/tmp/kd-vollreview-20260916/source/src/components/MustWatchListe.jsx:278), repository-relativ src/components/MustWatchListe.jsx:278-288 und 521-527. Der Link geht über planeMustwatchSprung zu springeZuFilm. Bei bereits aktivem Haupttab beendet navigiere den Tabwechsel früh, also ohne Remount: [eingefrorene Quelle: /private/tmp/kd-vollreview-20260916/source/src/App.jsx:209](/private/tmp/kd-vollreview-20260916/source/src/App.jsx:209), repository-relativ src/App.jsx:209-219 und 1181-1194.
+
+## Belege und Gegenproben
+
+Statisch wurden der erreichbare Linkpfad, der frühe Rückweg von navigiere, die getrennten Suchzustände, die vollständige Sichtbarkeitsprojektion und die Behandlung bewahrter Karten geprüft. Eine kaputte ID oder ein hypothetischer Datenzustand ist dafür nicht nötig.
+
+Der Validator führte [reproduce.mjs](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E04-F003/validator/reproduce.mjs) mit echten MediathekTab-, MustWatchListe- und Unterkomponenten in React/JSDOM aus. Die App-Callbacks waren unverändert aus der eingefrorenen App.jsx extrahiert; ein isolierter Elternharness stellte nur State und randständige No-op-Funktionen. localStorage war isoliert und fetch gesperrt. Exit 0 belegt: Link erreichbar, Suche Alpha bleibt erhalten, Ziel-DOM fehlt, expandedId wird gesetzt, Fokus wird nach Timer null und es gibt keinen Scroll-Aufruf. Der Kontrolllauf nach Leeren der Suche rendert Zulu und ruft scrollIntoView auf. Beobachtungen und Source-Hashes stehen in [result.json](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E04-F003/validator/result.json). Das ist eine erfolgreiche Reproduktion des Fehlers, kein Produkt-PASS.
+
+Gegenproben:
+
+- Ein Haupttabwechsel kann MediathekTab unmounten und die Suche zurücksetzen; der bestätigte interne Ansichtswechsel bleibt aber im Haupttab und remountet nicht.
+- Ohne Suchfilter funktioniert Link, Öffnung und Scrollen.
+- Der Jahrzehnteffekt räumt nur eine nicht mehr verfügbare Dekade auf und schützt nicht vor Suche, Genre, Kategorie oder Besitz.
+- A-Z und Jahrzehnt können zugleich den Must-Watch-Link verbergen; der separate Suchfall vermeidet diese Einschränkung.
+- Keine Migration ist erforderlich; aktuelle gewöhnliche Master- und Must-Watch-Daten mit einer gültigen String-ID genügen.
+
+Der erste Validatorlauf hatte nach abgeschlossenen Assertions offene importierte Browsermodul-Handles und wurde mit Exit 130 beendet. Nach einem expliziten Harness-Abschluss lief derselbe begrenzte Test regulär mit Exit 0. Das ist kein Testwerkzeug-PASS und kein Gegenbeweis gegen den reproduzierten Produktfehler.
+
+## Korrekturziel und Abnahme
+
+Fokusbehandlung und Sichtbarkeitsprojektion in MediathekTab sollen so zusammenarbeiten, dass ein explizit angesprungener vorhandener Mastereintrag sichtbar wird. Eine gezielte Neutralisierung ausschließender Filter oder eine tatsächlich sichtbare fokussierte Karte sind mögliche schmale Lösungen. Fokus darf erst nach erfolgreicher sichtbarer Auflösung quittiert werden; ein nicht vorhandenes Ziel braucht ein nachvollziehbares Verhalten. Gespeicherte Daten und Must-Watch-Verknüpfungen bleiben unverändert.
+
+Abnahme:
+
+1. Mit aktiver Suche Alpha öffnet ein Must-Watch-Masterlink auf Zulu die sichtbare, aufgeklappte Zulu-Karte ohne manuelles Leeren der Suche.
+2. Ein gültiges Ziel verliert seinen Fokus nicht still, solange es nur wegen lokaler Filter unsichtbar ist.
+3. Gezielt getestete Regressionen decken Suche, ausschließenden Genre-, Kategorie- und Besitzfilter sowie einen tatsächlich erreichbaren A-Z- oder Dekadenfall ab.
+4. Kontrollpfad ohne Filter und automatische Wahl des passenden Medientyps funktionieren fort; Navigation verändert keine gespeicherten Daten.
+
+## Abhängigkeiten und offene Punkte
+
+Keine Browser-, iPhone-, PWA- oder Live-Betriebsprüfung wurde durchgeführt; JSDOM beobachtet Scroll-Aufrufe, nicht eine reale Pixelposition. Vollständiger App-Mount und globale Testsuite wurden nicht ausgeführt. Dies ist ein lokaler React-Navigationsfehler, keine belegte Server-, Provider- oder Datenintegritätsstörung.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: [E04-F003.json](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/validations/E04-F003.json). Ursprünglicher Verdacht: [E04-F003.json](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E04-F003.json). Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E04/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E04/KD-REV-E04-003.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

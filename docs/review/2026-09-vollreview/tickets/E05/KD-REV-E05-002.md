@@ -1,0 +1,72 @@
+# KD-REV-E05-002 · Serien-Faktenlookup sendet den internen statt des SQL-Vertragswerts
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — Der neutrale FlixPatrol-Kontext geht für reguläre Serienprognosen mit starken IDs deterministisch verloren; die Hauptfunktion läuft ohne Kontext weiter. Keine Datenkorruption oder Providerwirkung ist belegt.
+- Finding: E05-F002
+- Prüfstand: `14804ce389d69114feed27b92fb11ac78423cc0e`
+- Zuständige Etappe: E05
+
+## Fehler und Auswirkung
+
+Für eine Serie mit gültigem Jahr und IMDb- oder TMDb-ID, aber ohne direkte FlixPatrol-ID, kann der serverseitige Faktenreader einen vorhandenen eindeutigen Cachetitel außerhalb der fünf AT-Charts nicht lesen. Der Forecast erhält deshalb keinen optionalen neutralen FlixPatrol-Kontext. Ein regulärer Forecast-Aufruf bleibt möglich; dieses Ticket behauptet weder eine beschädigte Prognose noch einen Providerfehler.
+
+Der Fehler ist an der JS/SQL-Grenze für beide Eingaben `typ: "serie"` und `typ: "series"` bestätigt. Direkte FlixPatrol-IDs, Serien im Chartfallback und Filmlookups bleiben begrenzt funktionsfähig.
+
+## Auslöser, Soll und Ist
+
+**Auslöser.** Ein aktives berechtigtes Konto erstellt eine Prognose für `typ: "serie"` mit einem gültigen Bezugsjahr und einer IMDb- oder TMDb-ID, ohne FlixPatrol-ID. Im resolved Cache liegt ein eindeutiger, passender Serien-Titel, aber außerhalb der fünf gelesenen AT-Charts. Die Lookup-Migration ist installiert. Ein vorheriger Filmwissen-Read darf gelingen; sein normaler Cache-Miss blockiert den Pfad nicht.
+
+**Soll.** Der RPC `kd_title_facts_lookup` erhält `mediaType: "series"` und findet den passenden resolved Cachetitel unabhängig von Chartmitgliedschaft. Der Film-Forecast bekommt dann den neutralen Kontext.
+
+**Ist.** Der Reader normalisiert beide Serienbezeichnungen zunächst auf die interne deutsche Form `"serie"` ([eingefrorene `flixpatrolFactsContext.js`:16-24](/private/tmp/kd-vollreview-20260916/source/supabase/functions/_shared/flixpatrolFactsContext.js:16); repository-relativ `supabase/functions/_shared/flixpatrolFactsContext.js`, Prüfcommit). Genau diesen Wert serialisiert er in das RPC-Argument ([`flixpatrolFactsContext.js`:256-279](/private/tmp/kd-vollreview-20260916/source/supabase/functions/_shared/flixpatrolFactsContext.js:256); gleicher Prüfcommit). Der SQL-Vertrag akzeptiert dort aber ausschließlich `film` oder `series` und antwortet daher mit `ok=false`, `code=invalid-request` ([eingefrorene Lookup-Migration:126-203](/private/tmp/kd-vollreview-20260916/source/supabase/migrations/20260911120000_title_facts_lookup.sql:126); repository-relativ `supabase/migrations/20260911120000_title_facts_lookup.sql`, Prüfcommit).
+
+Danach läuft der Reader auf den bisherigen fünf-Chart-Fallback. Enthält dieser den Titel nicht, liefert `context()` `null`; `ai-task` lässt `flixpatrolFakten` dann korrekt weg ([eingefrorene `index.ts`:4479-4486 und 4544-4555](/private/tmp/kd-vollreview-20260916/source/supabase/functions/ai-task/index.ts:4479); repository-relativ `supabase/functions/ai-task/index.ts`, Prüfcommit).
+
+## Ursache und Fundstellen
+
+Die Funktion `mediaType()` ist als interne Normalisierung geeignet, aber nicht als RPC-Adapter: Sie bildet `series` und `serie` beide auf `serie` ([`flixpatrolFactsContext.js`:22](/private/tmp/kd-vollreview-20260916/source/supabase/functions/_shared/flixpatrolFactsContext.js:22)). In `load()` wird dieser interne Wert an `kd_title_facts_lookup` weitergereicht ([`flixpatrolFactsContext.js`:265-278](/private/tmp/kd-vollreview-20260916/source/supabase/functions/_shared/flixpatrolFactsContext.js:265)). SQL validiert `mediaType` strikt gegen `('film','series')` und macht einen ID-basierten Cache-Join ohne Chart-Bezug ([`20260911120000_title_facts_lookup.sql`:169-201](/private/tmp/kd-vollreview-20260916/source/supabase/migrations/20260911120000_title_facts_lookup.sql:169)). Eine Suche im gesamten Migrationsbaum ergab keine spätere Vertragskorrektur.
+
+Der Forecast-Aufruf ist regulär erreichbar: Die Vorbewertung baut den Auftrag aus dem Film ([eingefrorene `vorbewertung.js`:61-80](/private/tmp/kd-vollreview-20260916/source/src/services/vorbewertung.js:61); `src/services/vorbewertung.js` am Prüfcommit), der Auftragsbau übergibt `typ` und externe IDs unverändert ([eingefrorene `prognoseAuftrag.js`:95-115](/private/tmp/kd-vollreview-20260916/source/src/lib/prognoseAuftrag.js:95); `src/lib/prognoseAuftrag.js` am Prüfcommit), und die Edge Function akzeptiert `serie` als Forecast-Typ ([`index.ts`:2071-2078 und 2321-2333](/private/tmp/kd-vollreview-20260916/source/supabase/functions/ai-task/index.ts:2071)). Der Supabase-RPC-Wrapper konvertiert das Argument nicht.
+
+## Belege und Gegenproben
+
+**Ausgeführte lokale Integration (kein Provider, kein Remote-Aufruf).**
+
+`node /private/tmp/kd-vollreview-20260916/tests/E05-F002/validator/reproduce.mjs` lief mit Exit 0. Der Harness verwendet den unveränderten JS-Reader und Identitätsbauer sowie einen isolierten PostgreSQL 17.10 mit drei Originalmigrationen. Synthetische Cachetitel werden über die Original-Save-RPC gespeichert; Auth/Konto-Supabase ist lokal gestubbt und Chartmitgliedschaft gemockt.
+
+- Neun Fälle bestanden: Serien per IMDb oder TMDb außerhalb der Charts liefern mit `serie` (auch aus Eingabe `series`) `invalid-request` und keinen Kontext.
+- Wird ausschließlich das RPC-Argument auf `series` geändert, liefert derselbe Cachetitel in einem Read Kontext.
+- Kontrollen: Filmlookup außerhalb der Charts, direkte FlixPatrol-ID und Chartfallback funktionieren.
+
+Die exakten Identitäten, RPC-Argumente, SQL-Antworten und Ergebnisse liegen unter [`results.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E05-F002/validator/results.json). Der lokale PostgreSQL-Cluster wurde danach gestoppt und entfernt. Die Quellenidentität für elf Produktdateien ist zusätzlich unter [`source-verification.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E05-F002/validator/source-verification.json) mit 11/11 bytegleichen Dateien zum Prüfcommit belegt.
+
+**Bestehende Tests sind keine Gegenprobe.** Der Forecast-Cachetest verwendet nur einen Film und sein RPC-Mock antwortet argumentunabhängig ([eingefrorene `ai_task_test.ts`:399-400 und 8337-8361](/private/tmp/kd-vollreview-20260916/source/ai_task_test.ts:399); repository-relativ `ai_task_test.ts` am Prüfcommit). Der SQL-Test fragt die Serien-IMDb-ID ohne `mediaType` ab ([eingefrorene `data_plan_foundation_pg17_test.mjs`:86-96](/private/tmp/kd-vollreview-20260916/source/data_plan_foundation_pg17_test.mjs:86); repository-relativ `data_plan_foundation_pg17_test.mjs` am Prüfcommit). Diese Tests widerlegen die Serialisierungsgrenze nicht.
+
+**Abgrenzung Radar.** Der reguläre Radar-Werkpfad verwendet denselben Faktenreader ([eingefrorene `runner.js`:74-82](/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/runner.js:74); `supabase/functions/radar-websearch-task/runner.js` am Prüfcommit). Er bildet `series` auf `serie` ab ([`index.ts`:493-505](/private/tmp/kd-vollreview-20260916/source/supabase/functions/radar-websearch-task/index.ts:493); gleicher Prüfcommit), sodass der RPC-Fehler erreichbar ist. Der letzte Radar-SQL-Kontext liefert für Werkziele jedoch unabhängig davon kein `releaseYear`; der zusätzliche Jahr-Guard lässt den Kontext daher auch nach einer isolierten Mappingkorrektur leer. Dieses Ticket repariert Radar nicht vollständig und behauptet keine alleinige Radar-Ausfallursache.
+
+## Korrekturziel und Abnahme
+
+Die Korrektur auf die RPC-Grenze von `kd_title_facts_lookup` begrenzen: Vor dem RPC `film`/`series` serialisieren, etwa über den vorhandenen Vertrag `normalisiereExterneWerkart`. Die interne Darstellung `serie`, der Promptvertrag, SQL-Validierung sowie Jahr- und ID-Konfliktguards bleiben erhalten. Kein Providerpfad, keine Migration und kein Radar-Umbau sind durch diesen Befund begründet.
+
+Abnahmekriterien:
+
+- Serienidentitäten mit gültigem Jahr und nur IMDb beziehungsweise nur TMDb senden `mediaType: "series"` und liefern außerhalb aller Charts einen passenden resolved Cachetitel.
+- Beide Reader-Eingaben `typ: "serie"` und `typ: "series"` funktionieren; der Forecast darf intern weiter `serie` verwenden.
+- Filmlookup, direkte FlixPatrol-ID und Chartfallback bleiben funktionsfähig.
+- ID-Konflikte, mehrdeutige SQL-Treffer sowie fehlendes oder widersprüchliches Jahr bleiben ohne ungesicherten Kontext.
+- Ein Regressionstest prüft echte SQL-Vertragsvalidierung oder einen strikt vertragstreuen Mock; ein argumentunabhängiger Erfolgs-Mock genügt nicht.
+
+## Abhängigkeiten und offene Punkte
+
+Keine Liveumgebung, reale Cache-/Chartbelegung, Produktionshäufigkeit oder installierter Migrationsstand wurden geprüft. Die End-to-end-Aufruferwirkung ist statisch belegt; die Reader/SQL-Grenze und ihre Kontrollen wurden lokal ausgeführt. Es lief keine vollständige Edge-Function-Anfrage und keine Provider-Promptausgabe.
+
+Nur die drei für Cache und Lookup erforderlichen Originalmigrationen wurden lokal angewandt. Ein erster lokaler Vorlauf scheiterte vor Testbeginn an Sandbox-Shared-Memory, ein zweiter an einer unvollständigen synthetischen Save-Fixture; der final vollständige Lauf ist der oben dokumentierte Erfolg. Keiner der Vorläufe wird als Produkt-PASS ausgegeben.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: [`/private/tmp/kd-vollreview-20260916/validations/E05-F002.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/validations/E05-F002.json) (`confirmed`). Ursprüngliches, eingefrorenes Master-Proposal: [`/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E05-F002.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E05-F002.json).
+
+Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E05/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E05/KD-REV-E05-002.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

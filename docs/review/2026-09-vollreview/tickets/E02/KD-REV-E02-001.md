@@ -1,0 +1,72 @@
+# KD-REV-E02-001 · Verspäteter Tokenrefresh kann abgemeldete oder neue Sitzung überschreiben
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P1 – ein gültiger, aber überholter Refresh-Commit kann nach abgeschlossenem Logout die Credentials wiederherstellen oder bei einem parallelen Login die Credentials des neuen Kontos ersetzen bzw. löschen.
+- Finding: E02-F001
+- Prüfstand: `14804ce389d69114feed27b92fb11ac78423cc0e`
+- Zuständige Etappe: E02
+
+## Fehler und Auswirkung
+
+Im Browser/PWA kann eine ausstehende Refresh-Antwort der Sitzung A noch verarbeitet werden, nachdem die lokalen Credentials von A bereits durch Logout entfernt oder durch die Credentials von B ersetzt wurden. Eine erfolgreiche späte A-Antwort schreibt dann A erneut. Eine späte terminale `invalid_grant`-Antwort kann den globalen Schlüssel löschen, obwohl B ihn inzwischen geschrieben hat. Beim späteren Resume wird folglich A wieder angemeldet oder die B-Sitzung ist Gast.
+
+Der Befund betrifft den persistierten Auth-Kontext und dessen spätere Projektion, nicht nachgewiesen sind ein serverseitiger RLS-Bypass, eine Vermischung persönlicher Datentöpfe, Remote-Schreibfehler oder Fremdzugriff. Die Reproduktion zeigt bei einem vollständigen B-Login zunächst weiter den geschützten Snapshot `B/degraded/access-blocked`; falsch ist dennoch bereits der persistierte Schlüssel.
+
+## Auslöser, Soll und Ist
+
+Voraussetzung ist eine gültige Sitzung A im fünfminütigen Refresh-Puffer. Ein unabhängiger Tokenleser startet `getAccessToken()` und wartet auf die Refresh-Antwort. Währenddessen schließt derselbe Coordinator einen Logout ab oder ein anderer Tab schreibt per `signIn` die Credentials von B. Danach trifft eine für A valide Erfolgsmeldung oder `HTTP 400 invalid_grant` ein. Eine erfolgreiche Antwort kann serverseitig vor dem Logout erzeugt und erst danach im Client verarbeitet werden; der lokale Logout wird im Treiber zudem auch nach fehlgeschlagenem Server-Logout fortgesetzt.
+
+Soll ist: Eine Antwort der überholten Operation A darf den aktuellen `kd:auth:session` weder schreiben noch löschen. Ein anschließendes Resume muss Gast beziehungsweise B beibehalten.
+
+Ist ist: `refreshIntern` schreibt die valide A-Antwort ohne Abgleich mit dem aktuell gespeicherten Schlüssel oder löscht ihn bei terminalem `invalid_grant`. Der lokale Validator beobachtete danach A nach einem Logout, A statt B nach einem Erfolg und keinen Schlüssel statt B nach `invalid_grant`; der folgende Resume übernimmt jeweils diesen falschen Persistenzstand.
+
+## Ursache und Fundstellen
+
+Die Operation hält nur die vor `await` gelesene Sitzung `frisch` fest. Die Antwortprüfung bindet sie an Konto-ID und Mail von A, prüft aber nicht, ob der lokale Schlüssel oder eine Operationsgeneration seit Requestbeginn gewechselt hat. Der Commit geschieht danach direkt. Der Web-Lock schützt ausschließlich Refreshs; `signIn` und `signOut` nehmen ihn nicht. Auth-Service-Generationen schützen nur die spätere Snapshot-Publikation, nicht die bereits erfolgte Treibermutation. Die Coordinator-Queue umfasst zudem keinen direkten Tokenabruf eines anderen Dienstes und existiert pro Instanz.
+
+Maßgebliche Fundstellen am Prüfcommit:
+
+- [eingefrorene Quelle: authDriver.js](/private/tmp/kd-vollreview-20260916/source/src/lib/authDriver.js:269) – `refreshIntern` liest die Sitzung und nimmt bei Zeile 280 den asynchronen Refresh vor; Zeilen 288–301 validieren nur gegen A und schreiben bei Zeile 296, Zeilen 303–306 löschen bei terminalem Fehler. Repository: `src/lib/authDriver.js:269-306` @ `14804ce389d69114feed27b92fb11ac78423cc0e`.
+- [eingefrorene Quelle: authDriver.js](/private/tmp/kd-vollreview-20260916/source/src/lib/authDriver.js:318) – `refresh()` sperrt nur `kd:auth:refresh`; direkte Tokenleser warten anschließend auf dessen Ergebnis. Repository: `src/lib/authDriver.js:318-343` @ `14804ce389d69114feed27b92fb11ac78423cc0e`.
+- [eingefrorene Quelle: authDriver.js](/private/tmp/kd-vollreview-20260916/source/src/lib/authDriver.js:370) – `signOut` kann nach dem Serverversuch lokal löschen; ein Fehler des Server-Logout blockiert diese lokale Löschung nicht. Repository: `src/lib/authDriver.js:370-385` @ `14804ce389d69114feed27b92fb11ac78423cc0e`.
+- [eingefrorene Quelle: auth.js](/private/tmp/kd-vollreview-20260916/source/src/services/auth.js:178) und [sessionCoordinator.js](/private/tmp/kd-vollreview-20260916/source/src/services/sessionCoordinator.js:466) – Logout/Snapshot-Generation und Coordinator-Serialisierung liegen außerhalb des Credential-Commits des unabhängig gestarteten Refreshs. Repository: `src/services/auth.js:178-199,212-244`, `src/services/sessionCoordinator.js:466-490` @ `14804ce389d69114feed27b92fb11ac78423cc0e`.
+- [eingefrorene Quelle: streamingPages.js](/private/tmp/kd-vollreview-20260916/source/src/services/streamingPages.js:133) – realer unabhängiger Pfad `loadPage → networkPage → driver.getAccessToken`; der Kontoguard nach Rückkehr schützt Folgearbeit, nicht den vorherigen Credential-Write. Repository: `src/services/streamingPages.js:133-146,218-236` @ `14804ce389d69114feed27b92fb11ac78423cc0e`.
+- [eingefrorene Quelle: storage.js](/private/tmp/kd-vollreview-20260916/source/src/services/storage.js:615) – der Transition-Zaun ist ein `setTimeout(0)`, nicht das Abwarten aller Auth-Requests. Repository: `src/services/storage.js:615-619` @ `14804ce389d69114feed27b92fb11ac78423cc0e`.
+
+## Belege und Gegenproben
+
+Statische Beweiskette: Der Validator verfolgte den unabhängigen Streaming-Pfad, die Refresh-Sperre, Auth-Service-Generationen, Resume und Cache-/Transition-Grenzen. Die relevante eingefrorene Quelle wurde gegen den Prüfcommit abgeglichen: [source-proof.json](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E02-F001/validator/source-proof.json) bestätigt sieben von sieben maßgeblichen Dateien bytegleich zu `14804ce389d69114feed27b92fb11ac78423cc0e`.
+
+Ausgeführt wurde ausschließlich ein isolierter Node-Mock-Harness mit unveränderten Produktmodulen aus der eingefrorenen Kopie, kontrollierten Fetch-Promises, In-Memory-`localStorage` und einem gemeinsamen seriellen Web-Lock-Mock – ohne Netzwerk: [refresh-race.mjs](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E02-F001/validator/refresh-race.mjs), Ergebnis [result.json](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E02-F001/validator/result.json), Exit 0. Fünf Fehlerszenarien reproduzieren die Persistenzkorruption; zwei Kontrollen grenzen sie ein:
+
+- Erfolg nach beendetem Coordinator-Logout: persistiert A, Resume A (`BUG_REPRODUCED`).
+- Erfolg nach B-Credential-Commit bzw. vollständigem B-Login: persistiert A (`BUG_REPRODUCED`).
+- `invalid_grant` nach B-Credential-Commit bzw. B-Login: persistiert `null` statt B (`BUG_REPRODUCED`).
+- `invalid_grant` nach abgeschlossenem Logout bleibt Gast, und Coordinator-eigener Refresh vor Coordinator-Logout endet ohne Credentials (`CONTROL_OK`).
+
+Die bestandenen Harness-Assertions belegen die Fehlerbeobachtung; sie sind keine Produktabnahme. Testwerkzeugfehler wurden nicht festgestellt. Betriebsbeleglücke: Es gab keinen Live-Supabase-/Provider-Test, keine echte Mehrtab-Browserausführung und keine iPhone-Abnahme.
+
+## Korrekturziel und Abnahme
+
+Die Korrektur bleibt auf `src/lib/authDriver.js` beschränkt: Credential-Mutationen eines Refreshs müssen vor Write, Delete und Rückgabe an eine aktuelle Sitzungs-/Operationsidentität gebunden werden. Ein reiner Konto-ID-Vergleich genügt nicht, weil Logout und erneuter Login desselben Kontos ebenfalls überholte Antworten erzeugen können. Der Commit muss gegenüber Sign-in/Sign-out auch tabübergreifend koordiniert sein; ein ungeschütztes Read-then-write ist dafür nicht atomar. Snapshot- und Cachegrenzen bleiben bestehen.
+
+Abnahme:
+
+- Ein ausstehendes direktes `getAccessToken(A)` plus abgeschlossener Coordinator-Logout darf nach spätem Erfolg keinen Sessionkey wiederherstellen; Resume bleibt Gast.
+- Ein B-Sign-in über einen anderen Coordinator darf durch späten A-Erfolg und `invalid_grant` weder ersetzt noch gelöscht werden; B bleibt nach Resume angemeldet.
+- Der Schutz deckt Logout plus erneuten Login desselben Kontos und den Mehrtab-Fall ab; seine Operationsidentität ist stärker als die Konto-ID.
+- Bei unveränderter aktueller Sitzung rotiert ein gültiger Refresh weiter normal; `invalid_grant` entfernt nur diese Sitzung, Netzwerkfehler erhalten sie, und der bestehende Single-Flight-Vertrag bleibt bestehen.
+- Tests verwenden den echten Auth-Treiber mit verzögerten Mock-Antworten und prüfen Persistenz sowie UI-Snapshot. Shared-Lock-/Fallback-Fälle und ein nachfolgendes Resume sind enthalten.
+
+## Abhängigkeiten und offene Punkte
+
+Keine bestätigte Abhängigkeit zu E02-F002; beide betreffen `authDriver`, haben aber unterschiedliche Ursachen und Korrekturgrenzen.
+
+Offen bleiben reale Provider-/Supabase-Semantik nach erfolgreich serverseitigem Logout, echte Browser-Mehrtab- und iPhone-Verhalten. Cache-/Adoption und Own-Row-Zugriff waren im Harness isoliert gemockt. Der Validator hat keine globale Testsuite ausgeführt und keine anderen Review-Duplikate geprüft; die vollständige E02-Leseabdeckung ist separat dokumentiert.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: [E02-F001.json](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/validations/E02-F001.json) (`confirmed`). Eingefrorenes Master-Proposal: [E02-F001.json](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E02-F001.json). Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E02/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E02/KD-REV-E02-001.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

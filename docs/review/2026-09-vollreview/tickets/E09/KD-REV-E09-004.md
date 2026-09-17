@@ -1,0 +1,69 @@
+# KD-REV-E09-004 · Vier Bloganalyse-Regressionstests bestehen ohne Ausführung ihrer Testkörper
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — vier Sicherheits-/Fehlergrenzen erscheinen im lokalen Test und in CI grün, obwohl ihre Assertions nicht laufen. Eine produktive Sicherheitslücke, Datenbeschädigung oder Live-Auswirkung ist damit nicht belegt.
+- Finding: E09-F004
+- Prüfstand: `14804ce389d69114feed27b92fb11ac78423cc0e`
+- Zuständige Etappe: E09
+
+## Fehler und Auswirkung
+
+Vier als asynchron übergebene Bloganalyse-Regressionstests reichen ein Funktionsobjekt an `checkAsync`, ohne die Funktion aufzurufen. `await` eines Funktionsobjekts gibt das Objekt zurück; `check` wertet es als truthy und meldet Erfolg. Dadurch sind die vier behaupteten grünen Assertions keine Ausführung ihrer Testkörper:
+
+- Nullhash bei der Vorschauerzeugung,
+- Ausnahme der Clock,
+- Nullhash in einem Nachweis-Marker und
+- nicht-stringförmige Markerfelder.
+
+`npm test` führt die Datei regulär aus; der CI-Workflow ruft `npm test` auf. Der Befund betrifft daher den Nachweiswert dieser vier Tests. Er belegt keine Umgehung der aktuellen Produkt-Guards.
+
+## Auslöser, Soll und Ist
+
+Auslöser ist der direkte Lauf von `blogprofilanalyse_test.mjs`, ebenso der normale Testweg über `scripts.test` in `package.json` und den `npm test`-Schritt des Deploy-Workflows.
+
+Soll: Jede der vier Test-Assertions führt ihren Körper aus. Eine gezielte lokal eingefügte, sofort werfende Sentinel-Assertion muss rot gezählt werden und Exit 1 auslösen.
+
+Ist: Die vier Funktionsobjekte bestehen ohne Aufruf. Selbst vier Sentinel-Körper ergeben laut Validator `149 ok, 0 offen`, Exit 0 und null Sentinel-Eintritte. Erst nach lokaler Ergänzung der vier fehlenden `()` werden die Sentinels erreicht, vier Fehler gezählt und Exit 1 ausgelöst.
+
+## Ursache und Fundstellen
+
+- [`blogprofilanalyse_test.mjs:36-42`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:36) erwartet bei `checkAsync` bereits ein ausgewertetes Promise/Ergebnis und ruft keinen Callback auf. [`…:26-34`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:26) prüft den zurückgegebenen Wert nur auf Truthiness.
+- Bei [`…:673-684`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:673), [`…:686-699`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:686), [`…:1012-1018`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:1012) und [`…:1020-1027`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:1020) schließen die asynchronen IIFEs mit `}))` statt mit `})())`; ihre Körper werden daher nie betreten. Benachbarte Proben verwenden den aufgerufenen IIFE-Ausdruck, etwa [`…:701-710`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:701).
+- Die Abschlusskontrolle schlägt ausschließlich bei `rot.length > 0` fehl ([`…:1080-1084`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:1080)). Die stillen Funktionsobjekte erhöhen `ok`, nicht `rot`.
+- Der Test ist in `scripts.test` enthalten ([`package.json`](/private/tmp/kd-vollreview-20260916/source/package.json)); der reguläre CI-Pfad führt `npm test` aus ([`.github/workflows/deploy.yml:39-42`](/private/tmp/kd-vollreview-20260916/source/.github/workflows/deploy.yml:39)).
+
+Die Vollpfadlinks verweisen auf die eingefrorene Quelle `/private/tmp/kd-vollreview-20260916/source/`. Die genannten Repository-Pfade und Zeilen gelten für Commit `14804ce389d69114feed27b92fb11ac78423cc0e`.
+
+## Belege und Gegenproben
+
+**Ausgeführte lokale Reproduktion des Validators:**
+
+`python3 /private/tmp/kd-vollreview-20260916/tests/E09-F004/validator/reproduce.py`
+
+Die vier isolierten Varianten importierten Produktmodule ausschließlich aus der unveränderten eingefrorenen Quelle: Originalaufrufe, Originalaufrufe mit werfenden Sentinels, lokal reparierte Aufrufe mit Originalkörpern sowie lokal reparierte Aufrufe mit Sentinels. Ergebnis unter Node v24.18.0: `original-bodies=149/0`, Exit 0; `original-sentinel=149/0`, Exit 0 und 0 Eintritte; `invoked-bodies=149/0`, Exit 0; `invoked-sentinel=145/4`, Exit 1 und exakt die vier erwarteten Eintritte. Das Reproduktionsskript prüft Exitcodes und Sentinel-IDs. Artefakte einschließlich Einzelläufen und SHA-256-Werten liegen unter [`/private/tmp/kd-vollreview-20260916/tests/E09-F004/validator/`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E09-F004/validator/), insbesondere [`results.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E09-F004/validator/results.json).
+
+**Gegenbelege:** Die Produktlogik lehnt einen Nullhash in `berechneContentHash` ab ([`src/lib/blogProfilAnalyse.js:385-392`](/private/tmp/kd-vollreview-20260916/source/src/lib/blogProfilAnalyse.js:385)); die Clock-Ausnahme wird im aktuellen Pfad gefangen ([`…:703-710`](/private/tmp/kd-vollreview-20260916/source/src/lib/blogProfilAnalyse.js:703)); `validiereNachweisMarker` prüft Typen und Nullhash, und der Speicherweg nutzt diesen Validator ([`…:524-557`](/private/tmp/kd-vollreview-20260916/source/src/lib/blogProfilAnalyse.js:524)). Nach ausschließlich lokaler Ergänzung der vier Aufrufe bestehen alle 149 Originalassertions. Die Nullhash-Revalidierungsprobe in [`blogprofilanalyse_test.mjs:861-955`](/private/tmp/kd-vollreview-20260916/source/blogprofilanalyse_test.mjs:861) ist kein Ersatz für die vier Körper; sie deckt einen anderen Pfad ab und fordert ausdrücklich, dass Digest und Clock dort nicht laufen.
+
+**Einordnung:** Dies ist ein bestätigter **Testwerkzeugfehler**, kein bestätigter Produktfehler. Die vorhandenen Runtime-Guards begrenzen die gegenwärtige Produktwirkung, ohne die Nichtexekution der vier Tests zu korrigieren. Betriebsbeleglücke: Weder gesamte Testsuite noch CI wurden ausgeführt; es gibt keine Aussage zu einem konkreten historischen CI-Lauf. Provider-, Runtime- oder Remote-Schreibtests waren weder nötig noch ausgeführt.
+
+## Korrekturziel und Abnahme
+
+Die kleine Korrektur auf `blogprofilanalyse_test.mjs` begrenzen: alle vier asynchronen IIFEs tatsächlich aufrufen. Optional darf `checkAsync` unaufgerufene Funktionen fail-closed zurückweisen, sofern dies ohne Änderung des Produktcodes und ohne Verfälschung bestehender Testverträge möglich ist. Keine Produkt-, Provider-, Datenbank- oder Migrationsänderung gehört in dieses Ticket.
+
+Abnahme:
+
+- Der normale Einzeldateilauf betritt alle vier Testkörper.
+- Die vier ursprünglichen Assertions bestehen gegen unveränderte Produktmodule.
+- Je eine gezielte lokale Sentinel-Mutation in jedem der vier Körper wird als Fehler gezählt und ergibt einen von null verschiedenen Prozess-Exit.
+- Falls der Helfer abgesichert wird, darf er ein unaufgerufenes Funktionsobjekt nicht als erfolgreiche Assertion verbuchen.
+
+## Abhängigkeiten und offene Punkte
+
+Keine Duplikatbeziehung bekannt. Der Fehler kann ohne Produktänderung behoben werden. Die Sentinel-Reproduktion zeigt fehlende Ausführung, nicht die vollständige Abwesenheit sonstiger redundanter Abdeckung in anderen Tests. Eine spätere Korrektur sollte die vier Testfälle gezielt ausführen und nur danach ihre Rolle als Regressionstest erneut beanspruchen.
+
+## Herkunft und Master-Abnahme
+
+Validatorergebnis: [`/private/tmp/kd-vollreview-20260916/validations/E09-F004.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/validations/E09-F004.json). Ursprünglicher Vorschlag: [`/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E09-F004.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/validation-inputs/E09-F004.json). Autor: Terra/xhigh. Zuständiger Master: Astra/high. Die gesonderte Master-Abnahme liegt vor.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E09/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E09/KD-REV-E09-004.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

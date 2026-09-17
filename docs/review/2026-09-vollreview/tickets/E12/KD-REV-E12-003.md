@@ -1,0 +1,87 @@
+# KD-REV-E12-003 · Wochentag-Labels im Wochenplan-Editor überlappen auf schmalen Viewports
+
+- Status: unabhängig validiert; Master-Abnahme bestätigt
+- Priorität: P2 — bei 320 und 375 CSS-Pixeln gehört ein Teil der mindestens 44px breiten Tagesfläche tatsächlich zum rechten Nachbartag. Die Tagesmitten bleiben bedienbar; ein vollständiger Funktionsausfall oder Datenverlust ist nicht belegt.
+- Finding: E12-F003
+- Prüfstand: `14804ce389d69114feed27b92fb11ac78423cc0e`
+- Zuständige Etappe: E12
+
+## Fehler und Auswirkung
+
+Im Wochenplan-Editor überlappen sechs benachbarte Wochentag-Labels bei 320 und 375 CSS-Pixeln. Ein Tap in der Mitte einer Überlappung trifft jeweils das rechte Label und schaltet nur dessen Checkbox. Damit ist der sichtbare Bereich eines Wochentags nicht vollständig dessen eigener Touchbereich.
+
+Bestätigt wurde der Fehler in Chromium und WebKit, jeweils in den Themes dunkel, hell, showa und neon-noir. Bei 320px beträgt die Überlappung je 9px, bei 375px rund 2,29px. Bei 393 und 430px bestehen keine gemessenen Überschneidungen.
+
+Betroffen ist die Wochentagauswahl beim Anlegen und über denselben `ReminderEditor` auch beim Bearbeiten von Wochenplaneinträgen. Es gibt keinen Befund zu Persistenz, Datenverlust, Live-Auslieferung oder physischen iPhone-/PWA-Geräten.
+
+## Auslöser, Soll und Ist
+
+**Auslöser.** Angemeldeter Benutzer nach abgeschlossenem App-Boot: Start → Deine Woche → Eintrag, bei 320 oder 375 CSS-Pixeln und normaler Schriftgröße. Im geöffneten Editor die Wochentage bedienen. Weder bestehende Reminder noch Providerdaten oder ein besonderer Datenzustand sind nötig.
+
+**Soll.** Sieben Wochentag-Labels und ihre Touchflächen liegen innerhalb des Editors, sind ohne gegenseitige Überdeckung getrennt bedienbar und schalten jeweils ausschließlich den zugehörigen Wochentag.
+
+**Ist.** In Chromium 151.0.7922.34 und WebKit 26.5 bestehen bei 320 und 375px jeweils sechs Überschneidungen. `elementFromPoint` in der Überlappungsmitte liefert das rechte Label; echte Playwright-Taps schalten nur dessen Checkbox. Alle sieben Tagesmitten schalten weiterhin den eigenen Tag.
+
+## Ursache und Fundstellen
+
+- [`/private/tmp/kd-vollreview-20260916/source/src/index.css:1514`](/private/tmp/kd-vollreview-20260916/source/src/index.css:1514)–[`...:1520`](/private/tmp/kd-vollreview-20260916/source/src/index.css:1520) (`src/index.css:1514-1520` am Prüfcommit) definiert sieben `minmax(0,1fr)`-Gridspalten und setzt für die enthaltenen Labels zugleich `min-width:44px`.
+
+- Die schmale Mediaquery reduziert in [`.../src/index.css:1561`](/private/tmp/kd-vollreview-20260916/source/src/index.css:1561) nur Gap und Padding, nicht die Spaltenzahl oder einen Reflow.
+
+- Das später geladene [`/private/tmp/kd-vollreview-20260916/source/src/styles/design-primary.css:54`](/private/tmp/kd-vollreview-20260916/source/src/styles/design-primary.css:54) überschreibt das mobile Editorpadding auf `--kd-space-4 = 16px`. Dadurch bleiben für die Gridspuren bei 320px nur 32px, bei 375px rund 38,71px.
+
+- Die 44px-Labels ragen bei 3px Gap jeweils 9px beziehungsweise rund 2,29px in das folgende Label. Spätere Styles enthalten keinen Reflow für `.kd-wochen-tage`; die schmale Regel in `design-primary.css:199` betrifft nur die separate Wochenansicht `.kd-wochen-tagauswahl`.
+
+- [`/private/tmp/kd-vollreview-20260916/source/src/components/Wochenplan.jsx:197`](/private/tmp/kd-vollreview-20260916/source/src/components/Wochenplan.jsx:197)–[`...:199`](/private/tmp/kd-vollreview-20260916/source/src/components/Wochenplan.jsx:199) enthält je Label eine echte kontrollierte Checkbox mit eigenem `tagToggle(nr)`. Der reguläre Account-Aufrufpfad lautet `src/App.jsx:1901-1905 → src/tabs/StartTab.jsx:260,272,333 → src/components/Wochenplan.jsx:335-343,363-366,197-199`.
+
+Alle repository-relativen Fundstellen beziehen sich auf `14804ce389d69114feed27b92fb11ac78423cc0e`; die verlinkten Originale liegen in der unveränderlichen Quelle unter `/private/tmp/kd-vollreview-20260916/source/`.
+
+## Belege und Gegenproben
+
+**Statische Kaskade und Provenienz.** Der Validator prüfte die finale CSS-Importreihenfolge, mobile Vorfahrenregeln, Editorpadding und die getrennte Wochenansicht. [`provenance.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E12-F003/validator/provenance.json) belegt 15 gegen den Prüfcommit geprüfte Dateien, alle byteidentisch.
+
+**Ausgeführte lokale Reproduktion.** [`validate.mjs`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E12-F003/validator/validate.mjs) nutzt die Originalkomponente und Tokens, die relevante App-/StartTab-Vorfahrenkette, alle sieben App-Stylesheets, einen leeren gültigen Plan sowie einen Save-Stub. Der erfolgreiche Lauf endete mit Exit 0 und deckte 32 Kombinationen ab:
+
+- Chromium und WebKit
+- dunkel, hell, showa und neon-noir
+- 320, 375, 393 und 430 CSS-Pixel
+
+Dabei schalteten 224 native Klicks in die sieben Tagesmitten jeweils nur die eigene Checkbox. 96 native Taps in Überschneidungsbereichen schalteten jeweils den rechten Nachbartag; `elementFromPoint` bestätigte die Trefferzuordnung. Es gab keine Page-Errors, externen Requests oder Save-Aufrufe. Vollständige Messwerte stehen in [`results.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E12-F003/validator/results.json); die visuelle Gegenprobe liegt u.a. in [`webkit-320.png`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/tests/E12-F003/validator/webkit-320.png).
+
+Der erste lokale Start konnte im Sandboxprofil vor dem Browserlauf keinen Loopback-Port öffnen. Das ist weder Produktfehler noch Test-PASS. Der dokumentierte vollständige Lauf erfolgte anschließend mit einer ausschließlich lokalen Testserver-/Browserfreigabe.
+
+**Gegenproben und Grenzen.**
+
+- Bei 393 und 430px wurden in beiden Engines und allen vier Themes keine Überschneidungen gemessen; der Befund behauptet keinen Fehler für alle mobilen Breiten.
+- Alle Tagesmitten blieben bedienbar. Betroffen sind die überdeckten Randflächen und die Darstellung, nicht eine pauschale Unbedienbarkeit.
+- `tests/cleanup-d2.spec.mjs:124-132` prüft 393px, 44px-Labelgröße und `scrollWidth <= clientWidth + 1`. Das ist kein Gegenbeleg: 393px ist unbetroffen; bei 375px beträgt `scrollWidth/clientWidth` trotz sechs Überschneidungen `299/299`.
+- Die Dokumentbreite blieb in allen Läufen gleich der Viewportbreite. Ein globaler horizontaler Overflow-Check erkennt den Fehler nicht.
+- Ein leerer gültiger Wochenplan genügt. Es besteht kein schema-, migrations- oder providerabhängiger Auslöser.
+
+Dies ist ein Produktfehler der responsiven CSS-Geometrie, kein Fehler des Testwerkzeugs. Nicht vorgenommene physische oder Live-Prüfungen bleiben Betriebs- beziehungsweise Abnahmebeleglücken.
+
+## Korrekturziel und Abnahme
+
+Eine kleine responsive CSS-Korrektur an `.kd-wochen-tage` und gegebenenfalls am Editor-Innenabstand soll mindestens 44px große Labels mit tatsächlich disjunkten Trefferflächen ermöglichen. Bei Platzmangel soll die Auswahl umbrechen. Checkbox-/Reminder-Datenmodell, Persistenz und die separate Wochenansicht bleiben unverändert; das Touchziel darf nicht unter den bestehenden 44px-Vertrag schrumpfen.
+
+- Bei 320, 375, 393 und 430 CSS-Pixeln liegen die Tageslabels in Chromium und WebKit, jeweils in allen vier Themes, vollständig im Fieldset und überlappen paarweise nicht.
+- Jedes Label besitzt mindestens eine echte 44×44-CSS-Pixel-Touchfläche; Zwischenräume gehören nicht zum Nachbarlabel.
+- Native Klicks/Taps in Zentren und nahe den Rändern aller sieben Tagesflächen toggeln ausschließlich den zugehörigen Tag. Die übrigen Checkboxzustände bleiben unverändert; der bestehende Guard für mindestens einen ausgewählten Tag bleibt erhalten.
+- Eine gezielte Regression misst Label-Rechtecke und tatsächliche Trefferzuordnung. Ein alleiniger `scrollWidth/clientWidth`-Vergleich genügt nicht.
+- Neueintrag und Bearbeiten verwenden weiterhin denselben funktionierenden Editor. Live-Anbieter- oder Remote-Schreibtests sind nicht erforderlich.
+
+## Abhängigkeiten und offene Punkte
+
+- Keine Abhängigkeit zu Provideraufrufen, Mail, Backend, Datenmigrationen oder Remote-Schreibvorgängen festgestellt.
+- Die Reproduktion ist ein Komponentenharness mit nachgebildeten, am Produktcode verifizierten relevanten Vorfahren; keine vollständige App-/Login-End-to-End-Ausführung.
+- Nicht geprüft: physisches iPhone/PWA, VoiceOver, Hardwaretastatur, andere Schriftstufen, Deep-Space-Horror-Spezialeffekt und Safari auf einem physischen Gerät.
+- Es wurde keine Speicheraktion ausgeführt; fehlerhafte Persistenz oder Datenverlust werden nicht behauptet.
+- Keine Duplicate-Zuordnung belegt. Master-Abnahme ist bestätigt.
+
+## Herkunft und Master-Abnahme
+
+- Validatorergebnis: [`/private/tmp/kd-vollreview-20260916/validations/E12-F003.json`](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/validations/E12-F003.json), Status `confirmed`.
+- Autor: Terra/xhigh. Zuständiger Master: Astra/high. Master-Abnahme: **bestätigt**.
+
+
+Master-Abnahme: [bestätigter Abgleich](/Users/max/Documents/GitHub/kinodreieck-app/docs/review/2026-09-vollreview/state/evidence/inbox/E12/TICKET_REVIEW.json). Der bytegenau geprüfte Autorentext ist unter `state/evidence/draft-tickets/E12/KD-REV-E12-003.md` archiviert. Diese Lesefassung aktualisiert nur Beleglinks und Abnahmestatus.

@@ -1,0 +1,1307 @@
+{
+  "stage": "E14",
+  "base_sha": "14804ce389d69114feed27b92fb11ac78423cc0e",
+  "status": "complete",
+  "coverage_verdict": {
+    "verdict": "complete_with_distinct_methods",
+    "total": 906,
+    "fully_read_primary": 874,
+    "other_primary_checks": 32,
+    "primary_duplicate_count": 0,
+    "primary_gaps": 0,
+    "e14_primary_files": 0,
+    "evidence": "COVERAGE_AUDIT.json",
+    "limits": "Originale Volllektüreattestationen und Anzeigebereiche strukturell geprüft; E14 wiederholt nicht 874 Volllektüren. Rückwirkendes Verständnis/etwaige fremde Tooltrunkierung nicht beobachtbar. Strukturdatei master_wikidata bleibt trotz vollständig angezeigter sechs Zeilen eine der 32 anderen Prüfarten."
+  },
+  "gaps": [],
+  "cross_stage_dispositions": [
+    {
+      "source_stage": "E01",
+      "note_index": 1,
+      "original_note": {
+        "stage": "E02/E03",
+        "status": "counterevidence",
+        "detail": "EinstiegsGate.jsx remountet App mit storageOwnerKennung und entfernt den Baum bei fehlender Kontofreigabe. Keine pauschale Accountleck-Behauptung aus App-State allein. useArticleController prueft geladene Storagegeneration auch bei spaeten Callbackaufrufen."
+      },
+      "disposition": "counterevidence",
+      "reason": "Owner-remount und gebundene Storagegeneration schützen App/Artikel; kein pauschales State-Kontoleck. Der unabhängige Credential-Race E02-F001 bleibt bestehen.",
+      "evidence": "src/components/EinstiegsGate.jsx:95-104; src/services/storage.js:197-237; src/controllers/useArticleController.js:143-164"
+    },
+    {
+      "source_stage": "E01",
+      "note_index": 2,
+      "original_note": {
+        "stage": "E06/E07",
+        "status": "needs_validation",
+        "finding": "E01-F001",
+        "detail": "Pinpersistenz und Katalogaufloesung unterscheiden: frischer Start hat nur Known und keinen Webfeed; pending Pins werden nicht angezeigt. Paging-Streaming fuellt den separaten App-Vollkatalog nicht automatisch."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E01-F001: persistierter Pin bleibt erhalten, fehlende Auflösung und ignorierte pendingPinIds erklären die Unsichtbarkeit. Paging ersetzt den App-Vollkatalog nicht.",
+      "evidence": "draft-tickets/E01/KD-REV-E01-001.md; src/App.jsx:910-955"
+    },
+    {
+      "source_stage": "E01",
+      "note_index": 3,
+      "original_note": {
+        "stage": "E06",
+        "status": "follow_up_not_finding",
+        "detail": "Manueller refreshKatalog setzt Legacy-Katalogrefs zurueck; der separat gehaltene Pagingcontroller bekommt keine ausdrueckliche Refreshrevision. Controller revalidiert aber selbst ueber Sessionfrische/Expiry. Fachbereich soll pruefen, ob Katalogrefresh vor Ablauf der Frist bestehende Pagingansichten aktualisieren muss."
+      },
+      "disposition": "new_confirmed_finding",
+      "reason": "E14-F002 unabhängig confirmed/P2: Metadatenkorrektur bei wertgleichem Kontext bleibt nach manuellem Refresh bis zur nächsten fristbedingten Wiederaufnahme unsichtbar. Kein allgemeiner TTL-Ausfall.",
+      "evidence": "validations/E14-F002.json; src/App.jsx:1794-1810"
+    },
+    {
+      "source_stage": "E01",
+      "note_index": 4,
+      "original_note": {
+        "stage": "E07",
+        "status": "follow_up_not_finding",
+        "detail": "Start onSpringeZuEntdecken verwirft pin.target und navigiert nur zu blog; EntdeckenTab fokusId zielt ausschliesslich auf Blogmeinungen. Keine konkrete Titelfokussierung fuer Empfehlungspins im gelesenen Pfad nachgewiesen."
+      },
+      "disposition": "remaining_boundary",
+      "reason": "Ziel wird beim Sprung verworfen, aber keine belegte Zusage einer Empfehlungskarten-Fokussierung. Als Navigationsgrenze erhalten; kein bestätigtes Ticket und kein Duplikat der konkreten Kinoankerfehler.",
+      "evidence": "src/tabs/StartTab.jsx:265-323; src/App.jsx:1885-1910"
+    },
+    {
+      "source_stage": "E02",
+      "note_index": 1,
+      "original_note": {
+        "target": "E03 / Datentreiber und Persistenz",
+        "note": "E02-F001 und E02-F002 beruehren direkte getAccessToken-Aufrufer, Accountbinding und Wiederholung nach 401. UI-Generationen und persistierte Credentials getrennt validieren."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E02-F001 Credential-Race und E02-F002 Force-Refresh sind getrennte Fehler; Storagebindung widerlegt die Credentialmutation nicht.",
+      "evidence": "src/lib/authDriver.js:269-343; draft-tickets/E02"
+    },
+    {
+      "source_stage": "E02",
+      "note_index": 2,
+      "original_note": {
+        "target": "E14 / Migrationsgesamtkonsistenz",
+        "note": "current_schema.sql ist historische Basis bis Rollen-v1, kein vollstaendiger September-Endstand. Anonyme Legacy-/Demo-/Shared-Rechte werden durch 20260901193000_private_release_access_boundary.sql aufgehoben. Kein aktuelles Zugriffsloch aus alten Snapshot-GRANTs abgeleitet."
+      },
+      "disposition": "counterevidence",
+      "reason": "September-Privatrelease hebt historische anonyme Catalog-/Shared-Rechte auf; current_schema ist keine Endzustandsquelle.",
+      "evidence": "supabase/migrations/20260901193000_private_release_access_boundary.sql:1-79"
+    },
+    {
+      "source_stage": "E02",
+      "note_index": 3,
+      "original_note": {
+        "target": "E14 / Betrieb und Testwerkzeuge",
+        "note": "E02-F003 betrifft Fehlerbereinigung des expliziten Live-RLS-Harness. Kein Live-Lauf in diesem Review; Testkonten und vorhandene Nutzerdaten in der Schwerebewertung unterscheiden."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E02-F003 betrifft ausschließlich Bereinigung des ausdrücklich gestarteten RLS-Testwerkzeugs. Kein produktiver Datenverlust oder Review-Livelauf.",
+      "evidence": "draft-tickets/E02/KD-REV-E02-003.md"
+    },
+    {
+      "source_stage": "E03",
+      "note_index": 1,
+      "original_note": {
+        "area": "Session/Authentifizierung",
+        "files": [
+          "src/services/sessionCoordinator.js",
+          "src/components/KontoBereich.jsx",
+          "src/main.jsx"
+        ],
+        "method": "targeted_cross_reference",
+        "summary": "Regulärer Auto-Login ruft kontoSicherAutomatischLaden auf. Focus-/Online-/Visibility-Refresh kann Pull bei sichtbarer App auslösen. Keine vollständige E03-Leseattestation dieser fremdzugeordneten Dateien."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "Normale Login-/Refreshaufrufer machen E03-F001/F002 erreichbar. P2 für sichtbaren Pull-Rücksprung, P1 für ungewollte Gastübernahme bleiben wie validiert getrennt.",
+      "evidence": "draft-tickets/E03/KD-REV-E03-001.md; draft-tickets/E03/KD-REV-E03-002.md"
+    },
+    {
+      "source_stage": "E03",
+      "note_index": 2,
+      "original_note": {
+        "area": "Registry/Testpflege",
+        "files": [
+          "package.json"
+        ],
+        "method": "targeted_script_inspection",
+        "summary": "Standalone-Löschtest wird nicht direkt in package.json genannt; seine reproduzierte Fehlfunktion belegt allein keinen CI-Ausfall."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E03-F003 ist P3-Testpflege; keine aktive CI-Anbindung behaupten.",
+      "evidence": "draft-tickets/E03/KD-REV-E03-003.md"
+    },
+    {
+      "source_stage": "E03",
+      "note_index": 3,
+      "original_note": {
+        "area": "Gegenbeleg Konfliktauflösung",
+        "files": [
+          "src/components/KontoBereich.jsx",
+          "src/tabs/DatenTab.jsx",
+          "src/App.jsx"
+        ],
+        "method": "targeted_caller_trace",
+        "summary": "Fehlende onRemoteChange-Meldung der expliziten Remote-Konfliktauflösung nicht als UI-Bug erhoben: KontoBereich ruft onDatenGeaendert auf; App verdrahtet einen Reload."
+      },
+      "disposition": "counterevidence",
+      "reason": "Explizite Konfliktübernahme ruft onDatenGeaendert auf; App verdrahtet Reload. Nicht dem Hintergrund-Pullfehler gleichsetzen.",
+      "evidence": "src/components/KontoBereich.jsx:277-292; src/App.jsx:2094-2111"
+    },
+    {
+      "source_stage": "E03",
+      "note_index": 4,
+      "original_note": {
+        "area": "Legacy/Restore",
+        "files": [
+          "src/lib/restore.js",
+          "account_export_release_ui_test.mjs"
+        ],
+        "method": "assigned_full_read",
+        "summary": "Restore/Undo bleiben intern lesepflichtig; im aktuellen Privatrelease ist die Importoberfläche verborgen. Mögliche Remote-Undo-Semantik bei lokalen Deletes deshalb nicht als erreichbarer Produktfehler ausgegeben."
+      },
+      "disposition": "remaining_boundary",
+      "reason": "Interne Restore-/Undo-Pfade bleiben historisch gelesen, aber verborgene Importoberfläche belegt keine aktuelle Nutzererreichbarkeit. Keine Reparaturforderung allein daraus.",
+      "evidence": "inbox/E03/REPORT.md; inbox/E03/READING_COMPLETE.json"
+    },
+    {
+      "source_stage": "E04",
+      "note_index": 1,
+      "original_note": "E04-F007: Paketmapping fehlerhaft, aber TeilenBlock hat keinen gefundenen aktiven src/tools-Aufrufer. Aktuelle Nutzerwirkung nicht belegt; kein P2-Ticket allein aus dem Legacy-Modul ableiten.",
+      "disposition": "counterevidence",
+      "reason": "E04-F007 refuted: keine aktive Verwendung des legacy TeilenBlock, daher kein aktuelles P2-Ticket.",
+      "evidence": "validations/E04-F007.json"
+    },
+    {
+      "source_stage": "E04",
+      "note_index": 2,
+      "original_note": "Shared-Artikel-Migrationen vom Juli/August sind nicht der Endzustand. 20260809121000_rollen_v1_access_enforcement.sql bindet Owner-Schreibwege an kd_account_active; 20260901193000_private_release_access_boundary.sql entzieht anon den Listen-RPC-Zugriff. Die historischen anonymen Grants sind fuer sich kein aktueller Befund.",
+      "disposition": "counterevidence",
+      "reason": "Spätere aktive Owner-RLS und Entzug anonymer Listen-RPC-Rechte sind maßgeblich.",
+      "evidence": "supabase/migrations/20260809121000_rollen_v1_access_enforcement.sql; supabase/migrations/20260901193000_private_release_access_boundary.sql"
+    },
+    {
+      "source_stage": "E04",
+      "note_index": 3,
+      "original_note": "App.jsx als Querverweis ausschnittsweise gelesen: baueRefUniversum, MW-Refsprung, updateFilm mit mergePersonalMasterEntry, addFilm/null-Rueckgabe. Keine eigene Volltextattestation fuer App.jsx.",
+      "disposition": "coverage_boundary",
+      "reason": "App-Querverweise sind gezielte Zusatzlektüre, keine zweite primäre Zuständigkeit; E01 bleibt App-Master.",
+      "evidence": "COVERAGE_AUDIT.json; inbox/E04/READING_COMPLETE.json"
+    },
+    {
+      "source_stage": "E04",
+      "note_index": 4,
+      "original_note": "Gelesene DOM-Tests decken grosse Teile der Auswahl-/Loesch-Draftgrenzen ab; ihre Quelllektuere ist keine Ausfuehrung und keine physische iPhone/PWA-Abnahme.",
+      "disposition": "evidence_boundary",
+      "reason": "DOM-Testlektüre und isolierte Validatorläufe getrennt von Suite/physischer PWA-Abnahme belassen.",
+      "evidence": "inbox/E04/REPORT.md; draft-tickets/E04"
+    },
+    {
+      "source_stage": "E04",
+      "note_index": 5,
+      "original_note": "Weitere explorative Ideen (Boot-Migration/Remote-Pull-Rennen, minimale Artikelschemata, Doppelte innerhalb eines Pakets) wurden nicht als konkrete aktive Fehler belegt und nicht als bestaetigte Befunde ausgegeben.",
+      "disposition": "remaining_boundary",
+      "reason": "Boot-/Artikel-/Paketideen ohne belegten aktiven Schaden bleiben unpromoted; E03-F001 deckt nur seinen unabhängig bestätigten Pull-Race ab.",
+      "evidence": "inbox/E04/READING_COMPLETE.json; draft-tickets/E03/KD-REV-E03-001.md"
+    },
+    {
+      "source_stage": "E05",
+      "note_index": 1,
+      "original_note": {
+        "topic": "Radar-Kontext verliert Bezugsjahr",
+        "status": "cross_stage_followup",
+        "detail": "Validator E05-F002 belegt unabhaengigen fehlenden releaseYear im finalen kd_radar_websearch_context und Radaradapter. Mappingfix allein liefert deshalb noch keinen Kontext. Radar-Etappe beziehungsweise E14 soll gegen ihre Befunde abgleichen; nicht mit F002 als eine Ursache zusammenfassen.",
+        "references": [
+          "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql:239",
+          "supabase/functions/radar-websearch-task/index.ts:493",
+          "/private/tmp/kd-vollreview-20260916/validations/E05-F002.json"
+        ]
+      },
+      "disposition": "new_confirmed_finding",
+      "reason": "E14-F001 unabhängig confirmed/P2: bereits gespeichertes gültiges Werkjahr verschwindet im SQL-Kontext. Eigenständige Ursache gegenüber E05-F002. Ticket separat verfasst und nun hashgebunden abgenommen.",
+      "evidence": "validations/E14-F001.json; supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql:239-264"
+    },
+    {
+      "source_stage": "E05",
+      "note_index": 2,
+      "original_note": {
+        "topic": "Historischer Wikidata-Resolver",
+        "status": "not_promoted",
+        "detail": "tools/wikidata.js:141 akzeptiert einzigen Filmkandidaten ohne Abgleich vorgegebenen Jahres. Suche im eingefrorenen Quellbaum fand keine produktiven Aufrufer. Kein belegter aktueller Produktfehler; optional bei spaeterer Reaktivierung beachten."
+      },
+      "disposition": "remaining_boundary",
+      "reason": "Historischer Wikidata-Einzelkandidat ohne Jahresabgleich hat keinen belegten aktiven Aufrufer. Bei Reaktivierung neu prüfen.",
+      "evidence": "inbox/E05/REPORT.md"
+    },
+    {
+      "source_stage": "E05",
+      "note_index": 3,
+      "original_note": {
+        "topic": "SQL-Pflichtfeldguards und NULL",
+        "status": "cross_stage_review_note",
+        "detail": "Letzter kd_catalog_quellen_guard in 20260731170000 verwendet <> fuer jsonb_typeof fehlender Felder (79-94). Fehlende Pflichtfelder koennen deshalb SQL-NULL statt true ergeben. Aktueller Publisher-/Consumer-Schaden nicht reproduziert; in E14 Migrationsgesamtkonsistenz gegen uebergeordnete Validierung abgleichen, noch kein bestaetigtes Ticket."
+      },
+      "disposition": "remaining_boundary",
+      "reason": "Finaler Catalogguard verwendet nullable <>-Prüfungen. Split-NOT-NULL/Quellenstatus begrenzen einige Fälle, beseitigen aber fehlende JSON-Unterfelder nicht vollständig. Kein konkreter aktueller Publisher-/Consumerschaden nachgewiesen; defensiver Vertragshinweis, kein bestätigtes Ticket.",
+      "evidence": "supabase/migrations/20260731170000_split_streaming_catalog.sql:45-213"
+    },
+    {
+      "source_stage": "E05",
+      "note_index": 4,
+      "original_note": {
+        "topic": "Historische Quellenrollen",
+        "status": "resolved_by_current_docs",
+        "detail": "Watchmode/FlixPatrol-Plaene vom 11.09. sind historische Reviewobjekte. Fuer MotN gelten die spaeteren expliziten Override-Vertraege in docs/MOTN_STREAMING.md; keine vermeintlichen Bugs aus aelterer Quellenhierarchie abgeleitet."
+      },
+      "disposition": "counterevidence",
+      "reason": "Spätere explizite MotN-Verträge sind gegenüber früheren Planpapieren maßgeblich; keine Quellen-Neuausrichtung aus historischem Text.",
+      "evidence": "inbox/E05/REPORT.md; inbox/E06/REPORT.md"
+    },
+    {
+      "source_stage": "E06",
+      "note_index": 1,
+      "original_note": "E06-F001 verbindet SQL-Projektionsfrische mit App-Legacy-Metadaten. Known-Nachladung ist relevanter Gegenbeleg; keine Live-Störung behauptet.",
+      "disposition": "confirmed_finding",
+      "reason": "E06-F001 trennt SQL-Katalogablauf vom Neu-Ablauf. Known-Nachladung kann warnen, löst aber Paginggültigkeit nicht allgemein.",
+      "evidence": "supabase/migrations/20260914100000_streaming_pages_latency.sql; src/controllers/useStreamingPageController.js:145-181; draft-tickets/E06/KD-REV-E06-001.md"
+    },
+    {
+      "source_stage": "E06",
+      "note_index": 2,
+      "original_note": "E06-F002 betrifft Streaming und Mediathek-Löschung. Originale StreamingTab-Komponente lokal mit JSDOM reproduziert; unabhängige Validierung bleibt ausstehend.",
+      "disposition": "confirmed_finding",
+      "reason": "E06-F002 inzwischen unabhängig bestätigt: verwaiste Status-ID blockiert Wiederanlage; kein kompletter Mediatheklöschfehler.",
+      "evidence": "draft-tickets/E06/KD-REV-E06-002.md"
+    },
+    {
+      "source_stage": "E06",
+      "note_index": 3,
+      "original_note": "E06-F003 betrifft App-Ladepfad, Neu-Fristenbuch und externen Producer. Producer-Pruning wird im vorhandenen Testvertrag simuliert, tatsächlicher externer Betrieb ist nicht belegt.",
+      "disposition": "confirmed_finding",
+      "reason": "E06-F003 unabhängig bestätigt unter Diff-Pruning-Eingang; externer Betriebszustand unbekannt. SQL-Projektion ersetzt kein persistiertes persönliches Neu-Fristenbuch.",
+      "evidence": "supabase/migrations/20260913200000_streaming_pages_backend.sql:375-471; src/App.jsx:1490-1535; draft-tickets/E06/KD-REV-E06-003.md"
+    },
+    {
+      "source_stage": "E06",
+      "note_index": 4,
+      "original_note": "Querverweise außerhalb des Pakets wurden gezielt gelesen/gesucht (App.jsx, staffeln.js, externalTitleIdentity, catalogController, personalDataTransactionController), nicht als vollständige zusätzliche Dateilektüre attestiert.",
+      "disposition": "coverage_boundary",
+      "reason": "Fremde Dateien nur Querverweise; primäre Zuständigkeit unverändert.",
+      "evidence": "COVERAGE_AUDIT.json"
+    },
+    {
+      "source_stage": "E06",
+      "note_index": 5,
+      "original_note": "Bestehende Tests vollständig gelesen, nicht pauschal ausgeführt. Keine gesamte Suite, Produktbuilds, Live-/Provideranfragen oder Remote-Schreibvorgänge.",
+      "disposition": "evidence_boundary",
+      "reason": "Keine globale Suite/Build/Provider-/Remotewirkung aus Masterlektüre ableiten.",
+      "evidence": "inbox/E06/REPORT.md"
+    },
+    {
+      "source_stage": "E07",
+      "note_index": 1,
+      "original_note": {
+        "area": "E14 Migrationsgesamtkonsistenz",
+        "note": "E07 las alle 18 zugeordneten Entdecken-Migrationen vollstaendig und verfolgte die spaeteren Ueberschreibungen. Keine gesamte Migrationenkette ausgefuehrt; im Paket vorhandene PG17-Tests verwenden begrenzte synthetische Ausgangsschemata. Gesamtkettenintegration bleibt E14."
+      },
+      "disposition": "migration_review",
+      "reason": "E14 verfolgt wirksame Definitionen und ACL der Format-8/9-Kette; keine komplette Migrationenausführung behauptet. Lokale Bereichsproben sind keine globale Kettenintegration.",
+      "evidence": "migration_end_state; SUPPLEMENTAL_READS.json"
+    },
+    {
+      "source_stage": "E07",
+      "note_index": 2,
+      "original_note": {
+        "area": "Provider/Betrieb",
+        "note": "E07-F003 betrifft den weiterhin verdrahteten CLI-Live-Proof nach erfolgreichem Write, nicht den separaten aktuellen Workflow-Parser. Kein echter Einmallauf oder Providerrequest gestartet. tools/entdecken_facts_live.mjs vereinheitlicht Catch-Fehler zu Exit 1; ohne vollstaendigen Wrapper-Nachweis kein eigenstaendiger Budget- oder Retry-Befund erhoben."
+      },
+      "disposition": "counterevidence",
+      "reason": "E07-F003 refuted: bytegenauer Format-6-Preflight stoppt den behaupteten Einmallauf vor POST. Latente Helperlücke bleibt für eine ausdrücklich spätere Reaktivierung; keine Guardumgehung oder Retryhypothese.",
+      "evidence": "validations/E07-F003.json"
+    },
+    {
+      "source_stage": "E07",
+      "note_index": 3,
+      "original_note": {
+        "area": "Quellenidentitaet und Kino",
+        "note": "E07-F002 betrifft Verlust aller OeFI-Chartbelege in Format 8/9, nicht einen vollstaendigen Kinoausfall: lokale Programmfueller bleiben sichtbar. Strengen Jahr/Typ-Matcher beibehalten. Bestehender Format-6-Phasentest akzeptiert lokale Fueller ohne OeFI-Link; positive Beleg-Erhaltstests nutzen Format 7."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E07-F002 verliert ÖFI-Belege, nicht sämtliche Kinoangebote; lokale Füller bleiben. Strengen Matcher erhalten.",
+      "evidence": "draft-tickets/E07/KD-REV-E07-002.md"
+    },
+    {
+      "source_stage": "E07",
+      "note_index": 4,
+      "original_note": {
+        "area": "Pins / Konto / Katalog",
+        "note": "Persoenliche Pins, Legacy-Upgrade und dokumentierte Konto-/Offline-Vertraege gelesen. E07-F001 verbindet Mediathek-Sehstatus mit lokalem Entdecken-Filter. Katalog-, RLS- und Account-Gesamtsystem ausserhalb dieser Etappe nicht pauschal als geprueft ausgeben."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E07-F001 Film/Serie-Gesehenvergleich getrennt von Pinauflösung E01-F001 und Server-RLS.",
+      "evidence": "draft-tickets/E07/KD-REV-E07-001.md; draft-tickets/E01/KD-REV-E01-001.md"
+    },
+    {
+      "source_stage": "E08",
+      "note_index": 1,
+      "original_note": "E08-F004 und E08-F005 sind neue konkrete Vorschlaege mit isolierter JS-Reproduktion; unabhaengige Validierung steht aus. Keine eigene Bestätigung anstelle des Validators.",
+      "disposition": "confirmed_finding",
+      "reason": "E08-F004 und F005 jetzt unabhängig confirmed/P2 und Master-hashakzeptiert. Gastkontrolle in F004 auf tatsächliche statische Abgrenzung präzisiert.",
+      "evidence": "inbox/E08/TICKET_REVIEW.json; TICKET_AUDIT.json"
+    },
+    {
+      "source_stage": "E08",
+      "note_index": 2,
+      "original_note": "E08-F005 beruehrt tools/ai_smoke.mjs ausserhalb des E08-Pakets. Geprueft wurden Imports, Szenariodefinition und der aktive S8/P25-Aufruf 1340..1386; E14 soll den Quervertrag zum Kosten-/Smoke-Bereich koordinieren.",
+      "disposition": "confirmed_finding",
+      "reason": "E08-F005 betrifft Testtool S8/P25: ein Providerrequest und 1..4 Text-Websuchen. Kosten- und Nichttextgrenzen bleiben unverändert.",
+      "evidence": "draft-tickets/E08/KD-REV-E08-005.md"
+    },
+    {
+      "source_stage": "E08",
+      "note_index": 3,
+      "original_note": "E08-F003 beruehrt App.jsx und EntdeckenTab.jsx. Die unabhaengige Validierung enthaelt echten React/jsdom-Entfernenpfad und den produktiven Aufruferbeleg.",
+      "disposition": "confirmed_finding",
+      "reason": "E08-F003 Personenaboentfernung wegen leerem Katalog ist andere Ursache als Feedblockade F004.",
+      "evidence": "draft-tickets/E08/KD-REV-E08-003.md"
+    },
+    {
+      "source_stage": "E08",
+      "note_index": 4,
+      "original_note": "Historische August-Plaene und E17A/E18/E17B-Werkzeuge sind keine heutige Betriebsfreigabe. E17B Wave A besitzt absichtlich keine autorisierenden Remoteexecutor-Brands; untrusted Canonical-v2-Ergebnisse bleiben lokale Vergleichsartefakte.",
+      "disposition": "evidence_boundary",
+      "reason": "Historische Opspläne, Executorbrands und Vergleichsartefakte begründen keine heutige Außenwirkung.",
+      "evidence": "inbox/E08/REPORT.md"
+    },
+    {
+      "source_stage": "E08",
+      "note_index": 5,
+      "original_note": "Die September-Membermigration und aktuelle Feed-Overloads wurden in die Bewertung einbezogen. Der historische radar_review-Zugriffsfehler wird nicht erneut als offener Bug ausgegeben.",
+      "disposition": "counterevidence",
+      "reason": "Membermigration ersetzt Berechtigungsprädikat und ergänzt neuen Feedwrapper; kein aktuelles radar_review-Zugriffsloch behaupten.",
+      "evidence": "supabase/migrations/20260914210000_radar_member_search_access.sql:1-238"
+    },
+    {
+      "source_stage": "E08",
+      "note_index": 6,
+      "original_note": "Feed-/Account-/Outbox-Vertraege, sechs Tage Planung, Initialclaim, Retrybindung, Textfundprovenienz sowie Personen-/Gruppen-Altpfade wurden dateiuebergreifend gelesen. Keine Aussage zu tatsaechlich betroffenen Livekonten, Deploymentparitaet oder physischem iPhone.",
+      "disposition": "evidence_boundary",
+      "reason": "Verfolgte Account-/Feed-/Retryverträge sind source- und lokal begrenzt, kein Live-/PWA-Nachweis.",
+      "evidence": "inbox/E08/REPORT.md; migration_end_state"
+    },
+    {
+      "source_stage": "E09",
+      "note_index": 1,
+      "original_note": {
+        "topic": "Kino integration",
+        "detail": "F002 and F003 affect separate search branches. A shared exact date predicate may serve both fixes; retain title-override and time-without-cinema contracts. F002 requires expanded future program; F003 occurs in normal multiday window."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E09-F002 Stringdatumsvergleich und F003 übergangener harter Filter getrennt beheben; gemeinsamer Datumshelfer möglich, getrennte Trigger erhalten.",
+      "evidence": "draft-tickets/E09/KD-REV-E09-002.md; draft-tickets/E09/KD-REV-E09-003.md"
+    },
+    {
+      "source_stage": "E09",
+      "note_index": 2,
+      "original_note": {
+        "topic": "Account and personal storage",
+        "detail": "Owner-keyed App remount plus captured storage context counter the speculative old-account callback issue. No live RLS/device/reload acceptance claimed; F001 local UI/storage loss independently reproduced."
+      },
+      "disposition": "counterevidence",
+      "reason": "Owner-remount und Kontextbinding widerlegen pauschalen alten Callback-Kontozugriff; unabhängig persistierter Profilverlust F001 bleibt.",
+      "evidence": "src/components/EinstiegsGate.jsx:95-104; src/services/storage.js:197-237; draft-tickets/E09/KD-REV-E09-001.md"
+    },
+    {
+      "source_stage": "E09",
+      "note_index": 3,
+      "original_note": {
+        "topic": "Migration end state",
+        "detail": "Assigned profile migration fully read; latest constraint reference still lists profile key. E14 owns complete chronological migration consistency and live parity remains untested."
+      },
+      "disposition": "migration_review",
+      "reason": "Letzter kd_personal-Key-CHECK vom 14.09. enthält Profil und Wochenplan neben Pins; keine spätere Rücknahme gefunden.",
+      "evidence": "supabase/migrations/20260914230000_entdecken_pins_personal.sql:1-29"
+    },
+    {
+      "source_stage": "E09",
+      "note_index": 4,
+      "original_note": {
+        "topic": "Historical documentation/tests",
+        "detail": "Historical forecasting plans and X/F test comments are not current product truth. Current code/tests intentionally allow personal estimated WARUM and preserve confirmed profile use while AI creation is off. FINDER_SOLL=1 is included by npm test."
+      },
+      "disposition": "counterevidence",
+      "reason": "Historische WARUM-/KI-Schalterannahmen ersetzen aktuelle Schätzungs-/Profilverträge nicht; FINDER_SOLL-Test ist aktiv.",
+      "evidence": "inbox/E09/REPORT.md"
+    },
+    {
+      "source_stage": "E09",
+      "note_index": 5,
+      "original_note": {
+        "topic": "Blog entry and test scope",
+        "detail": "Release DatenTab hides BlogProfilAnalyse. F004 is a regression-test defect, not proof of an exploitable production hash/clock vulnerability. Other blog runtime and UI guards remain meaningful."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E09-F004 betrifft vier unausgeführte Regressionstestkörper, nicht einen belegten produktiven Hashangriff.",
+      "evidence": "draft-tickets/E09/KD-REV-E09-004.md"
+    },
+    {
+      "source_stage": "E09",
+      "note_index": 6,
+      "original_note": {
+        "topic": "Unpromoted observations",
+        "detail": "Profile deletion retains version while forecast staleness uses version equality; current harmful UI contract not established. No standalone finding. Recommendation epoch/alias effectiveness and same-owner remote-refresh races not established from bounded cross references; no confirmed defect claimed."
+      },
+      "disposition": "remaining_boundary",
+      "reason": "Profilversion nach Löschung und Empfehlungsepoch/Remote-Races ohne konkreten schädlichen Nutzerpfad bleiben offene Untersuchungsgrenzen, keine bestätigten Bugs.",
+      "evidence": "inbox/E09/READING_COMPLETE.json"
+    },
+    {
+      "source_stage": "E10",
+      "note_index": 1,
+      "original_note": "E10-F004 spans Filmwissen identity, Streaming/Mediathek callers, forecast payload and database key/read contract; carry into E14 migration and identity consistency review.",
+      "disposition": "confirmed_finding",
+      "reason": "E10-F004 betrifft typfreien TMDB-Key und typfreien Read-RPC; neuere FlixPatrol-Typprüfung repariert diesen separaten Cache nicht.",
+      "evidence": "supabase/migrations/20260729220000_etappe8_filmwissen_cache.sql:102-128; supabase/migrations/20260809121000_rollen_v1_access_enforcement.sql:275-446; draft-tickets/E10/KD-REV-E10-004.md"
+    },
+    {
+      "source_stage": "E10",
+      "note_index": 2,
+      "original_note": "Assigned migrations were read in full; historical rollout documents are not evidence of present deployment, enabled gates, provider rights or production data.",
+      "disposition": "evidence_boundary",
+      "reason": "Historische Rollouts sind keine gegenwärtige Deploy-/Providerfreigabe.",
+      "evidence": "inbox/E10/REPORT.md"
+    },
+    {
+      "source_stage": "E10",
+      "note_index": 3,
+      "original_note": "Separate validator reports mark all four findings confirmed/P2. Their executed mock evidence is not work executed by this master. Draft ticket author completion exists; ticket acceptance has not been performed in this reading-only continuation.",
+      "disposition": "confirmed_finding",
+      "reason": "Alle vier Tickets nun getrennt abgenommen und hashgleich; ausgeführte Belege stammen von Validatoren.",
+      "evidence": "inbox/E10/TICKET_REVIEW.json; TICKET_AUDIT.json"
+    },
+    {
+      "source_stage": "E11",
+      "note_index": 1,
+      "original_note": {
+        "stage": "E01/E06/E14",
+        "finding": "E11-F003",
+        "note": "Legacy-Streamingstatus benutzt schwächeren ID-Abgleich als progressives library_id-Mapping; Statuspersistenz und Navigation mit Streamingbereich abstimmen."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E11-F003 Legacy-ID-Abgleich unterläuft Konfliktsperre; aktueller progressive Pfad ist Gegenkontrolle. Separat von E06-F002 verwaistem Ziel.",
+      "evidence": "draft-tickets/E11/KD-REV-E11-003.md"
+    },
+    {
+      "source_stage": "E11",
+      "note_index": 2,
+      "original_note": {
+        "stage": "E01/E07/E14",
+        "finding": "E11-F002",
+        "note": "Globale Suche/Pinboard adressieren auch Programmfilme in persönlicher Kinoempfehlungslane; fehlender Zielanker in KinoTab."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E11-F002 Empfehlungskarte ohne Fokusanker; getrennt von verborgenem Pin E01-F001.",
+      "evidence": "draft-tickets/E11/KD-REV-E11-002.md"
+    },
+    {
+      "source_stage": "E11",
+      "note_index": 3,
+      "original_note": {
+        "stage": "E01/E14",
+        "finding": "E11-F004",
+        "note": "Persönlicher Kino-Reminder muss beim App-Sprung film_ref aus seiner Quelle erhalten; echte Pins/Vorschläge tragen diese bereits."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E11-F004 verliert vorhandene film_ref im Remindertransport. Anker existiert hier; deshalb kein Duplikat von F002.",
+      "evidence": "draft-tickets/E11/KD-REV-E11-004.md"
+    },
+    {
+      "source_stage": "E11",
+      "note_index": 4,
+      "original_note": {
+        "stage": "E02/E14",
+        "note": "SQL-Endzustand quergeprüft: spätere Rollenmigration ersetzt Serienwatch-Policies/RPC mit account_active, Private-Ops ergänzt ON DELETE CASCADE, September-Pins-CHECK erhält kd:wochenplan. Kein behaupteter Livezustand."
+      },
+      "disposition": "migration_review",
+      "reason": "Rollen-v1 besitzt account_active-RLS/invoker-Setter, Private-Ops ergänzt FK-CASCADE; letzter Personal-CHECK erhält Wochenplan.",
+      "evidence": "supabase/migrations/20260809121000_rollen_v1_access_enforcement.sql; supabase/migrations/20260809220000_private_pilot_ops.sql:157-159; supabase/migrations/20260914230000_entdecken_pins_personal.sql"
+    },
+    {
+      "source_stage": "E11",
+      "note_index": 5,
+      "original_note": {
+        "stage": "E13/E14",
+        "note": "WOCHENPLAN_SERIEN.md ist historisch: Serienbeobachtung, externer Linkeditor und aufgezählte Testverträge passen nicht mehr zum eingefrorenen Code. Kein Featurewunsch oder allein daraus abgeleiteter Produktbug."
+      },
+      "disposition": "counterevidence",
+      "reason": "Historisches Wochenplanpapier erzeugt keinen aktuellen Funktionsauftrag.",
+      "evidence": "inbox/E11/REPORT.md"
+    },
+    {
+      "source_stage": "E12",
+      "note_index": 1,
+      "original_note": {
+        "topic": "Tastaturzugang Kino/Streaming",
+        "finding": "E12-F002",
+        "note": "Renderer liegen fachlich bei Kino und Streaming. Validator bestätigt fehlenden direkten Detailtrigger; alternative globale Suchnavigation und bedingter Gesehen-Abbrechen-Umweg sind Gegenbelege gegen absolute Unzugänglichkeit."
+      },
+      "disposition": "confirmed_finding",
+      "reason": "E12-F002 fehlender neutraler Tastaturtrigger; Suche/Gesehen-Abbruch bleiben Teilgegenbelege gegen absolute Unerreichbarkeit.",
+      "evidence": "draft-tickets/E12/KD-REV-E12-002.md"
+    },
+    {
+      "source_stage": "E12",
+      "note_index": 2,
+      "original_note": {
+        "topic": "Historische mobile Suite",
+        "note": "playwright.config.mjs:9-11 aktiviert mobile-layout.spec.mjs nur mit KD_LEGACY_PUBLIC_MOBILE=1. Alte Gast-, Deep-Space- und Tab-Rollen-Annahmen dieser Datei werden nicht als aktuelle Produktfehler ausgegeben. Default-Gate nutzt kino-mobile-filter, private-release-login und neon-noir; zusätzliche private-v1-Tests liegen separat."
+      },
+      "disposition": "counterevidence",
+      "reason": "Legacy-mobile nur opt-in; heutiges Defaultgate und private-v1 separat. Keine alten Gastannahmen als Produktbug.",
+      "evidence": "inbox/E12/REPORT.md"
+    },
+    {
+      "source_stage": "E12",
+      "note_index": 3,
+      "original_note": {
+        "topic": "Historischer Cleanup-Test",
+        "note": "cleanup_c2_test.mjs:21,61-65 erwartet lokale JahrzehntFilter/AlphabetFilter-Funktionen in StreamingTab; der Snapshot importiert KatalogRegler. Kein Aufruf in package.json/.github gefunden. Als Testwartungsrest eingeordnet, kein Nachweis eines roten aktiven Gates; nicht ausgeführt."
+      },
+      "disposition": "remaining_boundary",
+      "reason": "cleanup_c2-Testwartungsrest ohne aktiven Runner; nicht erneut als aktiver Gatefehler priorisieren.",
+      "evidence": "inbox/E12/READING_COMPLETE.json"
+    },
+    {
+      "source_stage": "E12",
+      "note_index": 4,
+      "original_note": {
+        "topic": "Hilfepfade",
+        "note": "Einige Hilfeanweisungen nennen Unterabschnitte ohne die heutige übergeordnete Settings-Gruppe. Konto & Geräte-Sync existiert weiterhin als H2; Streaming-Quellen weiterhin als Klappe. Kein verlorenes Ziel und kein selbständiger Funktionsbefund belegt."
+      },
+      "disposition": "counterevidence",
+      "reason": "Hilfebegriffe ungenau, Ziele aber vorhanden; kein bestätigter verlorener Pfad.",
+      "evidence": "inbox/E12/READING_COMPLETE.json"
+    },
+    {
+      "source_stage": "E12",
+      "note_index": 5,
+      "original_note": {
+        "topic": "PWA-Abnahme",
+        "note": "Service-Worker-, Offline-, VisualViewport- und PWA-Verträge/Tests vollständig im Packet gelesen. Historische grüne Prüfberichte sind keine neue Browser-, Deployment- oder physische iPhone-Abnahme."
+      },
+      "disposition": "evidence_boundary",
+      "reason": "Keine neue physische PWA-/Offline-/Serviceworkerabnahme aus Quelllektüre oder alten Berichten.",
+      "evidence": "inbox/E12/REPORT.md"
+    },
+    {
+      "source_stage": "E13",
+      "note_index": 1,
+      "original_note": "F002 beruehrt den finalen Retentionzustand ausserhalb E13: 20260815120000_private_export_radar_pilot_compat.sql; E14 soll den Migrationsgesamtzustand beruecksichtigen.",
+      "disposition": "confirmed_finding",
+      "reason": "E13-F002: finale Retentiondefinition älter als Mail-Ratenbucket; nur Rate-Ledger ergänzen, dauernde Operationsidempotenz erhalten.",
+      "evidence": "supabase/migrations/20260815120000_private_export_radar_pilot_compat.sql:189-357; supabase/migrations/20260902090000_private_mail_request_guards.sql; draft-tickets/E13/KD-REV-E13-002.md"
+    },
+    {
+      "source_stage": "E13",
+      "note_index": 2,
+      "original_note": "F003 verknuepft Releasewerkzeug mit ai-task und seinen aktuellen gemeinsamen FlixPatrol-/Identitaetsabhaengigkeiten. Eigenstaendiger Byte-Readback bleibt Gegenbeleg gegen eine behauptete falsche Liveauslieferung.",
+      "disposition": "confirmed_finding",
+      "reason": "E13-F003 Importabschluss 11 statt 8; vollständiger Git-Check und separater Byte-Readback begrenzen Aussage. Keine falsche Liveauslieferung bestätigt.",
+      "evidence": "draft-tickets/E13/KD-REV-E13-003.md"
+    },
+    {
+      "source_stage": "E13",
+      "note_index": 3,
+      "original_note": "F004 ist ein Test-/Produkttextwiderspruch im aktiven private-v1-Gate. Produkttext nicht auf den historischen Test zuruecksetzen.",
+      "disposition": "confirmed_finding",
+      "reason": "E13-F004 aktive private-v1-Assertion aktualisieren; persönlichen Produkthero erhalten.",
+      "evidence": "draft-tickets/E13/KD-REV-E13-004.md"
+    },
+    {
+      "source_stage": "E13",
+      "note_index": 4,
+      "original_note": "F005 betrifft den lokalen historischen Demo-Publisher. Aktuelle Nutzung und Prioritaet separat klaeren; keine Datenbankausfuehrung erfolgt.",
+      "disposition": "unresolved",
+      "reason": "E13-F005 bleibt unresolved: statischer Generatorfehler, unabhängige CLI/SQL-Probe automatisch unterbrochen. Keine Wiederholung/Abwandlung, kein Ticket mit bestätigtem P2.",
+      "evidence": "validations/E13-F005.json"
+    },
+    {
+      "source_stage": "E13",
+      "note_index": 5,
+      "original_note": "Historische Build-/CI-/Provider-/PWA-Belege in Dokumenten sind keine aktuelle Liveverifikation.",
+      "disposition": "evidence_boundary",
+      "reason": "Historische CI/Provider/PWA-Belege bleiben vergangene Nachweise, keine Liveverifikation dieses Reviews.",
+      "evidence": "inbox/E13/REPORT.md"
+    }
+  ],
+  "migration_end_state": {
+    "verdict": "targeted_chronological_source_contract_review_complete",
+    "contracts": [
+      {
+        "contract": "Private Kontogrenze, Shared und Catalog",
+        "chronology": "Rollenbasis/enforcement 09.08. -> private release access boundary 01.09.",
+        "effective_source_state": "Aktive Account-RLS schützt persönliche und Shared-Schreibwege. September entzieht anonymes Catalog-/kd_store-/Shared-Listenrecht; Listen-RPC prüft auth.uid und aktiven Account. Alte Snapshotgrants sind kein aktuelles Zugriffsloch.",
+        "evidence": "20260809121000_rollen_v1_access_enforcement.sql vollständig; 20260901193000_private_release_access_boundary.sql vollständig",
+        "limits": "Statisch, keine Live-RLS-Abnahme. Rollen-Enforcement setzt vorab gelockte Tabellen, deaktivierte KI und bestimmte Bootstrapkonten voraus; kein universell replaybares Leerschema behauptet."
+      },
+      {
+        "contract": "Persönliche Keys und Serienwatch",
+        "chronology": "Wochenplan/Profil-Patches -> Rollen-RLS 09.08. -> Private-Ops CASCADE 09.08. -> Entdecken-Pins-CHECK 14.09.",
+        "effective_source_state": "Letzter Key-CHECK erhält bestehende Profil-/Wochenplan-/Radar-Keys und fügt Pins hinzu. Serienwatch bleibt account_active/own-account, Setter bigint[] begrenzt, FK löscht beim Accountdelete kaskadierend.",
+        "evidence": "20260914230000_entdecken_pins_personal.sql vollständig; 20260809121000_rollen_v1_access_enforcement.sql vollständig; 20260809220000_private_pilot_ops.sql:157-159",
+        "limits": "Keine tatsächlichen Kontodeletes oder Bestandsmigration ausgeführt."
+      },
+      {
+        "contract": "Filmwissen-Identität",
+        "chronology": "Cache-DDL 29.07. -> spätere Adapter/Syntheseänderungen -> Rollenread-RPC 09.08.",
+        "effective_source_state": "Werk selbst hat typ, Kennungsschlüssel bleibt (namespace,kennung), aktueller Read-RPC bleibt (text,text) ohne TMDB-Medientyp. Kein späteres typisiertes Schlüssel-ALTER gefunden. E10-F004 bleibt trotz neuerem FlixPatrol-Lookup bestehen.",
+        "evidence": "20260729220000_etappe8_filmwissen_cache.sql:24-49,102-128; 20260809121000_rollen_v1_access_enforcement.sql:275-446; Migrationsbaumsuche nach Objekt/ALTER",
+        "limits": "Keine Datenreparatur oder Aussage über reale Kollisionen. Eine spätere Korrektur benötigt explizite Altbestandsbehandlung."
+      },
+      {
+        "contract": "FlixPatrol Lookup versus Radar-Kontext",
+        "chronology": "Radar v6 Kontext 22.08. -> title_facts_lookup 11.09. -> Member-Zugang 14.09.",
+        "effective_source_state": "Lookup akzeptiert film|series und prüft starke IDs; JS-intern serie ist kein SQL-Wert (E05-F002). Der finale Werk-Kontext verliert gespeichertes releaseYear (E14-F001); Memberpatch ändert nur Berechtigung, nicht die Projektion.",
+        "evidence": "20260911120000_title_facts_lookup.sql:126-218; 20260822200000_radar_title_group_discovery_v6.sql:188-286; 20260914210000_radar_member_search_access.sql vollständig; validations/E14-F001.json",
+        "limits": "E14-F001-Validator führte 25 Radar-/Private-/Retry-Migrationen und effektiven pg_get_functiondef-Readback aus; Cache/Provider gemockt. Nicht globale Migrationenkette."
+      },
+      {
+        "contract": "Radar-Feed Overloads und Zugriff",
+        "chronology": "Schrittweise interne Wrapper August -> Suchstatus-Overload 31.08. -> Textfund-sourceTarget 06.09. -> Member-Wrapper/Patches 14.09.",
+        "effective_source_state": "uuid[] bleibt separat von uuid[],boolean; kein Default-Argument-Mehrdeutigkeitswechsel. Zweiargument-Wrapper delegiert an den aktuellen Einargumentfeed; neuer search_access-Wrapper delegiert an beide bisherigen Verträge. Neue Textfunde bleiben auth.uid-gebunden. Grants explizit auth/service, interne Helfer service-only.",
+        "evidence": "20260831120000_radar_search_status.sql vollständig; 20260906170000_radar_text_finding_source_target.sql:1-42; 20260914210000_radar_member_search_access.sql vollständig",
+        "limits": "Nicht jeden historischen internen Wrapper erneut vollständig gelesen; E08-Primärlektüre und fokussierte Validator-Integrationen ergänzen E14. Kein pauschaler Ketten-PASS."
+      },
+      {
+        "contract": "Entdecken Schreibsignaturen und Formate",
+        "chronology": "Daily 20.08. -> Weekly 22.08. löscht alte Signaturen -> Lease/Format5/6 -> FlixPatrol8 09.09. -> Batch9 11.09.",
+        "effective_source_state": "Alter unfenced save(jsonb) explizit gelöscht. Wirksamer save(jsonb,bigint) prüft Tages-Fence, Lease und Payload; Dispatcher akzeptiert 9/8/6/5, Readback unterscheidet 50/5 von 25/2. CREATE OR REPLACE derselben Signaturen erhält zuvor service-only eingeschränkte ACL; neue v9-Helfer explizit service-only. Feedstatus bleibt read-only, kein impliziter Providerstart.",
+        "evidence": "20260822190000_entdecken_weekly_feed.sql:143-148; 20260909210000_entdecken_flixpatrol_feed.sql:243-308,450-474; 20260911123000_entdecken_flixpatrol_batch_format9.sql:273-358",
+        "limits": "Alte Format6-CLI-Provenienz bleibt eigenständiger Vorabstopp: E07-F003 refuted, nicht durch SQL-Formatkompatibilität geheilt. Keine globale SQL-Ausführung oder Flags-Liveprüfung."
+      },
+      {
+        "contract": "Streaming Quelle, Projektion, Seiten und Fristen",
+        "chronology": "Split-Guard 31.07. -> Streamingpages Backend 13.09. -> Latency-Ersatz 14.09.",
+        "effective_source_state": "Bekannt/Entdecken müssen bei Projektionsrefresh zusammenpassen; interne Tabellen RLS/service-only. Latency ersetzt identische Page-RPC-Signaturen und erhält authenticated Grant. Auth/Accountprüfung bleibt; nextExpiryAt beschreibt Neu-Fristablauf, kein vollständiger Quellkatalog-Ablauf. E06-F001/F003 und E14-F002 betreffen drei verschiedene Grenzen.",
+        "evidence": "20260731170000_split_streaming_catalog.sql vollständig; 20260913200000_streaming_pages_backend.sql:66-74,375-471,808-826; 20260914100000_streaming_pages_latency.sql vollständig",
+        "limits": "Keine Live-Katalogfrische oder reales Diff-Pruning belegt. SQL-null-Unterfeldguards bleiben eigener nicht bestätigter Defensivhinweis; keine externe Publishergarantie erfunden."
+      },
+      {
+        "contract": "Private Retention und spätere Mailledgers",
+        "chronology": "Private-Ops 09.08. -> Retentionfix 10.08. -> Radar-kompatible finale Retention 15.08. -> Mailledgers 02.09.",
+        "effective_source_state": "Finale Retentiondefinition deckt frühere Tabellen, aber keine später erzeugten Mail-Ratenbuckets. E13-F002 bestätigt unbegrenzte Ansammlung/Dryrun-Blindstelle. Operationsledger trotz expires_at nicht automatisch löschen: Replay-Idempotenz gilt dauerhaft fail-closed.",
+        "evidence": "20260815120000_private_export_radar_pilot_compat.sql:189-357; 20260902090000_private_mail_request_guards.sql:1-100,315-405; vollständiger E13-F002-Ticket-/Validatorbeleg",
+        "limits": "E13-Validator führte exakte Mailmigration und finalen Retentionkörper lokal mit leeren sonstigen Retentionfixtures aus, nicht gesamten historischen Datenbestand. E14 keine eigene SQL-Ausführung."
+      },
+      {
+        "contract": "Automatic AI Retry und Backlog",
+        "chronology": "Retry-Jobs 03.09. -> Radar-Retrybindung -> Memberpatch -> Backlog-RPC 16.09.",
+        "effective_source_state": "Neuester Backlog-RPC liest fällige pending Jobs service-only zu eigenem clock_timestamp. Claim/Backlog sind getrennte Momentaufnahmen; backlog mit processedJobs=0 ist zulässig (E13-F001), kein Beleg einer verlorenen Jobverarbeitung.",
+        "evidence": "20260916193000_automatic_ai_retry_backlog.sql vollständig; draft-tickets/E13/KD-REV-E13-001.md",
+        "limits": "Zeitgrenzenreproduktion im E13-Validator mit Mock, kein SQL-Lockkonkurrenztest. Aktuelle Scheduleraktivierung unbekannt."
+      }
+    ],
+    "limits": [
+      "Regexindex nur Navigation, nicht SQL-Parser oder Endzustandsbeweis.",
+      "Kein gesamter Migrationenreplay und kein Live-Schema; sourcebezogener Endzustand unter erfolgreicher geordneter Anwendung der jeweiligen Migrationen.",
+      "Primäre SQL-Lektüren E01-E13 plus E14-Zusatzintervalle und ausdrücklich bezeichnete unabhängige fokussierte SQL-Proben."
+    ]
+  },
+  "duplicates": {
+    "merged": [],
+    "conclusion": "Keine der 49 bestätigten Ursachen ist als Duplikat zusammenzulegen.",
+    "separate_groups": [
+      {
+        "findings": [
+          "E07-F001",
+          "E10-F004",
+          "E11-F003"
+        ],
+        "why": "Film/Serie-Thema gemeinsam, aber Gesehenfilter, DB-Filmwissenkey und Legacy-Statusresolver sind getrennte Verluststellen."
+      },
+      {
+        "findings": [
+          "E05-F002",
+          "E14-F001"
+        ],
+        "why": "Falscher SQL-Enumwert gegenüber fehlendem bereits gespeichertem Bezugsjahr; Filmfall isoliert unabhängig bestätigt."
+      },
+      {
+        "findings": [
+          "E06-F001",
+          "E06-F003",
+          "E14-F002",
+          "E05-F001"
+        ],
+        "why": "Quellablauf, persistierte Neu-Anker, explizite Cacheinvalidierung und Generationsmischung sind vier unabhängige Verträge."
+      },
+      {
+        "findings": [
+          "E01-F001",
+          "E04-F003",
+          "E11-F002",
+          "E11-F004"
+        ],
+        "why": "Fehlende Pinauflösung, Filtermaskierung, fehlender DOM-Anker und verlorene Filmreferenz brauchen unterschiedliche Korrekturen."
+      },
+      {
+        "findings": [
+          "E08-F003",
+          "E08-F004"
+        ],
+        "why": "Personenresolver blockiert Entfernen versus Textvalidator blockiert gesamten Feed/Outbox."
+      },
+      {
+        "findings": [
+          "E09-F002",
+          "E09-F003",
+          "E01-F002"
+        ],
+        "why": "Stringdatumsvergleich, ausgelassener harter Filter und jahrlose Pinsortierung getrennt; gemeinsame Utility möglich, kein gemeinsamer Bug."
+      }
+    ]
+  },
+  "ticket_corrections": [
+    {
+      "finding_id": "E08-F004",
+      "status": "resolved_hash_verified",
+      "change": "Gastbetrieb als statische Scopegrenze statt ausgeführte Gegenprobe bezeichnet; fremdes synthetisches Konto bleibt ausgeführte Kontrolle.",
+      "hash": "999fe68fe92fe551a65296451a9bafba75d5d8bffcc9ce6ffa60999c0406a998"
+    },
+    {
+      "finding_id": "E08-F001",
+      "status": "resolved_hash_verified",
+      "location": "Abhängigkeiten und offene Punkte, Zeile 62",
+      "current": "Keine primäre Master-Leseabdeckung bestätigt; dokumentiert ist ausschließlich der zugeteilte, unabhängig validierte Finding-Pfad.",
+      "replacement": "Dieses Ticket dokumentiert den unabhängig validierten Finding-Pfad; die vollständige primäre E08-Lektüre ist separat in READING_COMPLETE.json und den Attestationen belegt.",
+      "reason": "Keine materielle Ticketabweichung. Satz sonst leicht als globale Leselücke missverständlich; dem Overwatcher bereits geliefert.",
+      "hash": "456c8e06a885d7a0c83647e3624ef008f87c9da7b415672ae2500091cdcc5c6a"
+    },
+    {
+      "finding_id": "E14-F001",
+      "status": "resolved_hash_verified",
+      "source": "TICKET_REVIEW.json",
+      "reason": "no_change ist Ergebnis der gemockten Suchfälle, keine allgemeine Zusage über reale Suchergebnisse.",
+      "hash": "c816560d1d7531cf46de16ab6fd7ecc95e6f91feb3b30d22e0d3eaef9635acb3"
+    }
+  ],
+  "ordered_tickets": [
+    {
+      "finding_id": "E02-F001",
+      "category": "product",
+      "order": 1,
+      "reason": "Credentialgeneration zuerst schützen; Logout und neuer Login dürfen nicht durch alten Refresh überschrieben werden.",
+      "priority": "P1",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "b981b014d6359f53aa6ab9f7cfdb2c7de928792c2969bea5601436367532ecdf"
+    },
+    {
+      "finding_id": "E03-F002",
+      "category": "product",
+      "order": 2,
+      "reason": "Danach Gast-/Kontotöpfe trennen; normale Bearbeitung darf keine stillschweigende Übernahme persistieren.",
+      "priority": "P1",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "fcd903a3098883aea89c0837ca0de0b844f6a5b3ace6ed52cf82031de7aebaca"
+    },
+    {
+      "finding_id": "E03-F001",
+      "category": "product",
+      "order": 3,
+      "reason": "Bestätigte Daten bei überlappendem Pull erhalten; zuverlässiger Kontostand vor UI-Folgekorrekturen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "908d26af1b6088ca4e2609b36b922b2636d435b1b18cbf6baa3ff74acb2b7a73"
+    },
+    {
+      "finding_id": "E09-F001",
+      "category": "product",
+      "order": 4,
+      "reason": "Dauerhaften Verlust bestätigter persönlicher Profilfilme im Ergänzungsweg stoppen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "49b3c703854bad37e111116f085f7370438080d7dc233f343f4b9291025b7723"
+    },
+    {
+      "finding_id": "E08-F002",
+      "category": "product",
+      "order": 5,
+      "reason": "Akzeptierte Plattformfunde samt Quelle getrennt erhalten; migrationskompatible Identität vor weiteren Radar-Korrekturen klären.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "64cb66532f226eef5d9d697b7e8b729fba4f2c8c3438bba128a79dadd5f21684"
+    },
+    {
+      "finding_id": "E05-F003",
+      "category": "product",
+      "order": 6,
+      "reason": "Stabile nichtleere interne IDs herstellen; Auswahl/Einzeledits und spätere Navigationsprüfungen brauchen eindeutige Ziele.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "fe4178d285408f2e830c15ef3a1d07cc15cf9df481d798ef50a6f3491185569f"
+    },
+    {
+      "finding_id": "E10-F004",
+      "category": "product",
+      "order": 7,
+      "reason": "Typabhängige TMDB-Identität im Filmwissen end-to-end schützen; falsche Werkevidenz wirkt bis WARUM.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "75c3dfa25a0b66de01136e59a5f201e27b3820f9eb5705b43afda28ad3241b1d"
+    },
+    {
+      "finding_id": "E04-F004",
+      "category": "product",
+      "order": 8,
+      "reason": "Gespeicherte Must-Watch-Jahre beim schrittweisen Editieren bewahren.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "9bb3ec0dbf721ca60bca0c44e1e681fd770ace5b33b5bf4c60bc8f3ca63373fc"
+    },
+    {
+      "finding_id": "E04-F005",
+      "category": "product",
+      "order": 9,
+      "reason": "Manuelle Importkorrekturen bei Einzelwritefehler erhalten; bestätigte Teilerfolge bewahren.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "d7590155ef10abdde2c0e7a7dc4f0ed098cc93d3c8b0105b3a30e2c4dee778b6"
+    },
+    {
+      "finding_id": "E04-F006",
+      "category": "product",
+      "order": 10,
+      "reason": "Film/Serie-Wechsel darf keinen falschen Typ persistieren.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "282ee404ceddd19b7b676f6c137b5f2a1e7800853b0aff538e4fbe8cff08459d"
+    },
+    {
+      "finding_id": "E04-F001",
+      "category": "product",
+      "order": 11,
+      "reason": "Bekanntes Jahr und Werkart im Blogmatching erhalten; falsche stabile Verlinkung vermeiden.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "3822ff421253a7d30f01f3c32b678771e1438778ca0bb11e84c92ed50f4c7557"
+    },
+    {
+      "finding_id": "E08-F004",
+      "category": "product",
+      "order": 12,
+      "reason": "Blockade des gesamten eigenen Radarfeeds und seiner Entfernung durch zulässigen Text beseitigen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "999fe68fe92fe551a65296451a9bafba75d5d8bffcc9ce6ffa60999c0406a998"
+    },
+    {
+      "finding_id": "E02-F002",
+      "category": "product",
+      "order": 13,
+      "reason": "401-Erholung nach Credential-Races sicher erzwingen; E02-F001-Generationsschutz dabei erhalten.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "e37797941761ff92f498f41af8b2cc769dbfead48402d2fb4b531dcf838dde9e"
+    },
+    {
+      "finding_id": "E08-F003",
+      "category": "product",
+      "order": 14,
+      "reason": "Berechtigtes Entfernen bestehender Personenabos unabhängig vom aktuellen Beispielkatalog machen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "60ab9fbbf7c0c630361218e680b5277faa6f3c73d9213eed2e54bbbfc3ba1a35"
+    },
+    {
+      "finding_id": "E06-F002",
+      "category": "product",
+      "order": 15,
+      "reason": "Wiederanlage regulär gelöschter Titel durch verwaiste Status-IDs nicht blockieren.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "20423d71203ab4d08c7bcd4d732104919307c1be6764f0a71e07342a6f9ab4bf"
+    },
+    {
+      "finding_id": "E11-F003",
+      "category": "product",
+      "order": 16,
+      "reason": "Im erreichbaren Legacy-Fallback falsche Werkzuordnung verhindern; progressive Gegenkontrolle erhalten.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "63aa0f5c021114959b420f5775afe540f4c0bbba2aefd44635fc9987f67e1c33"
+    },
+    {
+      "finding_id": "E05-F001",
+      "category": "product",
+      "order": 17,
+      "reason": "Keine widersprüchlichen Kataloggenerationen nach partiellem Known-Fehler mischen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "c96cb802a4c98b401cf5773c2b9e961b1b9eea290122f9823fd0f0f1323122ac"
+    },
+    {
+      "finding_id": "E06-F001",
+      "category": "product",
+      "order": 18,
+      "reason": "Quellkatalog-Ablauf im progressiven Pfad erhalten; abgelaufene Angebote nicht als aktuell weiterführen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "fdf836d21e6347ba4175643021429882cf2ec9c96455c07d21ce2325cb24f167"
+    },
+    {
+      "finding_id": "E14-F002",
+      "category": "product",
+      "order": 19,
+      "reason": "Manuelle Refreshabsicht explizit an Pagingcache weitergeben; baut auf unveränderter Kontogrenze auf, unabhängig vom Ablauf-Fix.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "f95f3545c31ce0b82288e0339da57da87e02a5c78e8a1671053f8252d0a088f9"
+    },
+    {
+      "finding_id": "E06-F003",
+      "category": "product",
+      "order": 20,
+      "reason": "Persönliche 14-Tage-Anker auch im progressiven Datenweg erhalten; Refresh darf Neu-Fristen nicht neu starten.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "60509be122448e0f0fe087d493d18d9c41922e8a807f557c83e42099314d474a"
+    },
+    {
+      "finding_id": "E07-F001",
+      "category": "product",
+      "order": 21,
+      "reason": "Gesehen-Abgleich nach Film/Serie trennen; ungesehene andere Werkart nicht ausblenden.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "ed79987e20ae6aaad93e07d904d1673a48b028d75f9733124da9ed82dfd3b2d8"
+    },
+    {
+      "finding_id": "E11-F001",
+      "category": "product",
+      "order": 22,
+      "reason": "Sichtbare Wiederholungsgrenze 12 tatsächlich speichern, bevor weitere Terminpräsentation korrigiert wird.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "eb96f4b103baf58b11ae0f48c081d60860ab53caadbfc2d43329a5478b62db6f"
+    },
+    {
+      "finding_id": "E12-F003",
+      "category": "product",
+      "order": 23,
+      "reason": "Wochentag-Touchflächen trennen; falsches Nachbartag-Toggling auf schmalen Viewports verhindern.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "264981ac071d26eb19364777d43e090c6fbae9c44b39277893a7a49236f23982"
+    },
+    {
+      "finding_id": "E12-F002",
+      "category": "product",
+      "order": 24,
+      "reason": "Direkten Tastaturzugang zu sichtbaren Katalogdetails herstellen; innere Aktionen separat halten.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "3d9bb4805f2e333cd318ae9474fd403140e39eabba3cd279912e829acbfe1800"
+    },
+    {
+      "finding_id": "E10-F003",
+      "category": "product",
+      "order": 25,
+      "reason": "Quellenbody innerhalb Adaptertimeout begrenzen; optionalen Recherchepfad nicht endlos hängen lassen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "8b6746354184c09088b5f8ca473b95e344262c524e29678b11a51ff147970329"
+    },
+    {
+      "finding_id": "E01-F001",
+      "category": "product",
+      "order": 26,
+      "reason": "Persistierte Titel-Pins nach frischem Start erreichbar machen, ohne Katalogvollständigkeit vorzutäuschen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "1f15b1410fdb803cec122d2dc7395e866a410ef42e36955e6f6f704bac257fa3"
+    },
+    {
+      "finding_id": "E04-F003",
+      "category": "product",
+      "order": 27,
+      "reason": "Must-Watch-Sprung über widersprechende Mediathekfilter hinweg zustellen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "b40146d7438b168d04c6e556fffa3c654984671b1026c5f1437c30dc5b730095"
+    },
+    {
+      "finding_id": "E11-F004",
+      "category": "product",
+      "order": 28,
+      "reason": "Aktuelle Filmreferenz vom persönlichen Kinoreminder zur vorhandenen Zielkarte transportieren.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "f42564a6d102a529fd1e1df5e051ca53382ac3ace49f73e9daecb5a11ab8b7b6"
+    },
+    {
+      "finding_id": "E11-F002",
+      "category": "product",
+      "order": 29,
+      "reason": "Programmanker auch an persönlichen Kinoempfehlungen bereitstellen; andere Ursache als Remindertransport.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "4ed78ea33f1c62e252f5f300086bbf5d4dd5efc8d62d9e4c7af340b4bfe57d73"
+    },
+    {
+      "finding_id": "E09-F002",
+      "category": "product",
+      "order": 30,
+      "reason": "Exakten Tagesvergleich im Finder herstellen; wiederverwendbare Datumslogik vor zweitem Filterzweig prüfen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "a81b8abdf298c029018b5223bb2fb016d4be5073e7a40adf255aa92b89ca2576"
+    },
+    {
+      "finding_id": "E09-F003",
+      "category": "product",
+      "order": 31,
+      "reason": "Expliziten Tagesfilter auch im unbewerteten Kinozweig anwenden; Titeloverride-Vertrag erhalten.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "82663ae96edeb648726f6685abc003c187e3669bbd1df2dc73dca02d3270bdfd"
+    },
+    {
+      "finding_id": "E01-F002",
+      "category": "product",
+      "order": 32,
+      "reason": "Jahrübergreifende Terminreihenfolge korrigieren, damit naher Dezembertermin nicht verdrängt wird.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "810277b70d509bb341a7d2100ed5b852e411c932465766a4cbbb0b560d2a69b0"
+    },
+    {
+      "finding_id": "E04-F002",
+      "category": "product",
+      "order": 33,
+      "reason": "Bearbeitete KI-Vorschläge korrekt als bearbeitet kennzeichnen; persönliche Bewertung bewahren.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "14a8c8634ddeddf63e43f16e6c9ea2f6af17bb93000c52d1084014f397af2a53"
+    },
+    {
+      "finding_id": "E08-F001",
+      "category": "product",
+      "order": 34,
+      "reason": "Bestätigten Speicherteilerfolg korrekt darstellen; Receipt nicht zur UI-Vereinfachung verfälschen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "456c8e06a885d7a0c83647e3624ef008f87c9da7b415672ae2500091cdcc5c6a"
+    },
+    {
+      "finding_id": "E05-F002",
+      "category": "product",
+      "order": 35,
+      "reason": "Internes serie explizit auf SQL series abbilden; Voraussetzung für Serienabnahme des zusätzlichen Radarjahr-Fixes.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "5ca30d7fa90c7e2bc43ecc17165821c19f9a1493f1830865b0151c1f0b58f24c"
+    },
+    {
+      "finding_id": "E14-F001",
+      "category": "product",
+      "order": 36,
+      "reason": "Bereits belegtes Werkjahr im Radar-Kontext erhalten; Filmfall unabhängig, Serienfall zusätzlich mit E05-F002 abnehmen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "c816560d1d7531cf46de16ab6fd7ecc95e6f91feb3b30d22e0d3eaef9635acb3"
+    },
+    {
+      "finding_id": "E07-F002",
+      "category": "product",
+      "order": 37,
+      "reason": "ÖFI-Provenienz der Format-8/9-Karten bis zur Anzeige bewahren; keine Matcherlockerung.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "f225ee6fcc1a7fa7cb633e6a8b292410df4cf958bae7c0adff2086a3aef9d583"
+    },
+    {
+      "finding_id": "E12-F001",
+      "category": "product",
+      "order": 38,
+      "reason": "Vorschaukopf/Schließenfläche zwischen 520 und 760 CSS-Pixeln vollständig sichtbar halten.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "0850140fa4f4bfc6694c979dfb36b3bc8c6aa5287cf1f85f24690428cf29331c"
+    },
+    {
+      "finding_id": "E10-F001",
+      "category": "product",
+      "order": 39,
+      "reason": "JSON-null an API-Grenze kontrolliert abweisen; keine weitergehende Kosten-/Authwirkung unterstellen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "73deb669cb35eddac7203854c69cf57c10ad14bd9898336161a00daad3117ddf"
+    },
+    {
+      "finding_id": "E13-F003",
+      "category": "operations",
+      "order": 40,
+      "reason": "Vor späterem Release vollständigen Importabschluss in Dirty-/Quellhashnachweis erfassen; keine aktuelle Deployfreigabe.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "0f14f3f77bf7371832ac187453ac87d77191b0f3c1b6890f4c8f8b12ec591bfd"
+    },
+    {
+      "finding_id": "E09-F004",
+      "category": "test_tool",
+      "order": 41,
+      "reason": "Vier bisher nicht laufende Testkörper tatsächlich ausführen; falsches Grün beseitigen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "b7f506e2e9983bbb2f8692f5d11422ecdab4d52f3aad59125bb10e05a35cd1aa"
+    },
+    {
+      "finding_id": "E13-F004",
+      "category": "test_tool",
+      "order": 42,
+      "reason": "Aktives private-v1-Gate an beabsichtigten Produkthero angleichen; folgende Checks erreichbar machen.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "38b573059fc52458f02b5880ff8032c7f4e9d54dadd9fa4e3108a0ee69851144"
+    },
+    {
+      "finding_id": "E02-F003",
+      "category": "test_tool",
+      "order": 43,
+      "reason": "Testproben bei Transportfehler robust aufräumen, bevor ein künftiger ausdrücklich freigegebener RLS-Lauf erfolgt.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "7ab808e02f982843f611944dda060857e043e66621ec864616ced20e6d51e6ce"
+    },
+    {
+      "finding_id": "E08-F005",
+      "category": "test_tool",
+      "order": 44,
+      "reason": "Freitext-Smoke auf einen Providerrequest mit 1..4 Suchen korrigieren, ohne Kosten-/Receiptgrenzen zu lockern.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "7bc04d6a1f0177af47d48cc0f4edcdcc033c1ccdb7edd6a2e92b1bfd754df5b3"
+    },
+    {
+      "finding_id": "E13-F001",
+      "category": "operations",
+      "order": 45,
+      "reason": "Gültigen backlog/0-Zeitgrenzenfall akzeptieren, damit Rückstandstelemetrie nicht ausfällt.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "eecf9f8ca5e41fd766070ac26b0c60be088084859f27f6b27a9826fb31f814c8"
+    },
+    {
+      "finding_id": "E13-F002",
+      "category": "operations",
+      "order": 46,
+      "reason": "Begrenzte Retention nur für abgelaufene Mailratenfenster ergänzen; Operationsidempotenz erhalten.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "1486aeaaf76dbb0d4dfcce5c232c338ba6dc2a9f71b4e172304f354ade4bd224"
+    },
+    {
+      "finding_id": "E10-F002",
+      "category": "operations",
+      "order": 47,
+      "reason": "Tokenfreie Diagnosefehler ehrlich als Fehler zurückgeben; nicht als leeren erfolgreichen Modellkatalog.",
+      "priority": "P2",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "11315c0ad0b14f8477ed73b98c800a36a71d6e011b5d5501952f27046fe9e323"
+    },
+    {
+      "finding_id": "E11-F005",
+      "category": "product",
+      "order": 48,
+      "reason": "P3: Leerzeichentitel mit sichtbarer Validierung und Nullguard abweisen.",
+      "priority": "P3",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "0e3d43dc81e130b49e229650deae181e86a93f5a2a3e26ed0b47e55e454883a5"
+    },
+    {
+      "finding_id": "E03-F003",
+      "category": "test_tool",
+      "order": 49,
+      "reason": "P3: Standalone-Löschschutzfixture reparieren, damit ihre sechs Folgechecks laufen.",
+      "priority": "P3",
+      "ticket_state": "accepted_hash_verified",
+      "ticket_sha256": "e9d88e5c7b6549bb5202b5ac8ec0127e84e1275db29ce640fd26d3ba7812622f"
+    }
+  ],
+  "unresolved": [
+    {
+      "id": "E13-F005",
+      "status": "unresolved",
+      "reason": "Statischer SQL-Generatorverdacht; unabhängige Laufzeitprüfung automatisch unterbrochen. Kein Retry/Workaround, kein bestätigtes P2-Ticket.",
+      "evidence": "validations/E13-F005.json"
+    },
+    {
+      "id": "E14-scope-limits",
+      "status": "explicit_boundaries",
+      "reason": "Vollständiger historischer SQL-Replay, aktuelle Remote-/Deploy-/Providerzustände, externe Producer-Pruningpraxis und physische Geräte/PWA nicht geprüft. Kein Produkt-PASS."
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "E14-F001",
+      "status": "confirmed",
+      "severity": "P2",
+      "validation_path": "/private/tmp/kd-vollreview-20260916/validations/E14-F001.json",
+      "ticket_acceptance": "accepted_hash_verified"
+    },
+    {
+      "id": "E14-F002",
+      "status": "confirmed",
+      "severity": "P2",
+      "validation_path": "/private/tmp/kd-vollreview-20260916/validations/E14-F002.json",
+      "ticket_acceptance": "accepted_hash_verified"
+    }
+  ],
+  "counts": {
+    "confirmed": 49,
+    "accepted_tickets_hash_verified": 49,
+    "new_tickets_pending_acceptance": 0,
+    "P1": 2,
+    "P2": 45,
+    "P3": 2,
+    "refuted": 2,
+    "unresolved_hypotheses": 1,
+    "cross_stage_notes_disposed": 59
+  },
+  "refuted_findings": [
+    {
+      "id": "E04-F007",
+      "reason": "Kein aktiver Legacy-Aufrufer belegt."
+    },
+    {
+      "id": "E07-F003",
+      "reason": "Vorgelagerter verpflichtender Provenienzzaun verhindert behaupteten Postwrite-Fehler."
+    }
+  ],
+  "dependencies": [
+    {
+      "before": "E02-F001",
+      "after": "E02-F002",
+      "kind": "shared_contract_order",
+      "reason": "Force-Refresh muss Generationseigentum erhalten."
+    },
+    {
+      "before": "E05-F002",
+      "after": "E14-F001",
+      "kind": "series_acceptance_prerequisite",
+      "reason": "Filmjahresfall unabhängig; vollständiger Serienfaktenpfad benötigt beide Fixes."
+    },
+    {
+      "before": "E13-F003",
+      "after": "future_function_delivery",
+      "kind": "release_evidence_gate",
+      "reason": "Produktkorrekturen lokal möglich; spätere bytegenaue Liefernachweise benötigen vollständige Closure."
+    },
+    {
+      "before": "E13-F004",
+      "after": "future_private_release_gate",
+      "kind": "test_gate_prerequisite",
+      "reason": "Aktiver Browserpflichtschritt muss aktuelle Produkt-Copy akzeptieren."
+    }
+  ],
+  "summary": "906 Primärdateien vollständig nach vorgeschriebenen Methoden belegt: 874 Volllektüren, 32 andere Prüfarten, keine Leselücke. Alle 59 Querverweise eingeordnet. 49 unabhängig bestätigte Ursachen eindeutig priorisiert; alle 49 aktuellen Ticketoriginale fachlich akzeptiert und hashgebunden. Keine Duplikatzusammenlegung. Zwei Hypothesen widerlegt, E13-F005 bleibt ungeklärt. Keine Produktänderung oder Liveabnahme.",
+  "completed_at": "2026-09-16T22:48:18.417209+00:00"
+}
