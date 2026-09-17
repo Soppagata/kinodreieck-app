@@ -1,4 +1,4 @@
-// E08-002, E08-004, E05-002 and E14-001: disposable PG17, real product RPCs.
+// E08-002, E08-004, E05-002 and E14-001: disposable PG16/17, real product RPCs.
 import {randomUUID} from 'node:crypto';
 import * as R from './src/lib/localEventRadar.js';
 import {validateRadarPilotFeed} from './src/lib/radarPilotContracts.js';
@@ -9,15 +9,34 @@ globalThis.fetch=async()=>{throw new Error('Unexpected network');};
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalTextRadarTargetId } from './src/lib/localEventRadar.js';
 import { evaluateTextRadarWebsearchResponse } from './supabase/functions/radar-websearch-task/contract.js';
 import { parseAnthropicRadarWebsearchResponse } from './supabase/functions/radar-websearch-task/anthropicAdapter.js';
 import { runRadarWebsearchCheck } from './supabase/functions/radar-websearch-task/runner.js';
 const SOURCE=process.cwd();
-const OUT='/private/tmp';
-const PG='/Applications/Postgres.app/Contents/Versions/17/bin';
-const root=mkdtempSync(join(OUT,'review49-p05-pg-'));
+const configuredPgBin=process.env.KD_TEST_PG_BIN?.trim();
+const pgConfig=spawnSync('pg_config',['--bindir'],{encoding:'utf8',timeout:10000});
+const pgCandidates=(configuredPgBin?[configuredPgBin]:[
+  pgConfig.status===0?pgConfig.stdout.trim():null,
+  '/Applications/Postgres.app/Contents/Versions/17/bin',
+  '/usr/lib/postgresql/17/bin',
+  '/usr/lib/postgresql/16/bin',
+]).filter(Boolean);
+const requiredPgBinaries=['initdb','pg_ctl','postgres','psql'];
+const selectedPg=[...new Set(pgCandidates)].map(directory=>{
+  const versions=requiredPgBinaries.map(binary=>{
+    const result=spawnSync(join(directory,binary),['--version'],{encoding:'utf8',timeout:10000});
+    return result.status===0?result.stdout.match(/\(PostgreSQL\) ((16|17)\.\d+)\b/):null;
+  });
+  return versions.every(version=>version&&version[2]===versions[0]?.[2])
+    ?{directory,version:versions[0][1]}:null;
+}).find(Boolean);
+assert.ok(selectedPg,`PostgreSQL 16 or 17 server binaries required (${requiredPgBinaries.join(', ')}); set KD_TEST_PG_BIN to a compatible bin directory. Tried: ${pgCandidates.join(', ')}`);
+const PG=selectedPg.directory;
+console.log(`PostgreSQL ${selectedPg.version}: ${PG}`);
+const root=mkdtempSync(join(tmpdir(),'review49-p05-pg-'));
 const data=join(root,'data'), socket=join(root,'socket'); mkdirSync(socket);
 let running=false;
 function run(bin,args,input) {
