@@ -10,9 +10,8 @@ Maßgeblicher Registerstand ist dieses Dokument im Integrationsworktree
 /private/tmp/kd-blog-integration-20260918, Zielbranch
 codex/blog-integration-20260918. Die Kopie im Primärcheckout bleibt die
 Planungsreferenz. Startcode nach frischem Fetch: origin/staging und origin/main
-3725c33afaad58a711f94dffb511288f8237d31f. B0 ist der gemeinsame
-Freeze-Commit dieses Registers nach Integration von F0 und wird im Dispatch
-mit vollständiger SHA gebunden.
+3725c33afaad58a711f94dffb511288f8237d31f. Die gemeinsame eingefrorene
+Nicht-main-Basis B0 ist bcfe7c7021778463e226d8382495e39c01672383.
 
 Produktvertrag: [Blogplan](BLOG_VEROEFFENTLICHUNG_OHNE_NAMEN_PLAN_2026-09-17.md).
 Arbeitsablauf: [Kinodreieck-Etappen-Orchestrierung](/Users/max/.agents/skills/kinodreieck-etappen-orchestrierung/SKILL.md).
@@ -59,11 +58,11 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Beleg |
 |---|---|---|---|---|
-| M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | OFFEN | — |
-| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | OFFEN | — |
-| M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | OFFEN | — |
-| M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | OFFEN | — |
-| M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | OFFEN | — |
+| M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | GEBAUT | 23e430c bis 513ce6f; integrierter Nutzerweg grün |
+| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | GEBAUT | 5369a03 bis 513ce6f; anonyme Zwei-Konten-Projektion und Antwortverlust geprüft |
+| M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | GEBAUT | Gesamtweg grün; Identitätsdelta 105c0d2, Projektion 25/25, SQL/Service/Client-Gegenprobe grün |
+| M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | GEBAUT | Kein Katalogvollabruf im Gesamtweg; Leerbestand-Delta 6aeb732, Transaktionen 60/60 |
+| M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | GEBAUT | 4b5caef; PG-Refresh 12/12 und integrierter Schedulerpfad grün |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -207,17 +206,91 @@ nur die betroffenen Pakete an und wird über den Meister geklärt.
 
 | Paket | Geplanter Branch | Geplanter Worktree | Status / Commit |
 |---|---|---|---|
-| F0 | codex/blog-foundation-20260918 | /private/tmp/kd-blog-foundation-20260918 | INTEGRATED / 0574426 + 93411b7, 26 Vertragstests grün |
-| A | codex/blog-backend-20260918 | /private/tmp/kd-blog-backend-20260918 | PLANNED / — |
-| B | codex/blog-client-20260918 | /private/tmp/kd-blog-client-20260918 | PLANNED / — |
-| C | codex/blog-ui-20260918 | /private/tmp/kd-blog-ui-20260918 | PLANNED / — |
+| F0 | codex/blog-foundation-20260918 | /private/tmp/kd-blog-foundation-20260918 | INTEGRATED / 0574426 + 93411b7 + 74ecad4, 27 Vertragstests grün |
+| A | codex/blog-backend-20260918 | /private/tmp/kd-blog-backend-20260918 | INTEGRATED / 5369a03 + 4b5caef + 0ad7d89, PG 38/38 + 12/12 |
+| B | codex/blog-client-20260918, Folge codex/blog-client-identity-20260918 | /private/tmp/kd-blog-client-20260918, Folge /private/tmp/kd-blog-client-identity-20260918 | INTEGRATED / 23e430c + f6144c8 + 6aeb732 + 105c0d2, Transaktionen 60/60, Projektion 25/25, Service 47/47, Blog 27/27 |
+| C | codex/blog-ui-20260918 | /private/tmp/kd-blog-ui-20260918 | INTEGRATED / 3b1c787 + 873f7cb + 642328c + 513ce6f, UI 4/4 + Chromium 34/34 |
 
 Gemeinsamer Zielbranch: `codex/blog-integration-20260918`.
 Meister-Worktree: `/private/tmp/kd-blog-integration-20260918`.
-Der Meister-Worktree ist angelegt; Paket-Worktrees folgen mit dem Dispatch.
-Basis B0, finaler Kandidat und Lieferziel werden beim tatsächlichen Start gebunden.
-Modelle/Denktiefe werden erst beim Dispatch anhand des aktiven Skills und einer
-gegebenen ausdrücklichen Nutzerwahl zugeordnet.
+Meister- und Paket-Worktrees sind aus demselben B0 angelegt. Alle drei Pakete
+sind ohne gegenseitiges Warten gestartet. Alle drei Lieferungen sind in der
+Reihenfolge A → B → C konfliktfrei integriert. 22 Prüfungen des echten
+UI-/Controller-/Service-/SQL-Nutzerwegs mit zwei lokalen Konten sind grün.
+Finaler Kandidat folgt nach den konkreten unten benannten Integrationsdeltas.
+A: /root/blog_foundation, gpt-5.6-sol/high wegen Auth/RLS/Migration/Privacy.
+B: /root/blog_client, gpt-5.6-sol/high wegen kontogebundener Shared-State-Grenze.
+C: /root/blog_ui, gpt-5.6-sol/medium. Keine Bauchats.
+
+C-Erstlieferung a66c886f82834d0747da57cdac97d2aee24a56fc liegt in der
+vereinbarten Ownership. Fokussiert belegt: Oberfläche 4/4, Chromium 21/21
+bei 320/393/736 px hell/dunkel. Delta zurück an C: sekundäre Ziele bedienbar,
+Leser ohne Sortiermenüs, explizite Nummerierung, eindeutiger privater
+Speichertext bei bestehender Publikation, direkte Karten-Rotlinks und
+ehrliche Titelsuche in den geladenen Karten. Keine Änderung der RPC-Verträge.
+Delta 314be77 schließt die funktionalen UI-Nähte und bestätigt 30/30
+Chromiumprüfungen. Sichtkontrolle führte zu einem letzten engen Delta:
+Quellenlinks bei genügend Platz in derselben Zeile, lesbare Quellennamen
+und stärkerer Kontrast im hellen Modus.
+552710f4c3f9a59b61d123aec8c1206c2880e5a6 schließt das visuelle Delta;
+32/32 Chromiumchecks und gelieferte 320-/736-px-Screenshots belegen die
+kompakte Inlinezeile, Umbruch, Kontrast und Touchziele. C ist integriert.
+Die abschließende Eingabenaht 9da32c70b5868f99cf725c8db34f2e1b5f067eec
+ergänzt Jahr und Typ am einzigen Hinzufügen-Feld, damit Serien und sichere
+Jahreszuordnungen über denselben bestehenden Vertrag erfasst werden können.
+Chromium 34/34 belegt Serie/Jahr sowie ungültige Jahre und schmale Darstellung.
+
+B-Erstlieferung 10bf9fafe17e25a4bb026238c172f27815b3aa53 liegt vollständig
+in der Ownership; fokussiert grün: Transaktionen 35/35, Service 45/45,
+Projektion 13/13, Blog 27/27. Die Zusammensteckprüfung verlangt ein Delta
+für öffentliche/neue Rotlinks und Rückkehr, Editorprojektion und Status,
+vollständige Kartendaten, sichere persönliche Werkzuordnung, laufende
+Operationen und Account-Epochen, bestätigte Löschung nach unklarem Publish
+sowie Listeninvalidierung und Entwurfserhalt. Gemeinsame Verträge bleiben fest.
+
+fc70a368527473873cab5749ed8cb3873df5df2a schließt diese B-Nähte; beide
+B-Lieferungen sind als 23e430c und f6144c8 integriert. Der anschließende
+Gesamtweg ist grün. Zwei konkrete Anschlussfehler bleiben als enges Delta:
+bestätigt leere Mediathek im App-Boot und Verwechslung gleichnamiger Werke
+mit unterschiedlichen starken IDs zwischen SQL-Projektion und Leserindex.
+F0/A erhält exklusiv die kleine additive Erweiterung um backendverifizierte
+neutrale Identitäten. B korrigiert zunächst unabhängig den Leerbestand und
+verwendet die neuen Identitäten erst nach Integration der Vertragsbasis.
+
+Das Leerbestand-Delta 4734a3a ist als 6aeb732 integriert; bestätigtes Fehlen
+und fehlgeschlagener Read sind getrennt, Transaktionen 60/60.
+F0-Vertragsdelta 3ddaab6 und A-Delta fd41afa sind als 74ecad4 / 0ad7d89
+integriert (Vertrag 27/27, Backend 38/38, Refresh 12/12). Der Server liefert
+nur am bestätigten Werk verifizierte `resolution.identityHints`; der
+Listenabruf bleibt resolverfrei. Für B liegt ein isolierter Folgeworktree
+`/private/tmp/kd-blog-client-identity-20260918` auf exakter Basis
+`0ad7d8921c60411faa234e7d2150c7d4edc1d08e` bereit; Owner bleibt derselbe
+B-Baumeister. Nur Serviceparser, persönliche Projektion und deren Tests
+sind für dieses abhängige Delta schreibbar.
+
+B-Identitätsdelta 1d653e423369cd522b8636cb6f80911c475455b8 ist als
+105c0d2 integriert.
+Der Parser akzeptiert und prüft das optionale Feld strikt, gemeinsame starke
+IDs schlagen Titel-/Jahrzuordnung; widersprüchliche IDs und mehrdeutige
+Treffer werden nicht verknüpft. Der Medientyp trennt insbesondere gleiche
+TMDB-Zahlen bei Film und Serie. Projektion 25/25, Service 47/47, Transaktionen
+60/60 sowie die reale SQL/Service/Client-Gegenprobe sind grün. Der Meister
+hat dieselbe negative und zwei positive Identitätsproben im dauerhaften
+Gesamttest ergänzt. Alle Produktpakete sind damit integriert.
+
+A-Erstlieferung 0c3a28eb63de6dda642ecdc7e8d3245ff4946ffd liegt in der
+Ownership; lokale PG17-Tests 27/27 und 12/12 bestanden. Delta zurück an A:
+Leserechte strikt auf aktive Konten statt anon, tatsächlicher automatischer
+Hintergrundanschluss der Quellenpflege und faire begrenzte Fortschritts-/Retry-
+Auswahl über mehr als einen Batch. Bisherige Tests hatten den anonymen
+Lesepfad irrtümlich erlaubt; diese Vertragsabweichung ist noch zu schließen.
+Delta 73cfae4cd22ddc45afa082639050be3dc9363f15 schließt diese Lücken und
+ergänzt getrennte ID-Kandidaten, bestätigte fehlende Jahreswerte und den
+Ausschluss abgelaufener Kinotermine. PG17: 36 Backend- und 12 Refreshchecks
+grün, einschließlich >Batchlimit, Teilfehler/Retry und registriertem
+Schedulerpfad. Ownership bestätigt, sequenziell integriert als 5369a03 und
+4b5caef. Die Migration bindet kd-blog-reference-refresh-v1 an den vorhandenen
+pg_cron-Vertrag; die lokale Harness kann exakt dessen Jobkommando ausführen.
 
 DISPATCH F0: Agent /root/blog_foundation, gpt-5.6-sol/high wegen des tragenden
 Privacy-/RPC-/Shared-State-Vertrags; exakte Startbasis
