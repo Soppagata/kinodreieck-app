@@ -23,6 +23,7 @@ import {
   BLOG_PUBLIC_OUTCOME,
   BLOG_RPC,
   hasBlogPublicationCapability,
+  isBlogPublicIdentityHints,
   isBlogPublicCinemaTarget,
   isBlogPublicStreamingTarget,
 } from "../lib/blogContract.js";
@@ -71,8 +72,13 @@ function parsePublicReference(reference) {
   if (!exactKeys(reference, ["referenceId", "rank", "title", "year", "mediaType", "resolution", "sources"])
       || !text(reference.referenceId) || !Number.isInteger(reference.rank)
       || !text(reference.title)
-      || !exactKeys(reference.resolution, ["status", "workKey"])
+      || !(exactKeys(reference.resolution, ["status", "workKey"])
+        || exactKeys(reference.resolution, ["status", "workKey", "identityHints"]))
       || !exactKeys(reference.sources, ["status", "checkedAt", "validUntil", "streamingRevision", "cinemaRevision", "streaming", "cinema"])) return null;
+  const identityHints = Object.prototype.hasOwnProperty.call(reference.resolution, "identityHints")
+    ? reference.resolution.identityHints : null;
+  if (identityHints !== null
+      && (reference.resolution.status !== "matched" || !isBlogPublicIdentityHints(identityHints))) return null;
   const streaming = Array.isArray(reference.sources.streaming) ? reference.sources.streaming : null;
   const cinema = Array.isArray(reference.sources.cinema) ? reference.sources.cinema : null;
   if (!streaming || !cinema || !streaming.every(isBlogPublicStreamingTarget)
@@ -80,7 +86,11 @@ function parsePublicReference(reference) {
   return {
     referenceId: reference.referenceId, rank: reference.rank, title: reference.title,
     year: reference.year, mediaType: reference.mediaType,
-    resolution: { status: reference.resolution.status, workKey: reference.resolution.workKey },
+    resolution: {
+      status: reference.resolution.status,
+      workKey: reference.resolution.workKey,
+      ...(identityHints === null ? {} : { identityHints: identityHints.map((hint) => ({ ...hint })) }),
+    },
     sources: {
       status: reference.sources.status,
       checkedAt: reference.sources.checkedAt,

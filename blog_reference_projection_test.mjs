@@ -115,6 +115,56 @@ check("Ein leerer, aber geladener persönlicher Bestand zeigt einen echten Rotli
     library: [], libraryIndex: new Map(), libraryReady: true,
     selectedSourceIds: [], now: fixture.testClock,
   })[0].state === "redlink");
+
+const twinReference = [{
+  ...opaqueReference[0], referenceId: "twin-public", title: "Twin", year: 2000, mediaType: "film",
+  resolution: { status: "matched", workKey: "work:twin-a",
+    identityHints: [{ namespace: "imdb", value: "tt1000001" }] },
+}];
+const wrongTwin = { id: "twin-b", titel: "Twin", jahr: 2000, typ: "film", imdb_id: "tt1000002" };
+check("Widersprüchliche verifizierte IMDb-Identität sperrt den Titel-Zwilling",
+  projectPublicBlogReferences(twinReference, {
+    library: [wrongTwin], libraryIndex: buildBlogLibraryIndex([wrongTwin]), libraryReady: true,
+    selectedSourceIds: [], now: fixture.testClock,
+  })[0].state === "redlink");
+const rightTwin = { id: "twin-a-private", titel: "Ganz anderer Anzeigename", jahr: 1999,
+  typ: "film", imdb_id: "tt1000001" };
+check("Gleiche starke ID verbindet unabhängig von Anzeigename und Jahr",
+  projectPublicBlogReferences(twinReference, {
+    library: [wrongTwin, rightTwin], libraryIndex: buildBlogLibraryIndex([wrongTwin, rightTwin]),
+    libraryReady: true, selectedSourceIds: [], now: fixture.testClock,
+  })[0].primaryTarget?.ref === "twin-a-private");
+check("Widerspruch in einer zweiten gemeinsamen ID blockiert auch einen einzelnen ID-Kandidaten",
+  projectPublicBlogReferences([{
+    ...twinReference[0], resolution: { ...twinReference[0].resolution,
+      identityHints: [{ namespace: "imdb", value: "tt1000001" }, { namespace: "tmdb", value: "42" }] },
+  }], {
+    library: [{ ...rightTwin, tmdb_id: 43 }], libraryIndex: new Map(), libraryReady: true,
+    selectedSourceIds: [], now: fixture.testClock,
+  })[0].state === "redlink");
+check("Doppelte persönliche Treffer derselben starken ID bleiben mehrdeutig offen",
+  projectPublicBlogReferences(twinReference, {
+    library: [rightTwin, { ...rightTwin, id: "twin-a-duplicate" }], libraryIndex: new Map(),
+    libraryReady: true, selectedSourceIds: [], now: fixture.testClock,
+  })[0].state === "redlink");
+check("Legacy-Mediathekzeile ohne starke ID darf weiterhin eindeutig über Titel, Jahr und Typ heilen",
+  projectPublicBlogReferences(twinReference, {
+    library: [{ id: "legacy-twin", titel: "Twin", jahr: 2000, typ: "film" }],
+    libraryIndex: new Map(), libraryReady: true, selectedSourceIds: [], now: fixture.testClock,
+  })[0].primaryTarget?.ref === "legacy-twin");
+
+const tmdbTypedReference = [{
+  ...opaqueReference[0], referenceId: "typed-tmdb", title: "Gleiche Nummer", year: 2020, mediaType: "film",
+  resolution: { status: "matched", workKey: "work:typed",
+    identityHints: [{ namespace: "tmdb", value: "700" }] },
+}];
+check("Gleiche TMDB-Zahl trennt Film und Serie über den normalisierten Medientyp",
+  projectPublicBlogReferences(tmdbTypedReference, {
+    library: [
+      { id: "tmdb-series", titel: "Serienzwilling", jahr: 2020, typ: "serie", tmdb_id: 700 },
+      { id: "tmdb-film", titel: "Filmzwilling", jahr: 2019, typ: "film", tmdb_id: 700 },
+    ], libraryIndex: new Map(), libraryReady: true, selectedSourceIds: [], now: fixture.testClock,
+  })[0].primaryTarget?.ref === "tmdb-film");
 const privateTargets = buildPrivateBlogTargetIndex(library, [
   { id: "mw-library", titel: "A", verknuepfung: { ziel: "master", id: "private-new-hope" } },
   { id: "mw-stream", titel: "B", verknuepfung: { ziel: "streaming", id: "watchmode-2" } },

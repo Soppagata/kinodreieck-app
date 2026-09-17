@@ -322,6 +322,43 @@ check("Akzeptierte v1-Liste enthält keine privaten Artikel- oder Zeilen-IDs",
   !JSON.stringify(v1Page.page).includes(blogFixture.ownerArticle.privateArticleId)
   && !JSON.stringify(v1Page.page).includes("row-01"));
 
+const pageWithIdentityHints = JSON.parse(JSON.stringify(blogFixture.publicPage));
+pageWithIdentityHints.items[0].article.references[0].resolution.identityHints = [
+  { namespace: "imdb", value: "tt0076759" },
+  { namespace: "tmdb", value: "11" },
+];
+nextResponses = [response(200, pageWithIdentityHints)];
+const parsedIdentityPage = await service.listV1({ cursor: null, limit: 20 });
+check("v1-Service übernimmt ausschließlich gültige serverbestätigte Identitätshinweise",
+  JSON.stringify(parsedIdentityPage.page.items[0].article.references[0].resolution.identityHints)
+    === JSON.stringify(pageWithIdentityHints.items[0].article.references[0].resolution.identityHints));
+
+const invalidIdentityPages = [
+  (() => {
+    const page = JSON.parse(JSON.stringify(pageWithIdentityHints));
+    page.items[0].article.references[0].resolution.identityHints.push({ namespace: "imdb", value: "tt-other" });
+    return page;
+  })(),
+  (() => {
+    const page = JSON.parse(JSON.stringify(pageWithIdentityHints));
+    page.items[0].article.references[0].resolution.unexpected = "private";
+    return page;
+  })(),
+  (() => {
+    const page = JSON.parse(JSON.stringify(pageWithIdentityHints));
+    page.items[0].article.references[0].resolution.status = "not_found";
+    return page;
+  })(),
+];
+let invalidIdentityResponses = 0;
+for (const page of invalidIdentityPages) {
+  nextResponses = [response(200, page)];
+  try { await service.listV1({ cursor: null, limit: 20 }); }
+  catch (error) { if (error?.code === "invalid-response") invalidIdentityResponses += 1; }
+}
+check("v1-Service verwirft doppelte, statusfremde oder erweiterte Identitätsformen fail-closed",
+  invalidIdentityResponses === invalidIdentityPages.length);
+
 const opPublish = "30000000-0000-4000-8000-000000000001";
 const publishRequest = {
   contractVersion: "blog-publication-v1", operationId: opPublish,

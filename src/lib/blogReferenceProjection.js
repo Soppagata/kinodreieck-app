@@ -1,6 +1,7 @@
 import {
   BLOG_IDENTITY_NAMESPACES,
   BLOG_MAX_REFERENCES,
+  isBlogPublicIdentityHints,
   projectBlogReferenceForReader,
 } from "./blogContract.js";
 import { gleicheEintragAb } from "./artikel.js";
@@ -67,6 +68,48 @@ function workKeysForLibraryItem(item) {
     keys.add(`${hint.namespace}:${hint.value}`);
   }
   return keys;
+}
+
+function targetForLibraryItem(item, fallbackTitle = "") {
+  return item && text(item?.id) ? {
+    kind: "library",
+    ref: text(item.id),
+    titel: text(item.titel || item.title) || text(fallbackTitle) || "Ohne Titel",
+  } : null;
+}
+
+function identityRelation(publicHints, item) {
+  const privateByNamespace = new Map(blogIdentityHints(item)
+    .map((hint) => [hint.namespace, hint.value]));
+  let matches = 0;
+  let conflicts = 0;
+  for (const hint of publicHints) {
+    const privateValue = privateByNamespace.get(hint.namespace);
+    if (!privateValue) continue;
+    if (privateValue === text(hint.value)) matches += 1;
+    else conflicts += 1;
+  }
+  return { matches, conflicts };
+}
+
+function sameMediaType(referenceMediaType, item) {
+  return normalisiereTyp(item?.typ || item?.mediaType || "sonstiges")
+    === normalisiereTyp(referenceMediaType || "sonstiges");
+}
+
+function resolveStrongIdentity(publicHints, library, fallbackTitle, mediaType) {
+  if (!publicHints.length) return { target: null, blocksFallback: false };
+  const matches = [];
+  for (const item of library) {
+    if (!sameMediaType(mediaType, item)) continue;
+    const relation = identityRelation(publicHints, item);
+    if (relation.matches > 0) matches.push({ item, relation });
+  }
+  if (matches.length !== 1) {
+    return { target: null, blocksFallback: matches.length > 1 };
+  }
+  if (matches[0].relation.conflicts > 0) return { target: null, blocksFallback: true };
+  return { target: targetForLibraryItem(matches[0].item, fallbackTitle), blocksFallback: true };
 }
 
 /* Der Index kennt ausschließlich gemeinsame Werkkennungen oder starke IDs.
@@ -167,25 +210,39 @@ export function projectPublicBlogReferences(references, {
   return (Array.isArray(references) ? references : []).map((reference) => {
     const referenceId = text(reference?.referenceId);
     const workKey = text(reference?.resolution?.workKey);
-    let libraryTarget = workKey ? libraryIndex.get(workKey) || null : null;
+    const libraryItems = Array.isArray(library) ? library : [];
+    const publicHints = isBlogPublicIdentityHints(reference?.resolution?.identityHints)
+      ? reference.resolution.identityHints : [];
+    const strongIdentity = resolveStrongIdentity(publicHints, libraryItems,
+      reference?.title, reference?.mediaType);
+    let libraryTarget = strongIdentity.target;
+    let fallbackBlocked = strongIdentity.blocksFallback && !strongIdentity.target;
+    const indexedTarget = !libraryTarget && workKey ? libraryIndex.get(workKey) || null : null;
+    if (indexedTarget) {
+      const indexedItem = libraryItems.find((item) => text(item?.id) === text(indexedTarget.ref));
+      const relation = indexedItem && publicHints.length ? identityRelation(publicHints, indexedItem) : null;
+      if ((!indexedItem || sameMediaType(reference?.mediaType, indexedItem))
+          && (!relation || relation.conflicts === 0)) libraryTarget = indexedTarget;
+      else fallbackBlocked = true;
+    }
     const strongWorkKey = BLOG_IDENTITY_NAMESPACES.some((namespace) => workKey.startsWith(`${namespace}:`));
     const explicitWorkKeyConflict = !!workKey && !libraryTarget
-      && (Array.isArray(library) ? library : []).some((item) => workKeysForLibraryItem(item).has(workKey));
-    if (!libraryTarget && !strongWorkKey && !explicitWorkKeyConflict && libraryReady) {
+      && libraryItems.some((item) => workKeysForLibraryItem(item).has(workKey));
+    if (!libraryTarget && !fallbackBlocked && !strongWorkKey && !explicitWorkKeyConflict && libraryReady) {
       const match = gleicheEintragAb({
         eingabe: text(reference?.title),
         jahr: Number.isInteger(reference?.year) ? reference.year : null,
         typ: normalisiereTyp(reference?.mediaType || "sonstiges"),
-      }, Array.isArray(library) ? library : []);
+      }, libraryItems);
       if (match.status === "verlinkt") {
-        const item = library.find((entry) => text(entry?.id) === text(match.ref));
+        const item = libraryItems.find((entry) => text(entry?.id) === text(match.ref));
         const referenceYear = Number.isInteger(reference?.year) ? reference.year : null;
         const itemYear = Number.isInteger(item?.jahr ?? item?.year) ? (item.jahr ?? item.year) : null;
-        if (item && referenceYear !== null && itemYear === referenceYear) libraryTarget = {
-          kind: "library",
-          ref: text(item.id),
-          titel: text(item.titel || item.title) || text(reference?.title) || "Ohne Titel",
-        };
+        const relation = item && publicHints.length ? identityRelation(publicHints, item) : null;
+        if (item && referenceYear !== null && itemYear === referenceYear
+            && (!relation || relation.conflicts === 0)) {
+          libraryTarget = targetForLibraryItem(item, reference?.title);
+        }
       }
     }
     const projection = projectBlogReferenceForReader(reference, {
