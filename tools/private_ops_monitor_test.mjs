@@ -223,6 +223,27 @@ const purgeWarningEntry = purgeWarning.reports.find((r) => r.id === "purge");
 check("Purge liefert nur Warning bei fälligen Daten", purgeWarningEntry?.code === "PURGE_DUE" && purgeWarningEntry?.warningCount === 5);
 check("Purge-Warnung bleibt nicht kritisch", purgeWarning.critical.includes("purge") === false && purgeWarning.ok === true);
 
+const mailBucketFetch = createFetchMock((url, options) => {
+  if (url.includes("/rest/v1/rpc/kd_private_retention_run")) {
+    check("Mailbucket-Monitor bleibt beim Dryrun mit Limit 500",
+      options.method === "POST"
+      && JSON.stringify(JSON.parse(options.body)) === JSON.stringify({ p_dry_run: true, p_limit: 500 }));
+    return fakeAntwort(200, { ok: true, dryRun: true, due: {
+      operations: 0, shareOperations: 0, pilotImportOperations: 0, checks: 0,
+      aiLogs: 0, deleteLedger: 0, orphanTargets: 0, mailRateBuckets: 2,
+    }, result: { purgedTargets: 0, failedTargets: 0, purgedMailRateBuckets: 0 } });
+  }
+  return okFetch(url);
+});
+const mailBucketWarning = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: mailBucketFetch });
+const mailBucketReport = mailBucketWarning.reports.find((r) => r.id === "purge");
+check("allein abgelaufene Mailrate-Buckets lösen PURGE_DUE aus",
+  mailBucketReport?.code === "PURGE_DUE" && mailBucketReport.warningCount === 2);
+check("Mailbucket-Warnung bleibt sichtbar und nicht kritisch",
+  mailBucketWarning.ok === true && !mailBucketWarning.critical.includes("purge")
+  && formatPrivateOpsGitHub(mailBucketWarning).annotations.some((line) =>
+    line.startsWith("::warning title=Private Ops: Aufbewahrung::2")));
+
 const redactedPayload = {
   KD_MONITOR_SUPABASE_URL: "https://secret.supabase.io",
   KD_MONITOR_PUBLISHABLE_KEY: "sb-pub-sensitive-xyz",
