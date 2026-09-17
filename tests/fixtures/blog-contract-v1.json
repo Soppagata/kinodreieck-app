@@ -19,6 +19,26 @@
       "kd_list_shared_articles_v1"
     ]
   },
+  "identityProjectionCases": {
+    "confirmedSameTitleWork": {
+      "title": "Synthetic Twin",
+      "year": 2000,
+      "mediaType": "film",
+      "requestHints": [{ "namespace": "imdb", "value": "tt1000001" }],
+      "publicResolution": { "status": "matched", "workKey": "fixture:work:twin-a", "identityHints": [{ "namespace": "imdb", "value": "tt1000001" }] },
+      "otherWork": { "title": "Synthetic Twin", "year": 2000, "mediaType": "film", "identityHints": [{ "namespace": "imdb", "value": "tt1000002" }] }
+    },
+    "conflictingHints": {
+      "requestHints": [{ "namespace": "imdb", "value": "tt1000001" }, { "namespace": "tmdb", "value": "1002" }],
+      "outcome": "decision_required",
+      "publicResolution": null
+    },
+    "unknownHint": {
+      "requestHints": [{ "namespace": "imdb", "value": "tt1999999" }],
+      "outcome": "decision_required",
+      "publicResolution": null
+    }
+  },
   "ownerArticle": {
     "privateArticleId": "fixture-private-star-wars-order",
     "contentVersion": "10000000-0000-4000-8000-000000000002",
@@ -58,7 +78,7 @@
           "references": [
             {
               "referenceId": "ref-public-01", "rank": 1, "title": "Star Wars: A New Hope", "year": 1977, "mediaType": "film",
-              "resolution": { "status": "matched", "workKey": "fixture:work:new-hope-1977" },
+              "resolution": { "status": "matched", "workKey": "fixture:work:new-hope-1977", "identityHints": [{ "namespace": "imdb", "value": "tt0076759" }, { "namespace": "tmdb", "value": "11" }] },
               "sources": { "status": "checked", "checkedAt": "2032-05-04T11:00:00.000Z", "validUntil": "2032-05-05T12:00:00.000Z", "streamingRevision": "fixture-stream-12", "cinemaRevision": "fixture-cinema-8", "streaming": [], "cinema": [] }
             },
             {

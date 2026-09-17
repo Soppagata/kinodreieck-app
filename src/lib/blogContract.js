@@ -113,6 +113,22 @@ export function isBlogStreamingSourceId(value) {
   return BLOG_STREAMING_SOURCE_IDS.includes(String(value || "").trim());
 }
 
+/* Oeffentliche Identitaeten sind ein optionaler, kleiner Nachweis des vom
+   Backend bestaetigten Werks. Das Format allein belegt keine Verifikation;
+   erzeugen darf das Feld ausschliesslich der serverseitige Resolver. */
+export function isBlogPublicIdentityHints(value) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 4) return false;
+  const namespaces = new Set();
+  return value.every((hint) => {
+    if (!exactKeys(hint, ["namespace", "value"])
+        || !BLOG_IDENTITY_NAMESPACES.includes(hint.namespace)
+        || !nonEmptyString(hint.value)
+        || namespaces.has(hint.namespace)) return false;
+    namespaces.add(hint.namespace);
+    return true;
+  });
+}
+
 export function isBlogPublicStreamingTarget(target) {
   return plain(target)
     && target.kind === "streaming"

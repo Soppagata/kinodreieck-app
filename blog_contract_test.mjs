@@ -13,6 +13,7 @@ import {
   blogSaveIntent,
   hasBlogPublicationCapability,
   isBlogPublicCinemaTarget,
+  isBlogPublicIdentityHints,
   isBlogPublicStreamingTarget,
   isBlogSourceTargetCurrent,
   projectBlogReferenceForReader,
@@ -46,6 +47,17 @@ check("Optionale starke Identitaetshinweise bleiben neutral und katalogpruefbar"
       && typeof hint.value === "string" && hint.value.length > 0))
   && !JSON.stringify(fixture.ownerArticle.references.flatMap((entry) => entry.identityHints || []))
     .includes("alpha-local"));
+check("Oeffentliche starke Identitaeten stammen nur aus dem bestaetigten Werk",
+  isBlogPublicIdentityHints(fixture.identityProjectionCases.confirmedSameTitleWork.publicResolution.identityHints)
+  && fixture.identityProjectionCases.confirmedSameTitleWork.publicResolution.identityHints[0].value === "tt1000001"
+  && fixture.identityProjectionCases.confirmedSameTitleWork.otherWork.identityHints[0].value === "tt1000002"
+  && fixture.identityProjectionCases.conflictingHints.publicResolution === null
+  && fixture.identityProjectionCases.unknownHint.publicResolution === null
+  && !isBlogPublicIdentityHints([{ namespace: "imdb", value: "tt1000001", privateId: "secret" }])
+  && !isBlogPublicIdentityHints([
+    { namespace: "imdb", value: "tt1000001" },
+    { namespace: "imdb", value: "tt1000002" },
+  ]));
 
 const article = fixture.publicPage.items[0].article;
 check("Oeffentliche Projektion ist neutral und enthaelt keine privaten Zeilen- oder Konto-IDs",
@@ -53,7 +65,8 @@ check("Oeffentliche Projektion ist neutral und enthaelt keine privaten Zeilen- o
   && fixture.publicPage.items[0].article.id === fixture.publicPage.items[0].publicationId
   && !JSON.stringify(fixture.publicPage).includes(fixture.ownerArticle.privateArticleId)
   && !JSON.stringify(fixture.publicPage).includes("row-01")
-  && !JSON.stringify(fixture.publicPage).includes("fixture-account-alpha"));
+  && !JSON.stringify(fixture.publicPage).includes("fixture-account-alpha")
+  && isBlogPublicIdentityHints(article.references[0].resolution.identityHints));
 check("Gleiche Werke koennen mehrfach mit eigener stabiler Referenz dargestellt werden",
   article.references.filter((entry) => entry.resolution.workKey === "fixture:work:new-hope-1977").length === 3
   && new Set(article.references.map((entry) => entry.referenceId)).size === article.references.length);

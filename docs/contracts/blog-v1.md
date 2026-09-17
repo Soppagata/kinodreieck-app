@@ -335,7 +335,14 @@ Eine oeffentliche Referenz hat folgende Form:
   "title": "Star Wars: A New Hope",
   "year": 1977,
   "mediaType": "film",
-  "resolution": { "status": "matched", "workKey": "opaque-public-work-key" },
+  "resolution": {
+    "status": "matched",
+    "workKey": "opaque-public-work-key",
+    "identityHints": [
+      { "namespace": "imdb", "value": "tt0076759" },
+      { "namespace": "tmdb", "value": "11" }
+    ]
+  },
   "sources": {
     "status": "checked",
     "checkedAt": "RFC-3339-Zeitpunkt",
@@ -358,6 +365,17 @@ Eine oeffentliche Referenz hat folgende Form:
   }
 }
 ```
+
+`resolution.identityHints` ist eine optionale additive Projektion mit hoechstens
+vier Eintraegen und hoechstens einem Wert je Namespace. Sie ist nur bei
+`status: "matched"` zulaessig und enthaelt ausschliesslich starke Identitaeten,
+die der Server am exakt bestaetigten zentralen Werk gefunden hat. Reihenfolge
+ist `imdb`, `tmdb`, `watchmode`, `film_at`. Der Server kopiert weder
+ungepruefte Request-Hinweise noch private Mediathek-IDs in dieses Feld.
+Widerspruechliche oder unbekannte Eingaben ergeben weiterhin
+`decision_required` beziehungsweise keinen Match; sie erscheinen niemals in
+der oeffentlichen Aufloesung. Fehlen am bestaetigten Werk starke Identitaeten,
+wird `identityHints` weggelassen.
 
 `sourceId` ist bei Streaming exakt eine der kanonischen vorhandenen
 Backend-Service-IDs aus `BLOG_STREAMING_SOURCE_IDS`. Unbekannte IDs und freie
