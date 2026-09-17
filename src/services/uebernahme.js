@@ -301,8 +301,8 @@ export async function kontoUebernehmen(_inventurWerte, { accountBindung = null }
   try {
     adoption = await (deps.bindeCacheVorPull || bindeKontoCacheVorPull)(kontoContext.accountId, deps);
     if (!kontoContext.isCurrent()) throw new Error("Kontokontext gewechselt.");
-    const r = await kontoContext.pull();
-    if (r?.ok === false) throw new Error("Kontostand konnte nicht vollständig geladen werden.");
+    const r = await kontoContext.pull({ ersetzeFehlendeToepfe: true });
+    if (r?.ok === false || r?.konflikt?.length) throw new Error("Kontostand konnte nicht vollständig geladen werden.");
     return {
       ok: true, ergebnis: r, accountBindung: kontoContext.bindung,
       cacheTransition: adoption?.token || null,

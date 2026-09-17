@@ -209,7 +209,7 @@ export function erstelleGebundenenAccountContext({ driver, accountId, generation
     bindung: Object.freeze({ accountId: id, generation }),
     isCurrent: aktuell,
     inventur: () => run("inventur"),
-    pull: () => run("pull"),
+    pull: (optionen) => run("pull", [optionen]),
     uebernehmeKey: (key, value) => run("uebernehmeKey", [key, value]),
     loescheRemote: (key) => run("loescheRemote", [key]),
     resolveKeepRemote: (key) => run("resolveConflictUseRemote", [key]),

@@ -244,7 +244,7 @@ export function createAccountDriver({
   }
 
   /* ---------- Pull ---------- */
-  async function syncPull() {
+  async function syncPull({ ersetzeFehlendeToepfe = false } = {}) {
     if (!aktiv()) return { ...inaktiv(), geladen: [], angelegt: [], konflikt: [], fehler: [] };
     if (!konfiguriert()) return { ok: false, message: "nicht konfiguriert" };
     const ergebnis = { geladen: [], angelegt: [], konflikt: [], fehler: [] };
@@ -272,8 +272,18 @@ export function createAccountDriver({
 
     for (const key of ACCOUNT_SYNC_KEYS) {
       if (!aktiv()) return { ...inaktiv(), ...ergebnis };
-      const row = remote[key];
+      /* Nur die gebundene Remote→lokal-Adoption verlangt einen vollständigen
+         Kontobestand. Ein im Konto fehlender Topf darf dabei keinen Gastwert
+         behalten. Alltags-Pulls behalten ihre bisherige Missing-Semantik und
+         damit insbesondere lokale, noch nicht angelegte Kontotöpfe. */
+      const row = remote[key] || (ersetzeFehlendeToepfe ? { value: null, revision: null } : null);
       if (!row) { markStale(key, false); ergebnis.angelegt.push(key); continue; }
+      /* Der GET kann vor einem inzwischen bestätigten Commit (oder einem
+         neueren Pull) gelesen haben. Pending ist nach dessen Bestätigung
+         bereits leer: die monotone Revision muss deshalb VOR jeder Cache-,
+         Snapshot-, Status- oder Subscriber-Änderung geprüft werden. */
+      const bekannteRevision = getVer(key);
+      if (row.revision != null && bekannteRevision != null && row.revision < bekannteRevision) continue;
       const remoteVal = (row.value == null) ? null : String(row.value);
       const lokal = localStorage.getItem(key);
       if (key === "kd:entdecken-pins" && lokal != null) {
@@ -315,6 +325,9 @@ export function createAccountDriver({
         if (!aktiv()) return { ...inaktiv(), ...ergebnis };
         if (remoteVal == null) localStorage.removeItem(key);
         else localStorage.setItem(key, remoteVal);
+        if (localStorage.getItem(key) !== remoteVal) {
+          throw new Error("Der lokale Kontotopf konnte nicht sicher ersetzt werden.");
+        }
         geaendert.push({ key, value: remoteVal });
       }
       if (!aktiv()) return { ...inaktiv(), ...ergebnis };
