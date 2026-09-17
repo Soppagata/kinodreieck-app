@@ -3,6 +3,7 @@ import {
   BLOG_MAX_REFERENCES,
   projectBlogReferenceForReader,
 } from "./blogContract.js";
+import { gleicheEintragAb } from "./artikel.js";
 import { normalisiereTyp } from "./typen.js";
 
 const SOURCE_ALIASES = new Map([
@@ -161,14 +162,35 @@ function flatReferenceView(reference, projection, rowId) {
 }
 
 export function projectPublicBlogReferences(references, {
-  selectedSourceIds = [], libraryIndex = new Map(), libraryReady = false, now,
+  selectedSourceIds = [], libraryIndex = new Map(), library = [], libraryReady = false, now,
 } = {}) {
   return (Array.isArray(references) ? references : []).map((reference) => {
     const referenceId = text(reference?.referenceId);
     const workKey = text(reference?.resolution?.workKey);
+    let libraryTarget = workKey ? libraryIndex.get(workKey) || null : null;
+    const strongWorkKey = BLOG_IDENTITY_NAMESPACES.some((namespace) => workKey.startsWith(`${namespace}:`));
+    const explicitWorkKeyConflict = !!workKey && !libraryTarget
+      && (Array.isArray(library) ? library : []).some((item) => workKeysForLibraryItem(item).has(workKey));
+    if (!libraryTarget && !strongWorkKey && !explicitWorkKeyConflict && libraryReady) {
+      const match = gleicheEintragAb({
+        eingabe: text(reference?.title),
+        jahr: Number.isInteger(reference?.year) ? reference.year : null,
+        typ: normalisiereTyp(reference?.mediaType || "sonstiges"),
+      }, Array.isArray(library) ? library : []);
+      if (match.status === "verlinkt") {
+        const item = library.find((entry) => text(entry?.id) === text(match.ref));
+        const referenceYear = Number.isInteger(reference?.year) ? reference.year : null;
+        const itemYear = Number.isInteger(item?.jahr ?? item?.year) ? (item.jahr ?? item.year) : null;
+        if (item && referenceYear !== null && itemYear === referenceYear) libraryTarget = {
+          kind: "library",
+          ref: text(item.id),
+          titel: text(item.titel || item.title) || text(reference?.title) || "Ohne Titel",
+        };
+      }
+    }
     const projection = projectBlogReferenceForReader(reference, {
       selectedSourceIds,
-      libraryTarget: workKey ? libraryIndex.get(workKey) || null : null,
+      libraryTarget,
       libraryReady,
       now,
     });

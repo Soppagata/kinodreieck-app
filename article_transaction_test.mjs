@@ -544,7 +544,10 @@ const publicSnapshot = {
   updatedAt: "2032-05-04T11:00:00.000Z",
 };
 
-async function mounteBlogController({ initialArticles = [], serviceOverrides = {}, addLibraryItem, navigateTarget } = {}) {
+async function mounteBlogController({
+  initialArticles = [], initialLibrary = [{ id: "library-1", titel: "Alien", jahr: 1979, typ: "film", imdb_id: "tt0078748" }],
+  serviceOverrides = {}, addLibraryItem, navigateTarget, articlesReady = true,
+} = {}) {
   const events = [];
   let api = null;
   const defaultService = {
@@ -582,6 +585,7 @@ async function mounteBlogController({ initialArticles = [], serviceOverrides = {
   function Harness() {
     const [scope, setScope] = useState("account:a");
     const [articles, setArticles] = useState(initialArticles);
+    const [library, setLibrary] = useState(initialLibrary);
     const articlesRef = useRef(initialArticles);
     articlesRef.current = articles;
     const writeArticles = useCallback(async (calculate) => {
@@ -593,8 +597,8 @@ async function mounteBlogController({ initialArticles = [], serviceOverrides = {
       return true;
     }, []);
     const controller = useBlogPublicationController({
-      accountScope: scope, enabled: true, articles, articlesReady: true,
-      writeArticles, library: [{ id: "library-1", titel: "Alien", imdb_id: "tt0078748" }],
+      accountScope: scope, enabled: true, articles, articlesReady,
+      writeArticles, library,
       libraryReady: true, mustwatch: [], mustwatchReady: true,
       selectedServices: ["Netflix"], selectedServicesReady: true,
       service: defaultService,
@@ -602,7 +606,7 @@ async function mounteBlogController({ initialArticles = [], serviceOverrides = {
       navigateTarget: navigateTarget || ((target) => { events.push(`navigate:${target.kind}`); return true; }),
       clock: () => "2032-05-04T12:00:00.000Z",
     });
-    api = { controller, articles, articlesRef, setScope };
+    api = { controller, articles, articlesRef, library, setLibrary, setScope };
     return null;
   }
 
@@ -646,6 +650,9 @@ check("Checkbox aus speichert zuerst und ausschließlich privat",
 check("Neue private Artikelzeilen erhalten stabile UUIDs",
   /^[0-9a-f-]{36}$/i.test(blogFixture.api().articles[0].liste[0].rowId)
   && /^[0-9a-f-]{36}$/i.test(blogFixture.api().articles[0].contentVersion));
+check("Private Artikelzeilen heilen über die bestehende eindeutige Artikel-Abgleichlogik",
+  blogFixture.api().articles[0].liste[0].ref === "library-1"
+  && blogFixture.api().controller.editor.references[0].primaryTarget.ref === "library-1");
 
 await act(async () => {
   blogFixture.api().controller.actions.onEditArticle({ articleId: blogSave.private.articleId });
@@ -850,16 +857,22 @@ blogFixture = await mounteBlogController({
 });
 let redlinkResult;
 await act(async () => {
+  blogFixture.api().controller.actions.onReadArticle({ scope: "private", articleId: "redlink-blog", returnToken: "mine:list" });
+  await tick();
+});
+await act(async () => {
   blogFixture.api().controller.actions.onOpenRedlinkForm({ articleId: "redlink-blog", rowId: "row-red" });
   await tick();
   redlinkResult = await blogFixture.api().controller.actions.onConfirmRedlinkForm({
-    articleId: "redlink-blog", rowId: "row-red", mediaInput: { titel: "Alien", jahr: 1979, typ: "film" },
+    articleId: "redlink-blog", rowId: "row-red", mediaInput: { titel: "Alien – eigene Fassung", jahr: 1980, typ: "film" },
   });
   await tick();
 });
 check("Fehler beim Rotlink-Anlegen erhält Formular, Entwurf und Rotlink",
   redlinkResult.status === "failed" && redlinkResult.mediaWriteConfirmed === false
   && blogFixture.api().controller.redlinkForm.status === "failed"
+  && blogFixture.api().controller.redlinkForm.initial.titel === "Alien – eigene Fassung"
+  && blogFixture.api().controller.redlinkForm.initial.jahr === 1980
   && blogFixture.api().articles[0].liste[0].ref === null);
 await act(async () => {
   redlinkResult = blogFixture.api().controller.actions.onCancelRedlinkForm({ articleId: "redlink-blog", rowId: "row-red" });
@@ -876,6 +889,10 @@ blogFixture = await mounteBlogController({
     contentVersion: "10000000-0000-4000-8000-000000000012",
     liste: [{ rowId: "row-ok", eingabe: "Alien", jahr: 1979, typ: "film", ref: null, rotlink_ok: true }],
   }],
+});
+await act(async () => {
+  blogFixture.api().controller.actions.onReadArticle({ scope: "private", articleId: "redlink-ok", returnToken: "mine:list" });
+  await tick();
 });
 await act(async () => {
   blogFixture.api().controller.actions.onOpenRedlinkForm({ articleId: "redlink-ok", rowId: "row-ok" });
@@ -897,6 +914,450 @@ const navigationResult = blogFixture.api().controller.actions.onNavigateReferenc
 });
 check("Referenznavigation reicht ausschließlich das bestätigte echte Ziel an die App weiter",
   navigationResult === undefined && blogFixture.events.join(",") === "navigate:library");
+await blogFixture.cleanup();
+
+/* Offener Editor: flache Projektion, exakte Rotlink-Rückkehr und Entwurfsschutz. */
+const editorMediaEvents = [];
+blogFixture = await mounteBlogController({
+  initialLibrary: [],
+  addLibraryItem: async () => { editorMediaEvents.push("media"); return "library-editor-new"; },
+});
+await act(async () => { blogFixture.api().controller.actions.onNewArticle(); await tick(); });
+await act(async () => {
+  const { controller } = blogFixture.api();
+  controller.actions.onEditorChange({
+    title: "Offener Entwurf", text: "Bleibt vollständig", ordered: true, anonymousPublication: true,
+  });
+  controller.actions.onAddReference({
+    draftKey: controller.editor.draftKey,
+    reference: { title: "Neuer Film", year: 2030, mediaType: "film" },
+  });
+  await tick();
+});
+const openDraftKey = blogFixture.api().controller.editor.draftKey;
+const openRowId = blogFixture.api().controller.editor.references[0].rowId;
+check("Editor liefert flache Referenzfelder und einen ehrlichen Anzeigezustand",
+  blogFixture.api().controller.editor.references[0].title === "Neuer Film"
+  && blogFixture.api().controller.editor.references[0].state === "redlink"
+  && blogFixture.api().controller.editor.displayState === "private"
+  && blogFixture.api().controller.editor.publicationId === null);
+await act(async () => {
+  blogFixture.api().controller.actions.onOpenRedlinkForm({ articleId: null, rowId: openRowId });
+  await tick();
+});
+await act(async () => {
+  redlinkResult = blogFixture.api().controller.actions.onCancelRedlinkForm({ articleId: null, rowId: openRowId });
+  await tick();
+});
+check("Rotlink-Abbruch aus einem neuen Entwurf kehrt exakt in denselben Editor zurück",
+  redlinkResult.status === "cancelled"
+  && blogFixture.api().controller.view.mode === "editor"
+  && blogFixture.api().controller.editor.draftKey === openDraftKey
+  && blogFixture.api().controller.editor.text === "Bleibt vollständig"
+  && blogFixture.api().controller.editor.anonymousPublication === true);
+await act(async () => {
+  blogFixture.api().controller.actions.onOpenRedlinkForm({ articleId: null, rowId: openRowId });
+  await tick();
+});
+blogFixture.events.length = 0;
+await act(async () => {
+  redlinkResult = await blogFixture.api().controller.actions.onConfirmRedlinkForm({
+    articleId: null, rowId: openRowId,
+    mediaInput: { titel: "Neuer Film", jahr: 2030, typ: "film" },
+  });
+  await tick();
+});
+await act(async () => {
+  blogFixture.api().setLibrary([{ id: "library-editor-new", titel: "Neuer Film", jahr: 2030, typ: "film" }]);
+  await tick();
+});
+check("Bestätigter Editor-Rotlink schreibt erst Mediathek, dann eigenen Artikel und bewahrt den Entwurf",
+  editorMediaEvents.join(",") === "media" && blogFixture.events.join(",") === "private"
+  && redlinkResult.mediaWriteConfirmed === true
+  && blogFixture.api().articles[0].liste[0].ref === "library-editor-new"
+  && blogFixture.api().controller.editor.text === "Bleibt vollständig"
+  && blogFixture.api().controller.editor.ordered === true
+  && blogFixture.api().controller.editor.anonymousPublication === true
+  && blogFixture.api().controller.editor.references[0].state === "available"
+  && blogFixture.api().controller.view.mode === "editor");
+const protectedDraftKey = blogFixture.api().controller.editor.draftKey;
+await act(async () => {
+  blogFixture.api().controller.actions.onEditorChange({ text: "Ungespeicherte Ergänzung" });
+  await tick();
+});
+await act(async () => {
+  await blogFixture.api().controller.actions.onLoadPublished({ cursor: null, replace: true });
+  await tick();
+  blogFixture.api().controller.actions.onBack({ returnToken: null });
+  await tick();
+});
+check("Tabwechsel zur Veröffentlichungsliste und zurück bewahrt den offenen Entwurf",
+  blogFixture.api().controller.view.area === "mine"
+  && blogFixture.api().controller.editor.draftKey === protectedDraftKey
+  && blogFixture.api().controller.editor.text === "Ungespeicherte Ergänzung");
+await act(async () => {
+  blogFixture.api().controller.actions.onEditArticle({ articleId: blogFixture.api().controller.editor.articleId });
+  await tick();
+});
+check("Rückkehr in denselben Editor lädt keinen älteren gespeicherten Inhalt",
+  blogFixture.api().controller.view.mode === "editor"
+  && blogFixture.api().controller.editor.draftKey === protectedDraftKey
+  && blogFixture.api().controller.editor.text === "Ungespeicherte Ergänzung");
+const newWhileDirty = blogFixture.api().controller.actions.onNewArticle();
+check("Neuer Artikel ersetzt keinen ungespeicherten offenen Entwurf",
+  newWhileDirty.errorCode === "unsaved-draft"
+  && blogFixture.api().controller.editor.draftKey === protectedDraftKey
+  && blogFixture.api().controller.editor.text === "Ungespeicherte Ergänzung");
+await blogFixture.cleanup();
+
+/* Entscheidungskandidaten und Entscheidungen aktualisieren den offenen Entwurf in-place. */
+blogFixture = await mounteBlogController({
+  serviceOverrides: {
+    publishV1: async (request) => ({
+      contractVersion: "blog-publication-v1", outcome: "decision_required",
+      operationId: request.operationId, contentVersion: request.contentVersion,
+      referenceResults: [],
+      decisionRequests: [{ rowId: request.article.references[0].rowId,
+        candidates: [{ workKey: "work:candidate", title: "Kandidat", year: 1979, mediaType: "film" }] }],
+      errorCode: "REFERENCE_DECISION_REQUIRED",
+    }),
+  },
+});
+await act(async () => { blogFixture.api().controller.actions.onNewArticle(); await tick(); });
+await act(async () => {
+  const { controller } = blogFixture.api();
+  controller.actions.onEditorChange({ title: "Entscheidung", text: "Offener Text", anonymousPublication: true });
+  controller.actions.onAddReference({ draftKey: controller.editor.draftKey,
+    reference: { title: "Alien", year: 1979, mediaType: "film" } });
+  await tick();
+});
+await act(async () => {
+  blogSave = await blogFixture.api().controller.actions.onSave({
+    draftKey: blogFixture.api().controller.editor.draftKey, anonymousPublication: true,
+  });
+  await tick();
+});
+const decisionArticleId = blogSave.private.articleId;
+const decisionRowId = blogFixture.api().controller.editor.references[0].rowId;
+check("Decision-required erscheint im offenen Editor ohne Text- oder Checkboxverlust",
+  blogSave.publication.status === "decision_required"
+  && blogFixture.api().controller.editor.text === "Offener Text"
+  && blogFixture.api().controller.editor.anonymousPublication === true
+  && blogFixture.api().controller.editor.references[0].decisionCandidates.length === 1);
+await act(async () => {
+  blogFixture.api().controller.actions.onEditorChange({ text: "Noch nicht gespeicherter Text" });
+  await tick();
+  await blogFixture.api().controller.actions.onReferenceDecision({
+    articleId: decisionArticleId, rowId: decisionRowId,
+    decision: { kind: "confirm_work", workKey: "work:candidate" },
+  });
+  await tick();
+});
+check("Referenzentscheidung ersetzt keinen neueren offenen Entwurf",
+  blogFixture.api().controller.editor.text === "Noch nicht gespeicherter Text"
+  && blogFixture.api().controller.editor.anonymousPublication === true
+  && blogFixture.api().controller.editor.references[0].resolutionIntent.workKey === "work:candidate");
+await blogFixture.cleanup();
+
+/* Saving-Phase und gemeinsame Sperre. */
+let releasePublish;
+const heldPublish = new Promise((resolve) => { releasePublish = resolve; });
+blogFixture = await mounteBlogController({
+  serviceOverrides: { publishV1: async () => heldPublish },
+});
+await act(async () => { blogFixture.api().controller.actions.onNewArticle(); await tick(); });
+await act(async () => {
+  blogFixture.api().controller.actions.onEditorChange({ title: "Busy", text: "Text" });
+  await tick();
+});
+let heldSave;
+await act(async () => {
+  heldSave = blogFixture.api().controller.actions.onSave({
+    draftKey: blogFixture.api().controller.editor.draftKey, anonymousPublication: true,
+  });
+  await tick();
+});
+const busyResult = await blogFixture.api().controller.actions.onSave({
+  draftKey: blogFixture.api().controller.editor.draftKey, anonymousPublication: false,
+});
+check("OnSave zeigt die laufende Phase und blockiert widersprüchliche Mehrfachklicks",
+  blogFixture.api().controller.editor.saveStatus === "saving"
+  && busyResult.private.errorCode === "busy");
+await act(async () => {
+  const savedVersion = blogFixture.api().articles[0].contentVersion;
+  releasePublish({
+    contractVersion: "blog-publication-v1", outcome: "published",
+    operationId: blogFixture.api().articles[0].publikation.pending.operationId,
+    contentVersion: savedVersion,
+    publication: { ...publicSnapshot, publicRevision: 1, publishedContentVersion: savedVersion },
+    referenceResults: [], decisionRequests: [],
+  });
+  await heldSave; await tick();
+});
+check("Nach bestätigter Antwort endet die Saving-Phase mit aktueller Publikations-ID",
+  blogFixture.api().controller.editor.saveStatus === "published"
+  && blogFixture.api().controller.editor.publicationId === publicSnapshot.publicationId);
+await blogFixture.cleanup();
+
+/* Fremder öffentlicher Rotlink ergänzt ausschließlich die persönliche Mediathek. */
+const publicReference = {
+  referenceId: "public-red", rank: 1, title: "Öffentlicher Neuzugang", year: 2031, mediaType: "film",
+  resolution: { status: "matched", workKey: "work:opaque-public" },
+  sources: { status: "checked", checkedAt: "2032-05-04T11:00:00.000Z",
+    validUntil: "2032-05-05T12:00:00.000Z", streaming: [], cinema: [] },
+};
+const publicMediaEvents = [];
+blogFixture = await mounteBlogController({
+  initialLibrary: [],
+  addLibraryItem: async () => { publicMediaEvents.push("media"); return "public-added-library"; },
+  serviceOverrides: {
+    listV1: async () => ({ ok: true, page: {
+      contractVersion: "blog-publication-v1", snapshotAt: "2032-05-04T12:00:00Z",
+      items: [{ publicationId: publicSnapshot.publicationId, shareToken: publicSnapshot.shareToken,
+        author: "Ohne Namensangabe", publicRevision: 3, contentVersion: publicSnapshot.publishedContentVersion,
+        publishedAt: "2032-05-04T10:00:00Z", updatedAt: publicSnapshot.updatedAt,
+        article: { id: publicSnapshot.publicationId, title: "Fremd", text: "Lesetext", ordered: true,
+          references: [publicReference, ...Array.from({ length: 4 }, (_, index) => ({
+            ...publicReference, referenceId: `public-more-${index}`, rank: index + 2,
+            title: `Öffentlich ${index}`,
+          }))] } }],
+      nextCursor: null, complete: true,
+    } }),
+  },
+});
+await act(async () => {
+  await blogFixture.api().controller.actions.onLoadPublished({ cursor: null, replace: true });
+  await tick();
+});
+check("Öffentliche Karten liefern ordered und die Vorschau oberhalb der sichtbaren Dreiergrenze",
+  blogFixture.api().controller.publishedPage.items[0].ordered === true
+  && blogFixture.api().controller.publishedPage.items[0].referencePreview.length === 5);
+await act(async () => {
+  blogFixture.api().controller.actions.onReadArticle({ scope: "published",
+    articleId: publicSnapshot.publicationId, returnToken: "published:list" });
+  await tick();
+});
+await act(async () => {
+  blogFixture.api().controller.actions.onOpenRedlinkForm({ articleId: publicSnapshot.publicationId, rowId: "public-red" });
+  await tick();
+});
+blogFixture.events.length = 0;
+await act(async () => {
+  redlinkResult = await blogFixture.api().controller.actions.onConfirmRedlinkForm({
+    articleId: publicSnapshot.publicationId, rowId: "public-red",
+    mediaInput: { titel: "Öffentlicher Neuzugang", jahr: 2031, typ: "film" },
+  });
+  await tick();
+});
+await act(async () => {
+  blogFixture.api().setLibrary([{ id: "public-added-library", titel: "Öffentlicher Neuzugang", jahr: 2031, typ: "film" }]);
+  await tick();
+});
+check("Öffentlicher Rotlink verändert keinen fremden Artikel und kehrt in denselben Leser zurück",
+  redlinkResult.status === "saved" && publicMediaEvents.join(",") === "media"
+  && blogFixture.events.length === 0 && blogFixture.api().articles.length === 0
+  && blogFixture.api().controller.view.mode === "reader"
+  && blogFixture.api().controller.reader.scope === "published"
+  && blogFixture.api().controller.reader.referenceViews[0].primaryTarget.ref === "public-added-library");
+await blogFixture.cleanup();
+
+/* Karten liefern Reihenfolge und die ganze kompakte Vorschau bis zum Vertragslimit. */
+const fiveRows = Array.from({ length: 5 }, (_, index) => ({
+  rowId: `preview-${index}`, eingabe: `Film ${index}`, jahr: 2000 + index, typ: "film", ref: null, rotlink_ok: true,
+}));
+blogFixture = await mounteBlogController({
+  initialArticles: [{ id: "preview-blog", titel: "Vorschau", text: "Text", geordnet: true,
+    status: "freigegeben", contentVersion: "10000000-0000-4000-8000-000000000099", liste: fiveRows }],
+});
+check("Private Karten liefern ordered und mehr als drei kompakte Referenzen",
+  blogFixture.api().controller.articleCards[0].ordered === true
+  && blogFixture.api().controller.articleCards[0].referencePreview.length === 5);
+await blogFixture.cleanup();
+
+const invalidateArticle = {
+  id: "invalidate-blog", titel: "Invalidate", text: "Privat", status: "freigegeben", geteilt: true,
+  contentVersion: publicSnapshot.publishedContentVersion, liste: [],
+  publikation: { status: "published", pending: null, errorCode: null, ...publicSnapshot },
+};
+blogFixture = await mounteBlogController({
+  initialArticles: [invalidateArticle], articlesReady: false,
+  serviceOverrides: {
+    listV1: async () => ({ ok: true, page: {
+      contractVersion: "blog-publication-v1", snapshotAt: "2032-05-04T12:00:00Z",
+      items: [{ publicationId: publicSnapshot.publicationId, shareToken: publicSnapshot.shareToken,
+        author: "Ohne Namensangabe", publicRevision: 3, contentVersion: publicSnapshot.publishedContentVersion,
+        publishedAt: "2032-05-04T10:00:00Z", updatedAt: publicSnapshot.updatedAt,
+        article: { id: publicSnapshot.publicationId, title: "Alt", text: "Alt", ordered: false, references: [] } }],
+      nextCursor: null, complete: true,
+    } }),
+  },
+});
+await act(async () => {
+  await blogFixture.api().controller.actions.onLoadPublished({ cursor: null, replace: true });
+  await tick();
+});
+await act(async () => {
+  withdrawResult = await blogFixture.api().controller.actions.onWithdraw({ articleId: "invalidate-blog" });
+  await tick();
+});
+check("Bestätigte Rücknahme invalidiert den offenen Veröffentlichungslistenstand",
+  withdrawResult.status === "withdrawn"
+  && blogFixture.api().controller.publishedPage.status === "idle"
+  && blogFixture.api().controller.publishedPage.items.length === 0);
+await blogFixture.cleanup();
+
+const retryOperationId = "30000000-0000-4000-8000-000000000009";
+const retryArticle = {
+  id: "retry-blog", titel: "Retry", text: "Privat", status: "freigegeben",
+  contentVersion: "10000000-0000-4000-8000-000000000088", liste: [],
+  publikation: { status: "error", action: "publish", operationId: retryOperationId,
+    pending: { action: "publish", operationId: retryOperationId,
+      contentVersion: "10000000-0000-4000-8000-000000000088",
+      request: { contractVersion: "blog-publication-v1", operationId: retryOperationId,
+        contentVersion: "10000000-0000-4000-8000-000000000088", privateArticleId: "retry-blog",
+        expectedPublicRevision: null, article: { title: "Retry", text: "Privat", ordered: false, references: [] } } },
+    errorCode: "unknown", publicationId: null, publicRevision: null, publishedContentVersion: null },
+};
+blogFixture = await mounteBlogController({
+  initialArticles: [retryArticle], articlesReady: false,
+  serviceOverrides: {
+    ownerReadback: async (privateArticleId, operationId) => ({
+      contractVersion: "blog-publication-v1", privateArticleId, currentPublication: null,
+      operation: { operationId, status: "not_applied", result: null, errorCode: null },
+      legacyReloadRequired: false,
+    }),
+  },
+});
+let retryResult;
+await act(async () => {
+  retryResult = await blogFixture.api().controller.actions.onRetryPublication({
+    articleId: "retry-blog", operationId: retryOperationId,
+  });
+  await tick();
+});
+check("Gezielte Wiederholung liest zuerst den Ownerstand und sendet nur den bestätigten nicht angewandten Vorgang",
+  retryResult.publication.status === "published"
+  && blogFixture.events.join(",") === "private,publish,private"
+  && blogFixture.api().articles[0].publikation.pending === null);
+await blogFixture.cleanup();
+
+/* Verlorene Publish-Antwort: Löschen liest den Ownerstand vor der Rücknahme. */
+const lostOperationId = "30000000-0000-4000-8000-000000000001";
+const lostArticle = {
+  id: "lost-publish", titel: "Verloren", text: "Privat", status: "freigegeben", geteilt: true,
+  contentVersion: "10000000-0000-4000-8000-000000000077", liste: [],
+  publikation: { status: "error", action: "publish", operationId: lostOperationId,
+    pending: { action: "publish", operationId: lostOperationId,
+      contentVersion: "10000000-0000-4000-8000-000000000077", request: {} },
+    errorCode: "unknown", publicationId: null, publicRevision: null, publishedContentVersion: null },
+};
+const lostEvents = [];
+blogFixture = await mounteBlogController({
+  initialArticles: [lostArticle], articlesReady: false,
+  serviceOverrides: {
+    ownerReadback: async (privateArticleId, operationId) => {
+      lostEvents.push(`readback:${operationId}`);
+      return { contractVersion: "blog-publication-v1", privateArticleId,
+        currentPublication: publicSnapshot, operation: null, legacyReloadRequired: false };
+    },
+    withdrawV1: async (request) => {
+      lostEvents.push("withdraw");
+      return { contractVersion: "blog-publication-v1", outcome: "withdrawn",
+        operationId: request.operationId, publicationId: publicSnapshot.publicationId };
+    },
+  },
+});
+await act(async () => {
+  deleteResult = await blogFixture.api().controller.actions.onDelete({ articleId: "lost-publish" });
+  await tick();
+});
+check("Löschen nach verlorener Publish-Antwort bestätigt Ownerstand und Rücknahme vor privater Löschung",
+  lostEvents.join(",") === `readback:${lostOperationId},withdraw`
+  && deleteResult.publication.status === "withdrawn"
+  && deleteResult.private.status === "deleted"
+  && blogFixture.api().articles.length === 0);
+await blogFixture.cleanup();
+
+/* Verspätete Antworten dürfen nach einem Kontowechsel weder navigieren noch schreiben. */
+let releaseList;
+const heldList = new Promise((resolve) => { releaseList = resolve; });
+blogFixture = await mounteBlogController({ serviceOverrides: { listV1: async () => heldList } });
+let lateLoad;
+await act(async () => {
+  lateLoad = blogFixture.api().controller.actions.onLoadPublished({ cursor: null, replace: true });
+  await tick();
+});
+await act(async () => {
+  blogFixture.api().setScope("account:b");
+  await tick();
+});
+await act(async () => {
+  releaseList({ ok: true, page: { contractVersion: "blog-publication-v1", snapshotAt: "2032-05-04T12:00:00Z",
+    items: [], nextCursor: null, complete: true } });
+  loadResult = await lateLoad;
+  await tick();
+});
+check("Verspätete Published-Antwort bleibt nach Kontowechsel ohne Navigation und Seitenwrite",
+  loadResult.errorCode === "account-changed"
+  && blogFixture.api().controller.view.area === "mine"
+  && blogFixture.api().controller.publishedPage.items.length === 0);
+await blogFixture.cleanup();
+
+let releaseMedia;
+const heldMedia = new Promise((resolve) => { releaseMedia = resolve; });
+blogFixture = await mounteBlogController({ initialLibrary: [], addLibraryItem: async () => heldMedia });
+await act(async () => { blogFixture.api().controller.actions.onNewArticle(); await tick(); });
+await act(async () => {
+  const { controller } = blogFixture.api();
+  controller.actions.onEditorChange({ title: "Kontowechsel", text: "A" });
+  controller.actions.onAddReference({ draftKey: controller.editor.draftKey,
+    reference: { title: "Spät", year: 2032, mediaType: "film" } });
+  await tick();
+});
+const lateRowId = blogFixture.api().controller.editor.references[0].rowId;
+await act(async () => {
+  blogFixture.api().controller.actions.onOpenRedlinkForm({ articleId: null, rowId: lateRowId });
+  await tick();
+});
+let lateRedlink;
+await act(async () => {
+  lateRedlink = blogFixture.api().controller.actions.onConfirmRedlinkForm({ articleId: null, rowId: lateRowId,
+    mediaInput: { titel: "Spät", jahr: 2032, typ: "film" } });
+  await tick();
+});
+blogFixture.events.length = 0;
+await act(async () => { blogFixture.api().setScope("account:b"); await tick(); });
+await act(async () => { releaseMedia("late-library"); redlinkResult = await lateRedlink; await tick(); });
+check("Verspäteter Rotlink-Abschluss schreibt nach Kontowechsel keinen Artikel und navigiert nicht",
+  redlinkResult.errorCode === "account-changed"
+  && redlinkResult.mediaWriteConfirmed === true
+  && blogFixture.events.length === 0
+  && blogFixture.api().controller.editor === null
+  && blogFixture.api().controller.view.area === "mine");
+await blogFixture.cleanup();
+
+let releaseWithdraw;
+const heldWithdraw = new Promise((resolve) => { releaseWithdraw = resolve; });
+blogFixture = await mounteBlogController({
+  initialArticles: [invalidateArticle], articlesReady: false,
+  serviceOverrides: { withdrawV1: async () => heldWithdraw },
+});
+let lateWithdraw;
+await act(async () => {
+  lateWithdraw = blogFixture.api().controller.actions.onWithdraw({ articleId: "invalidate-blog" });
+  await tick();
+});
+check("Rücknahme persistiert den Vorgang vor dem Remoteaufruf", blogFixture.events.join(",") === "private");
+await act(async () => { blogFixture.api().setScope("account:b"); await tick(); });
+await act(async () => {
+  releaseWithdraw({ contractVersion: "blog-publication-v1", outcome: "withdrawn",
+    operationId: "late", publicationId: publicSnapshot.publicationId });
+  withdrawResult = await lateWithdraw; await tick();
+});
+check("Verspätete Withdraw-Antwort schreibt nach Kontowechsel keinen Abschluss",
+  withdrawResult.errorCode === "account-changed"
+  && blogFixture.events.join(",") === "private"
+  && blogFixture.api().controller.view.area === "mine");
 await blogFixture.cleanup();
 
 console.log(`article_transaction_test: ${ok} Checks bestanden.`);

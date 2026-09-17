@@ -71,6 +71,50 @@ check("Mediathekindex nutzt nur gemeinsame Werkkennung oder starke IDs",
   && !index.has("Star Wars"));
 check("Mehrdeutige starke IDs werden fail-closed nicht in den Index aufgenommen",
   !buildBlogLibraryIndex([...library, { id: "duplicate", titel: "Dublette", imdb_id: "tt0076759" }]).has("imdb:tt0076759"));
+
+const opaqueReference = [{
+  referenceId: "opaque-ref", rank: 1, title: "Opaque Server Film", year: 2029, mediaType: "film",
+  resolution: { status: "matched", workKey: "work:opaque-backend-key" },
+  sources: { status: "checked", checkedAt: "2032-05-04T11:00:00.000Z", validUntil: "2032-05-05T12:00:00.000Z", streaming: [], cinema: [] },
+}];
+const opaqueLibrary = [{ id: "private-opaque-title", titel: "Opaque Server Film", jahr: 2029, typ: "film" }];
+check("Opaque Server-Werkkennungen fallen konservativ auf eindeutigen Titel, Jahr und Typ zurück",
+  projectPublicBlogReferences(opaqueReference, {
+    library: opaqueLibrary, libraryIndex: buildBlogLibraryIndex(opaqueLibrary), libraryReady: true,
+    selectedSourceIds: [], now: fixture.testClock,
+  })[0].primaryTarget?.ref === "private-opaque-title");
+check("Mehrdeutige persönliche Titel bleiben trotz opaque Werkkennung Rotlink",
+  projectPublicBlogReferences(opaqueReference, {
+    library: [...opaqueLibrary, { ...opaqueLibrary[0], id: "private-opaque-duplicate" }],
+    libraryIndex: new Map(), libraryReady: true, selectedSourceIds: [], now: fixture.testClock,
+  })[0].state === "redlink");
+check("Titelgleichheit mit abweichendem Jahr bleibt beim öffentlichen Fallback ungelöst",
+  projectPublicBlogReferences(opaqueReference, {
+    library: [{ ...opaqueLibrary[0], jahr: 2030 }], libraryIndex: new Map(), libraryReady: true,
+    selectedSourceIds: [], now: fixture.testClock,
+  })[0].state === "redlink");
+check("Widersprüchliche starke Werkkennungen werden nicht durch Titelgleichheit überstimmt",
+  projectPublicBlogReferences([{ ...opaqueReference[0], resolution: { status: "matched", workKey: "imdb:tt-wrong" } }], {
+    library: opaqueLibrary, libraryIndex: buildBlogLibraryIndex(opaqueLibrary), libraryReady: true,
+    selectedSourceIds: [], now: fixture.testClock,
+  })[0].state === "redlink");
+check("Mehrdeutige explizite Werkkennungen werden ebenfalls nicht über den Titel umgangen",
+  projectPublicBlogReferences(opaqueReference, {
+    library: [
+      { ...opaqueLibrary[0], workKey: "work:opaque-backend-key" },
+      { id: "workkey-conflict", titel: "Anderer Titel", jahr: 2035, typ: "film", workKey: "work:opaque-backend-key" },
+    ],
+    libraryIndex: buildBlogLibraryIndex([
+      { ...opaqueLibrary[0], workKey: "work:opaque-backend-key" },
+      { id: "workkey-conflict", titel: "Anderer Titel", jahr: 2035, typ: "film", workKey: "work:opaque-backend-key" },
+    ]),
+    libraryReady: true, selectedSourceIds: [], now: fixture.testClock,
+  })[0].state === "redlink");
+check("Ein leerer, aber geladener persönlicher Bestand zeigt einen echten Rotlink",
+  projectPublicBlogReferences(opaqueReference, {
+    library: [], libraryIndex: new Map(), libraryReady: true,
+    selectedSourceIds: [], now: fixture.testClock,
+  })[0].state === "redlink");
 const privateTargets = buildPrivateBlogTargetIndex(library, [
   { id: "mw-library", titel: "A", verknuepfung: { ziel: "master", id: "private-new-hope" } },
   { id: "mw-stream", titel: "B", verknuepfung: { ziel: "streaming", id: "watchmode-2" } },

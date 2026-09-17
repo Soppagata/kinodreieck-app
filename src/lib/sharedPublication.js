@@ -88,12 +88,14 @@ export function completeBlogPublication(article, operationId, response) {
   const outcome = response?.outcome;
   if (["published", "updated"].includes(outcome) && response?.publication) {
     return applyOwnerPublication(article, response.publication, {
+      pending: null,
       decisionRequests: response?.decisionRequests || [],
     });
   }
-  if (["withdrawn", "absent"].includes(outcome)) return applyOwnerPublication(article, null);
+  if (["withdrawn", "absent"].includes(outcome)) return applyOwnerPublication(article, null, { pending: null });
   return applyOwnerPublication(article, publicationSnapshot(article).publicationId
     ? publicationSnapshot(article) : null, {
+    pending: null,
     errorCode: response?.errorCode || outcome || "server",
     decisionRequests: response?.decisionRequests || [],
   });
