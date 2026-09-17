@@ -104,22 +104,28 @@ export function KinoTab({
     setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null); setGenreF("");
     setZeigeMehr(true);
     if (fokusTreffer.art === "film") setExpandedId("k" + fokusTreffer.ref);
+  }, [fokusTreffer, setExpandedId]);
+  useEffect(() => {
+    if (!fokusTreffer) return undefined;
     let zweiterFrame = 0;
     const ersterFrame = requestAnimationFrame(() => {
       zweiterFrame = requestAnimationFrame(() => {
         const schluessel = `${fokusTreffer.art}:${fokusTreffer.ref}`;
         const ziel = [...(bereichRef.current?.querySelectorAll("[data-kino-suchtreffer]") || [])]
           .find((element) => element.dataset.kinoSuchtreffer === schluessel);
-        ziel?.focus?.({ preventScroll: true });
-        ziel?.scrollIntoView?.({ behavior: "auto", block: "center" });
+        if (!ziel) return;
+        ziel.focus({ preventScroll: true });
+        ziel.scrollIntoView?.({ behavior: "auto", block: "center" });
         onFokusVerbraucht?.();
       });
     });
     return () => { cancelAnimationFrame(ersterFrame); cancelAnimationFrame(zweiterFrame); };
-    // Der Fokusauftrag selbst ist die Ereigniskennung; der Inline-Callback aus
-    // App darf den Effekt nicht bei jedem Eltern-Render erneut auslösen.
+    // Der Inline-Callback aus App darf den Effekt nicht bei jedem
+    // Eltern-Render erneut auslösen.
+    // Fehlende Ziele bleiben ausstehend. Neue Daten erlauben einen neuen
+    // Zustellversuch; ohne Datenänderung gibt es weder Timer noch RAF-Schleife.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fokusTreffer]);
+  }, [fokusTreffer, kinoMatches, restSichtbar, geschmacksprofil, programm]);
 
   /* Verfügbare Kinos / Tage / Fassungen aus den Daten ableiten */
   const alleProg = useMemo(() => [...kinoMatches.matched.map((m) => m.prog), ...kinoMatches.rest], [kinoMatches]);
@@ -479,13 +485,16 @@ export function KinoTab({
                   );
                 })}
                 {empfohleneGefiltert.map((entry) => (
-                  <div key={entry.targetId} data-testid="kino-personal-ausserhalb-mediathek">
+                  <div key={entry.targetId} data-testid="kino-personal-ausserhalb-mediathek"
+                    className="kd-suchfokus" tabIndex={-1}
+                    data-kino-suchtreffer={`programm:${entry.program.film_at_id || entry.program.t}`}>
                     <KompaktEintrag
                       pf={entry.program} zeiten={zeitenGefiltert(entry.program)} kinos={kinoF ? [kinoF] : entry.program.k}
                       genres={genresFuer(entry.program).map((genre) => genre.label)}
                       addFilm={addFilm} addFilmMitPrognose={addFilmMitPrognose}
                       vorbewertungAktiv={vorbewertungAktiv} prognoseSperrgrund={prognoseSperrgrund}
                       autorName={autorName} istGepinnt={istGepinnt} togglePin={toggleKinoPin}
+                      fokusAktiv={fokusTreffer?.art === "programm" && String(fokusTreffer.ref) === String(entry.program.film_at_id || entry.program.t)}
                       master={master} updateFilm={updateFilm} />
                   </div>
                 ))}

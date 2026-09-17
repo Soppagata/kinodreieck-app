@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import { syncStatusAnzeige } from "../lib/syncStatus.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
@@ -7,7 +7,7 @@ import { Wochenplan } from "../components/Wochenplan.jsx";
 import { findeKinoPinImKatalog, kinoPinTermin } from "../lib/wochenplan.js";
 import { projectDailyMustwatch, viennaCalendarDay } from "../lib/mustwatch.js";
 import { localRecommendationCandidates, webDiscoveryFeedCards } from "../lib/entdeckenUi.js";
-import { resolveEntdeckenPins } from "../lib/entdeckenPins.js";
+import { normalizeEntdeckenPins, resolveEntdeckenPins } from "../lib/entdeckenPins.js";
 import { projectRecentPersonalEntries } from "../lib/personalEntryChronology.js";
 import { formatPresentationDate } from "../lib/presentationDate.js";
 
@@ -22,7 +22,7 @@ export function StartTab(props) {
 
 /* ==================== DASHBOARD ====================
    Modul-Reihenfolge und -Zuschnitt: Entscheidung Max 18.07.2026.
-   Datenquellen (alles vorhandener App-State, keine neuen Fetches, kein LLM):
+   Datenquellen (vorhandener App-State und bedarfsgesteuerter Kataloglader, kein LLM):
    · Vertrauens-Zeile: useSyncStatus (Muster SyncStatusChip) + progStand + streamingBekannt
    · Pinboard:         Entdecken-Titel + kinoPins
    · Deine Woche:      persönliche Reminder + Kinopins + passende Kinovorschläge
@@ -238,6 +238,25 @@ function StartDashboard({
   }), [aktuelleEmpfehlungen, entdeckenPins, kinoKatalog, mustwatch, mustwatchReady,
     pinOwnerKey, progStand, serienKatalog, streamingBekannt, streamingEntdecken, webDiscoveryFeed]);
   const titelPins = entdeckenPinAufloesung.resolved;
+  const ausstehendeTitelPins = useMemo(() => {
+    const pending = new Set(entdeckenPinAufloesung.pendingPinIds);
+    return normalizeEntdeckenPins(entdeckenPins).filter((pin) => pending.has(pin.pinId)
+      && (pin.format === 1 || (pinOwnerKey && pin.ownerKey === pinOwnerKey)));
+  }, [entdeckenPinAufloesung, entdeckenPins, pinOwnerKey]);
+  const pinKatalogVersuch = useRef(null);
+  useEffect(() => {
+    /* Erst den leichten Boot-Katalog abgleichen; nur ungelöste öffentliche
+       Titel benötigen den bestehenden Vollweg. Ein Versuch pro Konto und
+       Dashboard-Mount, auch bei Fehler/leerer/mehrdeutiger Antwort. */
+    if (!streamingBekannt || !onStreamingKatalogLaden
+        || streamingEntdecken?.katalogMengen?.umfang === "voll"
+        || !ausstehendeTitelPins.some((pin) => pin.format === 1)
+        || pinKatalogVersuch.current?.owner === pinOwnerKey) return;
+    pinKatalogVersuch.current = { owner: pinOwnerKey };
+    Promise.resolve().then(() => onStreamingKatalogLaden(true)).catch(() => {
+      /* Der Loader meldet Datenfehler; der gespeicherte Pin bleibt ausstehend. */
+    });
+  }, [ausstehendeTitelPins, onStreamingKatalogLaden, pinOwnerKey, streamingBekannt, streamingEntdecken]);
   const zuletzt = useMemo(() => projectRecentPersonalEntries({ master, limit: 5 }), [master]);
 
   const datum = formatPresentationDate(new Date(), { format: "long" });
@@ -284,7 +303,7 @@ function StartDashboard({
               </button>
             </div>
           )}
-          {titelPins.length > 0 || pins.length > 0 ? (
+          {titelPins.length > 0 || ausstehendeTitelPins.length > 0 || pins.length > 0 ? (
             <div className="kd-dash-karte kd-pinboard-radar">
               {titelPins.map((pin) => (
                 <button key={`entdecken-${pin.pinId}`} className="kd-dash-zeile kd-pinboard-titel" onClick={() => {
@@ -301,6 +320,17 @@ function StartDashboard({
                   </span>
                   <span className="kd-pinboard-kino-meta">{pin.label}</span>
                 </button>
+              ))}
+              {ausstehendeTitelPins.map((pin) => (
+                <div key={`pending-${pin.pinId}`} className="kd-dash-zeile kd-pinboard-titel" role="status">
+                  <span className="kd-pinboard-kino-titel">
+                    <span className="kd-pinboard-kino-marker" aria-hidden="true">◆</span>
+                    <span className="kd-pinboard-kino-name">{pin.title}
+                      {pin.year ? <span className="kd-pinboard-kino-jahr"> ({pin.year})</span> : null}
+                    </span>
+                  </span>
+                  <span className="kd-pinboard-kino-meta">Gespeichert · Abgleich ausstehend</span>
+                </div>
               ))}
               {pins.map((p) => (
                 <button key={`kino-${p.t}|${p.z}`} className="kd-dash-zeile kd-pinboard-kino" onClick={() => {
