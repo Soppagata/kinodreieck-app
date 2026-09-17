@@ -132,11 +132,21 @@ Ticketprovenienz: Die alten SHA256-Metadaten in E14/FINAL_REVIEW.json weichen vo
 
 ## Liefergrenzen
 
-Gebaut, lokal getestet, unabhaengig abgenommen und lokal committed. Push, CI, Deployment, bestehende Serverdatenwrites, bezahlte Anbieteraufrufe und praktische iPhone/PWA-Abnahme wurden nicht durchgefuehrt. Die SQL-Nachweise verwenden frische lokale PG17-Testcluster mit synthetischen Daten; sie ersetzen keine Abnahme auf einem bestehenden Server. **E13-F005 bleibt separat UNGEKLAERT und zaehlt nicht zu den 49.**
+Gebaut, lokal getestet, unabhaengig abgenommen und lokal committed. Push, CI, Deployment, bestehende Serverdatenwrites, bezahlte Anbieteraufrufe und praktische iPhone/PWA-Abnahme wurden bis zur lokalen Abnahme nicht durchgefuehrt. Die SQL-Nachweise verwenden frische lokale PG17-Testcluster mit synthetischen Daten; sie ersetzen keine Abnahme auf einem bestehenden Server. **E13-F005 bleibt separat UNGEKLAERT und zaehlt nicht zu den 49.**
+
+## Staging-Auftrag vom 17.09.2026
+
+Max beauftragt jetzt die Staging-Lieferung zur eigenen iPhone/PWA-Abnahme. Der Produktionspush folgt ausdruecklich erst nach seiner Freigabe. Der Master fuehrt die Lieferung; es gibt keinen weiteren Pruef- oder Lieferchat. Status: **VORBEREITET; Entscheidung ueber die gemeinsame Backendwirkung offen.**
+
+[Frischer Read-only-Preflight](evidence/STAGING_PREFLIGHT.json): main und staging sowie beide Webbuilds stehen weiter auf 14804ce. Der Push-Probelauf des lokalen Kandidaten 8ae8c6e nach staging ist force-frei moeglich; noch kein Push oder Deploy. Beide GitHub-Umgebungen verwenden jedoch dasselbe Supabase-Projekt `bscjgwcntapobyxsiyce` und dieselben Functionnamen. Die zugaengliche Projektliste enthaelt nur dieses Projekt. Alle sechs neuen Migrationen fehlen; die bestehenden Schnittstellen passen zu den erwarteten Vorgaengern. Die Serverzaehlung findet 26 Radar-v1-Funde und keine bestehenden TMDB-Filmwissen-Zuordnungen. Der alte Kennungsnormalisierer akzeptiert numerische TMDB-IDs und weist die neuen typisierten IDs ab.
+
+Deshalb kann eine volle Staging-Lieferung mit unveraendertem Produktionsbackend noch nicht behauptet werden. Vor gemeinsamer Umstellung sind Ziel/Umfang und das Versionsfenster zu klaeren: Die neue Radar-Migration schreibt auch die von alten Prod-Clients gelesenen Fundschluessel um; der neue Filmwissenvertrag lehnt deren numerische TMDB-Anfragen ab. Max ist die Wahl zwischen getrenntem Staging-Backend und einer ausdruecklich vorgezogenen gemeinsamen Umstellung mit Wartungsfenster vorgelegt. Keine Serverdatenmutation, kein neuer Anbieterrequest und keine neue Infrastruktur wurden ausgefuehrt.
+
+Unabhaengige CI-Vorbereitung: Die drei neu eingebundenen SQL-Testskripte P05/P06/P07 besitzen Mac-spezifische PostgreSQL-Pfade. Die bestehenden Owner korrigieren parallel ausschliesslich jeweils ihre Testdatei und ihren Paketbeleg, alle von 8ae8c6e in neuen Worktrees. Keine gemeinsamen Schreibflaechen oder Produktaenderungen; Integration und passender Masterabschluss folgen nach Lieferung. Die urspruenglichen 49 Ticketfixes bleiben lokal DONE.
 
 ## Konkret vorbereitete spaetere Auslieferung
 
-Noch nicht beauftragt oder ausgefuehrt. Der nach lokaler Abnahme festgelegte Produktcommit bleibt der gemeinsame Lieferkandidat. Alte Runbooks mit anderen Migrationsnamen/Functionstaenden sind kein Nachweis fuer diese Lieferung.
+Staging-Weblieferung ist inzwischen beauftragt; die oben benannte gemeinsame Backendgrenze bleibt offen. Noch kein Schritt ausgefuehrt. Der nach lokaler Abnahme festgelegte Produktstand bleibt der gemeinsame Lieferkandidat. Alte Runbooks mit anderen Migrationsnamen/Functionstaenden sind kein Nachweis fuer diese Lieferung.
 
 1. Frische Ziel-Refs, Migrationsledger, Function-Quellstaende, Web-/Service-Worker-Version und laufende Scheduler read-only erheben. Nur die tatsaechlich fehlenden Migrationen anwenden. Vor der autorisierten Bestandsumschreibung die betroffenen Radar-/Filmwissen-Identitaeten sichern und die Ruecklese-/Wiederherstellungsprobe festlegen.
 2. Das Versionsfenster fuer Radar- und Filmwissen-Schluessel sowie Feedannotation koordinieren. Alte Radarwriter werden serverseitig normalisiert; alte Reader koennen v2-Schluessel nicht lesen. Alte numerische Filmwissen-TMDB-Anfragen werden bewusst abgewiesen. Strenge alte Entdecken-Clients verstehen angereicherte Format-8/9-Feeds nicht. Neue Writer duerfen erst nach passender DB und aktualisierten Readern ausgegeben werden; fuer Filmwissen ist ein abgestimmtes Wartungsfenster erforderlich. Laufende Scheduler/Requests vor dem Schema-/Writerwechsel kontrolliert auslaufen lassen.

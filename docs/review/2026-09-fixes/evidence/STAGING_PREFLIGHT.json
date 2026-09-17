@@ -1,0 +1,578 @@
+{
+  "status": "WAITING_FOR_BACKEND_SCOPE_DECISION",
+  "candidateAtPreflight": "8ae8c6e066bd5aeaf2e7746cef904dfb7797a0ae",
+  "readOnly": true,
+  "githubObservedAt": "2026-09-17T16:06:26.034837+00:00",
+  "backendObservedAt": "2026-09-17T16:12:39.936575+00:00",
+  "remoteRefs": {
+    "main": "14804ce389d69114feed27b92fb11ac78423cc0e",
+    "staging": "14804ce389d69114feed27b92fb11ac78423cc0e"
+  },
+  "pushDryRun": {
+    "target": "refs/heads/staging",
+    "result": "fast-forward accepted",
+    "actualPush": false
+  },
+  "environments": {
+    "staging": {
+      "effectiveVariables": {
+        "SUPABASE_URL": "https://bscjgwcntapobyxsiyce.supabase.co",
+        "AI_ENDPOINT_NAME": "ai-task",
+        "APP_URL": "https://staging.kinodreieck.at",
+        "CLOUDFLARE_PAGES_PROJECT": "kinodreieck",
+        "STAGING_ENTDECKEN_DAILY_FEED_ENABLED": "true",
+        "STAGING_RADAR_PILOT_CLIENT_ENABLED": "true"
+      },
+      "deployedBuild": {
+        "format": 1,
+        "buildVersion": "14804ce389d69114feed27b92fb11ac78423cc0e",
+        "appEnvironment": "staging"
+      }
+    },
+    "production": {
+      "effectiveVariables": {
+        "SUPABASE_URL": "https://bscjgwcntapobyxsiyce.supabase.co",
+        "AI_ENDPOINT_NAME": "ai-task",
+        "APP_URL": "https://kinodreieck.at",
+        "CLOUDFLARE_PAGES_PROJECT": "kinodreieck"
+      },
+      "deployedBuild": {
+        "format": 1,
+        "buildVersion": "14804ce389d69114feed27b92fb11ac78423cc0e",
+        "appEnvironment": "production"
+      }
+    }
+  },
+  "sharedSupabaseProject": true,
+  "accessibleSupabaseProjects": [
+    {
+      "projectRef": "bscjgwcntapobyxsiyce",
+      "status": "ACTIVE_HEALTHY"
+    }
+  ],
+  "migrations": [
+    {
+      "path": "supabase/migrations/20260917100000_review_radar_text_identity.sql",
+      "sha256": "82661ea4f2d1f6c968b5a3f719e0684096597bada2a5006b7be7d7786ed1070d",
+      "alreadyApplied": false
+    },
+    {
+      "path": "supabase/migrations/20260917101000_review_radar_context_year.sql",
+      "sha256": "738cbf27b9748e0ee5d2fd95631e8d2d4ad9a716d5f3a2edc3ebb674817c2d80",
+      "alreadyApplied": false
+    },
+    {
+      "path": "supabase/migrations/20260917110000_review_filmwissen_identity.sql",
+      "sha256": "2cd4740a1b1807012316db22b62bd2a947cc3929f94680116da59cdf95a49546",
+      "alreadyApplied": false
+    },
+    {
+      "path": "supabase/migrations/20260917120000_review_streaming_freshness_anchors.sql",
+      "sha256": "104a29402c3c442d7504093795904ce4414dc78f71a4dd19ebbec3eca75aec52",
+      "alreadyApplied": false
+    },
+    {
+      "path": "supabase/migrations/20260917123000_review_mail_rate_bucket_retention.sql",
+      "sha256": "ae915a36f2686b9b2dbd15f0d553ba0c2d538fc76e6bf8796c642d1d3ac632aa",
+      "alreadyApplied": false
+    },
+    {
+      "path": "supabase/migrations/20260917130000_review_entdecken_ofi_identity.sql",
+      "sha256": "3b4c03230e7afd9ef87be92b1bc7b419a61282f2fdd3072bc5b158bf01bbd07b",
+      "alreadyApplied": false
+    }
+  ],
+  "database": {
+    "ledger": [
+      {
+        "name": "kd_personal",
+        "version": "20260725120000"
+      },
+      {
+        "name": "etappe4_quellenregister_zugriff",
+        "version": "20260725220000"
+      },
+      {
+        "name": "etappe4_guard_ausbaustufe",
+        "version": "20260726120000"
+      },
+      {
+        "name": "etappe5_ki_unterbau",
+        "version": "20260726160000"
+      },
+      {
+        "name": "etappe5_ki_unterbau_haertung",
+        "version": "20260726180000"
+      },
+      {
+        "name": "etappe6_ausgabebudget_suche",
+        "version": "20260727180000"
+      },
+      {
+        "name": "etappe6_tageslimit_bauphase",
+        "version": "20260727190000"
+      },
+      {
+        "name": "etappe7_profil_topf",
+        "version": "20260727210000"
+      },
+      {
+        "name": "etappe7_structured_output_timeout",
+        "version": "20260729200000"
+      },
+      {
+        "name": "etappe8_film_forecast",
+        "version": "20260729210000"
+      },
+      {
+        "name": "etappe8_filmwissen_cache",
+        "version": "20260729220000"
+      },
+      {
+        "name": "etappe8_filmwissen_synthese_sicherung",
+        "version": "20260730110000"
+      },
+      {
+        "name": "etappe8_filmwissen_adapter_sperren",
+        "version": "20260730140000"
+      },
+      {
+        "name": "etappe8_filmwissen_atomarer_abschluss",
+        "version": "20260730160000"
+      },
+      {
+        "name": "etappe8_filmwissen_belegklassen",
+        "version": "20260730180000"
+      },
+      {
+        "name": "etappe8_filmwissen_adapter_betrieb",
+        "version": "20260730210000"
+      },
+      {
+        "name": "etappe9_beta_tageslimit",
+        "version": "20260730230000"
+      },
+      {
+        "name": "etappe9_beta_antwortlimit",
+        "version": "20260730231000"
+      },
+      {
+        "name": "shared_articles",
+        "version": "20260731120000"
+      },
+      {
+        "name": "archive_legacy_shared",
+        "version": "20260731121000"
+      },
+      {
+        "name": "demo_seed_catalog",
+        "version": "20260731140000"
+      },
+      {
+        "name": "split_streaming_catalog",
+        "version": "20260731170000"
+      },
+      {
+        "name": "stapelimport_medien",
+        "version": "20260801194500"
+      },
+      {
+        "name": "wochenplan_serienbeobachtung",
+        "version": "20260802120000"
+      },
+      {
+        "name": "shared_article_claim_tokens",
+        "version": "20260802220000"
+      },
+      {
+        "name": "ai_anbieter_request_kostenzaun",
+        "version": "20260808120000"
+      },
+      {
+        "name": "etappe9_beta_tageslimit_30",
+        "version": "20260808225500"
+      },
+      {
+        "name": "rollen_v1_access_basis",
+        "version": "20260809120000"
+      },
+      {
+        "name": "rollen_v1_access_enforcement",
+        "version": "20260809121000"
+      },
+      {
+        "name": "event_radar_local_basis",
+        "version": "20260809180000"
+      },
+      {
+        "name": "private_pilot_ops",
+        "version": "20260809220000"
+      },
+      {
+        "name": "private_pilot_retention_fix",
+        "version": "20260810120000"
+      },
+      {
+        "name": "radar_max_manual_pilot",
+        "version": "20260814120000"
+      },
+      {
+        "name": "private_export_radar_pilot_compat",
+        "version": "20260815120000"
+      },
+      {
+        "name": "radar_deferred_trigger_privilege_fix",
+        "version": "20260816010000"
+      },
+      {
+        "name": "blog_profile_extract_config",
+        "version": "20260817120000"
+      },
+      {
+        "name": "radar_websearch_mvp_package_a",
+        "version": "20260817180000"
+      },
+      {
+        "name": "radar_websearch_mvp_package_b",
+        "version": "20260817190000"
+      },
+      {
+        "name": "radar_person_server_candidate",
+        "version": "20260819220000"
+      },
+      {
+        "name": "entdecken_daily_feed",
+        "version": "20260820200000"
+      },
+      {
+        "name": "radar_person_catalog_repair",
+        "version": "20260821120000"
+      },
+      {
+        "name": "radar_title_group",
+        "version": "20260821130000"
+      },
+      {
+        "name": "entdecken_weekly_feed",
+        "version": "20260822190000"
+      },
+      {
+        "name": "radar_title_group_discovery_v6",
+        "version": "20260822200000"
+      },
+      {
+        "name": "entdecken_weekly_recovery",
+        "version": "20260822210000"
+      },
+      {
+        "name": "entdecken_weekly_recovery_claim",
+        "version": "20260822220000"
+      },
+      {
+        "name": "radar_text_target",
+        "version": "20260823120000"
+      },
+      {
+        "name": "entdecken_weekly_live_proof",
+        "version": "20260824120000"
+      },
+      {
+        "name": "filmwissen_loc_nfr_v2",
+        "version": "20260824130000"
+      },
+      {
+        "name": "entdecken_weekly_refresh_lease",
+        "version": "20260824140000"
+      },
+      {
+        "name": "radar_daily_schedule",
+        "version": "20260825120000"
+      },
+      {
+        "name": "entdecken_staging_owner_refresh_override",
+        "version": "20260825130000"
+      },
+      {
+        "name": "entdecken_weekly_prompt_v2",
+        "version": "20260825200000"
+      },
+      {
+        "name": "entdecken_editorial_sources_v2",
+        "version": "20260825210000"
+      },
+      {
+        "name": "entdecken_public_six_day_pool",
+        "version": "20260827140000"
+      },
+      {
+        "name": "entdecken_staging_owner_refresh_bypass",
+        "version": "20260827190000"
+      },
+      {
+        "name": "entdecken_mixed_pool_format_6",
+        "version": "20260828180000"
+      },
+      {
+        "name": "radar_feed_work_title",
+        "version": "20260829120000"
+      },
+      {
+        "name": "radar_six_day_schedule",
+        "version": "20260830120000"
+      },
+      {
+        "name": "radar_freetext_subscription",
+        "version": "20260830130000"
+      },
+      {
+        "name": "radar_text_findings",
+        "version": "20260830140000"
+      },
+      {
+        "name": "radar_initial_text_claim",
+        "version": "20260830150000"
+      },
+      {
+        "name": "radar_search_status",
+        "version": "20260831120000"
+      },
+      {
+        "name": "private_release_access_boundary",
+        "version": "20260901193000"
+      },
+      {
+        "name": "private_mail_request_guards",
+        "version": "20260902090000"
+      },
+      {
+        "name": "automatic_ai_retry_jobs",
+        "version": "20260903193000"
+      },
+      {
+        "name": "radar_automatic_retry_binding",
+        "version": "20260903213000"
+      },
+      {
+        "name": "entdecken_vienna_day_claim",
+        "version": "20260905180000"
+      },
+      {
+        "name": "radar_text_finding_source_target",
+        "version": "20260906170000"
+      },
+      {
+        "name": "entdecken_current_diverse_pool",
+        "version": "20260906180000"
+      },
+      {
+        "name": "entdecken_delayed_daily_claim",
+        "version": "20260909120000"
+      },
+      {
+        "name": "flixpatrol_usage_ticker",
+        "version": "20260909153000"
+      },
+      {
+        "name": "flixpatrol_data_cache",
+        "version": "20260909190000"
+      },
+      {
+        "name": "entdecken_flixpatrol_feed",
+        "version": "20260909210000"
+      },
+      {
+        "name": "title_facts_lookup",
+        "version": "20260911120000"
+      },
+      {
+        "name": "entdecken_flixpatrol_batch_format9",
+        "version": "20260911123000"
+      },
+      {
+        "name": "motn_streaming",
+        "version": "20260913160000"
+      },
+      {
+        "name": "motn_initial_backfill",
+        "version": "20260913170000"
+      },
+      {
+        "name": "motn_watchmode_identity",
+        "version": "20260913173000"
+      },
+      {
+        "name": "motn_change_checks",
+        "version": "20260913180000"
+      },
+      {
+        "name": "motn_usage_ticker",
+        "version": "20260913190000"
+      },
+      {
+        "name": "streaming_pages_backend",
+        "version": "20260913200000"
+      },
+      {
+        "name": "streaming_pages_latency",
+        "version": "20260914100000"
+      },
+      {
+        "name": "mustwatch_streaming_candidates",
+        "version": "20260914120000"
+      },
+      {
+        "name": "radar_member_search_access",
+        "version": "20260914210000"
+      },
+      {
+        "name": "entdecken_pins_personal",
+        "version": "20260914230000"
+      },
+      {
+        "name": "automatic_ai_retry_backlog",
+        "version": "20260916193000"
+      }
+    ],
+    "counts": [
+      {
+        "nonfilm_tmdb_mappings": 0,
+        "radar_findings": 26,
+        "radar_v1": 26,
+        "tmdb_mappings": 0
+      }
+    ],
+    "contracts": [
+      {
+        "anon_execute": false,
+        "args": "p_payload jsonb, p_today date",
+        "authenticated_execute": false,
+        "definition_md5": "e0e87995736efd22b0564b31b541a928",
+        "name": "kd_entdecken_public_payload_valid",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_namespace text, p_kennung text",
+        "authenticated_execute": true,
+        "definition_md5": "29bb3baf99465767078cb5caeba7da38",
+        "name": "kd_filmwissen_aktuell_lesen",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_namespace text, p_kennung text",
+        "authenticated_execute": false,
+        "definition_md5": "f9db98953339f58ce29105310d71a95e",
+        "name": "kd_filmwissen_kennung_norm",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_namespace text, p_kennung text, p_vorgang uuid",
+        "authenticated_execute": false,
+        "definition_md5": "d54a1b13d502be7ce631657a60aef07d",
+        "name": "kd_filmwissen_synthese_vorbereiten",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_dry_run boolean, p_limit integer",
+        "authenticated_execute": false,
+        "definition_md5": "f8d10039fda12686d559e95996b0edb4",
+        "name": "kd_private_retention_run",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_operation_ids uuid[]",
+        "authenticated_execute": true,
+        "definition_md5": "6edd4d5197b3097cf55e49db2090397c",
+        "name": "kd_radar_pilot_feed",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_operation_ids uuid[], p_include_search_status boolean",
+        "authenticated_execute": true,
+        "definition_md5": "9e70c284b0eb6e7c79e7c6fdc645a380",
+        "name": "kd_radar_pilot_feed",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_account_id uuid, p_target_key text",
+        "authenticated_execute": false,
+        "definition_md5": "6aff87a601391042285592cad521e41f",
+        "name": "kd_radar_websearch_context",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_user_id uuid, p_operation_id uuid, p_payload jsonb",
+        "authenticated_execute": false,
+        "definition_md5": "8bda10ffe39c8d370fed8e7dc8d9c716",
+        "name": "kd_radar_websearch_upsert_text_finding",
+        "schema": "public"
+      },
+      {
+        "anon_execute": false,
+        "args": "p_request jsonb",
+        "authenticated_execute": true,
+        "definition_md5": "dac78ff3228aa388527d3ac5bdb39c56",
+        "name": "kd_streaming_page",
+        "schema": "public"
+      }
+    ],
+    "patchPreconditions": [
+      {
+        "accepts_new_typed_tmdb": false,
+        "accepts_old_numeric_tmdb": true,
+        "context_anchor": true,
+        "radar_feed_anchor": true,
+        "radar_insert_anchor": true,
+        "radar_v1_contract": true
+      }
+    ]
+  },
+  "functions": [
+    {
+      "slug": "ai-task",
+      "version": 95,
+      "status": "ACTIVE",
+      "verify_jwt": true,
+      "updated_at": 1789236170444
+    },
+    {
+      "slug": "radar-websearch-task",
+      "version": 72,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "updated_at": 1789130842884
+    },
+    {
+      "slug": "entdecken-daily-task",
+      "version": 76,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "updated_at": 1789138592533
+    }
+  ],
+  "inProgressGithubRuns": [],
+  "scopeBoundary": {
+    "stagingWebPushAuthorized": true,
+    "productionWebPushAuthorized": false,
+    "sharedBackendMigrationAuthorized": false,
+    "paidProviderCallsAuthorized": false,
+    "awaitingDecision": "Separate staging backend preparation or explicitly authorized shared backend transition with maintenance window"
+  },
+  "ciPortabilityFollowup": {
+    "base": "8ae8c6e066bd5aeaf2e7746cef904dfb7797a0ae",
+    "mode": "PARALLEL_WAVE",
+    "owners": {
+      "review49_p05_pg17_test.mjs": "p05_radar",
+      "review49_p06_sql_test.mjs": "p06_filmwissen",
+      "review49_p07_pg_test.mjs": "p07_streaming"
+    },
+    "scope": "PostgreSQL binary and temporary-path discovery only; no product or SQL changes"
+  }
+}
