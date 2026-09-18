@@ -1,6 +1,6 @@
 # Blog: Bauebenen und parallele Baumeister
 
-Stand: 18.09.2026 · Status: lokal gebaut und geprüft; Frontend auf Staging ausgeliefert.
+Stand: 18.09.2026 · Status: Frontend auf Staging; gemeinsame Blog-Aktivierung vorbereitet.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -9,10 +9,12 @@ Folgeauftrag vom 18.09.: „Kannst du das mal bitte auf STaging pushen, ohne das
 prod davon betroffen ist?“ Damit sind Staging-Push, CI, Frontend-Deployment und
 Readback autorisiert. Die frisch gelesenen GitHub-Environment-Variablen belegen
 dieselbe Supabase-Instanz für Staging und Production. Die neue SQL-Migration
-bleibt deshalb unappliziert; ihre Aktivierung würde das gemeinsame Backend
+blieb bei dieser ersten Lieferung unappliziert; ihre Aktivierung würde das gemeinsame Backend
 und damit Production betreffen. Privates Schreiben und die neue Oberfläche
 können auf Staging geprüft werden; die neue Veröffentlichung bleibt bis zur
-Bereitstellung ihres Backendvertrags deaktiviert.
+Bereitstellung ihres Backendvertrags deaktiviert. Der jüngste Folgeauftrag
+autorisiert nun ausdrücklich den gemeinsamen veröffentlichten Blogbereich;
+Umfang und Belege stehen unter „Folgekorrektur“ und „Ebene 3“.
 
 Maßgeblicher Registerstand ist dieses Dokument im Integrationsworktree
 /private/tmp/kd-blog-integration-20260918, Zielbranch
@@ -446,19 +448,39 @@ unverändert. Entgegen der lokalen Harness-Annahme ist im echten Backend
 würde außerdem Legacy-RPCs ersetzen und direkte Rechte auf der bisherigen
 Shared-Tabelle entziehen, also Production betreffen.
 
-Für die gewünschte echte Aktivierung ohne Produktionsänderung ist daher eine
-isolierte Staging-Variante von Blogspeicher/Endpunkten samt getrennter
-Publikationsmetadaten und begrenzter Quellenpflege nötig. Diese zusätzliche
-Route wurde dem Nutzer zur Entscheidung gestellt; bis zur Antwort erfolgen
-keine Shared-Migration oder Scheduler-Aktivierung. Der unabhängige Tab-Fix
-wird regulär über Staging ausgeliefert.
+Die zunächst vorgeschlagene Staging-Isolation entfällt nach ausdrücklicher
+Klarstellung des Nutzers: „Stagig und prod dürfen sich den gleichen
+Veröffentlicht-Bereich teilen. ich werde auch auf Staging später Blogs
+schreiben, die auf prod sichtbar werden sollen“. Autorisiert ist damit die
+gemeinsame Blog-Aktivierung einschließlich nötiger Blog-Migration,
+Quellenpflege, Sicherung und Readback. Der neue Editor bleibt im
+Staging-Frontend; `main` und der Production-Frontendbuild bleiben unverändert.
 
-## Ebene 3: spätere Lieferung
+A-Folgedelta im isolierten Worktree
+`/private/tmp/kd-blog-shared-activation-build-20260918`, Basis `c8b4c7e`:
+die fehlende Cron-Voraussetzung deklarieren und den tatsächlichen alten
+Production-Lese-/Claim-/Owner-Löschweg kompatibel halten. Direkte unsichere
+Publikationswrites dürfen die neue serverseitige Anonymisierung nicht umgehen.
+Keine getrennten Blogtabellen/-Feeds und kein separater Plattformaufbau.
+Der Meister besitzt die anschließende gemeinsame Backend-Aktivierung und
+Staging-Auslieferung. Der Tab-Fix einschließlich vollständiger lokaler
+Mocksuite und Build ist bereits grün (Exit 0).
+A ist als `5cb050b` integriert (Paketcommit `86038ec`): Backend 42/42,
+Quellenpflege 13/13, minimale Legacy-Owner-Löschrechte, beide anonymisierten
+Leseverträge und deklarative Cron-Voraussetzung. Die Tabellen waren im
+gezielten Backup leer; Definitionen/Rechte und der 94-zeilige Migrationsledger
+sind lokal geschützt gesichert und wieder eingelesen.
 
-Der konkrete Push-/Deploymentumfang ist noch nicht beauftragt. Die spätere
-Lieferreihenfolge lautet: Backend-Anonymisierung und Referenzvertrag,
-gezielter Readback, vorbereitete Alt-Referenzen bzw. ehrlicher Übergangszustand,
-danach Client. Der Einstieg bleibt bei unbekanntem Backendvertrag geschlossen.
+## Ebene 3: gemeinsame Backend-Aktivierung und Staging-Korrektur
+
+Autorisiert sind die beiden Blog-Migrationen in Reihenfolge
+`20260918115900_blog_publication_pg_cron.sql` und
+`20260918120000_blog_publication_v1.sql`, ihr gezielter Readback sowie die
+Staging-Auslieferung des Tab-Fixes. Die Aktivierung wird gegen den gesicherten
+Vorher-Stand transaktional ausgeführt. Ein synthetischer Zwei-Konten-Test
+mit echtem Katalogabgleich, gemeinsamem v1-/Legacy-Lesen, Owner-Löschung und
+Rollennegativen wird vollständig zurückgerollt. Keine Testblogs bleiben
+öffentlich stehen. Der Einstieg bleibt bei unbekanntem Backendvertrag geschlossen.
 Kein Baumeister der Parallelwelle schreibt in ein gemeinsames Backend oder
 startet einen Providerlauf. Lokale Umsetzung, Tests, Commits und Integration
 brauchen bei erteiltem Bauauftrag keine Zwischenfreigaben.
