@@ -1,7 +1,7 @@
 # Blog: Bauebenen und parallele Baumeister
 
 Stand: 18.09.2026 · Status: gemeinsames Blog-Backend aktiv, identischer Blogstand auf Staging und Production ausgeliefert und zurückgelesen; praktische Production-PWA-Abnahme offen.
-Folgeplanung: M6 (sichere 50er-Grenze) und M7 (optionale Sonnet-Titelvorschläge) sind offen und noch nicht gebaut.
+Folgeauftrag: M6 (sichere 50er-Grenze) wird lokal gebaut; M7 (optionale KI-Titelvorschläge) wird einschließlich Settings und Datenschutz ausgeplant, noch nicht implementiert.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -76,8 +76,8 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
-| M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | Erweiterung, Ownership beim Bau | OFFEN (Plan) | Nutzerziel: üblicherweise bis 30, 50 sollen möglich sein; Schutzkonzept am Dokumentende |
-| M7 | Erwähnte Titel optional durch Sonnet erkennen lassen, mit Textbeleg prüfen und ausgewählte Vorschläge als Referenzen übernehmen. | Erweiterung, Ownership beim Bau | OFFEN (Plan) | Separater KI-Auftrag und Mehrfachauswahl; noch kein Provider-Test oder Produktcode |
+| M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | IN BAU (lokal) | Basis 664413e; kein permanenter Zähler, Hinweis beim Erreichen der 50. Referenz; Ownership am Dokumentende |
+| M7 | Erwähnte Titel optional mit KI erkennen lassen, mit Textbeleg prüfen und ausgewählte Vorschläge als Referenzen übernehmen. | Separater späterer Bauauftrag | AUSGEPLANT, NICHT GEBAUT | [Konkreter KI-/Settings-/DS-Entwurf](BLOG_REFERENZEN_KI_PLAN_2026-09-18.md); Sonnet ohne Thinking als Startvariante, Haiku als Vergleichskandidat; keine echten KI-Tests |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -671,8 +671,10 @@ beide ausgelieferten Branches bleiben auf dem geprüften Commit `77c5603`.
 Nutzerpräzisierung vom 18.09.: normalerweise höchstens 30 Referenzen, 50 sollen
 möglich sein. Gewünscht ist Schutz gegen manipulierte Listen mit etwa 1.945
 Einträgen sowie eine optionale Sonnet-Extraktion erwähnter Titel aus dem
-Blogtext mit anschließender Mehrfachauswahl. Status: Planung, kein neuer
-Produktcode, kein Deployment und kein zahlender Anbieterrequest.
+Blogtext mit anschließender Mehrfachauswahl. Der anschließende Nutzerauftrag
+autorisiert den lokalen Bau der 50er-Grenze, verlangt aber für die KI-Funktion
+zunächst die gründliche Planung einschließlich DS-Texten und Settings.
+Kein neues Deployment und kein zahlender Anbieterrequest in diesem Folgeauftrag.
 
 Die vorher untersuchte Auslegung für 500 bis 1.000 Referenzen wird für diesen
 Umfang zurückgestellt. Der isolierte Versuch auf Produktcode `77c5603` zeigte
@@ -683,7 +685,9 @@ Production-/iPhone-Latenz. Messbeleg:
 **M6: begrenzter, serverseitig abgesicherter Ausbau.**
 
 - 50 als harte fachliche Obergrenze pro Artikel; 30 ist ein Normalfall und
-  keine zusätzliche Sperre. Editor zeigt den Zähler und erklärt die Grenze.
+  keine zusätzliche Sperre. Gemäß jüngster Nutzerpräzisierung kein dauerhafter
+  Zähler oder Limittext. Ein kontextbezogener Hinweis erscheint beim Speichern/
+  Hinzufügen der 50. Referenz; ein weiterer Versuch erklärt die erreichte Grenze.
 - Alle Schreibpfade beachten denselben Vertrag: privat, Veröffentlichen,
   Aktualisieren, Import/Wiederherstellung, KI-Übernahme und direkte API-Writes.
   Entscheidend sind Backend-/Datenbankprüfungen; ein entfernter Browser-Check
@@ -719,7 +723,31 @@ Production-/iPhone-Latenz. Messbeleg:
   weder beim Öffnen noch beim Speichern/Import auf 15 abschneiden. Kein
   rückwirkliches Editieren bereits angewandter Migrationen.
 
+**R50-Ownership und Übergabe.** SOLO-Baumeister `/root/blog_ref50`, Sol/high
+wegen direkter API-, Datenbank- und Kontogrenzen. Basis
+`664413e4ffe0d396b49379ffc3d598d38fa9e654`, Worktree
+`/private/tmp/kd-blog-ref50-20260918`, Branch `codex/blog-ref50-20260918`.
+Paket umfasst den Mengenvertrag, Editor/Controller/Storage, private und
+öffentliche Schreibwege, additive SQL-Migration, Schema-/Testanbindung und
+`docs/contracts/blog-v1.md`. Kein KI-, Settings- oder DS-Produktcode.
+Meister bleibt auf diesen Produktflächen währenddessen lesend und besitzt
+dieses Register sowie den KI-Entwurf. Der SOLO-Baumeister führt den einen
+angemessenen lokalen Abschlusslauf aus; grüne Läufe werden bei unveränderter
+Integration nicht nochmals vollständig wiederholt. Kein Push, Deployment,
+gemeinsamer Backendwrite oder zahlender Providerrequest im Paket.
+
 **M7: Titelvorschläge mit Sonnet, bewusste Übernahme durch den Nutzer.**
+
+Der [ausgearbeitete KI-Plan](BLOG_REFERENZEN_KI_PLAN_2026-09-18.md) konkretisiert
+und ergänzt diese Skizze: neue standardmäßig ausgeschaltete Geräteoption
+`blogReferenzen`, genauer Textfluss und DS-Entwürfe, reale Codeanschlüsse,
+kompatible Health-Verhandlung, kurze direkte Textbelege statt ungeprüfter
+Wiederverwendung der Geschmacksanker, Modell-/Kostenvergleich und Prüffälle.
+Die Preise wurden am 18.09. offiziell neu geprüft: Sonnet 5 $2/$10, Haiku 4.5
+$1/$5 pro Million Eingabe-/Ausgabetokens. Sonnet zunächst ohne Thinking;
+keine automatische Websuche oder zweistufige Haiku-/Sonnet-Kaskade.
+Die folgenden Absätze bleiben die kurze Produktübersicht; bei Detailfragen
+gilt der konkrete Entwurf. Die Funktion ist weiterhin nur geplant.
 
 Nutzerweg: Im Speicherbereich optional „Titel im Text erkennen (KI)“ anklicken
 → Hinweis, dass Titel und Artikeltext an Anthropic gehen → kompakte Vorschau
