@@ -12,6 +12,7 @@ export const BLOG_TEST_ACCOUNTS = Object.freeze({
 const MIGRATION = "supabase/migrations/20260918120000_blog_publication_v1.sql";
 const CRON_PREREQUISITE = "supabase/migrations/20260918115900_blog_publication_pg_cron.sql";
 const SETWISE_MIGRATION = "supabase/migrations/20260918130000_blog_catalog_setwise.sql";
+const LOOKUP_MIGRATION = "supabase/migrations/20260918133000_blog_catalog_lookup.sql";
 
 function verifyCronPrerequisiteSql() {
   const sql = readFileSync(CRON_PREREQUISITE, "utf8");
@@ -183,7 +184,10 @@ function defaultProgram(now = Date.now()) {
   };
 }
 
-export async function startBlogPublicationPgHarness({ applySetwiseMigration = true } = {}) {
+export async function startBlogPublicationPgHarness({
+  applySetwiseMigration = true,
+  applyLookupMigration = applySetwiseMigration,
+} = {}) {
   const pg = pgBin();
   const root = mkdtempSync(join(tmpdir(), "kd-blog-pg-"));
   const data = join(root, "data");
@@ -240,11 +244,13 @@ export async function startBlogPublicationPgHarness({ applySetwiseMigration = tr
   const seedScaleCatalog = ({
     baseCount = 24_678,
     motnCount = 1_115,
+    programCount = 753,
     sourceRevision = 90,
     streamingGeneratedAt = new Date().toISOString(),
   } = {}) => {
     if (!Number.isInteger(baseCount) || baseCount < 20 || !Number.isInteger(motnCount)
-      || motnCount < 0 || motnCount > baseCount || !Number.isInteger(sourceRevision)) {
+      || motnCount < 0 || motnCount > baseCount || !Number.isInteger(programCount)
+      || programCount < 0 || !Number.isInteger(sourceRevision)) {
       throw new Error("invalid scale catalog dimensions");
     }
     rawSql(`begin;
@@ -259,16 +265,25 @@ export async function startBlogPublicationPgHarness({ applySetwiseMigration = tr
       select
         'scale-'||lpad(g::text,5,'0'),
         jsonb_build_object(
-          'titel',case when g in (1,2) then 'Scale Ambiguous Twin' else 'Scale Film '||lpad(g::text,5,'0') end,
-          'jahr',case when g in (1,2) then 2000 else 1950+(g%75) end,
+          'titel',case when g in (1,2) then 'Scale Ambiguous Twin'
+            when g>${baseCount - 128} then 'Scale Wide Sources'
+            else 'Scale Film '||lpad(g::text,5,'0') end,
+          'jahr',case when g in (1,2) then 2000 when g>${baseCount - 128} then 2024 else 1950+(g%75) end,
           'typ','film'
         ),
-        array[case g%4 when 0 then 'Netflix' when 1 then 'Prime Video'
-          when 2 then 'Disney+' else 'MUBI' end],
-        'film',case when g in (1,2) then 2000 else 1950+(g%75) end,
-        'wm-scale-'||g::text,
-        'tt'||lpad((7000000+g)::text,7,'0'),
-        (8000000+g)::text,
+        case when g=11045 then array['MUBI','Synthetic Unknown Service']
+          when g>${baseCount - 128} then array[case g%8 when 0 then 'Netflix'
+            when 1 then 'Prime Video' when 2 then 'Disney+' when 3 then 'Apple TV+'
+            when 4 then 'HBO Max' when 5 then 'Paramount Plus' when 6 then 'MUBI' else 'Crunchyroll' end]
+          when g<=11045 then array[case g%4 when 0 then 'Netflix' when 1 then 'Prime Video'
+          when 2 then 'Disney+' else 'MUBI' end]
+          when g=11046 then array['Netflix','Prime Video','Disney+','Apple TV+',
+            'HBO Max','Paramount Plus','MUBI','Crunchyroll']
+          else '{}'::text[] end,
+        'film',case when g in (1,2) then 2000 when g>${baseCount - 128} then 2024 else 1950+(g%75) end,
+        case when g>${baseCount - 128} then 'wm-scale-wide' else 'wm-scale-'||g::text end,
+        case when g>${baseCount - 128} then 'tt7999999' else 'tt'||lpad((7000000+g)::text,7,'0') end,
+        case when g>${baseCount - 128} then '8999999' else (8000000+g)::text end,
         true
       from generate_series(1,${baseCount}) g;
       insert into public.kd_streaming_page_motn(
@@ -280,18 +295,37 @@ export async function startBlogPublicationPgHarness({ applySetwiseMigration = tr
         'scale-'||lpad(g::text,5,'0'),
         'scale-'||lpad(g::text,5,'0'),
         jsonb_build_object(
-          'titel',case when g in (1,2) then 'Scale Ambiguous Twin' else 'Scale Film '||lpad(g::text,5,'0') end,
-          'jahr',case when g in (1,2) then 2000 else 1950+(g%75) end,
+          'titel',case when g in (1,2) then 'Scale Ambiguous Twin'
+            when g>${baseCount - 128} then 'Scale Wide Sources'
+            else 'Scale Film '||lpad(g::text,5,'0') end,
+          'jahr',case when g in (1,2) then 2000 when g>${baseCount - 128} then 2024 else 1950+(g%75) end,
           'typ','film'
         ),
-        array[case g%4 when 0 then 'Netflix' when 1 then 'Prime Video'
-          when 2 then 'Disney+' else 'MUBI' end],
-        'film',case when g in (1,2) then 2000 else 1950+(g%75) end,
-        'wm-scale-'||g::text,
-        'tt'||lpad((7000000+g)::text,7,'0'),
-        (8000000+g)::text,
+        case when g=11045 then array['MUBI','Synthetic Unknown Service']
+          when g>${baseCount - 128} then array[case g%8 when 0 then 'Netflix'
+            when 1 then 'Prime Video' when 2 then 'Disney+' when 3 then 'Apple TV+'
+            when 4 then 'HBO Max' when 5 then 'Paramount Plus' when 6 then 'MUBI' else 'Crunchyroll' end]
+          when g<=11045 then array[case g%4 when 0 then 'Netflix' when 1 then 'Prime Video'
+          when 2 then 'Disney+' else 'MUBI' end]
+          when g=11046 then array['Netflix','Prime Video','Disney+','Apple TV+',
+            'HBO Max','Paramount Plus','MUBI','Crunchyroll']
+          else '{}'::text[] end,
+        'film',case when g in (1,2) then 2000 when g>${baseCount - 128} then 2024 else 1950+(g%75) end,
+        case when g>${baseCount - 128} then 'wm-scale-wide' else 'wm-scale-'||g::text end,
+        case when g>${baseCount - 128} then 'tt7999999' else 'tt'||lpad((7000000+g)::text,7,'0') end,
+        case when g>${baseCount - 128} then '8999999' else (8000000+g)::text end,
         true,false,'strong_identity'
       from generate_series(1,${motnCount}) g;
+      update public.kd_catalog set
+        payload=jsonb_build_object('filme',coalesce((select jsonb_agg(jsonb_build_object(
+          'film_at_id','scale-cinema-'||g::text,
+          'titel','Scale Cinema '||lpad(g::text,4,'0'),
+          'jahr',1950+(g%75),
+          'vorstellungen',jsonb_build_array(jsonb_build_object(
+            'kino','Scale Kino','zeit',(now()+interval '12 hours')::text))
+        )) from generate_series(1,${programCount}) g),'[]'::jsonb)),
+        updated_at=now(),stand=now(),gueltig_bis=now()+interval '24 hours'
+      where name='programm';
       commit;`);
   };
 
@@ -309,6 +343,10 @@ export async function startBlogPublicationPgHarness({ applySetwiseMigration = tr
     sourceUpdate();
     rawSql(readFileSync(MIGRATION, "utf8"));
     if (applySetwiseMigration) rawSql(readFileSync(SETWISE_MIGRATION, "utf8"));
+    if (applyLookupMigration) {
+      if (!applySetwiseMigration) throw new Error("lookup migration requires setwise migration");
+      rawSql(readFileSync(LOOKUP_MIGRATION, "utf8"));
+    }
 
     const scalarRpcs = new Set([
       "kd_blog_publication_capabilities", "kd_publish_blog_v1", "kd_update_blog_publication_v1",
@@ -316,8 +354,16 @@ export async function startBlogPublicationPgHarness({ applySetwiseMigration = tr
       "kd_list_shared_articles_v1", "kd_refresh_blog_reference_sources_v1",
     ]);
     const tableRpcs = new Set(["kd_list_shared_articles", "kd_claim_shared_article"]);
-    const callRpc = (name, args, { role = "authenticated", accountId = BLOG_TEST_ACCOUNTS.alpha } = {}) => {
+    const callRpc = (name, args, {
+      role = "authenticated",
+      accountId = BLOG_TEST_ACCOUNTS.alpha,
+      statementTimeoutMs = null,
+    } = {}) => {
       if (!scalarRpcs.has(name) && !tableRpcs.has(name)) throw new Error(`unsupported RPC: ${name}`);
+      if (statementTimeoutMs !== null
+        && (!Number.isInteger(statementTimeoutMs) || statementTimeoutMs < 1 || statementTimeoutMs > 120_000)) {
+        throw new Error("invalid statement timeout");
+      }
       let invocation;
       if (name === "kd_blog_publication_capabilities" || name === "kd_list_shared_articles") invocation = `public.${name}()`;
       else if (name === "kd_claim_shared_article") invocation = `public.${name}(${literal(args?.p_share_token)}::uuid)`;
@@ -325,7 +371,8 @@ export async function startBlogPublicationPgHarness({ applySetwiseMigration = tr
       const select = scalarRpcs.has(name)
         ? `select to_jsonb(${invocation});`
         : `select coalesce(jsonb_agg(to_jsonb(r)),'[]'::jsonb) from ${invocation} r;`;
-      return lastJson(session(select, { role, accountId }));
+      const timeout = statementTimeoutMs === null ? "" : `set local statement_timeout=${statementTimeoutMs};`;
+      return lastJson(session(`${timeout}${select}`, { role, accountId }));
     };
     const runScheduledRefresh = () => {
       const command = rawSql("select command from cron.job where jobname='kd-blog-reference-refresh-v1';");
