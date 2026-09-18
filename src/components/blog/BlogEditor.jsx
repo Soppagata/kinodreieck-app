@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BLOG_MAX_REFERENCES, BLOG_SAVE_INTENT } from "../../lib/blogContract.js";
 import { lesePlausiblesJahr, plausiblerJahresbereich } from "../../lib/match.js";
 import { BlogReferenceList } from "./BlogReferenceList.jsx";
+import { BlogReferenceSuggestions } from "./BlogReferenceSuggestions.jsx";
 
 const SAVE_LABELS = {
   [BLOG_SAVE_INTENT.PRIVATE_ONLY]: "Privat speichern",
@@ -9,7 +10,7 @@ const SAVE_LABELS = {
   [BLOG_SAVE_INTENT.UPDATE]: "Speichern & aktualisieren",
 };
 
-export function BlogEditor({ editor, capability, actions, intent, hasPublication, onSave, onBack }) {
+export function BlogEditor({ editor, capability, actions, intent, hasPublication, referenceExtraction, onSave, onBack }) {
   const [newReference, setNewReference] = useState("");
   const [newReferenceYear, setNewReferenceYear] = useState("");
   const [newReferenceType, setNewReferenceType] = useState("film");
@@ -64,6 +65,7 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
       {limitNotice ? <p className="kd-blog-muted" role="status">{limitNotice}</p> : null}
     </section>
     <footer className="kd-blog-finish">
+      <BlogReferenceSuggestions extraction={referenceExtraction} referenceCount={references.length} />
       <label className={`kd-blog-check kd-blog-publish-check kd-touch-checkbox${!publishReady ? " is-disabled" : ""}`}><input type="checkbox" checked={editor.anonymousPublication === true} disabled={!publishReady}
         onChange={(event) => actions.onEditorChange({ anonymousPublication: event.target.checked })} />
         <span><strong>Anonym veröffentlichen</strong><small>{publishReady ? "Für angemeldete Nutzer sichtbar. Dein Kontoname wird nicht angezeigt."

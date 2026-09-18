@@ -51,6 +51,7 @@ import {
   readBlogLibraryBootState,
   useBlogPublicationController,
 } from "./controllers/useBlogPublicationController.js";
+import { useBlogReferenceExtractionController } from "./controllers/useBlogReferenceExtractionController.js";
 import { useErrorQueue } from "./controllers/useErrorQueue.js";
 import { useMasterStateController } from "./controllers/useMasterStateController.js";
 import { useBackupExportController } from "./controllers/useBackupExportController.js";
@@ -1314,6 +1315,22 @@ export default function App() {
     onFocusConsumed: () => setBlogFokus(null),
     setError: setErr,
   });
+  const blogReferenceExtraction = useBlogReferenceExtractionController({
+    accountScope: streamingKontextKey,
+    enabled: kiAn("blogReferenzen"),
+    personalAi: session.mode === "account" && session.state === "ready"
+      && session.capabilities?.personalAi === true,
+    editor: blogPublicationController.editor,
+    library: master || [],
+    libraryReady: isBlogLibraryReady(bootDone, masterReadStatus, master != null),
+    mustwatch,
+    mustwatchReady: mustwatchGeladen,
+    onApplyReferenceSuggestions: blogPublicationController.actions.onApplyReferenceSuggestions,
+  });
+  const blogController = useMemo(() => ({
+    ...blogPublicationController,
+    referenceExtraction: blogReferenceExtraction,
+  }), [blogPublicationController, blogReferenceExtraction]);
 
   const serienKatalog = useMemo(() => [
     ...((streamingBekannt && streamingBekannt.titel) || []),
@@ -2077,7 +2094,7 @@ export default function App() {
             radarAutomaticAvailable={radarAutomaticAvailable} onRadarRejectedDismiss={verwerfeAbgelehnteRadarAenderung}
             onRadarTextAdd={fuegeRadarTextHinzu} recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu} onPersonRadarChange={aenderePersonRadar}
-            blogProps={blogPublicationController}
+            blogProps={blogController}
           />
         )}
 

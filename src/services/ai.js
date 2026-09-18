@@ -51,6 +51,9 @@ export const AI_TASKS = Object.freeze([
   /* E17A: Artikelprofil-Extraktion mit ausschliesslich serverseitigem Prompt,
      Modellrouting und strengem Outputvertrag. */
   "blog-profile-extract",
+  /* M7: ausdrückliche, serverseitig versionierte Erkennung belegter
+     Referenznennungen im offenen Blogentwurf. */
+  "blog-reference-extract",
 ]);
 
 export const AI_PROMPT_VERSION = "v1";
@@ -189,10 +192,10 @@ export function createAiService({
           /* Der E17A-Prompt ist ausschliesslich serverseitig versioniert. Ein
              Aufrufer kann fuer diesen Task weder Prompt- noch Profilversion
              als Metadaten einschleusen. */
-          promptVersion: task === "blog-profile-extract"
+          promptVersion: ["blog-profile-extract", "blog-reference-extract"].includes(task)
             ? null
             : (options.promptVersion || AI_PROMPT_VERSION),
-          profilVersion: task === "blog-profile-extract"
+          profilVersion: ["blog-profile-extract", "blog-reference-extract"].includes(task)
             ? null
             : (options.profilVersion || null),
           vorgangId: options.vorgangId || vorgangId(),

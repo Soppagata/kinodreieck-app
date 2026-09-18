@@ -64,6 +64,7 @@ export function BlogTab({
   publicationCapability = { status: "unavailable", reason: null },
   view = { area: "mine", mode: "list", articleId: null, returnToken: null },
   editor = null, reader = null, redlinkForm = null, articleCards = [],
+  referenceExtraction = null,
   publishedPage = { status: "idle", items: [], nextCursor: null, complete: true, errorCode: null },
   actions: suppliedActions = {},
 }) {
@@ -89,7 +90,8 @@ export function BlogTab({
     const hasPublication = !!publicationIdFrom(editor);
     const intent = blogSaveIntent({ hasPublication, anonymousPublication: editor.anonymousPublication === true });
     content = <BlogEditor editor={editor} capability={publicationCapability} actions={actions} intent={intent}
-      hasPublication={hasPublication} onSave={save} onBack={() => actions.onBack({ returnToken: view.returnToken })} />;
+      hasPublication={hasPublication} referenceExtraction={referenceExtraction}
+      onSave={save} onBack={() => actions.onBack({ returnToken: view.returnToken })} />;
   } else if (view.mode === "reader" && reader) {
     content = <BlogReader reader={reader} actions={actions} />;
   } else if (view.mode === "redlink_form" && redlinkForm) {

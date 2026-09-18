@@ -34,6 +34,8 @@ import {
   publicationSnapshot,
 } from "../lib/sharedPublication.js";
 import { sharedArticlesService } from "../services/sharedArticles.js";
+import { blogReferenceContentHash } from "../lib/blogReferenceExtraction.js";
+import { normalisiereTyp } from "../lib/typen.js";
 
 export async function readBlogLibraryBootState(readMaster, decodeMaster) {
   try {
@@ -140,6 +142,98 @@ function editorReference(row, index) {
     resolutionIntent: row?.resolutionIntent || (row?.rotlink_ok
       ? { kind: "keep_redlink" } : { kind: "auto" }),
     decisionCandidates: Array.isArray(row?.decisionCandidates) ? row.decisionCandidates : [],
+  };
+}
+
+const BLOG_REFERENCE_APPLICATION_KEYS = Object.freeze([
+  "candidateId", "selectionId", "sourceKind", "ref", "title", "year", "mediaType", "resolutionIntent",
+]);
+const BLOG_REFERENCE_MEDIA_TYPES = new Set(["film", "serie", "musik", "sonstiges"]);
+
+function exactKeys(value, expected) {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).length === expected.length
+    && expected.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function sourceItemForCandidate(candidate, library, mustwatch) {
+  const source = candidate.sourceKind === "library" ? library
+    : candidate.sourceKind === "mustwatch" ? mustwatch : null;
+  if (!source || typeof candidate.ref !== "string" || !candidate.ref.trim()) return null;
+  const matches = source.filter((item) => String(item?.id == null ? "" : item.id) === candidate.ref);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function normalizeReferenceApplication(candidate, library, mustwatch) {
+  if (!exactKeys(candidate, BLOG_REFERENCE_APPLICATION_KEYS)
+      || typeof candidate.candidateId !== "string" || !candidate.candidateId
+      || typeof candidate.selectionId !== "string" || !candidate.selectionId
+      || typeof candidate.title !== "string" || !candidate.title.trim()
+      || candidate.title.trim().length > 240
+      || !BLOG_REFERENCE_MEDIA_TYPES.has(candidate.mediaType)
+      || (candidate.year !== null && (!Number.isInteger(candidate.year)
+        || candidate.year < (["film", "serie"].includes(candidate.mediaType) ? 1870 : 1)
+        || candidate.year > 2200))) return null;
+  if (candidate.sourceKind === "manual") {
+    if (candidate.ref !== null || !exactKeys(candidate.resolutionIntent, ["kind"])
+        || candidate.resolutionIntent.kind !== "keep_redlink") return null;
+    return {
+      identity: null,
+      row: editorReference({
+        title: candidate.title.trim(), year: candidate.year, mediaType: candidate.mediaType,
+        ref: null, resolutionIntent: { kind: "keep_redlink" }, decisionCandidates: [],
+      }, 0),
+    };
+  }
+  if (!["library", "mustwatch"].includes(candidate.sourceKind)
+      || !exactKeys(candidate.resolutionIntent, ["kind"])
+      || candidate.resolutionIntent.kind !== "auto") return null;
+  const item = sourceItemForCandidate(candidate, library, mustwatch);
+  if (!item) return null;
+  const itemTitle = text(item?.titel || item?.title);
+  const itemYear = Number.isInteger(item?.jahr ?? item?.year) ? (item.jahr ?? item.year) : null;
+  const itemType = normalisiereTyp(text(item?.typ || item?.mediaType) || "sonstiges");
+  if (candidate.title.trim() !== itemTitle || candidate.year !== itemYear
+      || candidate.mediaType !== itemType) return null;
+  return {
+    identity: String(candidate.ref),
+    row: editorReference({
+      title: itemTitle, year: itemYear, mediaType: itemType, ref: String(candidate.ref),
+      resolutionIntent: { kind: "auto" }, decisionCandidates: [],
+    }, 0),
+  };
+}
+
+export function applyBlogReferenceSuggestionsToDraft(draft, {
+  draftKey, candidates, library = [], mustwatch = [],
+} = {}) {
+  if (!draft || draft.draftKey !== draftKey || draft.saveStatus === "saving"
+      || !Array.isArray(draft.references) || !Array.isArray(candidates)
+      || candidates.length < 1 || candidates.length > BLOG_MAX_REFERENCES) {
+    return { status: "failed", errorCode: "invalid-selection", addedCount: 0, draft };
+  }
+  const seenSelections = new Set();
+  const seenIdentities = new Set(draft.references
+    .map((row) => row?.ref == null ? null : String(row.ref)).filter(Boolean));
+  const additions = [];
+  for (const candidate of candidates) {
+    if (seenSelections.has(candidate?.selectionId)) {
+      return { status: "failed", errorCode: "invalid-selection", addedCount: 0, draft };
+    }
+    seenSelections.add(candidate?.selectionId);
+    const normalized = normalizeReferenceApplication(candidate, library, mustwatch);
+    if (!normalized) return { status: "failed", errorCode: "invalid-selection", addedCount: 0, draft };
+    if (normalized.identity && seenIdentities.has(normalized.identity)) continue;
+    if (normalized.identity) seenIdentities.add(normalized.identity);
+    additions.push(normalized.row);
+  }
+  if (draft.references.length + additions.length > BLOG_MAX_REFERENCES) {
+    return { status: "failed", errorCode: "selection-too-large", addedCount: 0, draft };
+  }
+  const references = [...draft.references, ...additions].map(editorReference);
+  return {
+    status: "applied", errorCode: null, addedCount: additions.length,
+    draft: additions.length ? { ...draft, references, dirty: true, saveStatus: "idle" } : draft,
   };
 }
 
@@ -467,6 +561,31 @@ export function useBlogPublicationController({
       return { ...current, references: [...current.references, row], dirty: true, saveStatus: "idle" };
     });
   }, []);
+
+  const onApplyReferenceSuggestions = useCallback(async ({ draftKey, contentHash, candidates }) => {
+    const before = editorRef.current;
+    if (!before || before.draftKey !== draftKey || before.accountScope !== scopeRef.current
+        || typeof contentHash !== "string") {
+      return actionResult("failed", { errorCode: "stale-draft" });
+    }
+    let actualHash;
+    try {
+      actualHash = await blogReferenceContentHash({ title: before.title, text: before.text });
+    } catch {
+      return actionResult("failed", { errorCode: "hash-failed" });
+    }
+    const current = editorRef.current;
+    if (actualHash !== contentHash || current !== before || current.accountScope !== scopeRef.current) {
+      return actionResult("failed", { errorCode: "stale-draft" });
+    }
+    const result = applyBlogReferenceSuggestionsToDraft(current, {
+      draftKey, candidates, library, mustwatch,
+    });
+    if (result.status !== "applied") return actionResult("failed", { errorCode: result.errorCode });
+    editorRef.current = result.draft;
+    setEditor(result.draft);
+    return actionResult("applied", { addedCount: result.addedCount });
+  }, [library, mustwatch]);
 
   const onMoveReference = useCallback(({ draftKey, rowId, direction }) => {
     setEditor((current) => {
@@ -1057,7 +1176,7 @@ export function useBlogPublicationController({
     publishedPage: { ...publishedPage, items: publicItems },
     actions: {
       onNewArticle, onEditArticle, onReadArticle, onBack, onEditorChange,
-      onAddReference, onMoveReference, onRemoveReference, onSave,
+      onAddReference, onApplyReferenceSuggestions, onMoveReference, onRemoveReference, onSave,
       onReferenceDecision, onNavigateReference, onOpenRedlinkForm,
       onCancelRedlinkForm, onConfirmRedlinkForm, onRetryPublication,
       onWithdraw, onDelete, onLoadPublished,

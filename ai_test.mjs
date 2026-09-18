@@ -815,9 +815,9 @@ check("Ohne konfigurierten Transport meldet die Fassade SERVER mit vermerktem Gr
    =========================================================================== */
 console.log("\n--- Fassade: Aufgabenprüfung vor dem Transport ---");
 
-check("Die Etappe kennt genau acht implementierte Aufgaben",
-  AI_TASKS.length === 8
-  && ["health", "echo-struct", "intelligent-search", "profile-extract", "film-forecast", "filmwissen-synthese", "media-batch-extract", "blog-profile-extract"]
+check("Die Etappe kennt genau neun implementierte Aufgaben",
+  AI_TASKS.length === 9
+  && ["health", "echo-struct", "intelligent-search", "profile-extract", "film-forecast", "filmwissen-synthese", "media-batch-extract", "blog-profile-extract", "blog-reference-extract"]
     .every((t) => AI_TASKS.includes(t)));
 
 const unbekannteAufgabe = dienstMit({ ok: true });
@@ -881,6 +881,17 @@ check("blog-profile-extract laesst Prompt- und Profilversion ausschliesslich bei
   blogVersion.rufe[0]?.promptVersion === null
   && blogVersion.rufe[0]?.profilVersion === null
   && !Object.keys(blogVersion.rufe[0]?.payload || {}).some((k) => /prompt|provider|modell|model/i.test(k)));
+
+const blogReferenceVersion = dienstMit({ ok: true });
+await blogReferenceVersion.dienst.runTask(
+  "blog-reference-extract",
+  { title: "T", text: "Artikeltext" },
+  { promptVersion: "vom-browser", profilVersion: "vom-browser" },
+);
+check("blog-reference-extract bleibt getrennt und ausschliesslich serverseitig versioniert",
+  blogReferenceVersion.rufe[0]?.promptVersion === null
+  && blogReferenceVersion.rufe[0]?.profilVersion === null
+  && JSON.stringify(blogReferenceVersion.rufe[0]?.payload) === JSON.stringify({ title: "T", text: "Artikeltext" }));
 
 /* ===========================================================================
    T14 — Vorgangs-ID
