@@ -220,6 +220,15 @@ begin
     end if;
   end if;
 
+  if not pg_try_advisory_xact_lock(hashtextextended(
+      'kd-blog-publication-account:'||v_account::text,0)) then
+    return public.kd_blog_guard_conflict(
+      p_request,p_contract,'PUBLICATION_ACCOUNT_BUSY');
+  end if;
+
+  -- Read the publication version only after the shared account lock: a v2
+  -- update committed between an earlier read and this lock must never let an
+  -- old v1 writer replace its longer list with the legacy 15-row payload.
   if p_contract='blog-publication-v1' and p_action='update'
     and exists(select 1 from public.kd_shared_articles
       where account_id=v_account and article_id=p_request->>'privateArticleId'
@@ -228,11 +237,6 @@ begin
       p_request,p_contract,'CLIENT_UPGRADE_REQUIRED');
   end if;
 
-  if not pg_try_advisory_xact_lock(hashtextextended(
-      'kd-blog-publication-account:'||v_account::text,0)) then
-    return public.kd_blog_guard_conflict(
-      p_request,p_contract,'PUBLICATION_ACCOUNT_BUSY');
-  end if;
   for v_slot in 0..7 loop
     if pg_try_advisory_xact_lock(hashtextextended(
         'kd-blog-publication-global:'||v_slot::text,0)) then
