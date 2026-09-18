@@ -33,7 +33,9 @@ await esbuild.build({
       'export { GlobalErrorQueue } from "./src/components/GlobalErrorQueue.jsx";',
       'export { Wochenplan } from "./src/components/Wochenplan.jsx";',
       'export { StreamingTab } from "./src/tabs/StreamingTab.jsx";',
-      'export { ArtikelMaske } from "./src/tabs/BlogTab.jsx";',
+      'export { BlogTab } from "./src/tabs/BlogTab.jsx";',
+      'export { BlogEditor } from "./src/components/blog/BlogEditor.jsx";',
+      'export { useBlogPublicationController } from "./src/controllers/useBlogPublicationController.js";',
       'export { MustWatchListe } from "./src/components/MustWatchListe.jsx";',
       'export { KontoUebernahme } from "./src/components/KontoUebernahme.jsx";',
       'export { useBackupExportController } from "./src/controllers/useBackupExportController.js";',
@@ -70,9 +72,9 @@ const React = await import("react");
 const { act, createElement: h } = React;
 const { createRoot } = await import("react-dom/client");
 const {
-  FilmCard, FilmForm, MedienForm, StapelImport, GlobalErrorQueue, ArtikelMaske, MustWatchListe, KontoUebernahme,
+  FilmCard, FilmForm, MedienForm, StapelImport, GlobalErrorQueue, BlogTab, BlogEditor, MustWatchListe, KontoUebernahme,
   Wochenplan, StreamingTab,
-  useBackupExportController, useVokabularController, K, setGebundenerTestTreiber,
+  useBackupExportController, useVokabularController, useBlogPublicationController, K, setGebundenerTestTreiber,
   alleStimmungen, setzeEigeneStimmungen, vokabularZuMap,
 } = await import(ausgabe);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -149,73 +151,98 @@ check(!filmFixture.container.querySelector(".kd-beschreibung-editor") && filmWri
   "FilmCard schließt erst nach erfolgreicher Write-Bestätigung");
 await filmFixture.cleanup();
 
-/* ArtikelMaske: harter Doppelklick-Lock und private Release-Schreibgrenze. */
-let artikelResolver = null;
-const artikelWrites = [];
-const geteilterArtikel = {
+/* Blog-v1: Controller serialisiert Saves; Fehler bewahrt den kontrollierten
+   Editor. Privates Speichern lässt eine bestehende Veröffentlichung stehen. */
+let blogModel = null;
+let blogArticles = [{
   id: "blog_1", titel: "Titel", autor: "Max", text: "Text", geordnet: false,
-  geteilt: true, liste: [],
-};
-const artikelFixture = await mounte(ArtikelMaske, {
-  vorlage: geteilterArtikel,
-  angemeldet: false,
-  onErstellen: (daten) => {
-    artikelWrites.push(daten);
-    return new Promise((resolve) => { artikelResolver = resolve; });
+  contentVersion: "10000000-0000-4000-8000-000000000001", liste: [],
+  publikation: {
+    status: "published", publicationId: "20000000-0000-4000-8000-000000000001",
+    shareToken: "20000000-0000-4000-8000-000000000002", publicRevision: 3,
+    publishedContentVersion: "10000000-0000-4000-8000-000000000001", pending: null, errorCode: null,
   },
-  onAbbrechen() {},
-});
-check(!artikelFixture.container.textContent.includes("Shared —"), "Gast sieht in der Artikelmaske kein Shared-Control");
+}];
+let blogWriteCalls = 0;
+let resolveBlogWrite = null;
+let deferBlogWrite = true;
+function BlogHarness() {
+  const [articles, setArticles] = React.useState(blogArticles);
+  const articlesRef = React.useRef(articles);
+  articlesRef.current = articles;
+  const writeArticles = React.useCallback(async (calculate) => {
+    blogWriteCalls++;
+    const next = calculate(articlesRef.current);
+    const ok = deferBlogWrite ? await new Promise((resolve) => { resolveBlogWrite = resolve; }) : true;
+    if (ok) { blogArticles = next; articlesRef.current = next; setArticles(next); }
+    return ok;
+  }, []);
+  blogModel = useBlogPublicationController({
+    accountScope: "account:test", enabled: false, articles, articlesReady: true, writeArticles,
+    library: [], libraryReady: true, mustwatch: [], mustwatchReady: true,
+    selectedServices: [], selectedServicesReady: true,
+  });
+  return h(BlogTab, blogModel);
+}
+const blogFixture = await mounte(BlogHarness);
+await act(async () => { blogModel.actions.onEditArticle({ articleId: "blog_1" }); await tick(); });
+const blogText = blogFixture.container.querySelector("textarea");
+await act(async () => { setzeWert(blogText, "Privater Entwurf bleibt"); await tick(); });
+check(/veröffentlichte Fassung bleibt unverändert/.test(blogFixture.container.textContent),
+  "Blog-v1 erklärt vor privatem Speichern den Erhalt der Veröffentlichung");
 await act(async () => {
-  const speichern = knopf(artikelFixture.container, "Speichern");
+  const speichern = knopf(blogFixture.container, "Änderungen privat speichern");
   speichern.click(); speichern.click(); await tick();
 });
-check(artikelWrites.length === 1 && artikelWrites[0].geteilt === true,
-  "Artikelmaske verhindert Doppelartikel und bewahrt bestehenden geteilt-Wert beim Gast");
-await act(async () => { artikelResolver(null); await tick(); });
-check(!!knopf(artikelFixture.container, "Speichern") && /Eingabe bleibt erhalten/.test(artikelFixture.container.textContent),
-  "Artikelmaske bleibt nach fehlgeschlagenem Write mit sichtbarer Diagnose offen");
-await artikelFixture.cleanup();
+check(blogWriteCalls === 1 && knopf(blogFixture.container, "Speichert").disabled,
+  "Blog-v1-Controller sperrt den zweiten Save bis zur Write-Bestätigung");
+await act(async () => { resolveBlogWrite(false); await tick(); });
+check(blogFixture.container.querySelector("textarea").value === "Privater Entwurf bleibt"
+  && /Privates Speichern fehlgeschlagen/.test(blogFixture.container.textContent),
+  "Blog-v1 bewahrt kontrollierte Eingabe und Diagnose nach fehlgeschlagenem Write");
+deferBlogWrite = false;
+await act(async () => { knopf(blogFixture.container, "Änderungen privat speichern").click(); await tick(); });
+check(blogWriteCalls === 2
+  && blogArticles[0].text === "Privater Entwurf bleibt"
+  && blogArticles[0].publikation.publicationId === "20000000-0000-4000-8000-000000000001",
+  "Bestätigtes privates Speichern erhält die bestehende Veröffentlichung");
+await blogFixture.cleanup();
 
-let artikelJahrWrites = 0;
-const artikelJahrFixture = await mounte(ArtikelMaske, {
-  vorlage: {
-    id: "blog_jahr", titel: "Titel", autor: "Max", text: "Text", geordnet: false,
-    geteilt: false, liste: [{ eingabe: "Referenz", jahr: "1979.5", typ: "film" }],
-  },
-  onErstellen: async () => { artikelJahrWrites++; return "blog_jahr"; },
-  onAbbrechen() {},
-});
-await act(async () => { knopf(artikelJahrFixture.container, "Speichern").click(); await tick(); });
-check(artikelJahrWrites === 0
-  && /Referenz 1: Jahr muss leer oder eine ganze Zahl zwischen 1888/.test(artikelJahrFixture.container.textContent)
-  && artikelJahrFixture.container.querySelector('input[placeholder="Jahr"]').getAttribute("aria-invalid") === "true",
-"Artikelmaske blockiert nicht-ganzzahlige Referenzjahre mit sichtbarem Feldfehler");
-await artikelJahrFixture.cleanup();
-
-let historischerArtikel = null;
-const historischerArtikelFixture = await mounte(ArtikelMaske, {
-  vorlage: {
-    id: "blog_historisch", titel: "Historisch", autor: "Max", text: "Text", geordnet: false,
-    geteilt: false, liste: [
-      { eingabe: "Hamlet", jahr: "1603", typ: "sonstiges" },
-      { eingabe: "Frühe Quelle", jahr: "814", typ: "" },
-    ],
-  },
-  onErstellen: async (daten) => { historischerArtikel = daten; return "blog_historisch"; },
-  onAbbrechen() {},
-});
-await act(async () => { knopf(historischerArtikelFixture.container, "Speichern").click(); await tick(); });
-check(historischerArtikel?.liste[0].jahr === 1603 && historischerArtikel?.liste[1].jahr === 814,
-  "Artikelmaske bewahrt historische Nicht-Film- und untypisierte Referenzjahre");
-await historischerArtikelFixture.cleanup();
-
-const kontoFixture = await mounte(ArtikelMaske, {
-  vorlage: null, angemeldet: true, onErstellen: async () => null, onAbbrechen() {},
-});
-check(!kontoFixture.container.textContent.includes("Shared —"),
-  "Auch ein bereites Konto sieht im Privatrelease kein Shared-Control");
-await kontoFixture.cleanup();
+const referenceAdds = [];
+function ReferenceEditorHarness() {
+  const [editor, setEditor] = React.useState({
+    draftKey: "year-draft", articleId: null, title: "Historisch", text: "Text",
+    ordered: false, references: [], anonymousPublication: false, saveStatus: "idle",
+  });
+  const actions = {
+    onEditorChange: (patch) => setEditor((current) => ({ ...current, ...patch })),
+    onAddReference: ({ reference }) => {
+      referenceAdds.push(reference);
+      setEditor((current) => ({ ...current, references: [...current.references, { ...reference, rowId: `row-${referenceAdds.length}`, rank: referenceAdds.length }] }));
+    },
+  };
+  return h(BlogEditor, { editor, capability: { status: "ready" }, actions,
+    intent: "private_only", hasPublication: false, onSave: async () => {}, onBack() {} });
+}
+const jahrFixture = await mounte(ReferenceEditorHarness);
+const addReference = async (title, year, type) => {
+  await act(async () => {
+    setzeWert(jahrFixture.container.querySelector("#kd-blog-add-reference"), title);
+    setzeWert(jahrFixture.container.querySelector('input[aria-label="Jahr (optional)"]'), year);
+    setzeWert(jahrFixture.container.querySelector('select[aria-label="Typ"]'), type);
+    await tick();
+  });
+  await act(async () => { knopf(jahrFixture.container, "Hinzufügen").click(); await tick(); });
+};
+await addReference("Ungültiger Film", "1979.5", "film");
+check(referenceAdds.length === 0 && /ganze Zahl zwischen 1888/.test(jahrFixture.container.textContent)
+  && jahrFixture.container.querySelector('input[aria-label="Jahr (optional)"]').getAttribute("aria-invalid") === "true",
+  "BlogEditor blockiert nicht-ganzzahlige Filmjahre mit sichtbarem Feldfehler");
+await addReference("Hamlet", "1603", "sonstiges");
+await addReference("Frühe Quelle", "814", "sonstiges");
+check(referenceAdds[0]?.year === 1603 && referenceAdds[1]?.year === 814,
+  "BlogEditor bewahrt historisch gültige Nicht-Film-Jahre");
+await jahrFixture.cleanup();
 
 /* Kontoaktivierung: async Reject bleibt im Assistenten, serialisiert Klicks
    und ruft onFertig niemals vor bestätigtem Abschluss. */

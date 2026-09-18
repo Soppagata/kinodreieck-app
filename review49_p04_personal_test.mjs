@@ -14,6 +14,7 @@ const modules = {
   FilmForm: 'components/EintragForm.jsx', FilmCard: 'components/FilmCard.jsx',
   MustWatchListe: 'components/MustWatchListe.jsx', StapelImport: 'components/StapelImport.jsx',
   GeschmackBereich: 'components/GeschmackBereich.jsx', BlogTab: 'tabs/BlogTab.jsx',
+  BlogEditor: 'components/blog/BlogEditor.jsx', BlogRedlinkForm: 'components/blog/BlogRedlinkForm.jsx',
   useMustwatchController: 'controllers/useMustwatchController.js',
   useMasterPersistenceController: 'controllers/useArticleController.js',
 };
@@ -52,9 +53,9 @@ check(fixed[6].id==='id','E05 gültige ID bleibt erhalten; zweiter Lauf ist stab
 const storeData=new Map();let failWrite=false;
 P.setStorageDriver({ name:'p04-memory', async get(k){return storeData.has(k)?{value:storeData.get(k)}:null;}, async set(k,v){if(failWrite)throw Error('write');storeData.set(k,v);}, async delete(k){storeData.delete(k);} });
 const app=fs.readFileSync(path.join(dir,'src/App.jsx'),'utf8');
-function callback(name,end,env) { const s=app.indexOf(`  const ${name} = `);assert.ok(s>=0);const text=app.slice(s,app.indexOf(end,s)).trim();const expr=text.slice(text.indexOf('=')+1).trim().replace(/;$/,'');return Function(...Object.keys(env),`return (${expr});`)(...Object.values(env)); }
+function callback(name,env) { const s=app.indexOf(`  const ${name} = `);assert.ok(s>=0);const e=app.indexOf('\n  const ',s+1);assert.ok(e>s);const text=app.slice(s,e).trim();const expr=text.slice(text.indexOf('=')+1).trim().replace(/;$/,'');return Function(...Object.keys(env),`return (${expr});`)(...Object.values(env)); }
 let addFilm,updateFilm;const masterRef={current:fixed};
-function MasterHarness(){const {mutiereMaster}=P.useMasterPersistenceController({masterRef,setErr:()=>{},commitMaster:()=>{}});const env={...P,useCallback:f=>f,mutiereMaster,masterMetaRef:{current:null},naechsteHerkunft:()=>({}),mitMustwatch:P.baueRefUniversum,mustwatchRef:{current:[]},schreibeArtikel:async fn=>{fn([]);return true;},setErr:()=>{}};addFilm=callback('addFilm','\n\n  const serienKatalog',env);updateFilm=callback('updateFilm','\n  const deleteFilm',env);return null;}
+function MasterHarness(){const {mutiereMaster}=P.useMasterPersistenceController({masterRef,setErr:()=>{},commitMaster:()=>{}});const env={...P,useCallback:f=>f,mutiereMaster,masterMetaRef:{current:null},naechsteHerkunft:()=>({}),mitMustwatch:P.baueRefUniversum,mustwatchRef:{current:[]},schreibeArtikel:async fn=>{fn([]);return true;},setErr:()=>{}};addFilm=callback('addFilm',env);updateFilm=callback('updateFilm',env);return null;}
 const mh=await mount(MasterHarness);
 const id1=await addFilm({titel:'!!!',typ:'musik',jahr:null});const id2=await addFilm({titel:'???',typ:'musik',jahr:null});
 check(id1&&id2&&id1!==id2&&masterRef.current.at(-1).id===id2,'E05 App.addFilm speichert zwei Satzzeichentitel und gibt tatsächliche IDs zurück');
@@ -150,18 +151,31 @@ let release;const batchCalls=[];let key='a';
 const batchProps={kiAktiv:true,datenKontextKey:key,config:{appEnvironment:'production'},ai:{async runTask(){return {data:batchData};}},flixpatrolFacts:{async load(){return [];}},addFilm:film=>{batchCalls.push(film);return new Promise(r=>{release=r;});}};
 ui=await mount(P.StapelImport,batchProps);await input(ui.c.querySelector('textarea'),'Alien\nDark\nHeat');await click(button(ui.c,'Liste mit KI ordnen'));await click(button(ui.c,'Auswahl übernehmen'));await ui.render({...batchProps,datenKontextKey:'b'});await act(async()=>{release('alien');await tick();});check(batchCalls.length===1&&!ui.c.querySelector('.kd-stapel-vorschau')&&!ui.c.querySelector('.kd-stapel-bericht'),'E04-005 Kontextwechsel stoppt Rest und alte Abschlussanzeige');await ui.close();
 
-// E04-006: beide tatsächlichen Blog-Aufrufer, beide Richtungen, Umwege und Guard.
-for(const status of ['wartet','freigegeben']) for(const [from,to,via] of [['film','serie'],['serie','film'],['serie','serie'],['film','serie','musik'],['film','serie','sonstiges']]) {
- const saves=[],refs=[];
- const a={id:'blog',titel:'Artikel',autor:'Test',text:'Text',status,liste:[{eingabe:'Neu',jahr:2000,typ:from,ref:null}]};
- ui=await mount(P.BlogTab,{artikel:[a],master:[],fokusId:'blog',onAddFilm:async f=>{saves.push(f);check(refs.length===0,'E04-006 Referenz wartet auf bestätigte Anlage');return 'new-id';},onSetzeRef:(...v)=>{refs.push(v);return true;}});
- if(status==='wartet')await click(button(ui.c,'+ Neu anlegen'));else await click(ui.c.querySelector('a[title^="Eintrag existiert"]'));
- let outer=ui.c.querySelector('select');if(via){await input(outer,via);await input(ui.c.querySelector('select'),to);}else{await input(ui.c.querySelector('input[placeholder="Titel *"]'),'Eigener Entwurf');await input(outer,to);}
- check(ui.c.querySelector('select[title="Typ"]').value===to,`E04-006 ${status} ${from}→${to}: innerer und äußerer Typ synchron`);
+// E04-006: Der neue Blogweg wählt Typ/Jahr einmal beim Referenz-Hinzufügen;
+// das Ergänzungsformular übernimmt genau diese Identität und verknüpft erst
+// nach bestätigtem Medienwrite.
+for (const [typ,jahr] of [['film','1979'],['serie','2019']]) {
+ const added=[];
+ const editor={draftKey:`draft-${typ}`,articleId:'blog',title:'Artikel',text:'Text',ordered:false,references:[],anonymousPublication:false,saveStatus:'idle'};
+ ui=await mount(P.BlogEditor,{editor,capability:{status:'ready'},actions:{onEditorChange(){},onAddReference:v=>added.push(v)},intent:'private_only',hasPublication:false,onSave:async()=>{},onBack(){}});
+ await input(ui.c.querySelector('#kd-blog-add-reference'),typ==='serie'?'Andor':'Alien');
+ await input(ui.c.querySelector('input[aria-label="Jahr (optional)"]'),jahr);
+ await input(ui.c.querySelector('select[aria-label="Typ"]'),typ);
  await click(button(ui.c,'Hinzufügen'));
- check(saves[0].typ===to&&refs.length===1&&(via||saves[0].titel==='Eigener Entwurf'),`E04-006 ${status} ${from}→${to}${via?' über '+via:''}: Save und Entwurf korrekt`);await ui.close();
+ const ref=added[0].reference;
+ check(ref.mediaType===typ&&ref.year===Number(jahr),`E04-006 ${typ}: Titelbereich sendet Typ und Jahr`);
+ await ui.close();
+ const saves=[];
+ ui=await mount(P.BlogRedlinkForm,{form:{status:'idle',articleId:'blog',rowId:`row-${typ}`,initial:{titel:ref.title,jahr:ref.year,typ:ref.mediaType}},actions:{onCancelRedlinkForm(){},onConfirmRedlinkForm:async payload=>{saves.push(payload);return {status:'saved',mediaWriteConfirmed:true};}}});
+ check(ui.c.querySelector('select[title="Typ"]').value===typ&&ui.c.querySelectorAll('select[title="Typ"] option').length===1,`E04-006 ${typ}: Ergänzungsformular übernimmt den Typ ohne zweite Auswahl`);
+ await click(button(ui.c,'Hinzufügen'));
+ check(saves.length===1&&saves[0].mediaInput.typ===typ&&saves[0].mediaInput.jahr===Number(jahr),`E04-006 ${typ}: bestätigter Ergänzungsweg bewahrt Identität`);
+ await ui.close();
 }
-ui=await mount(P.BlogTab,{artikel:[{id:'b',titel:'Artikel',autor:'Test',text:'Text',status:'wartet',liste:[{eingabe:'Alt',jahr:1900,typ:'film',ref:null}]}],master:[],fokusId:'b',onAddFilm:()=>{throw Error('Darf nicht speichern');},onSetzeRef:()=>{throw Error('Darf keine Ref setzen');}});await click(button(ui.c,'+ Neu anlegen'));await input(ui.c.querySelector('select'),'serie');await click(button(ui.c,'Hinzufügen'));check(/zwischen 1928/.test(ui.c.textContent),'E04-006 Validierung folgt aktuellem Serientyp');await ui.close();
+let invalidAdds=0;
+ui=await mount(P.BlogEditor,{editor:{draftKey:'draft-invalid',articleId:'blog',title:'Artikel',text:'Text',ordered:false,references:[],anonymousPublication:false,saveStatus:'idle'},capability:{status:'ready'},actions:{onEditorChange(){},onAddReference(){invalidAdds++;}},intent:'private_only',hasPublication:false,onSave:async()=>{},onBack(){}});
+await input(ui.c.querySelector('#kd-blog-add-reference'),'Frühe Serie');await input(ui.c.querySelector('input[aria-label="Jahr (optional)"]'),'1900');await input(ui.c.querySelector('select[aria-label="Typ"]'),'serie');await click(button(ui.c,'Hinzufügen'));
+check(invalidAdds===0&&/zwischen 1928/.test(ui.c.textContent),'E04-006 Validierung folgt dem beim Hinzufügen gewählten Serientyp');await ui.close();
 
 // E04-002: Inhaltsvergleich, gespeicherter Status und UI nach Übernahme.
 const prognose=P.erstellePrognose({ergebnis:{format:'film-prognose-v1',achsen:{wie:4,was:3,warum:4},passung:82,kategorie_vorschlag:'kult',sicherheit:'mittel',begruendung:'Dichte Inszenierung.',verwendete_signale:[]},profilVersion:'p4',modell:'test',modellAlias:'test',vorgangId:'p04',verbrauch:{inputTokens:1,outputTokens:1,kostenUsdCent:0,dauerMs:1},jetzt:'2026-09-17T10:00:00Z'}).prognose;

@@ -13,6 +13,8 @@ const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const app = source("./src/App.jsx");
 const navigation = source("./src/components/AppNavigation.jsx");
 const blog = source("./src/tabs/BlogTab.jsx");
+const blogCards = source("./src/components/blog/BlogArticleCards.jsx");
+const blogReader = source("./src/components/blog/BlogReader.jsx");
 const entdecken = source("./src/tabs/EntdeckenTab.jsx");
 const hilfe = source("./src/lib/hilfeInhalte.js");
 const css = source("./src/index.css");
@@ -32,18 +34,18 @@ check("D-07/U-08: gemeinsamer de-AT-Formatter zeigt Datum und Zeit mit vierstell
 
 check("D-07/U-08: bekannte sichtbare Datumsflächen nutzen die Foundation", () => {
   const contracts = [
-    ["./src/tabs/BlogTab.jsx", /formatPresentationDate\(a\.erstellt_am\)/],
+    ["./src/components/blog/BlogArticleCards.jsx", /formatPresentationDate\(card\.updatedAt\)/],
     ["./src/components/ProfilAnsicht.jsx", /formatPresentationDate\(profil\.geaendert\)/],
     ["./src/components/TeilenBlock.jsx", /formatPresentationDate\(analyse\.erstellt\)/],
     ["./src/tabs/StartTab.jsx", /formatPresentationDate\(new Date\(\), \{ format: "long" \}\)/],
     ["./src/tabs/KinoTab.jsx", /formatPresentationDate\(progStand, \{ includeTime: true \}\)/],
     ["./src/tabs/KinoTab.jsx", /formatPresentationDate\(ev\.d, \{ fallback: ev\.d \}\)/],
     ["./src/tabs/EntdeckenTab.jsx", /formatPresentationDate\(entry\.date/],
-    ["./src/tabs/StreamingTab.jsx", /formatPresentationDate\(katalogInfo\.gueltigBis\)/],
+    ["./src/tabs/StreamingTab.jsx", /formatTitleFactsDate\(evidence\?\.checkedAt \?\? evidence\?\.fetchedAt\)/],
     ["./src/components/FilmwissenBereich.jsx", /formatPresentationDate\(daten\.version\.stand\)/],
     ["./src/components/StreamingEinstellungen.jsx", /formatPresentationDate\(stand, \{ includeTime: true \}\)/],
     ["./src/components/KontoBereich.jsx", /formatPresentationDate\(status\.lastPull/],
-    ["./src/components/PrivatePilotOps.jsx", /formatPresentationDate\(entry\.retrievedAt/],
+    ["./src/components/PrivatePilotOps.jsx", /formatPresentationDate\(entry\.timestamp/],
     ["./src/components/KatalogAuditStatus.jsx", /formatPresentationDate\(new Date\(value\), \{ includeTime: true \}\)/],
     ["./src/lib/radarNews.js", /formatPresentationDate\(entry\.checkedAt/],
   ];
@@ -63,11 +65,13 @@ check("D-07: interne ISO-Verträge für Inputs, Dateinamen und Persistenz bleibe
   assert.match(app, /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/);
 });
 
-check("R-07: Blogkarte ist Artikel mit eigenem Expand-Button und benannter Region", () => {
-  assert.match(blog, /<article key=\{a\.id\} className="kd-blog-karte"/);
-  assert.match(blog, /<button type="button" className="kd-blog-expand"[\s\S]*?aria-expanded=\{offen\} aria-controls=\{detailsId\}/);
-  assert.match(blog, /id=\{detailsId\} role="region" aria-labelledby=\{titelId\}/);
-  assert.doesNotMatch(blog, /role="button" tabIndex=\{0\}/);
+check("R-07: Blogkarten und Vollansicht besitzen benannte, echte Bedienelemente", () => {
+  assert.match(blogCards, /<article className="kd-blog-card" key=\{card\.articleId\}/);
+  assert.match(blogCards, /<button type="button" className="kd-blog-card-title"/);
+  assert.match(blogCards, /className="kd-blog-button kd-blog-button-primary"[\s\S]*?>Lesen<\/button>/);
+  assert.match(blogReader, /<article className="kd-blog-reader" aria-labelledby="kd-blog-reader-title">/);
+  assert.match(blogReader, /<h2 id="kd-blog-reader-title">/);
+  assert.doesNotMatch(blogCards, /role="button" tabIndex=\{0\}/);
 });
 
 check("R-11: Entdecken verwendet ehrliche Navigation statt eines unvollständigen Tabmusters", () => {

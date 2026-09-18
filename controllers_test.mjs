@@ -666,16 +666,16 @@ check("App besitzt keinen Demo-seitigen Must-Watch-Seed; normales Laden und Schr
       return true;
     },
   };
-  const callback = (name, folge) => {
+  const callback = (name) => {
     const start = app.indexOf(`  const ${name} = `);
-    const ende = app.indexOf(folge, start);
+    const ende = app.indexOf("\n  const ", start + 1);
     if (start < 0 || ende < 0) throw new Error(`App-Callback nicht auffindbar: ${name}`);
     const deklaration = app.slice(start, ende).trim();
     const ausdruck = deklaration.slice(deklaration.indexOf("=") + 1).trim().replace(/;$/, "");
     return Function(...Object.keys(umgebung), `return (${ausdruck});`)(...Object.values(umgebung));
   };
-  const add = callback("addFilm", "\n\n  const serienKatalog");
-  const update = callback("updateFilm", "\n  const deleteFilm");
+  const add = callback("addFilm");
+  const update = callback("updateFilm");
   for (const [roh, erwartet] of [
     ["trilogie", "film"], ["filmreihe", "film"], ["franchise", "serie"],
     ["film", "film"], ["serie", "serie"], ["musik", "musik"], ["sonstiges", "sonstiges"],

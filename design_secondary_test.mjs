@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const css = await readFile(new URL("./src/styles/design-secondary.css", import.meta.url), "utf8");
+const blogCss = await readFile(new URL("./src/styles/blog.css", import.meta.url), "utf8");
+const blogCards = await readFile(new URL("./src/components/blog/BlogArticleCards.jsx", import.meta.url), "utf8");
+const blogReader = await readFile(new URL("./src/components/blog/BlogReader.jsx", import.meta.url), "utf8");
 const sources = await Promise.all([
   "src/tabs/EntdeckenTab.jsx",
   "src/tabs/BlogTab.jsx",
@@ -47,8 +50,11 @@ for (const [path, marker] of requiredRoots) {
 
 const blog = sources[1];
 const dreiFragen = sources[10];
-assert.match(blog, /fontSize: "calc\(22px \* var\(--kd-schriftfaktor, 1\)\)"/);
-assert.doesNotMatch(blog, /<h3 id=\{titelId\}[\s\S]{0,260}textTransform: "uppercase"/);
+assert.match(blogCss, /\.kd-blog-list-head h2[^}]*font-size: calc\(22px \* var\(--kd-schriftfaktor, 1\)\)/);
+assert.match(blogCss, /\.kd-blog-card-title[^}]*min-height: 44px[^}]*font: 600 calc\(22px \* var\(--kd-schriftfaktor, 1\)\)/);
+assert.match(blogCards, /<article className="kd-blog-card"/);
+assert.match(blogReader, /aria-labelledby="kd-blog-reader-title"/);
+assert.doesNotMatch(blogCss, /text-transform:\s*uppercase/);
 assert.match(dreiFragen, /fontSize: "calc\(22px \* var\(--kd-schriftfaktor, 1\)\)"/);
 
 console.log("design secondary: local roots, 44px controls, and scoped secondary roles verified");

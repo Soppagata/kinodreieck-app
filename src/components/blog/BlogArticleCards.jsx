@@ -1,4 +1,5 @@
 import { BlogReferenceList } from "./BlogReferenceList.jsx";
+import { formatPresentationDate } from "../../lib/presentationDate.js";
 
 function displayLabel(state) {
   if (state === "published") return "Veröffentlicht";
@@ -25,7 +26,7 @@ export function BlogArticleCards({ cards = [], scope, actions, onNotice }) {
     const publicationError = typeof card.publicationError === "string" ? { status: card.publicationError, operationId: null } : card.publicationError;
     return <article className="kd-blog-card" key={card.articleId}>
     <div className="kd-blog-meta">{scope === "published" ? <span>Ohne Namensangabe</span> : <span className="kd-blog-state">{displayLabel(card.displayState)}</span>}
-      {card.updatedAt ? <time dateTime={card.updatedAt}>{new Intl.DateTimeFormat("de-AT", { dateStyle: "medium" }).format(new Date(card.updatedAt))}</time> : null}</div>
+      {card.updatedAt ? <time dateTime={card.updatedAt}>{formatPresentationDate(card.updatedAt)}</time> : null}</div>
     <h3><button type="button" className="kd-blog-card-title" onClick={() => read(card)}>{card.title}</button></h3>
     <p className="kd-blog-excerpt">{card.excerpt}</p>
     {card.referencePreview?.length ? <BlogReferenceList references={card.referencePreview.map((reference) => ({ ...reference, articleId: card.articleId }))}

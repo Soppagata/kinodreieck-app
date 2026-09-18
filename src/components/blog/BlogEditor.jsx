@@ -36,7 +36,7 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
     <label className="kd-blog-field">Text<textarea rows={9} value={editor.text || ""} onChange={(event) => actions.onEditorChange({ text: event.target.value })} /></label>
     <section className="kd-blog-references" aria-labelledby="kd-blog-reference-heading">
       <h3 id="kd-blog-reference-heading">Titelliste & Verknüpfungen</h3>
-      <label className="kd-blog-check"><input type="checkbox" checked={editor.ordered === true} onChange={(event) => actions.onEditorChange({ ordered: event.target.checked })} /><span>Als nummerierte Liste anzeigen</span></label>
+      <label className="kd-blog-check kd-touch-checkbox"><input type="checkbox" checked={editor.ordered === true} onChange={(event) => actions.onEditorChange({ ordered: event.target.checked })} /><span>Als nummerierte Liste anzeigen</span></label>
       <BlogReferenceList references={references.map((reference) => ({ ...reference, articleId: editor.articleId }))} ordered={editor.ordered === true} editable actions={actions} draftKey={editor.draftKey} />
       <label className="kd-blog-field" htmlFor="kd-blog-add-reference">Titel hinzufügen</label>
       <div className="kd-blog-add-reference"><input id="kd-blog-add-reference" className="kd-blog-add-reference-title" value={newReference} placeholder="Titel" onChange={(event) => { setNewReference(event.target.value); setReferenceError(""); }}
@@ -51,7 +51,7 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
       <p className="kd-blog-muted">{references.length}/{BLOG_MAX_REFERENCES} Titel</p>
     </section>
     <footer className="kd-blog-finish">
-      <label className={`kd-blog-check kd-blog-publish-check${!publishReady ? " is-disabled" : ""}`}><input type="checkbox" checked={editor.anonymousPublication === true} disabled={!publishReady}
+      <label className={`kd-blog-check kd-blog-publish-check kd-touch-checkbox${!publishReady ? " is-disabled" : ""}`}><input type="checkbox" checked={editor.anonymousPublication === true} disabled={!publishReady}
         onChange={(event) => actions.onEditorChange({ anonymousPublication: event.target.checked })} />
         <span><strong>Anonym veröffentlichen</strong><small>{publishReady ? "Für angemeldete Nutzer sichtbar. Dein Kontoname wird nicht angezeigt."
           : capability?.status === "checking" ? "Veröffentlichung wird geprüft. Privat speichern ist bereits möglich." : "Veröffentlichung ist derzeit nicht verfügbar. Privat speichern bleibt möglich."}</small></span></label>
