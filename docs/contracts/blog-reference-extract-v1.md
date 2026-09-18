@@ -44,11 +44,12 @@ Urheber/Jahr werden als Werkdaten nur angezeigt, soweit der Bestand sie belegt.
   `film|series|music|other|title_group|unclear`, `interpretation` ist
   `direct|interpreted|ambiguous`, `year` Integer 1–2200 oder null; bei
   `film`/`series` bleibt die bestehende Untergrenze 1870. Der v2-Publikations-
-  validator soll für `musik`/`sonstiges` gezielt Jahre ab 1 akzeptieren, entsprechend
+  validator akzeptiert für `musik`/`sonstiges` gezielt Jahre ab 1, entsprechend
   dem vorhandenen Mediathekvertrag; v1 und Film-/Seriengrenzen bleiben gleich.
-  Diese schmale Shared-Validatoränderung wartet nach automatischer Ablehnung
-  noch auf die konkret angefragte Nutzerbestätigung und ist nicht in der
-  M7-Migration enthalten. Bis zur Auflösung bleibt der neue Serverschalter aus.
+  Diese ausdrücklich genehmigte Shared-Validatoränderung steht in der neuen
+  additiven Migration `20260918170000_blog_reference_v2_years.sql`; bereits
+  angewandte Migrationen bleiben unverändert. Der neue Serverschalter wird
+  erst nach dem Backend-Readback aktiviert.
   `evidence` ist `{ field: "title"|"text", quote, start, end }`, Positionen sind
   serverseitig ermittelte UTF-16-Indizes des exakten Zitats im unveränderten Feld.
   `candidateId` wird serverseitig deterministisch erzeugt (opaker String).

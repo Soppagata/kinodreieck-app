@@ -133,7 +133,7 @@
     "test:blog:scale": "node blog_catalog_scale_pg_test.mjs",
     "test:blog:browser": "node blog_compact_ui_test.mjs",
     "test:blog-ref50:final": "npm test && npm run test:function && npm run build && git diff --check",
-    "test:blog-scan": "node blog_reference_extract_client_test.mjs && node blog_reference_extract_client_controller_test.mjs && node blog_reference_extract_privacy_test.mjs && node blog_reference_extract_pg_test.mjs && node blog_reference_extract_ui_decision_test.mjs",
+    "test:blog-scan": "node blog_reference_extract_client_test.mjs && node blog_reference_extract_client_controller_test.mjs && node blog_reference_extract_privacy_test.mjs && node blog_reference_extract_pg_test.mjs && node blog_reference_year_pg_test.mjs && node blog_reference_extract_ui_decision_test.mjs",
     "test:blog-scan:browser": "node blog_reference_extract_ui_test.mjs"
   },
   "dependencies": {

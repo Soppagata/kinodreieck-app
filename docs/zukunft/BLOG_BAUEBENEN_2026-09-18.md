@@ -1,7 +1,7 @@
 # Blog: Bauebenen und parallele Baumeister
 
-Stand: 18.09.2026 · Status: gemeinsames Blog-Backend aktiv, identischer Blogstand auf Staging und Production ausgeliefert und zurückgelesen; praktische Production-PWA-Abnahme offen.
-Aktueller Folgeauftrag: M6 (sichere 50er-Grenze) wird zusammen mit M7 auf Staging ausgeliefert. M7 umfasst jetzt ausdrücklich Filme, Serien, Musik und Sonstiges; sein Integrationsvertrag ist eingefroren, der Bau beginnt. Die historischen Liefer-/Freigabegrenzen unten beschreiben ihre damaligen Aufträge.
+Stand: 18.09.2026 · Status: M1–M5 auf Staging und Production, M6 auf Staging; M7-Backend einschließlich Jahreskorrektur aktiv und zurückgelesen. Die mobile Checkboxkorrektur und der integrierte Nutzerweg sind geprüft; vollständige Staging-Nachlieferung beauftragt. Praktische iPhone/PWA-Abnahme offen.
+Aktueller Folgeauftrag: Max hat die schmale v2-Jahreskorrektur für Musik/Sonstiges ausdrücklich freigegeben, danach die vollständige Staging-Nachlieferung zum PWA-Test beauftragt und die Checkboxdarstellung samt Hinweislöschung korrigieren lassen. Die historischen Liefer-/Freigabegrenzen unten beschreiben ihre damaligen Aufträge; der aktuelle Nachweis steht am Dokumentende.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -77,7 +77,7 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 | M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE auf Staging | M6 in a3a0086; Migration, lokales Gate, CI und Domain-/Service-Worker-Readback bestätigt; Production-Frontend bleibt 77c5603 |
-| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS | GEBAUT und ausgeliefert, noch deaktiviert | a3a0086 auf Staging; lokale/CI-/Backendnachweise grün. Aktivierung wartet auf Jahreskorrektur-Freigabe; Anbieterqualität und physische Abnahme nicht belegt |
+| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS | DONE im Integrationskandidaten; Backend aktiv | Produktquellen 8336e95 mit Jahresmigration 5427cc5; 32 Nutzerwegprüfungen, 13 PG-Fälle, 44 Browserchecks und Build grün. Zielbranch staging; CI-/Domainbeleg der Nachlieferung wird extern an dessen SHA gebunden. Anbieterqualität und physische Abnahme nicht belegt |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -1107,3 +1107,89 @@ der neue KI-Scan ist noch nicht als nutzbar oder als DONE freigegeben. Die
 Nachlieferung der Jahreskorrektur mit anschließender Taskaktivierung bleibt
 der konkrete Restauftrag. Dieses abschließende Register wird lokal separat
 committed; es löst keinen zweiten identischen Frontend-Deploy aus.
+
+### Freigegebene Jahreskorrektur und Scanaktivierung
+
+Max bestätigt den konkret vorbereiteten Vorschlag ausdrücklich:
+„Ja, darfst du! Danach pushe alles so, dass ich auf Staging PWA testen kann“.
+Damit ist die vorher fehlende Autorisierung für diese gemeinsame
+Validatoränderung erteilt. Sie umfasst die neue additive Migration,
+Voransicht/Driftprüfung, Ausführung und Readback, anschließende Aktivierung des
+neuen Taskschalters und die vollständige Staging-Lieferung. Keine erneute
+Freigabe für dieselbe Kette; keine Production-Frontend-Promotion.
+
+Delta-RESTAUFTRAG an A im bestehenden Worktree: nur v2-Musik/Sonstiges von
+1870–2200 auf 1–2200 erweitern; v1 und Film/Serie unverändert lassen.
+Fokussierte PG17-Fälle müssen echte Veröffentlichung und Leserechte über ein
+zweites Konto mit Musik 1824 und Buch 1605 sowie alte Typ-/Jahres- und
+15/50/51-Grenzen belegen. Historische bereits angewandte Migrationen bleiben
+unverändert. Das grüne gemeinsame Gate auf `a3a0086` wird übernommen;
+lokal werden nur das neue Delta und seine konkrete Integrationsnaht geprüft.
+Die erforderliche CI läuft auf dem neuen Staging-Commit.
+
+Belege dieser Nachlieferung ergänzen den bisherigen Ordner unter
+`/private/tmp/kd-blog-scan-release-20260918/year-activation/`.
+Bezahlte Agentenproben sind weiterhin nicht beauftragt; Anbieterqualität
+und physische iPhone/PWA-Abnahme bleiben getrennte Nachweisgrenzen.
+
+Die automatische Freigabeprüfung akzeptierte die erste zugeordnete Antwort
+auch nach Nachlesen der konkreten Vorfrage nicht. Max bestätigte daraufhin
+nochmals ausdrücklich im aktuellen Task: „Ich genehmige ausdrücklich diese
+Änderung an kd_blog_validate_write_request: nur v2 musik/sonstiges 1–2200,
+v1 und Film/Serie unverändert 1870–2200; gemeinsames Backend ändern, Scan
+aktivieren und Staging ausliefern.“ Danach wurde genau dieses Delta umgesetzt.
+
+DELIVERED A `c514e56`, INTEGRATED als `5427cc5`: neue additive Migration
+`20260918170000_blog_reference_v2_years.sql` und fokussierter PG17-Test.
+13 Prüfungen belegen privates Speichern, tatsächliche Veröffentlichung,
+persistente Referenzjahre und Readback sowie negative Typ-/Jahres-/Anzahlfälle.
+Der bestehende Testharness und die bereits angewandten Migrationen bleiben
+unverändert. Der neue Test ist in `test:blog-scan` und damit `npm test` registriert.
+
+Max meldete währenddessen im Staging-PWA-Screenshot versetzte Checkboxtexte
+und verlangte die Entfernung des gesamten Hinweises unter „Anonym
+veröffentlichen“. DELIVERED B `989546e`, INTEGRATED als `8336e95`:
+beide Checkboxzeilen mittig ausgerichtet, Hinweis vollständig entfernt.
+44 Browserchecks belegen auch auf 393×852 in Chromium und WebKit die
+Ausrichtung sowie den anklickbaren Wechsel von „Privat speichern“ zu
+„Speichern & veröffentlichen“. Das Häkchen bleibt standardmäßig aus;
+die bisherige Veröffentlichung ohne Namen ist unverändert.
+
+Meister-Integration: vorhandener Nutzerwegtest mit Musik 1824 und Buch 1605
+erweitert. 32/32 grün über Belegvalidator, bewusste Auswahl, atomare Übernahme,
+privates Speichern, Reload, explizite Publikation und anonymen Readback durch
+das zweite Konto. Der erste Anlauf scheiterte vor den Prüfungen an der Rolle
+des lokalen Migrations-Setups; nur dieses Setup korrigiert und denselben
+betroffenen Lauf wiederholt. Build und Diff grün. Die unveränderten übrigen
+Prüfungen des gemeinsamen Gates `a3a0086` werden übernommen.
+
+Backend-Nachlieferung am 18.09.2026, 21:45–21:46 UTC:
+
+- Neue Jahresmigration mit Voransicht der betroffenen Definitionen, Driftguard
+  und atomarem Ledgerwrite angewandt; Rohquelle im Ledger bytegenau bestätigt.
+  SHA-256 `4c82ec865dc6b7bd5d6f28017c3467a01ec2ed8093a1352f71171ae2ff76a1f6`.
+- 24 ausschließlich lesende Live-Validatorfälle bestätigen 20 Jahresfälle und
+  die v1-/v2-Grenzen 15/16/50/51. Keine Testpublikation und keine Nutzerdatenwrites.
+  Der Funktionsvergleich zeigt exakt den genehmigten Fragmentaustausch;
+  Funktionsrechte, Konfiguration und alter Exporter bleiben unverändert.
+- Anschließend ausschließlich `blog_reference_extract_enabled` von false auf
+  true geändert. Readback bestätigt unveränderte übrige KI-Konfiguration.
+- Providerfreier Health-Readback bestätigt die aktivierte ausgehandelte
+  Capability und den alten v5-Vertrag. Die Functions selbst bleiben beim zuvor
+  bytegenau geprüften Quellstand `a3a0086`; dieses Delta benötigt keinen erneuten
+  Function-Deploy. Export bleibt unverändert `EXPORT_DISABLED`.
+
+Der folgende force-freie Staging-Push enthält auch den bisherigen lokalen
+Registercommit `0e0b339` und sämtliche neuen Änderungen. Die erforderliche CI
+und der Domain-/Service-Worker-Readback werden am tatsächlichen Push-SHA
+gebunden; die abschließenden maschinenlesbaren Belege stehen unter
+`year-activation/github-status.json` und `year-activation/public-readback.json`
+im genannten Belegordner. Dadurch ist kein zweiter identischer Frontend-Push
+allein für nachträglich eingetragene CI-Metadaten nötig. Zum Zeitpunkt dieses
+Registercommits sind diese beiden Außenwirkungsschritte noch ausstehend.
+
+Für den PWA-Test: unter Einstellungen → Personalisierung & KI den zunächst
+ausgeschalteten Schalter „Titel aus Blogtexten mit KI erkennen“ aktivieren,
+danach im Blogeditor bewusst „Titel im Text erkennen (KI)“ starten.
+Keine echte Anbieterprobe durch Agenten und keine physische Geräteabnahme
+werden aus den vorliegenden Mock-, Browser- und Health-Nachweisen abgeleitet.

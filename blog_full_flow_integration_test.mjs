@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { JSDOM } from "jsdom";
@@ -282,6 +282,9 @@ const alphaService = localService(ui, {
 const betaService = localService(ui, { session: { accountId: accounts.beta }, rpc, calls });
 let mounted;
 try {
+  pg.sql(readFileSync("supabase/migrations/20260918170000_blog_reference_v2_years.sql", "utf8"), {
+    role: "postgres", accountId: null,
+  });
   for (const session of [{ role: "anon", accountId: null }, { role: "authenticated", accountId: accounts.inactive }]) {
     assert.throws(() => pg.callRpc(BLOG_RPC.list, { contractVersion: "blog-publication-v1", cursor: null, limit: 20 }, session));
   }
@@ -458,12 +461,12 @@ try {
   await mounted.close(); mounted = null;
   const scanValues = new Map();
   const scanTitle = "Mein Scan über verschiedene Medien";
-  const scanText = "Dune verbindet für mich zwei Verfilmungen. Dazu passen Severance (2022), Kind of Blue (1959) und Das unbekannte Buch (1988).";
+  const scanText = "Dune verbindet für mich zwei Verfilmungen. Dazu passen Severance (2022), 9. Sinfonie (1824) und Don Quijote (1605).";
   const scanLibrary = [
     { id: "private-alpha-dune-1984", titel: "Dune", jahr: 1984, typ: "film", regie: "David Lynch", imdb_id: "tt0087182" },
     { id: "private-alpha-dune-2021", titel: "Dune", jahr: 2021, typ: "film", regie: "Denis Villeneuve", imdb_id: "tt1160419" },
     { id: "private-alpha-severance", titel: "Severance", jahr: 2022, typ: "serie" },
-    { id: "private-alpha-kind-of-blue", titel: "Kind of Blue", jahr: 1959, typ: "musik", kuenstler: "Miles Davis" },
+    { id: "private-alpha-beethoven", titel: "9. Sinfonie", jahr: 1824, typ: "musik", kuenstler: "Ludwig van Beethoven" },
   ];
   const scanCalls = [];
   const scanService = {
@@ -484,10 +487,10 @@ try {
           interpretation: "ambiguous", evidence: { field: "text", quote: "Dune verbindet für mich zwei Verfilmungen." } },
         { mention: "Severance", titleSuggestion: "Severance", kind: "series", year: 2022,
           interpretation: "direct", evidence: { field: "text", quote: "Severance (2022)" } },
-        { mention: "Kind of Blue", titleSuggestion: "Kind of Blue", kind: "music", year: 1959,
-          interpretation: "direct", evidence: { field: "text", quote: "Kind of Blue (1959)" } },
-        { mention: "Das unbekannte Buch", titleSuggestion: "Das unbekannte Buch", kind: "other", year: 1988,
-          interpretation: "direct", evidence: { field: "text", quote: "Das unbekannte Buch (1988)" } },
+        { mention: "9. Sinfonie", titleSuggestion: "9. Sinfonie", kind: "music", year: 1824,
+          interpretation: "direct", evidence: { field: "text", quote: "9. Sinfonie (1824)" } },
+        { mention: "Don Quijote", titleSuggestion: "Don Quijote", kind: "other", year: 1605,
+          interpretation: "direct", evidence: { field: "text", quote: "Don Quijote (1605)" } },
       ] }, ui.readBlogReferenceInput(payload));
       assert.ok(normalized && !normalized.partial);
       return { ok: true, task, vorgangId: options.vorgangId, data: {
@@ -531,8 +534,8 @@ try {
     ["Dune", 1984, "film", scanLibrary[0].id],
     ["Dune", 2021, "film", scanLibrary[1].id],
     ["Severance", 2022, "serie", scanLibrary[2].id],
-    ["Kind of Blue", 1959, "musik", scanLibrary[3].id],
-    ["Das unbekannte Buch", 1988, "sonstiges", null],
+    ["9. Sinfonie", 1824, "musik", scanLibrary[3].id],
+    ["Don Quijote", 1605, "sonstiges", null],
   ]);
   check("Bewusste Übernahme erhält die erste Zeile und ergänzt beide Dune-Filme, Serie, Musik und Rotlink atomar",
     scanRows[0].rowId === preservedRow && scanRows[1].year === 1984 && scanRows[2].year === 2021
@@ -546,6 +549,7 @@ try {
   const savedRowIds = scannedArticle.liste.map((row) => row.rowId);
   check("Privates Speichern bewahrt alle bestätigten Typen und die unverknüpfte Entscheidung",
     scannedArticle.liste.length === 6 && scannedArticle.liste[4].typ === "musik"
+      && scannedArticle.liste[4].jahr === 1824 && scannedArticle.liste[5].jahr === 1605
       && scannedArticle.liste[5].rotlink_ok === true);
   await mounted.close(); mounted = null;
   mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
@@ -554,7 +558,9 @@ try {
   check("Reload stellt Reihenfolge, Werkidentitäten und Typen ohne erneuten Scan wieder her",
     JSON.stringify(mounted.model.editor.references.map((row) => row.rowId)) === JSON.stringify(savedRowIds)
       && mounted.model.editor.references[1].primaryTarget?.ref === scanLibrary[0].id
-      && mounted.model.editor.references[2].primaryTarget?.ref === scanLibrary[1].id && scanCalls.length === 1);
+      && mounted.model.editor.references[2].primaryTarget?.ref === scanLibrary[1].id
+      && mounted.model.editor.references[4].year === 1824
+      && mounted.model.editor.references[5].year === 1605 && scanCalls.length === 1);
   await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
   await click(ui, dom, buttonWithText(mounted.host, "Speichern & veröffentlichen"));
   await settled(ui, () => mounted.articles[0]?.publikation?.errorCode === "DECISION_REQUIRED", "unavailable shared work decisions");
@@ -575,7 +581,9 @@ try {
     publishedScan?.article.references.length === 6
       && publishedScan.article.references[1].year === 1984 && publishedScan.article.references[2].year === 2021
       && publishedScan.article.references[4].mediaType === "musik"
+      && publishedScan.article.references[4].year === 1824
       && publishedScan.article.references[5].mediaType === "sonstiges"
+      && publishedScan.article.references[5].year === 1605
       && !JSON.stringify([...alphaValues]).includes(scannedArticle.id) && scanCalls.length === 1);
   assert.equal(forbiddenNetworkAttempts, 0, "No catalog/provider lookup may hide behind a caught network failure");
   console.log(`blog_full_flow_integration_test: ${checks} Checks bestanden (echte UI/Controller/Service, lokales PostgreSQL, zwei Konten).`);
