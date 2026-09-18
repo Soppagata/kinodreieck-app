@@ -1,6 +1,6 @@
 # Blog: Bauebenen und parallele Baumeister
 
-Stand: 18.09.2026 · Status: Frontend auf Staging; gemeinsame Blog-Aktivierung vorbereitet.
+Stand: 18.09.2026 · Status: gemeinsames Blog-Backend geprüft; Staging-Korrekturkandidat bereit.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -11,8 +11,8 @@ Readback autorisiert. Die frisch gelesenen GitHub-Environment-Variablen belegen
 dieselbe Supabase-Instanz für Staging und Production. Die neue SQL-Migration
 blieb bei dieser ersten Lieferung unappliziert; ihre Aktivierung würde das gemeinsame Backend
 und damit Production betreffen. Privates Schreiben und die neue Oberfläche
-können auf Staging geprüft werden; die neue Veröffentlichung bleibt bis zur
-Bereitstellung ihres Backendvertrags deaktiviert. Der jüngste Folgeauftrag
+konnten auf Staging geprüft werden; die neue Veröffentlichung blieb damals bis
+zur Bereitstellung ihres Backendvertrags deaktiviert. Der jüngste Folgeauftrag
 autorisiert nun ausdrücklich den gemeinsamen veröffentlichten Blogbereich;
 Umfang und Belege stehen unter „Folgekorrektur“ und „Ebene 3“.
 
@@ -529,3 +529,56 @@ Auch das für den echten Backendtest vorbereitete Rollback-Skript wurde lokal
 mit 15 Referenzen geprüft: anonyme v1- und Legacy-Ausgabe, zweites Konto,
 Owner-Löschung, Rollensperren und privat bleibender Snapshot sind belegt;
 der Veröffentlichungsteil dauerte 1,05 Sekunden.
+
+Der reale Readback der additiven Migration `20260918130000` ist auf Kandidat
+`1a1575f` bestätigt: Ledger 97, exakte Funktionsquellen und Browserrechte.
+Die echte 15-Referenzen-Veröffentlichung löst alle Titel auf, überschreitet
+aber den tatsächlichen Acht-Sekunden-Serverdeckel. Der Test wurde vollständig
+zurückgerollt; es bestehen weder Testpublikationen noch laufende Testqueries.
+Der lokale Skalierungsbeleg allein reicht deshalb nicht zur Auslieferung.
+
+Gezielte reale Profilierung: 25.304 aggregierte Werke, kalter Snapshot
+7.070 ms, warmer Funktionslookup 53 ms, direkter Indexlookup 0,3 ms. Mit nur
+transaktionslokal deaktiviertem JIT sinkt der Aufbau auf 5.342 ms. Es wurden
+keine globalen Datenbankeinstellungen geändert. A erhält auf Basis `1a1575f`
+das additive Delta `20260918133000_blog_catalog_lookup.sql` für den kalten
+Aufbau und tatsächliche Indexnutzung. Referenz-, Quellen- und Rollenverträge,
+bereits angewandte Migrationen und das Clientzeitlimit bleiben erhalten.
+
+Das Lookup-Delta ist als `4170dcb` integriert (Paketcommit `816e13b`). Es
+berechnet Quellenkürzel je unterschiedlicher Bezeichnung nur einmal, begrenzt
+JIT/Sortieraufwand funktionslokal und nutzt für Einzelreferenzen direkt die
+Snapshot-Indizes. Die Paketprüfungen sind grün: 42 Backend-, 13 Refresh- und
+elf Skalierungschecks. Die erweiterte Fixture bildet 25.304 Werke, 11.181
+Streamingziele und ein Werk mit 128 Quellenzielen ab. Veröffentlichung von
+15 Referenzen: lokal 426 ms bei aktivem Acht-Sekunden-Statement-Limit.
+Die neue additive Migration wird erst nach dem integrierten Abschlusslauf
+aktiviert; der reale Gegenbeleg bleibt bis dahin offen.
+
+### Abschlussbeleg der Backendkorrektur
+
+Codekandidat `4170dcb71955279aa6ae07472df95a57ccb1cc31`: vollständiger lokaler
+Abschlusslauf einschließlich Build grün, Exit 0; integrierter Blog-Nutzerweg
+25/25, Skalierung 11/11, Pages-Build 72/72. Der Beleg liegt unter
+`/private/tmp/kd-blog-staging-activation-20260918/npm-test-lookup-final.log`.
+M1–M5 sind damit auch am Korrekturkandidaten lokal DONE; Ziel der anschließenden
+Client-Auslieferung ist ausschließlich `staging`.
+
+Die additive Migration `20260918133000` wurde anschließend atomar aktiviert.
+Lesender Nachweis: 98 Ledgerzeilen, alle vier Blog-Migrationsquellen exakt,
+32 Blog-Funktionskörper/Volatilitäten und die erwarteten Rollenrechte korrekt.
+Neue interne Helfer sind auch für `service_role` direkt gesperrt. JIT und
+Sortierbudget gelten nur innerhalb der Katalogfunktion.
+
+Realer Zwei-Konten-Test vom 18.09., 07:34 UTC: 15 von 15 Referenzen korrekt
+zugeordnet, Veröffentlichung einschließlich kaltem Snapshot in 4.424 ms;
+der reale Serverdeckel bleibt acht Sekunden. Anonyme v1- und Legacy-Leseausgabe,
+Claim, idempotente Wiederholung, Owner-Löschung, Fremdkonten-/Gast-/Inaktivsperre
+und privater Snapshot sind geprüft. Die gesamte Transaktion wurde verworfen;
+Nachlese bestätigt null Testkonten, Testpublikationen und Testoperationen.
+Belege: `backend-lookup-postflight.json` und `live-blog-smoke.json` im selben
+Belegordner. Zahlende Anbieterrequests: null.
+
+Noch offen sind Staging-Push, CI, Deployment und Domain-/Service-Worker-Readback.
+`main` und der Production-Frontendbuild werden für diese Korrektur nicht
+ausgeliefert. Die gemeinsame Blog-Backendwirkung ist ausdrücklich autorisiert.
