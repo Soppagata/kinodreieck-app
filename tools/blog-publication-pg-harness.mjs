@@ -11,6 +11,7 @@ export const BLOG_TEST_ACCOUNTS = Object.freeze({
 
 const MIGRATION = "supabase/migrations/20260918120000_blog_publication_v1.sql";
 const CRON_PREREQUISITE = "supabase/migrations/20260918115900_blog_publication_pg_cron.sql";
+const SETWISE_MIGRATION = "supabase/migrations/20260918130000_blog_catalog_setwise.sql";
 
 function verifyCronPrerequisiteSql() {
   const sql = readFileSync(CRON_PREREQUISITE, "utf8");
@@ -182,7 +183,7 @@ function defaultProgram(now = Date.now()) {
   };
 }
 
-export async function startBlogPublicationPgHarness() {
+export async function startBlogPublicationPgHarness({ applySetwiseMigration = true } = {}) {
   const pg = pgBin();
   const root = mkdtempSync(join(tmpdir(), "kd-blog-pg-"));
   const data = join(root, "data");
@@ -236,6 +237,64 @@ export async function startBlogPublicationPgHarness() {
       commit;`);
   };
 
+  const seedScaleCatalog = ({
+    baseCount = 24_678,
+    motnCount = 1_115,
+    sourceRevision = 90,
+    streamingGeneratedAt = new Date().toISOString(),
+  } = {}) => {
+    if (!Number.isInteger(baseCount) || baseCount < 20 || !Number.isInteger(motnCount)
+      || motnCount < 0 || motnCount > baseCount || !Number.isInteger(sourceRevision)) {
+      throw new Error("invalid scale catalog dimensions");
+    }
+    rawSql(`begin;
+      delete from public.kd_streaming_page_motn;
+      delete from public.kd_streaming_page_base;
+      delete from public.kd_streaming_page_state;
+      insert into public.kd_streaming_page_state(singleton,source_revision,generated_at,meta)
+        values(true,${sourceRevision},${literal(streamingGeneratedAt)}::timestamptz,'{}');
+      insert into public.kd_streaming_page_base(
+        source_key,payload,services,work_type,release_year,watchmode_id,imdb_id,tmdb_id,known
+      )
+      select
+        'scale-'||lpad(g::text,5,'0'),
+        jsonb_build_object(
+          'titel',case when g in (1,2) then 'Scale Ambiguous Twin' else 'Scale Film '||lpad(g::text,5,'0') end,
+          'jahr',case when g in (1,2) then 2000 else 1950+(g%75) end,
+          'typ','film'
+        ),
+        array[case g%4 when 0 then 'Netflix' when 1 then 'Prime Video'
+          when 2 then 'Disney+' else 'MUBI' end],
+        'film',case when g in (1,2) then 2000 else 1950+(g%75) end,
+        'wm-scale-'||g::text,
+        'tt'||lpad((7000000+g)::text,7,'0'),
+        (8000000+g)::text,
+        true
+      from generate_series(1,${baseCount}) g;
+      insert into public.kd_streaming_page_motn(
+        show_id,base_key,output_key,payload,services,work_type,release_year,
+        watchmode_id,imdb_id,tmdb_id,known,hidden,match_kind
+      )
+      select
+        'motn-scale-'||g::text,
+        'scale-'||lpad(g::text,5,'0'),
+        'scale-'||lpad(g::text,5,'0'),
+        jsonb_build_object(
+          'titel',case when g in (1,2) then 'Scale Ambiguous Twin' else 'Scale Film '||lpad(g::text,5,'0') end,
+          'jahr',case when g in (1,2) then 2000 else 1950+(g%75) end,
+          'typ','film'
+        ),
+        array[case g%4 when 0 then 'Netflix' when 1 then 'Prime Video'
+          when 2 then 'Disney+' else 'MUBI' end],
+        'film',case when g in (1,2) then 2000 else 1950+(g%75) end,
+        'wm-scale-'||g::text,
+        'tt'||lpad((7000000+g)::text,7,'0'),
+        (8000000+g)::text,
+        true,false,'strong_identity'
+      from generate_series(1,${motnCount}) g;
+      commit;`);
+  };
+
   try {
     mkdirSync(socket);
     run("initdb", ["--no-locale", "--encoding=UTF8", "--auth=trust", "--username=postgres", "--set", "shared_memory_type=mmap", "--pgdata", data]);
@@ -249,6 +308,7 @@ export async function startBlogPublicationPgHarness() {
     rawSql(baseSchemaSql());
     sourceUpdate();
     rawSql(readFileSync(MIGRATION, "utf8"));
+    if (applySetwiseMigration) rawSql(readFileSync(SETWISE_MIGRATION, "utf8"));
 
     const scalarRpcs = new Set([
       "kd_blog_publication_capabilities", "kd_publish_blog_v1", "kd_update_blog_publication_v1",
@@ -282,6 +342,7 @@ export async function startBlogPublicationPgHarness() {
       callRpc,
       runScheduledRefresh,
       scheduledRefreshJob,
+      seedScaleCatalog,
       sourceUpdate,
       sql(statement, options = {}) { return session(statement, options); },
       sqlJson(statement, options = {}) { return lastJson(session(statement, options)); },
