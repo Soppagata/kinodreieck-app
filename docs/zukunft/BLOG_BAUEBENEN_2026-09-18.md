@@ -1,10 +1,18 @@
 # Blog: Bauebenen und parallele Baumeister
 
-Stand: 18.09.2026 · Status: lokal gebaut, integriert und vollständig geprüft.
+Stand: 18.09.2026 · Status: lokal gebaut und geprüft; Frontend auf Staging ausgeliefert.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
 Backendmutation und zahlende Providerläufe sind nicht Teil dieses Bauauftrags.
+Folgeauftrag vom 18.09.: „Kannst du das mal bitte auf STaging pushen, ohne das
+prod davon betroffen ist?“ Damit sind Staging-Push, CI, Frontend-Deployment und
+Readback autorisiert. Die frisch gelesenen GitHub-Environment-Variablen belegen
+dieselbe Supabase-Instanz für Staging und Production. Die neue SQL-Migration
+bleibt deshalb unappliziert; ihre Aktivierung würde das gemeinsame Backend
+und damit Production betreffen. Privates Schreiben und die neue Oberfläche
+können auf Staging geprüft werden; die neue Veröffentlichung bleibt bis zur
+Bereitstellung ihres Backendvertrags deaktiviert.
 
 Maßgeblicher Registerstand ist dieses Dokument im Integrationsworktree
 /private/tmp/kd-blog-integration-20260918, Zielbranch
@@ -383,11 +391,40 @@ Lokale Logs: `/private/tmp/kd-blog-npm-test.log`,
 Ansichten: `/private/tmp/kd-blog-ui-320-dark.png` und
 `/private/tmp/kd-blog-reader-736-light.png`.
 
-Damit sind M1–M5 lokal abgeschlossen und committed. Push, externe CI,
-Deployment/Readback und die praktische Abnahme auf einem physischen iPhone
-sind **nicht belegt** und gehören zur späteren Lieferung. Die neue Migration
-setzt den bestehenden `pg_cron`-Vertrag voraus; dessen echte Registrierung und
-Ausführung werden beim Backend-Release am Ziel zurückgelesen.
+Damit sind M1–M5 lokal abgeschlossen und committed. Die praktische Abnahme
+auf einem physischen iPhone sowie der externe Backend-Release sind weiter
+**nicht belegt**. Die neue Migration setzt den bestehenden `pg_cron`-Vertrag
+voraus; dessen echte Registrierung und Ausführung werden erst beim
+Backend-Release am Ziel zurückgelesen.
+
+### Staging-Lieferung vom 18.09.2026
+
+Der Folgeauftrag autorisiert ausschließlich Staging ohne Auswirkung auf
+Production. Geprüft und ohne Force nach `origin/staging` gepusht wurde
+`622ce62b28722805f55ee7f5306f77350e8f3815` (Produktstand `5d706e3`, danach nur
+Abschlussdokumentation). `main` blieb auf
+`3725c33afaad58a711f94dffb511288f8237d31f`.
+
+- [CI-Lauf 35312813373](https://github.com/Soppagata/kinodreieck-app/actions/runs/35312813373):
+  erfolgreich; Testsuite, 349 Funktionstests, 50 Chromium- und 50 WebKit-Tests,
+  Gesamtschranke und Staging-Deployment grün. Production-Deploy übersprungen.
+- [Staging](https://staging.kinodreieck.at) meldet den Kandidaten `622ce62`
+  mit `appEnvironment=staging`; der Service Worker ist an denselben Build
+  gebunden. Die automatische Staging-Domainprüfung ist ebenfalls grün.
+- Production meldet unverändert `3725c33` mit `appEnvironment=production`.
+  Build-Metadaten sind inhaltsgleich und der Service Worker bytegleich mit
+  dem vor dem Push gesicherten Stand. Kein Production-Push/-Deploy.
+- Die GitHub-Environment-Variablen belegen dieselbe Supabase-Instanz für beide
+  Umgebungen. Deshalb wurde `20260918120000_blog_publication_v1.sql` nicht
+  ausgeführt; ebenso keine Functions, Scheduler oder gemeinsamen Daten geändert.
+  Die neue Oberfläche und privates Schreiben sind auf Staging verfügbar.
+  Die neue anonyme Veröffentlichung und ihre Quellenaufbereitung sind dort
+  noch nicht aktiviert; bei fehlendem Backendvertrag bleibt die Checkbox
+  deaktiviert und privates Speichern möglich.
+- Lokaler Liefernachweis: `/private/tmp/kd-blog-staging-release-20260918/`
+  mit Environment-Grenze, CI-Status/-Logs und öffentlichem Vorher-/Nachher-
+  Readback. Keine Zugangsdaten im Nachweis. Diese nachträgliche Protokollierung
+  ist ein lokaler Dokumentationscommit und startet keinen weiteren Deploy.
 
 ## Ebene 3: spätere Lieferung
 
