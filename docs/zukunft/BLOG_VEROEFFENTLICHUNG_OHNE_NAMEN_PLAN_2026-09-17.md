@@ -1,6 +1,6 @@
 # Blog: einfacher Editor, klare Karten und anonyme Veröffentlichung
 
-Stand: 18.09.2026 · Status: lokaler Bau beauftragt; Fortschritt im Bauebenenplan.
+Stand: 18.09.2026 · Status: lokal gebaut und geprüft; Liefernachweis im Bauebenenplan.
 
 Die parallele Umsetzung ist im [Bauebenenplan](BLOG_BAUEBENEN_2026-09-18.md)
 mit Paketownern, Schnittstellen und dem einzigen Meilensteinregister gegliedert.

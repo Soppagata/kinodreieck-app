@@ -1,6 +1,6 @@
 # Blog: Bauebenen und parallele Baumeister
 
-Stand: 18.09.2026 · Status: lokaler Bau durch Max beauftragt.
+Stand: 18.09.2026 · Status: lokal gebaut, integriert und vollständig geprüft.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -58,11 +58,11 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Beleg |
 |---|---|---|---|---|
-| M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | GEBAUT | 23e430c bis 513ce6f; integrierter Nutzerweg grün |
-| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | GEBAUT | 5369a03 bis 513ce6f; anonyme Zwei-Konten-Projektion und Antwortverlust geprüft |
-| M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | GEBAUT | Gesamtweg grün; Identitätsdelta 105c0d2, Projektion 25/25, SQL/Service/Client-Gegenprobe grün |
-| M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | GEBAUT | Kein Katalogvollabruf im Gesamtweg; Leerbestand-Delta 6aeb732, Transaktionen 60/60 |
-| M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | GEBAUT | 4b5caef; PG-Refresh 12/12 und integrierter Schedulerpfad grün |
+| M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | DONE (lokal) | 5d706e3; Gesamttest 25/25, Chromium 34/34, vollständiger Abschlusslauf |
+| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | DONE (lokal) | 5d706e3; Zwei-Konten-Projektion, Antwortverlust, Update/Rücknahme/Löschung im Gesamttest |
+| M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (lokal) | 5d706e3; Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
+| M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (lokal) | 5d706e3; persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
+| M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (lokal) | 5d706e3; Paket-Refresh 12/12, registriertes Schedulerkommando im Gesamttest |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -215,9 +215,10 @@ Gemeinsamer Zielbranch: `codex/blog-integration-20260918`.
 Meister-Worktree: `/private/tmp/kd-blog-integration-20260918`.
 Meister- und Paket-Worktrees sind aus demselben B0 angelegt. Alle drei Pakete
 sind ohne gegenseitiges Warten gestartet. Alle drei Lieferungen sind in der
-Reihenfolge A → B → C konfliktfrei integriert. 22 Prüfungen des echten
-UI-/Controller-/Service-/SQL-Nutzerwegs mit zwei lokalen Konten sind grün.
-Finaler Kandidat folgt nach den konkreten unten benannten Integrationsdeltas.
+Reihenfolge A → B → C konfliktfrei integriert. Nach den unten dokumentierten
+Integrationsdeltas ist der geprüfte Produkt-/Testkandidat
+`5d706e3e30072c98e5a2935fbf25670a9bb4f535`; die abschließende Dokumentation
+ist ein eigener, nachfolgender Commit ohne weitere Produktänderung.
 A: /root/blog_foundation, gpt-5.6-sol/high wegen Auth/RLS/Migration/Privacy.
 B: /root/blog_client, gpt-5.6-sol/high wegen kontogebundener Shared-State-Grenze.
 C: /root/blog_ui, gpt-5.6-sol/medium. Keine Bauchats.
@@ -354,6 +355,39 @@ Die kompakte Darstellung und der Rückweg nach Ergänzung werden mobil geprüft.
 Der Abschlusslauf ist kein erneuter Start aller Paketprüfungen. Unveränderte
 Paketbelege bleiben gültig; ein konkreter Integrationsfehler wird gezielt
 korrigiert und am finalen Kandidaten abgeschlossen.
+
+### Erreichter lokaler Abschluss
+
+Kandidat: `5d706e3e30072c98e5a2935fbf25670a9bb4f535` auf
+`codex/blog-integration-20260918`.
+
+- `npm test`: Exit 0, einschließlich 25 Blog-Gesamtprüfungen mit echter
+  UI/Controller/Service-Grenze und lokalem PostgreSQL, vollständiger Mocksuite,
+  Single-File-Build, Web-Build und 72/72 Pages-Build-Prüfungen.
+- `npm run test:blog:browser`: Exit 0, 34/34 Chromium-Prüfungen bei
+  320/393/736 px, hell/dunkel. Die finalen Ansichten wurden zusätzlich gesichtet.
+- `npm run test:function`: Exit 0, 349/349 gemockte Funktionstests.
+  Funktionsquellen, Test und Lockfile sind seit diesem Lauf bytegleich.
+- Backend-Paketbelege: 38/38 lokale PG17-Prüfungen, Quellenpflege 12/12;
+  die tatsächliche neue SQL-Projektion und das registrierte Refreshkommando
+  werden zusätzlich im gemeinsamen Gesamttest ausgeführt.
+- Gesamtdiff gegen Startbasis ohne Whitespacefehler; keine neuen Dependencies.
+
+Die bestehenden UI-Testanschlüsse wurden auf den neuen Editor umgestellt.
+Ein nach erfolgreichen Assertions offen bleibender React-Testprozess wurde
+im Test-Bootstrap korrigiert und die zu diesem Auftrag gehörenden alten
+Testprozesse beendet. Der vollständige Abschlusslauf beendet sich mit Exit 0.
+
+Lokale Logs: `/private/tmp/kd-blog-npm-test.log`,
+`/private/tmp/kd-blog-browser-test.log`, `/private/tmp/kd-blog-function-test.log`.
+Ansichten: `/private/tmp/kd-blog-ui-320-dark.png` und
+`/private/tmp/kd-blog-reader-736-light.png`.
+
+Damit sind M1–M5 lokal abgeschlossen und committed. Push, externe CI,
+Deployment/Readback und die praktische Abnahme auf einem physischen iPhone
+sind **nicht belegt** und gehören zur späteren Lieferung. Die neue Migration
+setzt den bestehenden `pg_cron`-Vertrag voraus; dessen echte Registrierung und
+Ausführung werden beim Backend-Release am Ziel zurückgelesen.
 
 ## Ebene 3: spätere Lieferung
 
