@@ -9,6 +9,10 @@ import {
   PRIVATE_PROVIDER_REGISTRY,
   RETENTION_CLASSES,
 } from "./src/lib/privatePilotOps.js";
+import {
+  createAccountSelfService,
+  validateOwnData,
+} from "./src/services/accountSelfService.js";
 
 const dateien = Object.fromEntries(await Promise.all([
   "src/tabs/DatenTab.jsx",
@@ -24,6 +28,7 @@ function check(name, fn) {
   checks += 1;
   console.log(`✓ ${name}`);
 }
+const istUngueltigeAntwort = (error) => error?.code === "invalid-response";
 
 function storageMitBestandswahl(funktionen = {}) {
   const werte = new Map([
@@ -39,6 +44,52 @@ function storageMitBestandswahl(funktionen = {}) {
     setItem: (key, value) => werte.set(key, String(value)),
   };
 }
+
+const ownDataAlt = {
+  ok: true,
+  schemaVersion: 1,
+  data: {
+    auth: { createdAt: "2026-09-18T10:00:00Z", lastSignInAt: "2026-09-18T10:00:00Z", providers: [] },
+    access: { role: "member", active: true, personal_ai: true, created_at: "2026-09-18T10:00:00Z", updated_at: "2026-09-18T10:00:00Z" },
+    personal: [],
+    aiLogs: [],
+    seriesWatch: [],
+    sharedArticles: [],
+    sharedClaims: [],
+    radar: {
+      capabilities: null,
+      accountState: null,
+      subscriptions: [],
+      receipts: [],
+      shares: [],
+      operations: [],
+      shareOperations: [],
+      reviews: [],
+      importOperations: [],
+      textFindings: [],
+    },
+    retention: [],
+    deletion: { enabled: false, lastStatus: null },
+  },
+};
+
+const gueltigeBlogExtraction = Object.freeze({
+  operationId: "11111111-2222-4333-8444-555555555555",
+  contractVersion: "blog-reference-extract-v1",
+  modelAlias: "gross",
+  promptVersion: "blog-reference-extract-v1",
+  resultVersion: "blog-reference-extract-v1",
+  status: "completed",
+  result: { candidates: [], partial: false },
+  createdAt: "2026-09-18T10:00:00Z",
+  finishedAt: "2026-09-18T10:00:01Z",
+  expiresAt: "2026-09-19T10:00:00Z",
+});
+
+const ownDataMitBlog = (rows) => ({
+  ...ownDataAlt,
+  data: { ...ownDataAlt.data, blogReferenceExtractions: rows },
+});
 
 check("Blogreferenzen sind ein additiver, standardmäßig ausgeschalteter Geräte-Opt-in", () => {
   assert.equal(KI_WAHL_VERSION, "e8-v1");
@@ -68,7 +119,9 @@ check("Kurzlebige Vorschläge sind als Inhaltsdaten mit exakter Backend-Naht reg
   assert.notEqual(eintrag.legalStatus, "NO_CONTENT_PAYLOAD");
   assert.equal(eintrag.retention, RETENTION_CLASSES.BLOG_REFERENCE_EXTRACTIONS.id);
   assert.match(eintrag.locations.join(" "), /kd_blog_reference_extractions/);
-  assert.match(eintrag.export, /kd_private_own_data\.blogReferenceExtractions/);
+  assert.match(eintrag.export, /account-self-service GET \?include=blog-reference-extract-v1/);
+  assert.match(eintrag.export, /kd_blog_reference_extract_own_data/);
+  assert.match(eintrag.export, /kd_private_own_data bleibt unverändert/);
   assert.match(eintrag.export, /nicht in der Gerätesicherung/);
   assert.match(eintrag.deleteTrigger, /24 Stunden/);
   assert.match(eintrag.deleteTrigger, /stündlicher Purge/);
@@ -76,6 +129,44 @@ check("Kurzlebige Vorschläge sind als Inhaltsdaten mit exakter Backend-Naht reg
   assert.match(eintrag.deleteTrigger, /FK-Cascade/);
   assert.equal(eintrag.featureFlag, null);
   assert.ok(ACCOUNT_EXPORT_REQUIRED_SCOPE.some((item) => item.id === "blog-reference-extractions"));
+});
+
+check("Own-Data akzeptiert Altantwort und die ausdrücklich ergänzte strikte Exportform", () => {
+  assert.equal(validateOwnData(ownDataAlt).blogReferenceExtractions, undefined);
+  const erweitert = validateOwnData(ownDataMitBlog([
+    gueltigeBlogExtraction,
+    { ...gueltigeBlogExtraction, operationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", result: null, finishedAt: null },
+  ]));
+  assert.equal(erweitert.blogReferenceExtractions.length, 2);
+  assert.equal(erweitert.blogReferenceExtractions[1].result, null);
+});
+
+check("Blog-Export verwirft Mengen-, Versions-, Größen-, Zeit- und Zusatzfeldabweichungen", () => {
+  const ungueltigeZeilen = [
+    { ...gueltigeBlogExtraction, account_id: "11111111-2222-4333-8444-555555555555" },
+    { ...gueltigeBlogExtraction, request_hmac: "a".repeat(64) },
+    { ...gueltigeBlogExtraction, extra: true },
+    { ...gueltigeBlogExtraction, operationId: "KEINE-UUID" },
+    { ...gueltigeBlogExtraction, contractVersion: "blog-reference-extract-v2" },
+    { ...gueltigeBlogExtraction, promptVersion: "blog-reference-extract-v2" },
+    { ...gueltigeBlogExtraction, resultVersion: "blog-reference-extract-v2" },
+    { ...gueltigeBlogExtraction, modelAlias: "klein" },
+    { ...gueltigeBlogExtraction, status: "x".repeat(33) },
+    { ...gueltigeBlogExtraction, status: "" },
+    { ...gueltigeBlogExtraction, result: [] },
+    { ...gueltigeBlogExtraction, result: { text: "ä".repeat(17_000) } },
+    { ...gueltigeBlogExtraction, createdAt: "2026-09-18" },
+    { ...gueltigeBlogExtraction, finishedAt: "irgendwann" },
+    { ...gueltigeBlogExtraction, expiresAt: "2026-09-19" },
+  ];
+  for (const row of ungueltigeZeilen) {
+    assert.throws(() => validateOwnData(ownDataMitBlog([row])), istUngueltigeAntwort);
+  }
+  assert.throws(
+    () => validateOwnData(ownDataMitBlog(Array.from({ length: 11 }, () => gueltigeBlogExtraction))),
+    istUngueltigeAntwort,
+  );
+  assert.throws(() => validateOwnData(ownDataMitBlog(null)), istUngueltigeAntwort);
 });
 
 check("Nicht übernommene Vorschläge erhalten keinen Geräte-Topf; übernommene Referenzen bleiben im Artikel", () => {
@@ -146,6 +237,33 @@ check("Die zentrale Dienstedarstellung rendert alle offiziellen Anthropic-Quelle
   assert.match(text, /entry\.termsSourceLabel/);
   assert.match(text, /entry\.additionalSources/);
   assert.equal(/Anthropic API/.test(text), false);
+});
+
+const ownDataRequests = [];
+const selfService = createAccountSelfService({
+  config: {
+    supabaseUrl: "https://privacy-test.invalid",
+    supabasePublishableKey: "sb_publishable_test",
+    accountSelfServiceEndpointName: "account-self-service",
+    privateSelfServiceEnabled: true,
+    accountDeleteEnabled: false,
+  },
+  tokenLoader: async () => "synthetic-token",
+  fetchImpl: async (url, init) => {
+    ownDataRequests.push({ url, init });
+    return { ok: true, status: 200, json: async () => ownDataMitBlog([gueltigeBlogExtraction]) };
+  },
+});
+const ownDataAntwort = await selfService.getOwnData();
+check("Client fordert Blog-Extraktionen ausschließlich über die versionierte Include-Naht an", () => {
+  assert.equal(ownDataAntwort.blogReferenceExtractions.length, 1);
+  assert.equal(ownDataRequests.length, 1);
+  assert.equal(
+    ownDataRequests[0].url,
+    "https://privacy-test.invalid/functions/v1/account-self-service?include=blog-reference-extract-v1",
+  );
+  assert.equal(ownDataRequests[0].init.method, "GET");
+  assert.equal(ownDataRequests[0].init.body, undefined);
 });
 
 console.log(`${checks}/${checks} Blog-Reference-Privacy-Checks grün`);

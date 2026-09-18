@@ -73,6 +73,38 @@ const radarTextFindingRows = (value) => rows(value, [
   "season_number", "source_url", "source_domain", "source_title", "source_claim",
   "checked_at", "created_at", "updated_at",
 ]);
+const BLOG_REFERENCE_EXTRACT_CONTRACT = "blog-reference-extract-v1";
+const MAX_BLOG_REFERENCE_EXPORT_ROWS = 10;
+const MAX_BLOG_REFERENCE_RESULT_BYTES = 32 * 1024;
+const begrenztesJsonObjekt = (value) => {
+  if (!fixedObject(value)) return false;
+  try {
+    const json = JSON.stringify(value);
+    return typeof json === "string"
+      && new TextEncoder().encode(json).byteLength <= MAX_BLOG_REFERENCE_RESULT_BYTES;
+  } catch {
+    return false;
+  }
+};
+const blogReferenceExtractionRows = (value) => Array.isArray(value)
+  && value.length <= MAX_BLOG_REFERENCE_EXPORT_ROWS
+  && rowWithExactKeysAndTypes(value, [
+    "operationId", "contractVersion", "modelAlias", "promptVersion",
+    "resultVersion", "status", "result", "createdAt", "finishedAt", "expiresAt",
+  ], {
+    operationId: lowercaseUuid,
+    contractVersion: (value) => value === BLOG_REFERENCE_EXTRACT_CONTRACT,
+    modelAlias: (value) => value === "gross",
+    promptVersion: (value) => value === BLOG_REFERENCE_EXTRACT_CONTRACT,
+    resultVersion: (value) => value === BLOG_REFERENCE_EXTRACT_CONTRACT,
+    /* Das finale Serverenum wird erst bei der Integration gebunden. Bis dahin
+       bleibt die Exportgrenze absichtlich ein kurzer, nicht leerer String. */
+    status: (value) => typeof value === "string" && value.length > 0 && value.length <= 32,
+    result: (value) => value === null || begrenztesJsonObjekt(value),
+    createdAt: iso8601TimestampWithOffset,
+    finishedAt: (value) => value === null || iso8601TimestampWithOffset(value),
+    expiresAt: iso8601TimestampWithOffset,
+  });
 
 export const ACCOUNT_SELF_SERVICE_TIMEOUT_MS = 20_000;
 
@@ -81,7 +113,11 @@ export function validateOwnData(value) {
     throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "account-self-service", operation: "own-data.validate" });
   }
   const allowed = ["auth", "access", "personal", "aiLogs", "seriesWatch", "sharedArticles", "sharedClaims", "radar", "retention", "deletion"];
-  if (!exactKeys(value.data, allowed)) {
+  const mitBlogReferenceExtractions = Object.hasOwn(value.data, "blogReferenceExtractions");
+  const allowedResponse = mitBlogReferenceExtractions
+    ? [...allowed, "blogReferenceExtractions"]
+    : allowed;
+  if (!exactKeys(value.data, allowedResponse)) {
     throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "account-self-service", operation: "own-data.validate", reason: "unknown-field" });
   }
   const radarKeys = ["capabilities", "accountState", "subscriptions", "receipts", "shares", "operations", "shareOperations", "reviews", "importOperations", "textFindings"];
@@ -115,6 +151,7 @@ export function validateOwnData(value) {
     && importRows(value.data.radar.importOperations)
     && rows(value.data.radar.reviews, ["review_id", "event_version_id", "decision", "reason", "source_id", "created_at"])
     && radarTextFindingRows(value.data.radar.textFindings)
+    && (!mitBlogReferenceExtractions || blogReferenceExtractionRows(value.data.blogReferenceExtractions))
     && rows(value.data.retention, ["data_class", "retention_days", "purpose_bound", "purge_trigger"])
     && exactKeys(value.data.deletion, ["enabled", "lastStatus"])
     && typeof value.data.deletion.enabled === "boolean"
@@ -136,7 +173,7 @@ export function createAccountSelfService({
     : ACCOUNT_SELF_SERVICE_TIMEOUT_MS;
   const basis = String(config.supabaseUrl || "").replace(/\/+$/, "");
   const endpoint = String(config.accountSelfServiceEndpointName || "");
-  const invoke = async (method, body = null) => {
+  const invoke = async (method, body = null, query = "") => {
     if (config.privateSelfServiceEnabled !== true || !basis || !endpoint) {
       throw new BoundaryError(ERROR_CODES.FORBIDDEN, { source: "account-self-service", operation: method, reason: "feature-disabled" });
     }
@@ -147,7 +184,7 @@ export function createAccountSelfService({
     let response;
     let payload = null;
     try {
-      response = await fetchImpl(`${basis}/functions/v1/${endpoint}`, {
+      response = await fetchImpl(`${basis}/functions/v1/${endpoint}${query}`, {
         method,
         headers: { Authorization: `Bearer ${token}`, apikey: config.supabasePublishableKey, "Content-Type": "application/json" },
         body: body ? JSON.stringify(body) : undefined,
@@ -163,7 +200,9 @@ export function createAccountSelfService({
     return payload;
   };
   return Object.freeze({
-    async getOwnData() { return validateOwnData(await invoke("GET")); },
+    async getOwnData() {
+      return validateOwnData(await invoke("GET", null, `?include=${BLOG_REFERENCE_EXTRACT_CONTRACT}`));
+    },
     async deleteCurrentAccount({ operationId, confirmation }) {
       if (config.accountDeleteEnabled !== true) {
         throw new BoundaryError(ERROR_CODES.FORBIDDEN, { source: "account-self-service", operation: "DELETE", reason: "delete-disabled" });

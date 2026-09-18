@@ -1366,9 +1366,10 @@ const deleteOperationId = "11111111-2222-4333-8444-555555555555";
 await enabledSelfService.deleteCurrentAccount({ operationId: deleteOperationId, confirmation: "DELETE test@example.invalid" });
 const deleteRequestBody = JSON.parse(requestLog[1].init.body);
 expect(
-  "Self-Service sendet nur aktuelles Bearer-Token und keine Account-ID im Requestkörper",
+  "Self-Service fordert den erweiterten Export ausdrücklich an und sendet keine Account-ID im Requestkörper",
   requestLog.length === 2
-    && requestLog.every((entry) => entry.url.endsWith("/functions/v1/account-self-service"))
+    && requestLog[0].url.endsWith("/functions/v1/account-self-service?include=blog-reference-extract-v1")
+    && requestLog[1].url.endsWith("/functions/v1/account-self-service")
     && requestLog[0].init.method === "GET"
     && requestLog[0].init.body === undefined
     && requestLog[1].init.method === "POST"
