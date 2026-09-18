@@ -426,6 +426,33 @@ Abschlussdokumentation). `main` blieb auf
   Readback. Keine Zugangsdaten im Nachweis. Diese nachträgliche Protokollierung
   ist ein lokaler Dokumentationscommit und startet keinen weiteren Deploy.
 
+### Folgekorrektur: Veröffentlicht-Tab und Aktivierungsgrenze
+
+Der Nutzer meldet am 18.09. den stummen Veröffentlicht-Tab und die deaktivierte
+Anonym-Checkbox. Die Checkbox entspricht dem noch fehlenden Backendvertrag.
+Der Tab hatte zusätzlich einen Clientfehler: Die Ansicht wechselte erst nach
+erfolgreichem Listenabruf, sodass fehlende Capability oder Netzwerkfehler den
+Klick ohne sichtbare Rückmeldung ließen. B-Delta `3df480d` auf Basis `9534ac9`
+öffnet den Bereich sofort, zeigt Lade-/Fehlerzustände und lässt eine späte
+Antwort keine neue Navigation erzwingen. Fokussiert grün: 65 Transaktions-
+und 34 Chromiumprüfungen. Die Capability wird nicht umgangen.
+
+Frischer lesender Backendbeleg vom 18.09., 06:30 UTC:
+`/private/tmp/kd-blog-staging-activation-20260918/backend-before.json`.
+Der Migrationsledger endet weiterhin bei `20260917130000`; die neuen Blog-RPCs
+fehlen. Die bestehende Shared-Tabelle, deren RLS/Rechte und Legacy-RPCs bleiben
+unverändert. Entgegen der lokalen Harness-Annahme ist im echten Backend
+`cron.schedule(text,text,text)` nicht eingerichtet. Die volle neue Migration
+würde außerdem Legacy-RPCs ersetzen und direkte Rechte auf der bisherigen
+Shared-Tabelle entziehen, also Production betreffen.
+
+Für die gewünschte echte Aktivierung ohne Produktionsänderung ist daher eine
+isolierte Staging-Variante von Blogspeicher/Endpunkten samt getrennter
+Publikationsmetadaten und begrenzter Quellenpflege nötig. Diese zusätzliche
+Route wurde dem Nutzer zur Entscheidung gestellt; bis zur Antwort erfolgen
+keine Shared-Migration oder Scheduler-Aktivierung. Der unabhängige Tab-Fix
+wird regulär über Staging ausgeliefert.
+
 ## Ebene 3: spätere Lieferung
 
 Der konkrete Push-/Deploymentumfang ist noch nicht beauftragt. Die spätere
