@@ -1,7 +1,7 @@
 # Blog: Bauebenen und parallele Baumeister
 
 Stand: 18.09.2026 · Status: gemeinsames Blog-Backend aktiv, identischer Blogstand auf Staging und Production ausgeliefert und zurückgelesen; praktische Production-PWA-Abnahme offen.
-Folgeauftrag: M6 (sichere 50er-Grenze) wird lokal gebaut; M7 (optionale KI-Titelvorschläge) wird einschließlich Settings und Datenschutz ausgeplant, noch nicht implementiert.
+Folgeauftrag abgeschlossen: M6 (sichere 50er-Grenze) ist lokal gebaut, getestet und integriert; M7 (optionale KI-Titelvorschläge) ist einschließlich Settings und Datenschutz ausgeplant, noch nicht implementiert. M6 wurde noch nicht ausgerollt.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -76,7 +76,7 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
-| M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | IN BAU (lokal) | Basis 664413e; kein permanenter Zähler, Hinweis beim Erreichen der 50. Referenz; Ownership am Dokumentende |
+| M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE (lokal, noch nicht ausgerollt) | Produktkandidat 4521984 auf codex/blog-integration-20260918; vollständiger Basis-Gate plus gezielte Delta-/Integrationsprüfungen; Lieferbeleg am Dokumentende |
 | M7 | Erwähnte Titel optional mit KI erkennen lassen, mit Textbeleg prüfen und ausgewählte Vorschläge als Referenzen übernehmen. | Separater späterer Bauauftrag | AUSGEPLANT, NICHT GEBAUT | [Konkreter KI-/Settings-/DS-Entwurf](BLOG_REFERENZEN_KI_PLAN_2026-09-18.md); Sonnet ohne Thinking als Startvariante, Haiku als Vergleichskandidat; keine echten KI-Tests |
 
 ## Ebene 0: gemeinsame Grundlage F0
@@ -749,7 +749,7 @@ Publikationswege. Außerdem erhält der private `kd:artikel`-Topf die noch
 fehlende serverseitige 50er-Prüfung für Liste und Schattenfeld; bisher
 begrenzte die Datenbank dort nur die Gesamtbytes. Es werden nur die
 betroffenen Prüfungen wiederholt, kein pauschaler zweiter Gesamtlauf.
-M6 bleibt bis zu diesem Delta und der Integration offen.
+Dieses Delta wurde vor dem M6-Abschluss integriert; sein Beleg folgt unten.
 
 Die zusätzliche vorgelagerte HTTP-Body-Grenze ist getrennt vom SQL-Deckel zu
 prüfen und am realen Eingang nachzuweisen. Ein im Hosting tatsächlich
@@ -757,6 +757,46 @@ konfigurierbarer Eingangszaun ist hier noch nicht belegt; keine freie
 Supabase-Einstellmöglichkeit unterstellen. `PGRST_DB_MAX_ROWS` begrenzt laut
 [PostgREST-Konfiguration](https://postgrest.org/en/stable/references/configuration.html#db-max-rows)
 die gelesenen Ergebniszeilen und ersetzt diesen Nachweis nicht.
+
+**R50-Abschluss, lokal.** Der finale Produktkandidat ist `4521984` auf
+`codex/blog-integration-20260918`. Integriert wurden `5bb18b1` als `ddd7e5e`
+und die Schutzkorrektur `9323312` als `9d298f7`. Die kleine Integrationsnaht
+`4521984` prüft den Publikationsvertrag eines v1-Updates erst unter dem
+gemeinsamen Account-Lock. So kann ein inzwischen abgeschlossenes v2-Update
+keinen veralteten Vorabentscheid und eine Kürzung seiner längeren Liste
+hinterlassen. Keine andere Produktfläche wurde bei der Integration geändert.
+
+Geliefert: 50 Referenzen ohne dauerhaften Zähler; situativer Hinweis an der
+50. Zeile; vollständige private und öffentliche Listen; bytebegrenzter
+Privatspeicher einschließlich ausstehender Publikationsdaten; direkte private
+Schreibgrenze für Liste und Schattenfeld; strikt getrennte v1/v2-Aufrufe mit
+gemeinsamer 128-KiB-, Rate- und Parallelitätsgrenze. Vorhandene Artikel werden
+durch die neue Migration weder gescannt noch gekürzt. Altclients behalten
+ihren v1/15-Vertrag; sie sehen v2-Publikationen erst nach einem App-Update.
+Die privaten Schattenreferenzen schützen längere Listen bei alten Saves.
+
+Der SOLO-Baumeister meldet auf `5bb18b1` den einen vollständigen grünen Lauf
+`npm run test:blog-ref50:final`: `npm test`, 349/349 Function-Mocktests, Build
+und Diff-Prüfung. Ausgabe war in seiner Task-PTY, kein persistierter Logpfad.
+Seine fokussierten Belege umfassen zusätzlich 36 Browser-/Mobile-, 27 Vertrags-,
+25 Projektions-, 11 Import-, 65 Artikeltransaktions-, 48 Shared-Service- und
+11 Katalogskalierungsprüfungen. Das Delta änderte SQL, Harness, Tests und
+Vertragsdokumentation; Anwendung und Build blieben unverändert.
+
+Nach der letzten Integrationsnaht hat der Meister nur die betroffenen Wege
+nochmals geprüft: R50/Abuse 39, bestehendes v1-Backend 42 und echter
+UI-/Controller-/Service-/PostgreSQL-Zwei-Konten-Weg 25, alle grün. Der
+synthetische lokale 20×50-Fall benötigte dabei 529 ms; keine Aussage über
+Production-Hardware oder ein physisches iPhone. Persistierter Beleg:
+`/private/tmp/kd-blog-ref50-integration-20260918.log`. Diff-Prüfung grün.
+
+Kein neuer Push, kein Deployment und keine Anwendung von
+`20260918140000_blog_reference_limit_v2.sql` im gemeinsamen Backend.
+Staging und Production bleiben auf dem zuvor ausgelieferten Blogstand.
+Beim späteren Rollout zuerst den additiven Backendvertrag, danach die Clients
+bereitstellen und den tatsächlichen Eingangsschutz gesondert nachweisen.
+M7 bleibt der reine [KI-/Settings-/DS-Entwurf](BLOG_REFERENZEN_KI_PLAN_2026-09-18.md);
+kein entsprechender Produktcode und keine Live-KI-Tests.
 
 **M7: Titelvorschläge mit Sonnet, bewusste Übernahme durch den Nutzer.**
 

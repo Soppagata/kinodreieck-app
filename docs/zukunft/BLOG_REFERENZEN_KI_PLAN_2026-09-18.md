@@ -1,8 +1,10 @@
 # Blogreferenzen aus Freitext: Entwurf für die optionale KI-Funktion
 
 Stand: 18.09.2026. **Ausgeplant, noch nicht implementiert oder aktiviert.**
-Codeprüfung gegen `664413e4ffe0d396b49379ffc3d598d38fa9e654`; M6 erhöht
-parallel den manuellen Referenzvertrag auf 50. Das einzige Fortschritts- und
+Codeprüfung der KI-Anschlüsse gegen `664413e4ffe0d396b49379ffc3d598d38fa9e654`;
+M6 ist inzwischen mit Produktkandidat `4521984` lokal auf 50 ausgebaut und
+geprüft. Die hier benannten KI-/Settings-/DS-Anschlüsse wurden dabei nicht
+verändert. Das einzige Fortschritts- und
 Paketregister bleibt [BLOG_BAUEBENEN_2026-09-18.md](BLOG_BAUEBENEN_2026-09-18.md).
 Dieses Dokument beschreibt das Produkt und seine konkreten Anschlüsse.
 Es wurde kein zahlender Anbieterrequest gestartet.
