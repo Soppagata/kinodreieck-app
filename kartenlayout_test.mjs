@@ -212,9 +212,11 @@ check("Blog-Datenwerkzeuge sind aus der Release-Oberfläche entfernt", () => {
 });
 
 check("Blog-Bearbeitung bleibt knapp und der Max-Einstieg öffnet keine entfernten Release-Nebenwege", () => {
-  const blog = lies("./src/tabs/BlogTab.jsx");
+  const blog = lies("./src/components/blog/BlogEditor.jsx");
   const daten = lies("./src/tabs/DatenTab.jsx");
-  assert.match(blog, /vorlage \? "Speichern" : "Erstellen"/);
+  assert.match(blog, /Privat speichern/);
+  assert.match(blog, /Speichern & veröffentlichen/);
+  assert.match(blog, /Anonym veröffentlichen/);
   assert.doesNotMatch(blog, /Speichern & neu abgleichen/i);
   assert.doesNotMatch(daten, /RELEASE_NEBENWEGE_SICHTBAR|MasterImport|Masterliste importieren|Technik & Support/);
   assert.match(daten, /aria-expanded=\{eggOffen\} aria-controls=\{eggBereichId\}/);
@@ -227,7 +229,7 @@ check("Icon-only Lösch- und Schließen-Aktionen sind zugänglich beschriftet", 
   // Pin-Aktion muss ihren konkreten zugänglichen Namen behalten.
   assert.match(lies("./src/tabs/KinoTab.jsx"), /aria-label=\{`Pin für \$\{p\.t\} lösen`\}/);
   assert.match(lies("./src/tabs/MediathekTab.jsx"), /aria-label="Mediatheksuche leeren"/);
-  assert.match(lies("./src/tabs/BlogTab.jsx"), /aria-label=\{`Referenz \$\{i \+ 1\} entfernen`\}/);
+  assert.match(lies("./src/components/blog/BlogReferenceList.jsx"), /<summary aria-label=\{`Aktionen für \$\{reference.title\}`\}/);
 });
 
 console.log(`kartenlayout_test: ${ok} Checks bestanden.`);
