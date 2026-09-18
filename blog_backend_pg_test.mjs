@@ -31,6 +31,8 @@ const request = ({ op, content, articleId, expected = null, title = "Fixture Art
 
 const harness = await startBlogPublicationPgHarness();
 try {
+  const resetPublicationRateWindow = () => harness.sql(`update public.kd_blog_publication_starts
+    set started_at=clock_timestamp()-interval '2 minutes';`);
   const capability = harness.callRpc("kd_blog_publication_capabilities");
   check("Capability ist fuer ein aktives Konto lesbar und meldet exakt die v1-RPCs",
     capability.contractVersion === "blog-publication-v1" && capability.enabled === true
@@ -150,6 +152,7 @@ try {
   check("Ausdrueckliche Auswahl bestaetigt genau ein echtes Konfliktwerk mit getrennten Quellen",
     selectedTwin.outcome === "published" && selectedTwinReference.sources.streaming.length === 1
     && selectedTwinReference.resolution.identityHints.length === 3);
+  resetPublicationRateWindow();
   const redlinkRequest = request({ op: 5, content: 5, articleId: "private-alpha-redlink", references: [{
     ...ambiguousRequest.article.references[0], resolutionIntent: { kind: "keep_redlink" },
   }] });
@@ -189,6 +192,7 @@ try {
     twinA.outcome === "published"
     && twinAReference.resolution.identityHints.some((hint) => hint.namespace === "imdb" && hint.value === "tt1000001")
     && !JSON.stringify(twinAReference.resolution.identityHints).includes("tt1000002"));
+  resetPublicationRateWindow();
 
   const conflictingTwin = harness.callRpc("kd_publish_blog_v1", request({
     op: 18, content: 18, articleId: "private-alpha-twin-conflict", references: [{
@@ -232,6 +236,7 @@ try {
   check("Verlorene Publish-Antwort ist per Ledger vollstaendig ruecklesbar",
     lostReadback.operation.status === "applied"
     && lostReadback.operation.result.publication.publicationId === lostPublished.publication.publicationId);
+  resetPublicationRateWindow();
 
   for (let number = 8; number <= 10; number += 1) {
     harness.callRpc("kd_publish_blog_v1", request({ op: number, content: number,

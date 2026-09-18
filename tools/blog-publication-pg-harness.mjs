@@ -10,6 +10,7 @@ export const BLOG_TEST_ACCOUNTS = Object.freeze({
 });
 
 const MIGRATION = "supabase/migrations/20260918120000_blog_publication_v1.sql";
+const PERSONAL_MIGRATION = "supabase/migrations/20260725120000_kd_personal.sql";
 const CRON_PREREQUISITE = "supabase/migrations/20260918115900_blog_publication_pg_cron.sql";
 const SETWISE_MIGRATION = "supabase/migrations/20260918130000_blog_catalog_setwise.sql";
 const LOOKUP_MIGRATION = "supabase/migrations/20260918133000_blog_catalog_lookup.sql";
@@ -341,6 +342,7 @@ export async function startBlogPublicationPgHarness({
        prerequisite without claiming a real extension installation. */
     verifyCronPrerequisiteSql();
     rawSql(baseSchemaSql());
+    rawSql(readFileSync(PERSONAL_MIGRATION, "utf8"));
     sourceUpdate();
     rawSql(readFileSync(MIGRATION, "utf8"));
     if (applySetwiseMigration) rawSql(readFileSync(SETWISE_MIGRATION, "utf8"));
@@ -402,7 +404,7 @@ export async function startBlogPublicationPgHarness({
             if (child.exitCode !== null) return Promise.resolve();
             return new Promise((done) => {
               child.once("exit", () => done());
-              child.kill("SIGTERM");
+              child.kill("SIGINT");
             });
           } });
         }
@@ -413,8 +415,39 @@ export async function startBlogPublicationPgHarness({
         if (!settled) finish(new Error(`blog lock holder exited ${code}: ${errors}`));
       });
       child.stdin.end(`begin;
-        select pg_advisory_xact_lock(hashtextextended('kd-blog-v2-account:${accountId}',0));
+        select pg_advisory_xact_lock(hashtextextended('kd-blog-publication-account:${accountId}',0));
         select 'BLOG_LOCK_READY';
+        select pg_sleep(30);
+        rollback;`);
+    });
+    const holdBlogGlobalLocks = () => new Promise((resolve, reject) => {
+      const child = spawn(join(pg, "psql"), psqlArgs, { env, stdio: ["pipe", "pipe", "pipe"] });
+      let output = ""; let errors = ""; let settled = false;
+      const finish = (error, value) => {
+        if (settled) return; settled = true;
+        if (error) reject(error); else resolve(value);
+      };
+      child.stdout.on("data", (chunk) => {
+        output += chunk;
+        if (output.includes("BLOG_GLOBAL_LOCKS_READY")) {
+          finish(null, { stop() {
+            if (child.exitCode !== null) return Promise.resolve();
+            return new Promise((done) => {
+              child.once("exit", () => done());
+              child.kill("SIGINT");
+            });
+          } });
+        }
+      });
+      child.stderr.on("data", (chunk) => { errors += chunk; });
+      child.on("error", (error) => finish(error));
+      child.on("exit", (code) => {
+        if (!settled) finish(new Error(`blog global lock holder exited ${code}: ${errors}`));
+      });
+      child.stdin.end(`begin;
+        select pg_advisory_xact_lock(hashtextextended(
+          'kd-blog-publication-global:'||g::text,0)) from generate_series(0,7) g;
+        select 'BLOG_GLOBAL_LOCKS_READY';
         select pg_sleep(30);
         rollback;`);
     });
@@ -426,6 +459,7 @@ export async function startBlogPublicationPgHarness({
       runScheduledRefresh,
       scheduledRefreshJob,
       holdBlogAccountLock,
+      holdBlogGlobalLocks,
       seedScaleCatalog,
       sourceUpdate,
       sql(statement, options = {}) { return session(statement, options); },

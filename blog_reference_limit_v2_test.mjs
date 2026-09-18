@@ -19,11 +19,22 @@ const refs = (count) => Array.from({ length: count }, (_, index) => ({
   mediaType: "film",
   resolutionIntent: { kind: "keep_redlink" },
 }));
-const request = ({ op, content = op, articleId, expected = null, references = [], text = "Volltext" }) => ({
-  contractVersion: "blog-publication-v2",
+const request = ({ op, content = op, articleId, expected = null, references = [],
+  text = "Volltext", contractVersion = "blog-publication-v2" }) => ({
+  contractVersion,
   operationId: uuid("5", op), contentVersion: uuid("6", content),
   privateArticleId: articleId, expectedPublicRevision: expected,
   article: { title: `Artikel ${articleId}`, text, ordered: true, references },
+});
+const sqlText = (value) => `'${String(value).replaceAll("'", "''")}'`;
+const privatePot = (count, shadowCount = count) => JSON.stringify({
+  artikel: [{ id: "direct-private", titel: "Direkt", text: "Text",
+    liste: Array.from({ length: count }, (_, index) => ({ eingabe: `Liste ${index + 1}` })),
+    blogReferencesV2: { references: Array.from({ length: shadowCount }, (_, index) => ({
+      rowId: `shadow-${index + 1}`, eingabe: `Schatten ${index + 1}`,
+    })) },
+  }],
+  gespeichertAm: 1,
 });
 
 const fiftyPrivateRows = refs(50).map((row) => ({
@@ -64,6 +75,78 @@ try {
   expectFailure("Inaktives Konto bleibt im v2-Pfad gesperrt",
     () => harness.callRpc("kd_blog_publication_capabilities_v2", undefined,
       { accountId: harness.accounts.inactive }), /account_inactive/);
+
+  harness.sql(`insert into public.kd_personal(key,value) values
+    ('kd:artikel','[]');`, { role: "authenticated", accountId: harness.accounts.alpha });
+  harness.sql(`update public.kd_personal set value=${sqlText(privatePot(30))}
+    where key='kd:artikel';`, { role: "authenticated", accountId: harness.accounts.alpha });
+  harness.sql(`update public.kd_personal set value=${sqlText(privatePot(50))}
+    where key='kd:artikel';`, { role: "authenticated", accountId: harness.accounts.alpha });
+  expectFailure("Direkter kd:artikel-Update mit 51 Listeneinträgen wird atomar abgewiesen",
+    () => harness.sql(`update public.kd_personal set value=${sqlText(privatePot(51))}
+      where key='kd:artikel';`, { role: "authenticated", accountId: harness.accounts.alpha }),
+    /kd_personal_blog_references_max/);
+  expectFailure("Direkter kd:artikel-Insert mit 1.945 Listeneinträgen wird abgewiesen",
+    () => harness.sql(`insert into public.kd_personal(key,value) values
+      ('kd:artikel',${sqlText(privatePot(1945))});`,
+      { role: "authenticated", accountId: harness.accounts.beta }),
+    /kd_personal_blog_references_max/);
+  expectFailure("Ein kleineres liste-Feld kann 51 Schattenreferenzen nicht umgehen",
+    () => harness.sql(`update public.kd_personal set value=${sqlText(privatePot(15, 51))}
+      where key='kd:artikel';`, { role: "authenticated", accountId: harness.accounts.alpha }),
+    /kd_personal_blog_references_max/);
+  const retainedPrivate = harness.sqlJson(`select jsonb_build_object(
+    'list',jsonb_array_length(value::jsonb->'artikel'->0->'liste'),
+    'shadow',jsonb_array_length(value::jsonb->'artikel'->0->'blogReferencesV2'->'references'))
+    from public.kd_personal where key='kd:artikel';`,
+    { role: "authenticated", accountId: harness.accounts.alpha });
+  check("Direkte Alt-/30-/50-Writes funktionieren und Fehlversuche erhalten den 50er-Stand",
+    retainedPrivate.list === 50 && retainedPrivate.shadow === 50);
+  harness.sql(`insert into public.kd_personal(key,value) values
+    ('kd:merkliste','unveraendert-nicht-json');`,
+    { role: "authenticated", accountId: harness.accounts.beta });
+  check("Die kd:artikel-Prüfung verändert andere persönliche Töpfe nicht",
+    harness.sqlJson(`select to_jsonb(value) from public.kd_personal
+      where key='kd:merkliste';`,
+      { role: "authenticated", accountId: harness.accounts.beta }) === "unveraendert-nicht-json");
+
+  const v2OnV1 = request({ op: 2, articleId: "cross-v2-on-v1", references: refs(50) });
+  expectFailure("v1-Publish weist ein v2-Payload vor Start und Katalogarbeit ab",
+    () => harness.callRpc("kd_publish_blog_v1", v2OnV1), /invalid_blog_publication_request/);
+  expectFailure("v1-Publish akzeptiert auch mit v1-Kennung niemals 50 Referenzen",
+    () => harness.callRpc("kd_publish_blog_v1", { ...v2OnV1,
+      contractVersion: "blog-publication-v1", operationId: uuid("5", 3) }),
+    /invalid_blog_publication_request/);
+  expectFailure("Der 128-KiB-Zaun gilt auch vor einem echten v1-Publish",
+    () => harness.callRpc("kd_publish_blog_v1", request({ op: 4,
+      articleId: "oversized-v1", references: [], text: "x".repeat(132_000),
+      contractVersion: "blog-publication-v1" })), /invalid_blog_publication_request/);
+  const v1PublishRequest = request({ op: 5, articleId: "private-v1-cross",
+    references: refs(15), contractVersion: "blog-publication-v1" });
+  const v1Published = harness.callRpc("kd_publish_blog_v1", v1PublishRequest);
+  check("Gültiger v1-Publish behält Antwortform, 15 Referenzen und v1-Speicherung",
+    v1Published.contractVersion === "blog-publication-v1"
+    && v1Published.referenceResults.length === 15
+    && harness.sqlJson(`select to_jsonb(contract_version) from public.kd_shared_articles
+      where article_id='private-v1-cross';`) === "blog-publication-v1");
+  expectFailure("v2-Update weist ein v1-Payload strikt ab",
+    () => harness.callRpc("kd_update_blog_publication_v2", request({ op: 6,
+      articleId: "private-v1-cross", expected: 1, references: refs(15),
+      contractVersion: "blog-publication-v1" })), /invalid_blog_publication_request/);
+  expectFailure("v1-Update weist ein v2-Payload strikt ab",
+    () => harness.callRpc("kd_update_blog_publication_v1", request({ op: 7,
+      articleId: "private-v1-cross", expected: 1, references: refs(50) })),
+    /invalid_blog_publication_request/);
+  const v1AfterCross = harness.callRpc("kd_read_own_blog_publication_v1", {
+    contractVersion: "blog-publication-v1", operationId: uuid("5", 8),
+    privateArticleId: "private-v1-cross",
+  });
+  check("Cross-Version-Updates lassen v1-Revision und 15 Referenzen unverändert",
+    v1AfterCross.currentPublication.publicRevision === 1
+    && Number(harness.sqlJson(`select to_jsonb(count(*))
+      from public.kd_blog_publication_references r
+      join public.kd_shared_articles a using(publication_id)
+      where a.article_id='private-v1-cross';`)) === 15);
 
   const thirtyRequest = request({ op: 10, articleId: "private-v2-main", references: refs(30) });
   const thirty = harness.callRpc("kd_publish_blog_v2", thirtyRequest);
@@ -138,40 +221,62 @@ try {
       '${JSON.stringify(request({ op: 98, articleId: "internal-bypass" })).replaceAll("'", "''")}'::jsonb,
       'publish');`, { role: "authenticated", accountId: harness.accounts.alpha }),
     /permission denied/);
+  expectFailure("Interne kd:artikel-Prüffunktion wird nicht als zusätzlicher RPC veröffentlicht",
+    () => harness.sql(`select public.kd_blog_private_article_references_valid('[]');`,
+      { role: "authenticated", accountId: harness.accounts.alpha }), /permission denied/);
 
   const lock = await harness.holdBlogAccountLock(harness.accounts.alpha);
   const busyStart = performance.now();
   const busy = harness.callRpc("kd_publish_blog_v2",
     request({ op: 16, articleId: "busy-account", references: [] }));
+  const busyV1 = harness.callRpc("kd_publish_blog_v1",
+    request({ op: 17, articleId: "busy-account-v1", references: [],
+      contractVersion: "blog-publication-v1" }));
   const busyElapsed = performance.now() - busyStart;
   await lock.stop();
-  check("Paralleler Auftrag desselben Kontos wird ohne Lock-Warteschlange schnell abgewiesen",
-    busy.errorCode === "PUBLICATION_ACCOUNT_BUSY" && busyElapsed < 1500);
+  check("Gemischte v1/v2-Aufträge desselben Kontos teilen den schnellen Account-Lock",
+    busy.errorCode === "PUBLICATION_ACCOUNT_BUSY"
+    && busyV1.errorCode === "PUBLICATION_ACCOUNT_BUSY" && busyElapsed < 1500);
+
+  const globalLocks = await harness.holdBlogGlobalLocks();
+  const globalV1 = harness.callRpc("kd_publish_blog_v1",
+    request({ op: 18, articleId: "global-v1", references: [],
+      contractVersion: "blog-publication-v1" }),
+    { accountId: harness.accounts.beta });
+  const globalV2 = harness.callRpc("kd_publish_blog_v2",
+    request({ op: 19, articleId: "global-v2", references: [] }),
+    { accountId: harness.accounts.beta });
+  await globalLocks.stop();
+  check("Gemischte v1/v2-Aufträge teilen die acht globalen Try-Lock-Slots",
+    globalV1.errorCode === "PUBLICATION_CAPACITY_BUSY"
+    && globalV2.errorCode === "PUBLICATION_CAPACITY_BUSY");
 
   harness.sql(`delete from public.kd_blog_publication_starts
     where account_id='${harness.accounts.beta}'::uuid;`);
   let firstRateRequest; let firstRateResponse;
   for (let index = 0; index < 5; index++) {
-    const candidate = request({ op: 100 + index, articleId: `rate-${index}`, references: [] });
-    const response = harness.callRpc("kd_publish_blog_v2", candidate,
+    const isV1 = index % 2 === 0;
+    const candidate = request({ op: 100 + index, articleId: `rate-${index}`, references: [],
+      contractVersion: isV1 ? "blog-publication-v1" : "blog-publication-v2" });
+    const response = harness.callRpc(isV1 ? "kd_publish_blog_v1" : "kd_publish_blog_v2", candidate,
       { accountId: harness.accounts.beta });
     if (index === 0) { firstRateRequest = candidate; firstRateResponse = response; }
     assert.equal(response.outcome, "published");
   }
   const startsBeforeReplay = harness.sqlJson(`select to_jsonb(count(*))
     from public.kd_blog_publication_starts where account_id='${harness.accounts.beta}'::uuid;`);
-  const replay = harness.callRpc("kd_publish_blog_v2", firstRateRequest,
+  const replay = harness.callRpc("kd_publish_blog_v1", firstRateRequest,
     { accountId: harness.accounts.beta });
   const sixth = harness.callRpc("kd_publish_blog_v2",
     request({ op: 106, articleId: "rate-sixth", references: [] }),
     { accountId: harness.accounts.beta });
   const startsAfterReplay = harness.sqlJson(`select to_jsonb(count(*))
     from public.kd_blog_publication_starts where account_id='${harness.accounts.beta}'::uuid;`);
-  check("Bekanntes idempotentes Ergebnis bleibt nach fünf Starts abrufbar",
+  check("Bekanntes v1-Ergebnis bleibt nach fünf gemischten Starts abrufbar",
     JSON.stringify(replay) === JSON.stringify(firstRateResponse));
   check("Idempotenter Readback verbraucht keinen weiteren Start",
     Number(startsBeforeReplay) === 5 && Number(startsAfterReplay) === 5);
-  check("Sechster neuer Start pro Minute wird atomar abgewiesen",
+  check("Sechster neuer v2-Start nach gemischten v1/v2-Starts wird abgewiesen",
     sixth.errorCode === "PUBLICATION_RATE_LIMIT");
 
   const withdrawn = harness.callRpc("kd_withdraw_blog_publication_v2", {

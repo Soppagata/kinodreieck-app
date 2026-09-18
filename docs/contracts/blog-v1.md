@@ -17,15 +17,17 @@ abgewiesen. Karten zeigen weiterhin höchstens drei Vorschautitel, der Leser
 die vollständige Liste.
 
 Mengen-, Rang-, Eindeutigkeits-, Feld- und Requestgrößenprüfungen laufen vor
-dem Katalogresolver. 51 oder 1.945 Referenzen werden vollständig abgelehnt,
-ebenso ein v2-Publikationsrequest über 128 KiB UTF-8. Es findet keine
+dem Katalogresolver. Die öffentlichen v1- und v2-Endpunkte akzeptieren jeweils
+nur ihre eigene Vertragsversion. 51 oder 1.945 Referenzen werden vollständig
+abgelehnt, ebenso jeder Publikationsrequest über 128 KiB UTF-8. Es findet keine
 Kürzung statt. Direkte Tabellenwrites bleiben für `authenticated` gesperrt.
-Pro Konto kann genau ein v2-Publikationsabgleich laufen; die Datenbank lehnt
-weitere Aufträge ohne Lock-Warteschlange ab. Zusätzlich gelten fünf neue
+Pro Konto kann genau ein v1- oder v2-Publikationsabgleich laufen; beide
+Versionen teilen denselben Account-Lock. Zusätzlich teilen sie fünf neue
 Publish-/Update-Starts pro Minute und acht globale, per Try-Lock belegte
-Arbeitsplätze. Ein bereits bekanntes, bytegleiches Operationsergebnis wird vor
-diesen Zählern aus dem Ledger zurückgegeben. Die Startzeilen werden nach zehn
-Minuten kontoweise bereinigt.
+Arbeitsplätze. Weitere Aufträge werden ohne Lock-Warteschlange abgelehnt. Ein
+bereits bekanntes, bytegleiches Operationsergebnis wird vor diesen Zählern aus
+dem Ledger zurückgegeben. Die Startzeilen werden nach zehn Minuten kontoweise
+bereinigt.
 
 Der persönliche Topf `kd:artikel` bleibt bei 1 MiB. Vor jedem Write wird die
 vollständige serialisierte Fassung einschließlich `publikation.pending.request`
@@ -34,6 +36,10 @@ erhalten. Artikel mit mehr als 15 Zeilen führen zusätzlich
 `blogReferencesV2.references`. Alte PWAs erhalten dieses unbekannte Feld bei
 ihren Objektkopien; wenn ihr alter Editor `liste` auf 15 kürzt, stellt ein
 neuer Client die längere Fassung aus dem Schattenfeld wieder her.
+Die Datenbank begrenzt für direkte `kd:artikel`-Writes sowohl `liste` als auch
+`blogReferencesV2.references` auf 50 Einträge. Der additive Write-Trigger
+verändert oder kürzt keinen Bestandswert und gilt atomar für neue Inserts und
+Updates. Andere persönliche Töpfe behalten ihren bisherigen Vertrag.
 
 v1- und Legacy-Listen sowie `kd_claim_shared_article` blenden v2-Publikationen
 aus. Ein v1-Update auf eine bereits v2-geführte Publikation endet mit

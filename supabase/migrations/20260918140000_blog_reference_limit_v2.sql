@@ -9,6 +9,63 @@ alter table public.kd_blog_publication_references
 alter table public.kd_blog_publication_references
   add constraint kd_blog_publication_references_rank_check check (rank between 1 and 50);
 
+create or replace function public.kd_blog_private_article_references_valid(p_value text)
+returns boolean
+language plpgsql immutable
+set search_path=pg_catalog
+as $$
+declare
+  v_root jsonb;
+  v_articles jsonb;
+  v_article jsonb;
+begin
+  begin
+    v_root:=p_value::jsonb;
+  exception when others then
+    return true;
+  end;
+  if jsonb_typeof(v_root)='array' then
+    v_articles:=v_root;
+  elsif jsonb_typeof(v_root)='object'
+    and jsonb_typeof(v_root->'artikel')='array' then
+    v_articles:=v_root->'artikel';
+  else
+    return true;
+  end if;
+  for v_article in select value from jsonb_array_elements(v_articles)
+  loop
+    if jsonb_typeof(v_article)='object'
+      and ((jsonb_typeof(v_article->'liste')='array'
+          and jsonb_array_length(v_article->'liste')>50)
+        or (jsonb_typeof(v_article->'blogReferencesV2'->'references')='array'
+          and jsonb_array_length(v_article->'blogReferencesV2'->'references')>50)) then
+      return false;
+    end if;
+  end loop;
+  return true;
+end
+$$;
+
+alter table public.kd_personal
+  drop constraint if exists kd_personal_blog_references_max;
+create or replace function public.kd_blog_private_article_write_guard()
+returns trigger
+language plpgsql volatile security definer
+set search_path=pg_catalog,public
+as $$
+begin
+  if new.key='kd:artikel'
+    and not public.kd_blog_private_article_references_valid(new.value) then
+    raise exception 'kd_personal_blog_references_max' using errcode='22023';
+  end if;
+  return new;
+end
+$$;
+drop trigger if exists kd_personal_blog_references_max_trg on public.kd_personal;
+create trigger kd_personal_blog_references_max_trg
+  before insert or update of key,value on public.kd_personal
+  for each row execute function public.kd_blog_private_article_write_guard();
+
 create table if not exists public.kd_blog_publication_starts (
   account_id uuid not null references auth.users(id) on delete cascade,
   operation_id uuid not null,
@@ -41,7 +98,7 @@ begin
     or not (p_request ?& array['contractVersion','operationId','contentVersion','privateArticleId','expectedPublicRevision','article'])
     or p_request - array['contractVersion','operationId','contentVersion','privateArticleId','expectedPublicRevision','article'] <> '{}'::jsonb
     or v_max=0
-    or (v_version='blog-publication-v2' and octet_length(p_request::text)>131072)
+    or octet_length(p_request::text)>131072
     or coalesce(p_request->>'operationId','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
     or coalesce(p_request->>'contentVersion','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
     or char_length(coalesce(p_request->>'privateArticleId','')) not between 1 and 160
@@ -110,16 +167,24 @@ begin
 end
 $$;
 
-create or replace function public.kd_blog_v2_conflict(
-  p_request jsonb,p_error text,p_publication jsonb default null)
+create or replace function public.kd_blog_guard_conflict(
+  p_request jsonb,p_contract text,p_error text,p_publication jsonb default null)
 returns jsonb language sql immutable set search_path=pg_catalog as $$
-  select jsonb_build_object('contractVersion','blog-publication-v2','outcome','conflict',
+  select jsonb_build_object('contractVersion',p_contract,'outcome','conflict',
     'operationId',p_request->>'operationId','contentVersion',p_request->>'contentVersion',
     'publication',p_publication,'referenceResults','[]'::jsonb,
     'decisionRequests','[]'::jsonb,'errorCode',p_error)
 $$;
 
-create or replace function public.kd_blog_apply_publication_v2(p_request jsonb,p_action text)
+create or replace function public.kd_blog_v2_conflict(
+  p_request jsonb,p_error text,p_publication jsonb default null)
+returns jsonb language sql immutable set search_path=pg_catalog as $$
+  select public.kd_blog_guard_conflict(
+    p_request,'blog-publication-v2',p_error,p_publication)
+$$;
+
+create or replace function public.kd_blog_apply_publication_guarded(
+  p_request jsonb,p_action text,p_contract text)
 returns jsonb
 language plpgsql volatile security definer
 set search_path=pg_catalog,public
@@ -133,7 +198,8 @@ declare
   v_locked boolean:=false;
 begin
   perform public.kd_blog_validate_write_request(p_request,p_action);
-  if p_request->>'contractVersion'<>'blog-publication-v2' then
+  if p_contract not in ('blog-publication-v1','blog-publication-v2')
+    or p_request->>'contractVersion'<>p_contract then
     raise exception 'invalid_blog_publication_request' using errcode='22023';
   end if;
   v_account:=public.kd_blog_require_owner();
@@ -146,35 +212,55 @@ begin
       or v_existing_op.action<>p_action or v_existing_op.request_hash<>md5(p_request::text) then
       update public.kd_blog_publication_operations set conflict_detected=true
        where account_id=v_account and operation_id=v_operation;
-      return public.kd_blog_v2_conflict(p_request,'OPERATION_ID_CONFLICT');
+      return public.kd_blog_guard_conflict(
+        p_request,p_contract,'OPERATION_ID_CONFLICT');
     end if;
     if v_existing_op.status<>'unknown' and v_existing_op.response is not null then
       return v_existing_op.response;
     end if;
   end if;
 
-  if not pg_try_advisory_xact_lock(hashtextextended('kd-blog-v2-account:'||v_account::text,0)) then
-    return public.kd_blog_v2_conflict(p_request,'PUBLICATION_ACCOUNT_BUSY');
+  if p_contract='blog-publication-v1' and p_action='update'
+    and exists(select 1 from public.kd_shared_articles
+      where account_id=v_account and article_id=p_request->>'privateArticleId'
+        and contract_version='blog-publication-v2') then
+    return public.kd_blog_guard_conflict(
+      p_request,p_contract,'CLIENT_UPGRADE_REQUIRED');
+  end if;
+
+  if not pg_try_advisory_xact_lock(hashtextextended(
+      'kd-blog-publication-account:'||v_account::text,0)) then
+    return public.kd_blog_guard_conflict(
+      p_request,p_contract,'PUBLICATION_ACCOUNT_BUSY');
   end if;
   for v_slot in 0..7 loop
-    if pg_try_advisory_xact_lock(hashtextextended('kd-blog-v2-global:'||v_slot::text,0)) then
+    if pg_try_advisory_xact_lock(hashtextextended(
+        'kd-blog-publication-global:'||v_slot::text,0)) then
       v_locked:=true; exit;
     end if;
   end loop;
-  if not v_locked then return public.kd_blog_v2_conflict(p_request,'PUBLICATION_CAPACITY_BUSY'); end if;
+  if not v_locked then
+    return public.kd_blog_guard_conflict(
+      p_request,p_contract,'PUBLICATION_CAPACITY_BUSY');
+  end if;
 
   delete from public.kd_blog_publication_starts
    where account_id=v_account and started_at<=clock_timestamp()-interval '10 minutes';
   if (select count(*) from public.kd_blog_publication_starts
       where account_id=v_account and started_at>clock_timestamp()-interval '1 minute')>=5 then
-    return public.kd_blog_v2_conflict(p_request,'PUBLICATION_RATE_LIMIT');
+    return public.kd_blog_guard_conflict(
+      p_request,p_contract,'PUBLICATION_RATE_LIMIT');
   end if;
   insert into public.kd_blog_publication_starts(account_id,operation_id)
   values(v_account,v_operation) on conflict do nothing;
 
-  v_response:=public.kd_blog_apply_publication(p_request,p_action)
-    || jsonb_build_object('contractVersion','blog-publication-v2');
-  if v_response->>'outcome' in ('published','updated') then
+  v_response:=public.kd_blog_apply_publication(p_request,p_action);
+  if p_contract='blog-publication-v2' then
+    v_response:=v_response
+      || jsonb_build_object('contractVersion','blog-publication-v2');
+  end if;
+  if p_contract='blog-publication-v2'
+    and v_response->>'outcome' in ('published','updated') then
     update public.kd_shared_articles set contract_version='blog-publication-v2',
       payload=jsonb_set(payload,'{contractVersion}','"blog-publication-v2"'::jsonb,true)
      where account_id=v_account and article_id=p_request->>'privateArticleId';
@@ -185,6 +271,24 @@ begin
 end
 $$;
 
+create or replace function public.kd_blog_apply_publication_v2(
+  p_request jsonb,p_action text)
+returns jsonb language sql volatile security definer
+set search_path=pg_catalog,public as $$
+  select public.kd_blog_apply_publication_guarded(
+    p_request,p_action,'blog-publication-v2')
+$$;
+
+create or replace function public.kd_publish_blog_v1(p_request jsonb) returns jsonb
+language sql volatile security definer set search_path=pg_catalog,public as $$
+  select public.kd_blog_apply_publication_guarded(
+    p_request,'publish','blog-publication-v1')
+$$;
+create or replace function public.kd_update_blog_publication_v1(p_request jsonb) returns jsonb
+language sql volatile security definer set search_path=pg_catalog,public as $$
+  select public.kd_blog_apply_publication_guarded(
+    p_request,'update','blog-publication-v1')
+$$;
 create or replace function public.kd_publish_blog_v2(p_request jsonb) returns jsonb
 language sql volatile security definer set search_path=pg_catalog,public as $$
   select public.kd_blog_apply_publication_v2(p_request,'publish')
@@ -192,21 +296,6 @@ $$;
 create or replace function public.kd_update_blog_publication_v2(p_request jsonb) returns jsonb
 language sql volatile security definer set search_path=pg_catalog,public as $$
   select public.kd_blog_apply_publication_v2(p_request,'update')
-$$;
-
-create or replace function public.kd_update_blog_publication_v1(p_request jsonb) returns jsonb
-language plpgsql volatile security definer set search_path=pg_catalog,public as $$
-declare v_contract text;
-begin
-  perform public.kd_blog_require_owner();
-  select contract_version into v_contract from public.kd_shared_articles
-   where account_id=auth.uid() and article_id=p_request->>'privateArticleId';
-  if v_contract='blog-publication-v2' then
-    return public.kd_blog_v2_conflict(p_request,'CLIENT_UPGRADE_REQUIRED')
-      || jsonb_build_object('contractVersion','blog-publication-v1');
-  end if;
-  return public.kd_blog_apply_publication(p_request,'update');
-end
 $$;
 
 create or replace function public.kd_blog_public_article(p_publication uuid) returns jsonb
@@ -430,7 +519,11 @@ begin
 end
 $$;
 
-revoke all on function public.kd_blog_v2_conflict(jsonb,text,jsonb),
+revoke all on function public.kd_blog_private_article_references_valid(text),
+  public.kd_blog_private_article_write_guard(),
+  public.kd_blog_guard_conflict(jsonb,text,text,jsonb),
+  public.kd_blog_v2_conflict(jsonb,text,jsonb),
+  public.kd_blog_apply_publication_guarded(jsonb,text,text),
   public.kd_blog_apply_publication_v2(jsonb,text)
   from public,anon,authenticated;
 revoke all on function public.kd_blog_publication_capabilities_v2(),
