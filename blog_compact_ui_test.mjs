@@ -33,6 +33,10 @@ const entry = `
     const [reader,setReader]=useState(null); const [redlinkForm,setRedlink]=useState(null); const [redlinkReturn,setRedlinkReturn]=useState(null);
     const [saveOutcome,setSaveOutcome]=useState("failed"); const [redlinkFails,setRedlinkFails]=useState(false);
     globalThis.blogSetSaveOutcome=setSaveOutcome; globalThis.blogSetRedlinkFails=setRedlinkFails;
+    globalThis.blogSetReferenceCount=(count)=>setEditor(e=>({...e,references:[
+      ...refs,
+      ...Array.from({length:Math.max(0,count-refs.length)},(_,index)=>({rowId:"extra-"+index,rank:refs.length+index+1,title:"Zusätzlicher Titel "+(index+1),year:2000+(index%20),mediaType:"film",state:"redlink",primaryTarget:null,secondaryTargets:[]}))
+    ].slice(0,count)}));
     globalThis.blogShowPublished=()=>setView({area:"published",mode:"list",articleId:null,returnToken:null});
     globalThis.blogNavigations=globalThis.blogNavigations||[];
     const cardRefs=refs.map(reference=>reference.rowId==="row-03"?{...reference,state:"redlink",primaryTarget:null,secondaryTargets:[]}:reference);
@@ -44,7 +48,7 @@ const entry = `
       onReadArticle:({scope,articleId,returnToken})=>{setReader({scope,article:{articleId,title:card.title,text:card.excerpt+"\\n\\nVoller gemeinsamer Lesertext.",ordered:true},referenceViews:refs,canEdit:scope==="private",returnToken:returnToken||"mine"});setView({area:scope==="published"?"published":"mine",mode:"reader",articleId,returnToken:returnToken||"mine"});},
       onBack:()=>setView({area:"mine",mode:"list",articleId:null,returnToken:null}),
       onEditorChange:(patch)=>setEditor(e=>({...e,...patch,dirty:true})),
-      onAddReference:(input)=>{globalThis.blogAddedReference=input;},
+      onAddReference:(input)=>{globalThis.blogAddedReference=input;setEditor(e=>({...e,references:[...e.references,{...input.reference,rowId:"added-"+e.references.length,rank:e.references.length+1,state:"redlink",primaryTarget:null,secondaryTargets:[]}]}));},
       onMoveReference:({rowId,direction})=>setEditor(e=>{const a=[...e.references].sort((x,y)=>x.rank-y.rank);const i=a.findIndex(x=>x.rowId===rowId);const j=direction==="up"?i-1:i+1;if(j<0||j>=a.length)return e;[a[i],a[j]]=[a[j],a[i]];return {...e,references:a.map((x,k)=>({...x,rank:k+1}))};}),
       onRemoveReference:({rowId})=>setEditor(e=>({...e,references:e.references.filter(x=>x.rowId!==rowId).map((x,k)=>({...x,rank:k+1}))})),
       onSave:async()=>editor.anonymousPublication ? fixtureOutcomes[saveOutcome] : {private:{status:"saved"},publication:{status:"not_requested",operationId:null}},
@@ -83,6 +87,19 @@ await check("Serie und Jahr werden über onAddReference konkret weitergegeben", 
   await page.evaluate(() => globalThis.blogAddedReference),
   { draftKey: "draft-1", reference: { title: "Andor", year: 2022, mediaType: "serie" } },
 ));
+await page.evaluate(() => globalThis.blogSetReferenceCount(49));
+await page.getByLabel("Titel hinzufügen").fill("Fünfzigster Titel");
+await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
+await check("Beim Hinzufügen der 50. Referenz erscheint nur der kontextuelle Hinweis", async () => {
+  assert.match(await page.getByRole("status").innerText(), /50\. Referenz/);
+  assert.equal(await page.getByText(/50\/50 Titel/).count(), 0);
+});
+await page.getByLabel("Titel hinzufügen").fill("Einundfünfzigster Titel");
+await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
+await check("Ein Versuch über 50 wird erklärt, ohne die Liste zu verändern", async () => {
+  assert.match(await page.getByRole("status").innerText(), /Mehr als 50 Referenzen/);
+  assert.equal(await page.locator(".kd-blog-editor .kd-blog-reference-row").count(), 50);
+});
 await page.getByLabel("Titel", { exact: true }).fill("Ein Titel"); await page.getByLabel("Text", { exact: true }).fill("Ein Text");
 await page.getByLabel("Anonym veröffentlichen").check();
 await check("Der Publish-Intent hat die eindeutige Abschlussbeschriftung", async () => assert.equal(await page.getByRole("button", { name: "Speichern & veröffentlichen" }).isVisible(), true));
@@ -102,11 +119,11 @@ await page.getByRole("button", { name: "Nach oben" }).click();
 const after = await page.locator(".kd-blog-reference-title").allTextContents();
 await check("Umordnen adressiert die stabile Zeile", () => assert.notDeepEqual(after, before));
 
-await page.locator(".kd-blog-editor .kd-blog-reference-link.is-redlink").click();
+await page.locator(".kd-blog-editor .kd-blog-reference-link.is-redlink").first().click();
 await page.getByRole("heading", { name: "Rotlink ergänzen" }).waitFor();
 await page.getByRole("button", { name: "← Zurück" }).click();
 await check("Rotlink-Abbruch kehrt mit erhaltenem Entwurf zurück", async () => assert.equal(await page.getByLabel("Titel", { exact: true }).inputValue(), "Ein Titel"));
-await page.locator(".kd-blog-editor .kd-blog-reference-link.is-redlink").click();
+await page.locator(".kd-blog-editor .kd-blog-reference-link.is-redlink").first().click();
 await page.evaluate(() => globalThis.blogSetRedlinkFails(true));
 await page.getByText("Ohne Bewertung speichern").click(); await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
 await page.getByText("Eintrag und Rotlink konnten nicht bestätigt gespeichert werden. Deine Eingabe bleibt erhalten.").waitFor();

@@ -3,8 +3,12 @@
    UI-Intent und die eine leserseitige Referenzprojektion. Netzwerk, Storage,
    Matching und React-State gehoeren den jeweiligen Paketen. */
 
-export const BLOG_CONTRACT_VERSION = "blog-publication-v1";
-export const BLOG_MAX_REFERENCES = 15;
+export const BLOG_LEGACY_CONTRACT_VERSION = "blog-publication-v1";
+export const BLOG_CONTRACT_VERSION = "blog-publication-v2";
+export const BLOG_LEGACY_MAX_REFERENCES = 15;
+export const BLOG_MAX_REFERENCES = 50;
+export const BLOG_PUBLICATION_MAX_BYTES = 128 * 1024;
+export const BLOG_PRIVATE_STORE_MAX_BYTES = 1024 * 1024;
 export const BLOG_LIST_DEFAULT_LIMIT = 20;
 export const BLOG_LIST_MAX_LIMIT = 50;
 export const BLOG_NEUTRAL_AUTHOR = "Ohne Namensangabe";
@@ -21,12 +25,12 @@ export const BLOG_IDENTITY_NAMESPACES = Object.freeze([
 ]);
 
 export const BLOG_RPC = Object.freeze({
-  capability: "kd_blog_publication_capabilities",
-  publish: "kd_publish_blog_v1",
-  update: "kd_update_blog_publication_v1",
-  withdraw: "kd_withdraw_blog_publication_v1",
-  ownerReadback: "kd_read_own_blog_publication_v1",
-  list: "kd_list_shared_articles_v1",
+  capability: "kd_blog_publication_capabilities_v2",
+  publish: "kd_publish_blog_v2",
+  update: "kd_update_blog_publication_v2",
+  withdraw: "kd_withdraw_blog_publication_v2",
+  ownerReadback: "kd_read_own_blog_publication_v2",
+  list: "kd_list_shared_articles_v2",
   legacyList: "kd_list_shared_articles",
   legacyClaim: "kd_claim_shared_article",
 });

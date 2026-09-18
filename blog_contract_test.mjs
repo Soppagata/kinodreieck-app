@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   BLOG_CONTRACT_VERSION,
+  BLOG_LEGACY_CONTRACT_VERSION,
+  BLOG_LEGACY_MAX_REFERENCES,
   BLOG_IDENTITY_NAMESPACES,
   BLOG_MAX_REFERENCES,
   BLOG_NEUTRAL_AUTHOR,
@@ -27,16 +29,29 @@ const check = (name, condition) => {
   console.log(`✓ ${name}`);
 };
 
-check("Fixture und Laufzeit verwenden denselben v1-Vertrag",
-  fixture.contractVersion === BLOG_CONTRACT_VERSION
-  && fixture.publicPage.contractVersion === BLOG_CONTRACT_VERSION);
-check("Capability ist exakt und unbekannte oder alte Server bleiben fail-closed",
-  hasBlogPublicationCapability(fixture.capability)
-  && !hasBlogPublicationCapability({ ...fixture.capability, contractVersion: "blog-publication-v0" })
-  && !hasBlogPublicationCapability({ ...fixture.capability, anonymousProjection: false })
-  && !hasBlogPublicationCapability({ ...fixture.capability, extra: true }));
+const capabilityV2 = {
+  ...fixture.capability,
+  contractVersion: BLOG_CONTRACT_VERSION,
+  maxReferences: BLOG_MAX_REFERENCES,
+  rpcs: [
+    "kd_publish_blog_v2", "kd_update_blog_publication_v2",
+    "kd_withdraw_blog_publication_v2", "kd_read_own_blog_publication_v2",
+    "kd_list_shared_articles_v2",
+  ],
+};
+check("Eingefrorene Fixture bleibt v1, während der aktive additive Vertrag v2 ist",
+  fixture.contractVersion === BLOG_LEGACY_CONTRACT_VERSION
+  && fixture.publicPage.contractVersion === BLOG_LEGACY_CONTRACT_VERSION
+  && BLOG_CONTRACT_VERSION === "blog-publication-v2");
+check("v2-Capability ist exakt und unbekannte oder alte Server bleiben fail-closed",
+  hasBlogPublicationCapability(capabilityV2)
+  && !hasBlogPublicationCapability(fixture.capability)
+  && !hasBlogPublicationCapability({ ...capabilityV2, contractVersion: "blog-publication-v0" })
+  && !hasBlogPublicationCapability({ ...capabilityV2, anonymousProjection: false })
+  && !hasBlogPublicationCapability({ ...capabilityV2, extra: true }));
 check("Referenzgrenze und stabile Zeilenidentitaet gelten unabhaengig von Rangfolge",
-  fixture.ownerArticle.references.length <= BLOG_MAX_REFERENCES
+  fixture.ownerArticle.references.length <= BLOG_LEGACY_MAX_REFERENCES
+  && BLOG_MAX_REFERENCES === 50
   && new Set(fixture.ownerArticle.references.map((entry) => entry.rowId)).size === fixture.ownerArticle.references.length
   && fixture.ownerArticle.references.every((entry, index) => entry.rank === index + 1));
 check("Optionale starke Identitaetshinweise bleiben neutral und katalogpruefbar",

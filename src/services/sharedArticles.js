@@ -17,6 +17,8 @@ import { BoundaryError, ERROR_CODES, errorFromStatus, normalizeBoundaryError } f
 import { istSupabaseProjektUrl } from "../lib/supabasePublic.js";
 import {
   BLOG_CONTRACT_VERSION,
+  BLOG_MAX_REFERENCES,
+  BLOG_PUBLICATION_MAX_BYTES,
   BLOG_LIST_DEFAULT_LIMIT,
   BLOG_LIST_MAX_LIMIT,
   BLOG_NEUTRAL_AUTHOR,
@@ -54,6 +56,15 @@ function parseMutation(data, operationId, allowed) {
       || text(value.operationId) !== text(operationId)
       || !allowed.includes(value.outcome)) throw invalid("blog.mutate", "invalid-v1-mutation");
   return value;
+}
+
+function validatePublicationRequest(request) {
+  const references = request?.article?.references;
+  if (!Array.isArray(references) || references.length > BLOG_MAX_REFERENCES) {
+    throw invalid("blog.mutate", "reference-limit");
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(request)).byteLength;
+  if (bytes > BLOG_PUBLICATION_MAX_BYTES) throw invalid("blog.mutate", "request-too-large");
 }
 
 function parseOwnerReadback(data, privateArticleId) {
@@ -127,6 +138,7 @@ function parseV1Page(data) {
         || !Array.isArray(article.references)) {
       throw invalid("blog.list", "unsafe-v1-item");
     }
+    if (article.references.length > BLOG_MAX_REFERENCES) throw invalid("blog.list", "reference-limit");
     const references = article.references.map(parsePublicReference);
     if (references.some((reference) => !reference)) throw invalid("blog.list", "unsafe-v1-reference");
     return {
@@ -153,6 +165,14 @@ export function sharedArticlePayload(article) {
       reason: "invalid-article",
     });
   }
+  const references = Array.isArray(article.liste) ? article.liste : [];
+  if (references.length > MAX_REFERENZEN) {
+    throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+      source: "shared-articles",
+      operation: "article.project",
+      reason: "legacy-reference-limit",
+    });
+  }
   return {
     id: text(article.id),
     titel,
@@ -160,8 +180,7 @@ export function sharedArticlePayload(article) {
     text: inhalt,
     geordnet: !!article.geordnet,
     erstellt_am: article.erstellt_am || null,
-    liste: (Array.isArray(article.liste) ? article.liste : [])
-      .slice(0, MAX_REFERENZEN)
+    liste: references
       .map((eintrag) => ({
         eingabe: text(eintrag?.eingabe),
         jahr: eintrag?.jahr == null ? null : Number(eintrag.jahr),
@@ -431,6 +450,7 @@ export function createSharedArticlesService({
       return { ok: true, page: parseV1Page(result.data) };
     },
     async publishV1(request) {
+      validatePublicationRequest(request);
       const result = await accountRequest("POST", `rpc/${BLOG_RPC.publish}`, {
         body: { p_request: request }, operation: "blog.publish",
       });
@@ -440,6 +460,7 @@ export function createSharedArticlesService({
       ]);
     },
     async updateV1(request) {
+      validatePublicationRequest(request);
       const result = await accountRequest("POST", `rpc/${BLOG_RPC.update}`, {
         body: { p_request: request }, operation: "blog.update",
       });

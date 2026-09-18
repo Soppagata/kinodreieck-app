@@ -418,7 +418,7 @@ try {
       && !mounted.articles.some((article) => article.id === uncertainArticleId));
 
   const twinPublication = await alphaService.publishV1({
-    contractVersion: "blog-publication-v1",
+    contractVersion: "blog-publication-v2",
     operationId: "30000000-0000-4000-8000-000000000901",
     contentVersion: "40000000-0000-4000-8000-000000000901",
     privateArticleId: "private-alpha-identity-integration", expectedPublicRevision: null,

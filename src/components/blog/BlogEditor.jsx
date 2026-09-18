@@ -14,12 +14,17 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
   const [newReferenceYear, setNewReferenceYear] = useState("");
   const [newReferenceType, setNewReferenceType] = useState("film");
   const [referenceError, setReferenceError] = useState("");
+  const [limitNotice, setLimitNotice] = useState("");
   const references = Array.isArray(editor.references) ? editor.references : [];
   const saving = editor.saveStatus === "saving" || editor.saveStatus?.status === "saving";
   const publishReady = capability?.status === "ready";
   const addReference = () => {
     const title = newReference.trim();
-    if (!title || references.length >= BLOG_MAX_REFERENCES) return;
+    if (!title) return;
+    if (references.length >= BLOG_MAX_REFERENCES) {
+      setLimitNotice(`Mehr als ${BLOG_MAX_REFERENCES} Referenzen können nicht gespeichert werden.`);
+      return;
+    }
     const parsedYear = lesePlausiblesJahr(newReferenceYear, { typ: newReferenceType });
     if (!parsedYear.ok) {
       const { min, max } = plausiblerJahresbereich(newReferenceType);
@@ -28,6 +33,14 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
     }
     actions.onAddReference({ draftKey: editor.draftKey, reference: { title, year: parsedYear.jahr, mediaType: newReferenceType } });
     setNewReference(""); setNewReferenceYear(""); setNewReferenceType("film"); setReferenceError("");
+    setLimitNotice(references.length + 1 === BLOG_MAX_REFERENCES
+      ? `Die ${BLOG_MAX_REFERENCES}. Referenz wird mit diesem Artikel gespeichert.` : "");
+  };
+  const save = () => {
+    if (references.length === BLOG_MAX_REFERENCES) {
+      setLimitNotice(`Alle ${BLOG_MAX_REFERENCES} Referenzen werden mit diesem Artikel gespeichert.`);
+    }
+    void onSave();
   };
   return <section className="kd-blog-editor" aria-labelledby="kd-blog-editor-heading">
     <div className="kd-blog-list-head"><h2 id="kd-blog-editor-heading">{editor.articleId ? "Artikel bearbeiten" : "Neuer Artikel"}</h2>
@@ -46,9 +59,9 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
         <select value={newReferenceType} aria-label="Typ" onChange={(event) => { setNewReferenceType(event.target.value); setReferenceError(""); }}>
           <option value="film">Film</option><option value="serie">Serie</option><option value="musik">Musik</option><option value="sonstiges">Sonstiges</option>
         </select>
-        <button type="button" className="kd-blog-button" disabled={!newReference.trim() || references.length >= BLOG_MAX_REFERENCES} onClick={addReference}>Hinzufügen</button></div>
+        <button type="button" className="kd-blog-button" disabled={!newReference.trim()} onClick={addReference}>Hinzufügen</button></div>
       {referenceError ? <p className="kd-blog-error" role="alert">{referenceError}</p> : null}
-      <p className="kd-blog-muted">{references.length}/{BLOG_MAX_REFERENCES} Titel</p>
+      {limitNotice ? <p className="kd-blog-muted" role="status">{limitNotice}</p> : null}
     </section>
     <footer className="kd-blog-finish">
       <label className={`kd-blog-check kd-blog-publish-check kd-touch-checkbox${!publishReady ? " is-disabled" : ""}`}><input type="checkbox" checked={editor.anonymousPublication === true} disabled={!publishReady}
@@ -57,7 +70,7 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
           : capability?.status === "checking" ? "Veröffentlichung wird geprüft. Privat speichern ist bereits möglich." : "Veröffentlichung ist derzeit nicht verfügbar. Privat speichern bleibt möglich."}</small></span></label>
       {hasPublication && !editor.anonymousPublication ? <p className="kd-blog-private-publication-note">Die veröffentlichte Fassung bleibt unverändert.</p> : null}
       <div className="kd-blog-footer-actions"><button type="button" className="kd-blog-button kd-blog-button-quiet" disabled={saving} onClick={onBack}>← Zurück</button>
-        <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={saving || !String(editor.title || "").trim() || !String(editor.text || "").trim() || (editor.anonymousPublication && !publishReady)} onClick={() => void onSave()}>
+        <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={saving || !String(editor.title || "").trim() || !String(editor.text || "").trim() || (editor.anonymousPublication && !publishReady)} onClick={save}>
           {saving ? "Speichert …" : hasPublication && intent === BLOG_SAVE_INTENT.PRIVATE_ONLY ? "Änderungen privat speichern" : SAVE_LABELS[intent]}</button></div>
     </footer>
   </section>;

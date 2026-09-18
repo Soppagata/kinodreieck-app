@@ -6,6 +6,7 @@ import {
   subscribeStorageContext,
 } from "../services/storage.js";
 import { normalisiereArtikelTypen } from "../lib/artikel.js";
+import { BLOG_PRIVATE_STORE_MAX_BYTES } from "../lib/blogContract.js";
 import { recoverInterruptedPublication } from "../lib/sharedPublication.js";
 import { useRemoteStorageValue } from "./useRemoteStorageValue.js";
 
@@ -30,6 +31,18 @@ export function parseArtikelSicher(rohText) {
 export function brauchtArtikelRevisionMigration(liste, gespeichertAm) {
   return Array.isArray(liste) && liste.length > 0
     && (!Number.isFinite(gespeichertAm) || gespeichertAm <= 0);
+}
+
+export function serialisiereArtikelTopf(liste, gespeichertAm) {
+  const value = JSON.stringify({ artikel: liste, gespeichertAm });
+  const bytes = new TextEncoder().encode(value).byteLength;
+  if (bytes > BLOG_PRIVATE_STORE_MAX_BYTES) {
+    const error = new Error("Der Artikelspeicher ist voll. Der Entwurf und der letzte gespeicherte Stand bleiben erhalten.");
+    error.code = "BLOG_PRIVATE_STORE_TOO_LARGE";
+    error.bytes = bytes;
+    throw error;
+  }
+  return value;
 }
 
 /* Artikel sind ein eigener persönlicher Topf, aber Teil des gemeinsamen
@@ -106,7 +119,7 @@ export function useArticleController({ setErr }) {
         let gespeichertAm = gelesen.gespeichertAm;
         if (mussZurueckschreiben) {
           gespeichertAm = Date.now();
-          await ladeKontext.set(K.artikel, JSON.stringify({ artikel: normalisiert, gespeichertAm }));
+          await ladeKontext.set(K.artikel, serialisiereArtikelTopf(normalisiert, gespeichertAm));
         }
         if (!aktiv || !ladeKontext.isCurrent()) return;
         /* Ein während des Loads bestätigter Demo-Seed gewinnt. */
@@ -130,11 +143,13 @@ export function useArticleController({ setErr }) {
   const persistArtikel = useCallback(async (liste, kontext) => {
     const gespeichertAm = Date.now();
     try {
-      await kontext.set(K.artikel, JSON.stringify({ artikel: liste, gespeichertAm }));
+      await kontext.set(K.artikel, serialisiereArtikelTopf(liste, gespeichertAm));
       return { ok: true, gespeichertAm };
-    } catch {
+    } catch (error) {
       if (geladenerKontextRef.current?.generation === kontext.generation) {
-        setErrRef.current("Artikel-Speichern fehlgeschlagen. Die letzte Änderung wurde nicht übernommen.");
+        setErrRef.current(error?.code === "BLOG_PRIVATE_STORE_TOO_LARGE"
+          ? error.message
+          : "Artikel-Speichern fehlgeschlagen. Die letzte Änderung wurde nicht übernommen.");
       }
       return { ok: false, gespeichertAm: 0 };
     }

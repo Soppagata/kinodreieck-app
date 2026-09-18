@@ -184,9 +184,13 @@ export function projectPrivateArticleForPublication(article, library) {
     title: text(article?.titel || article?.title),
     text: String(article?.text == null ? "" : article.text),
     ordered: article?.geordnet === true || article?.ordered === true,
-    references: (Array.isArray(article?.liste) ? article.liste : article?.references || [])
-      .slice(0, BLOG_MAX_REFERENCES)
-      .map((row, index) => projectPrivateReferenceForPublication(row, index + 1, libraryById)),
+    references: (() => {
+      const rows = Array.isArray(article?.liste) ? article.liste : article?.references || [];
+      if (rows.length > BLOG_MAX_REFERENCES) {
+        throw new Error(`Ein Blogartikel darf höchstens ${BLOG_MAX_REFERENCES} Referenzen enthalten.`);
+      }
+      return rows.map((row, index) => projectPrivateReferenceForPublication(row, index + 1, libraryById));
+    })(),
   };
 }
 

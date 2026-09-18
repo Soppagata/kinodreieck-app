@@ -14,7 +14,7 @@
    ============================================================ */
 import { norm, slugId, matchFilm } from "./match.js";
 import { TYP_GRUPPEN, tabVonTyp, hatDreieck, normalisiereTyp } from "./typen.js";
-import { neueArtikelId, gleicheArtikelAb } from "./artikel.js";
+import { MAX_LISTE, neueArtikelId, gleicheArtikelAb, mitBlogReferenzSchatten } from "./artikel.js";
 import { QUELLEN, quelleZuArray } from "./quellen.js";
 import { BEWERTUNGSKATEGORIE_IDS, istBewertungskategorie } from "./kategorien.js";
 
@@ -92,6 +92,8 @@ export function parsePaket(text) {
     const roh = p.bereiche[b];
     if (!Array.isArray(roh)) continue;
     if (b === "artikel") {
+      const zuLang = roh.find((a) => Array.isArray(a?.liste) && a.liste.length > MAX_LISTE);
+      if (zuLang) throw new Error(`Ein importierter Blogartikel enthält mehr als ${MAX_LISTE} Referenzen. Das Paket wurde nicht verändert oder gekürzt.`);
       bereiche.artikel = roh
         .filter((a) => a && typeof a === "object")
         .map((a) => ({ ...a, liste: Array.isArray(a.liste)
@@ -164,7 +166,7 @@ export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelL
           autor: eintrag.autor || analyse.autor,
           text: eintrag.text || "",
           geordnet: !!eintrag.geordnet,
-          liste: (eintrag.liste || []).slice(0, 15).map((le) => ({ eingabe: le.eingabe || "", jahr: le.jahr ?? null, typ: normalisiereTyp(le.typ), ref: null })),
+          liste: (eintrag.liste || []).map((le) => ({ eingabe: le.eingabe || "", jahr: le.jahr ?? null, typ: normalisiereTyp(le.typ), ref: null })),
           status: "wartet", // Importiertes durchläuft denselben Freigabe-Flow wie Eigenes
           erstellt_am: eintrag.erstellt_am || new Date().toISOString(),
           importiert_am: new Date().toISOString(),
@@ -174,7 +176,8 @@ export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelL
         const abg = gleicheArtikelAb({ ...roh, id }, [...(master || []), ...neueFilme]);
         report.verlinkt += abg.abgleichStat.verlinkt;
         report.rotlinks += abg.abgleichStat.rotlink + abg.abgleichStat.mehrfach;
-        neueArtikel.push({ ...abg, liste: abg.liste.map(({ abgleich, ...rest }) => rest), abgleichStat: undefined });
+        neueArtikel.push(mitBlogReferenzSchatten({ ...abg,
+          liste: abg.liste.map(({ abgleich, ...rest }) => rest), abgleichStat: undefined }));
         uebernommen++;
       }
     } else {

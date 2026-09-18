@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BLOG_MAX_REFERENCES,
   BLOG_CONTRACT_VERSION,
   BLOG_PUBLIC_OUTCOME,
   BLOG_SAVE_INTENT,
@@ -461,7 +462,7 @@ export function useBlogPublicationController({
 
   const onAddReference = useCallback(({ draftKey, reference }) => {
     setEditor((current) => {
-      if (!current || current.draftKey !== draftKey || current.saveStatus === "saving" || current.references.length >= 15) return current;
+      if (!current || current.draftKey !== draftKey || current.saveStatus === "saving" || current.references.length >= BLOG_MAX_REFERENCES) return current;
       const row = editorReference({ ...reference, rowId: neueBlogZeilenId() }, current.references.length);
       return { ...current, references: [...current.references, row], dirty: true, saveStatus: "idle" };
     });

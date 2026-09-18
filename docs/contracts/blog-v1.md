@@ -1,5 +1,52 @@
 # Blog-Vertrag v1
 
+## Additiver Übergang zu `blog-publication-v2`
+
+Seit Migration `20260918140000_blog_reference_limit_v2.sql` ist
+`blog-publication-v2` der Vertrag des aktuellen Clients. Diese Erweiterung
+ändert den hier dokumentierten v1-Vertrag nicht: Die bestehende Capability
+`kd_blog_publication_capabilities()` meldet weiterhin exakt
+`blog-publication-v1` und `maxReferences: 15`. Der neue Client prüft stattdessen
+`kd_blog_publication_capabilities_v2()` mit exakt `maxReferences: 50` und nutzt
+die fünf neuen v2-RPCs für Publish, Update, Rücknahme, Owner-Readback und Liste.
+
+v2 erlaubt 50 Referenzen pro Artikel. Es gibt keine fachliche 30er-Sperre und
+keinen dauerhaften Zähler im Editor. Nur beim Hinzufügen oder Speichern der
+50. Zeile erscheint ein situativer Hinweis; ein weiterer Eintrag wird erklärt
+abgewiesen. Karten zeigen weiterhin höchstens drei Vorschautitel, der Leser
+die vollständige Liste.
+
+Mengen-, Rang-, Eindeutigkeits-, Feld- und Requestgrößenprüfungen laufen vor
+dem Katalogresolver. 51 oder 1.945 Referenzen werden vollständig abgelehnt,
+ebenso ein v2-Publikationsrequest über 128 KiB UTF-8. Es findet keine
+Kürzung statt. Direkte Tabellenwrites bleiben für `authenticated` gesperrt.
+Pro Konto kann genau ein v2-Publikationsabgleich laufen; die Datenbank lehnt
+weitere Aufträge ohne Lock-Warteschlange ab. Zusätzlich gelten fünf neue
+Publish-/Update-Starts pro Minute und acht globale, per Try-Lock belegte
+Arbeitsplätze. Ein bereits bekanntes, bytegleiches Operationsergebnis wird vor
+diesen Zählern aus dem Ledger zurückgegeben. Die Startzeilen werden nach zehn
+Minuten kontoweise bereinigt.
+
+Der persönliche Topf `kd:artikel` bleibt bei 1 MiB. Vor jedem Write wird die
+vollständige serialisierte Fassung einschließlich `publikation.pending.request`
+gemessen. Bei Überschreitung bleiben Entwurf und letzter bestätigter Stand
+erhalten. Artikel mit mehr als 15 Zeilen führen zusätzlich
+`blogReferencesV2.references`. Alte PWAs erhalten dieses unbekannte Feld bei
+ihren Objektkopien; wenn ihr alter Editor `liste` auf 15 kürzt, stellt ein
+neuer Client die längere Fassung aus dem Schattenfeld wieder her.
+
+v1- und Legacy-Listen sowie `kd_claim_shared_article` blenden v2-Publikationen
+aus. Ein v1-Update auf eine bereits v2-geführte Publikation endet mit
+`CLIENT_UPGRADE_REQUIRED`. Damit kann ein alter Client eine längere öffentliche
+Liste weder übernehmen noch durch ein 15-Zeilen-Update ersetzen. Aktuelle
+v2-Clients lesen v1- und v2-Publikationen gemeinsam.
+
+Die 128-KiB-Prüfung ist eine Datenbankgrenze nach dem HTTP-Einlesen. Eine
+Gateway-weite Ingress-Grenze, die einen übergroßen Body schon vor Supabase/
+PostgREST verwirft, liegt außerhalb dieses lokalen Repository-Scopes und muss
+separat in der produktiven Gateway-Konfiguration gesetzt und zurückgelesen
+werden. Dieser lokale Vertrag behauptet dafür keine Production-Wirkung.
+
 Status: eingefrorene Grundlage F0 fuer die parallelen Pakete A, B und C
 
 Version: `blog-publication-v1`

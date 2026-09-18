@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +13,7 @@ const MIGRATION = "supabase/migrations/20260918120000_blog_publication_v1.sql";
 const CRON_PREREQUISITE = "supabase/migrations/20260918115900_blog_publication_pg_cron.sql";
 const SETWISE_MIGRATION = "supabase/migrations/20260918130000_blog_catalog_setwise.sql";
 const LOOKUP_MIGRATION = "supabase/migrations/20260918133000_blog_catalog_lookup.sql";
+const REFERENCE_V2_MIGRATION = "supabase/migrations/20260918140000_blog_reference_limit_v2.sql";
 
 function verifyCronPrerequisiteSql() {
   const sql = readFileSync(CRON_PREREQUISITE, "utf8");
@@ -347,11 +348,15 @@ export async function startBlogPublicationPgHarness({
       if (!applySetwiseMigration) throw new Error("lookup migration requires setwise migration");
       rawSql(readFileSync(LOOKUP_MIGRATION, "utf8"));
     }
+    rawSql(readFileSync(REFERENCE_V2_MIGRATION, "utf8"));
 
     const scalarRpcs = new Set([
       "kd_blog_publication_capabilities", "kd_publish_blog_v1", "kd_update_blog_publication_v1",
       "kd_withdraw_blog_publication_v1", "kd_read_own_blog_publication_v1",
       "kd_list_shared_articles_v1", "kd_refresh_blog_reference_sources_v1",
+      "kd_blog_publication_capabilities_v2", "kd_publish_blog_v2",
+      "kd_update_blog_publication_v2", "kd_withdraw_blog_publication_v2",
+      "kd_read_own_blog_publication_v2", "kd_list_shared_articles_v2",
     ]);
     const tableRpcs = new Set(["kd_list_shared_articles", "kd_claim_shared_article"]);
     const callRpc = (name, args, {
@@ -365,7 +370,8 @@ export async function startBlogPublicationPgHarness({
         throw new Error("invalid statement timeout");
       }
       let invocation;
-      if (name === "kd_blog_publication_capabilities" || name === "kd_list_shared_articles") invocation = `public.${name}()`;
+      if (name === "kd_blog_publication_capabilities" || name === "kd_blog_publication_capabilities_v2"
+        || name === "kd_list_shared_articles") invocation = `public.${name}()`;
       else if (name === "kd_claim_shared_article") invocation = `public.${name}(${literal(args?.p_share_token)}::uuid)`;
       else invocation = `public.${name}(${jsonLiteral(args?.p_request ?? args)})`;
       const select = scalarRpcs.has(name)
@@ -382,6 +388,36 @@ export async function startBlogPublicationPgHarness({
     const scheduledRefreshJob = () => lastJson(rawSql(`select to_jsonb(j) from (
       select jobname,schedule,command from cron.job where jobname='kd-blog-reference-refresh-v1'
     ) j;`));
+    const holdBlogAccountLock = (accountId) => new Promise((resolve, reject) => {
+      const child = spawn(join(pg, "psql"), psqlArgs, { env, stdio: ["pipe", "pipe", "pipe"] });
+      let output = ""; let errors = ""; let settled = false;
+      const finish = (error, value) => {
+        if (settled) return; settled = true;
+        if (error) reject(error); else resolve(value);
+      };
+      child.stdout.on("data", (chunk) => {
+        output += chunk;
+        if (output.includes("BLOG_LOCK_READY")) {
+          finish(null, { stop() {
+            if (child.exitCode !== null) return Promise.resolve();
+            return new Promise((done) => {
+              child.once("exit", () => done());
+              child.kill("SIGTERM");
+            });
+          } });
+        }
+      });
+      child.stderr.on("data", (chunk) => { errors += chunk; });
+      child.on("error", (error) => finish(error));
+      child.on("exit", (code) => {
+        if (!settled) finish(new Error(`blog lock holder exited ${code}: ${errors}`));
+      });
+      child.stdin.end(`begin;
+        select pg_advisory_xact_lock(hashtextextended('kd-blog-v2-account:${accountId}',0));
+        select 'BLOG_LOCK_READY';
+        select pg_sleep(30);
+        rollback;`);
+    });
 
     return Object.freeze({
       accounts: BLOG_TEST_ACCOUNTS,
@@ -389,6 +425,7 @@ export async function startBlogPublicationPgHarness({
       callRpc,
       runScheduledRefresh,
       scheduledRefreshJob,
+      holdBlogAccountLock,
       seedScaleCatalog,
       sourceUpdate,
       sql(statement, options = {}) { return session(statement, options); },

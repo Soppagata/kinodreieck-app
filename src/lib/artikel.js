@@ -2,7 +2,7 @@
    Blog: Artikel-Schema & Abgleich-Engine (deterministisch)
    ------------------------------------------------------------
    Schema: { id, titel, autor, text, geordnet, status, erstellt_am,
-             liste: [{ eingabe, jahr, typ, ref }] }  (max 15 Einträge)
+             liste: [{ eingabe, jahr, typ, ref }] }  (max 50 Einträge)
    - eingabe = was Max getippt hat (bleibt für die Anzeige erhalten)
    - ref     = aufgelöste Mediathek-ID; die eigentliche, stabile Verbindung.
                Der Titel ist NICHT der Schlüssel.
@@ -16,7 +16,9 @@
 import { norm, slugId, jahrPasst, wortPrefix, substanz } from "./match.js";
 import { normalisiereTyp } from "./typen.js";
 
-export const MAX_LISTE = 15;
+export const MAX_LISTE = 50;
+export const LEGACY_MAX_LISTE = 15;
+export const BLOG_REFERENZEN_SCHATTEN = "blogReferencesV2";
 
 function neueStabileBlogId() {
   try {
@@ -35,10 +37,27 @@ export function neueBlogZeilenId(randomUUID) {
   return neueStabileBlogId();
 }
 
+function gueltigerSchatten(article) {
+  const shadow = article?.[BLOG_REFERENZEN_SCHATTEN];
+  return shadow?.version === 2 && Array.isArray(shadow.references)
+    && shadow.references.length <= MAX_LISTE ? shadow.references : null;
+}
+
+/* Alte PWAs kennen das additive Feld nicht, behalten es bei ihren
+   Objektkopien aber bei. Falls sie `liste` auf 15 kuerzen, stellt ein neuer
+   Client daraus die vollstaendige Fassung wieder her. */
+export function vollstaendigeBlogZeilen(article) {
+  const liste = Array.isArray(article?.liste) ? article.liste : [];
+  const shadow = gueltigerSchatten(article);
+  return shadow && shadow.length > liste.length ? shadow : liste;
+}
+
 export function normalisiereBlogZeilen(liste, randomUUID) {
+  if (!Array.isArray(liste)) return [];
+  if (liste.length > MAX_LISTE) throw new Error(`Ein Blogartikel darf höchstens ${MAX_LISTE} Referenzen enthalten.`);
   let gleich = true;
   const gesehen = new Set();
-  const next = (Array.isArray(liste) ? liste : []).slice(0, MAX_LISTE).map((zeile) => {
+  const next = liste.map((zeile) => {
     const vorhanden = typeof zeile?.rowId === "string" ? zeile.rowId.trim() : "";
     const rowId = vorhanden && !gesehen.has(vorhanden) ? vorhanden : neueBlogZeilenId(randomUUID);
     gesehen.add(rowId);
@@ -49,6 +68,16 @@ export function normalisiereBlogZeilen(liste, randomUUID) {
   return gleich && next.length === liste?.length ? liste : next;
 }
 
+export function mitBlogReferenzSchatten(article, liste = article?.liste || []) {
+  const references = normalisiereBlogZeilen(liste);
+  if (references.length <= LEGACY_MAX_LISTE) {
+    const { [BLOG_REFERENZEN_SCHATTEN]: _entfernt, ...rest } = article;
+    return { ...rest, liste: references };
+  }
+  return { ...article, liste: references,
+    [BLOG_REFERENZEN_SCHATTEN]: { version: 2, references } };
+}
+
 /* Kanonische Schreibgrenze für importierte, wiederhergestellte und bereits
    gespeicherte Artikel. Unveränderte Listen behalten ihre Referenz, damit
    reine Lesevorgänge keinen unnötigen Storage-Write auslösen. */
@@ -57,27 +86,33 @@ export function normalisiereArtikelTypen(artikelListe) {
   const normalisiert = (artikelListe || []).map((artikel) => {
     if (!artikel || typeof artikel !== "object" || !Array.isArray(artikel.liste)) return artikel;
     let artikelGleich = true;
-    const liste = artikel.liste.map((zeile) => {
+    const vollstaendig = vollstaendigeBlogZeilen(artikel);
+    if (vollstaendig !== artikel.liste) artikelGleich = false;
+    const liste = normalisiereBlogZeilen(vollstaendig).map((zeile) => {
       if (!zeile?.typ) return zeile;
       const typ = normalisiereTyp(zeile.typ);
       if (typ === zeile.typ) return zeile;
       artikelGleich = false;
       return { ...zeile, typ };
     });
-    if (artikelGleich) return artikel;
+    const shadow = gueltigerSchatten(artikel);
+    const shadowAktuell = shadow?.length === liste.length
+      && shadow.every((zeile, index) => JSON.stringify(zeile) === JSON.stringify(liste[index]));
+    if (artikelGleich && (shadowAktuell || (!shadow && liste.length <= LEGACY_MAX_LISTE))) return artikel;
     allesGleich = false;
-    return { ...artikel, liste };
+    return shadow || liste.length > LEGACY_MAX_LISTE
+      ? mitBlogReferenzSchatten(artikel, liste)
+      : { ...artikel, liste };
   });
   return allesGleich ? artikelListe : normalisiert;
 }
 
 export function mitNeuerBlogFassung(article, contentVersion, nowIso = new Date().toISOString()) {
-  return {
+  return mitBlogReferenzSchatten({
     ...article,
     contentVersion: contentVersion || neueStabileBlogId(),
     updatedAt: nowIso,
-    liste: normalisiereBlogZeilen(article?.liste || []),
-  };
+  }, article?.liste || []);
 }
 
 export function neueArtikelId(titel, vorhandene) {
@@ -244,11 +279,12 @@ export function blogZuArtikel(sharedBlog, vorhandene, master, nowIso) {
     db_key: sharedBlog ? sharedBlog.db_key : null,
     source_publication_id: sharedBlog?.publication_id || sharedBlog?.db_key || null,
     source_loaded_at: nowIso || new Date().toISOString(),
-    liste: (q.liste || []).slice(0, MAX_LISTE).map((le) => ({
+    liste: (Array.isArray(q.liste) ? q.liste : []).map((le) => ({
       eingabe: le.eingabe, jahr: le.jahr == null ? null : le.jahr, typ: le.typ ? normalisiereTyp(le.typ) : null, ref: null,
     })),
   };
   const abg = gleicheArtikelAb(roh, master || []);
   // Abgleich-Felder abstreifen (wie beim Erstellen): nur stabile refs bleiben.
-  return { ...abg, liste: abg.liste.map(({ abgleich, ...rest }) => rest), abgleichStat: undefined };
+  return mitBlogReferenzSchatten({ ...abg,
+    liste: abg.liste.map(({ abgleich, ...rest }) => rest), abgleichStat: undefined });
 }
