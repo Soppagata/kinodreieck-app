@@ -275,6 +275,9 @@ export function projectPrivateBlogReferences(references, targetById = new Map(),
       resolutionIntent: reference?.resolutionIntent || (reference?.rotlink_ok
         ? { kind: "keep_redlink" } : { kind: "auto" }),
       decisionCandidates: Array.isArray(reference?.decisionCandidates) ? reference.decisionCandidates : [],
+      decisionRequired: reference?.decisionRequired === true
+        || (reference?.decisionRequired == null && Array.isArray(reference?.decisionCandidates)
+          && reference.decisionCandidates.length > 0),
     });
   });
 }

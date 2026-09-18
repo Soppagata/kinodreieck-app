@@ -11,11 +11,12 @@ function targetLabel(target) {
 
 function ReferenceDecision({ reference, actions }) {
   const candidates = reference.decisionCandidates || reference.candidates || [];
-  if (!candidates.length) return null;
-  return <div className="kd-blog-reference-decision"><select aria-label={`Zuordnung für ${reference.title}`} defaultValue=""
+  if (reference.decisionRequired !== true && !candidates.length) return null;
+  return <div className="kd-blog-reference-decision">{candidates.length ? <select aria-label={`Zuordnung für ${reference.title}`} defaultValue=""
     onChange={(event) => { if (event.target.value) void actions.onReferenceDecision({ articleId: reference.articleId, rowId: reference.rowId, decision: { kind: "confirm_work", workKey: event.target.value } }); }}>
     <option value="" disabled>Treffer wählen …</option>
     {candidates.map((candidate) => <option key={candidate.workKey} value={candidate.workKey}>{candidate.title}{candidate.year ? ` (${candidate.year})` : ""}</option>)}</select>
+    : <span className="kd-blog-reference-source">Kein gemeinsamer Treffer verfügbar.</span>}
     <button type="button" className="kd-blog-inline-action" onClick={() => void actions.onReferenceDecision({ articleId: reference.articleId, rowId: reference.rowId, decision: { kind: "keep_redlink" } })}>Als Rotlink behalten</button>
   </div>;
 }

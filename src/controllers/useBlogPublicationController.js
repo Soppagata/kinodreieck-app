@@ -142,6 +142,8 @@ function editorReference(row, index) {
     resolutionIntent: row?.resolutionIntent || (row?.rotlink_ok
       ? { kind: "keep_redlink" } : { kind: "auto" }),
     decisionCandidates: Array.isArray(row?.decisionCandidates) ? row.decisionCandidates : [],
+    decisionRequired: row?.decisionRequired === true
+      || (row?.decisionRequired == null && Array.isArray(row?.decisionCandidates) && row.decisionCandidates.length > 0),
   };
 }
 
@@ -260,13 +262,15 @@ function articleFromDraft(draft, previous, articleId, contentVersion, nowIso, re
     rotlink_ok: row.resolutionIntent?.kind === "keep_redlink",
     resolutionIntent: row.resolutionIntent || { kind: "auto" },
     decisionCandidates: Array.isArray(row.decisionCandidates) ? row.decisionCandidates : [],
+    decisionRequired: row.decisionRequired === true
+      || (row.decisionRequired == null && Array.isArray(row.decisionCandidates) && row.decisionCandidates.length > 0),
     rank: index + 1,
   }));
   const next = {
     ...(previous || {}), id: articleId, titel: text(draft.title), autor: previous?.autor || "",
     text: String(draft.text || ""), geordnet: draft.ordered === true,
     erstellt_am: previous?.erstellt_am || nowIso,
-    status: references.some((row) => row.decisionCandidates.length && row.resolutionIntent?.kind === "auto")
+    status: references.some((row) => row.decisionRequired === true && row.resolutionIntent?.kind === "auto")
       ? "wartet" : "freigegeben",
     liste: references,
   };
@@ -626,7 +630,7 @@ export function useBlogPublicationController({
       if (response?.outcome === BLOG_PUBLIC_OUTCOME.DECISION_REQUIRED) {
         const byRow = new Map((response.decisionRequests || []).map((decision) => [decision.rowId, decision.candidates || []]));
         next = { ...next, liste: next.liste.map((row) => byRow.has(row.rowId)
-          ? { ...row, decisionCandidates: byRow.get(row.rowId) } : row) };
+          ? { ...row, decisionCandidates: byRow.get(row.rowId), decisionRequired: true } : row) };
       }
       resolvedArticle = next;
       return next;
@@ -640,7 +644,7 @@ export function useBlogPublicationController({
           ...current,
           publicationId: publicationSnapshot(resolvedArticle).publicationId,
           references: current.references.map((row) => candidates.has(row.rowId)
-            ? { ...row, decisionCandidates: candidates.get(row.rowId) } : row),
+            ? { ...row, decisionCandidates: candidates.get(row.rowId), decisionRequired: true } : row),
           saveStatus: response?.outcome || "saved",
         }
         : current);
@@ -775,7 +779,7 @@ export function useBlogPublicationController({
         nextArticle = mitNeuerBlogFassung({
           ...article,
           liste: article.liste.map((row) => row.rowId === rowId
-            ? { ...row, resolutionIntent: decision, decisionCandidates: [] } : row),
+            ? { ...row, resolutionIntent: decision, decisionCandidates: [], decisionRequired: false } : row),
         }, publicationContentVersion(), clock());
         return nextArticle;
       }));
@@ -786,7 +790,7 @@ export function useBlogPublicationController({
         contentVersion: nextArticle.contentVersion,
         publicationId: publicationSnapshot(nextArticle).publicationId,
         references: current.references.map((row) => row.rowId === rowId
-          ? { ...row, resolutionIntent: decision, decisionCandidates: [] } : row),
+          ? { ...row, resolutionIntent: decision, decisionCandidates: [], decisionRequired: false } : row),
       } : current);
       return actionResult("saved", { articleId, rowId });
     } finally {
@@ -896,7 +900,7 @@ export function useBlogPublicationController({
         const linkedDraft = {
           ...draft,
           references: draft.references.map((row) => row.rowId === rowId
-            ? { ...row, ref: String(privateRef), resolutionIntent: { kind: "auto" }, decisionCandidates: [] }
+            ? { ...row, ref: String(privateRef), resolutionIntent: { kind: "auto" }, decisionCandidates: [], decisionRequired: false }
             : row),
         };
         persistedArticleId = draft.articleId || neueArtikelId(draft.title, articlesRef.current);
@@ -934,7 +938,7 @@ export function useBlogPublicationController({
             ...article,
             liste: article.liste.map((row) => row.rowId === rowId
               ? { ...row, ref: String(privateRef), rotlink_ok: false,
-                resolutionIntent: { kind: "auto" }, decisionCandidates: [] }
+                resolutionIntent: { kind: "auto" }, decisionCandidates: [], decisionRequired: false }
               : row),
           }, publicationContentVersion(), clock());
           return saved;
