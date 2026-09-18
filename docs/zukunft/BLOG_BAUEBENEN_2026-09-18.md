@@ -76,8 +76,8 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
-| M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE (lokal, noch nicht ausgerollt) | Produktkandidat 4521984 auf codex/blog-integration-20260918; vollständiger Basis-Gate plus gezielte Delta-/Integrationsprüfungen; Lieferbeleg am Dokumentende |
-| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS | GEBAUT – lokales Gate grün, Aktivierung offen | [Bauvertrag](../contracts/blog-reference-extract-v1.md), drei disjunkte Pakete; keine echte Anbieterqualität belegt |
+| M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE auf Staging | M6 in a3a0086; Migration, lokales Gate, CI und Domain-/Service-Worker-Readback bestätigt; Production-Frontend bleibt 77c5603 |
+| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS | GEBAUT und ausgeliefert, noch deaktiviert | a3a0086 auf Staging; lokale/CI-/Backendnachweise grün. Aktivierung wartet auf Jahreskorrektur-Freigabe; Anbieterqualität und physische Abnahme nicht belegt |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -1035,3 +1035,75 @@ Serverschalter bleibt bis zur ausstehenden Entscheidung über die schmale
 v2-Jahreskorrektur aus; damit wird kein kostenpflichtiger Scan als bereit
 ausgewiesen, dessen ältere Musik-/Buchjahre beim Publizieren noch scheitern.
 Diese Aktivierung bleibt ein offener Teil von M7 und wird nicht als DONE gemeldet.
+
+### M6/M7-Staging-Lieferung `a3a0086`
+
+Produktkandidat `a3a00868d9b25076b3f51ed9304ed71411735271` wurde nach dem
+lokalen Abschlussgate force-frei von `77c5603` nach `staging` gepusht. `main`
+bleibt unverändert. [CI-Lauf 35386804455](https://github.com/Soppagata/kinodreieck-app/actions/runs/35386804455)
+
+Backend vor dem Frontend ausgeliefert:
+
+- M6 `20260918140000` und M7 `20260918160000` jeweils mit gebundener
+  Funktions-/Konfigurationsvoransicht, Driftprüfung und atomarem Ledgerwrite;
+  anschließend beide Rohquellen bytegenau im Ledger nachgelesen.
+- Ein ausschließlich lesender Aufruf des immutable Publikationsvalidators
+  bestätigt v2/50, den beibehaltenen v1-Zaun und die 128-KiB-SQL-Eingangsgrenze.
+  Keine Publikations- oder privaten Datenwrites bei diesem Nachweis.
+- Neue Tabelle RLS-aktiv, kein direkter anon/authenticated-Lesezugriff, neue
+  Export-RPC nur service_role, Auth-Cascade und stündlicher Purge aktiv.
+  `kd_private_own_data(uuid)` bytegleich zum Vorzustand. Andere Tasks,
+  globale Aliase und Reservierungsgrenzen unverändert.
+- `ai-task` und `account-self-service` ACTIVE, JWT-Prüfung an. Alle 13 Dateien
+  beider vollständiger Importgraphen stimmen mit den deployten Dateien überein.
+  Health meldet den Kandidaten `a3a0086`. Nicht ausgehandelter v5-Vertrag bleibt
+  unverändert, neue Capability wird nur auf ausdrückliche Anfrage ergänzt.
+- Export bleibt mit und ohne neue Opt-in-Abfrage bei `EXPORT_DISABLED`;
+  keine Freigabe wurde erweitert. Neuer Scan bleibt
+  `blog_reference_extract_enabled=false`, solange die Jahreskorrektur offen ist.
+
+Belege unter `/private/tmp/kd-blog-scan-release-20260918/`:
+`m6-migration-readback.json`, `m7-migration-readback.json`,
+`m6-validator-readback.json`, `backend-readback.json`,
+`function-source-readback.json`, `functions-active.json`,
+`backend-disabled-health.json`. Sicherungen der nötigen Definitionen liegen
+zugriffsbeschränkt im Unterordner `private`; keine Nutzerdatenkopie.
+
+Nächster offener Produktschritt nach ausdrücklicher Antwort auf die laufende
+Jahresfrage: den eng begrenzten Vorschlag aus
+`/private/tmp/kd-blog-scan-year-proposal.sql` als neue additive Folgemigration
+lokal mit v1-/v2-Gegenfällen prüfen und ausliefern. Die bereits angewandte M7-
+Migration nicht nachträglich ändern. Danach ausschließlich den neuen
+Taskschalter aktivieren und die positive ausgehandelte Capability nachlesen.
+Dies wäre keine Freigabe für bezahlte Agentenproben; deren Anbieterqualität
+bleibt ohne eigenen Kosten-/Requestauftrag weiterhin NICHT BELEGT.
+
+Begründung der automatischen Ablehnung zur Jahreskorrektur, vom Paketowner
+nochmals exakt bestätigt: Der dynamische Austausch des gemeinsamen
+Publikationsvalidators ändert dauerhaft bestehende Writepfade mit Wirkung auf
+den gemeinsamen Dienst. Dafür verlangte die Prüfung eine spezifischere
+Nutzerautorisierung. Es war keine technische SQL- oder Jahreswertbeanstandung.
+Die konkret angefragte Korrektur begrenzt sich inzwischen ausdrücklich auf v2
+und Musik/Sonstiges; v1 und Film/Serie bleiben unverändert. Ohne Antwort keine
+indirekte Ausführung oder Änderung der schon angewandten Migration.
+
+Abschließender Lieferreadback, 18.09.2026 19:45 UTC:
+
+| Grenze | Belegter Stand |
+|---|---|
+| Gebaut / lokal geprüft | M6 und M7 auf Produktkandidat `a3a0086`; 32 integrierte Nutzerwegprüfungen, vollständige Mocksuite, 356 Function-Tests, 11 Chromium-Scanprüfungen, Build/Diff grün |
+| Committed / gepusht | Produktcode `a3a00868d9b25076b3f51ed9304ed71411735271` auf `origin/staging` |
+| CI | Run `35386804455` SUCCESS: Testsuite, Chromium, WebKit, Required Check und deploy-staging; deploy-production SKIPPED |
+| Backend | Beide Migrationen und beide Functions ausgeliefert, Ledger-/Quellen-/Rollen-/Health-Readback bestätigt |
+| Staging | Domain `staging.kinodreieck.at` meldet `a3a0086`; Service Worker enthält denselben Kandidaten |
+| Production | Remote `main`, Domain-Metadaten und Service Worker unverändert auf `77c5603`; gemeinsames Backend additiv erweitert |
+| M7-Aktivierung | OFFEN: `blog_reference_extract_enabled=false`; Jahresfrage wartet auf ausdrückliche Antwort nach automatischer Ablehnung |
+| Anbieterqualität / Kostenmessung | NICHT BELEGT; keine echten Anbieterrequests, kein Modellvergleich |
+| Physisches iPhone/PWA | NICHT BELEGT; Browserprüfung ist kein Geräteabnahmetest |
+
+Die finalen Domainergebnisse stehen in `public-readback.json`, der CI-Stand in
+`github-status.json` im oben genannten Belegordner. Staging ist mit M6 nutzbar;
+der neue KI-Scan ist noch nicht als nutzbar oder als DONE freigegeben. Die
+Nachlieferung der Jahreskorrektur mit anschließender Taskaktivierung bleibt
+der konkrete Restauftrag. Dieses abschließende Register wird lokal separat
+committed; es löst keinen zweiten identischen Frontend-Deploy aus.
