@@ -488,3 +488,44 @@ brauchen bei erteiltem Bauauftrag keine Zwischenfreigaben.
 Gebaut, getestet, committed, gepusht, CI-grün, deployed und praktisch auf der
 PWA abgenommen werden beim Abschluss getrennt berichtet. Das Register bindet
 nur tatsächlich erreichte Lieferstände.
+
+### Aktivierung und reales Katalogdelta
+
+Die beiden Migrationen wurden auf Kandidat `4314060` nach grünem vollständigem
+lokalem Abschlusslauf zusammen atomar angewandt. Der Readback bestätigt die
+exakten Quelldateien im nun 96-zeiligen Ledger, `pg_cron` 1.6.4, sechs neue
+Client-RPCs, den begrenzten Fünf-Minuten-Job sowie positive und negative Rechte.
+Der Nutzerauftrag zum gemeinsamen Blogbereich deckt diese Wirkung ab;
+Production-Frontend und `main` blieben unberührt.
+
+Die anschließende synthetische Gegenprobe zeigte einen echten Skalierungsfehler:
+`kd_blog_catalog_works()` überschreitet schon für eine begrenzte Auswahl das
+Zeitlimit. Ein isolierter lesender Aufruf mit acht Sekunden Zeitgrenze bestätigt
+SQLSTATE 57014. Der reale Bestand umfasst 24.678 Basis- und 1.115 MotN-Zeilen;
+die kleinen lokalen Fixtures hatten diese Skalierung nicht abgedeckt.
+Readback nach dem Abbruch: keine laufende Testquery und keine Testpublikationen.
+
+A erhält daher das enge additive Delta
+`20260918130000_blog_catalog_setwise.sql` im Worktree
+`/private/tmp/kd-blog-catalog-performance-20260918`, Basis `4314060`.
+Bereits angewandte Migrationen bleiben unverändert. Gefordert sind unveränderte
+Identitäts-/Quellenverträge, eine Abfrage ohne quadratische Einzelscans und ein
+lokaler 25.000-Zeilen-Nachweis einschließlich Veröffentlichung und Quellenpflege.
+Der Meister wiederholt anschließend gezielt die reale Gegenprobe und schließt
+die Staging-Auslieferung am korrigierten Kandidaten ab.
+
+Das additive Delta ist als `4191987` integriert (Paketcommit `a89bdc3`). Die
+Katalogprojektion aggregiert die Werke gemeinsam und verwendet innerhalb eines
+RPCs einen privaten temporären Snapshot, der mit Transaktionsende entfällt.
+Der Paketbeleg umfasst 42 Backend-, 13 Refresh- und neun Skalierungsprüfungen
+mit 24.678 Basis- und 1.115 MotN-Zeilen. Eine Veröffentlichung mit 15 Referenzen
+dauerte lokal 1,07 Sekunden. Der Skalierungstest ist jetzt Teil von `npm test`
+und damit auch der bestehenden CI. Der zehnsekündige Clientabbruch bleibt
+unverändert. Die reale Gegenprobe und Staging-Auslieferung stehen noch aus.
+
+Der vollständige lokale Abschlusslauf einschließlich Build ist mit Exit 0
+abgeschlossen (`npm-test-catalog-final.log` im oben genannten Belegordner).
+Auch das für den echten Backendtest vorbereitete Rollback-Skript wurde lokal
+mit 15 Referenzen geprüft: anonyme v1- und Legacy-Ausgabe, zweites Konto,
+Owner-Löschung, Rollensperren und privat bleibender Snapshot sind belegt;
+der Veröffentlichungsteil dauerte 1,05 Sekunden.
