@@ -6,6 +6,7 @@ import {
   buildBlogReferenceApplications,
   buildBlogReferenceSuggestions,
   readBlogReferenceExtractCapability,
+  validateBlogReferenceExtractionInput,
   validateBlogReferenceExtractionResponse,
 } from "./src/lib/blogReferenceExtraction.js";
 import { createAiService } from "./src/services/ai.js";
@@ -66,6 +67,25 @@ check("Filmjahre vor 1870 und manipulierte Belege werden fail-closed abgewiesen"
   const modelUrl = structuredClone(response);
   modelUrl.data.candidates[0].url = "https://example.invalid/work";
   assert.equal(validateBlogReferenceExtractionResponse(modelUrl, input).ok, false);
+});
+check("Mention und Titelvorschlag zählen bis 160 Unicode-Zeichen statt UTF-8-Bytes", () => {
+  const unicodeTitle = "ä".repeat(160);
+  const unicodeInput = { title: "Unicode", text: unicodeTitle };
+  const unicodeResponse = {
+    ...response,
+    data: { ...response.data, candidates: [{
+      ...response.data.candidates[0], candidateId: "c-unicode", mention: unicodeTitle,
+      titleSuggestion: unicodeTitle, year: null,
+      evidence: { field: "text", quote: unicodeTitle, start: 0, end: unicodeTitle.length },
+    }] },
+  };
+  assert.equal(validateBlogReferenceExtractionResponse(unicodeResponse, unicodeInput).ok, true);
+  unicodeResponse.data.candidates[0].titleSuggestion += "ä";
+  assert.equal(validateBlogReferenceExtractionResponse(unicodeResponse, unicodeInput).ok, false);
+});
+check("Der Fachauftrag verlangt Überschrift und Blogtext, ohne den Entwurf zu verändern", () => {
+  assert.equal(validateBlogReferenceExtractionInput({ title: "", text: "Text" }).reason, "empty-title");
+  assert.equal(validateBlogReferenceExtractionInput({ title: "Titel", text: "" }).reason, "empty-text");
 });
 
 const suggestions = buildBlogReferenceSuggestions(response.data.candidates, {

@@ -28,6 +28,7 @@ const yearMinForMediaType = (mediaType) => ["film", "serie"].includes(mediaType)
 
 const encoder = new TextEncoder();
 const byteLength = (value) => encoder.encode(String(value == null ? "" : value)).byteLength;
+const unicodeLength = (value) => Array.from(String(value == null ? "" : value)).length;
 const jsonByteLength = (value) => {
   try { return byteLength(JSON.stringify(value)); } catch { return Number.POSITIVE_INFINITY; }
 };
@@ -50,7 +51,8 @@ export function validateBlogReferenceExtractionInput({ title, text } = {}) {
   if (byteLength(text) > BLOG_REFERENCE_EXTRACT_MAX_TEXT_BYTES) {
     return { ok: false, reason: "text-too-long" };
   }
-  if (!title.trim() && !text.trim()) return { ok: false, reason: "empty-input" };
+  if (!title.trim()) return { ok: false, reason: "empty-title" };
+  if (!text.trim()) return { ok: false, reason: "empty-text" };
   return { ok: true, payload: { title, text } };
 }
 
@@ -75,8 +77,8 @@ export function readBlogReferenceExtractCapability(health) {
 function validateCandidate(candidate, input) {
   if (!exactKeys(candidate, CANDIDATE_KEYS) || !exactKeys(candidate.evidence, EVIDENCE_KEYS)) return null;
   if (!cleanText(candidate.candidateId) || byteLength(candidate.candidateId) > 160
-      || !cleanText(candidate.mention) || byteLength(candidate.mention) > 160
-      || !cleanText(candidate.titleSuggestion) || byteLength(candidate.titleSuggestion) > 160
+      || !cleanText(candidate.mention) || unicodeLength(candidate.mention) > 160
+      || !cleanText(candidate.titleSuggestion) || unicodeLength(candidate.titleSuggestion) > 160
       || !KINDS.has(candidate.kind) || !INTERPRETATIONS.has(candidate.interpretation)) return null;
   if (candidate.year !== null && (!Number.isInteger(candidate.year)
       || candidate.year < yearMinForKind(candidate.kind) || candidate.year > YEAR_MAX)) return null;

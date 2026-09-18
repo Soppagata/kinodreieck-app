@@ -81,12 +81,13 @@ await check("Mehrere gleichnamige Werke und Musik bleiben parallel auswählbar",
 
 await page.evaluate(() => globalThis.setBlogReferenceCount(48));
 await check("Bei zu wenig Restplatz bleibt die gesamte Mehrfachübernahme gesperrt", async () => {
-  await page.getByText("Noch 2 von 50 Plätzen frei. Kein Vorschlag ist vorausgewählt.").waitFor();
+  await page.getByText("Für die gesamte Auswahl ist nicht genug Platz. Es wurde nichts übernommen.").waitFor();
   assert.equal(await page.getByRole("button", { name: "Ausgewählte übernehmen" }).isDisabled(), true);
-  assert.match(await page.locator(".kd-blog-suggestion-apply").innerText(), /Noch 2 von 50 Plätzen frei/);
+  assert.doesNotMatch(await page.locator(".kd-blog-ai-references").innerText(), /Noch \d+ von 50 Plätzen frei/);
 });
 await page.evaluate(() => globalThis.setBlogReferenceCount(47));
-await page.getByText("Noch 3 von 50 Plätzen frei. Kein Vorschlag ist vorausgewählt.").waitFor();
+await page.getByText("Kein Vorschlag ist vorausgewählt.").waitFor();
+await page.getByText("Für die gesamte Auswahl ist nicht genug Platz. Es wurde nichts übernommen.").waitFor({ state: "detached" });
 await page.getByRole("button", { name: "Ausgewählte übernehmen" }).click();
 await check("Die UI übergibt alle drei bestätigten Werke in einem atomaren Aufruf", async () => {
   const applied = await page.evaluate(() => globalThis.appliedBlogCandidates);

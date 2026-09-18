@@ -38,7 +38,8 @@ function localError(reason) {
   return ({
     "title-too-long": "Die Überschrift ist für die KI-Erkennung zu lang. Du kannst normal weiterschreiben und speichern.",
     "text-too-long": "Der Blogtext ist länger als 18.000 Bytes. Er wird nicht gekürzt; du kannst ihn normal speichern und Referenzen manuell ergänzen.",
-    "empty-input": "Schreibe zuerst eine Überschrift oder einen Blogtext.",
+    "empty-title": "Schreibe zuerst eine Überschrift. Dein Entwurf und das Speichern bleiben davon unberührt.",
+    "empty-text": "Schreibe zuerst einen Blogtext. Dein Entwurf und das Speichern bleiben davon unberührt.",
     "reference-limit": "Bei 50 Referenzen startet keine KI-Erkennung. Entferne zuerst eine Referenz oder arbeite manuell weiter.",
     "capability-unavailable": "Die KI-Erkennung ist derzeit nicht verfügbar. Schreiben, Speichern und manuelle Referenzen funktionieren weiter.",
     "stale-draft": "Der Entwurf hat sich geändert. Die alten Vorschläge wurden nicht übernommen.",

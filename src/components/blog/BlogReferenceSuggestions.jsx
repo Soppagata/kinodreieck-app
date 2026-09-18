@@ -25,7 +25,8 @@ function startMessage(reason) {
     "reference-limit": `Bei ${BLOG_MAX_REFERENCES} Referenzen ist kein KI-Start möglich.`,
     "text-too-long": "Der Blogtext ist länger als 18.000 Bytes und wird nicht gekürzt.",
     "title-too-long": "Die Überschrift ist für die KI-Erkennung zu lang.",
-    "empty-input": "Schreibe zuerst eine Überschrift oder einen Blogtext.",
+    "empty-title": "Schreibe zuerst eine Überschrift.",
+    "empty-text": "Schreibe zuerst einen Blogtext.",
   })[reason] || null;
 }
 
@@ -55,6 +56,7 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
   const applications = useMemo(() => buildBlogReferenceApplications(suggestions, selectedRows), [selectedRows, suggestions]);
   const remaining = Math.max(0, BLOG_MAX_REFERENCES - referenceCount);
   const busy = ["running", "applying"].includes(extraction?.status);
+  const selectionTooLarge = applications.ok && applications.candidates.length > remaining;
 
   if (!extraction?.visible) return null;
 
@@ -140,10 +142,11 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
         </article>;
       })}
       <div className="kd-blog-suggestion-apply">
-        <p className="kd-blog-muted">Noch {remaining} von {BLOG_MAX_REFERENCES} Plätzen frei. Kein Vorschlag ist vorausgewählt.</p>
-        <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={busy || !applications.ok || applications.candidates.length > remaining}
+        <p className="kd-blog-muted">Kein Vorschlag ist vorausgewählt.</p>
+        <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={busy || !applications.ok || selectionTooLarge}
           onClick={() => void apply()}>{extraction.status === "applying" ? "Übernimmt …" : "Ausgewählte übernehmen"}</button>
       </div>
+      {selectionTooLarge ? <p className="kd-blog-error" role="alert">Für die gesamte Auswahl ist nicht genug Platz. Es wurde nichts übernommen.</p> : null}
       {selectionMessage ? <p className="kd-blog-error" role="alert">{selectionMessage}</p> : null}
     </div> : null}
   </section>;
