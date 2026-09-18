@@ -77,7 +77,7 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 | M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE (lokal, noch nicht ausgerollt) | Produktkandidat 4521984 auf codex/blog-integration-20260918; vollständiger Basis-Gate plus gezielte Delta-/Integrationsprüfungen; Lieferbeleg am Dokumentende |
-| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS | OFFEN – Vertrag eingefroren | [Bauvertrag](../contracts/blog-reference-extract-v1.md), drei disjunkte Pakete; keine echte Anbieterqualität belegt |
+| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS | GEBAUT – lokales Gate grün, Aktivierung offen | [Bauvertrag](../contracts/blog-reference-extract-v1.md), drei disjunkte Pakete; keine echte Anbieterqualität belegt |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -909,11 +909,129 @@ Commit; B und C müssen nicht auf A-Ausgaben warten.
 
 | Paket | Zugeordneter Scope | Worktree / Branch | Profil | Status |
 |---|---|---|---|---|
-| A | M7 Server, Budget/Cache, Export/Löschung | `/private/tmp/kd-blog-scan-backend-20260918` / `codex/blog-scan-backend-20260918` | Sol/high: Provider-, RLS-, Migrations- und Parallelitätsgrenzen | DISPATCH vorbereitet |
-| B | M7 Editor, Service/Controller, Zuordnung, atomare Übernahme | `/private/tmp/kd-blog-scan-client-20260918` / `codex/blog-scan-client-20260918` | Sol/high: kontogebundener asynchroner Shared-State | DISPATCH vorbereitet |
-| C | M7 Opt-in, Settings, Datenschutz/Inventar/Hilfe | `/private/tmp/kd-blog-scan-privacy-20260918` / `codex/blog-scan-privacy-20260918` | Sol/high: Privacy und bestehende Opt-in-Entscheidungen | DISPATCH vorbereitet |
+| A | M7 Server, Budget/Cache, Export/Löschung | `/private/tmp/kd-blog-scan-backend-20260918` / `codex/blog-scan-backend-20260918` | Sol/high: Provider-, RLS-, Migrations- und Parallelitätsgrenzen | INTEGRATED `1b0d3c7` |
+| B | M7 Editor, Service/Controller, Zuordnung, atomare Übernahme | `/private/tmp/kd-blog-scan-client-20260918` / `codex/blog-scan-client-20260918` | Sol/high: kontogebundener asynchroner Shared-State | INTEGRATED bis `12ef5e3` |
+| C | M7 Opt-in, Settings, Datenschutz/Inventar/Hilfe | `/private/tmp/kd-blog-scan-privacy-20260918` / `codex/blog-scan-privacy-20260918` | Sol/high: Privacy und bestehende Opt-in-Entscheidungen | INTEGRATED bis `5cc6801` |
 
 Exakte Write-Flächen stehen im eingefrorenen Vertrag. Gemeinsame Dokumente,
 Package-Testregistrierung und integrierter Nutzerweg liegen beim Meister.
 Integration A → B → C; Paketprüfungen werden übernommen, anschließend ein
 integrierter Abschlusslauf. Auslieferungsnachweise werden hier ergänzt.
+
+DISPATCH-Basis aller drei Pakete: `bed73fdfc901ca38376c89960ef727841c635a2f`.
+Baumeister: `/root/blog_scan_backend`, `/root/blog_scan_client`,
+`/root/blog_scan_privacy`. Frischer Auslieferungsvorstand vom 18.09.,
+18:41 UTC: 98 Migrationen, M6/v2 und Scan noch nicht vorhanden; beide
+Domains und Remote-Refs weiter auf `77c5603`, Production-SW als Vergleich
+gesichert. Live-Alias `gross` ist bereits `claude-sonnet-5`; keine Aliasänderung.
+Beleg: `/private/tmp/kd-blog-scan-release-20260918/preflight.json`.
+
+Benanntes Integrationsdelta im M7-Bauvertrag: Musik/Sonstiges unterstützen
+bereits im Mediathekvertrag Jahre ab 1, im Blog-v2-Validator bisher pauschal
+erst ab 1870. A erweitert diese beiden v2-Typen additiv; B übernimmt passende
+Extraktionsjahre. Der v1-Vertrag und Film-/Seriengrenzen bleiben erhalten.
+
+HTTP-Eingangsgrenze praktisch geklärt: Ein synthetischer Body über 128 KiB erreichte
+den bisherigen v1-Endpunkt und wurde entgegen der Vorannahme veröffentlicht.
+Der Meister entfernte den unbeabsichtigten Testblog unmittelbar anhand
+eindeutiger Artikelkennung, synthetischem Titel und exakt bekanntem Testtext
+zusammen mit seinen Operationen. Anschließende SQL-Nachlese: null Testblogs,
+null Testoperationen. Keine privaten Nutzerinhalte oder Anbieterrequests.
+Dies belegt keinen vorgelagerten 128-KiB-Zaun; die M6-SQL-Grenze wird beim
+Rollout getrennt nachgewiesen. Kein frei konfigurierbarer gehosteter Gateway-
+Zaun ist in den geprüften offiziellen Supabase/PostgREST-Konfigurationen belegt.
+
+DELIVERED C: `786e8782506cc04ace95d86dd16fc7f5d123b16b`, Basis `bed73fd`.
+Exklusive Settings-/DS-/Hilfefläche eingehalten; default-off bei unverändertem
+`e8-v1`, Registry/Inventar/Rechteweg und sichtbare Texte ergänzt. Fokussierte
+Paketprüfungen grün, darunter neue Privacy 9/9, KI-Schalter 89/89, Private Ops
+99 und angrenzende Settings-/Login-/Exportprüfungen. Keine Wiederholung durch
+den Meister. Benannte kleine Integrationsnaht: strikten Clientvalidator für
+`kd_private_own_data.blogReferenceExtractions` erweitern, sobald A die konkrete
+Exportprojektion liefert; bestehende Exportfreigabe bleibt unverändert.
+
+Benannte Exportnaht korrigiert: Altclients validieren die Own-Data-Antwort
+exakt. Zusätzlich lehnte die automatische Freigabeprüfung einen Austausch
+der gemeinsamen `kd_private_own_data`-Funktion wegen der Wirkung auf alle
+Exportaufrufe ab. Die engere Implementierung lässt diese Funktion und die
+normale Endpointantwort unverändert; nur ein ausdrücklich angefragtes
+`include=blog-reference-extract-v1` ergänzt Ergebnisse aus einer neuen
+dedizierten service-only Export-RPC. A besitzt RPC/Function, der Meister die
+kleine Client-/Validatornaht. Diese Variante wahrt die bisherige Antwortform.
+
+C erhält einen disjunkten Delta-Restauftrag auf eigenem Commit für die
+benannte Client-Exportnaht (`src/services/accountSelfService.js` und passende
+Tests) samt Korrektur seiner Inventarstelle. Die Row-Projektion enthält exakt
+operationId, contractVersion, modelAlias, promptVersion, resultVersion, status,
+result, createdAt, finishedAt, expiresAt; keine Konto-ID oder HMAC.
+Exportfreigabe bleibt UNPROVEN. Keine neue Prüfrolle oder Parallelwelle.
+
+Die separate v2-Jahreskorrektur ist konkret als
+`/private/tmp/kd-blog-scan-year-proposal.sql` vorbereitet. Die automatische
+Freigabeprüfung blockiert die gemeinsame Validatoränderung; Nutzerbestätigung
+für genau dieses Delta wurde angefragt, ist noch ausstehend. Solange keine
+Antwort vorliegt, wird diese Änderung weder eingebaut noch ausgerollt.
+
+DELIVERED B: `84228e8`, danach gezielte Integrationsdeltas `db23172` und
+`712486d`. Fokussierte Client-/Controller-/Chromiumprüfungen grün; vorhandene
+Referenzen bleiben geordnet, die Auswahl zweistufig und nicht vorausgewählt.
+Die Deltas entfernen den permanenten Kapazitätszähler und gleichen Eingabe-
+und Unicode-/Belegtextvalidierung an den Serververtrag an. Letzter fokussierter
+Clienttest 13/13, Chromium 11/11; keine zusätzliche Paketprüfung durch den Meister.
+
+DELIVERED C-Exportdelta: `6013b8e` auf `786e878`. Der Client fragt die neue
+Erweiterung ausdrücklich an und akzeptiert die unveränderte Altantwort weiter.
+Die genaue Zusatzprojektion wird begrenzt geprüft; keine Ausweitung bestehender
+Exportfreigaben. Fokussierte Privacy-/Exportprüfung 12/12.
+
+Der Meister ergänzt den vorhandenen Nutzerwegtest um serverseitig validierte
+Mockextraktion, zweistufige Auswahl zweier Dune-Filme, Serie, Musik und einen
+bewussten unverknüpften Buchverweis sowie atomare Übernahme, privates Speichern,
+Reload und v2-Veröffentlichung für ein zweites Konto. Nur die Modellantwort
+wird simuliert; keine Anbieterqualität wird daraus abgeleitet.
+
+Retentionnaht an die tatsächliche Serverimplementierung gebunden: Der
+stündliche Purge verarbeitet höchstens 200 Zeilen. Deshalb wird die zuvor
+geplante harte physische 25-Stunden-Frist nicht zugesagt. Nutzbarkeit endet
+weiter nach 24 Stunden; automatische Löschung folgt stündlich, bei Rückstau
+oder Betriebsstörung später. C korrigiert ausschließlich diese neuen Texte.
+Der neue Serverschalter wird erst nach gemeinsamem Backend-Readback aktiviert;
+globale KI-Aliase und Reservierungen anderer Aufgaben bleiben unverändert.
+
+INTEGRATED A/B/C auf `5cc6801` (A `1b0d3c7`, B `df77f65` mit
+`325c578`/`504b5bc`, C `fb16556` mit `69dd40d`/`5cc6801`). A belegt 356 Deno-
+und 11 PG17-Prüfungen. Der integrierte Weg belegt bereits Scan, bewusste
+Mehrfachauswahl, atomare Übernahme, privates Speichern und Reload.
+
+Konkreter Integrationsbefund am anschließenden Publizieren: Ein bestätigtes
+Mediathekswerk mit starker ID, das der gemeinsame Katalog nicht kennt, liefert
+`DECISION_REQUIRED` mit leerer Kandidatenliste. Die bisherige UI blendete dabei
+auch „Als Rotlink behalten“ aus. Gezielter B-Restauftrag: ausschließlich diesen
+explizit vom Server angeforderten Entscheidungszustand sichtbar und nach Reload
+lösbar machen. Keine Backend- oder Matching-Neukonstruktion.
+
+DELIVERED B-Korrektur `801660f`, integriert als `12ef5e3`: explizite leere
+Serverentscheidungen bleiben sichtbar und werden zeilenweise bewusst gelöst.
+Fokussierter B-Test 3/3. Meister-Nutzerweg anschließend 32/32 grün, inklusive
+serverseitigem Belegvalidator, privatem Reload, Rotlink-Entscheidung nach Reload
+und anonymer SQL-Publikation. Beleg: `/private/tmp/kd-blog-scan-release-20260918/integrated-flow.log`.
+
+Testregistrierung: neue Client-/Controller-/Privacy-/PG-/Entscheidungstests in
+`test:blog-scan` und damit `npm test`; neue Deno-Verträge in `test:function`.
+Der Chromium-Scan-Test läuft im vorhandenen Chromium-Mobilejob, dessen Browser
+bereits installiert ist. Kein zusätzlicher Browserdownload im Mock-Suitenjob.
+Der gemeinsame lokale Abschlusslauf umfasst Mocks, Functions, Scan-Chromium,
+Build und Diff; Protokolle unter `/private/tmp/kd-blog-scan-release-20260918/`.
+
+Gemeinsames lokales Abschlussgate am 18.09. grün: vollständige Mock-Suite
+(der erfolgreiche Präfix wurde nach Aktualisierung des absichtlich festen
+Function-Dateizählers von elf auf zwölf übernommen), Function-Suite, Chromium-
+Scan-Auswahl, Build und Diff. Der neue Extraktor wird im Releasegraph ausdrücklich
+mitgeprüft. Kein Anbieterrequest. Exakter Ablauf und Einzellogs:
+`/private/tmp/kd-blog-scan-release-20260918/local-gate.json`.
+
+Auslieferung kann für M6 und die deaktivierten M7-Bausteine erfolgen. Der neue
+Serverschalter bleibt bis zur ausstehenden Entscheidung über die schmale
+v2-Jahreskorrektur aus; damit wird kein kostenpflichtiger Scan als bereit
+ausgewiesen, dessen ältere Musik-/Buchjahre beim Publizieren noch scheitern.
+Diese Aktivierung bleibt ein offener Teil von M7 und wird nicht als DONE gemeldet.

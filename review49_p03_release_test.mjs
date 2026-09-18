@@ -24,8 +24,9 @@ try {
   commit();
   const info = () => releaseInfo({ git });
   const baseline = info();
-  check("Actual committed ai-task graph contains eleven local sources including the three omissions", () => {
-    assert.equal(baseline.dateien.length, 11);
+  check("Actual committed ai-task graph includes the blog extractor and all former omissions", () => {
+    assert.equal(baseline.dateien.length, 12);
+    assert.ok(baseline.dateien.includes("supabase/functions/ai-task/blogReferenceExtract.ts"));
     for (const leaf of ["externalTitleIdentity.js", "flixpatrolFacts.js", "flixpatrolFactsContext.js"]) {
       assert.ok(baseline.dateien.includes("supabase/functions/_shared/" + leaf));
     }
@@ -56,7 +57,7 @@ try {
   writeFileSync(join(temp, leaf), 'export type T = string;\n');
   commit();
   check("A newly committed transitive dependency joins the graph without a list edit", () => {
-    assert.equal(info().dateien.length, 13);
+    assert.equal(info().dateien.length, baseline.dateien.length + 2);
     assert.ok(info().dateien.includes(extra));
     assert.ok(info().dateien.includes(leaf));
     writeFileSync(join(temp, leaf), 'export type T = number;\n');

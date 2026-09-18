@@ -79,6 +79,9 @@ jobs:
       - name: Browser und Systembibliotheken sicherstellen
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: npm run test:mobile -- --project=${{ matrix.browser }}
+      - name: Blog-Scan-Auswahl auf schmalen Displays prüfen
+        if: matrix.browser == 'chromium'
+        run: npm run test:blog-scan:browser
 
   # Stabiler Required Check: behält den bisherigen Namen `test` und schlägt
   # auch dann fehl, wenn ein vorgeschalteter Job abgebrochen oder übersprungen wurde.

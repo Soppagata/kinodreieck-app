@@ -25,7 +25,7 @@ Urheber/Jahr werden als Werkdaten nur angezeigt, soweit der Bestand sie belegt.
 ## API-Naht A/B
 
 - Task `blog-reference-extract`, Prompt/Result `blog-reference-extract-v1`.
-- Fachpayload exakt `{ title: string, text: string }` im bestehenden ai-task-
+- Fachpayload exakt `{ title: string, text: string }`, beide nichtleer, im bestehenden ai-task-
   Umschlag. Keine Account-, Artikel-, Mediathek-IDs oder Referenzen zum Provider.
 - Bestehendes `blog-profile-extract` und nicht ausgehandeltes `ai-task-v5`
   bleiben unverändert. Neuer Client fordert bei `health` ausdrücklich
@@ -42,7 +42,13 @@ Urheber/Jahr werden als Werkdaten nur angezeigt, soweit der Bestand sie belegt.
 - Ein Kandidat enthält exakt `{ candidateId, mention, titleSuggestion, kind,
   year, interpretation, evidence }`. `kind` ist
   `film|series|music|other|title_group|unclear`, `interpretation` ist
-  `direct|interpreted|ambiguous`, `year` Integer 1870–2200 oder null.
+  `direct|interpreted|ambiguous`, `year` Integer 1–2200 oder null; bei
+  `film`/`series` bleibt die bestehende Untergrenze 1870. Der v2-Publikations-
+  validator soll für `musik`/`sonstiges` gezielt Jahre ab 1 akzeptieren, entsprechend
+  dem vorhandenen Mediathekvertrag; v1 und Film-/Seriengrenzen bleiben gleich.
+  Diese schmale Shared-Validatoränderung wartet nach automatischer Ablehnung
+  noch auf die konkret angefragte Nutzerbestätigung und ist nicht in der
+  M7-Migration enthalten. Bis zur Auflösung bleibt der neue Serverschalter aus.
   `evidence` ist `{ field: "title"|"text", quote, start, end }`, Positionen sind
   serverseitig ermittelte UTF-16-Indizes des exakten Zitats im unveränderten Feld.
   `candidateId` wird serverseitig deterministisch erzeugt (opaker String).
@@ -74,10 +80,16 @@ Identische Ergebnisse zählen nicht als neuer bezahlter Start. API-Leserate begr
 Private Tabelle `kd_blog_reference_extractions`, Zugriff nur über den Dienst.
 Kontogebundener serverseitiger Inhalts-HMAC plus Modell/Prompt/Resultversion;
 Rohtext nicht zusätzlich speichern. Maximal zehn Ergebnisse/320 KiB pro Konto.
-24 Stunden Anzeige ab Erstellung, stündlicher Purge, spätestens 25 Stunden
-physische Entfernung im normalen Schedulerbetrieb. Auth-Account-FK mit Cascade;
-noch vorhandene Inhalte in `kd_private_own_data` unter
-`blogReferenceExtractions` aufnehmen. Keine Ausweitung der Löschfreigaben.
+24 Stunden Anzeige ab Erstellung, danach stündlicher begrenzter Purge.
+Rückstau oder Betriebsstörungen können die physische Entfernung verzögern;
+eine feste 25-Stunden-Höchstfrist wird nicht zugesagt. Auth-Account-FK mit Cascade;
+noch vorhandene Inhalte über die neue service-only RPC
+`kd_blog_reference_extract_own_data(p_account_id uuid)` exportieren.
+`kd_private_own_data(uuid)` bleibt unverändert. `account-self-service` ergänzt
+`blogReferenceExtractions` nur bei ausdrücklich angefragtem GET-Parameter
+`?include=blog-reference-extract-v1`; die normale Altantwort bleibt unverändert.
+Der neue Client fordert diese Erweiterung an und validiert sie streng. Keine
+Ausweitung der Löschfreigaben.
 Unsicherer Providerausgang bleibt terminal/konservativ gebucht; Lease-Ablauf
 startet keinen neuen Providerrequest für denselben Auftrag. Keine Rohinhalte,
 Titel, Zitate oder Antworten in Logs. Cleanup und Export gehören Paket A.
@@ -129,6 +141,8 @@ blockieren weder Schreiben noch Speichern oder manuelle Referenzen.
   `src/lib/hilfeInhalte.js`, `src/components/DatenschutzDienste.jsx`,
   `src/components/EinstiegsGate.jsx`, `src/components/PrivatePilotOps.jsx`,
   neue `blog_reference_extract_privacy*`-Tests und bestehende eigene Settings-/DS-Tests.
+  Benanntes Integrationsdelta: `src/services/accountSelfService.js` und dessen
+  fokussierte Tests für den expliziten Export-Opt-in gehören ebenfalls C.
 - Meister: Vertragsdokumente, das eine Register, Package-Testregistrierung,
   integrierter Nutzerwegtest, Integration und Auslieferung. Keine parallele
   Fachimplementierung, keine zusätzlichen Reviewagenten.

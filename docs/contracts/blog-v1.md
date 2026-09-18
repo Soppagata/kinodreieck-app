@@ -48,10 +48,13 @@ Liste weder übernehmen noch durch ein 15-Zeilen-Update ersetzen. Aktuelle
 v2-Clients lesen v1- und v2-Publikationen gemeinsam.
 
 Die 128-KiB-Prüfung ist eine Datenbankgrenze nach dem HTTP-Einlesen. Eine
-Gateway-weite Ingress-Grenze, die einen übergroßen Body schon vor Supabase/
-PostgREST verwirft, liegt außerhalb dieses lokalen Repository-Scopes und muss
-separat in der produktiven Gateway-Konfiguration gesetzt und zurückgelesen
-werden. Dieser lokale Vertrag behauptet dafür keine Production-Wirkung.
+gezielte HTTP-Probe am gemeinsamen gehosteten v1-Endpunkt vom 18.09.2026
+belegt, dass ein Body über 128 KiB den bisherigen RPC erreicht. Ein
+vorgelagerter 128-KiB-Zaun ist dort damit nicht vorhanden. Eine frei
+konfigurierbare gehostete Gatewaygrenze ist nicht belegt; die dokumentierte
+[PostgREST-Zeilengrenze](https://supabase.com/docs/guides/local-development/cli/config#api.max_rows)
+begrenzt Antworten und ersetzt keine Eingangsgrenze. M6 begrenzt den
+Datenbank-/Resolverpfad, behauptet jedoch keinen Abbruch vor HTTP-Einlesen.
 
 Status: eingefrorene Grundlage F0 fuer die parallelen Pakete A, B und C
 

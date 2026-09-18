@@ -44,6 +44,8 @@ async function loadDeliveredBlogUi() {
         'export { createRoot } from "react-dom/client";',
         'export { BlogTab } from "./src/tabs/BlogTab.jsx";',
         'export { useBlogPublicationController } from "./src/controllers/useBlogPublicationController.js";',
+        'export { useBlogReferenceExtractionController } from "./src/controllers/useBlogReferenceExtractionController.js";',
+        'export { readBlogReferenceInput, validateBlogReferenceResult } from "./supabase/functions/ai-task/blogReferenceExtract.ts";',
         'export { useArticleController } from "./src/controllers/useArticleController.js";',
         'export { localDriver, setStorageDriver } from "./src/lib/storage.js";',
         'export { createSharedArticlesService } from "./src/services/sharedArticles.js";',
@@ -175,7 +177,7 @@ function field(host, prefix) {
   return control;
 }
 
-async function mountAccount(ui, { accountId, service, values, initialLibrary = [], selectedServices }) {
+async function mountAccount(ui, { accountId, service, values, initialLibrary = [], selectedServices, scanService = null }) {
   const writes = [];
   const navigations = [];
   const errors = [];
@@ -211,7 +213,7 @@ async function mountAccount(ui, { accountId, service, values, initialLibrary = [
       setItems(next);
       return id;
     }, [items]);
-    model = ui.useBlogPublicationController({
+    const publication = ui.useBlogPublicationController({
       accountScope: accountId, enabled: true,
       articles: articles.artikelListe, articlesReady: articles.artikelGeladen,
       writeArticles: articles.schreibeArtikel,
@@ -220,6 +222,13 @@ async function mountAccount(ui, { accountId, service, values, initialLibrary = [
       service, addLibraryItem, navigateTarget: (target) => { navigations.push(target); return true; },
       setError: reportError, clock,
     });
+    const referenceExtraction = ui.useBlogReferenceExtractionController({
+      accountScope: accountId, enabled: !!scanService, personalAi: !!scanService,
+      editor: publication.editor, library: items, libraryReady: true,
+      mustwatch: [], mustwatchReady: true, service: scanService,
+      onApplyReferenceSuggestions: publication.actions.onApplyReferenceSuggestions,
+    });
+    model = { ...publication, referenceExtraction };
     articleApi = articles;
     library = items;
     return ui.React.createElement(ui.BlogTab, model);
@@ -445,6 +454,129 @@ try {
     projectTwins([wrongTwin, correctTwin]).primaryTarget?.ref === correctTwin.id);
   check("Bestätigte gemeinsame Werkidentität funktioniert auch bei abweichendem gespeicherten Anzeigenamen",
     projectTwins([{ ...correctTwin, titel: "Mein anderer Anzeigename" }]).primaryTarget?.ref === correctTwin.id);
+
+  await mounted.close(); mounted = null;
+  const scanValues = new Map();
+  const scanTitle = "Mein Scan über verschiedene Medien";
+  const scanText = "Dune verbindet für mich zwei Verfilmungen. Dazu passen Severance (2022), Kind of Blue (1959) und Das unbekannte Buch (1988).";
+  const scanLibrary = [
+    { id: "private-alpha-dune-1984", titel: "Dune", jahr: 1984, typ: "film", regie: "David Lynch", imdb_id: "tt0087182" },
+    { id: "private-alpha-dune-2021", titel: "Dune", jahr: 2021, typ: "film", regie: "Denis Villeneuve", imdb_id: "tt1160419" },
+    { id: "private-alpha-severance", titel: "Severance", jahr: 2022, typ: "serie" },
+    { id: "private-alpha-kind-of-blue", titel: "Kind of Blue", jahr: 1959, typ: "musik", kuenstler: "Miles Davis" },
+  ];
+  const scanCalls = [];
+  const scanService = {
+    async runTask(task, payload, options) {
+      if (task === "health") {
+        assert.deepEqual(payload, { capabilities: ["blog-reference-extract-v1"] });
+        return { ok: true, task: "health", activation: { userTasks: ["blog-reference-extract"] },
+          capabilities: { blogReferenceExtract: { contractVersion: "blog-reference-extract-v1",
+            enabled: true, modelAlias: "gross", maxTextBytes: 18000, maxTitleBytes: 512, maxCandidates: 50 } } };
+      }
+      assert.equal(task, "blog-reference-extract");
+      assert.deepEqual(payload, { title: scanTitle, text: scanText });
+      scanCalls.push(structuredClone(payload));
+      // Only the model answer is mocked. Both server and client validate the
+      // same evidence contract before the real editor/persistence path runs.
+      const normalized = ui.validateBlogReferenceResult({ candidates: [
+        { mention: "Dune", titleSuggestion: "Dune", kind: "title_group", year: null,
+          interpretation: "ambiguous", evidence: { field: "text", quote: "Dune verbindet für mich zwei Verfilmungen." } },
+        { mention: "Severance", titleSuggestion: "Severance", kind: "series", year: 2022,
+          interpretation: "direct", evidence: { field: "text", quote: "Severance (2022)" } },
+        { mention: "Kind of Blue", titleSuggestion: "Kind of Blue", kind: "music", year: 1959,
+          interpretation: "direct", evidence: { field: "text", quote: "Kind of Blue (1959)" } },
+        { mention: "Das unbekannte Buch", titleSuggestion: "Das unbekannte Buch", kind: "other", year: 1988,
+          interpretation: "direct", evidence: { field: "text", quote: "Das unbekannte Buch (1988)" } },
+      ] }, ui.readBlogReferenceInput(payload));
+      assert.ok(normalized && !normalized.partial);
+      return { ok: true, task, vorgangId: options.vorgangId, data: {
+        contractVersion: "blog-reference-extract-v1", ...normalized,
+        expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      } };
+    },
+  };
+  mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
+    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService });
+  await mounted.action("onNewArticle");
+  await input(ui, dom, field(mounted.host, "Titel"), scanTitle);
+  await input(ui, dom, field(mounted.host, "Text"), scanText);
+  await input(ui, dom, mounted.host.querySelector("#kd-blog-add-reference"), "Bestehende Referenz");
+  await click(ui, dom, buttonWithText(mounted.host, "Hinzufügen"));
+  const preservedRow = mounted.model.editor.references[0].rowId;
+  const beforeScanWrites = mounted.writes.length;
+  await settled(ui, () => mounted.model.referenceExtraction.canStart, "negotiated scan capability");
+  await click(ui, dom, buttonWithText(mounted.host, "Titel im Text erkennen (KI)"));
+  await settled(ui, () => mounted.model.referenceExtraction.status === "result", "server-normalized scan suggestions");
+  check("Serververtrag und Client liefern vier belegte Erwähnungen ohne Vorauswahl oder Speicherung",
+    scanCalls.length === 1 && mounted.host.querySelectorAll(".kd-blog-suggestion").length === 4
+      && !mounted.host.querySelector(".kd-blog-suggestion input:checked")
+      && mounted.model.editor.references.length === 1 && mounted.writes.length === beforeScanWrites);
+  const suggestionAt = (index) => mounted.host.querySelectorAll(".kd-blog-suggestion")[index];
+  for (let i = 0; i < 4; i++) await click(ui, dom, suggestionAt(i).querySelector(".kd-blog-suggestion-mention input"));
+  check("Erwähnungsauswahl allein übernimmt nichts; Dune zeigt beide unterscheidbaren Werke",
+    mounted.model.editor.references.length === 1
+      && /1984.*David Lynch/.test(suggestionAt(0).textContent)
+      && /2021.*Denis Villeneuve/.test(suggestionAt(0).textContent));
+  await click(ui, dom, suggestionAt(0).querySelectorAll(".kd-blog-suggestion-work input")[0]);
+  await click(ui, dom, suggestionAt(0).querySelectorAll(".kd-blog-suggestion-work input")[1]);
+  await click(ui, dom, suggestionAt(1).querySelector(".kd-blog-suggestion-work input"));
+  await click(ui, dom, suggestionAt(2).querySelector(".kd-blog-suggestion-work input"));
+  await click(ui, dom, suggestionAt(3).querySelector(".kd-blog-suggestion-work input"));
+  await click(ui, dom, buttonWithText(mounted.host, "Ausgewählte übernehmen"));
+  await settled(ui, () => mounted.model.editor.references.length === 6, "atomic reference adoption");
+  const scanRows = mounted.model.editor.references;
+  assert.deepEqual(scanRows.map((row) => [row.title, row.year, row.mediaType, row.primaryTarget?.ref ?? null]), [
+    ["Bestehende Referenz", null, "film", null],
+    ["Dune", 1984, "film", scanLibrary[0].id],
+    ["Dune", 2021, "film", scanLibrary[1].id],
+    ["Severance", 2022, "serie", scanLibrary[2].id],
+    ["Kind of Blue", 1959, "musik", scanLibrary[3].id],
+    ["Das unbekannte Buch", 1988, "sonstiges", null],
+  ]);
+  check("Bewusste Übernahme erhält die erste Zeile und ergänzt beide Dune-Filme, Serie, Musik und Rotlink atomar",
+    scanRows[0].rowId === preservedRow && scanRows[1].year === 1984 && scanRows[2].year === 2021
+      && scanRows[3].mediaType === "serie" && scanRows[4].mediaType === "musik"
+      && scanRows[5].mediaType === "sonstiges" && scanRows[5].primaryTarget === null
+      && scanRows[5].resolutionIntent.kind === "keep_redlink"
+      && mounted.writes.length === beforeScanWrites);
+  await click(ui, dom, buttonWithText(mounted.host, "Privat speichern"));
+  await settled(ui, () => mounted.articles.some((article) => article.titel === scanTitle), "scanned draft persisted");
+  const scannedArticle = mounted.articles.find((article) => article.titel === scanTitle);
+  const savedRowIds = scannedArticle.liste.map((row) => row.rowId);
+  check("Privates Speichern bewahrt alle bestätigten Typen und die unverknüpfte Entscheidung",
+    scannedArticle.liste.length === 6 && scannedArticle.liste[4].typ === "musik"
+      && scannedArticle.liste[5].rotlink_ok === true);
+  await mounted.close(); mounted = null;
+  mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
+    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService });
+  await click(ui, dom, buttonWithText(mounted.host, "Bearbeiten"));
+  check("Reload stellt Reihenfolge, Werkidentitäten und Typen ohne erneuten Scan wieder her",
+    JSON.stringify(mounted.model.editor.references.map((row) => row.rowId)) === JSON.stringify(savedRowIds)
+      && mounted.model.editor.references[1].primaryTarget?.ref === scanLibrary[0].id
+      && mounted.model.editor.references[2].primaryTarget?.ref === scanLibrary[1].id && scanCalls.length === 1);
+  await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
+  await click(ui, dom, buttonWithText(mounted.host, "Speichern & veröffentlichen"));
+  await settled(ui, () => mounted.articles[0]?.publikation?.errorCode === "DECISION_REQUIRED", "unavailable shared work decisions");
+  await mounted.close(); mounted = null;
+  mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
+    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService });
+  await click(ui, dom, buttonWithText(mounted.host, "Bearbeiten"));
+  check("Fehlende gemeinsame Katalogbelege bleiben nach Reload als ausdrückliche Rotlink-Entscheidung lösbar",
+    [...mounted.host.querySelectorAll("button")].filter((button) => button.textContent === "Als Rotlink behalten").length === 2);
+  for (let i = 0; i < 2; i++) await click(ui, dom, buttonWithText(mounted.host, "Als Rotlink behalten"));
+  await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
+  await click(ui, dom, buttonWithText(mounted.host, "Speichern & veröffentlichen"));
+  await settled(ui, () => !!mounted.articles[0]?.publikation?.publicationId, "scanned draft published");
+  const scannedPage = (await alphaService.listV1()).page;
+  assertAnonymizedPage(scannedPage, [accounts.alpha, accounts.beta, scannedArticle.id, ...savedRowIds, ...scanLibrary.map((item) => item.id)]);
+  const publishedScan = scannedPage.items.find((item) => item.article.title === scanTitle);
+  check("Die bestätigten Scanreferenzen erreichen den echten v2-Publikationsweg und sind anonym für das andere Konto lesbar",
+    publishedScan?.article.references.length === 6
+      && publishedScan.article.references[1].year === 1984 && publishedScan.article.references[2].year === 2021
+      && publishedScan.article.references[4].mediaType === "musik"
+      && publishedScan.article.references[5].mediaType === "sonstiges"
+      && !JSON.stringify([...alphaValues]).includes(scannedArticle.id) && scanCalls.length === 1);
   assert.equal(forbiddenNetworkAttempts, 0, "No catalog/provider lookup may hide behind a caught network failure");
   console.log(`blog_full_flow_integration_test: ${checks} Checks bestanden (echte UI/Controller/Service, lokales PostgreSQL, zwei Konten).`);
 } finally {
