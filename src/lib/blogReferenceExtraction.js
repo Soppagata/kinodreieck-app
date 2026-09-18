@@ -37,6 +37,7 @@ const exactKeys = (value, expected) => isObject(value)
   && Object.keys(value).length === expected.length
   && expected.every((key) => Object.prototype.hasOwnProperty.call(value, key));
 const cleanText = (value) => typeof value === "string" && value === value.trim() && value.length > 0;
+const nonBlankText = (value) => typeof value === "string" && value.trim().length > 0;
 const canonicalIso = (value) => typeof value === "string"
   && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(value)
   && Number.isFinite(Date.parse(value));
@@ -77,13 +78,13 @@ export function readBlogReferenceExtractCapability(health) {
 function validateCandidate(candidate, input) {
   if (!exactKeys(candidate, CANDIDATE_KEYS) || !exactKeys(candidate.evidence, EVIDENCE_KEYS)) return null;
   if (!cleanText(candidate.candidateId) || byteLength(candidate.candidateId) > 160
-      || !cleanText(candidate.mention) || unicodeLength(candidate.mention) > 160
-      || !cleanText(candidate.titleSuggestion) || unicodeLength(candidate.titleSuggestion) > 160
+      || !nonBlankText(candidate.mention) || unicodeLength(candidate.mention) > 160
+      || !nonBlankText(candidate.titleSuggestion) || unicodeLength(candidate.titleSuggestion) > 160
       || !KINDS.has(candidate.kind) || !INTERPRETATIONS.has(candidate.interpretation)) return null;
   if (candidate.year !== null && (!Number.isInteger(candidate.year)
       || candidate.year < yearMinForKind(candidate.kind) || candidate.year > YEAR_MAX)) return null;
   const evidence = candidate.evidence;
-  if (!["title", "text"].includes(evidence.field) || !cleanText(evidence.quote)
+  if (!["title", "text"].includes(evidence.field) || !nonBlankText(evidence.quote)
       || byteLength(evidence.quote) > 320 || !Number.isInteger(evidence.start)
       || !Number.isInteger(evidence.end) || evidence.start < 0 || evidence.end <= evidence.start) return null;
   const source = input[evidence.field];

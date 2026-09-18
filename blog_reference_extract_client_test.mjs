@@ -83,6 +83,20 @@ check("Mention und Titelvorschlag zählen bis 160 Unicode-Zeichen statt UTF-8-By
   unicodeResponse.data.candidates[0].titleSuggestion += "ä";
   assert.equal(validateBlogReferenceExtractionResponse(unicodeResponse, unicodeInput).ok, false);
 });
+check("Exakte Belege und Modelltexte dürfen belegte Rand-Leerzeichen unverändert behalten", () => {
+  const spacedInput = { title: "Beleg", text: " Dune 2021 " };
+  const spacedResponse = {
+    ...response,
+    data: { ...response.data, candidates: [{
+      ...response.data.candidates[1], candidateId: "c-spaced", mention: " Dune",
+      titleSuggestion: " Dune ",
+      evidence: { field: "text", quote: " Dune 2021 ", start: 0, end: spacedInput.text.length },
+    }] },
+  };
+  const result = validateBlogReferenceExtractionResponse(spacedResponse, spacedInput);
+  assert.equal(result.ok, true);
+  assert.equal(result.value.candidates[0].evidence.quote, spacedInput.text);
+});
 check("Der Fachauftrag verlangt Überschrift und Blogtext, ohne den Entwurf zu verändern", () => {
   assert.equal(validateBlogReferenceExtractionInput({ title: "", text: "Text" }).reason, "empty-title");
   assert.equal(validateBlogReferenceExtractionInput({ title: "Titel", text: "" }).reason, "empty-text");
