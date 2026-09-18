@@ -54,17 +54,17 @@ export function DatenschutzUebersicht({
           Persönliche Inhalte liegen {accountActive ? "in diesem Browser und bei aktiviertem Kontospeicher zusätzlich in deinem Konto" : "in diesem Browser"}. Gemeinsame Kino- und Streamingdaten werden getrennt davon gepflegt.
         </p>
         <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.6 }}>
-          FlixPatrol erhält keine persönlichen Profile, Bewertungen, Notizen oder deine Streaming-Auswahl. Bei einer bewusst gestarteten KI-Funktion erhält Anthropic die dafür benötigten Eingaben und begrenzten Kontextdaten. Zusätzlich kann ein serverseitig freigegebener automatischer Radar-Lauf aktive Radarziele an Anthropic senden; der lokale KI-Schalter stoppt diesen Server-Radar nicht.
+          FlixPatrol erhält keine persönlichen Profile, Bewertungen, Notizen oder deine Streaming-Auswahl. Bei „Titel im Text erkennen (KI)“ erhält Anthropic erst nach deinem Klick die Überschrift und den vollständigen begrenzten Blogtext; persönliche Angaben im Text werden mitgesendet. „Anonym veröffentlichen“ anonymisiert diese Eingabe nicht. Zusätzlich kann ein serverseitig freigegebener automatischer Radar-Lauf aktive Radarziele an Anthropic senden; der lokale KI-Schalter stoppt diesen Server-Radar nicht.
         </p>
         <details>
           <summary style={{ cursor: "pointer", color: T.rauch, fontSize: 13 }}>Speicherung und Aufbewahrung</summary>
           <p style={{ margin: "10px 0 0", color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
-            Persönliche Inhalte sind zweckgebunden. Kurzzeitige lokale Sicherheits- und Übergangskopien sind auf höchstens sieben Tage angelegt; inhaltsfreie Betriebsnachweise auf höchstens 90 Tage.
+            Persönliche Inhalte sind zweckgebunden. Vorschläge und kurze Textfundstellen aus der Blog-Referenzerkennung sind 24 Stunden abrufbar und werden durch den stündlichen Purge im normalen Schedulerbetrieb spätestens nach 25 Stunden gelöscht. Kurzzeitige lokale Sicherheits- und Übergangskopien sind auf höchstens sieben Tage angelegt; inhaltsfreie Betriebsnachweise auf höchstens 90 Tage.
           </p>
         </details>
       </> : <>
       <p style={{ margin: 0, color: T.rauch, fontSize: 13, lineHeight: 1.6 }}>
-        {PRIVATE_DATA_INVENTORY.length} feste Datenklassen sind im Register. Persönliche Inhalte liegen lokal{accountActive ? " und bei aktiviertem Kontospeicher zusätzlich im eigenen Supabase-Konto" : " im Browser"}. Gemeinsame Katalogquellen werden serverseitig gepflegt. Anthropic erhält begrenzte Eingaben aus bewusst gestarteten KI-Aufgaben oder aus einer serverseitig freigegebenen automatischen Radar-Prüfung aktiver Ziele. Der lokale KI-Schalter stoppt diesen Server-Radar nicht.
+        {PRIVATE_DATA_INVENTORY.length} feste Datenklassen sind im Register. Persönliche Inhalte liegen lokal{accountActive ? " und bei aktiviertem Kontospeicher zusätzlich im eigenen Supabase-Konto" : " im Browser"}. Gemeinsame Katalogquellen werden serverseitig gepflegt. Anthropic erhält begrenzte Eingaben aus bewusst gestarteten KI-Aufgaben oder aus einer serverseitig freigegebenen automatischen Radar-Prüfung aktiver Ziele. Bei der Blog-Referenzerkennung sind das nach deinem Klick die Überschrift und der vollständige begrenzte Blogtext einschließlich persönlicher Angaben im Text; anonymes Veröffentlichen anonymisiert diese Eingabe nicht. Der lokale KI-Schalter stoppt diesen Server-Radar nicht.
       </p>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.6 }}>
         FlixPatrol wird zentral mit dem Betreiber-API-Key abgerufen. Der Browser liest nur begrenzte Fakten aus dem eigenen Supabase-Cache. Persönliche Profile, Bewertungen, Notizen und die Auswahl deiner Streamingdienste werden nicht an FlixPatrol gesendet. Beim Forecast und bei strukturierten Radar-Zielen kann ein passender Cachetreffer den bestehenden Anthropic-Auftrag ergänzen. Bei der Profil-Extraktion erfolgt der Cacheabgleich erst nach der Anbieterantwort; die FlixPatrol-Nachprüfung bei Import und Kataloganreicherung liest nur diesen Cache und löst selbst keine zusätzlichen FlixPatrol- oder KI-Anfragen aus.
@@ -72,6 +72,7 @@ export function DatenschutzUebersicht({
       <dl className="kd-statusliste">
         <div><dt>Persönliche Töpfe</dt><dd>{PRIVATE_DATA_INVENTORY.filter((entry) => entry.retention === RETENTION_CLASSES.PURPOSE_BOUND.id).length}</dd></div>
         <div><dt>Kurzzeit-Rückholpunkte</dt><dd>{RETENTION_CLASSES.TRANSIENT_7.label}</dd></div>
+        <div><dt>Blog-Referenzvorschläge</dt><dd>{RETENTION_CLASSES.BLOG_REFERENCE_EXTRACTIONS.label}</dd></div>
         <div><dt>Betriebsnachweise</dt><dd>höchstens {RETENTION_CLASSES.AUDIT_90.label}</dd></div>
       </dl>
       <details>
@@ -100,6 +101,9 @@ export function ManuellerDatenrechteWeg({ kontoExportFreigegeben = false }) {
         Unter Settings → Konto, Daten &amp; Sicherung kannst du eine JSON-Sicherheitskopie der persönlichen
         Inhalte dieses Geräts herunterladen, zum Beispiel Mediathek, Artikel, Listen,
         Einstellungen und Geschmacksprofil.
+      </p>
+      <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
+        Übernommene Referenzen sind Teil des Blogartikels und reisen mit dessen Gerätesicherung. Nicht übernommene KI-Vorschläge erhalten keinen eigenen Geräte- oder Backup-Topf. Noch vorhandene serverseitige Vorschläge und kurze Textfundstellen gehören stattdessen zum Konto-/Rechteweg.
       </p>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
         Soweit ein Konto aktiv ist, versucht die Sicherung vorher, den aktuellen Synchronisationsstand zu laden.

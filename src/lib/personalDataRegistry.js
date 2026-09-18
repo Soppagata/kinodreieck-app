@@ -95,7 +95,10 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
   jsonEintrag({
     key: K.artikel,
     backupField: "artikel",
-    label: "Blog-Artikel",
+    /* Bewusst derselbe Topf: Bestätigte Referenzen sind Teil des Artikels.
+       Kurzlebige, noch nicht übernommene KI-Vorschläge gehören ausschließlich
+       in den serverseitigen Rechteweg und nie in Geräte-Sync oder Backup. */
+    label: "Blog-Artikel einschließlich übernommener Referenzen",
     einheit: "Artikel",
     backupFallback: [],
     pruefe: (v) => Array.isArray(v) || (istObjekt(v) && Array.isArray(v.artikel)),

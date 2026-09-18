@@ -32,11 +32,11 @@
 
 const KEY = "kd:ki";
 const KEY_VERSION = "kd:ki-version";
-/* Filmwissen kam innerhalb dieser Wahlfassung als eigenständig
-   kostenpflichtiger Opt-in hinzu. Die bestehende Marke bleibt absichtlich
+/* Filmwissen und die Blog-Referenzerkennung kamen innerhalb dieser Wahlfassung
+   als eigenständige kostenpflichtige Opt-ins hinzu. Die bestehende Marke bleibt absichtlich
    gültig: Der Einstieg wird durch einen Versionssprung nicht erneut geöffnet.
    Bestandsnutzer behalten daher ihre bisherigen KI-Funktionen, während der
-   fehlende Filmwissen-Einzelwert über `standardAn: false` sicher AUS bleibt. */
+   jeweils fehlende Einzelwert über `standardAn: false` sicher AUS bleibt. */
 export const KI_WAHL_VERSION = "e8-v1";
 
 /* Ein fehlgeschlagenes Schreiben darf besonders beim AUSSCHALTEN nicht den
@@ -89,6 +89,12 @@ export const KI_FUNKTIONEN = {
   filmwissen: {
     label: "Belegtes Filmwissen recherchieren",
     beschreibung: "Separat aktivieren und für einen Film auf ausdrücklichen Klick einen belegten Recherchebericht erstellen.",
+    standardAn: false,
+    beiAus: "ausblenden",
+  },
+  blogReferenzen: {
+    label: "Titel aus Blogtexten mit KI erkennen",
+    beschreibung: "Auf deinen Klick die Überschrift und den aktuellen Blogtext an Anthropic senden. Du prüfst die Vorschläge und wählst die Referenzen selbst aus.",
     standardAn: false,
     beiAus: "ausblenden",
   },

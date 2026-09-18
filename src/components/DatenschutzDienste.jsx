@@ -22,8 +22,9 @@ export function DatenschutzDienste({ titel = "Dienste, Empfänger und Datenquell
               {entry.retentionNote && <p style={textStyle}>{entry.retentionNote}</p>}
               <p style={textStyle}>
                 <a href={entry.officialSource} target="_blank" rel="noopener noreferrer" style={linkStyle}>{entry.officialSourceLabel}</a>
-                {entry.technicalSource && <> · <a href={entry.technicalSource} target="_blank" rel="noopener noreferrer" style={linkStyle}>Technische Informationen</a></>}
-                {entry.termsSource && <> · <a href={entry.termsSource} target="_blank" rel="noopener noreferrer" style={linkStyle}>Bedingungen</a></>}
+                {entry.technicalSource && <> · <a href={entry.technicalSource} target="_blank" rel="noopener noreferrer" style={linkStyle}>{entry.technicalSourceLabel || "Technische Informationen"}</a></>}
+                {entry.termsSource && <> · <a href={entry.termsSource} target="_blank" rel="noopener noreferrer" style={linkStyle}>{entry.termsSourceLabel || "Bedingungen"}</a></>}
+                {(entry.additionalSources || []).map((source) => <span key={source.href}> · <a href={source.href} target="_blank" rel="noopener noreferrer" style={linkStyle}>{source.label}</a></span>)}
               </p>
             </article>
           ))}

@@ -129,8 +129,8 @@ check("A", "leererStand() ist der fail-closed Zustand: global null, keine Funkti
   () => { const s = K.leererStand();
     return s.global === null && JSON.stringify(s.funktionen) === "{}" && s.gefragtAm === null
       && Object.keys(s).sort().join(",") === "funktionen,gefragtAm,global"; });
-check("A", "KI_FUNKTIONEN führt die sechs Kern-KI-Funktionen einschließlich Filmwissen",
-  () => NAMEN().join(",") === "suche,profil,vorbewertung,filmwissen,stapelimport,diagnose");
+check("A", "KI_FUNKTIONEN führt die sieben Kern-KI-Funktionen einschließlich Filmwissen und Blogreferenzen",
+  () => NAMEN().join(",") === "suche,profil,vorbewertung,filmwissen,blogReferenzen,stapelimport,diagnose");
 check("A", "jede Funktion hat Label, Beschreibung und ein Verhalten bei Aus",
   () => NAMEN().every((n) => { const f = K.KI_FUNKTIONEN[n];
     return typeof f.label === "string" && f.label.length > 0
@@ -139,12 +139,14 @@ check("A", "jede Funktion hat Label, Beschreibung und ein Verhalten bei Aus",
 /* „ausblenden" ist die Doktrin: Bei KI=aus existiert der Knopf nicht. Ein
    Erklärtext wäre die falsche Auskunft — `ai-disabled` heißt „der Betreiber
    hat abgeschaltet", nicht „du hast abgeschaltet". */
-check("A", "alle sechs blenden bei Aus AUS — keine erklärt sich nach dem Klick",
+check("A", "alle sieben blenden bei Aus AUS — keine erklärt sich nach dem Klick",
   () => NAMEN().every((n) => K.KI_FUNKTIONEN[n].beiAus === "ausblenden"));
 check("A", "KI_WAHL_VERSION erhält den bestehenden Einstiegsvertrag",
   () => K.KI_WAHL_VERSION === "e8-v1");
 check("A", "Filmwissen ist als eigenständiger kostenpflichtiger Pfad ausdrücklich opt-in",
   () => K.KI_FUNKTIONEN.filmwissen.standardAn === false);
+check("A", "Blogreferenzen sind als eigenständiger kostenpflichtiger Pfad ausdrücklich opt-in",
+  () => K.KI_FUNKTIONEN.blogReferenzen.standardAn === false);
 /* Der Topf ist gerätelokal und darf NICHT in den Sync- oder Backup-Weg.
    `kd:einstellungen` wird von Anmeldung, Restore und Übernahme überschrieben —
    ein Zweitgerät könnte den Schalter sonst still umlegen. */
@@ -214,9 +216,9 @@ check("B", "FAIL-CLOSED: ausdrücklich eingeschaltete Funktionen ohne Grundentsc
 /* Und der Normalfall zur Eichung — ohne ihn wäre „alles aus" trivial grün. */
 const an = speicher(AN());
 check("B", "EICHUNG: die bisherigen Funktionen bleiben unter offenem Dach standardmäßig AN",
-  () => NAMEN().filter((n) => n !== "filmwissen").every((n) => K.kiAn(n, an) === true));
-check("B", "Filmwissen bleibt ohne ausdrücklichen Einzelwert auch unter offenem Dach AUS",
-  () => K.kiAn("filmwissen", an) === false);
+  () => NAMEN().filter((n) => !["filmwissen", "blogReferenzen"].includes(n)).every((n) => K.kiAn(n, an) === true));
+check("B", "neue kostenpflichtige Opt-ins bleiben ohne Einzelwert auch unter offenem Dach AUS",
+  () => K.kiAn("filmwissen", an) === false && K.kiAn("blogReferenzen", an) === false);
 check("B", "ein fehlender Storage (undefined/null) ist ebenfalls AUS, ohne zu werfen",
   () => K.kiAn("suche", undefined) === false && K.kiAn("suche", null) === false
     && K.ladeStand(null).global === null && K.wahlBestaetigt(null) === false);
@@ -257,6 +259,9 @@ check("C", "eine nicht erwähnte Funktion ist unter offenem Dach AN (Voreinstell
 check("C", "der neue bezahlte Filmwissen-Pfad ist von dieser Voreinstellung ausgenommen",
   () => K.kiAn("filmwissen", speicher(AN())) === false
     && K.kiAn("filmwissen", speicher(AN({ funktionen: { filmwissen: true } }))) === true);
+check("C", "die Blog-Referenzerkennung ist von dieser Voreinstellung ausgenommen",
+  () => K.kiAn("blogReferenzen", speicher(AN())) === false
+    && K.kiAn("blogReferenzen", speicher(AN({ funktionen: { blogReferenzen: true } }))) === true);
 check("C", "nur ausdrückliches `false` schaltet ab — 0, \"\", null tun es nicht",
   () => [0, "", null, "false"].every((v) => {
     const s = speicher({ "kd:ki": JSON.stringify({ global: true, funktionen: { suche: v }, gefragtAm: T0 }), "kd:ki-version": K.KI_WAHL_VERSION });
@@ -296,12 +301,13 @@ const e8v1OhneFilmwissen = speicher({
   "kd:ki": JSON.stringify({ global: true, funktionen: {}, gefragtAm: T0 }),
   "kd:ki-version": "e8-v1",
 });
-check("D", "eine gültige e8-v1-Bestandswahl behält alte Funktionen, aber öffnet Filmwissen nicht",
+check("D", "eine gültige e8-v1-Bestandswahl behält alte Funktionen, öffnet neue Opt-ins aber nicht",
   () => K.wahlBestaetigt(e8v1OhneFilmwissen) === true
     && K.ladeStand(e8v1OhneFilmwissen).global === true
-    && NAMEN().filter((n) => n !== "filmwissen")
+    && NAMEN().filter((n) => !["filmwissen", "blogReferenzen"].includes(n))
       .every((n) => K.kiAn(n, e8v1OhneFilmwissen) === true)
-    && K.kiAn("filmwissen", e8v1OhneFilmwissen) === false);
+    && K.kiAn("filmwissen", e8v1OhneFilmwissen) === false
+    && K.kiAn("blogReferenzen", e8v1OhneFilmwissen) === false);
 });
 
 /* =========================================================================
@@ -343,6 +349,11 @@ check("E", "Filmwissen öffnet erst ein ausdrücklich gespeichertes true",
     if (K.kiAn("filmwissen", t) !== false) return false;
     K.setzeFunktion("filmwissen", true, t);
     return K.kiAn("filmwissen", t) === true; });
+check("E", "Blogreferenzen öffnen erst ein ausdrücklich gespeichertes true",
+  () => { const t = speicher(AN());
+    if (K.kiAn("blogReferenzen", t) !== false) return false;
+    K.setzeFunktion("blogReferenzen", true, t);
+    return K.kiAn("blogReferenzen", t) === true; });
 check("E", "setzeFunktion fasst die Versionsmarke NICHT an — sie gehört zur Grundfrage",
   () => { const t = speicher(AN()); t._zugriffe.length = 0; K.setzeFunktion("suche", false, t);
     return !t._zugriffe.some(([art, k]) => art === "set" && k === "kd:ki-version"); });

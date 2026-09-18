@@ -226,7 +226,8 @@ export function DatenTab({
           <p style={{ ...mono, margin: "0 0 10px", lineHeight: 1.6 }}>
             Diese Schalter steuern KI-Aktionen, die du selbst startest: Suchtexte
             und eigene Begriffe deuten, Geschmacksprofile erstellen oder
-            verfeinern, KI-Bewertungen erstellen und mehrere Titel erfassen.
+            verfeinern, KI-Bewertungen erstellen, mehrere Titel erfassen und
+            Titel in einem Blogtext erkennen.
             Suche, Sammlung und Bewertungen funktionieren auch ohne diese
             KI-Aktionen.
           </p>
@@ -264,8 +265,9 @@ export function DatenTab({
             Diese Wahl gilt nur für diesen Browser auf diesem Gerät und wird weder
             synchronisiert noch gesichert. Sie steuert nicht den Hintergrund-Radar
             oder die normale Auswahl in Entdecken und Für mich. Bereits gespeicherte
-            eigene Begriffe, Profile sowie KI- und Filmwissen-Ergebnisse bleiben
-            erhalten. Für neue KI-Aktionen brauchst du außerdem ein KI-fähiges Konto.
+            eigene Begriffe, Profile, übernommene Blogreferenzen sowie KI- und
+            Filmwissen-Ergebnisse bleiben erhalten. Für neue KI-Aktionen brauchst
+            du außerdem ein KI-fähiges Konto.
           </p>
         </div>
 

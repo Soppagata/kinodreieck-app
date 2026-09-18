@@ -613,7 +613,7 @@ const retentionById = Object.values(RETENTION_CLASSES);
 const retentionDays = new Set(retentionById.map((entry) => entry.days));
 expect(
   "Private-Pilot Retention-Klassen sind vollständig und eindeutig",
-  retentionById.length === 5
+  retentionById.length === 6
     && new Set(retentionById.map((entry) => entry.id)).size === retentionById.length
     && retentionDays.has(0)
     && retentionDays.has(7)
@@ -699,7 +699,7 @@ expect(
   exportStatus.schemaVersion === PRIVATE_OPS_SCHEMA_VERSION
     && exportStatus.registryVersion === PRIVATE_OPS_SCHEMA_VERSION
     && exportStatus.localDataClasses.length === PERSONAL_DATA_ENTRIES.length
-    && exportStatus.retentionPolicy.length === 5,
+    && exportStatus.retentionPolicy.length === 6,
 );
 
 const retentionRows = parseInsertRows(migrationSql, "kd_private_retention_registry");
