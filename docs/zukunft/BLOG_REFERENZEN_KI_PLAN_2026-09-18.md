@@ -184,7 +184,8 @@ nimmt keine verspäteten Vorschläge auf.
 
 Zunächst ein neuer Auftrag pro Konto gleichzeitig, höchstens drei neue Starts
 pro Minute und zehn pro Tag, zusätzlich zu vorhandenen strengeren AI-Limits
-und einer endlichen globalen Parallelitätsgrenze. Alle Grenzen gelten atomar
+und zunächst höchstens vier gleichzeitig laufenden Extraktionen über alle
+Konten. Alle Grenzen gelten atomar
 im Backend auch für direkte API-Aufrufe. Validierung erfolgt vor
 Budgetreservierung; Cachetreffer kosten keinen neuen Anbieterrequest und
 zählen nicht als neuer bezahlter Start. Billige API-Leseraten bleiben begrenzt.
@@ -324,7 +325,7 @@ konkreten Informationspflichten oder Rechtsgrundlage. Primärquellen: [Aufbewahr
 | Neue `src/lib/blogReferenceExtraction.js` | Reiner Clientvertrag: Eingabe/Antwortgrenzen, Vorschlagsauswahl und Zusammenführung. Keine Providerzugangsdaten. |
 | `src/services/ai.js`, `src/lib/aiDriver.js` | Task-Allowlist und strikte Ergebnisvalidierung; Prompt-/Profilversion wie beim servergeführten Blogprofilauftrag nicht frei vom Client übernehmen. Bestehenden Abort-/Accountschutz nutzen. |
 | Neue `supabase/functions/ai-task/blogReferenceExtract.ts` | Reiner Aufgabenvertrag, Prompt, festes Anbieterschema, direkte Belegprüfung, Ergebnisse. Kein weiterer großer Inlineblock mit lose duplizierten Grenzen. |
-| `supabase/functions/ai-task/index.ts`, `requestContract.ts` | Dünne Registrierung des neuen Tasks, eigene Capability, Featureflag, atomarer Cache-/Budgetweg und Statusantworten. |
+| `supabase/functions/ai-task/index.ts`, `requestContract.ts` | Dünne Registrierung des neuen Tasks, eigene Capability, Featureflag, atomarer Cache-/Budgetweg und Statusantworten. Den vorhandenen allgemeinen Eingangszaun von 1.000.000 Bytes bereits beim Bodylesen erzwingen; die engere Taskgrenze zusätzlich nach dem Routing prüfen. Kein Vertrauen allein auf `Content-Length`. |
 | `supabase/functions/ai-task/providerContract.ts` | Taskgebundene Option für `thinking: { type: "disabled" }`; Körperbau und Kostenschätzung müssen dieselbe Option verwenden. Bestehende Aufgaben nicht global umstellen. Gebundenes Antwortlesen für den neuen Task. |
 | Neue additive Migration plus Schema-/PG-Harnessstand | Neue private Ergebnistabelle und servicegeschützte Start/Finish/Cleanup-RPCs; Modellrouting, Token-/Kosten-/Ratenwerte, Default-off-Featureflag. Keine Änderung angewandter Migrationen. |
 
@@ -416,6 +417,10 @@ Startnachweis, keine allgemeine Qualitätsgarantie. Haiku wird erst dann zum
 Standardkandidaten, wenn es die Kriterien ebenfalls erfüllt und im Vergleich
 keine relevante Verschlechterung zeigt. Bis dahin bleibt Sonnet die geplante
 Variante, ohne Behauptung einer bereits gemessenen besten Preis-Leistung.
+Ein späterer Modellwechsel betrifft ausschließlich den versionierten Vertrag
+dieses Tasks samt Prompt, Capability und Kostenkonfiguration. Den gemeinsamen
+Alias `gross` nicht auf Haiku umbiegen; andere Sonnet-Aufgaben bleiben davon
+unberührt. Kein stiller Modellwechsel bei Fehlern oder Budgetmangel.
 
 ## Spätere Bauaufteilung
 

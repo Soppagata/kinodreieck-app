@@ -736,6 +736,28 @@ angemessenen lokalen Abschlusslauf aus; grüne Läufe werden bei unveränderter
 Integration nicht nochmals vollständig wiederholt. Kein Push, Deployment,
 gemeinsamer Backendwrite oder zahlender Providerrequest im Paket.
 
+**Integrationsbefund nach erster R50-Lieferung.** Paketcommit
+`5bb18b190061687b3eeb0270a732042ab490c364` besteht den vollständigen lokalen
+Abschlusslauf. Vor Integration wurde dennoch eine konkrete Vertragsnaht
+lokal reproduziert: `kd_publish_blog_v1` nahm einen v2-Request mit 50 Referenzen
+an und lieferte `published`, `contractVersion=blog-publication-v1`, 50
+Referenzergebnisse und null neue Aufrufzähler. Der gemeinsam erweiterte
+Validator allein bindet die alten öffentlichen Endpunkte nicht an v1.
+Ein Delta-Restauftrag bindet deshalb jede RPC an ihre Vertragsversion und
+führt die Mengen-/Rate-/Parallelitätsgrenzen über beide öffentlichen
+Publikationswege. Außerdem erhält der private `kd:artikel`-Topf die noch
+fehlende serverseitige 50er-Prüfung für Liste und Schattenfeld; bisher
+begrenzte die Datenbank dort nur die Gesamtbytes. Es werden nur die
+betroffenen Prüfungen wiederholt, kein pauschaler zweiter Gesamtlauf.
+M6 bleibt bis zu diesem Delta und der Integration offen.
+
+Die zusätzliche vorgelagerte HTTP-Body-Grenze ist getrennt vom SQL-Deckel zu
+prüfen und am realen Eingang nachzuweisen. Ein im Hosting tatsächlich
+konfigurierbarer Eingangszaun ist hier noch nicht belegt; keine freie
+Supabase-Einstellmöglichkeit unterstellen. `PGRST_DB_MAX_ROWS` begrenzt laut
+[PostgREST-Konfiguration](https://postgrest.org/en/stable/references/configuration.html#db-max-rows)
+die gelesenen Ergebniszeilen und ersetzt diesen Nachweis nicht.
+
 **M7: Titelvorschläge mit Sonnet, bewusste Übernahme durch den Nutzer.**
 
 Der [ausgearbeitete KI-Plan](BLOG_REFERENZEN_KI_PLAN_2026-09-18.md) konkretisiert
