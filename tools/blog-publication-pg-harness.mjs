@@ -10,6 +10,19 @@ export const BLOG_TEST_ACCOUNTS = Object.freeze({
 });
 
 const MIGRATION = "supabase/migrations/20260918120000_blog_publication_v1.sql";
+const CRON_PREREQUISITE = "supabase/migrations/20260918115900_blog_publication_pg_cron.sql";
+
+function verifyCronPrerequisiteSql() {
+  const sql = readFileSync(CRON_PREREQUISITE, "utf8");
+  const required = [
+    /create\s+extension\s+if\s+not\s+exists\s+pg_cron\s+with\s+schema\s+pg_catalog/i,
+    /grant\s+usage\s+on\s+schema\s+cron\s+to\s+postgres/i,
+    /grant\s+all\s+privileges\s+on\s+all\s+tables\s+in\s+schema\s+cron\s+to\s+postgres/i,
+  ];
+  if (!required.every((pattern) => pattern.test(sql)) || /https?:\/\/|net\.http|webhook/i.test(sql)) {
+    throw new Error("invalid blog pg_cron prerequisite migration");
+  }
+}
 
 function pgBin() {
   const configured = spawnSync("pg_config", ["--bindir"], { encoding: "utf8" });
@@ -229,6 +242,10 @@ export async function startBlogPublicationPgHarness() {
     run("pg_ctl", ["--pgdata", data, "--log", join(root, "postgres.log"), "--options",
       `-c listen_addresses= -c unix_socket_directories=${socket} -p ${port} -c shared_memory_type=mmap -c dynamic_shared_memory_type=posix`, "--wait", "start"]);
     running = true;
+    /* pg_cron is not installed into the disposable local cluster. The schema
+       above is a narrow test double; this check binds it to the declarative
+       prerequisite without claiming a real extension installation. */
+    verifyCronPrerequisiteSql();
     rawSql(baseSchemaSql());
     sourceUpdate();
     rawSql(readFileSync(MIGRATION, "utf8"));

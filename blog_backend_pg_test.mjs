@@ -258,6 +258,8 @@ try {
   const legacyRow = legacyRows.find((row) => row.publication_id === legacy.publication_id);
   check("Legacy-Liste behaelt Signatur und anonymisiert IDs, Autor und Payload",
     legacyRow.article_id === legacy.publication_id && legacyRow.author === "Ohne Namensangabe"
+    && legacyRow.payload.id === legacy.publication_id
+    && Object.keys(legacyRow).sort().join(",") === "article_id,author,payload,publication_id,share_token,updated_at"
     && legacyRow.payload.autor === "Ohne Namensangabe"
     && !JSON.stringify(legacyRow).includes("private-legacy-secret")
     && !JSON.stringify(legacyRow).includes("private-media-secret")
@@ -280,13 +282,46 @@ try {
   check("Legacy-Claim bleibt atomar einmalig und liefert dieselbe sichere Projektion",
     firstClaim[0].claimed === true && secondClaim[0].claimed === false
     && firstClaim[0].article_id === legacy.publication_id
+    && Object.keys(firstClaim[0]).sort().join(",") === "article_id,author,claimed,payload,publication_id,share_token,updated_at"
     && !JSON.stringify(firstClaim).includes("private-media-secret"));
   expectFailure("Inaktives Konto kann auch Legacy-Claim nicht ausfuehren",
     () => harness.callRpc("kd_claim_shared_article", { p_share_token: legacy.share_token }, { accountId: harness.accounts.inactive }),
     /account_inactive/);
-  expectFailure("Authentifizierter Browser kann die Publikationstabelle nicht direkt manipulieren",
-    () => harness.sql("delete from public.kd_shared_articles;", { role: "authenticated", accountId: harness.accounts.alpha }),
+  expectFailure("Altclient kann weiterhin keine Publikation direkt einfuegen",
+    () => harness.sql(`insert into public.kd_shared_articles(article_id,author,payload)
+      values('forbidden-insert','Name','{"titel":"Nein","text":"Nein"}'::jsonb);`,
+      { role: "authenticated", accountId: harness.accounts.alpha }),
     /permission denied/);
+  expectFailure("Altclient kann weiterhin keine Publikation direkt aktualisieren",
+    () => harness.sql(`update public.kd_shared_articles set author='Manipuliert'
+      where article_id='private-legacy-secret';`,
+      { role: "authenticated", accountId: harness.accounts.alpha }), /permission denied/);
+  expectFailure("Minimale Delete-Spaltenrechte geben keine Autoren- oder Payloadfelder frei",
+    () => harness.sql("select author,payload from public.kd_shared_articles;",
+      { role: "authenticated", accountId: harness.accounts.alpha }), /permission denied/);
+
+  const foreignLegacyDelete = harness.sqlJson(`with deleted as (
+    delete from public.kd_shared_articles where article_id='private-legacy-secret'
+    returning publication_id)
+    select coalesce(jsonb_agg(publication_id),'[]'::jsonb) from deleted;`,
+    { role: "authenticated", accountId: harness.accounts.beta });
+  const inactiveLegacyDelete = harness.sqlJson(`with deleted as (
+    delete from public.kd_shared_articles where article_id='private-legacy-secret'
+    returning publication_id)
+    select coalesce(jsonb_agg(publication_id),'[]'::jsonb) from deleted;`,
+    { role: "authenticated", accountId: harness.accounts.inactive });
+  expectFailure("Anon kann den Legacy-Delete nicht ausfuehren",
+    () => harness.sql(`delete from public.kd_shared_articles
+      where article_id='private-legacy-secret' returning publication_id;`,
+      { role: "anon", accountId: null }), /permission denied/);
+  const ownerLegacyDelete = harness.sqlJson(`with deleted as (
+    delete from public.kd_shared_articles where article_id='private-legacy-secret'
+    returning publication_id)
+    select coalesce(jsonb_agg(publication_id),'[]'::jsonb) from deleted;`,
+    { role: "authenticated", accountId: harness.accounts.alpha });
+  check("Ausgelieferter Prod-DELETE bleibt ownergebunden mit select=publication_id kompatibel",
+    foreignLegacyDelete.length === 0 && inactiveLegacyDelete.length === 0
+    && ownerLegacyDelete.length === 1 && ownerLegacyDelete[0] === legacy.publication_id);
 
   const withdrawConflict = harness.callRpc("kd_withdraw_blog_publication_v1", {
     contractVersion: "blog-publication-v1", operationId: id("3", 11),

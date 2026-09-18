@@ -4,7 +4,9 @@ Status: eingefrorene Grundlage F0 fuer die parallelen Pakete A, B und C
 
 Version: `blog-publication-v1`
 
-Grenze: lokale Implementierung; kein Deployment und kein gemeinsamer Datenbankwrite
+Grenze: lokale Implementierung fuer einen spaeter gemeinsam aktivierten
+Staging-/Produktions-Datenbereich; dieser Vertrag selbst fuehrt kein Deployment
+und keinen gemeinsamen Datenbankwrite aus
 
 Dieser Vertrag ergaenzt die vorhandene Shared-Article-Infrastruktur. Er ersetzt
 weder den persoenlichen Artikeltopf noch Mediathek, Streamingindex oder
@@ -34,6 +36,23 @@ behält pro Zeile eine stabile Identitaet, auch wenn der Rang geaendert wird.
   kontogebunden. Eine gemeinsame Projektion erhaelt stattdessen eine
   servererzeugte `referenceId` und gegebenenfalls einen oeffentlichen,
   kataloggebundenen `workKey`.
+
+## Gemeinsamer Backendbereich und Lieferreihenfolge
+
+Staging und Produktion verwenden absichtlich denselben veroeffentlichten
+Blogbereich. Eine auf Staging veroeffentlichte Kopie ist damit nach Aktivierung
+auch fuer aktive Produktionskonten sichtbar. Es gibt keine Environment-Spalte,
+kein Staging-Praefix und keine getrennte Publikationsliste. Der neue Editor kann
+trotzdem zunaechst nur im Staging-Client ausgeliefert werden; diese UI-Grenze
+veraendert den gemeinsamen Backendvertrag nicht.
+
+Vor `20260918120000_blog_publication_v1.sql` muss
+`20260918115900_blog_publication_pg_cron.sql` erfolgreich laufen. Die schmale
+Voraussetzung installiert `pg_cron` deklarativ in `pg_catalog` und gibt dem
+Migrationseigner `postgres` Zugriff auf das `cron`-Schema und dessen Tabellen.
+Die lokale PG17-Harness verwendet dafuer nur ein Cron-Doppel; sie belegt keine
+Installation im gemeinsamen Supabase-Projekt. Die reale Migration und der
+registrierte Job muessen deshalb separat per Readback bestaetigt werden.
 
 ## Gemeinsame Konstanten
 
@@ -467,10 +486,17 @@ v1-Projektion erzeugt:
 
 So bleiben vorhandene Parser und Claim-Snapshots funktionsfaehig, ohne private
 IDs oder Autorendaten zu leaken. Alte List-/Claim-Signaturen werden weder
-umbenannt noch um Pflichtparameter erweitert. Direkter authentifizierter
-INSERT/UPDATE/DELETE auf `kd_shared_articles` wird fuer normale Clients
-entzogen; neue Writes laufen ausschliesslich ueber die v1-RPCs. Erst danach
-darf die Capability `legacyProjectionSafe: true` melden.
+umbenannt noch um Pflichtparameter erweitert.
+
+Der ausgelieferte Produktionsclient entfernt seine eigene oeffentliche Kopie
+noch ueber `DELETE kd_shared_articles?article_id=eq...&select=publication_id`
+mit `return=representation`. Dafuer besitzt `authenticated` ausschliesslich
+`DELETE` sowie Spalten-SELECT auf `article_id` und `publication_id`; Owner- und
+Aktivkonto-RLS gelten fuer Auswahl und Loeschung. Direkter INSERT und UPDATE
+bleiben ohne Tabellenrecht und ohne RLS-Policy gesperrt. Listen- und
+Claim-Antworten kommen weiterhin nur aus den anonymisierten Funktionen und
+enthalten weder Autor- noch private Artikel- oder Referenz-IDs. Erst mit dieser
+Kompatibilitaet darf die Capability `legacyProjectionSafe: true` melden.
 
 ## Anwendung-zu-UI-Vertrag
 

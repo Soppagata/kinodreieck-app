@@ -13,10 +13,12 @@
 -- Radar-/Private-/Entdecken-Migrationen KEIN aktueller Ist-Stand und KEINE
 -- alleinige Wiederherstellungsreferenz für neue Umgebungen.
 -- Die additive, nur fuer aktive Konten lesbare anonyme Blogprojektion v1 samt
--- Operationsledger, Referenzcache und begrenzter pg_cron-Quellenpflege
--- und RPC-Rechten liegt in
+-- Operationsledger, Referenzcache, RPC-Rechten und begrenzter Quellenpflege
+-- liegt in
 -- migrations/20260918120000_blog_publication_v1.sql und wird hier bewusst
 -- nicht in den historischen Basisdump zurückkopiert.
+-- Die schmale pg_cron-Voraussetzung liegt davor in
+-- migrations/20260918115900_blog_publication_pg_cron.sql.
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;

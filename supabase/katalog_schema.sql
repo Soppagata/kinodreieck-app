@@ -14,7 +14,8 @@
 --                   Streamingindex nur serverseitig; keine neue Quelle und
 --                   kein Browserrecht auf Vollkataloge werden eingeführt.
 --                   Revisionen markieren begrenzte Blog-Refresh-Batches fuer
---                   den vorhandenen pg_cron-Scheduler, nicht den Listenleser.
+--                   den durch 20260918115900 installierten pg_cron-Scheduler,
+--                   nicht den Listenleser.
 -- Wer diese Datei auf einer frischen Datenbank ausführt, bekommt einen
 -- Katalog OHNE diese Regeln. Danach zwingend beide Migrationen laufen lassen.
 

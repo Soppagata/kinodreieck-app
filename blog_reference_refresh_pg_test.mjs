@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { startBlogPublicationPgHarness } from "./tools/blog-publication-pg-harness.mjs";
 
 let checks = 0;
@@ -24,6 +25,11 @@ const publishRequest = (number, articleId, title, references) => ({
 
 const harness = await startBlogPublicationPgHarness();
 try {
+  const prerequisite = readFileSync("supabase/migrations/20260918115900_blog_publication_pg_cron.sql", "utf8");
+  check("Cron-Voraussetzung entspricht der deklarativen Supabase-Installation",
+    /create\s+extension\s+if\s+not\s+exists\s+pg_cron\s+with\s+schema\s+pg_catalog/i.test(prerequisite)
+    && /grant\s+usage\s+on\s+schema\s+cron\s+to\s+postgres/i.test(prerequisite)
+    && /grant\s+all\s+privileges\s+on\s+all\s+tables\s+in\s+schema\s+cron\s+to\s+postgres/i.test(prerequisite));
   const job = harness.scheduledRefreshJob();
   check("Migration bindet einen begrenzten Refresh an den vorhandenen Scheduler",
     job.jobname === "kd-blog-reference-refresh-v1" && job.schedule === "*/5 * * * *"

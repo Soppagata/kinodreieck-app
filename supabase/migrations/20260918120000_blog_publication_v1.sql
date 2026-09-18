@@ -1,6 +1,7 @@
--- Kinodreieck blog publication v1: anonymous public projection, idempotent
--- owner mutations, bounded source preparation and cursor based public reads.
--- Uses only the existing streaming projection and kd_catalog.programm.
+-- Kinodreieck blog publication v1: active-account shared projection,
+-- idempotent owner mutations, bounded source preparation and cursor reads.
+-- Requires 20260918115900_blog_publication_pg_cron.sql first and uses only the
+-- existing streaming projection plus kd_catalog.programm.
 begin;
 
 alter table public.kd_shared_articles
@@ -1380,7 +1381,7 @@ declare v_job bigint;
 begin
   if to_regprocedure('cron.schedule(text,text,text)') is null
     or to_regprocedure('cron.unschedule(bigint)') is null then
-    raise exception 'blog_reference_refresh_requires_pg_cron';
+    raise exception 'blog_reference_refresh_requires_pg_cron_prerequisite';
   end if;
   for v_job in execute 'select jobid from cron.job where jobname=$1'
     using 'kd-blog-reference-refresh-v1'
@@ -1427,6 +1428,19 @@ grant execute on function public.kd_refresh_blog_reference_sources_v1(jsonb) to 
 
 revoke all on table public.kd_shared_articles from public,anon,authenticated;
 grant all on table public.kd_shared_articles to service_role;
+
+drop policy if exists kdsa_owner_insert on public.kd_shared_articles;
+drop policy if exists kdsa_owner_update on public.kd_shared_articles;
+drop policy if exists kdsa_owner_select on public.kd_shared_articles;
+create policy kdsa_owner_select on public.kd_shared_articles
+  for select to authenticated
+  using (account_id=auth.uid() and public.kd_account_active());
+drop policy if exists kdsa_owner_delete on public.kd_shared_articles;
+create policy kdsa_owner_delete on public.kd_shared_articles
+  for delete to authenticated
+  using (account_id=auth.uid() and public.kd_account_active());
+
+grant select(article_id,publication_id),delete on public.kd_shared_articles to authenticated;
 
 notify pgrst,'reload schema';
 commit;
