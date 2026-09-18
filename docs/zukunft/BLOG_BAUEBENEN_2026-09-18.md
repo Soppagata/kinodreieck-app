@@ -1,6 +1,6 @@
 # Blog: Bauebenen und parallele Baumeister
 
-Stand: 18.09.2026 · Status: gemeinsames Blog-Backend geprüft; Staging-Korrekturkandidat bereit.
+Stand: 18.09.2026 · Status: gemeinsames Blog-Backend aktiv, Staging-Korrektur ausgeliefert und zurückgelesen; praktische PWA-Abnahme offen.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -68,11 +68,11 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Beleg |
 |---|---|---|---|---|
-| M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | DONE (lokal) | 5d706e3; Gesamttest 25/25, Chromium 34/34, vollständiger Abschlusslauf |
-| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | DONE (lokal) | 5d706e3; Zwei-Konten-Projektion, Antwortverlust, Update/Rücknahme/Löschung im Gesamttest |
-| M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (lokal) | 5d706e3; Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
-| M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (lokal) | 5d706e3; persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
-| M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (lokal) | 5d706e3; Paket-Refresh 12/12, registriertes Schedulerkommando im Gesamttest |
+| M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); Gesamttest 25/25, Chromium 34/34, vollständiger Abschlusslauf |
+| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); Zwei-Konten-Projektion, Antwortverlust, Update/Rücknahme/Löschung im Gesamttest |
+| M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
+| M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
+| M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -582,3 +582,33 @@ Belegordner. Zahlende Anbieterrequests: null.
 Noch offen sind Staging-Push, CI, Deployment und Domain-/Service-Worker-Readback.
 `main` und der Production-Frontendbuild werden für diese Korrektur nicht
 ausgeliefert. Die gemeinsame Blog-Backendwirkung ist ausdrücklich autorisiert.
+
+
+### Ausgeliefert: Staging-Korrektur 77c5603
+
+Der Liefercommit `77c5603876b4823df37582914acaed00ddf97f8b` wurde force-frei
+auf `staging` gepusht und dort zurückgelesen. CI-Lauf
+[35320186013](https://github.com/Soppagata/kinodreieck-app/actions/runs/35320186013)
+ist erfolgreich: vollständige Testsuite, 349 Function-Mocks, 50 Chromium-
+und 50 WebKit-Tests; `deploy-staging` erfolgreich, `deploy-production`
+ausdrücklich übersprungen. Keine neue Produktänderung folgte dem lokalen
+Abschlusslauf auf Codekandidat `4170dcb`.
+
+Cloudflare-Deployment `9a673925`: HTTPS-, Login-, Header- und Build-/SW-Smokes
+sind sowohl auf der Deployment-URL als auch `https://staging.kinodreieck.at`
+grün. Eigener Domain-Readback vom 18.09., 07:45 UTC bestätigt Build `77c5603`
+und den dazugehörigen Service Worker. Production liefert weiterhin exakt
+Build `3725c33` und dieselben Service-Worker-Bytes wie vor diesem Auftrag;
+`main` blieb auf `3725c33afaad58a711f94dffb511288f8237d31f`.
+
+Die reale Hintergrundpflege ist nach der letzten Migration ebenfalls belegt:
+planmäßiger Lauf um 07:35 UTC erfolgreich. Beide Umgebungen teilen den
+veröffentlichten Blogbestand wie ausdrücklich gewünscht. Der Veröffentlicht-Tab
+reagiert auf Staging sofort, und die Anonym-Checkbox erhält jetzt die echte
+Backend-Capability. Nutzer müssen die Staging-App auf die neue Version laden.
+Praktische Abnahme auf Max' physischem iPhone/PWA: NICHT BELEGT.
+
+Die kompakte maschinenlesbare Lieferquittung liegt unter
+`/private/tmp/kd-blog-staging-activation-20260918/release-final.json`.
+Dieser abschließende Dokumentationsbeleg entsteht nach dem Deployment lokal;
+der verifizierte Staging-Liefercommit bleibt `77c5603`.
