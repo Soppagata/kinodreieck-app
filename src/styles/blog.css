@@ -44,6 +44,8 @@
 .kd-blog-check strong { display: block; font-size: 15px; }
 .kd-blog-check small { display: block; margin-top: 3px; color: var(--kd-rauch); font-size: 12px; line-height: 1.5; }
 .kd-blog-check.is-disabled { cursor: default; opacity: .76; }
+.kd-blog-display-check, .kd-blog-publish-check { display: grid; grid-template-columns: 19px minmax(0, 1fr); align-items: center; }
+.kd-blog-display-check input, .kd-blog-publish-check input { margin: 0; }
 .kd-blog-reference-list { display: grid; margin: 6px 0 12px; }
 .kd-blog-reference-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; min-width: 0; }
 .kd-blog-reference-row.is-editable { grid-template-columns: 22px minmax(0, 1fr) 44px; }

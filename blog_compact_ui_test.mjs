@@ -8,7 +8,7 @@ const rootDir = process.cwd();
 const moduleRoot = process.env.KD_TEST_NODE_MODULES || path.join(rootDir, "node_modules");
 const requireFromTestEnv = createRequire(path.join(moduleRoot, "__kd_test_resolver__.cjs"));
 const { build } = requireFromTestEnv("esbuild");
-const { chromium } = requireFromTestEnv("@playwright/test");
+const { chromium, webkit } = requireFromTestEnv("@playwright/test");
 const outdir = fs.mkdtempSync(path.join(os.tmpdir(), "kd-blog-ui-"));
 const fixture = JSON.parse(fs.readFileSync(path.join(rootDir, "tests/fixtures/blog-contract-v1.json"), "utf8"));
 let checks = 0;
@@ -67,6 +67,45 @@ const result = await build({ stdin: { contents: entry, sourcefile: "blog-browser
 assert.ok(result);
 const js = fs.readFileSync(path.join(outdir, "stdin.js"), "utf8");
 const css = fs.readFileSync(path.join(outdir, "stdin.css"), "utf8");
+
+for (const [browserName, engine] of Object.entries({ chromium, webkit })) {
+  const focusedBrowser = await engine.launch({ headless: true });
+  const focusedPage = await focusedBrowser.newPage({ viewport: { width: 393, height: 852 } });
+  await focusedPage.setContent(`<main id="root"></main><style>html{background:#17151A}body{margin:0;padding:12px;background:#17151A;color:#ECE8DF}</style>`);
+  await focusedPage.addStyleTag({ content: css });
+  await focusedPage.addScriptTag({ content: js });
+  await focusedPage.evaluate(() => globalThis.mountBlogFixture(document.getElementById("root")));
+  await focusedPage.getByRole("button", { name: "+ Neuer Artikel" }).click();
+  await focusedPage.getByLabel("Titel", { exact: true }).fill("Veröffentlichungsprobe");
+  await focusedPage.getByLabel("Text", { exact: true }).fill("Ein vollständig ausgefüllter privater Entwurf.");
+  const checkboxCenters = await focusedPage.locator(".kd-blog-display-check, .kd-blog-publish-check").evaluateAll((rows) => rows.map((row) => {
+    const input = row.querySelector("input").getBoundingClientRect();
+    const label = row.querySelector("span").getBoundingClientRect();
+    return { input: input.top + input.height / 2, label: label.top + label.height / 2 };
+  }));
+  await check(`${browserName} 393px: beide Checkboxzeilen sind mittig ausgerichtet`, () => {
+    assert.equal(checkboxCenters.length, 2);
+    assert.ok(checkboxCenters.every((row) => Math.abs(row.input - row.label) <= 1));
+  });
+  await check(`${browserName} 393px: der entfernte Veröffentlichungshinweis bleibt fort`, async () => {
+    assert.equal(await focusedPage.getByText("Für angemeldete Nutzer sichtbar. Dein Kontoname wird nicht angezeigt.").count(), 0);
+  });
+  const privateButton = focusedPage.getByRole("button", { name: "Privat speichern" });
+  await check(`${browserName} 393px: ohne Häkchen bleibt privates Speichern anklickbar`, async () => {
+    assert.equal(await privateButton.isEnabled(), true);
+    await privateButton.click();
+    await focusedPage.getByText("Privat gespeichert.").waitFor();
+  });
+  await focusedPage.getByLabel("Anonym veröffentlichen").check();
+  const publishButton = focusedPage.getByRole("button", { name: "Speichern & veröffentlichen" });
+  await check(`${browserName} 393px: das Häkchen zeigt den anklickbaren Veröffentlichungsbutton`, async () => {
+    assert.equal(await publishButton.isEnabled(), true);
+    await publishButton.click();
+    await focusedPage.getByText("Privat gespeichert, Veröffentlichung fehlgeschlagen.").waitFor();
+  });
+  await focusedBrowser.close();
+}
+
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 await page.setContent(`<main id="root"></main><style>html{background:#17151A}body{margin:0;padding:12px;background:#17151A;color:#ECE8DF}</style>`);
