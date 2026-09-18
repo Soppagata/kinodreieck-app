@@ -1,6 +1,6 @@
 # Blog: Bauebenen und parallele Baumeister
 
-Stand: 18.09.2026 · Status: gemeinsames Blog-Backend aktiv, Staging-Korrektur ausgeliefert und zurückgelesen; praktische PWA-Abnahme offen.
+Stand: 18.09.2026 · Status: gemeinsames Blog-Backend aktiv, identischer Blogstand auf Staging und Production ausgeliefert und zurückgelesen; praktische Production-PWA-Abnahme offen.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -12,9 +12,11 @@ dieselbe Supabase-Instanz für Staging und Production. Die neue SQL-Migration
 blieb bei dieser ersten Lieferung unappliziert; ihre Aktivierung würde das gemeinsame Backend
 und damit Production betreffen. Privates Schreiben und die neue Oberfläche
 konnten auf Staging geprüft werden; die neue Veröffentlichung blieb damals bis
-zur Bereitstellung ihres Backendvertrags deaktiviert. Der jüngste Folgeauftrag
-autorisiert nun ausdrücklich den gemeinsamen veröffentlichten Blogbereich;
-Umfang und Belege stehen unter „Folgekorrektur“ und „Ebene 3“.
+zur Bereitstellung ihres Backendvertrags deaktiviert. Der nächste Folgeauftrag
+autorisierte ausdrücklich den gemeinsamen veröffentlichten Blogbereich;
+Umfang und Belege stehen unter „Folgekorrektur“ und „Ebene 3“. Anschließend
+wurde auch die unveränderte Production-Übernahme ausdrücklich beauftragt und
+abgeschlossen; ihr Beleg steht am Ende dieses Dokuments.
 
 Maßgeblicher Registerstand ist dieses Dokument im Integrationsworktree
 /private/tmp/kd-blog-integration-20260918, Zielbranch
@@ -68,11 +70,11 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Beleg |
 |---|---|---|---|---|
-| M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); Gesamttest 25/25, Chromium 34/34, vollständiger Abschlusslauf |
-| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); Zwei-Konten-Projektion, Antwortverlust, Update/Rücknahme/Löschung im Gesamttest |
-| M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
-| M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
-| M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + gemeinsames Backend) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
+| M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Gesamttest 25/25, Chromium 34/34, vollständiger Abschlusslauf |
+| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Zwei-Konten-Projektion, Antwortverlust, Update/Rücknahme/Löschung im Gesamttest |
+| M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
+| M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
+| M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -612,3 +614,51 @@ Die kompakte maschinenlesbare Lieferquittung liegt unter
 `/private/tmp/kd-blog-staging-activation-20260918/release-final.json`.
 Dieser abschließende Dokumentationsbeleg entsteht nach dem Deployment lokal;
 der verifizierte Staging-Liefercommit bleibt `77c5603`.
+
+### Production-Übernahme desselben Stands
+
+Folgeauftrag vom 18.09.: „Passt so, übernehmen wir genau so auf prod! Achte
+darauf, dass alle funktionen auch funktionieren und für alle nutzer freigegeben
+sind“. Autorisiert sind die unveränderte Übernahme des geprüften Staging-
+Commits auf `main`, Production-CI/Deployment und Readback. Neue Blog-Migrationen
+oder Produktänderungen sind dafür nicht nötig.
+
+Frischer Readback vor dem Push: gemeinsames Backend weiterhin exakt passend
+zu allen vier Blog-Migrationen und 32 Funktionsdefinitionen; Rollenrechte und
+Quellenpflege aktiv. Der Blog-Einstieg und die Capability hängen ausschließlich
+an einem aktiven Konto, ohne Staging-/Owner-/KI-Beschränkung. Eine rein lesende
+Prüfung der Capability für sämtliche aktiven Konten bestätigt 18/18 Zugriffe,
+darunter 17/17 normale Mitglieder. Keine Kontofreigaben wurden verändert.
+
+Commit `77c5603876b4823df37582914acaed00ddf97f8b` wurde force-frei auf `main`
+gepusht; Remote-Readback bestätigt exakt denselben Commit auf `main` und
+`staging`. Der Primärcheckout bleibt unverändert. CI-Lauf
+[35321910408](https://github.com/Soppagata/kinodreieck-app/actions/runs/35321910408)
+ist erfolgreich: vollständige Testsuite mit PostgreSQL 17, 349 Function-Mocks
+und 50 Chromium-Tests. WebKit: 48 unmittelbar bestanden, zwei allgemeine
+Classix-/Showa-Navigationstests bestanden beim automatischen Retry; keine
+endgültig fehlgeschlagenen Tests. Diese Flakes betreffen keinen Blogtest und
+werden nicht als 50 unmittelbar grüne Prüfungen ausgegeben.
+
+Die reguläre GitHub-Production-Freigabe wurde auf Grundlage des ausdrücklichen
+Nutzerauftrags erteilt. `deploy-production` ist erfolgreich, `deploy-staging`
+wurde in diesem Main-Lauf übersprungen. Cloudflare-Deployment
+`f69c9e96.kinodreieck.pages.dev`: HTTPS-, Login-, Header- und Build-/SW-Smokes
+auf Deployment-URL und `https://kinodreieck.at` bestanden. Eigener Readback
+vom 18.09., 08:13 UTC bestätigt auf beiden Domains exakt Build `77c5603` mit
+passendem Service Worker und korrekter Umgebungskennung. Die Staging-Build-
+und Service-Worker-Bytes sind gegenüber dem Vorherstand unverändert.
+
+Alle aktiven Konten erhalten denselben Blogvertrag, ohne Owner-, Staging- oder
+KI-Freigabegate. Die erneut belegte Capability gilt für 18/18 aktive Konten,
+darunter 17/17 normale Mitglieder; die Prüfung war rein lesend. Der bestehende
+reale Zwei-Konten-/15-Referenzen-Nachweis gilt für den unveränderten gemeinsamen
+Backendstand. Für diese Production-Übernahme wurden keine Migrationen erneut
+angewandt und keine zahlenden Anbieterrequests gestartet.
+
+Die praktische Abnahme auf einem physischen iPhone als Production-PWA bleibt
+NICHT BELEGT. Der Lieferstand ist technisch ausgeliefert und zurückgelesen.
+Belege für diesen Abschnitt liegen unter
+`/private/tmp/kd-blog-production-20260918`, die kompakte Quittung in
+`release-final.json`. Dieser Dokumentationsabschluss wird nur lokal committed;
+beide ausgelieferten Branches bleiben auf dem geprüften Commit `77c5603`.
