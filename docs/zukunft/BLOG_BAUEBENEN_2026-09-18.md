@@ -1,7 +1,7 @@
 # Blog: Bauebenen und parallele Baumeister
 
 Stand: 18.09.2026 · Status: gemeinsames Blog-Backend aktiv, identischer Blogstand auf Staging und Production ausgeliefert und zurückgelesen; praktische Production-PWA-Abnahme offen.
-Folgeauftrag abgeschlossen: M6 (sichere 50er-Grenze) ist lokal gebaut, getestet und integriert; M7 (optionale KI-Titelvorschläge) ist einschließlich Settings und Datenschutz ausgeplant, noch nicht implementiert. M6 wurde noch nicht ausgerollt.
+Aktueller Folgeauftrag: M6 (sichere 50er-Grenze) wird zusammen mit M7 auf Staging ausgeliefert. M7 umfasst jetzt ausdrücklich Filme, Serien, Musik und Sonstiges; sein Integrationsvertrag ist eingefroren, der Bau beginnt. Die historischen Liefer-/Freigabegrenzen unten beschreiben ihre damaligen Aufträge.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -77,7 +77,7 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 | M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE (lokal, noch nicht ausgerollt) | Produktkandidat 4521984 auf codex/blog-integration-20260918; vollständiger Basis-Gate plus gezielte Delta-/Integrationsprüfungen; Lieferbeleg am Dokumentende |
-| M7 | Erwähnte Titel optional mit KI erkennen lassen, mit Textbeleg prüfen und ausgewählte Vorschläge als Referenzen übernehmen. | Separater späterer Bauauftrag | AUSGEPLANT, NICHT GEBAUT | [Konkreter KI-/Settings-/DS-Entwurf](BLOG_REFERENZEN_KI_PLAN_2026-09-18.md); Sonnet ohne Thinking als Startvariante, Haiku als Vergleichskandidat; keine echten KI-Tests |
+| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS | OFFEN – Vertrag eingefroren | [Bauvertrag](../contracts/blog-reference-extract-v1.md), drei disjunkte Pakete; keine echte Anbieterqualität belegt |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -885,3 +885,35 @@ belegt den strukturierten Sonnet-Ausgabepfad, aber auch Schemaeinschränkungen,
 die eine eigene Mengen-/Längenprüfung erfordern.
 [Anthropic Prompt-Injection-Schutz](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks)
 stützt die Trennung von Anweisungen und untrusted Text sowie minimale Rechte.
+
+### M7-Auftrag und Parallelwelle vom 18.09.2026
+
+Der übergebene Masterauftrag autorisiert ausdrücklich Umsetzung, Commits,
+force-freien Staging-Push, CI, additive gemeinsame Backendmigrationen und
+Functions vor dem abhängigen Frontend, Staging-Deployment und Readback für
+M6 und M7. Keine Production-Frontend-Promotion. Bezahlte Anbieterprüfungen
+haben noch keine aufgabenspezifische Kosten-/Requestfreigabe.
+
+Frisch geprüft: Integrationsworktree sauber auf
+`795d5be`; M6-Produktstand `4521984`. Primärcheckout auf altem `main` mit
+Nutzeränderungen bleibt unberührt. Vorhandene M6-Gates werden übernommen.
+Der bestehende Mengen-/Publikationsvertrag unterstützt bereits alle vier
+Mediathektypen. Musik und Sonstiges haben keinen belegten externen Katalog;
+Bestandszuordnung oder bewusst unverknüpfte Übernahme ist der Vertrag.
+
+Der neue [M7-Vertrag](../contracts/blog-reference-extract-v1.md) friert vor
+Baubeginn Payload, Ergebnis, Capability-Aushandlung, Typen, Grenzen,
+Lebensdauer, Auswahl/Übernahme und Ownership ein. Keine zusätzliche
+veränderliche Produktgrundlage ist nötig. PARALLEL_WAVE direkt von dessen
+Commit; B und C müssen nicht auf A-Ausgaben warten.
+
+| Paket | Zugeordneter Scope | Worktree / Branch | Profil | Status |
+|---|---|---|---|---|
+| A | M7 Server, Budget/Cache, Export/Löschung | `/private/tmp/kd-blog-scan-backend-20260918` / `codex/blog-scan-backend-20260918` | Sol/high: Provider-, RLS-, Migrations- und Parallelitätsgrenzen | DISPATCH vorbereitet |
+| B | M7 Editor, Service/Controller, Zuordnung, atomare Übernahme | `/private/tmp/kd-blog-scan-client-20260918` / `codex/blog-scan-client-20260918` | Sol/high: kontogebundener asynchroner Shared-State | DISPATCH vorbereitet |
+| C | M7 Opt-in, Settings, Datenschutz/Inventar/Hilfe | `/private/tmp/kd-blog-scan-privacy-20260918` / `codex/blog-scan-privacy-20260918` | Sol/high: Privacy und bestehende Opt-in-Entscheidungen | DISPATCH vorbereitet |
+
+Exakte Write-Flächen stehen im eingefrorenen Vertrag. Gemeinsame Dokumente,
+Package-Testregistrierung und integrierter Nutzerweg liegen beim Meister.
+Integration A → B → C; Paketprüfungen werden übernommen, anschließend ein
+integrierter Abschlusslauf. Auslieferungsnachweise werden hier ergänzt.
