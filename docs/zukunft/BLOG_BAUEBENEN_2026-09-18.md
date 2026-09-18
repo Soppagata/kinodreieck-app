@@ -1,6 +1,7 @@
 # Blog: Bauebenen und parallele Baumeister
 
 Stand: 18.09.2026 · Status: gemeinsames Blog-Backend aktiv, identischer Blogstand auf Staging und Production ausgeliefert und zurückgelesen; praktische Production-PWA-Abnahme offen.
+Folgeplanung: M6 (sichere 50er-Grenze) und M7 (optionale Sonnet-Titelvorschläge) sind offen und noch nicht gebaut.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -75,6 +76,8 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
+| M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | Erweiterung, Ownership beim Bau | OFFEN (Plan) | Nutzerziel: üblicherweise bis 30, 50 sollen möglich sein; Schutzkonzept am Dokumentende |
+| M7 | Erwähnte Titel optional durch Sonnet erkennen lassen, mit Textbeleg prüfen und ausgewählte Vorschläge als Referenzen übernehmen. | Erweiterung, Ownership beim Bau | OFFEN (Plan) | Separater KI-Auftrag und Mehrfachauswahl; noch kein Provider-Test oder Produktcode |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -662,3 +665,133 @@ Belege für diesen Abschnitt liegen unter
 `/private/tmp/kd-blog-production-20260918`, die kompakte Quittung in
 `release-final.json`. Dieser Dokumentationsabschluss wird nur lokal committed;
 beide ausgelieferten Branches bleiben auf dem geprüften Commit `77c5603`.
+
+### Geplante Erweiterung: 50 Referenzen und freiwillige KI-Extraktion
+
+Nutzerpräzisierung vom 18.09.: normalerweise höchstens 30 Referenzen, 50 sollen
+möglich sein. Gewünscht ist Schutz gegen manipulierte Listen mit etwa 1.945
+Einträgen sowie eine optionale Sonnet-Extraktion erwähnter Titel aus dem
+Blogtext mit anschließender Mehrfachauswahl. Status: Planung, kein neuer
+Produktcode, kein Deployment und kein zahlender Anbieterrequest.
+
+Die vorher untersuchte Auslegung für 500 bis 1.000 Referenzen wird für diesen
+Umfang zurückgestellt. Der isolierte Versuch auf Produktcode `77c5603` zeigte
+lokal 100 Referenzen in 445 ms und 1.000 in 1.047 ms, beweist aber keine
+Production-/iPhone-Latenz. Messbeleg:
+`/private/tmp/kd-blog-ref-scale-spike-20260918.json`.
+
+**M6: begrenzter, serverseitig abgesicherter Ausbau.**
+
+- 50 als harte fachliche Obergrenze pro Artikel; 30 ist ein Normalfall und
+  keine zusätzliche Sperre. Editor zeigt den Zähler und erklärt die Grenze.
+- Alle Schreibpfade beachten denselben Vertrag: privat, Veröffentlichen,
+  Aktualisieren, Import/Wiederherstellung, KI-Übernahme und direkte API-Writes.
+  Entscheidend sind Backend-/Datenbankprüfungen; ein entfernter Browser-Check
+  darf keine Wirkung haben. Öffentliche Referenzen bleiben auch über Rang-
+  und Eindeutigkeitsbedingungen auf 50 begrenzt.
+- Mengen-, Feldlängen- und Byteprüfungen erfolgen vor Katalogabgleich und
+  anderen teuren Schritten. Übergrößen werden vollständig abgewiesen, nicht
+  still auf 50 gekürzt. Bestehende Daten bleiben unverändert. Als noch zu
+  prüfender Startwert für einen Publikationsrequest sind 128 KiB vorgesehen;
+  vorgelagerte Body-Grenzen müssen auch ohne vertrauenswürdigen Content-Length-
+  Header greifen. Ein SQL-Check allein verhindert kein beliebig großes
+  Einlesen am HTTP-Eingang.
+- Atomare Aufrufbegrenzung pro Konto und ein gemeinsamer Parallelitätsdeckel
+  schützen auch gegen viele jeweils gültige Listen. Vorschlag: höchstens ein
+  laufender Publikationsabgleich pro Konto, fünf neue Veröffentlichungs- oder
+  Aktualisierungsversuche pro Minute. Globale Kapazität im Bau am vorhandenen
+  Backend binden; Überlast schnell ablehnen statt unbegrenzt in Locks warten.
+  Identische Vorgangs-IDs liefern den vorhandenen Ausgang zurück. Schutz gilt
+  ebenso bei direktem RPC-Aufruf; eine reine Browser- oder IP-Sperre genügt nicht.
+- Der private Sammelspeicher `kd:artikel` hat laut Schema weiterhin 1 MiB.
+  Diese Grenze bleibt zunächst bestehen; die vollständige serialisierte
+  Fassung einschließlich Publikationsmetadaten wird vor jedem Schreibschritt
+  geprüft. Eine Überschreitung wird erklärt und erhält den Entwurf und den
+  letzten bestätigten Stand. Viele lange Blogs können diese Grenze weiterhin
+  erreichen; artikelweiser Speicher ist dafür eine spätere gezielte Erweiterung.
+- Karten behalten drei Vorschautitel. Für 50 Referenzen zunächst keine neue
+  Hintergrund-Publikationsmaschine oder virtuelle Endlosliste. Fokussiert
+  prüfen: voller Feed mit 20 Blogs zu je 50 Referenzen, schwächeres Mobilgerät,
+  persönliche Mediathek und Quellen mit vielen Zielen. Werden die bestehenden
+  Zeit-/Nutzbarkeitsgrenzen überschritten, nur den betroffenen Pfad verkleinern.
+- Die Capability prüft momentan exakt `maxReferences=15`. Deshalb einen
+  kompatiblen Übergang vorsehen; ältere PWAs dürfen größere private Listen
+  weder beim Öffnen noch beim Speichern/Import auf 15 abschneiden. Kein
+  rückwirkliches Editieren bereits angewandter Migrationen.
+
+**M7: Titelvorschläge mit Sonnet, bewusste Übernahme durch den Nutzer.**
+
+Nutzerweg: Im Speicherbereich optional „Titel im Text erkennen (KI)“ anklicken
+→ Hinweis, dass Titel und Artikeltext an Anthropic gehen → kompakte Vorschau
+mit Checkboxen, gefundenem Titel und zugehöriger Textfundstelle → „Ausgewählte
+übernehmen“ → regulär privat speichern oder bewusst anonym veröffentlichen.
+Keine neue Pflichtstufe. Keine Titel sind anfangs ausgewählt. Vorhandene
+Referenzen zählen mit: bei 30 bestehenden sind höchstens 20 neue auswählbar.
+Eine volle Liste startet keinen bezahlten Auftrag, solange kein Platz frei ist.
+
+- Neuer eigener Task `blog-reference-extract` auf dem bestehenden `ai-task`-
+  Unterbau, serverseitig verbindlich Sonnet/`gross`. `blog-profile-extract`
+  bleibt unverändert: dieser bestehende Task analysiert Geschmack und nutzt
+  ein anderes Modell. Nicht als Ersatz für die neue Funktion umdeuten.
+  KI-Capability/Health versioniert ergänzen: alte Clients prüfen dessen
+  Schlüsselmengen exakt; ein unkoordiniert ergänztes Feld darf bestehende
+  Profilanalyse oder Veröffentlichung nicht deaktivieren.
+- Sonnet übernimmt die Interpretation des Freitexts. Code übernimmt
+  Belegprüfung, konservative Dublettenerkennung, Mengen-/Rechteprüfung und
+  Werkverknüpfung. Der bestehende Streaming-/Kinoabgleich bleibt beim
+  Veröffentlichen; die KI ermittelt keine Verfügbarkeit und erfindet keine IDs.
+- Nur Artikelüberschrift und Text an den Anbieter, keine Konto-ID, E-Mail,
+  private Mediathek oder sonstigen Profilbestände. API-Key bleibt im Backend.
+  Expliziter Einzelklick; kein Auftrag bei jedem Speichern oder Tastendruck.
+  Kontospezifische KI-Freigabe und bestehende Budget-/Not-Aus-Regeln gelten;
+  normale Blogfunktionen bleiben unabhängig davon verfügbar.
+- Begrenzt strukturiertes Ergebnis, maximal 50 Titelvorschläge. Jeder Vorschlag
+  benötigt eine serverseitig überprüfbare Fundstelle im unveränderten Text.
+  Jahr nur bei belegter Nennung, unklare Werktitel/Seriennamen als unklar
+  kennzeichnen; „Star Wars“ darf keine erfundene Liste sämtlicher Episoden
+  auslösen. Ein im Text kritisierter Titel darf ebenfalls vorgeschlagen werden.
+- Artikelinhalt ist untrusted Datenmaterial. Kein Websearch, keine Werkzeuge,
+  keine Schreibrechte und keine vom Modell festgelegten Links. Format, Anzahl,
+  Längen, Fundstellen und Felder werden nach der Modellantwort geprüft. Ein
+  strukturierter JSON-Output allein beweist weder korrekte Titel noch sichere
+  Mengen. Überlange, unbelegte oder fehlerhafte Ergebnisse werden nicht blind
+  übernommen; keine HTML-Ausführung aus Artikel oder Antwort.
+- Vorschlag für den ersten Eingabevertrag: höchstens 18.000 UTF-8-Bytes Text
+  wie beim bestehenden Blog-KI-Pfad und dessen begrenzter Request-Umschlag;
+  längere Artikel bleiben normal speicherbar, die Analyse erklärt ihr Limit.
+  Eigene feste Ausgabe-, Zeit- und Kostenobergrenzen vor Anbieterstart
+  serverseitig prüfen und atomar im vorhandenen Budget reservieren. Konkrete
+  Token-/Centwerte beim Vertragsbau anhand des vollständigen Prompts festlegen;
+  der alte Haiku-Deckel darf nicht ungeprüft für Sonnet übernommen werden.
+- Pro Konto nur eine laufende Extraktion; als Betriebsstart drei Starts pro
+  Minute und zehn pro Tag vorschlagen, zusätzlich zu den bestehenden globalen
+  KI-Budgets. Kontogebundener Text-/Modell-/Promptversionsschlüssel verhindert
+  bezahlte Doppelläufe für denselben unveränderten Text. Cache auch für einen
+  bestätigten Leerfund, zeitlich begrenzt; keine Blogtexte in Betriebslogs.
+  Unsicherer Ausgang löst keinen automatischen neuen Anbieterrequest aus.
+- Vorschläge bleiben an Konto, Entwurf und Textfassung gebunden. Ändert sich
+  der Text oder das Konto während des Aufrufs, darf die alte Antwort keine
+  neue Liste überschreiben. Übernahme ergänzt ausschließlich die ausgewählten
+  fehlenden Referenzen, erhält vorhandene Reihenfolge und überprüft unmittelbar
+  vor dem Schreiben erneut die 50er-Grenze. Dubletten/Remakes nicht nur anhand
+  des Titels zusammenlegen; unklare Zuordnung dem Nutzer überlassen.
+- Keine Treffer, Abbruch, KI aus, Budget erschöpft oder Anbieterfehler lassen
+  Text, bestehende Referenzen und normales Speichern nutzbar. Die Anonym-
+  Checkbox wird durch die Extraktion weder gesetzt noch ausgelöst.
+
+**Nachweise und Baufolge.** Erst M6 samt kompatiblem Übergang, danach M7 auf
+dem begrenzten Vertrag. Vor dem Bau die Schreibflächen disjunkt zuordnen.
+Fokussierte Nachweise: 30/50 gültig; 51/1.945, übergroße Strings, parallele
+Grenzübertritte und direkte API-Umgehungen ohne Katalog-/Providerarbeit
+abgelehnt; keine Datenabschneidung oder fremden Kontozugriffe. Für M7 außerdem
+erfundene Titel/Fundstellen, Prompt-Injection-Text, mehrdeutige Namen wie
+„Es“/„Her“, identische Anfragen, volle Listen und verspätete Antworten testen.
+Mit Mocks bauen; Erkennungsqualität und reale Kosten bleiben bis zu einer
+eigenen begrenzten Anbieterprobe ausdrücklich unbelegt.
+
+Primärquellen, am 18.09. gelesen:
+[Anthropic Structured Outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
+belegt den strukturierten Sonnet-Ausgabepfad, aber auch Schemaeinschränkungen,
+die eine eigene Mengen-/Längenprüfung erfordern.
+[Anthropic Prompt-Injection-Schutz](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks)
+stützt die Trennung von Anweisungen und untrusted Text sowie minimale Rechte.
