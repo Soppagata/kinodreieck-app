@@ -864,6 +864,89 @@ check("Meine Artikel setzt über onBack(null) die kontrollierte private Liste",
   blogFixture.api().controller.view.area === "mine" && blogFixture.api().controller.view.mode === "list");
 await blogFixture.cleanup();
 
+let unavailableListCalls = 0;
+blogFixture = await mounteBlogController({
+  serviceOverrides: {
+    capability: async () => ({ ok: false, reason: "contract-mismatch" }),
+    listV1: async () => {
+      unavailableListCalls += 1;
+      throw new Error("Die Liste darf ohne Capability nicht angefragt werden");
+    },
+  },
+});
+let unavailableLoad;
+await act(async () => {
+  unavailableLoad = await blogFixture.api().controller.actions.onLoadPublished({ cursor: null, replace: true });
+  await tick();
+});
+check("Fehlende Backend-Capability öffnet den veröffentlichten Bereich mit ehrlichem Fehler",
+  unavailableLoad.status === "failed" && unavailableLoad.errorCode === "contract-mismatch"
+  && unavailableListCalls === 0
+  && blogFixture.api().controller.view.area === "published"
+  && blogFixture.api().controller.view.mode === "list"
+  && blogFixture.api().controller.publishedPage.status === "failed"
+  && blogFixture.api().controller.publishedPage.errorCode === "contract-mismatch"
+  && blogFixture.api().controller.publishedPage.items.length === 0);
+await blogFixture.cleanup();
+
+let publishedLoadAttempts = 0;
+blogFixture = await mounteBlogController({
+  serviceOverrides: {
+    listV1: async () => {
+      publishedLoadAttempts += 1;
+      if (publishedLoadAttempts === 1) throw Object.assign(new Error("offline"), { code: "network" });
+      return { ok: true, page: { contractVersion: "blog-publication-v1", snapshotAt: "2032-05-04T12:00:00Z",
+        items: [], nextCursor: null, complete: true } };
+    },
+  },
+});
+let failedPublishedLoad;
+await act(async () => {
+  failedPublishedLoad = await blogFixture.api().controller.actions.onLoadPublished({ cursor: null, replace: true });
+  await tick(); await tick();
+});
+check("Netzfehler bleibt im sichtbaren veröffentlichten Bereich und startet keinen Dauer-Retry",
+  failedPublishedLoad.status === "failed" && failedPublishedLoad.errorCode === "network"
+  && publishedLoadAttempts === 1
+  && blogFixture.api().controller.view.area === "published"
+  && blogFixture.api().controller.publishedPage.status === "failed"
+  && blogFixture.api().controller.publishedPage.errorCode === "network");
+let retriedPublishedLoad;
+await act(async () => {
+  retriedPublishedLoad = await blogFixture.api().controller.actions.onLoadPublished({ cursor: null, replace: true });
+  await tick();
+});
+check("Ausdrückliches Neu laden wiederholt genau einmal und bestätigt erst dann die leere Liste",
+  retriedPublishedLoad.status === "loaded" && publishedLoadAttempts === 2
+  && blogFixture.api().controller.view.area === "published"
+  && blogFixture.api().controller.publishedPage.status === "loaded"
+  && blogFixture.api().controller.publishedPage.items.length === 0);
+await blogFixture.cleanup();
+
+let releaseNavigatedList;
+const heldNavigatedList = new Promise((resolve) => { releaseNavigatedList = resolve; });
+blogFixture = await mounteBlogController({ serviceOverrides: { listV1: async () => heldNavigatedList } });
+let navigatedLoad;
+await act(async () => {
+  navigatedLoad = blogFixture.api().controller.actions.onLoadPublished({ cursor: null, replace: true });
+  await tick();
+});
+check("Veröffentlicht zeigt während des echten Requests sofort den Ladezustand",
+  blogFixture.api().controller.view.area === "published"
+  && blogFixture.api().controller.publishedPage.status === "loading");
+await act(async () => {
+  blogFixture.api().controller.actions.onBack({ returnToken: null });
+  await tick();
+  releaseNavigatedList({ ok: true, page: { contractVersion: "blog-publication-v1", snapshotAt: "2032-05-04T12:00:00Z",
+    items: [], nextCursor: null, complete: true } });
+  await navigatedLoad;
+  await tick();
+});
+check("Späte erfolgreiche Liste zwingt nach der Rückkehr nicht erneut in den veröffentlichten Bereich",
+  blogFixture.api().controller.view.area === "mine"
+  && blogFixture.api().controller.publishedPage.status === "loaded");
+await blogFixture.cleanup();
+
 const reloadArticle = {
   id: "reload", titel: "Reload", autor: "Max", text: "Text", status: "freigegeben",
   contentVersion: "10000000-0000-4000-8000-000000000009", liste: [],

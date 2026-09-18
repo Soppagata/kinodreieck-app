@@ -1010,10 +1010,20 @@ export function useBlogPublicationController({
   }, [beginMutation, finishMutation, mutationCurrent, withdrawArticle, writeArticles]);
 
   const onLoadPublished = useCallback(async ({ cursor = null, replace = false } = {}) => {
-    if (publicationCapability.status !== "ready") return actionResult("failed", { errorCode: "capability-unavailable" });
+    if (replace) setView({ area: "published", mode: "list", articleId: null, returnToken: null });
+    if (publicationCapability.status !== "ready") {
+      const errorCode = publicationCapability.status === "checking"
+        ? "capability-checking"
+        : publicationCapability.reason || "capability-unavailable";
+      setPublishedPage((current) => ({ ...current, status: "failed", errorCode }));
+      return actionResult("failed", { errorCode });
+    }
     if (!replace && cursor !== publishedPage.nextCursor) return actionResult("failed", { errorCode: "cursor-mismatch" });
     const token = beginMutation("load-published");
-    if (!token) return actionResult("failed", { errorCode: "busy" });
+    if (!token) {
+      setPublishedPage((current) => ({ ...current, status: "failed", errorCode: "busy" }));
+      return actionResult("failed", { errorCode: "busy" });
+    }
     setPublishedPage((current) => ({ ...current, status: "loading", errorCode: null }));
     try {
       const result = await service.listV1({ cursor });
@@ -1025,7 +1035,6 @@ export function useBlogPublicationController({
         complete: result.page.complete,
         errorCode: null,
       }));
-      setView({ area: "published", mode: "list", articleId: null, returnToken: null });
       return actionResult("loaded");
     } catch (error) {
       if (!mutationCurrent(token)) return actionResult("failed", { errorCode: "account-changed" });
@@ -1034,7 +1043,8 @@ export function useBlogPublicationController({
     } finally {
       finishMutation(token);
     }
-  }, [beginMutation, finishMutation, mutationCurrent, publicationCapability.status, publishedPage.nextCursor, service]);
+  }, [beginMutation, finishMutation, mutationCurrent, publicationCapability.reason,
+    publicationCapability.status, publishedPage.nextCursor, service]);
 
   return {
     publicationCapability,
