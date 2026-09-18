@@ -57,7 +57,7 @@ export const RETENTION_CLASSES = Object.freeze({
   BLOG_REFERENCE_EXTRACTIONS: Object.freeze({
     id: "blog-reference-extractions-24h",
     days: 1,
-    label: "24 Stunden abrufbar; spätestens nach 25 Stunden gelöscht",
+    label: "24 Stunden abrufbar; danach stündliche automatische Löschung",
   }),
   PURPOSE_BOUND: Object.freeze({ id: "purpose-bound", days: null, label: "bis zur Löschung durch dich" }),
 });
@@ -170,7 +170,7 @@ export const PRIVATE_DATA_INVENTORY = Object.freeze([
     locations: Object.freeze(["Supabase kd_blog_reference_extractions"]),
     recipients: Object.freeze(["Supabase"]),
     export: "serverseitiger Konto-/Rechteweg nur über account-self-service GET ?include=blog-reference-extract-v1 und die service-only RPC kd_blog_reference_extract_own_data; kd_private_own_data bleibt unverändert, nicht in der Gerätesicherung",
-    deleteTrigger: "nach 24 Stunden nicht mehr abrufbar; stündlicher Purge, im normalen Schedulerbetrieb spätestens nach 25 Stunden; bei Kontolöschung zusätzlich FK-Cascade",
+    deleteTrigger: "nach 24 Stunden nicht mehr abrufbar; danach automatische stündliche Löschung, bei Rückstau oder Betriebsstörungen kann die physische Löschung später erfolgen; bei Kontolöschung zusätzlich FK-Cascade",
     retention: RETENTION_CLASSES.BLOG_REFERENCE_EXTRACTIONS.id,
     featureFlag: null,
     legalStatus: "CONTENT_PAYLOAD",

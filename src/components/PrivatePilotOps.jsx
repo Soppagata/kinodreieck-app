@@ -59,7 +59,7 @@ export function DatenschutzUebersicht({
         <details>
           <summary style={{ cursor: "pointer", color: T.rauch, fontSize: 13 }}>Speicherung und Aufbewahrung</summary>
           <p style={{ margin: "10px 0 0", color: T.rauch, fontSize: 12, lineHeight: 1.55 }}>
-            Persönliche Inhalte sind zweckgebunden. Vorschläge und kurze Textfundstellen aus der Blog-Referenzerkennung sind 24 Stunden abrufbar und werden durch den stündlichen Purge im normalen Schedulerbetrieb spätestens nach 25 Stunden gelöscht. Kurzzeitige lokale Sicherheits- und Übergangskopien sind auf höchstens sieben Tage angelegt; inhaltsfreie Betriebsnachweise auf höchstens 90 Tage.
+            Persönliche Inhalte sind zweckgebunden. Vorschläge und kurze Textfundstellen aus der Blog-Referenzerkennung sind 24 Stunden abrufbar und werden danach automatisch in stündlichen Löschläufen entfernt. Bei Rückstau oder Betriebsstörungen kann die physische Löschung später erfolgen. Kurzzeitige lokale Sicherheits- und Übergangskopien sind auf höchstens sieben Tage angelegt; inhaltsfreie Betriebsnachweise auf höchstens 90 Tage.
           </p>
         </details>
       </> : <>

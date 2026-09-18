@@ -124,8 +124,10 @@ check("Kurzlebige Vorschläge sind als Inhaltsdaten mit exakter Backend-Naht reg
   assert.match(eintrag.export, /kd_private_own_data bleibt unverändert/);
   assert.match(eintrag.export, /nicht in der Gerätesicherung/);
   assert.match(eintrag.deleteTrigger, /24 Stunden/);
-  assert.match(eintrag.deleteTrigger, /stündlicher Purge/);
-  assert.match(eintrag.deleteTrigger, /spätestens nach 25 Stunden/);
+  assert.match(eintrag.deleteTrigger, /automatische stündliche Löschung/);
+  assert.match(eintrag.deleteTrigger, /Rückstau oder Betriebsstörungen/);
+  assert.match(eintrag.deleteTrigger, /physische Löschung später erfolgen/);
+  assert.doesNotMatch(eintrag.deleteTrigger, /25 Stunden/);
   assert.match(eintrag.deleteTrigger, /FK-Cascade/);
   assert.equal(eintrag.featureFlag, null);
   assert.ok(ACCOUNT_EXPORT_REQUIRED_SCOPE.some((item) => item.id === "blog-reference-extractions"));
@@ -206,7 +208,9 @@ check("Login- und Langtexte trennen Profilanalyse und Referenzerkennung", () => 
   assert.match(text, /keine Konto- oder Artikelkennung, Mediathek oder Geschmacksdaten hinzugefügt/);
   assert.match(text, /„Anonym veröffentlichen“[^<]*anonymisiert nicht/);
   assert.match(text, /24 Stunden zur erneuten Anzeige/);
-  assert.match(text, /spätestens nach 25 Stunden/);
+  assert.match(text, /stündlichen Löschläufen/);
+  assert.match(text, /Rückstau oder Betriebsstörungen/);
+  assert.doesNotMatch(text, /25 Stunden/);
   assert.match(text, /blogReferenceExtractions/);
   assert.doesNotMatch(text, /ausgewählten Artikel mit ID/);
 });
@@ -215,7 +219,9 @@ check("Kurzfassung und Datenrechte erklären Transfer, Inhaltsklasse und Sicheru
   const text = dateien["src/components/PrivatePilotOps.jsx"];
   assert.match(text, /erst nach deinem Klick die Überschrift und den vollständigen begrenzten Blogtext/);
   assert.match(text, /persönliche Angaben im Text werden mitgesendet/);
-  assert.match(text, /spätestens nach 25 Stunden gelöscht/);
+  assert.match(text, /stündlichen Löschläufen entfernt/);
+  assert.match(text, /physische Löschung später erfolgen/);
+  assert.doesNotMatch(text, /25 Stunden/);
   assert.match(text, /Nicht übernommene KI-Vorschläge erhalten keinen eigenen Geräte- oder Backup-Topf/);
   assert.match(text, /serverseitige Vorschläge und kurze Textfundstellen gehören stattdessen zum Konto-\/Rechteweg/);
 });

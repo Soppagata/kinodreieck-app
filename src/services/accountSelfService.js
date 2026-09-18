@@ -97,8 +97,8 @@ const blogReferenceExtractionRows = (value) => Array.isArray(value)
     modelAlias: (value) => value === "gross",
     promptVersion: (value) => value === BLOG_REFERENCE_EXTRACT_CONTRACT,
     resultVersion: (value) => value === BLOG_REFERENCE_EXTRACT_CONTRACT,
-    /* Das finale Serverenum wird erst bei der Integration gebunden. Bis dahin
-       bleibt die Exportgrenze absichtlich ein kurzer, nicht leerer String. */
+    /* Der Exportstatus bleibt ein kurzer, nicht leerer String und kann dadurch
+       keine unbegrenzten oder anders geformten Statusdaten einschleusen. */
     status: (value) => typeof value === "string" && value.length > 0 && value.length <= 32,
     result: (value) => value === null || begrenztesJsonObjekt(value),
     createdAt: iso8601TimestampWithOffset,
