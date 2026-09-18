@@ -8,6 +8,7 @@ export function baueAnbieterKoerper(
   maxTokens: number,
   schema: Record<string, unknown> | null,
   bilder: AnbieterBild[] = [],
+  optionen: AnbieterRequestOptionen = {},
 ): Record<string, unknown> {
   const content: unknown = bilder.length
     ? [
@@ -27,8 +28,15 @@ export function baueAnbieterKoerper(
   if (schema) {
     koerper.output_config = { format: { type: "json_schema", schema } };
   }
+  if (optionen.thinkingDisabled === true) {
+    koerper.thinking = { type: "disabled" };
+  }
   return koerper;
 }
+
+export type AnbieterRequestOptionen = Readonly<{
+  thinkingDisabled?: boolean;
+}>;
 
 export type AnbieterBild = {
   media_type: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
@@ -408,6 +416,7 @@ export function schaetzeAnbieterEingabeTokens(
   maxTokens: number,
   schema: Record<string, unknown> | null,
   bilder: AnbieterBild[] = [],
+  optionen: AnbieterRequestOptionen = {},
 ): number {
   let bildTokens = 0;
   if (bilder.length) {
@@ -437,6 +446,7 @@ export function schaetzeAnbieterEingabeTokens(
        die komplette Nachrichtenstruktur erhalten, nur die bereits separat
        zum Vision-Maximum reservierten Binaerdaten werden geleert. */
     bilder.map((bild) => ({ ...bild, data: "" })),
+    optionen,
   );
   const bytes = new TextEncoder().encode(JSON.stringify(koerper)).length;
   /* Keine Durchschnittsannahme wie bytes/3: Ein Texttoken muss mindestens ein

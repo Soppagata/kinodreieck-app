@@ -73,8 +73,30 @@ import {
   pruefeAnbieterKostenzaun,
   schaetzeAnbieterEingabeTokens,
   type AnbieterBild,
+  type AnbieterRequestOptionen,
   type BlogBeleganker,
 } from "./providerContract.ts";
+import {
+  BLOG_REFERENCE_CONTRACT_VERSION,
+  BLOG_REFERENCE_MAX_CANDIDATES,
+  BLOG_REFERENCE_MAX_PROVIDER_BODY_BYTES,
+  BLOG_REFERENCE_MAX_REQUEST_BYTES,
+  BLOG_REFERENCE_MAX_RESPONSE_BYTES,
+  BLOG_REFERENCE_MAX_TEXT_BYTES,
+  BLOG_REFERENCE_MAX_TITLE_BYTES,
+  BLOG_REFERENCE_MAX_TOKENS,
+  BLOG_REFERENCE_MODEL_ALIAS,
+  BLOG_REFERENCE_PROMPT_VERSION,
+  BLOG_REFERENCE_RESULT_VERSION,
+  BLOG_REFERENCE_TASK,
+  BLOG_REFERENCE_TASK_CAP_USD_CENT,
+  BLOG_REFERENCE_TIMEOUT_MS,
+  blogReferenceContentHmac,
+  buildBlogReferencePrompt,
+  readBlogReferenceInput,
+  validateBlogReferenceResult,
+  type BlogReferenceInput,
+} from "./blogReferenceExtract.ts";
 import {
   PROVIDER_DIAGNOSTIC_ENV,
   PROVIDER_DIAGNOSTIC_HEADER,
@@ -416,6 +438,42 @@ type AnbieterErgebnis = {
   abbruch: { code: string; grund: string } | null;
 };
 
+async function liesAnbieterAntwortText(
+  response: Response,
+  maxBytes: number | null,
+): Promise<string> {
+  if (maxBytes === null) return await response.text();
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel("provider-response-too-large").catch(() => {});
+        throw new AufrufFehler(
+          CODES.INVALID_RESPONSE,
+          "anbieter-antwort-zu-gross",
+        );
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const all = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    all.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(all);
+}
+
 /* Anthropic Structured Outputs akzeptiert nur einen Teil von JSON Schema.
    Diese Grenzen werden von SDKs lokal nachgeprueft, beim rohen REST-Aufruf
    dieses Endpunkts aber als 400 abgelehnt. Deshalb pruefen wir jedes
@@ -511,6 +569,9 @@ async function rufeAnbieter(
   timeoutMs: number,
   schema: Record<string, unknown> | null,
   bilder: AnbieterBild[] = [],
+  optionen: AnbieterRequestOptionen = {},
+  bodyMaxBytes: number | null = null,
+  responseMaxBytes: number | null = null,
   onRawResponse: (raw: string) => void = () => {},
 ): Promise<AnbieterErgebnis> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
@@ -525,7 +586,12 @@ async function rufeAnbieter(
     maxTokens,
     schema,
     bilder,
+    optionen,
   );
+  const serialisiert = JSON.stringify(koerper);
+  if (bodyMaxBytes !== null && new TextEncoder().encode(serialisiert).length > bodyMaxBytes) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "anbieter-body-zu-gross");
+  }
 
   const uhr = new AbortController();
   const stopp = setTimeout(() => uhr.abort(), timeoutMs);
@@ -539,14 +605,14 @@ async function rufeAnbieter(
         "anthropic-version": ANBIETER_VERSION,
         "content-type": "application/json",
       },
-      body: JSON.stringify(koerper),
+      body: serialisiert,
       signal: uhr.signal,
     });
     /* Der Timeout umfasst bewusst auch den Antwortkoerper. `fetch()` ist schon
        nach den Headern erfuellt; den Timer davor zu loeschen liess ein
        haengendes `json()` unbegrenzt weiterlaufen. */
     try {
-      const raw = await antwort.text();
+      const raw = await liesAnbieterAntwortText(antwort, responseMaxBytes);
       onRawResponse(raw);
       daten = raw ? JSON.parse(raw) : null;
     } catch (e) {
@@ -554,10 +620,12 @@ async function rufeAnbieter(
          behandelt. Ein Abort ist dagegen die harte Zeitgrenze und darf nicht
          durch ein bequemes `.catch(() => null)` in diese mildere Diagnose
          umgedeutet werden. */
-      if (uhr.signal.aborted || (e as Error)?.name === "AbortError") throw e;
+      if (e instanceof AufrufFehler || uhr.signal.aborted ||
+          (e as Error)?.name === "AbortError") throw e;
       daten = null;
     }
   } catch (e) {
+    if (e instanceof AufrufFehler) throw e;
     throw new AufrufFehler(
       CODES.SERVER,
       uhr.signal.aborted || (e as Error)?.name === "AbortError"
@@ -862,6 +930,9 @@ type Auftrag = {
   nutzertext: string;
   schema: Record<string, unknown> | null;
   bilder?: AnbieterBild[];
+  providerOptionen?: AnbieterRequestOptionen;
+  providerBodyMaxBytes?: number;
+  providerResponseMaxBytes?: number;
 };
 
 /* Die Prüfung liefert entweder eine Fehlerkennung oder die Daten, die der
@@ -895,6 +966,7 @@ type Aufgabe = {
      Codestandard noch auf einen anderen positiven DB-Wert zurueckfallen. */
   maxTokensExakt?: number;
   taskCapExakt?: number;
+  timeoutMaxMs?: number;
 };
 
 /* Suche, persönliche Profilextraktion und Prognose teilen sich denselben
@@ -3917,6 +3989,38 @@ export const AUFGABEN: Record<string, Aufgabe> = {
     },
   },
 
+  [BLOG_REFERENCE_TASK]: {
+    modellAliasPflicht: BLOG_REFERENCE_MODEL_ALIAS,
+    maxTokensExakt: BLOG_REFERENCE_MAX_TOKENS,
+    taskCapExakt: BLOG_REFERENCE_TASK_CAP_USD_CENT,
+    timeoutMaxMs: BLOG_REFERENCE_TIMEOUT_MS,
+    bauAuftrag(payload) {
+      const input = readBlogReferenceInput(payload);
+      const prompt = buildBlogReferencePrompt(input);
+      return {
+        system: prompt.system,
+        nutzertext: prompt.user,
+        schema: prompt.schema,
+        providerOptionen: { thinkingDisabled: true },
+        providerBodyMaxBytes: BLOG_REFERENCE_MAX_PROVIDER_BODY_BYTES,
+        providerResponseMaxBytes: BLOG_REFERENCE_MAX_RESPONSE_BYTES,
+      };
+    },
+    pruefeErgebnis(inhalt, payload) {
+      const input = readBlogReferenceInput(payload);
+      const result = validateBlogReferenceResult(inhalt, input);
+      return result
+        ? {
+          daten: {
+            contractVersion: BLOG_REFERENCE_CONTRACT_VERSION,
+            candidates: result.candidates,
+            partial: result.partial,
+          },
+        }
+        : { fehler: "blog-reference-result-invalid" };
+    },
+  },
+
   /* ---------- film-forecast (Etappe 8) --------------------------------------
      Eine persoenliche Prognose fuer genau EINEN unbewerteten Film bzw. eine
      Serie. Sie ist ausdruecklich keine echte Bewertung. WARUM darf hier als
@@ -4034,6 +4138,91 @@ function blogProfileCapability(
   };
 }
 
+function blogReferenceCapability(
+  konfig: Konfig,
+  voraussetzungen: {
+    buildGueltig: boolean;
+    anbieterSecretGesetzt: boolean;
+    providerFreigegeben: boolean;
+    migrationBereit: boolean;
+  },
+) {
+  const taskModelle = istReinesObjekt(konfig["task_modell"])
+    ? konfig["task_modell"] as Record<string, unknown>
+    : {};
+  const taskTokens = istReinesObjekt(konfig["task_max_tokens"])
+    ? konfig["task_max_tokens"] as Record<string, unknown>
+    : {};
+  const taskCaps = istReinesObjekt(konfig["task_max_reservierung_usd_cent"])
+    ? konfig["task_max_reservierung_usd_cent"] as Record<string, unknown>
+    : {};
+  const aliases = istReinesObjekt(konfig["modell_alias"])
+    ? konfig["modell_alias"] as Record<string, unknown>
+    : {};
+  const modelRaw = eigenerWert(aliases, BLOG_REFERENCE_MODEL_ALIAS);
+  const model = typeof modelRaw === "string" ? modelRaw.trim() : "";
+  const price = preisFuer(konfig, model);
+  const timeout = liesAnbieterRequestTimeoutMs(eigenerWert(konfig, "timeout_ms"));
+  const cap = pruefeAnbieterKostenzaun(
+    1,
+    eigenerWert(konfig, "anbieter_request_max_usd_cent"),
+    BLOG_REFERENCE_TASK_CAP_USD_CENT,
+    true,
+  );
+  const enabled = voraussetzungen.buildGueltig &&
+    voraussetzungen.anbieterSecretGesetzt &&
+    voraussetzungen.providerFreigegeben &&
+    voraussetzungen.migrationBereit &&
+    konfig["ai_aktiv"] === true &&
+    konfig["blog_reference_extract_enabled"] === true &&
+    eigenerWert(taskModelle, BLOG_REFERENCE_TASK) === BLOG_REFERENCE_MODEL_ALIAS &&
+    eigenerWert(taskTokens, BLOG_REFERENCE_TASK) === BLOG_REFERENCE_MAX_TOKENS &&
+    eigenerWert(taskCaps, BLOG_REFERENCE_TASK) === BLOG_REFERENCE_TASK_CAP_USD_CENT &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(model) &&
+    anbieterOwnerPreisboden(model) !== null && price.sicher &&
+    cap.konfigurationGueltig && timeout !== null;
+  return {
+    contractVersion: BLOG_REFERENCE_CONTRACT_VERSION,
+    enabled,
+    modelAlias: BLOG_REFERENCE_MODEL_ALIAS,
+    maxTextBytes: BLOG_REFERENCE_MAX_TEXT_BYTES,
+    maxTitleBytes: BLOG_REFERENCE_MAX_TITLE_BYTES,
+    maxCandidates: BLOG_REFERENCE_MAX_CANDIDATES,
+  };
+}
+
+async function liesRequestTextBegrenzt(
+  req: Request,
+  maxBytes: number,
+): Promise<{ text: string; tooLarge: boolean }> {
+  if (!req.body) return { text: "", tooLarge: false };
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel("request-body-too-large").catch(() => {});
+        return { text: "", tooLarge: true };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const all = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    all.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { text: new TextDecoder("utf-8", { fatal: true }).decode(all), tooLarge: false };
+}
+
 /* ---------- Einstieg --------------------------------------------------------------
    Der Anfragebehandler ist ausgelagert und exportiert, damit ihn ein Test
    aufrufen kann, ohne einen Server zu starten. Bis Etappe 6 hatte diese Datei
@@ -4054,7 +4243,22 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     });
   }
 
-  const rohtext = await req.text().catch(() => "");
+  let bodyRead: { text: string; tooLarge: boolean };
+  try {
+    bodyRead = await liesRequestTextBegrenzt(req, 1_000_000);
+  } catch {
+    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+      grund: "request-body-ungueltig",
+      status: 400,
+    });
+  }
+  if (bodyRead.tooLarge) {
+    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+      grund: "auftrag-zu-gross",
+      status: 413,
+    });
+  }
+  const rohtext = bodyRead.text;
   let koerper: Record<string, unknown> = {};
   try {
     koerper = rohtext ? JSON.parse(rohtext) : {};
@@ -4091,6 +4295,8 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
      ausschliesslich die serverseitige Blog-Promptversion. */
   let protokollPromptVersion = task === BLOG_PROFILE_TASK
     ? BLOG_PROFILE_PROMPT_VERSION
+    : task === BLOG_REFERENCE_TASK
+    ? BLOG_REFERENCE_PROMPT_VERSION
     : promptVersion;
   let forecastProvenienz: {
     warumHerkunft: "filmwissen" | "persoenlich_geschaetzt";
@@ -4100,6 +4306,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     auftragId: string;
     belege: AdapterFundstelle[];
   } | null = null;
+  let blogReferenceClaimed = false;
 
   /* 1) Größe zuerst. Sie ist die einzige Prüfung ohne Netzrunde — ein
         aufgeblähter Auftrag soll nicht erst zwei Abfragen auslösen.
@@ -4195,11 +4402,13 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
      jeder andere Clientwert stoppt vor Adminclient, Konfiguration, Log und
      Anbieter. So kann weder eine gueltig aussehende noch eine formfremde
      Clientversion in einen spaeteren Pfad geraten. */
-  if (task === BLOG_PROFILE_TASK &&
+  if ((task === BLOG_PROFILE_TASK || task === BLOG_REFERENCE_TASK) &&
       ((promptVersionRoh !== undefined && promptVersionRoh !== null) ||
         (profilVersionRoh !== undefined && profilVersionRoh !== null))) {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
-      grund: "blog-versionen-nur-serverseitig",
+      grund: task === BLOG_REFERENCE_TASK
+        ? "blog-reference-versionen-nur-serverseitig"
+        : "blog-versionen-nur-serverseitig",
       status: 400,
       vorgangId,
     });
@@ -4245,9 +4454,29 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       vorgangId,
     });
   }
+  if (task === BLOG_REFERENCE_TASK &&
+      new TextEncoder().encode(rohtext).length > BLOG_REFERENCE_MAX_REQUEST_BYTES) {
+    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+      grund: "blog-reference-auftrag-zu-gross",
+      status: 413,
+      vorgangId,
+    });
+  }
 
   /* ---- health: kostet nichts, legt keine Zeile an, zählt auf kein Limit ---- */
   if (klassifiziereAufgabe(task, false) === "health") {
+    const capabilityRequest = eigenerWert(payload, "capabilities");
+    const requestsBlogReference = Array.isArray(capabilityRequest) &&
+      capabilityRequest.length === 1 &&
+      capabilityRequest[0] === BLOG_REFERENCE_CONTRACT_VERSION &&
+      Object.keys(payload).length === 1;
+    if (capabilityRequest !== undefined && !requestsBlogReference) {
+      return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+        grund: "health-capability-unbekannt",
+        status: 400,
+        vorgangId,
+      });
+    }
     const { herkunft: pubHerkunft } = oeffentlich();
     const { herkunft: secHerkunft } = geheim();
     const buildVersion = functionBuildVersion(
@@ -4263,6 +4492,15 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     } catch {
       /* Health bleibt absichtlich erfolgreich und inhaltsfrei, meldet die
          Capability bei Registry-Fehlern aber fail-closed als nicht bereit. */
+    }
+    let blogReferenceMigrationBereit = false;
+    if (requestsBlogReference) {
+      const { data: migration } = await admin.rpc(
+        "kd_blog_reference_extract_capability_v1",
+      );
+      blogReferenceMigrationBereit = istReinesObjekt(migration) &&
+        migration.ok === true &&
+        migration.contractVersion === BLOG_REFERENCE_CONTRACT_VERSION;
     }
     let stand: unknown = null;
     const { data } = await admin.rpc("kd_ai_stand", {
@@ -4294,7 +4532,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
           gate: "KD_AI_TASK_ENABLED",
           requiredValue: "true",
           enabled: aiTaskIstAktiv(),
-          userTasks: NUTZER_AUFGABEN,
+          userTasks: requestsBlogReference
+            ? [...NUTZER_AUFGABEN, BLOG_REFERENCE_TASK]
+            : NUTZER_AUFGABEN,
         },
         betrieb: {
           aiAktiv: konfig["ai_aktiv"] === true,
@@ -4317,12 +4557,41 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
             anbieterSecretGesetzt,
             providerFreigegeben,
           }),
+          ...(requestsBlogReference
+            ? {
+              blogReferenceExtract: blogReferenceCapability(konfig, {
+                buildGueltig: buildVersion !== "unversioned",
+                anbieterSecretGesetzt,
+                providerFreigegeben,
+                migrationBereit: blogReferenceMigrationBereit,
+              }),
+            }
+            : {}),
         },
         zeit: new Date().toISOString(),
       },
       200,
       origin,
     );
+  }
+
+  /* Vom Nutzer ausdruecklich gewaehlte, standardmaessig ausgeschaltete
+     Blogfunktion. Ein realer Providerrequest entsteht nur nach der manuellen
+     Editoraktion und allen bestehenden Konto-/Provider-/Budgetgrenzen. */
+  if (task === BLOG_REFERENCE_TASK) {
+    if (!vorgangId) {
+      return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+        grund: "vorgangid-fehlt",
+        status: 400,
+        vorgangId,
+      });
+    }
+    if (konfig["blog_reference_extract_enabled"] !== true) {
+      return fehlerAntwort(CODES.AI_DISABLED, origin, {
+        grund: "blog-reference-extract-aus",
+        vorgangId,
+      });
+    }
   }
 
   /* ---- anbieter-modelle: Diagnose. Belegt die gültigen Modell-IDs am echten
@@ -5007,13 +5276,38 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       vorgangId,
     });
   }
-  const timeoutMs = liesAnbieterRequestTimeoutMs(
+  const configuredTimeoutMs = liesAnbieterRequestTimeoutMs(
     eigenerWert(konfig, "timeout_ms"),
   );
-  if (timeoutMs === null) {
+  if (configuredTimeoutMs === null) {
     await schliesseFilmwissenVorAi("server:anbieter-timeout");
     return fehlerAntwort(CODES.SERVER, origin, {
       grund: "anbieter-zeitgrenze-ungueltig",
+      vorgangId,
+    });
+  }
+  const timeoutMs = aufgabe.timeoutMaxMs === undefined
+    ? configuredTimeoutMs
+    : Math.min(configuredTimeoutMs, aufgabe.timeoutMaxMs);
+
+  /* Der taskgebundene Providerkoerper wird einmal deterministisch gebaut.
+     Dieselben Optionen gehen in Kostenreservierung und spaeteren Fetch. */
+  const providerBody = baueAnbieterKoerper(
+    modell,
+    auftrag.system,
+    auftrag.nutzertext,
+    maxTokens,
+    auftrag.schema,
+    auftrag.bilder ?? [],
+    auftrag.providerOptionen ?? {},
+  );
+  if (auftrag.providerBodyMaxBytes !== undefined &&
+      new TextEncoder().encode(JSON.stringify(providerBody)).length >
+        auftrag.providerBodyMaxBytes) {
+    await schliesseFilmwissenVorAi("invalid-response:anbieter-body-zu-gross");
+    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+      grund: "anbieter-body-zu-gross",
+      status: 413,
       vorgangId,
     });
   }
@@ -5044,6 +5338,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     maxTokens,
     auftrag.schema,
     auftrag.bilder ?? [],
+    auftrag.providerOptionen ?? {},
   );
   const reservierung = kostenAus(preis, geschaetzteEingabe, maxTokens);
   const kostenzaun = pruefeAnbieterKostenzaun(
@@ -5064,6 +5359,81 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     });
   }
 
+  const cancelBlogReferenceClaim = async () => {
+    if (!blogReferenceClaimed || !vorgangId) return;
+    try {
+      await admin.rpc("kd_blog_reference_extract_cancel_v1", {
+        p_account: aufrufer.accountId,
+        p_operation: vorgangId,
+      });
+    } catch { /* Noch providerfreier Claim darf keinen Fehlerpfad verdecken. */ }
+    blogReferenceClaimed = false;
+  };
+
+  if (task === BLOG_REFERENCE_TASK) {
+    const secret = geheim().schluessel;
+    if (!secret || !vorgangId) {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "blog-reference-hmac-konfiguration",
+        vorgangId,
+      });
+    }
+    let input: BlogReferenceInput;
+    try {
+      input = readBlogReferenceInput(aufgabenPayload);
+    } catch (e) {
+      const f = e as AufrufFehler;
+      return fehlerAntwort(f.code ?? CODES.INVALID_RESPONSE, origin, {
+        grund: f.grund ?? "blog-reference-payload",
+        status: 400,
+        vorgangId,
+      });
+    }
+    const requestHmac = await blogReferenceContentHmac(
+      input,
+      secret,
+      aufrufer.accountId,
+    );
+    const { data: preparedRaw, error: preparedError } = await admin.rpc(
+      "kd_blog_reference_extract_prepare_v1",
+      {
+        p_account: aufrufer.accountId,
+        p_operation: vorgangId,
+        p_request_hmac: requestHmac,
+        p_contract_version: BLOG_REFERENCE_CONTRACT_VERSION,
+        p_model_alias: BLOG_REFERENCE_MODEL_ALIAS,
+        p_prompt_version: BLOG_REFERENCE_PROMPT_VERSION,
+        p_result_version: BLOG_REFERENCE_RESULT_VERSION,
+        p_reservation_usd_cent: reservierung,
+      },
+    );
+    const prepared = preparedRaw as {
+      ok?: boolean;
+      status?: string;
+      code?: string;
+      grund?: string;
+      data?: unknown;
+    } | null;
+    if (preparedError) {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "blog-reference-prepare-fehlgeschlagen:" +
+          ((preparedError as { code?: string }).code ?? "?"),
+        vorgangId,
+      });
+    }
+    if (prepared?.ok && prepared.status === "cache_hit" &&
+        istReinesObjekt(prepared.data)) {
+      return jsonAntwort({ ok: true, task, vorgangId, data: prepared.data }, 200, origin);
+    }
+    if (!prepared?.ok || prepared.status !== "new") {
+      return fehlerAntwort(prepared?.code ?? CODES.SERVER, origin, {
+        grund: prepared?.grund ?? "blog-reference-prepare-formfremd",
+        vorgangId,
+      });
+    }
+    blogReferenceClaimed = true;
+  }
+
   const { data: startRoh, error: startFehler } = await admin.rpc(
     "kd_ai_auftrag_starten",
     {
@@ -5082,6 +5452,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
        nicht eingespielte Migration (Signatur ohne Reservierung). Der Code ist
        Schema-Information, keine Nutzerdaten. */
     await schliesseFilmwissenVorAi("server:ai-start");
+    await cancelBlogReferenceClaim();
     return fehlerAntwort(CODES.SERVER, origin, {
       grund: "auftrag-start-fehlgeschlagen:" +
         ((startFehler as { code?: string }).code ?? "?"),
@@ -5096,6 +5467,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   } | null;
   if (!start?.ok) {
     await schliesseFilmwissenVorAi("server:ai-abgelehnt");
+    await cancelBlogReferenceClaim();
     return fehlerAntwort(start?.code ?? CODES.LIMIT, origin, {
       grund: start?.grund ?? "abgelehnt",
       vorgangId,
@@ -5116,6 +5488,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   const logId = Number(start.log_id);
   if (!Number.isInteger(logId) || logId <= 0) {
     await schliesseFilmwissenVorAi("server:ai-log");
+    await cancelBlogReferenceClaim();
     return fehlerAntwort(CODES.SERVER, origin, {
       grund: "protokoll-id-fehlt",
       vorgangId,
@@ -5132,6 +5505,17 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
        als nackter „Internal Server Error" statt als saubere Fehlerklasse
        ankam. Im Spike belegt (P9, 26.07.). */
     try {
+      if (status === "fehler" && blogReferenceClaimed && vorgangId) {
+        try {
+          await admin!.rpc("kd_blog_reference_extract_finish_v1", {
+            p_account: aufrufer.accountId,
+            p_operation: vorgangId,
+            p_succeeded: false,
+            p_result: null,
+          });
+        } catch { /* Die gemeinsame Kostenzeile muss trotzdem abschliessen. */ }
+        blogReferenceClaimed = false;
+      }
       if (filmwissenLauf) {
         if (status === "fehler") {
           await admin!.rpc("kd_filmwissen_synthese_fehlgeschlagen", {
@@ -5168,6 +5552,21 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
 
   let ergebnis: AnbieterErgebnis;
+  if (blogReferenceClaimed && vorgangId) {
+    const { data: markedRaw, error: markedError } = await admin.rpc(
+      "kd_blog_reference_extract_provider_started_v1",
+      { p_account: aufrufer.accountId, p_operation: vorgangId },
+    );
+    const marked = markedRaw as { ok?: boolean } | null;
+    if (markedError || marked?.ok !== true) {
+      await cancelBlogReferenceClaim();
+      await beende("fehler", { fehlerklasse: "server:blog-reference-provider-mark" });
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "blog-reference-provider-start-nicht-gebunden",
+        vorgangId,
+      });
+    }
+  }
   try {
     ergebnis = await rufeAnbieter(
       modell,
@@ -5177,8 +5576,13 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       timeoutMs,
       auftrag.schema,
       auftrag.bilder ?? [],
+      auftrag.providerOptionen ?? {},
+      auftrag.providerBodyMaxBytes ?? null,
+      auftrag.providerResponseMaxBytes ?? null,
       (raw) => {
-        if (providerDiagnostic.allowed) providerRawResponse = raw;
+        if (providerDiagnostic.allowed && task !== BLOG_REFERENCE_TASK) {
+          providerRawResponse = raw;
+        }
       },
     );
   } catch (e) {
@@ -5661,6 +6065,41 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       200,
       origin,
     );
+  }
+
+  if (task === BLOG_REFERENCE_TASK && blogReferenceClaimed && vorgangId) {
+    const { data: storedRaw, error: storedError } = await admin.rpc(
+      "kd_blog_reference_extract_finish_v1",
+      {
+        p_account: aufrufer.accountId,
+        p_operation: vorgangId,
+        p_succeeded: true,
+        p_result: antwortDaten,
+      },
+    );
+    const stored = storedRaw as {
+      ok?: boolean;
+      status?: string;
+      code?: string;
+      grund?: string;
+      data?: unknown;
+    } | null;
+    if (storedError || stored?.ok !== true || stored.status !== "succeeded" ||
+        !istReinesObjekt(stored.data)) {
+      await beende("fehler", {
+        modell: ergebnis.modell,
+        inputTokens: ergebnis.inputTokens,
+        outputTokens: ergebnis.outputTokens,
+        kosten,
+        fehlerklasse: "server:blog-reference-speichern",
+      });
+      return fehlerAntwort(stored?.code ?? CODES.SERVER, origin, {
+        grund: stored?.grund ?? "blog-reference-speichern-fehlgeschlagen",
+        vorgangId,
+      });
+    }
+    antwortDaten = stored.data;
+    blogReferenceClaimed = false;
   }
 
   await beende("fertig", {

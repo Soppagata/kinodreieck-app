@@ -93,6 +93,7 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
   request_max_media_bytes: 950000,
   antwort_max_bytes: 262144,
   anbieter_request_max_usd_cent: 500,
+  blog_reference_extract_enabled: true,
   modell_alias: {
     klein: "claude-haiku-4-5-20251001",
     gross: "claude-sonnet-5",
@@ -104,6 +105,7 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
     "filmwissen-synthese": "gross",
     "media-batch-extract": "klein",
     "blog-profile-extract": "klein",
+    "blog-reference-extract": "gross",
   },
   task_max_tokens: {
     "echo-struct": 256,
@@ -112,11 +114,13 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
     "filmwissen-synthese": 2048,
     "media-batch-extract": 4096,
     "blog-profile-extract": 2048,
+    "blog-reference-extract": 8192,
   },
   task_max_reservierung_usd_cent: {
     "filmwissen-synthese": 6,
     "media-batch-extract": 4,
     "blog-profile-extract": 5,
+    "blog-reference-extract": 30,
   },
   preise_usd_cent_pro_mtok: {
     "claude-haiku-4-5-20251001": { in: 100, out: 500 },
@@ -377,6 +381,30 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
         wert,
       })),
     );
+  }
+  if (url.includes("/rest/v1/rpc/kd_blog_reference_extract_capability_v1")) {
+    return antwort({ ok: true, contractVersion: "blog-reference-extract-v1" });
+  }
+  if (url.includes("/rest/v1/rpc/kd_blog_reference_extract_prepare_v1")) {
+    return antwort({ ok: true, status: "new" });
+  }
+  if (url.includes("/rest/v1/rpc/kd_blog_reference_extract_provider_started_v1")) {
+    return antwort({ ok: true });
+  }
+  if (url.includes("/rest/v1/rpc/kd_blog_reference_extract_cancel_v1")) {
+    return antwort({ ok: true });
+  }
+  if (url.includes("/rest/v1/rpc/kd_blog_reference_extract_finish_v1")) {
+    return antwort(koerper?.p_succeeded === true
+      ? {
+        ok: true,
+        status: "succeeded",
+        data: {
+          ...(koerper?.p_result as Record<string, unknown>),
+          expiresAt: "2026-09-19T12:00:00.000Z",
+        },
+      }
+      : { ok: true, status: "failed" });
   }
   if (url.includes("/rest/v1/rpc/kd_ai_auftrag_starten")) {
     if (z.startHttpFehler) {
@@ -5418,6 +5446,16 @@ const BUDGET_SONDEN: Record<
     },
     maxTokensExakt: BLOG_PROFILE_MAX_TOKENS,
     groessteGueltigeAntwort: () => groessteGueltigeBlogProfilAntwort(),
+  },
+  "blog-reference-extract": {
+    payload: () => ({
+      title: "Werke im Text",
+      text: "Alien (1979) und Beethovens Neunte (1824).",
+    }),
+    vorbereiten: () => {
+      z.anbieter = () => anbieterErfolg({ candidates: [] });
+    },
+    maxTokensExakt: 8192,
   },
 };
 

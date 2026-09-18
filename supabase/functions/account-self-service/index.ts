@@ -91,6 +91,10 @@ Deno.serve(async (req) => {
   if (access?.active !== true) return json({ ok: false, code: "ACCOUNT_INACTIVE" }, 403, origin);
 
   if (req.method === "GET") {
+    const include = new URL(req.url).searchParams.get("include");
+    if (include !== null && include !== "blog-reference-extract-v1") {
+      return json({ ok: false, code: "INVALID_INCLUDE" }, 400, origin);
+    }
     const { data: exportSettings, error: exportSettingsError } = await api.admin
       .from("kd_private_settings")
       .select("export_enabled")
@@ -99,12 +103,26 @@ Deno.serve(async (req) => {
     if (exportSettingsError || exportSettings?.export_enabled !== true) return json({ ok: false, code: "EXPORT_DISABLED" }, 403, origin);
     const { data, error } = await api.admin.rpc("kd_private_own_data", { p_account_id: accountId });
     if (error || !data || typeof data !== "object") return json({ ok: false, code: "OWN_DATA_UNAVAILABLE" }, 503, origin);
+    let blogReferenceExtractions: unknown = undefined;
+    if (include === "blog-reference-extract-v1") {
+      const { data: extractionData, error: extractionError } = await api.admin.rpc(
+        "kd_blog_reference_extract_own_data",
+        { p_account_id: accountId },
+      );
+      if (extractionError || !Array.isArray(extractionData)) {
+        return json({ ok: false, code: "OWN_DATA_UNAVAILABLE" }, 503, origin);
+      }
+      blogReferenceExtractions = extractionData;
+    }
     return json({
       ok: true,
       schemaVersion: 1,
       data: {
         auth: { createdAt: userData.user.created_at || null, lastSignInAt: userData.user.last_sign_in_at || null, providers: (userData.user.identities || []).map((identity) => identity.provider).filter(Boolean) },
         ...(data as Record<string, unknown>),
+        ...(include === "blog-reference-extract-v1"
+          ? { blogReferenceExtractions }
+          : {}),
       },
     }, 200, origin);
   }
