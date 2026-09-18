@@ -134,6 +134,9 @@ const BEREICHE = [
         ? "Beliebtheitslisten sind weder persönliche Empfehlung noch Qualitätsurteil oder Beleg, dass ein Titel in deinem Abo verfügbar ist."
         : "FlixPatrol-Chartplätze sind neutrale Beliebtheitssignale. Sie sind weder persönliche Empfehlung noch Qualitätsurteil oder Beleg, dass ein Titel in deinem Abo verfügbar ist.",
       "Im Blog schreibst und verwaltest du eigene Artikel. Verweise können mit Einträgen aus Mediathek oder Must-Watch verbunden sein.",
+      "Für die gemeinsame Ansicht „Veröffentlicht“ setzt du unten im Editor „Anonym veröffentlichen“ und speicherst. Andere angemeldete Nutzer sehen die veröffentlichte Fassung ohne deinen Kontonamen.",
+      "Ohne Häkchen speicherst du privat. Eine bereits veröffentlichte Fassung bleibt dabei unverändert; du kannst sie bewusst aktualisieren oder zurückziehen.",
+      "Die kompakte Titelliste führt zu passenden Einträgen deiner Mediathek, deiner ausgewählten Streamingdienste oder des Kinoprogramms. Fehlende Titel bleiben als Rotlink sichtbar und lassen sich in deiner Mediathek ergänzen.",
       "Wird eine solche Verbindung gelöst, bleibt der Artikel bestehen und der offene Verweis kann später erneut zugeordnet werden.",
     ],
     suchwoerter: ["entdecken", "empfehlungen", "radar", "meinungen", "artikel", "blog", "rotlink"],

@@ -13,6 +13,7 @@ let esbuild;
 try { esbuild = require("esbuild"); }
 catch { esbuild = require("vite/node_modules/esbuild"); }
 
+let forbiddenNetworkAttempts = 0;
 function installLocalDom() {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     url: "https://blog.integration.invalid/",
@@ -26,7 +27,10 @@ function installLocalDom() {
     });
   }
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  globalThis.fetch = async () => { throw new Error("No external network in Blog integration test"); };
+  globalThis.fetch = async () => {
+    forbiddenNetworkAttempts++;
+    throw new Error("No external network in Blog integration test");
+  };
   dom.window.fetch = globalThis.fetch;
   return dom;
 }
@@ -333,7 +337,8 @@ try {
     mounted.navigations.length === 3 && mounted.navigations[0].ref === "private-beta-new-hope"
       && mounted.navigations[2].ref === "fixture-film-at-jedi");
   check("Öffnen und Navigieren fordern ausschließlich die vorbereitete Blogliste an",
-    calls.slice(readStart).every((call) => call.name === BLOG_RPC.list));
+    calls.slice(readStart).every((call) => call.name === BLOG_RPC.list)
+      && forbiddenNetworkAttempts === 0);
 
   const redlink = () => [...mounted.host.querySelectorAll(".kd-blog-reference-link")]
     .find((element) => element.textContent.includes("Synthetic Missing Story"));
@@ -440,6 +445,7 @@ try {
     projectTwins([wrongTwin, correctTwin]).primaryTarget?.ref === correctTwin.id);
   check("Bestätigte gemeinsame Werkidentität funktioniert auch bei abweichendem gespeicherten Anzeigenamen",
     projectTwins([{ ...correctTwin, titel: "Mein anderer Anzeigename" }]).primaryTarget?.ref === correctTwin.id);
+  assert.equal(forbiddenNetworkAttempts, 0, "No catalog/provider lookup may hide behind a caught network failure");
   console.log(`blog_full_flow_integration_test: ${checks} Checks bestanden (echte UI/Controller/Service, lokales PostgreSQL, zwei Konten).`);
 } finally {
   if (mounted) await mounted.close();

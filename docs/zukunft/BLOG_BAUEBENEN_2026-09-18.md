@@ -209,7 +209,7 @@ nur die betroffenen Pakete an und wird über den Meister geklärt.
 | F0 | codex/blog-foundation-20260918 | /private/tmp/kd-blog-foundation-20260918 | INTEGRATED / 0574426 + 93411b7 + 74ecad4, 27 Vertragstests grün |
 | A | codex/blog-backend-20260918 | /private/tmp/kd-blog-backend-20260918 | INTEGRATED / 5369a03 + 4b5caef + 0ad7d89, PG 38/38 + 12/12 |
 | B | codex/blog-client-20260918, Folge codex/blog-client-identity-20260918 | /private/tmp/kd-blog-client-20260918, Folge /private/tmp/kd-blog-client-identity-20260918 | INTEGRATED / 23e430c + f6144c8 + 6aeb732 + 105c0d2, Transaktionen 60/60, Projektion 25/25, Service 47/47, Blog 27/27 |
-| C | codex/blog-ui-20260918 | /private/tmp/kd-blog-ui-20260918 | INTEGRATED / 3b1c787 + 873f7cb + 642328c + 513ce6f, UI 4/4 + Chromium 34/34 |
+| C | codex/blog-ui-20260918, Folge codex/blog-ui-regression-20260918 | /private/tmp/kd-blog-ui-20260918, Folge /private/tmp/kd-blog-ui-regression-20260918 | INTEGRATED / 3b1c787 + 873f7cb + 642328c + 513ce6f + 63084a1, UI 4/4 + Chromium 34/34, Bestandsregressionen 266 + Designvertrag |
 
 Gemeinsamer Zielbranch: `codex/blog-integration-20260918`.
 Meister-Worktree: `/private/tmp/kd-blog-integration-20260918`.
@@ -276,7 +276,20 @@ Treffer werden nicht verknüpft. Der Medientyp trennt insbesondere gleiche
 TMDB-Zahlen bei Film und Serie. Projektion 25/25, Service 47/47, Transaktionen
 60/60 sowie die reale SQL/Service/Client-Gegenprobe sind grün. Der Meister
 hat dieselbe negative und zwei positive Identitätsproben im dauerhaften
-Gesamttest ergänzt. Alle Produktpakete sind damit integriert.
+Gesamttest ergänzt. Der Gesamttest besteht nun 25 Prüfungen; auch ein
+intern abgefangener unerlaubter Katalog-/Provideraufruf würde fehlschlagen.
+Alle Produktpakete sind damit integriert.
+
+Im gemeinsamen Abschlusslauf wurden zwei überholte Layoutbehauptungen und
+die alte direkte Einbindung von ArtikelMaske/App-Callback-Grenzen gefunden.
+Der Meister aktualisierte die schmale Layoutnaht in acf4f68. C erhielt für
+die Bestandsregressionen den isolierten Folgeworktree auf genau diesem Commit.
+Lieferung b95d7ba ist als 63084a1 integriert: review49_p04_personal 88,
+async_persistence_ui 72, controllers 97, cleanup_d2 9 und design_secondary
+grün. Die Tests prüfen den echten neuen Editor-/Controllerweg. Karten nutzen
+weiter den gemeinsamen Datumsformatter, Checkboxen den bestehenden
+Touchvertrag. Der Meister ergänzt ausschließlich die passende Hilfecopy und
+die Testregistrierung; keine weitere Produktlogik.
 
 A-Erstlieferung 0c3a28eb63de6dda642ecdc7e8d3245ff4946ffd liegt in der
 Ownership; lokale PG17-Tests 27/27 und 12/12 bestanden. Delta zurück an A:
