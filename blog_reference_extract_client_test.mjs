@@ -166,7 +166,8 @@ const sources = await resolveBlogReferenceCatalogSources(sourceCandidates, {
     sourceActive -= 1;
     return { status: "ready", version: "mw1-69", expiresAt: "2030-01-01T00:05:00.000Z", items: query === "Evil Dead Burn" ? [{
       id: "1768658", titel: "Evil Dead Burn", jahr: 2026, typ: "movie",
-      dienste: ["Prime Video"], watchmode_id: "1768658", imdb_id: "tt31170389",
+      dienste: ["Amazon", "AppleTV", "Rakuten TV", "Sky Store", "maxdome Store"],
+      watchmode_id: "1768658", imdb_id: "tt31170389",
     }] : [] };
   } },
   cinema: { filme: [{ film_at_id: "kino-1", t: "Kinofilm", j: 2026 }] },
@@ -219,6 +220,7 @@ check("Vorhandene Streaming- und Kino-IDs werden typgerecht und mit sichtbarer H
   assert.equal(sourceSuggestions[0].workOptions[0].mediaType, "film");
   assert.equal(sourceSuggestions[0].workOptions[0].sourceLabel, "Streaming-Katalog");
   assert.equal(sourceSuggestions[0].workOptions[0].sourceTarget.ref, "1768658");
+  assert.equal("sourceId" in sourceSuggestions[0].workOptions[0].sourceTarget, false);
   assert.equal(sourceSuggestions[1].workOptions[0].sourceLabel, "Kinoprogramm");
   assert.equal(sourceSuggestions[1].workOptions[0].sourceTarget.ref, "kino-1");
 });
@@ -267,7 +269,7 @@ check("Ein belegter Streaming-Treffer behält Navigationsziel und starke IDs ohn
   assert.equal(result.status, "applied");
   assert.equal(result.draft.references[1].primaryTarget, undefined);
   assert.deepEqual(result.draft.references[1].sourceTarget, {
-    kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn", sourceId: "prime",
+    kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn",
   });
   assert.equal(result.draft.references[1].identityHints[0].namespace, "imdb");
 });

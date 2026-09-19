@@ -188,9 +188,12 @@ function sourceEvidence(source, item, ref, title) {
   const identityHints = blogIdentityHints(item);
   if (source.kind === "streaming") {
     const sourceId = canonicalBlogSourceIds(item?.dienste || [])[0] || null;
-    if (!sourceId || identityHints.length === 0) return null;
+    if (identityHints.length === 0) return null;
     return {
-      sourceTarget: { kind: "streaming", art: "entdecken", ref, titel: title, sourceId },
+      sourceTarget: {
+        kind: "streaming", art: "entdecken", ref, titel: title,
+        ...(sourceId ? { sourceId } : {}),
+      },
       identityHints,
     };
   }

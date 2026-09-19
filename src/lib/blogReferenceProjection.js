@@ -1,9 +1,9 @@
 import {
   BLOG_IDENTITY_NAMESPACES,
   BLOG_MAX_REFERENCES,
+  isBlogStreamingSourceId,
   isBlogPublicIdentityHints,
   isBlogPublicCinemaTarget,
-  isBlogPublicStreamingTarget,
   projectBlogReferenceForReader,
 } from "./blogContract.js";
 import { gleicheEintragAb } from "./artikel.js";
@@ -29,6 +29,17 @@ const ID_FIELDS = Object.freeze({
 });
 
 function text(value) { return String(value == null ? "" : value).trim(); }
+
+export function isBlogPrivateStreamingTarget(target) {
+  if (!target || typeof target !== "object" || Array.isArray(target)) return false;
+  const expectedKeys = target.sourceId == null
+    ? ["kind", "art", "ref", "titel"] : ["kind", "art", "ref", "titel", "sourceId"];
+  if (Object.keys(target).length !== expectedKeys.length
+      || !expectedKeys.every((key) => Object.prototype.hasOwnProperty.call(target, key))) return false;
+  return target.kind === "streaming" && target.art === "entdecken"
+    && !!text(target.ref) && !!text(target.titel)
+    && (target.sourceId == null || isBlogStreamingSourceId(target.sourceId));
+}
 
 function identityValue(item, namespace) {
   for (const field of ID_FIELDS[namespace] || []) {
@@ -266,7 +277,7 @@ export function projectPublicBlogReferences(references, {
 export function projectPrivateBlogReferences(references, targetById = new Map(), { ready = true } = {}) {
   return (Array.isArray(references) ? references : []).map((reference, index) => {
     const rowId = text(reference?.rowId);
-    const storedTarget = isBlogPublicStreamingTarget(reference?.sourceTarget)
+    const storedTarget = isBlogPrivateStreamingTarget(reference?.sourceTarget)
       || isBlogPublicCinemaTarget(reference?.sourceTarget) ? reference.sourceTarget : null;
     const target = storedTarget || (reference?.ref == null ? null : targetById.get(String(reference.ref)));
     return Object.freeze({

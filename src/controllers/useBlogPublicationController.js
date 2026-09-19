@@ -9,12 +9,12 @@ import {
   blogPublicationDisplayState,
   isBlogPublicCinemaTarget,
   isBlogPublicIdentityHints,
-  isBlogPublicStreamingTarget,
 } from "../lib/blogContract.js";
 import {
   buildBlogLibraryIndex,
   buildPrivateBlogTargetIndex,
   canonicalBlogSourceIds,
+  isBlogPrivateStreamingTarget,
   projectPrivateArticleForPublication,
   projectPrivateBlogReferences,
   projectPublicBlogReferences,
@@ -200,7 +200,7 @@ function normalizeReferenceApplication(candidate, library, mustwatch) {
   }
   if (sourceBacked) {
     const validTarget = candidate.sourceKind === "streaming"
-      ? isBlogPublicStreamingTarget(candidate.sourceTarget)
+      ? isBlogPrivateStreamingTarget(candidate.sourceTarget)
       : isBlogPublicCinemaTarget(candidate.sourceTarget);
     if (!validTarget || !isBlogPublicIdentityHints(candidate.identityHints)
         || candidate.sourceTarget.ref !== candidate.ref

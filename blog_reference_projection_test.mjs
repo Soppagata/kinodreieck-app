@@ -177,7 +177,7 @@ check("Bestehende Must-Watch-Rückverweise bleiben echte Bibliotheks-, Streaming
   && privateTargets.get("mw-cinema")?.kind === "cinema");
 const directStreamingRow = {
   rowId: "direct-stream", eingabe: "Evil Dead Burn", jahr: 2026, typ: "film", ref: "1768658",
-  sourceTarget: { kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn", sourceId: "prime" },
+  sourceTarget: { kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn" },
   identityHints: [{ namespace: "imdb", value: "tt31170389" }, { namespace: "watchmode", value: "1768658" }],
   resolutionIntent: { kind: "auto" },
 };

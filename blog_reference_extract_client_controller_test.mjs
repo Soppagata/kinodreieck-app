@@ -43,7 +43,8 @@ const catalogService = {
   async search(query, options = {}) {
     catalogCalls.push({ query, options });
     return { status: "ready", version: "mw-test", expiresAt: "2030-01-01T00:05:00.000Z", items: [{
-      id: "stream-dune", titel: "Dune", jahr: 2021, typ: "movie", dienste: ["Netflix"],
+      id: "stream-dune", titel: "Dune", jahr: 2021, typ: "movie",
+      dienste: ["Amazon", "AppleTV", "Rakuten TV", "Sky Store", "maxdome Store"],
       imdb_id: "tt1160419", watchmode_id: "stream-dune",
     }] };
   },
@@ -245,7 +246,7 @@ const directStreamingApplication = {
   candidateId: "c-burn", selectionId: "c-burn:streaming:1768658", sourceKind: "streaming",
   ref: "1768658", title: "Evil Dead Burn", year: 2026, mediaType: "film",
   resolutionIntent: { kind: "auto" },
-  sourceTarget: { kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn", sourceId: "prime" },
+  sourceTarget: { kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn" },
   identityHints: [{ namespace: "imdb", value: "tt31170389" }, { namespace: "watchmode", value: "1768658" }],
 };
 let sourceApply;
