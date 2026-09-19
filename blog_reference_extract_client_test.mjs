@@ -198,6 +198,82 @@ check(".runTask registriert den neuen Task getrennt und überlässt beide Versio
   assert.equal(sent.profilVersion, null);
   assert.deepEqual(sent.payload, input);
 });
+
+const fullScanInput = {
+  title: "Scan-Reproduktion",
+  text: `JOOOHNNYYY TEEEEEESST
+Space odyssee
+Blabla roter oktober blabla
+Trash grindhouse nicolas cage AEG city of god mashed potato
+Im Kino habe ich letztens Evil Dead gesehen. Den neuen. Der sich so alt angefühlt hat… kein Retro, aber ein Remake von einem Remake. Spaß hat Evil Dead Burn trotzdem gemacht, kappa.`,
+};
+const fullCandidate = (candidateId, mention, titleSuggestion, kind = "film", interpretation = "direct") => {
+  const start = fullScanInput.text.indexOf(mention);
+  assert.notEqual(start, -1);
+  return {
+    candidateId, mention, titleSuggestion, kind, year: null, interpretation,
+    evidence: { field: "text", quote: mention, start, end: start + mention.length },
+  };
+};
+const freshEnvelope = {
+  ok: true,
+  task: "blog-reference-extract",
+  vorgangId: "33333333-3333-4333-8333-333333333333",
+  modellAlias: "gross",
+  modell: "claude-sonnet-4-5-20250929",
+  data: {
+    contractVersion: "blog-reference-extract-v1",
+    candidates: [
+      fullCandidate("scan-johnny", "JOOOHNNYYY TEEEEEESST", "Johnny Test", "series", "interpreted"),
+      fullCandidate("scan-space", "Space odyssee", "2001: A Space Odyssey", "film", "interpreted"),
+      fullCandidate("scan-oktober", "roter oktober", "Jagd auf Roter Oktober", "film", "interpreted"),
+      fullCandidate("scan-city", "city of god", "City of God"),
+      fullCandidate("scan-evil", "Evil Dead", "Evil Dead"),
+    ],
+    partial: false,
+    expiresAt: "2030-09-19T12:00:00.000Z",
+  },
+  providerReceipt: {
+    schemaVersion: "provider-receipt-v1", provider: "anthropic",
+    model: "claude-sonnet-4-5-20250929",
+    usage: { inputTokens: 240, outputTokens: 510 },
+    responseSha256: "a".repeat(64), resultMode: "structured",
+    server: { logId: 123, providerRequests: 1, reservationUsdCent: 500, costUsdCent: 1.25 },
+  },
+  verbrauch: {
+    inputTokens: 240, outputTokens: 510, kostenUsdCent: 1.25,
+    dauerMs: 6123, stopReason: "end_turn",
+  },
+};
+const freshAi = createAiService({
+  auth: { requireAccount: () => ({ account: { id: "account-a" } }) },
+  config: { aiEndpointName: "ai-task", schemaVersion: "v5" },
+  transport: async () => structuredClone(freshEnvelope),
+});
+const freshRaw = await freshAi.runTask("blog-reference-extract", fullScanInput);
+check("Frische AI-Task-Hülle und Cache-Hülle liefern dieselben fünf nicht vorausgewählten Vorschläge", () => {
+  const fresh = validateBlogReferenceExtractionResponse(freshRaw, fullScanInput);
+  const cached = validateBlogReferenceExtractionResponse({
+    ok: freshEnvelope.ok, task: freshEnvelope.task,
+    vorgangId: freshEnvelope.vorgangId, data: structuredClone(freshEnvelope.data),
+  }, fullScanInput);
+  assert.equal(fresh.ok, true);
+  assert.equal(cached.ok, true);
+  assert.equal(fresh.value.candidates.length, 5);
+  assert.deepEqual(fresh.value.candidates, cached.value.candidates);
+  const freshSuggestions = buildBlogReferenceSuggestions(fresh.value.candidates);
+  assert.equal(freshSuggestions.every((suggestion) => !("selected" in suggestion)), true);
+  assert.equal(buildBlogReferenceApplications(freshSuggestions, []).reason, "empty-selection");
+  assert.equal("modell" in fresh.value, false);
+  assert.equal("providerReceipt" in fresh.value, false);
+  assert.equal("verbrauch" in fresh.value, false);
+
+  const unknownEnvelope = { ...freshRaw, unexpected: "nicht vereinbart" };
+  assert.equal(validateBlogReferenceExtractionResponse(unknownEnvelope, fullScanInput).ok, false);
+  const malformedEvidence = structuredClone(freshRaw);
+  malformedEvidence.data.candidates[0].evidence.start += 1;
+  assert.equal(validateBlogReferenceExtractionResponse(malformedEvidence, fullScanInput).ok, false);
+});
 const hashA = await blogReferenceContentHash(input);
 const hashB = await blogReferenceContentHash({ ...input, text: `${input.text} ` });
 check("Der Content-Hash bindet die exakte Titel/Text-Paarung", () => assert.notEqual(hashA, hashB));

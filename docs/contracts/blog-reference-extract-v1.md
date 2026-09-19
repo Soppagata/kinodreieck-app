@@ -36,7 +36,11 @@ Urheber/Jahr werden als Werkdaten nur angezeigt, soweit der Bestand sie belegt.
   modelAlias: "gross", maxTextBytes: 18000, maxTitleBytes: 512,
   maxCandidates: 50 }`. `enabled` setzt Konfiguration, Migration, Providerfreigabe,
   Schlüssel, versionierten Build und passende feste Reservierungsgrenze voraus.
-- Erfolg im bisherigen `{ ok, task, vorgangId, data }`-Umschlag. `data` ist exakt
+- Erfolg enthält immer `{ ok, task, vorgangId, data }`. Eine frische normale
+  ai-task-Antwort darf zusätzlich ausschließlich `modellAlias`, `modell`,
+  `providerReceipt` und `verbrauch` tragen; eine Cache-Antwort darf diese vier
+  Metadaten auslassen. Der Client verwendet sie nicht für Vorschläge oder
+  Persistenz. `data` ist exakt
   `{ contractVersion, candidates, partial, expiresAt }`; Version wie oben,
   `partial` boolean, `expiresAt` ISO-Zeitpunkt der unverlängerten Cachefrist.
 - Ein Kandidat enthält exakt `{ candidateId, mention, titleSuggestion, kind,

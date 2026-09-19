@@ -17,6 +17,10 @@ const CAPABILITY_KEYS = Object.freeze([
 ]);
 const DATA_KEYS = Object.freeze(["contractVersion", "candidates", "partial", "expiresAt"]);
 const ENVELOPE_KEYS = Object.freeze(["ok", "task", "vorgangId", "data"]);
+const ENVELOPE_METADATA_KEYS = Object.freeze([
+  "modellAlias", "modell", "providerReceipt", "verbrauch",
+]);
+const ENVELOPE_ALLOWED_KEYS = new Set([...ENVELOPE_KEYS, ...ENVELOPE_METADATA_KEYS]);
 const KINDS = new Set(["film", "series", "music", "other", "title_group", "unclear"]);
 const INTERPRETATIONS = new Set(["direct", "interpreted", "ambiguous"]);
 const MEDIA_TYPE_BY_KIND = Object.freeze({
@@ -36,6 +40,9 @@ const isObject = (value) => !!value && typeof value === "object" && !Array.isArr
 const exactKeys = (value, expected) => isObject(value)
   && Object.keys(value).length === expected.length
   && expected.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+const validEnvelopeKeys = (value) => isObject(value)
+  && ENVELOPE_KEYS.every((key) => Object.prototype.hasOwnProperty.call(value, key))
+  && Object.keys(value).every((key) => ENVELOPE_ALLOWED_KEYS.has(key));
 const cleanText = (value) => typeof value === "string" && value === value.trim() && value.length > 0;
 const nonBlankText = (value) => typeof value === "string" && value.trim().length > 0;
 const canonicalIso = (value) => typeof value === "string"
@@ -99,7 +106,7 @@ function validateCandidate(candidate, input) {
 
 export function validateBlogReferenceExtractionResponse(response, input) {
   const checkedInput = validateBlogReferenceExtractionInput(input);
-  if (!checkedInput.ok || !exactKeys(response, ENVELOPE_KEYS)
+  if (!checkedInput.ok || !validEnvelopeKeys(response)
       || response.ok !== true || response.task !== BLOG_REFERENCE_EXTRACT_TASK
       || !cleanText(response.vorgangId) || !exactKeys(response.data, DATA_KEYS)) {
     return { ok: false, reason: "invalid-envelope" };
