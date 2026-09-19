@@ -1482,3 +1482,17 @@ Controllerchecks grün. UI-/PG-Gesamtfixture angepasst; sie läuft wie von Max
 gewünscht erst in der regulären CI. Kein Wiederholungslauf beim Meister,
 kein lokaler Build und kein zusätzlicher Browser- oder Anbieteraufruf.
 Der finale Commit wird mit CI und Staging-Version im Lieferbeleg gebunden.
+
+Die erste CI fand eine falsche Erwartung der angepassten Gesamtfixture an
+die projizierte Editoransicht. `756eedf` / `14e55e4` korrigiert ausschließlich
+diese Erwartung; die Prüfung der tatsächlich gespeicherten Werkreferenz bleibt
+streng. Nur der fehlgeschlagene PG-Gesamttest wurde danach gezielt ausgeführt
+(46 grün), keine weiteren lokalen Wiederholungen.
+
+`c059b80` / `6747f34` ergänzt die noch fehlende Streamingauflösung beim
+erneuten Öffnen über den vorhandenen Katalogabruf: höchstens 500 deduplizierte
+bekannte IDs, Abbruch bei Konto-/Artikelwechsel, keine Anbieteranfrage und
+keine automatische Mediathekerstellung. Die neue einzelne Regression für
+abgelaufene Beobachtung mit aktuellem bzw. entferntem Katalogwerk ist grün
+und in `test:blog` registriert. Der Meister wiederholt sie nicht. Die finale
+CI und der anschließende Versionsreadback bleiben die Lieferbelege.
