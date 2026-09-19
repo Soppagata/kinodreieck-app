@@ -77,7 +77,7 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 | M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE auf Staging | M6 in a3a0086; Migration, lokales Gate, CI und Domain-/Service-Worker-Readback bestätigt; Production-Frontend bleibt 77c5603 |
-| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS; Solo-Folgekorrektur B | DONE im Integrationskandidaten; Staging-Lieferung folgt | Produktdelta 32378ac akzeptiert reguläre frische und Cache-Antworten. 14 Client-, 10 Controllerfälle, vollständige lokale Mocksuite und 41 integrierte Nutzerwegprüfungen grün; Backend unverändert. Finaler Liefercommit wird durch CI-/Domainbelege gebunden. |
+| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS; Solo-Folgekorrektur B | INTEGRIERT; Staging-Nachweis im Lieferbeleg | Auswahlhinweise und Streaming-/Kinoabgleich als 233ad55 und 8a3eacc integriert. Gesamtcheck über reguläre CI; finaler Commit und Domainstand unter `/private/tmp/kd-blog-selection-release-20260919/`. Physische PWA-Abnahme bleibt bei Max. |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -1360,3 +1360,72 @@ Functioncode, Prompts, Modellkonfiguration und Kostenregeln sind unverändert.
 Der finale Liefercommit wird in `/private/tmp/kd-blog-scan-feedback-20260919/`
 mit lokalem Gate, Push-Readback, GitHub-CI und Domain-/Service-Worker-Readback
 gebunden. Die Abnahme der korrigierten Anzeige auf dem iPhone bleibt Max' Test.
+
+
+### M7-Folgekorrektur: Auswahl und Quellen vom 19.09.2026
+
+Max meldet anhand des Screenshots um 15:01, dass ausgewählte Titel nicht
+übernommen werden können. Der sichtbare manuelle Eintrag Evil Dead Burn,
+2026, Film ist vollständig. Der bisherige Client sperrt den Gesamtbutton
+jedoch auch bei einer anderen markierten Erwähnung ohne konkrete Werkauswahl;
+die erklärende Klickmeldung bleibt wegen `disabled` unerreichbar. Das Delta
+macht offene Entscheidungen je Titel und am Übernahmebereich sichtbar und
+behält die atomare Übernahme bei.
+
+Die bisherige Vorschlagsliste gleicht nur Mediathek und Merkliste ab. Der
+bestehende neutrale Streaming-Kandidatendienst bietet bereits eine begrenzte,
+kontogebundene Titelsuche über den ganzen gepflegten Bestand; er ersetzt
+keinen Provider und lädt keinen Vollkatalog herunter. Kino wird aus dem
+aktuellen vorhandenen Programm mit dessen Herkunft und Frische bewertet.
+Gleichnamige Werke, Jahres-/Typkonflikte und fehlende bzw. nicht geladene
+Quellen bleiben sichtbar unterscheidbar. Auswahl und Quellennachweise müssen
+privates Speichern, Reload und normale Veröffentlichung überleben.
+
+Die aktuelle Nutzerentscheidung ist ausdrücklich: „Nur Blogreferenz;
+Mediathek später ausdrücklich ergänzen“. Manuelle unverknüpfte Übernahme
+bleibt eine Referenz im Blog; ein Mediathek-Eintrag wird erst im gesonderten,
+bewusst gestarteten Ergänzungsweg angelegt. Die Oberfläche erklärt diese
+Alternative auch dann verständlich, wenn konkrete Werke gefunden wurden.
+
+SOLO-Delta B von `ea327edfd67224b4814a16c9dbb2f143b2f21a50` im Worktree
+`/private/tmp/kd-blog-scan-selection-fix-20260919`, Branch
+`codex/blog-scan-selection-fix-20260919`. B besitzt die Client-/Editor-
+Anschlüsse, nötige private Referenzadapter, fokussierte Tests und die
+vertragliche Präzisierung. Meister besitzt dieses Register, Paketregistrierung,
+integrierten Gesamtweg und die Staging-Lieferung. Kein neuer Backendvertrag,
+keine Migration, kein KI-/Modell-/Promptwechsel und kein bezahlter Test.
+Die Skills matching-guards und resolver-cache ergänzen ausschließlich die
+fachliche Werkzuordnung und die Wiederverwendung bestehender Quellenpfade.
+
+Reine Diagnose-/Lieferbelege: `/private/tmp/kd-blog-selection-release-20260919/`.
+Der vorhandene Streamingkatalog enthält Evil Dead Burn (2026); im aktuellen
+Kinoprogramm gibt es keinen Titelgleichstand dafür. Dieses Quellenwissen
+stammt aus einem begrenzten Readback, nicht aus einer neuen Anbieteranfrage.
+
+DELIVERED / INTEGRATED: `225fd43` als `233ad55` übernommen. Der Button
+bleibt bei offenen Einzelentscheidungen bedienbar, nennt den betroffenen Titel
+und führt zu dessen Karte. Auswahlstand und Rückmeldung stehen direkt bei der
+Übernahme. Werkverknüpfung und „Nur als Blogreferenz“ sind Alternativen;
+unvollständige Auswahlen werden weiterhin nicht teilweise übernommen.
+Streaming wird seriell mit höchstens acht Suchbegriffen und zwanzig Treffern
+je Abfrage über den bestehenden Kandidatendienst abgeglichen; Kino stammt aus
+dem aktuellen geladenen Programm. Ausfälle und Teilabgleich bleiben sichtbar.
+
+Der schmale Folgefix `f61e07f` als `8a3eacc` erhält auch den konkret belegten
+Shop-only-Treffer Evil Dead Burn. Sein privates Katalogziel benötigt keine
+erfundene Aboquelle. Öffentliche Zielvalidatoren und Abofilter bleiben streng;
+für die Veröffentlichung werden die bestätigten Werkkennungen an den
+bestehenden serverseitigen Resolver übergeben.
+
+Übernommene Paketbelege: 20 Client-, 12 Controller-, 27 Projektionsprüfungen,
+12 Chromium-Prüfungen bei 320/393 Pixeln und Kandidatendiensttests grün.
+Nach dem Shop-only-Delta nur die beiden betroffenen Client-/Controllertests
+erneut ausgeführt. Der bestehende PG-/UI-Gesamttest enthält zusätzlich den
+Nutzerweg mit reinen Shopangeboten, Kino, verständlicher offener Auswahl,
+privatem Save, Reload, Veröffentlichung und ausdrücklich ohne Mediathekwrite.
+
+Max' Steuerung vom 19.09.: gleiche Tests nicht vor und nach Deployment
+wiederholen. Deshalb kein weiterer lokaler Voll- oder Buildlauf; die reguläre
+CI übernimmt den abschließenden Gesamtcheck. Nach dem Deployment erfolgen
+nur Git-/Versions-/Service-Worker-Readback und Lieferbeleg. Kein zusätzlicher
+bezahlter KI-Test, keine Migration und keine Production-Frontend-Promotion.

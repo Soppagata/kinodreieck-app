@@ -180,7 +180,8 @@ function field(host, prefix) {
   return control;
 }
 
-async function mountAccount(ui, { accountId, service, values, initialLibrary = [], selectedServices, scanService = null, scanEnabled = !!scanService }) {
+async function mountAccount(ui, { accountId, service, values, initialLibrary = [], selectedServices,
+  scanService = null, scanEnabled = !!scanService, scanCatalogService = null, scanCinema = null }) {
   const writes = [];
   const navigations = [];
   const errors = [];
@@ -257,6 +258,8 @@ async function mountAccount(ui, { accountId, service, values, initialLibrary = [
       accountScope: accountId, enabled: scanEnabled, personalAi: !!scanService,
       editor: publication.editor, library: items, libraryReady: true,
       mustwatch: [], mustwatchReady: true, service: scanService,
+      catalogService: scanCatalogService, cinema: scanCinema, cinemaReady: scanCinema !== null,
+      sourceContextKey: scanCinema === null ? "" : "synthetic-current-cinema",
       onApplyReferenceSuggestions: publication.actions.onApplyReferenceSuggestions,
       onOpenSettings: () => settingsVisits.push("personalisierung"),
     });
@@ -554,13 +557,34 @@ try {
   await mounted.close(); mounted = null;
   const scanValues = new Map();
   const scanTitle = "Mein Scan über verschiedene Medien";
-  const scanText = "Dune verbindet für mich zwei Verfilmungen. Dazu passen Severance (2022), 9. Sinfonie (1824) und Don Quijote (1605).";
+  const scanText = "Dune verbindet für mich zwei Verfilmungen. Dazu passen Severance (2022), 9. Sinfonie (1824) und Don Quijote (1605). Star Wars: The Empire Strikes Back (1980) ist im Streamingkatalog, Star Wars: Return of the Jedi (1983) im Kino.";
   const scanLibrary = [
     { id: "private-alpha-dune-1984", titel: "Dune", jahr: 1984, typ: "film", regie: "David Lynch", imdb_id: "tt0087182" },
     { id: "private-alpha-dune-2021", titel: "Dune", jahr: 2021, typ: "film", regie: "Denis Villeneuve", imdb_id: "tt1160419" },
     { id: "private-alpha-severance", titel: "Severance", jahr: 2022, typ: "serie" },
     { id: "private-alpha-beethoven", titel: "9. Sinfonie", jahr: 1824, typ: "musik", kuenstler: "Ludwig van Beethoven" },
   ];
+  const catalogQueries = [];
+  const scanSources = {
+    scanCatalogService: {
+      async search(query, { limit, signal }) {
+        assert.equal(limit, 20);
+        assert.equal(signal.aborted, false);
+        catalogQueries.push(query);
+        return { status: "ready", version: "synthetic-catalog-v1",
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+          items: query === "Star Wars: The Empire Strikes Back" ? [{
+            id: "fixture-watchmode-empire", titel: "Star Wars: The Empire Strikes Back",
+            jahr: 1980, typ: "movie", dienste: ["Amazon", "AppleTV"],
+            watchmode_id: "fixture-watchmode-empire", imdb_id: "tt0080684", tmdb_id: "1891",
+          }] : [] };
+      },
+    },
+    scanCinema: { filme: [{
+      film_at_id: "fixture-film-at-jedi", titel: "Star Wars: Return of the Jedi", jahr: 1983,
+      vorstellungen: [{ kino: "Fixture Kino", zeit: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() }],
+    }] },
+  };
   const scanCalls = [];
   const scanService = {
     async runTask(task, payload, options) {
@@ -584,6 +608,10 @@ try {
           interpretation: "direct", evidence: { field: "text", quote: "9. Sinfonie (1824)" } },
         { mention: "Don Quijote", titleSuggestion: "Don Quijote", kind: "other", year: 1605,
           interpretation: "direct", evidence: { field: "text", quote: "Don Quijote (1605)" } },
+        { mention: "Star Wars: The Empire Strikes Back", titleSuggestion: "Star Wars: The Empire Strikes Back", kind: "film", year: 1980,
+          interpretation: "direct", evidence: { field: "text", quote: "Star Wars: The Empire Strikes Back (1980)" } },
+        { mention: "Star Wars: Return of the Jedi", titleSuggestion: "Star Wars: Return of the Jedi", kind: "film", year: 1983,
+          interpretation: "direct", evidence: { field: "text", quote: "Star Wars: Return of the Jedi (1983)" } },
       ] }, ui.readBlogReferenceInput(payload));
       assert.ok(normalized && !normalized.partial);
       const model = "claude-sonnet-4-5-20250929";
@@ -603,7 +631,7 @@ try {
     },
   };
   mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
-    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService, scanEnabled: false });
+    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService, ...scanSources, scanEnabled: false });
   await mounted.action("onNewArticle");
   const beforeSettings = mounted.writes.length;
   await click(ui, dom, buttonWithText(mounted.host, "Zu Personalisierung & KI"));
@@ -614,7 +642,7 @@ try {
       && mounted.writes.length === beforeSettings && scanCalls.length === 0);
   await mounted.close(); mounted = null;
   mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
-    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService });
+    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService, ...scanSources });
   await mounted.action("onNewArticle");
   await input(ui, dom, field(mounted.host, "Titel"), scanTitle);
   await input(ui, dom, field(mounted.host, "Text"), scanText);
@@ -625,23 +653,38 @@ try {
   await settled(ui, () => mounted.model.referenceExtraction.canStart, "negotiated scan capability");
   await click(ui, dom, buttonWithText(mounted.host, "Titel im Text erkennen (KI)"));
   await settled(ui, () => mounted.model.referenceExtraction.status === "result", "server-normalized scan suggestions");
-  check("Frische Serverantwort mit Metadaten liefert vier belegte Erwähnungen ohne Vorauswahl oder Speicherung",
-    scanCalls.length === 1 && mounted.host.querySelectorAll(".kd-blog-suggestion").length === 4
+  check("Frische Serverantwort mit Metadaten liefert sechs belegte Erwähnungen ohne Vorauswahl oder Speicherung",
+    scanCalls.length === 1 && mounted.host.querySelectorAll(".kd-blog-suggestion").length === 6
       && !mounted.host.querySelector(".kd-blog-suggestion input:checked")
       && mounted.model.editor.references.length === 1 && mounted.writes.length === beforeScanWrites);
   const suggestionAt = (index) => mounted.host.querySelectorAll(".kd-blog-suggestion")[index];
-  for (let i = 0; i < 4; i++) await click(ui, dom, suggestionAt(i).querySelector(".kd-blog-suggestion-mention input"));
+  for (let i = 0; i < 6; i++) await click(ui, dom, suggestionAt(i).querySelector(".kd-blog-suggestion-mention input"));
   check("Erwähnungsauswahl allein übernimmt nichts; Dune zeigt beide unterscheidbaren Werke",
     mounted.model.editor.references.length === 1
       && /1984.*David Lynch/.test(suggestionAt(0).textContent)
       && /2021.*Denis Villeneuve/.test(suggestionAt(0).textContent));
+  await click(ui, dom, buttonWithText(mounted.host, "Ausgewählte übernehmen"));
+  check("Unvollständige Auswahl erklärt den offenen Titel am Button statt lautlos zu sperren",
+    mounted.host.querySelector(".kd-blog-suggestion-apply").textContent.includes("Entscheidung offen bei „Dune“")
+      && mounted.host.textContent.includes("Es wurde nichts übernommen.")
+      && mounted.model.editor.references.length === 1 && mounted.writes.length === beforeScanWrites);
+  check("Der neutrale Quellenabgleich findet Shop-Katalog und Kino auch ohne Abo- oder Mediathektreffer",
+    suggestionAt(4).textContent.includes("Streaming-Katalog")
+      && suggestionAt(5).textContent.includes("Kinoprogramm")
+      && mounted.model.referenceExtraction.sources.streaming.status === "ready"
+      && mounted.model.referenceExtraction.sources.cinema.status === "ready"
+      && JSON.stringify(catalogQueries) === JSON.stringify([
+        "Dune", "Severance", "Star Wars: The Empire Strikes Back", "Star Wars: Return of the Jedi",
+      ]));
   await click(ui, dom, suggestionAt(0).querySelectorAll(".kd-blog-suggestion-work input")[0]);
   await click(ui, dom, suggestionAt(0).querySelectorAll(".kd-blog-suggestion-work input")[1]);
   await click(ui, dom, suggestionAt(1).querySelector(".kd-blog-suggestion-work input"));
   await click(ui, dom, suggestionAt(2).querySelector(".kd-blog-suggestion-work input"));
   await click(ui, dom, suggestionAt(3).querySelector(".kd-blog-suggestion-work input"));
+  await click(ui, dom, suggestionAt(4).querySelector(".kd-blog-suggestion-work input"));
+  await click(ui, dom, suggestionAt(5).querySelector(".kd-blog-suggestion-work input"));
   await click(ui, dom, buttonWithText(mounted.host, "Ausgewählte übernehmen"));
-  await settled(ui, () => mounted.model.editor.references.length === 6, "atomic reference adoption");
+  await settled(ui, () => mounted.model.editor.references.length === 8, "atomic reference adoption");
   const scanRows = mounted.model.editor.references;
   assert.deepEqual(scanRows.map((row) => [row.title, row.year, row.mediaType, row.primaryTarget?.ref ?? null]), [
     ["Bestehende Referenz", null, "film", null],
@@ -650,6 +693,8 @@ try {
     ["Severance", 2022, "serie", scanLibrary[2].id],
     ["9. Sinfonie", 1824, "musik", scanLibrary[3].id],
     ["Don Quijote", 1605, "sonstiges", null],
+    ["Star Wars: The Empire Strikes Back", 1980, "film", "fixture-watchmode-empire"],
+    ["Star Wars: Return of the Jedi", 1983, "film", "fixture-film-at-jedi"],
   ]);
   check("Bewusste Übernahme erhält die erste Zeile und ergänzt beide Dune-Filme, Serie, Musik und Rotlink atomar",
     scanRows[0].rowId === preservedRow && scanRows[1].year === 1984 && scanRows[2].year === 2021
@@ -662,12 +707,15 @@ try {
   const scannedArticle = mounted.articles.find((article) => article.titel === scanTitle);
   const savedRowIds = scannedArticle.liste.map((row) => row.rowId);
   check("Privates Speichern bewahrt alle bestätigten Typen und die unverknüpfte Entscheidung",
-    scannedArticle.liste.length === 6 && scannedArticle.liste[4].typ === "musik"
+    scannedArticle.liste.length === 8 && scannedArticle.liste[4].typ === "musik"
       && scannedArticle.liste[4].jahr === 1824 && scannedArticle.liste[5].jahr === 1605
       && scannedArticle.liste[5].rotlink_ok === true);
+  check("Bestätigte Blogreferenzen und privates Speichern legen keine Mediathek-Einträge an",
+    !mounted.writes.some((write) => write.key === "kd:master")
+      && JSON.stringify(mounted.library) === JSON.stringify(scanLibrary));
   await mounted.close(); mounted = null;
   mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
-    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService });
+    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService, ...scanSources });
   await click(ui, dom, buttonWithText(mounted.host, "Bearbeiten"));
   check("Reload stellt Reihenfolge, Werkidentitäten und Typen ohne erneuten Scan wieder her",
     JSON.stringify(mounted.model.editor.references.map((row) => row.rowId)) === JSON.stringify(savedRowIds)
@@ -675,12 +723,18 @@ try {
       && mounted.model.editor.references[2].primaryTarget?.ref === scanLibrary[1].id
       && mounted.model.editor.references[4].year === 1824
       && mounted.model.editor.references[5].year === 1605 && scanCalls.length === 1);
+  check("Reload erhält Streaming- und Kinoziele ohne erneuten Scan oder Quellenabruf",
+    mounted.model.editor.references[6].primaryTarget?.kind === "streaming"
+      && mounted.model.editor.references[6].primaryTarget?.ref === "fixture-watchmode-empire"
+      && mounted.model.editor.references[7].primaryTarget?.kind === "cinema"
+      && mounted.model.editor.references[7].primaryTarget?.ref === "fixture-film-at-jedi"
+      && catalogQueries.length === 4 && scanCalls.length === 1);
   await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
   await click(ui, dom, buttonWithText(mounted.host, "Anonym veröffentlichen"));
   await settled(ui, () => mounted.articles[0]?.publikation?.errorCode === "DECISION_REQUIRED", "unavailable shared work decisions");
   await mounted.close(); mounted = null;
   mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
-    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService });
+    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService, ...scanSources });
   await click(ui, dom, buttonWithText(mounted.host, "Bearbeiten"));
   check("Fehlende gemeinsame Katalogbelege bleiben nach Reload als ausdrückliche Rotlink-Entscheidung lösbar",
     [...mounted.host.querySelectorAll("button")].filter((button) => button.textContent === "Als Rotlink behalten").length === 2);
@@ -692,13 +746,18 @@ try {
   assertAnonymizedPage(scannedPage, [accounts.alpha, accounts.beta, scannedArticle.id, ...savedRowIds, ...scanLibrary.map((item) => item.id)]);
   const publishedScan = scannedPage.items.find((item) => item.article.title === scanTitle);
   check("Die bestätigten Scanreferenzen erreichen den aktuellen Publikationsweg und sind anonym für das andere Konto lesbar",
-    publishedScan?.article.references.length === 6
+    publishedScan?.article.references.length === 8
       && publishedScan.article.references[1].year === 1984 && publishedScan.article.references[2].year === 2021
       && publishedScan.article.references[4].mediaType === "musik"
       && publishedScan.article.references[4].year === 1824
       && publishedScan.article.references[5].mediaType === "sonstiges"
       && publishedScan.article.references[5].year === 1605
       && !JSON.stringify([...alphaValues]).includes(scannedArticle.id) && scanCalls.length === 1);
+  check("Bestätigte Quellenidentitäten erreichen die öffentliche Projektion ohne private Mediathekwrites",
+    publishedScan.article.references[6].sources.streaming.some((target) => target.titel === "Star Wars: The Empire Strikes Back"
+      && target.sourceId === "netflix")
+      && publishedScan.article.references[7].sources.cinema.some((target) => target.ref === "fixture-film-at-jedi")
+      && !mounted.writes.some((write) => write.key === "kd:master") && catalogQueries.length === 4);
   assert.equal(forbiddenNetworkAttempts, 0, "No catalog/provider lookup may hide behind a caught network failure");
   console.log(`blog_full_flow_integration_test: ${checks} Checks bestanden (echte UI/Controller/Service, lokales PostgreSQL, zwei Konten).`);
 } finally {
