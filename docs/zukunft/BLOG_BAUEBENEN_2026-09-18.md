@@ -1299,3 +1299,15 @@ und Buildnachweis bleiben für dessen unveränderte Quellen gültig.
 Die statischen Einstellungsprüfungen erkennen die Personalisierungs-Klappe
 auch mit ihrer neuen Sprungmarken-ID: 89 KI-Schalter- und 281 Geschmacks-UI-
 Prüfungen grün, unveränderte Zustimmungs- und Schreibschutzkriterien.
+
+Altformat-Kompatibilität: Paketdelta `d6890d3` als `f2d2afc` integriert.
+Die additive Migration `20260919093000_blog_legacy_null_projection.sql`
+bewahrt `NULL`-Vertragsversionen in den drei alten Lese-/Claim-Filtern;
+v2/v3 bleiben dort ausgeschlossen. Vier fokussierte PG-Fälle sowie erneut
+41 integrierte Nutzerwegprüfungen grün. Der Frontendquellbaum ist unverändert,
+sein Buildnachweis bleibt gültig. Migration am 19.09. um 07:55 UTC ausgeführt
+und mit exakter Ledgerquelle zurückgelesen: SHA-256
+`d2f50194db56780dc56aff8ee0608d8a2918652c069e6871db94cf2cd7f590a9`.
+Kein bestehender Beitrag war betroffen; Rechte, Autorenentscheidung und
+KI-/Exportkonfiguration blieben unverändert. Belege im selben Lieferordner
+unter `legacy-migration-*.json` und `integrated-flow-with-legacy.log`.
