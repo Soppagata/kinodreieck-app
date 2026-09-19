@@ -215,7 +215,9 @@ check("Blog-Bearbeitung bleibt knapp und der Max-Einstieg öffnet keine entfernt
   const blog = lies("./src/components/blog/BlogEditor.jsx");
   const daten = lies("./src/tabs/DatenTab.jsx");
   assert.match(blog, /Privat speichern/);
-  assert.match(blog, /Speichern & veröffentlichen/);
+  assert.match(blog, /run\(onPrivateSave\)/);
+  assert.match(blog, /run\(onPublish\)/);
+  assert.match(blog, /Als \$\{profileAuthor\}/);
   assert.match(blog, /Anonym veröffentlichen/);
   assert.doesNotMatch(blog, /Speichern & neu abgleichen/i);
   assert.doesNotMatch(daten, /RELEASE_NEBENWEGE_SICHTBAR|MasterImport|Masterliste importieren|Technik & Support/);

@@ -151,7 +151,7 @@ check(!filmFixture.container.querySelector(".kd-beschreibung-editor") && filmWri
   "FilmCard schließt erst nach erfolgreicher Write-Bestätigung");
 await filmFixture.cleanup();
 
-/* Blog-v1: Controller serialisiert Saves; Fehler bewahrt den kontrollierten
+/* Blog: Controller serialisiert Saves; Fehler bewahrt den kontrollierten
    Editor. Privates Speichern lässt eine bestehende Veröffentlichung stehen. */
 let blogModel = null;
 let blogArticles = [{
@@ -188,20 +188,20 @@ const blogFixture = await mounte(BlogHarness);
 await act(async () => { blogModel.actions.onEditArticle({ articleId: "blog_1" }); await tick(); });
 const blogText = blogFixture.container.querySelector("textarea");
 await act(async () => { setzeWert(blogText, "Privater Entwurf bleibt"); await tick(); });
-check(/veröffentlichte Fassung bleibt unverändert/.test(blogFixture.container.textContent),
-  "Blog-v1 erklärt vor privatem Speichern den Erhalt der Veröffentlichung");
+check(knopf(blogFixture.container, "Privat speichern")?.disabled === false,
+  "Blog bietet privates Speichern unabhängig von der Publikations-Capability an");
 await act(async () => {
-  const speichern = knopf(blogFixture.container, "Änderungen privat speichern");
+  const speichern = knopf(blogFixture.container, "Privat speichern");
   speichern.click(); speichern.click(); await tick();
 });
 check(blogWriteCalls === 1 && knopf(blogFixture.container, "Speichert").disabled,
-  "Blog-v1-Controller sperrt den zweiten Save bis zur Write-Bestätigung");
+  "Blog-Controller sperrt den zweiten Save bis zur Write-Bestätigung");
 await act(async () => { resolveBlogWrite(false); await tick(); });
 check(blogFixture.container.querySelector("textarea").value === "Privater Entwurf bleibt"
   && /Privates Speichern fehlgeschlagen/.test(blogFixture.container.textContent),
-  "Blog-v1 bewahrt kontrollierte Eingabe und Diagnose nach fehlgeschlagenem Write");
+  "Blog bewahrt kontrollierte Eingabe und Diagnose nach fehlgeschlagenem Write");
 deferBlogWrite = false;
-await act(async () => { knopf(blogFixture.container, "Änderungen privat speichern").click(); await tick(); });
+await act(async () => { knopf(blogFixture.container, "Privat speichern").click(); await tick(); });
 check(blogWriteCalls === 2
   && blogArticles[0].text === "Privater Entwurf bleibt"
   && blogArticles[0].publikation.publicationId === "20000000-0000-4000-8000-000000000001",
@@ -222,7 +222,7 @@ function ReferenceEditorHarness() {
     },
   };
   return h(BlogEditor, { editor, capability: { status: "ready" }, actions,
-    intent: "private_only", hasPublication: false, onSave: async () => {}, onBack() {} });
+    intent: "private_only", hasPublication: false, onPrivateSave: async () => {}, onPublish: async () => {}, onBack() {} });
 }
 const jahrFixture = await mounte(ReferenceEditorHarness);
 const addReference = async (title, year, type) => {

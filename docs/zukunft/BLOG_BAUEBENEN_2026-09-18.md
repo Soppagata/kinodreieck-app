@@ -1288,3 +1288,11 @@ Lieferbelege liegen unter `/private/tmp/kd-blog-posting-release-20260919/`:
 `local-delta-gate.json`, `github-status.json` und `public-readback.json` binden
 Push, erforderliche CI und tatsächliche Staging-Version an den finalen
 Liefercommit. Production-Frontend und main werden nicht promoviert.
+
+CI-Testadapter: Die Release-Oberflächenprüfungen erwarten jetzt die getrennten
+Aktionen und den angezeigten kanonischen Benutzernamen. Der asynchrone
+Persistenztest verwendet den permanenten privaten Speicherbutton und prüft
+weiterhin Doppelklickschutz, Fehlschlag und erhaltene Veröffentlichung.
+14 Kartenlayout-, 4 Blogoberflächen- und 72 asynchrone Persistenzprüfungen grün.
+Dieses Delta ändert keinen Produkt- oder Backendcode; der 41-Fälle-Gesamtweg
+und Buildnachweis bleiben für dessen unveränderte Quellen gültig.

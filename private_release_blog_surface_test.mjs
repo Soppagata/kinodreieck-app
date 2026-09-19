@@ -21,13 +21,14 @@ check("Die UI konsumiert nur kontrollierte Blogaktionen und keine Services", () 
   assert.match(source, /publishedPage/);
   assert.match(source, /actions: suppliedActions/);
 });
-check("Der Editor besitzt kein Autorenfeld und veröffentlicht nur per Opt-in", () => {
-  assert.doesNotMatch(editorSource, /Autor|author/);
+check("Der Editor trennt privaten Save und bewusste kanonische Autorenwahl", () => {
   assert.match(editorSource, /Anonym veröffentlichen/);
   assert.match(editorSource, /disabled=\{!publishReady\}/);
   assert.match(editorSource, /Privat speichern/);
-  assert.match(editorSource, /Speichern & veröffentlichen/);
-  assert.match(editorSource, /Speichern & aktualisieren/);
+  assert.match(editorSource, /run\(onPrivateSave\)/);
+  assert.match(editorSource, /run\(onPublish\)/);
+  assert.match(editorSource, /Als \$\{profileAuthor\}/);
+  assert.match(editorSource, /Anonym aktualisieren/);
 });
 check("Referenzen werden ausschließlich über rowId umgeordnet und entfernt", () => {
   assert.match(referenceSource, /onMoveReference\(\{ draftKey, rowId: reference\.rowId/);
@@ -72,6 +73,7 @@ check("Bei fehlender Capability bleibt privates Speichern aktiv", () => {
   const save = [...host.querySelectorAll("button")].find((button) => button.textContent === "Privat speichern");
   assert.equal(publish.disabled, true);
   assert.equal(save.disabled, false);
+  assert.equal([...host.querySelectorAll("label")].some((label) => /Autorname/.test(label.textContent)), false);
   assert.equal(networkCalls, 0);
 });
 console.log(`private_release_blog_surface_test: ${checks} Checks bestanden (nur Mocks).`);
