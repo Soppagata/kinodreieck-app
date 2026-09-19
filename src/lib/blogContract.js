@@ -4,7 +4,7 @@
    Matching und React-State gehoeren den jeweiligen Paketen. */
 
 export const BLOG_LEGACY_CONTRACT_VERSION = "blog-publication-v1";
-export const BLOG_CONTRACT_VERSION = "blog-publication-v2";
+export const BLOG_CONTRACT_VERSION = "blog-publication-v3";
 export const BLOG_LEGACY_MAX_REFERENCES = 15;
 export const BLOG_MAX_REFERENCES = 50;
 export const BLOG_PUBLICATION_MAX_BYTES = 128 * 1024;
@@ -12,6 +12,12 @@ export const BLOG_PRIVATE_STORE_MAX_BYTES = 1024 * 1024;
 export const BLOG_LIST_DEFAULT_LIMIT = 20;
 export const BLOG_LIST_MAX_LIMIT = 50;
 export const BLOG_NEUTRAL_AUTHOR = "Ohne Namensangabe";
+export const BLOG_AUTHOR_MAX_CHARACTERS = 120;
+
+export const BLOG_AUTHOR_MODE = Object.freeze({
+  ANONYMOUS: "anonymous",
+  PROFILE: "profile",
+});
 
 /* IDs aus dem vorhandenen zentralen Streaming-Backend. Das Blog fuehrt keine
    zweite Namens- oder Aliasliste ein. */
@@ -25,12 +31,12 @@ export const BLOG_IDENTITY_NAMESPACES = Object.freeze([
 ]);
 
 export const BLOG_RPC = Object.freeze({
-  capability: "kd_blog_publication_capabilities_v2",
-  publish: "kd_publish_blog_v2",
-  update: "kd_update_blog_publication_v2",
-  withdraw: "kd_withdraw_blog_publication_v2",
-  ownerReadback: "kd_read_own_blog_publication_v2",
-  list: "kd_list_shared_articles_v2",
+  capability: "kd_blog_publication_capabilities_v3",
+  publish: "kd_publish_blog_v3",
+  update: "kd_update_blog_publication_v3",
+  withdraw: "kd_withdraw_blog_publication_v3",
+  ownerReadback: "kd_read_own_blog_publication_v3",
+  list: "kd_list_shared_articles_v3",
   legacyList: "kd_list_shared_articles",
   legacyClaim: "kd_claim_shared_article",
 });
@@ -85,7 +91,8 @@ export const BLOG_PUBLIC_OUTCOME = Object.freeze({
 });
 
 const CAPABILITY_KEYS = Object.freeze([
-  "contractVersion", "enabled", "anonymousProjection", "maxReferences",
+  "contractVersion", "enabled", "anonymousProjection", "namedAuthorProjection",
+  "profileAuthor", "maxAuthorCharacters", "maxReferences",
   "cursorPagination", "ownerReadback", "legacyProjectionSafe", "rpcs",
 ]);
 const REQUIRED_V1_RPCS = Object.freeze([
@@ -111,6 +118,14 @@ function instantMs(value) {
 
 function nonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+export function isBlogPublicAuthor(value) {
+  return typeof value === "string"
+    && value === value.trim()
+    && Array.from(value).length >= 1
+    && Array.from(value).length <= BLOG_AUTHOR_MAX_CHARACTERS
+    && /^[a-z0-9][a-z0-9._-]*$/.test(value);
 }
 
 export function isBlogStreamingSourceId(value) {
@@ -159,6 +174,9 @@ export function hasBlogPublicationCapability(value) {
   if (value.contractVersion !== BLOG_CONTRACT_VERSION
       || value.enabled !== true
       || value.anonymousProjection !== true
+      || value.namedAuthorProjection !== true
+      || !(value.profileAuthor === null || isBlogPublicAuthor(value.profileAuthor))
+      || value.maxAuthorCharacters !== BLOG_AUTHOR_MAX_CHARACTERS
       || value.maxReferences !== BLOG_MAX_REFERENCES
       || value.cursorPagination !== true
       || value.ownerReadback !== true

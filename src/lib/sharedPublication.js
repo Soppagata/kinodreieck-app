@@ -45,6 +45,8 @@ export function publicationSnapshot(article) {
     publicRevision: Number.isInteger(state?.publicRevision) && state.publicRevision > 0
       ? state.publicRevision : null,
     publishedContentVersion: state?.publishedContentVersion || null,
+    authorMode: state?.authorMode === "profile" ? "profile" : "anonymous",
+    author: state?.author || null,
     updatedAt: state?.updatedAt || null,
   };
 }
@@ -70,6 +72,8 @@ export function applyOwnerPublication(article, currentPublication, {
       shareToken: current?.shareToken || null,
       publicRevision: Number.isInteger(current?.publicRevision) ? current.publicRevision : null,
       publishedContentVersion: current?.publishedContentVersion || null,
+      authorMode: current ? (current.authorMode === "profile" ? "profile" : "anonymous") : null,
+      author: current?.author || null,
       updatedAt: current?.updatedAt || null,
     },
   };

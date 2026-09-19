@@ -553,9 +553,10 @@ check("Fehlgeschlagener Master-Read bleibt ungeprüft und wird nicht als leer ge
   && isBlogLibraryReady(true, failedMasterRead.status, true));
 
 const v1Capability = {
-  contractVersion: "blog-publication-v1", enabled: true, anonymousProjection: true,
-  maxReferences: 15, cursorPagination: true, ownerReadback: true, legacyProjectionSafe: true,
-  rpcs: ["kd_publish_blog_v1", "kd_update_blog_publication_v1", "kd_withdraw_blog_publication_v1", "kd_read_own_blog_publication_v1", "kd_list_shared_articles_v1"],
+  contractVersion: "blog-publication-v3", enabled: true, anonymousProjection: true,
+  namedAuthorProjection: true, profileAuthor: "max", maxAuthorCharacters: 120,
+  maxReferences: 50, cursorPagination: true, ownerReadback: true, legacyProjectionSafe: true,
+  rpcs: ["kd_publish_blog_v3", "kd_update_blog_publication_v3", "kd_withdraw_blog_publication_v3", "kd_read_own_blog_publication_v3", "kd_list_shared_articles_v3"],
 };
 const publicSnapshot = {
   publicationId: "20000000-0000-4000-8000-000000000001",
@@ -570,6 +571,7 @@ async function mounteBlogController({
   serviceOverrides = {}, addLibraryItem, navigateTarget, articlesReady = true, libraryReady = true,
 } = {}) {
   const events = [];
+  const requests = [];
   let api = null;
   const defaultService = {
     capability: async () => ({ ok: true, capability: v1Capability }),
@@ -578,20 +580,24 @@ async function mounteBlogController({
       currentPublication: null, operation: operationId ? null : null, legacyReloadRequired: false,
     }),
     publishV1: async (request) => {
+      requests.push(request);
       events.push("publish");
       return {
         contractVersion: "blog-publication-v1", outcome: "published",
         operationId: request.operationId, contentVersion: request.contentVersion,
-        publication: { ...publicSnapshot, publicRevision: 1, publishedContentVersion: request.contentVersion },
+        publication: { ...publicSnapshot, publicRevision: 1, publishedContentVersion: request.contentVersion,
+          authorMode: request.authorDecision?.mode || "anonymous", author: request.authorDecision?.expectedAuthor || "Ohne Namensangabe" },
         referenceResults: [], decisionRequests: [],
       };
     },
     updateV1: async (request) => {
+      requests.push(request);
       events.push("update");
       return {
         contractVersion: "blog-publication-v1", outcome: "updated",
         operationId: request.operationId, contentVersion: request.contentVersion,
-        publication: { ...publicSnapshot, publicRevision: request.expectedPublicRevision + 1, publishedContentVersion: request.contentVersion },
+        publication: { ...publicSnapshot, publicRevision: request.expectedPublicRevision + 1, publishedContentVersion: request.contentVersion,
+          authorMode: request.authorDecision?.mode || "anonymous", author: request.authorDecision?.expectedAuthor || "Ohne Namensangabe" },
         referenceResults: [], decisionRequests: [],
       };
     },
@@ -637,7 +643,7 @@ async function mounteBlogController({
   await act(async () => { root.render(React.createElement(Harness)); await tick(); await tick(); });
   events.length = 0;
   return {
-    api: () => api, events,
+    api: () => api, events, requests,
     async cleanup() { await act(async () => root.unmount()); container.remove(); },
   };
 }
@@ -661,6 +667,29 @@ check("Master-Readfehler hält dieselbe Referenz bis zu einem bestätigten Stand
   emptyBootFixture.api().controller.articleCards[0].referencePreview[0].state === "unchecked");
 await emptyBootFixture.cleanup();
 
+let namedFixture = await mounteBlogController();
+await act(async () => {
+  namedFixture.api().controller.actions.onNewArticle();
+  await tick();
+  namedFixture.api().controller.actions.onEditorChange({ title: "Mit Namen", text: "Öffentlicher Text" });
+  await tick();
+});
+let namedSave;
+await act(async () => {
+  namedSave = await namedFixture.api().controller.actions.onPublish({
+    draftKey: namedFixture.api().controller.editor.draftKey,
+    anonymousPublication: false,
+  });
+  await tick();
+});
+check("Namentliche Publikation speichert privat und bindet den sichtbaren Capability-Namen atomar",
+  namedSave.private.status === "saved" && namedSave.publication.status === "published"
+  && namedFixture.requests[0].authorDecision.mode === "profile"
+  && namedFixture.requests[0].authorDecision.expectedAuthor === "max"
+  && namedFixture.api().articles[0].publikation.authorMode === "profile"
+  && namedFixture.api().controller.editor.anonymousPublication === false);
+await namedFixture.cleanup();
+
 let blogFixture = await mounteBlogController();
 await act(async () => {
   blogFixture.api().controller.actions.onNewArticle();
@@ -680,7 +709,7 @@ await act(async () => {
 const neuerDraftKey = blogFixture.api().controller.editor.draftKey;
 let blogSave;
 await act(async () => {
-  blogSave = await blogFixture.api().controller.actions.onSave({ draftKey: neuerDraftKey, anonymousPublication: false });
+  blogSave = await blogFixture.api().controller.actions.onPrivateSave({ draftKey: neuerDraftKey });
   await tick();
 });
 check("Checkbox aus speichert zuerst und ausschließlich privat",

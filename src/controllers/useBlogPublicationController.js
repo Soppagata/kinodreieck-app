@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BLOG_MAX_REFERENCES,
+  BLOG_AUTHOR_MODE,
   BLOG_CONTRACT_VERSION,
   BLOG_PUBLIC_OUTCOME,
   BLOG_SAVE_INTENT,
   BLOG_STREAMING_SOURCE_IDS,
   blogPublicationDisplayState,
-  blogSaveIntent,
 } from "../lib/blogContract.js";
 import {
   buildBlogLibraryIndex,
@@ -83,7 +83,7 @@ function publicationMayExist(article) {
     || !!article?.publikation?.publicationId
     || article?.geteilt === true;
 }
-export function createBlogSaveRequest(article, operationId, intent, library) {
+export function createBlogSaveRequest(article, operationId, intent, library, authorDecision) {
   const snapshot = publicationSnapshot(article);
   return {
     contractVersion: BLOG_CONTRACT_VERSION,
@@ -92,6 +92,7 @@ export function createBlogSaveRequest(article, operationId, intent, library) {
     privateArticleId: article.id,
     expectedPublicRevision: intent === BLOG_SAVE_INTENT.UPDATE ? snapshot.publicRevision : null,
     article: projectPrivateArticleForPublication(article, library),
+    authorDecision,
   };
 }
 
@@ -126,6 +127,8 @@ function mutationPublicationResult(response, operationId) {
     publicationId: response?.publication?.publicationId || response?.publicationId || null,
     publicRevision: response?.publication?.publicRevision || response?.actualPublicRevision || null,
     publishedContentVersion: response?.publication?.publishedContentVersion || null,
+    authorMode: response?.publication?.authorMode || null,
+    author: response?.publication?.author || null,
     decisionRequests: Array.isArray(response?.decisionRequests) ? response.decisionRequests : [],
     errorCode: response?.errorCode || null,
   });
@@ -247,7 +250,10 @@ function draftFromArticle(article, accountScope, draftKey = publicationOperation
     publicationId: article?.publikation?.publicationId || null,
     title: article?.titel || "", text: article?.text || "",
     ordered: article?.geordnet === true,
-    references, anonymousPublication: false, dirty: false, saveStatus: "idle",
+    references,
+    anonymousPublication: !!article?.publikation?.publicationId
+      && article?.publikation?.authorMode !== BLOG_AUTHOR_MODE.PROFILE,
+    dirty: false, saveStatus: "idle",
   };
 }
 
@@ -365,7 +371,7 @@ export function useBlogPublicationController({
     service.capability().then((result) => {
       if (!active || scopeRef.current !== scope) return;
       setPublicationCapability(result?.ok
-        ? { status: "ready", reason: null }
+        ? { status: "ready", reason: null, value: result.capability }
         : { status: "unavailable", reason: result?.reason || "contract-mismatch" });
     }).catch((error) => {
       if (active && scopeRef.current === scope) {
@@ -404,6 +410,25 @@ export function useBlogPublicationController({
     if (article) setView({ area: "mine", mode: "reader", articleId: article.id, returnToken: "external-focus" });
     onFocusConsumed?.();
   }, [focusedArticleId, onFocusConsumed]);
+
+  useEffect(() => {
+    setEditor((current) => {
+      if (!current?.articleId || current.dirty || current.accountScope !== accountScope) return current;
+      const article = articles.find((entry) => entry.id === current.articleId);
+      if (!article) return current;
+      const snapshot = publicationSnapshot(article);
+      if (!snapshot.publicationId) return current;
+      const anonymousPublication = !!snapshot.publicationId
+        && snapshot.authorMode !== BLOG_AUTHOR_MODE.PROFILE;
+      if ((current.publicationId || null) === snapshot.publicationId
+          && current.anonymousPublication === anonymousPublication) return current;
+      return {
+        ...current,
+        publicationId: snapshot.publicationId,
+        anonymousPublication,
+      };
+    });
+  }, [accountScope, articles]);
 
   const publicItems = useMemo(() => publishedPage.items.map((item) => {
     const referenceViews = projectPublicBlogReferences(item?.article?.references, {
@@ -643,6 +668,9 @@ export function useBlogPublicationController({
         ? {
           ...current,
           publicationId: publicationSnapshot(resolvedArticle).publicationId,
+          anonymousPublication: response?.publication
+            ? response.publication.authorMode !== BLOG_AUTHOR_MODE.PROFILE
+            : current.anonymousPublication,
           references: current.references.map((row) => candidates.has(row.rowId)
             ? { ...row, decisionCandidates: candidates.get(row.rowId), decisionRequired: true } : row),
           saveStatus: response?.outcome || "saved",
@@ -697,7 +725,7 @@ export function useBlogPublicationController({
     }
   }, [applyMutationResponse, mutationCurrent, service, writeArticles]);
 
-  const onSave = useCallback(async ({ draftKey, anonymousPublication }) => {
+  const saveDraft = useCallback(async ({ draftKey, anonymousPublication, publishRequested = false }) => {
     const token = beginMutation("save");
     if (!token) return privateFailed(editorRef.current?.articleId, "busy");
     const draft = editorRef.current;
@@ -731,20 +759,26 @@ export function useBlogPublicationController({
       } : current);
       setView((current) => ({ ...current, articleId }));
       const privatePart = { status: "saved", articleId, contentVersion, errorCode: null };
-      const intent = blogSaveIntent({
-        hasPublication: !!publicationSnapshot(savedArticle).publicationId,
-        anonymousPublication: !!anonymousPublication,
-      });
-      if (intent === BLOG_SAVE_INTENT.PRIVATE_ONLY) {
+      if (!publishRequested) {
         setEditor((current) => current?.draftKey === draftKey ? { ...current, saveStatus: "saved" } : current);
         return saveResult(privatePart);
       }
+      const intent = publicationSnapshot(savedArticle).publicationId
+        ? BLOG_SAVE_INTENT.UPDATE : BLOG_SAVE_INTENT.PUBLISH;
       if (publicationCapability.status !== "ready") {
         setEditor((current) => current?.draftKey === draftKey ? { ...current, saveStatus: "failed" } : current);
         return saveResult(privatePart, emptyPublication(BLOG_PUBLIC_OUTCOME.FAILED, { errorCode: "capability-unavailable" }));
       }
       const operationId = publicationOperationId();
-      const request = createBlogSaveRequest(savedArticle, operationId, intent, publicationReferenceItems);
+      const profileAuthor = publicationCapability.value?.profileAuthor || null;
+      const authorDecision = anonymousPublication
+        ? { mode: BLOG_AUTHOR_MODE.ANONYMOUS, expectedAuthor: null }
+        : { mode: BLOG_AUTHOR_MODE.PROFILE, expectedAuthor: profileAuthor };
+      if (!anonymousPublication && !profileAuthor) {
+        setEditor((current) => current?.draftKey === draftKey ? { ...current, saveStatus: "failed" } : current);
+        return saveResult(privatePart, emptyPublication(BLOG_PUBLIC_OUTCOME.FAILED, { errorCode: "profile-author-unavailable" }));
+      }
+      const request = createBlogSaveRequest(savedArticle, operationId, intent, publicationReferenceItems, authorDecision);
       const action = intent === BLOG_SAVE_INTENT.UPDATE ? "update" : "publish";
       let operationArticle = null;
       const operationSaved = await writeArticles((previous) => previous.map((entry) => {
@@ -762,11 +796,31 @@ export function useBlogPublicationController({
       if (mutationCurrent(token)) setEditor((current) => current?.draftKey === draftKey
         ? { ...current, saveStatus: publication.status } : current);
       return saveResult(privatePart, publication);
+    } catch (error) {
+      if (mutationCurrent(token)) {
+        setEditor((current) => current?.draftKey === draftKey
+          ? { ...current, saveStatus: "failed" } : current);
+      }
+      return privateFailed(draft?.articleId || null, error?.code || "private-save-failed");
     } finally {
       finishMutation(token);
     }
-  }, [beginMutation, clock, finishMutation, mutationCurrent, publicationCapability.status,
+  }, [beginMutation, clock, finishMutation, mutationCurrent, publicationCapability.status, publicationCapability.value,
     publicationReferenceItems, sendMutation, writeArticles]);
+
+  const onPrivateSave = useCallback(({ draftKey }) => saveDraft({
+    draftKey,
+    anonymousPublication: editorRef.current?.anonymousPublication === true,
+    publishRequested: false,
+  }), [saveDraft]);
+  const onPublish = useCallback(({ draftKey, anonymousPublication }) => saveDraft({
+    draftKey, anonymousPublication: anonymousPublication === true, publishRequested: true,
+  }), [saveDraft]);
+  /* Übergangsnaht für bereits vorhandene Integrationen. Neue Oberflächen
+     verwenden die zwei expliziten Aktionen. */
+  const onSave = useCallback((input = {}) => saveDraft({
+    ...input, publishRequested: input.publishRequested === true || input.anonymousPublication === true,
+  }), [saveDraft]);
 
   const onReferenceDecision = useCallback(async ({ articleId, rowId, decision }) => {
     const token = beginMutation("reference-decision");
@@ -1180,7 +1234,8 @@ export function useBlogPublicationController({
     publishedPage: { ...publishedPage, items: publicItems },
     actions: {
       onNewArticle, onEditArticle, onReadArticle, onBack, onEditorChange,
-      onAddReference, onApplyReferenceSuggestions, onMoveReference, onRemoveReference, onSave,
+      onAddReference, onApplyReferenceSuggestions, onMoveReference, onRemoveReference,
+      onPrivateSave, onPublish, onSave,
       onReferenceDecision, onNavigateReference, onOpenRedlinkForm,
       onCancelRedlinkForm, onConfirmRedlinkForm, onRetryPublication,
       onWithdraw, onDelete, onLoadPublished,

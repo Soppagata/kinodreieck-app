@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { blogSaveIntent, BLOG_SAVE_INTENT } from "../lib/blogContract.js";
+import { BLOG_SAVE_INTENT } from "../lib/blogContract.js";
 import { BlogArticleCards } from "../components/blog/BlogArticleCards.jsx";
 import { BlogEditor } from "../components/blog/BlogEditor.jsx";
 import { BlogReader } from "../components/blog/BlogReader.jsx";
@@ -71,7 +71,8 @@ export function BlogTab({
   const actions = useMemo(() => ({
     onNewArticle: NOOP, onEditArticle: NOOP, onReadArticle: NOOP, onBack: NOOP,
     onEditorChange: NOOP, onAddReference: NOOP, onMoveReference: NOOP,
-    onRemoveReference: NOOP, onSave: async () => null, onReferenceDecision: async () => null,
+    onRemoveReference: NOOP, onPrivateSave: async () => null, onPublish: async () => null,
+    onSave: async () => null, onReferenceDecision: async () => null,
     onNavigateReference: NOOP, onOpenRedlinkForm: NOOP, onCancelRedlinkForm: NOOP,
     onConfirmRedlinkForm: async () => null, onRetryPublication: async () => null,
     onWithdraw: async () => null, onDelete: async () => null, onLoadPublished: async () => null,
@@ -79,8 +80,16 @@ export function BlogTab({
   }), [suppliedActions]);
   const [notice, setNotice] = useState(null);
   useEffect(() => { setNotice(null); }, [view.area, view.mode, view.articleId]);
-  const save = async () => {
-    const result = await actions.onSave({ draftKey: editor?.draftKey, anonymousPublication: editor?.anonymousPublication === true });
+  const savePrivate = async () => {
+    const result = await actions.onPrivateSave({ draftKey: editor?.draftKey });
+    setNotice(saveNotice(result));
+    return result;
+  };
+  const publish = async () => {
+    const result = await actions.onPublish({
+      draftKey: editor?.draftKey,
+      anonymousPublication: editor?.anonymousPublication === true,
+    });
     setNotice(saveNotice(result));
     return result;
   };
@@ -88,10 +97,11 @@ export function BlogTab({
   let content;
   if (view.mode === "editor" && editor) {
     const hasPublication = !!publicationIdFrom(editor);
-    const intent = blogSaveIntent({ hasPublication, anonymousPublication: editor.anonymousPublication === true });
+    const intent = hasPublication ? BLOG_SAVE_INTENT.UPDATE : BLOG_SAVE_INTENT.PUBLISH;
     content = <BlogEditor editor={editor} capability={publicationCapability} actions={actions} intent={intent}
       hasPublication={hasPublication} referenceExtraction={referenceExtraction}
-      onSave={save} onBack={() => actions.onBack({ returnToken: view.returnToken })} />;
+      onPrivateSave={savePrivate} onPublish={publish}
+      onBack={() => actions.onBack({ returnToken: view.returnToken })} />;
   } else if (view.mode === "reader" && reader) {
     content = <BlogReader reader={reader} actions={actions} />;
   } else if (view.mode === "redlink_form" && redlinkForm) {

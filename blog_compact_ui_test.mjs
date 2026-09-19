@@ -32,7 +32,8 @@ const entry = `
     const [editor,setEditor]=useState({draftKey:"draft-1",articleId:null,contentVersion:null,title:"",text:"",ordered:true,references:refs,anonymousPublication:false,dirty:false,saveStatus:"idle"});
     const [reader,setReader]=useState(null); const [redlinkForm,setRedlink]=useState(null); const [redlinkReturn,setRedlinkReturn]=useState(null);
     const [saveOutcome,setSaveOutcome]=useState("failed"); const [redlinkFails,setRedlinkFails]=useState(false);
-    globalThis.blogSetSaveOutcome=setSaveOutcome; globalThis.blogSetRedlinkFails=setRedlinkFails;
+    const [privateFails,setPrivateFails]=useState(false);
+    globalThis.blogSetSaveOutcome=setSaveOutcome; globalThis.blogSetRedlinkFails=setRedlinkFails; globalThis.blogSetPrivateFails=setPrivateFails;
     globalThis.blogSetReferenceCount=(count)=>setEditor(e=>({...e,references:[
       ...refs,
       ...Array.from({length:Math.max(0,count-refs.length)},(_,index)=>({rowId:"extra-"+index,rank:refs.length+index+1,title:"Zusätzlicher Titel "+(index+1),year:2000+(index%20),mediaType:"film",state:"redlink",primaryTarget:null,secondaryTargets:[]}))
@@ -51,14 +52,17 @@ const entry = `
       onAddReference:(input)=>{globalThis.blogAddedReference=input;setEditor(e=>({...e,references:[...e.references,{...input.reference,rowId:"added-"+e.references.length,rank:e.references.length+1,state:"redlink",primaryTarget:null,secondaryTargets:[]}]}));},
       onMoveReference:({rowId,direction})=>setEditor(e=>{const a=[...e.references].sort((x,y)=>x.rank-y.rank);const i=a.findIndex(x=>x.rowId===rowId);const j=direction==="up"?i-1:i+1;if(j<0||j>=a.length)return e;[a[i],a[j]]=[a[j],a[i]];return {...e,references:a.map((x,k)=>({...x,rank:k+1}))};}),
       onRemoveReference:({rowId})=>setEditor(e=>({...e,references:e.references.filter(x=>x.rowId!==rowId).map((x,k)=>({...x,rank:k+1}))})),
-      onSave:async()=>editor.anonymousPublication ? fixtureOutcomes[saveOutcome] : {private:{status:"saved"},publication:{status:"not_requested",operationId:null}},
+      onPrivateSave:async()=>privateFails?{private:{status:"failed"},publication:{status:"not_requested"}}
+        :{private:{status:"saved"},publication:{status:"not_requested",operationId:null}},
+      onPublish:async()=>fixtureOutcomes[saveOutcome],
       onReferenceDecision:async()=>({status:"saved"}), onNavigateReference:({target})=>globalThis.blogNavigations.push(target),
       onOpenRedlinkForm:({articleId,rowId})=>{setRedlinkReturn(view);setRedlink({articleId:articleId||"article-1",rowId,status:"open",initial:{titel:"Star Wars: Synthetic Missing Story",jahr:1984,typ:"film"},errorCode:null});setView({area:view.area,mode:"redlink_form",articleId:articleId||"article-1",returnToken:"redlink"});},
       onCancelRedlinkForm:()=>setView(redlinkReturn||{area:"mine",mode:"list",articleId:null,returnToken:null}),
       onConfirmRedlinkForm:async()=>{if(redlinkFails)return {status:"failed",mediaWriteConfirmed:false,errorCode:"FIXTURE"};setEditor(e=>({...e,references:e.references.map(x=>x.rowId==="row-04"?{...x,state:"available",primaryTarget:{kind:"library",ref:"local-4",titel:x.title}}:x)}));setView(redlinkReturn||{area:"mine",mode:"editor",articleId:editor.articleId,returnToken:"mine"});return {status:"saved",mediaWriteConfirmed:true};},
       onRetryPublication:async(input)=>{globalThis.blogRetry=input;return null;},onWithdraw:async()=>({status:"withdrawn"}),onDelete:async()=>({private:{status:"deleted"}}),onLoadPublished:async()=>({status:"loaded"}),
     };
-    return <BlogTab publicationCapability={{status:"ready",reason:null}} view={view} editor={editor} reader={reader} redlinkForm={redlinkForm} articleCards={[card]}
+    return <BlogTab publicationCapability={{status:"ready",reason:null,value:{profileAuthor:"max"}}} view={view} editor={editor} reader={reader} redlinkForm={redlinkForm} articleCards={[card]}
+      referenceExtraction={{entryVisible:true,visible:false,settingsRequired:true,onOpenSettings:()=>{globalThis.blogOpenedAiSettings=true;}}}
       publishedPage={{status:"ready",items:[card,otherCard],nextCursor:"fixture-next",complete:false,errorCode:null}} actions={actions}/>;
   }
   globalThis.mountBlogFixture=(node)=>createRoot(node).render(<Harness/>);
@@ -94,14 +98,28 @@ for (const [browserName, engine] of Object.entries({ chromium, webkit })) {
   await check(`${browserName} 393px: ohne Häkchen bleibt privates Speichern anklickbar`, async () => {
     assert.equal(await privateButton.isEnabled(), true);
     await privateButton.click();
-    await focusedPage.getByText("Privat gespeichert.").waitFor();
+    await focusedPage.locator(".kd-blog-local-notice").getByText("Privat gespeichert.").waitFor();
+  });
+  await focusedPage.evaluate(() => globalThis.blogSetPrivateFails(true));
+  await privateButton.click();
+  await check(`${browserName} 393px: privater Fehler bleibt direkt bei der Aktion sichtbar`, async () => {
+    assert.match(await focusedPage.locator(".kd-blog-local-notice").innerText(), /Eingabe bleibt erhalten/);
+  });
+  await focusedPage.evaluate(() => globalThis.blogSetPrivateFails(false));
+  const namedPublishButton = focusedPage.getByRole("button", { name: "Als max veröffentlichen" });
+  await check(`${browserName} 393px: namentliches Veröffentlichen zeigt den serverbestätigten Namen`, async () => {
+    assert.equal(await namedPublishButton.isEnabled(), true);
+  });
+  await focusedPage.getByRole("button", { name: "Zu Personalisierung & KI" }).click();
+  await check(`${browserName} 393px: ausgeschalteter KI-Scan bleibt über Einstellungen auffindbar`, async () => {
+    assert.equal(await focusedPage.evaluate(() => globalThis.blogOpenedAiSettings), true);
   });
   await focusedPage.getByLabel("Anonym veröffentlichen").check();
-  const publishButton = focusedPage.getByRole("button", { name: "Speichern & veröffentlichen" });
+  const publishButton = focusedPage.getByRole("button", { name: "Anonym veröffentlichen" });
   await check(`${browserName} 393px: das Häkchen zeigt den anklickbaren Veröffentlichungsbutton`, async () => {
     assert.equal(await publishButton.isEnabled(), true);
     await publishButton.click();
-    await focusedPage.getByText("Privat gespeichert, Veröffentlichung fehlgeschlagen.").waitFor();
+    await focusedPage.locator(".kd-blog-local-notice").getByText("Privat gespeichert, Veröffentlichung fehlgeschlagen.").waitFor();
   });
   await focusedBrowser.close();
 }
@@ -141,12 +159,12 @@ await check("Ein Versuch über 50 wird erklärt, ohne die Liste zu verändern", 
 });
 await page.getByLabel("Titel", { exact: true }).fill("Ein Titel"); await page.getByLabel("Text", { exact: true }).fill("Ein Text");
 await page.getByLabel("Anonym veröffentlichen").check();
-await check("Der Publish-Intent hat die eindeutige Abschlussbeschriftung", async () => assert.equal(await page.getByRole("button", { name: "Speichern & veröffentlichen" }).isVisible(), true));
-await page.getByRole("button", { name: "Speichern & veröffentlichen" }).click();
-await page.getByText("Privat gespeichert, Veröffentlichung fehlgeschlagen.").waitFor();
+await check("Der Publish-Intent hat die eindeutige Abschlussbeschriftung", async () => assert.equal(await page.getByRole("button", { name: "Anonym veröffentlichen" }).isVisible(), true));
+await page.getByRole("button", { name: "Anonym veröffentlichen" }).click();
+await page.locator(".kd-blog-local-notice").getByText("Privat gespeichert, Veröffentlichung fehlgeschlagen.").waitFor();
 await page.evaluate(() => globalThis.blogSetSaveOutcome("unknown"));
-await page.getByRole("button", { name: "Speichern & veröffentlichen" }).click();
-await page.getByText("Privat gespeichert. Ob die Veröffentlichung angekommen ist, wird geprüft.").waitFor();
+await page.getByRole("button", { name: "Anonym veröffentlichen" }).click();
+await page.locator(".kd-blog-local-notice").getByText("Privat gespeichert. Die Veröffentlichung braucht noch deine Aufmerksamkeit.").waitFor();
 await check("Teilerfolg und unbekannter Ausgang stammen aus der Vertragsfixture", () => {
   assert.equal(fixture.saveOutcomes.publishPartialFailure.private.status, "saved");
   assert.equal(fixture.saveOutcomes.publishUnknown.publication.status, "unknown");
@@ -226,9 +244,9 @@ await check("Technische Disney-ID erscheint lesbar und kontrastreich", async () 
 await page.screenshot({ path: "/private/tmp/kd-blog-reader-736-light.png", fullPage: true });
 await page.getByRole("button", { name: "← Zurück" }).click(); await page.getByRole("button", { name: "Bearbeiten", exact: true }).click();
 await check("Neu, Lesen, Zurück und Bearbeiten bleiben direkte Wege", async () => assert.equal(await page.getByRole("heading", { name: "Artikel bearbeiten" }).isVisible(), true));
-await check("Öffentliche Kopie plus Checkbox aus benennt die private Änderung", async () => {
-  assert.equal(await page.getByRole("button", { name: "Änderungen privat speichern" }).isVisible(), true);
-  assert.equal(await page.getByText("Die veröffentlichte Fassung bleibt unverändert.").isVisible(), true);
+await check("Öffentliche Kopie hält private Speicherung und namentliche Aktualisierung getrennt", async () => {
+  assert.equal(await page.getByRole("button", { name: "Privat speichern" }).isVisible(), true);
+  assert.equal(await page.getByRole("button", { name: "Als max aktualisieren" }).isVisible(), true);
 });
 
 await page.evaluate(() => globalThis.blogShowPublished());

@@ -301,49 +301,54 @@ check("Fehler bewahrt die wiederholbare Löschabsicht",
 check("Gezogene Snapshots verlangen niemals Remote-Löschung",
   !needsRemoteRemoval({ ...failed, herkunft: "gezogen" }));
 
-/* ---------- Blog-Publikation v2 mit eingefrorener v1-Fixture ---------- */
+/* ---------- Blog-Publikation v3 mit eingefrorener v1-Fixture ---------- */
 const blogFixture = JSON.parse(fs.readFileSync("tests/fixtures/blog-contract-v1.json", "utf8"));
-const v2Capability = {
-  ...blogFixture.capability, contractVersion: "blog-publication-v2", maxReferences: 50,
-  rpcs: ["kd_publish_blog_v2", "kd_update_blog_publication_v2",
-    "kd_withdraw_blog_publication_v2", "kd_read_own_blog_publication_v2",
-    "kd_list_shared_articles_v2"],
+const v3Capability = {
+  ...blogFixture.capability, contractVersion: "blog-publication-v3",
+  namedAuthorProjection: true, profileAuthor: "max", maxAuthorCharacters: 120,
+  maxReferences: 50,
+  rpcs: ["kd_publish_blog_v3", "kd_update_blog_publication_v3",
+    "kd_withdraw_blog_publication_v3", "kd_read_own_blog_publication_v3",
+    "kd_list_shared_articles_v3"],
 };
-const v2Page = { ...blogFixture.publicPage, contractVersion: "blog-publication-v2" };
+const v3Page = { ...blogFixture.publicPage, contractVersion: "blog-publication-v3",
+  items: blogFixture.publicPage.items.map((item) => ({ ...item, author: "max" })) };
 snapshot = aktiveSession();
-nextResponses = [response(200, v2Capability)];
+nextResponses = [response(200, v3Capability)];
 calls = [];
 const capability = await service.capability();
-check("Capability aktiviert anonymes Publizieren nur beim exakten v2-Vertrag",
-  capability.ok && calls[0].url.endsWith("/rest/v1/rpc/kd_blog_publication_capabilities_v2")
+check("Capability aktiviert namentliches Publizieren nur beim exakten v3-Vertrag",
+  capability.ok && capability.capability.profileAuthor === "max"
+  && calls[0].url.endsWith("/rest/v1/rpc/kd_blog_publication_capabilities_v3")
   && JSON.stringify(JSON.parse(calls[0].options.body)) === "{}");
 
-nextResponses = [response(200, { ...v2Capability, maxReferences: 51 })];
+nextResponses = [response(200, { ...v3Capability, maxReferences: 51 })];
 const staleCapability = await service.capability();
 check("Altes oder abweichendes Backend bleibt fail-closed",
   staleCapability.ok === false && staleCapability.reason === "contract-mismatch");
 
-nextResponses = [response(200, v2Page)];
+nextResponses = [response(200, v3Page)];
 calls = [];
 const v1Page = await service.listV1({ cursor: null, limit: 20 });
-check("v2-Liste sendet nur Vertragsversion, Limit und Cursor",
+check("v3-Liste sendet nur Vertragsversion, Limit und Cursor",
   v1Page.ok && v1Page.page.items.length === 1
-  && calls[0].url.endsWith("/rest/v1/rpc/kd_list_shared_articles_v2")
+  && v1Page.page.items[0].author === "max"
+  && calls[0].url.endsWith("/rest/v1/rpc/kd_list_shared_articles_v3")
   && JSON.stringify(JSON.parse(calls[0].options.body)) === JSON.stringify({ p_request: {
-    contractVersion: "blog-publication-v2", limit: 20, cursor: null,
+    contractVersion: "blog-publication-v3", limit: 20, cursor: null,
   } }));
-check("Akzeptierte v2-Liste enthält keine privaten Artikel- oder Zeilen-IDs",
+check("Akzeptierte v3-Liste enthält keine privaten Artikel- oder Zeilen-IDs",
   !JSON.stringify(v1Page.page).includes(blogFixture.ownerArticle.privateArticleId)
   && !JSON.stringify(v1Page.page).includes("row-01"));
 
-const pageWithIdentityHints = JSON.parse(JSON.stringify(v2Page));
+const pageWithIdentityHints = JSON.parse(JSON.stringify(v3Page));
 pageWithIdentityHints.items[0].article.references[0].resolution.identityHints = [
   { namespace: "imdb", value: "tt0076759" },
   { namespace: "tmdb", value: "11" },
 ];
 nextResponses = [response(200, pageWithIdentityHints)];
 const parsedIdentityPage = await service.listV1({ cursor: null, limit: 20 });
-check("v2-Service übernimmt ausschließlich gültige serverbestätigte Identitätshinweise",
+check("v3-Service übernimmt ausschließlich gültige serverbestätigte Identitätshinweise",
   JSON.stringify(parsedIdentityPage.page.items[0].article.references[0].resolution.identityHints)
     === JSON.stringify(pageWithIdentityHints.items[0].article.references[0].resolution.identityHints));
 
@@ -370,38 +375,41 @@ for (const page of invalidIdentityPages) {
   try { await service.listV1({ cursor: null, limit: 20 }); }
   catch (error) { if (error?.code === "invalid-response") invalidIdentityResponses += 1; }
 }
-check("v2-Service verwirft doppelte, statusfremde oder erweiterte Identitätsformen fail-closed",
+check("v3-Service verwirft doppelte, statusfremde oder erweiterte Identitätsformen fail-closed",
   invalidIdentityResponses === invalidIdentityPages.length);
 
 const opPublish = "30000000-0000-4000-8000-000000000001";
 const publishRequest = {
-  contractVersion: "blog-publication-v2", operationId: opPublish,
+  contractVersion: "blog-publication-v3", operationId: opPublish,
   contentVersion: blogFixture.ownerArticle.contentVersion,
   privateArticleId: blogFixture.ownerArticle.privateArticleId,
   expectedPublicRevision: null,
   article: { title: blogFixture.ownerArticle.title, text: blogFixture.ownerArticle.text, ordered: true, references: [] },
+  authorDecision: { mode: "profile", expectedAuthor: "max" },
 };
 nextResponses = [response(200, {
-  contractVersion: "blog-publication-v2", outcome: "published", operationId: opPublish,
+  contractVersion: "blog-publication-v3", outcome: "published", operationId: opPublish,
   contentVersion: publishRequest.contentVersion,
-  publication: blogFixture.ownerReadbacks.currentWithoutOperation.currentPublication,
+  publication: { ...blogFixture.ownerReadbacks.currentWithoutOperation.currentPublication,
+    authorMode: "profile", author: "max" },
   referenceResults: [], decisionRequests: [],
 })];
 calls = [];
 const v1Published = await service.publishV1(publishRequest);
-check("Publish-v2 kapselt den unveränderten Request ausschließlich als p_request",
+check("Publish-v3 kapselt Autorenentscheidung atomar im unveränderten p_request",
   v1Published.outcome === "published"
-  && calls[0].url.endsWith("/rest/v1/rpc/kd_publish_blog_v2")
+  && calls[0].url.endsWith("/rest/v1/rpc/kd_publish_blog_v3")
   && JSON.stringify(JSON.parse(calls[0].options.body)) === JSON.stringify({ p_request: publishRequest })
-  && !("accountId" in publishRequest) && !("author" in publishRequest));
+  && !("accountId" in publishRequest) && !("author" in publishRequest)
+  && publishRequest.authorDecision.expectedAuthor === "max");
 
 const opWithdraw = "30000000-0000-4000-8000-000000000003";
 const withdrawRequest = {
-  contractVersion: "blog-publication-v2", operationId: opWithdraw,
+  contractVersion: "blog-publication-v3", operationId: opWithdraw,
   privateArticleId: blogFixture.ownerArticle.privateArticleId, expectedPublicRevision: 3,
 };
 nextResponses = [response(200, {
-  contractVersion: "blog-publication-v2", outcome: "withdrawn", operationId: opWithdraw,
+  contractVersion: "blog-publication-v3", outcome: "withdrawn", operationId: opWithdraw,
   publicationId: blogFixture.publicPage.items[0].publicationId, errorCode: null,
 })];
 calls = [];
@@ -413,7 +421,9 @@ check("Rücknahme nutzt Revision und eigene Artikel-ID ohne Account-ID",
 
 nextResponses = [response(200, {
   ...blogFixture.ownerReadbacks.currentWithoutOperation,
-  contractVersion: "blog-publication-v2",
+  contractVersion: "blog-publication-v3",
+  currentPublication: { ...blogFixture.ownerReadbacks.currentWithoutOperation.currentPublication,
+    authorMode: "profile", author: "max" },
 })];
 calls = [];
 const readback = await service.ownerReadback(blogFixture.ownerArticle.privateArticleId);
@@ -422,8 +432,8 @@ check("Owner-Readback ist nach Reload auch ohne Operations-ID verfügbar",
   && JSON.parse(calls[0].options.body).p_request.operationId === null);
 
 nextResponses = [response(200, {
-  ...v2Page,
-  items: [{ ...v2Page.items[0], article: {
+  ...v3Page,
+  items: [{ ...v3Page.items[0], article: {
     ...blogFixture.publicPage.items[0].article,
     references: [{ ...blogFixture.publicPage.items[0].article.references[0], rowId: "private-row" }],
   } }],

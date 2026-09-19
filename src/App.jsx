@@ -1150,6 +1150,16 @@ export default function App() {
       ziel?.querySelector("summary")?.focus?.({ preventScroll: true });
     }));
   }, [navigiere]);
+  const oeffnePersonalisierungKi = useCallback(() => {
+    navigiere("daten");
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const ziel = document.getElementById("personalisierung-ki");
+      if (ziel) ziel.open = true;
+      const reduzierteBewegung = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      ziel?.scrollIntoView?.({ block: "start", behavior: reduzierteBewegung ? "auto" : "smooth" });
+      ziel?.querySelector("summary")?.focus?.({ preventScroll: true });
+    }));
+  }, [navigiere]);
 
   /* Der Autorname bleibt lokal und wird in aktiven Bewertungsformularen verwendet. */
   const [autorName, setAutorName] = useState("");
@@ -1326,6 +1336,7 @@ export default function App() {
     mustwatch,
     mustwatchReady: mustwatchGeladen,
     onApplyReferenceSuggestions: blogPublicationController.actions.onApplyReferenceSuggestions,
+    onOpenSettings: oeffnePersonalisierungKi,
   });
   const blogController = useMemo(() => ({
     ...blogPublicationController,

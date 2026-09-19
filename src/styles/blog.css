@@ -90,6 +90,8 @@
 .kd-blog-suggestion-apply .kd-blog-muted { margin-right: auto; }
 .kd-blog-private-publication-note { margin: -8px 0 0 29px; color: var(--kd-rauch); font-size: 12px; }
 .kd-blog-footer-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--kd-space-2); }
+.kd-blog-save-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--kd-space-2); flex-wrap: wrap; }
+.kd-blog-local-notice { margin: -4px 0 0; font-size: 13px; line-height: 1.5; }
 .kd-blog-reader { padding: clamp(16px, 5vw, 28px); border-radius: var(--kd-radius-karte); background: var(--kd-kartenFeld); color: var(--kd-kartenText); }
 .kd-blog-reader .kd-blog-button { color: var(--kd-kartenText); border-color: var(--kd-kartenTextWeich); }
 .kd-blog-reader .kd-blog-button-quiet { border-color: transparent; color: var(--kd-kartenTextWeich); }
@@ -135,6 +137,8 @@ body[style*="color-scheme: light"] .kd-blog-v1 :is(.kd-blog-card, .kd-blog-menu-
   .kd-blog-footer-actions { align-items: stretch; flex-direction: column; }
   .kd-blog-footer-actions .kd-blog-button-primary { width: 100%; }
   .kd-blog-footer-actions .kd-blog-button-quiet { align-self: flex-start; }
+  .kd-blog-save-actions { width: 100%; align-items: stretch; flex-direction: column; }
+  .kd-blog-save-actions .kd-blog-button { width: 100%; }
   .kd-blog-ai-reference-head, .kd-blog-suggestion-apply { align-items: stretch; flex-direction: column; }
   .kd-blog-ai-reference-head .kd-blog-button, .kd-blog-suggestion-apply .kd-blog-button { width: 100%; }
   .kd-blog-suggestion-decisions { margin-left: 0; }

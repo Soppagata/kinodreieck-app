@@ -219,7 +219,7 @@ export function DatenTab({
           Grundentscheidung ohne Konto getroffen wird und den Rest prägt.
           Der Schalter ist geraetelokal (kd:ki) -- deshalb der Hinweis, dass
           er nicht mitreist. */}
-      <Klappe titel="Personalisierung & KI">
+      <Klappe id="personalisierung-ki" titel="Personalisierung & KI">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={kasten}>
           <h2 style={h2}>Manuelle KI-Funktionen</h2>

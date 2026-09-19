@@ -59,6 +59,7 @@ export function useBlogReferenceExtractionController({
   mustwatchReady = false,
   service = aiService,
   onApplyReferenceSuggestions,
+  onOpenSettings,
   digest,
   clock = () => Date.now(),
 } = {}) {
@@ -293,7 +294,10 @@ export function useBlogReferenceExtractionController({
   }, [invalidateApply, invalidateRequest]);
 
   return {
+    entryVisible: !!editor,
     visible,
+    settingsRequired: enabled !== true,
+    onOpenSettings,
     capability,
     status: scan.status,
     binding: scan.binding,

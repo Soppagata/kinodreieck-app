@@ -26,6 +26,7 @@ import {
   BLOG_RPC,
   hasBlogPublicationCapability,
   isBlogPublicIdentityHints,
+  isBlogPublicAuthor,
   isBlogPublicCinemaTarget,
   isBlogPublicStreamingTarget,
 } from "../lib/blogContract.js";
@@ -50,11 +51,27 @@ function invalid(operation, reason) {
   });
 }
 
+function validPublicationSnapshot(value) {
+  if (!exactKeys(value, ["publicationId", "shareToken", "publicRevision", "publishedContentVersion", "updatedAt", "authorMode", "author"])
+      || !text(value.publicationId) || !text(value.shareToken)
+      || !Number.isInteger(value.publicRevision) || value.publicRevision < 1
+      || !text(value.publishedContentVersion) || !text(value.updatedAt)
+      || !["anonymous", "profile"].includes(value.authorMode)) return false;
+  return value.authorMode === "anonymous"
+    ? value.author === BLOG_NEUTRAL_AUTHOR
+    : isBlogPublicAuthor(value.author);
+}
+
 function parseMutation(data, operationId, allowed) {
   const value = rpcValue(data);
   if (!plain(value) || value.contractVersion !== BLOG_CONTRACT_VERSION
       || text(value.operationId) !== text(operationId)
       || !allowed.includes(value.outcome)) throw invalid("blog.mutate", "invalid-v1-mutation");
+  if ([BLOG_PUBLIC_OUTCOME.PUBLISHED, BLOG_PUBLIC_OUTCOME.UPDATED].includes(value.outcome)
+      && !validPublicationSnapshot(value.publication)) throw invalid("blog.mutate", "invalid-publication-author");
+  if (value.outcome === BLOG_PUBLIC_OUTCOME.CONFLICT
+      && value.publication !== null && value.publication !== undefined
+      && !validPublicationSnapshot(value.publication)) throw invalid("blog.mutate", "invalid-conflict-publication");
   return value;
 }
 
@@ -62,6 +79,13 @@ function validatePublicationRequest(request) {
   const references = request?.article?.references;
   if (!Array.isArray(references) || references.length > BLOG_MAX_REFERENCES) {
     throw invalid("blog.mutate", "reference-limit");
+  }
+  const decision = request?.authorDecision;
+  if (!exactKeys(decision, ["mode", "expectedAuthor"])
+      || !["anonymous", "profile"].includes(decision.mode)
+      || (decision.mode === "anonymous" && decision.expectedAuthor !== null)
+      || (decision.mode === "profile" && !isBlogPublicAuthor(decision.expectedAuthor))) {
+    throw invalid("blog.mutate", "invalid-author-decision");
   }
   const bytes = new TextEncoder().encode(JSON.stringify(request)).byteLength;
   if (bytes > BLOG_PUBLICATION_MAX_BYTES) throw invalid("blog.mutate", "request-too-large");
@@ -71,7 +95,7 @@ function parseOwnerReadback(data, privateArticleId) {
   const value = rpcValue(data);
   if (!plain(value) || value.contractVersion !== BLOG_CONTRACT_VERSION
       || text(value.privateArticleId) !== text(privateArticleId)
-      || !(value.currentPublication === null || plain(value.currentPublication))
+      || !(value.currentPublication === null || validPublicationSnapshot(value.currentPublication))
       || !(value.operation === null || plain(value.operation))
       || typeof value.legacyReloadRequired !== "boolean") {
     throw invalid("blog.owner-readback", "invalid-owner-readback");
@@ -132,7 +156,8 @@ function parseV1Page(data) {
     if (!exactKeys(item, ["publicationId", "shareToken", "author", "publicRevision", "contentVersion", "publishedAt", "updatedAt", "article"])
         || !exactKeys(article, ["id", "title", "text", "ordered", "references"])
         || !text(item.publicationId)
-        || !text(item.shareToken) || item.author !== BLOG_NEUTRAL_AUTHOR
+        || !text(item.shareToken)
+        || !(item.author === BLOG_NEUTRAL_AUTHOR || isBlogPublicAuthor(item.author))
         || article.id !== item.publicationId || !text(article.title)
         || typeof article.text !== "string" || typeof article.ordered !== "boolean"
         || !Array.isArray(article.references)) {

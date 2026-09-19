@@ -29,26 +29,30 @@ const check = (name, condition) => {
   console.log(`✓ ${name}`);
 };
 
-const capabilityV2 = {
+const capabilityV3 = {
   ...fixture.capability,
   contractVersion: BLOG_CONTRACT_VERSION,
+  namedAuthorProjection: true,
+  profileAuthor: "max",
+  maxAuthorCharacters: 120,
   maxReferences: BLOG_MAX_REFERENCES,
   rpcs: [
-    "kd_publish_blog_v2", "kd_update_blog_publication_v2",
-    "kd_withdraw_blog_publication_v2", "kd_read_own_blog_publication_v2",
-    "kd_list_shared_articles_v2",
+    "kd_publish_blog_v3", "kd_update_blog_publication_v3",
+    "kd_withdraw_blog_publication_v3", "kd_read_own_blog_publication_v3",
+    "kd_list_shared_articles_v3",
   ],
 };
-check("Eingefrorene Fixture bleibt v1, während der aktive additive Vertrag v2 ist",
+check("Eingefrorene Fixture bleibt v1, während der aktive additive Vertrag v3 ist",
   fixture.contractVersion === BLOG_LEGACY_CONTRACT_VERSION
   && fixture.publicPage.contractVersion === BLOG_LEGACY_CONTRACT_VERSION
-  && BLOG_CONTRACT_VERSION === "blog-publication-v2");
-check("v2-Capability ist exakt und unbekannte oder alte Server bleiben fail-closed",
-  hasBlogPublicationCapability(capabilityV2)
+  && BLOG_CONTRACT_VERSION === "blog-publication-v3");
+check("v3-Capability ist exakt und unbekannte oder alte Server bleiben fail-closed",
+  hasBlogPublicationCapability(capabilityV3)
   && !hasBlogPublicationCapability(fixture.capability)
-  && !hasBlogPublicationCapability({ ...capabilityV2, contractVersion: "blog-publication-v0" })
-  && !hasBlogPublicationCapability({ ...capabilityV2, anonymousProjection: false })
-  && !hasBlogPublicationCapability({ ...capabilityV2, extra: true }));
+  && !hasBlogPublicationCapability({ ...capabilityV3, contractVersion: "blog-publication-v0" })
+  && !hasBlogPublicationCapability({ ...capabilityV3, anonymousProjection: false })
+  && !hasBlogPublicationCapability({ ...capabilityV3, profileAuthor: "max@example.test" })
+  && !hasBlogPublicationCapability({ ...capabilityV3, extra: true }));
 check("Referenzgrenze und stabile Zeilenidentitaet gelten unabhaengig von Rangfolge",
   fixture.ownerArticle.references.length <= BLOG_LEGACY_MAX_REFERENCES
   && BLOG_MAX_REFERENCES === 50

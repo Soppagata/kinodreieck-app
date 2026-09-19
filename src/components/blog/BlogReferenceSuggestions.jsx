@@ -58,7 +58,19 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
   const busy = ["running", "applying"].includes(extraction?.status);
   const selectionTooLarge = applications.ok && applications.candidates.length > remaining;
 
-  if (!extraction?.visible) return null;
+  if (!(extraction?.entryVisible === true || extraction?.visible === true)) return null;
+
+  if (!extraction.visible) return <section className="kd-blog-ai-references" aria-labelledby="kd-blog-ai-reference-heading">
+    <div className="kd-blog-ai-reference-head">
+      <div><h3 id="kd-blog-ai-reference-heading">Titel im Text erkennen (KI)</h3>
+        <p>{extraction.settingsRequired
+          ? "Die optionale KI-Erkennung ist ausgeschaltet. Schreiben, private Speicherung und manuelle Referenzen funktionieren unabhängig davon."
+          : "Die KI-Erkennung ist für dieses Konto derzeit nicht verfügbar."}</p></div>
+      {extraction.settingsRequired && typeof extraction.onOpenSettings === "function"
+        ? <button type="button" className="kd-blog-button" onClick={extraction.onOpenSettings}>Zu Personalisierung & KI</button>
+        : null}
+    </div>
+  </section>;
 
   const update = (candidateId, patch) => {
     setSelections((current) => ({

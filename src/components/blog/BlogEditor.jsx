@@ -4,18 +4,13 @@ import { lesePlausiblesJahr, plausiblerJahresbereich } from "../../lib/match.js"
 import { BlogReferenceList } from "./BlogReferenceList.jsx";
 import { BlogReferenceSuggestions } from "./BlogReferenceSuggestions.jsx";
 
-const SAVE_LABELS = {
-  [BLOG_SAVE_INTENT.PRIVATE_ONLY]: "Privat speichern",
-  [BLOG_SAVE_INTENT.PUBLISH]: "Speichern & veröffentlichen",
-  [BLOG_SAVE_INTENT.UPDATE]: "Speichern & aktualisieren",
-};
-
-export function BlogEditor({ editor, capability, actions, intent, hasPublication, referenceExtraction, onSave, onBack }) {
+export function BlogEditor({ editor, capability, actions, intent, hasPublication, referenceExtraction, onPrivateSave, onPublish, onBack }) {
   const [newReference, setNewReference] = useState("");
   const [newReferenceYear, setNewReferenceYear] = useState("");
   const [newReferenceType, setNewReferenceType] = useState("film");
   const [referenceError, setReferenceError] = useState("");
   const [limitNotice, setLimitNotice] = useState("");
+  const [actionNotice, setActionNotice] = useState(null);
   const references = Array.isArray(editor.references) ? editor.references : [];
   const saving = editor.saveStatus === "saving" || editor.saveStatus?.status === "saving";
   const publishReady = capability?.status === "ready";
@@ -37,12 +32,37 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
     setLimitNotice(references.length + 1 === BLOG_MAX_REFERENCES
       ? `Die ${BLOG_MAX_REFERENCES}. Referenz wird mit diesem Artikel gespeichert.` : "");
   };
-  const save = () => {
+  const run = async (action) => {
     if (references.length === BLOG_MAX_REFERENCES) {
       setLimitNotice(`Alle ${BLOG_MAX_REFERENCES} Referenzen werden mit diesem Artikel gespeichert.`);
     }
-    void onSave();
+    setActionNotice(null);
+    let result;
+    try {
+      result = await action();
+    } catch {
+      setActionNotice({ kind: "error", text: "Speichern fehlgeschlagen. Deine Eingabe bleibt erhalten." });
+      return null;
+    }
+    if (result?.private?.status === "failed") {
+      setActionNotice({ kind: "error", text: "Privates Speichern fehlgeschlagen. Deine Eingabe bleibt erhalten." });
+    } else if (result?.private?.status === "saved" && result?.publication?.status === "not_requested") {
+      setActionNotice({ kind: "success", text: "Privat gespeichert." });
+    } else if (result?.private?.status === "saved" && ["published", "updated"].includes(result?.publication?.status)) {
+      setActionNotice({ kind: "success", text: result.publication.status === "published" ? "Privat gespeichert und veröffentlicht." : "Privat gespeichert und Veröffentlichung aktualisiert." });
+    } else if (result?.private?.status === "saved") {
+      setActionNotice({ kind: result?.publication?.status === "failed" ? "error" : "warning", text: result?.publication?.status === "failed"
+        ? "Privat gespeichert, Veröffentlichung fehlgeschlagen." : "Privat gespeichert. Die Veröffentlichung braucht noch deine Aufmerksamkeit." });
+    }
+    return result;
   };
+  const profileAuthor = capability?.value?.profileAuthor || null;
+  const publishAsAnonymous = editor.anonymousPublication === true;
+  const publishLabel = publishAsAnonymous
+    ? (hasPublication ? "Anonym aktualisieren" : "Anonym veröffentlichen")
+    : profileAuthor
+      ? `Als ${profileAuthor} ${intent === BLOG_SAVE_INTENT.UPDATE ? "aktualisieren" : "veröffentlichen"}`
+      : "Autorenname fehlt";
   return <section className="kd-blog-editor" aria-labelledby="kd-blog-editor-heading">
     <div className="kd-blog-list-head"><h2 id="kd-blog-editor-heading">{editor.articleId ? "Artikel bearbeiten" : "Neuer Artikel"}</h2>
       <span className="kd-blog-state">{editor.displayState === "published" ? "Veröffentlicht" : editor.displayState === "private_changes" ? "Änderungen privat" : "Privat"}</span></div>
@@ -69,10 +89,15 @@ export function BlogEditor({ editor, capability, actions, intent, hasPublication
       <label className={`kd-blog-check kd-blog-publish-check kd-touch-checkbox${!publishReady ? " is-disabled" : ""}`}><input type="checkbox" checked={editor.anonymousPublication === true} disabled={!publishReady}
         onChange={(event) => actions.onEditorChange({ anonymousPublication: event.target.checked })} />
         <span><strong>Anonym veröffentlichen</strong></span></label>
-      {hasPublication && !editor.anonymousPublication ? <p className="kd-blog-private-publication-note">Die veröffentlichte Fassung bleibt unverändert.</p> : null}
+      {!publishAsAnonymous && !profileAuthor ? <p className="kd-blog-private-publication-note">Für eine namentliche Veröffentlichung fehlt ein Profilname. Privat speichern oder anonym veröffentlichen ist weiterhin möglich.</p> : null}
+      {actionNotice ? <p className={`kd-blog-local-notice kd-blog-notice-${actionNotice.kind}`} role={actionNotice.kind === "error" ? "alert" : "status"}>{actionNotice.text}</p> : null}
       <div className="kd-blog-footer-actions"><button type="button" className="kd-blog-button kd-blog-button-quiet" disabled={saving} onClick={onBack}>← Zurück</button>
-        <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={saving || !String(editor.title || "").trim() || !String(editor.text || "").trim() || (editor.anonymousPublication && !publishReady)} onClick={save}>
-          {saving ? "Speichert …" : hasPublication && intent === BLOG_SAVE_INTENT.PRIVATE_ONLY ? "Änderungen privat speichern" : SAVE_LABELS[intent]}</button></div>
+        <div className="kd-blog-save-actions">
+          <button type="button" className="kd-blog-button" disabled={saving || !String(editor.title || "").trim() || !String(editor.text || "").trim()} onClick={() => void run(onPrivateSave)}>
+            {saving ? "Speichert …" : "Privat speichern"}</button>
+          <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={saving || !publishReady || (!publishAsAnonymous && !profileAuthor) || !String(editor.title || "").trim() || !String(editor.text || "").trim()} onClick={() => void run(onPublish)}>
+            {saving ? "Speichert …" : publishLabel}</button>
+        </div></div>
     </footer>
   </section>;
 }

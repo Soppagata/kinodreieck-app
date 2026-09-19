@@ -15,6 +15,7 @@ const CRON_PREREQUISITE = "supabase/migrations/20260918115900_blog_publication_p
 const SETWISE_MIGRATION = "supabase/migrations/20260918130000_blog_catalog_setwise.sql";
 const LOOKUP_MIGRATION = "supabase/migrations/20260918133000_blog_catalog_lookup.sql";
 const REFERENCE_V2_MIGRATION = "supabase/migrations/20260918140000_blog_reference_limit_v2.sql";
+const AUTHOR_V3_MIGRATION = "supabase/migrations/20260919090000_blog_publication_author_v3.sql";
 
 function verifyCronPrerequisiteSql() {
   const sql = readFileSync(CRON_PREREQUISITE, "utf8");
@@ -67,7 +68,7 @@ end$$;
 create function cron.unschedule(p_jobid bigint) returns boolean
 language plpgsql as $$begin delete from cron.job where jobid=p_jobid; return found; end$$;
 create schema auth;
-create table auth.users(id uuid primary key);
+create table auth.users(id uuid primary key,email text);
 create function auth.role() returns text language sql stable as $$
   select nullif(current_setting('request.jwt.claim.role',true),'')
 $$;
@@ -159,8 +160,10 @@ create table public.kd_streaming_page_motn(
 );
 grant all on public.kd_catalog,public.kd_streaming_page_state,
   public.kd_streaming_page_base,public.kd_streaming_page_motn to service_role;
-insert into auth.users(id) values
-  ('${BLOG_TEST_ACCOUNTS.alpha}'),('${BLOG_TEST_ACCOUNTS.beta}'),('${BLOG_TEST_ACCOUNTS.inactive}');
+insert into auth.users(id,email) values
+  ('${BLOG_TEST_ACCOUNTS.alpha}','alpha@login.kinodreieck.at'),
+  ('${BLOG_TEST_ACCOUNTS.beta}','beta@login.kinodreieck.at'),
+  ('${BLOG_TEST_ACCOUNTS.inactive}','inactive@login.kinodreieck.at');
 insert into public.kd_account_access(account_id,active) values
   ('${BLOG_TEST_ACCOUNTS.alpha}',true),('${BLOG_TEST_ACCOUNTS.beta}',true),('${BLOG_TEST_ACCOUNTS.inactive}',false);
 `;
@@ -189,6 +192,7 @@ function defaultProgram(now = Date.now()) {
 export async function startBlogPublicationPgHarness({
   applySetwiseMigration = true,
   applyLookupMigration = applySetwiseMigration,
+  applyAuthorMigration = false,
 } = {}) {
   const pg = pgBin();
   const root = mkdtempSync(join(tmpdir(), "kd-blog-pg-"));
@@ -351,6 +355,7 @@ export async function startBlogPublicationPgHarness({
       rawSql(readFileSync(LOOKUP_MIGRATION, "utf8"));
     }
     rawSql(readFileSync(REFERENCE_V2_MIGRATION, "utf8"));
+    if (applyAuthorMigration) rawSql(readFileSync(AUTHOR_V3_MIGRATION, "utf8"));
 
     const scalarRpcs = new Set([
       "kd_blog_publication_capabilities", "kd_publish_blog_v1", "kd_update_blog_publication_v1",
@@ -359,6 +364,9 @@ export async function startBlogPublicationPgHarness({
       "kd_blog_publication_capabilities_v2", "kd_publish_blog_v2",
       "kd_update_blog_publication_v2", "kd_withdraw_blog_publication_v2",
       "kd_read_own_blog_publication_v2", "kd_list_shared_articles_v2",
+      "kd_blog_publication_capabilities_v3", "kd_publish_blog_v3",
+      "kd_update_blog_publication_v3", "kd_withdraw_blog_publication_v3",
+      "kd_read_own_blog_publication_v3", "kd_list_shared_articles_v3",
     ]);
     const tableRpcs = new Set(["kd_list_shared_articles", "kd_claim_shared_article"]);
     const callRpc = (name, args, {
@@ -373,6 +381,7 @@ export async function startBlogPublicationPgHarness({
       }
       let invocation;
       if (name === "kd_blog_publication_capabilities" || name === "kd_blog_publication_capabilities_v2"
+        || name === "kd_blog_publication_capabilities_v3"
         || name === "kd_list_shared_articles") invocation = `public.${name}()`;
       else if (name === "kd_claim_shared_article") invocation = `public.${name}(${literal(args?.p_share_token)}::uuid)`;
       else invocation = `public.${name}(${jsonLiteral(args?.p_request ?? args)})`;
