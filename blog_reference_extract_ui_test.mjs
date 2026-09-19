@@ -22,16 +22,14 @@ const entry = `
     { candidateId:"c-dune",mention:"Dune",titleSuggestion:"Dune",kind:"title_group",year:null,interpretation:"ambiguous",
       evidence:{field:"text",quote:"Dune ist zweimal gemeint",start:0,end:23},mediaType:null,
       workOptions:[
-        {identity:"library:dune-1984",sourceKind:"library",ref:"dune-1984",title:"Dune",year:1984,mediaType:"film",creator:"David Lynch",sourceLabel:"Mediathek"},
-        {identity:"library:dune-2021",sourceKind:"library",ref:"dune-2021",title:"Dune",year:2021,mediaType:"film",creator:"Denis Villeneuve",sourceLabel:"Mediathek"},
-        {identity:"streaming:dune-stream",sourceKind:"streaming",ref:"dune-stream",title:"Dune",year:2021,mediaType:"film",creator:null,sourceLabel:"Streaming-Katalog",sourceTarget:{kind:"streaming",art:"entdecken",ref:"dune-stream",titel:"Dune",sourceId:"netflix"},identityHints:[{namespace:"imdb",value:"tt1160419"}]},
-        {identity:"cinema:dune-kino",sourceKind:"cinema",ref:"dune-kino",title:"Dune",year:2021,mediaType:"film",creator:null,sourceLabel:"Kinoprogramm",sourceTarget:{kind:"cinema",art:"programm",ref:"dune-kino",titel:"Dune"},identityHints:[{namespace:"film_at",value:"dune-kino"}]},
-      ]},
-    { candidateId:"c-music",mention:"Water Music",titleSuggestion:"Water Music",kind:"music",year:1720,interpretation:"direct",
-      evidence:{field:"text",quote:"1720 Water Music",start:30,end:46},mediaType:"musik",
-      workOptions:[{identity:"library:water-1720",sourceKind:"library",ref:"water-1720",title:"Water Music",year:1720,mediaType:"musik",creator:"G. F. Handel",sourceLabel:"Mediathek"}]},
+        {identity:"work:dune-1984",title:"Dune",year:1984,mediaType:"film",creator:"David Lynch",sourceLabels:["Mediathek"],identityHints:[{namespace:"imdb",value:"tt0087182"}],sourceObservations:[]},
+        {identity:"work:dune-2021",title:"Dune",year:2021,mediaType:"film",creator:"Denis Villeneuve",sourceLabels:["Mediathek","Streaming-Katalog","Kinoprogramm"],identityHints:[{namespace:"imdb",value:"tt1160419"}],sourceObservations:[]},
+      ],requiresWorkDecision:true},
+    { candidateId:"c-2001",mention:"2001",titleSuggestion:"2001: A Space Odyssey",kind:"film",year:1968,interpretation:"interpreted",
+      evidence:{field:"text",quote:"2001",start:30,end:34},mediaType:"film",requiresWorkDecision:false,
+      workOptions:[{identity:"work:2001",title:"2001: A Space Odyssey",year:1968,mediaType:"film",creator:"Stanley Kubrick",sourceLabels:["Mediathek","Streaming-Katalog","Kinoprogramm"],identityHints:[{namespace:"imdb",value:"tt0062622"}],sourceObservations:[]}]},
     { candidateId:"c-burn",mention:"Evil Dead Burn",titleSuggestion:"Evil Dead Burn",kind:"film",year:2026,interpretation:"direct",
-      evidence:{field:"text",quote:"Evil Dead Burn",start:50,end:64},mediaType:"film",workOptions:[]},
+      evidence:{field:"text",quote:"Evil Dead Burn",start:50,end:64},mediaType:"film",workOptions:[],requiresWorkDecision:false},
   ];
   function Harness(){
     const [referenceCount,setReferenceCount]=useState(0);
@@ -41,7 +39,7 @@ const entry = `
       sources:{streaming:{status:"ready"},cinema:{status:"ready"}},
       canStart:referenceCount<50,startReason:referenceCount>=50?"reference-limit":null,start:()=>{},cancel:()=>{},
       apply:async(candidates)=>{globalThis.appliedBlogCandidates=candidates;return {status:"applied",addedCount:candidates.length};}};
-    const editor={draftKey:"draft-1",articleId:null,title:"Mein Blog",text:"Dune ist zweimal gemeint. 1720 Water Music.",ordered:false,references,anonymousPublication:false,dirty:true,saveStatus:"idle",displayState:"private"};
+    const editor={draftKey:"draft-1",articleId:null,title:"Mein Blog",text:"Dune ist zweimal gemeint. 2001. Evil Dead Burn.",ordered:false,references,anonymousPublication:false,dirty:true,saveStatus:"idle",displayState:"private"};
     const actions={onEditorChange:()=>{},onAddReference:()=>{},onMoveReference:()=>{},onRemoveReference:()=>{},onSave:async()=>({private:{status:"saved"},publication:{status:"not_requested"}})};
     return <BlogTab publicationCapability={{status:"ready"}} view={{area:"mine",mode:"editor",articleId:null,returnToken:"mine:list"}}
       editor={editor} referenceExtraction={extraction} actions={actions}/>;
@@ -69,48 +67,46 @@ await check("Erwähnungen und konkrete Werke starten vollständig ohne Vorauswah
 });
 await page.getByLabel(/Dune.*Titelgruppe/).check();
 await check("Die Erwähnungsauswahl öffnet eine getrennte konkrete Werkauswahl", async () => {
-  assert.equal(await page.getByText("Werk oder reine Blogreferenz wählen").first().isVisible(), true);
+  assert.equal(await page.getByText("Welches Werk ist gemeint?").first().isVisible(), true);
   assert.equal(await page.getByText(/David Lynch/).isVisible(), true);
   assert.equal(await page.getByText(/Denis Villeneuve/).isVisible(), true);
   assert.match(await page.locator(".kd-blog-suggestion").first().innerText(), /Streaming-Katalog.*Kinoprogramm/s);
 });
-const duneWorks = page.locator(".kd-blog-suggestion").first().locator(".kd-blog-suggestion-work input");
-await duneWorks.nth(0).check();
-await duneWorks.nth(1).check();
-await page.getByLabel(/Water Music.*Musik/).check();
-await page.getByLabel(/Evil Dead Burn.*Film/).check();
-await page.locator(".kd-blog-suggestion").nth(2).getByLabel(/Nur als Blogreferenz/).check();
-await check("Mehrere gleichnamige Werke und Musik bleiben parallel auswählbar", async () => {
-  assert.equal(await duneWorks.nth(0).isChecked(), true);
-  assert.equal(await duneWorks.nth(1).isChecked(), true);
-  assert.match(await page.locator(".kd-blog-suggestion").nth(1).innerText(), /1720.*G\. F\. Handel/s);
-  assert.match(await page.locator(".kd-blog-suggestion").nth(2).innerText(), /keinen Mediathek-Eintrag/);
-});
-
 await page.getByRole("button", { name: "Ausgewählte übernehmen" }).click();
-await check("Eine offene zweite Auswahl bleibt klickbar, nennt den betroffenen Titel und erhält den atomaren Batch", async () => {
-  assert.match(await page.locator(".kd-blog-suggestions").innerText(), /Entscheidung offen bei „Water Music“/);
+await check("Eine echte Werkmehrdeutigkeit nennt den offenen Titel direkt am Übernahmebutton", async () => {
+  assert.match(await page.locator(".kd-blog-suggestion-apply").innerText(), /Entscheidung offen bei „Dune“/);
   assert.equal(await page.evaluate(() => globalThis.appliedBlogCandidates), undefined);
-  assert.equal(await page.locator(".kd-blog-suggestion").nth(1).evaluate((node) => document.activeElement === node), true);
+  assert.equal(await page.locator(".kd-blog-suggestion").first().evaluate((node) => document.activeElement === node), true);
 });
-await page.locator(".kd-blog-suggestion").nth(1).locator(".kd-blog-suggestion-work input").first().check();
-await page.getByText("3 Erwähnungen markiert · 4 Referenzen bereit.").waitFor();
+const duneWorks = page.locator(".kd-blog-suggestion").first().locator(".kd-blog-suggestion-work input");
+await duneWorks.nth(1).check();
+await page.getByLabel(/2001: A Space Odyssey.*Film/).check();
+await page.getByLabel(/Evil Dead Burn.*Film/).check();
+await check("Klare Werke mit mehreren oder ohne Fundort brauchen keinen Unterhaken", async () => {
+  assert.equal(await duneWorks.nth(1).isChecked(), true);
+  assert.match(await page.locator(".kd-blog-suggestion").nth(1).innerText(), /Als ein Werk übernehmen.*Mediathek.*Streaming-Katalog.*Kinoprogramm/s);
+  assert.equal(await page.locator(".kd-blog-suggestion").nth(1).locator(".kd-blog-suggestion-work input").count(), 0);
+  assert.match(await page.locator(".kd-blog-suggestion").nth(2).innerText(), /aktuell in keinem Bestand gefunden/);
+  assert.equal(await page.locator(".kd-blog-suggestion").nth(2).locator(".kd-blog-suggestion-work input").count(), 0);
+});
 
-await page.evaluate(() => globalThis.setBlogReferenceCount(47));
+await page.getByText("3 Erwähnungen markiert · 3 Referenzen bereit.").waitFor();
+
+await page.evaluate(() => globalThis.setBlogReferenceCount(48));
 await check("Bei zu wenig Restplatz bleibt die gesamte Mehrfachübernahme gesperrt", async () => {
   await page.getByText("Für die gesamte Auswahl ist nicht genug Platz. Es wurde nichts übernommen.").waitFor();
   assert.equal(await page.getByRole("button", { name: "Ausgewählte übernehmen" }).isDisabled(), true);
   assert.doesNotMatch(await page.locator(".kd-blog-ai-references").innerText(), /Noch \d+ von 50 Plätzen frei/);
 });
-await page.evaluate(() => globalThis.setBlogReferenceCount(46));
+await page.evaluate(() => globalThis.setBlogReferenceCount(47));
 await page.getByText("Für die gesamte Auswahl ist nicht genug Platz. Es wurde nichts übernommen.").waitFor({ state: "detached" });
 await page.getByRole("button", { name: "Ausgewählte übernehmen" }).click();
-await check("Die UI übergibt alle vier bestätigten Referenzen in einem atomaren Aufruf", async () => {
+await check("Die UI übergibt drei bestätigte Werke in einem atomaren Aufruf", async () => {
   const applied = await page.evaluate(() => globalThis.appliedBlogCandidates);
-  assert.equal(applied.length, 4);
-  assert.deepEqual(applied.map((candidate) => candidate.ref), ["dune-1984", "dune-2021", "water-1720", null]);
-  assert.equal(applied[2].mediaType, "musik");
-  assert.equal(applied[3].resolutionIntent.kind, "keep_redlink");
+  assert.equal(applied.length, 3);
+  assert.deepEqual(applied.map((candidate) => candidate.ref), [null, null, null]);
+  assert.deepEqual(applied.map((candidate) => candidate.year), [2021, 1968, 2026]);
+  assert.equal(applied.every((candidate) => candidate.resolutionIntent.kind === "auto"), true);
   assert.equal(await page.locator(".kd-blog-suggestions input[type=checkbox]:checked").count(), 0);
 });
 

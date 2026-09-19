@@ -678,11 +678,6 @@ try {
       ]));
   await click(ui, dom, suggestionAt(0).querySelectorAll(".kd-blog-suggestion-work input")[0]);
   await click(ui, dom, suggestionAt(0).querySelectorAll(".kd-blog-suggestion-work input")[1]);
-  await click(ui, dom, suggestionAt(1).querySelector(".kd-blog-suggestion-work input"));
-  await click(ui, dom, suggestionAt(2).querySelector(".kd-blog-suggestion-work input"));
-  await click(ui, dom, suggestionAt(3).querySelector(".kd-blog-suggestion-work input"));
-  await click(ui, dom, suggestionAt(4).querySelector(".kd-blog-suggestion-work input"));
-  await click(ui, dom, suggestionAt(5).querySelector(".kd-blog-suggestion-work input"));
   await click(ui, dom, buttonWithText(mounted.host, "Ausgewählte übernehmen"));
   await settled(ui, () => mounted.model.editor.references.length === 8, "atomic reference adoption");
   const scanRows = mounted.model.editor.references;
@@ -696,20 +691,21 @@ try {
     ["Star Wars: The Empire Strikes Back", 1980, "film", "fixture-watchmode-empire"],
     ["Star Wars: Return of the Jedi", 1983, "film", "fixture-film-at-jedi"],
   ]);
-  check("Bewusste Übernahme erhält die erste Zeile und ergänzt beide Dune-Filme, Serie, Musik und Rotlink atomar",
+  check("Bewusste Übernahme erhält die erste Zeile und ergänzt Werke statt ihrer Fundorte atomar",
     scanRows[0].rowId === preservedRow && scanRows[1].year === 1984 && scanRows[2].year === 2021
       && scanRows[3].mediaType === "serie" && scanRows[4].mediaType === "musik"
       && scanRows[5].mediaType === "sonstiges" && scanRows[5].primaryTarget === null
-      && scanRows[5].resolutionIntent.kind === "keep_redlink"
+      && scanRows.slice(1).every((row) => row.ref === null && row.resolutionIntent.kind === "auto")
       && mounted.writes.length === beforeScanWrites);
   await click(ui, dom, buttonWithText(mounted.host, "Privat speichern"));
   await settled(ui, () => mounted.articles.some((article) => article.titel === scanTitle), "scanned draft persisted");
   const scannedArticle = mounted.articles.find((article) => article.titel === scanTitle);
   const savedRowIds = scannedArticle.liste.map((row) => row.rowId);
-  check("Privates Speichern bewahrt alle bestätigten Typen und die unverknüpfte Entscheidung",
+  check("Privates Speichern bewahrt alle bestätigten Typen und dynamischen Werkidentitäten",
     scannedArticle.liste.length === 8 && scannedArticle.liste[4].typ === "musik"
       && scannedArticle.liste[4].jahr === 1824 && scannedArticle.liste[5].jahr === 1605
-      && scannedArticle.liste[5].rotlink_ok === true);
+      && scannedArticle.liste.slice(1).every((row) => row.ref === null && row.workIdentity
+        && row.resolutionIntent.kind === "auto"));
   check("Bestätigte Blogreferenzen und privates Speichern legen keine Mediathek-Einträge an",
     !mounted.writes.some((write) => write.key === "kd:master")
       && JSON.stringify(mounted.library) === JSON.stringify(scanLibrary));

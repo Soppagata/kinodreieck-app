@@ -215,6 +215,9 @@ export function heileRotlinks(artikelListe, master) {
     let geaendert = false;
     const liste = a.liste.map((le) => {
       if (le.ref) return le;
+      // Neue Blog-Scans speichern das Werk, nicht den gerade sichtbaren Fundort.
+      // Ihre kontobezogene Navigation wird beim Lesen dynamisch projiziert.
+      if (le.workIdentity) return le;
       const erg = gleicheEintragAb(le, master);
       if (erg.status === "verlinkt") { geheilt++; geaendert = true; return { ...le, ref: erg.ref }; }
       return le;

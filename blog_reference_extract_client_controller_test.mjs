@@ -125,16 +125,18 @@ await act(async () => {
 check("Aktuelle Antwort enthält keine Vorauswahl und nur belegte lokale Werkoptionen", () => {
   assert.equal(model.status, "result");
   assert.equal(model.suggestions.length, 1);
-  assert.deepEqual(model.suggestions[0].workOptions.map((option) => option.ref), ["dune-2021", "stream-dune"]);
+  assert.equal(model.suggestions[0].workOptions.length, 1);
+  assert.deepEqual(model.suggestions[0].workOptions[0].sourceLabels,
+    ["Streaming-Katalog", "Mediathek"]);
+  assert.equal(model.suggestions[0].requiresWorkDecision, false);
   assert.deepEqual(catalogCalls.map((call) => call.query), ["Dune"]);
   assert.equal(catalogCalls[0].options.limit, 20);
   assert.equal(model.sources.streaming.status, "ready");
 });
 
-const selected = [{
-  candidateId: "c-dune", selectionId: "c-dune:library:dune-2021", sourceKind: "library",
-  ref: "dune-2021", title: "Dune", year: 2021, mediaType: "film", resolutionIntent: { kind: "auto" },
-}];
+const selected = buildBlogReferenceApplications(model.suggestions, [{
+  candidateId: "c-dune", selected: true, workIdentities: [], manual: false,
+}]).candidates;
 const boundApply = model.apply;
 let applyResult;
 await act(async () => { applyResult = await model.apply(selected); await tick(); });
@@ -145,13 +147,9 @@ check("Übernahme prüft Health und Textbindung erneut und reicht genau einen at
   assert.equal(applied[0].draftKey, "draft-a");
   assert.equal(calls.filter((call) => call.task === "health").length, 2);
 });
-const streamingSelections = [{
-  candidateId: "c-dune", selected: true, workIdentities: ["streaming:stream-dune"], manual: false,
-}];
-const streamingApplications = buildBlogReferenceApplications(model.suggestions, streamingSelections);
 controllerNow = Date.parse("2030-01-01T00:06:00Z");
 let expiredSourceApply;
-await act(async () => { expiredSourceApply = await model.apply(streamingApplications.candidates); await tick(); });
+await act(async () => { expiredSourceApply = await model.apply(selected); await tick(); });
 check("Ein abgelaufener Quellenstand wird vor der Übernahme verworfen", () => {
   assert.equal(expiredSourceApply.status, "failed");
   assert.equal(expiredSourceApply.errorCode, "result-expired");
@@ -227,8 +225,12 @@ await act(async () => {
 const publicationDraft = publicationModel.editor;
 const publicationHash = await blogReferenceContentHash({ title: publicationDraft.title, text: publicationDraft.text });
 const remakeApplications = [
-  { candidateId: "c-1", selectionId: "c-1:library:dune-1984", sourceKind: "library", ref: "dune-1984", title: "Dune", year: 1984, mediaType: "film", resolutionIntent: { kind: "auto" } },
-  { candidateId: "c-2", selectionId: "c-2:library:dune-2021", sourceKind: "library", ref: "dune-2021", title: "Dune", year: 2021, mediaType: "film", resolutionIntent: { kind: "auto" } },
+  { candidateId: "c-1", selectionId: "c-1:work", sourceKind: "work", ref: null,
+    title: "Dune", year: 1984, mediaType: "film", resolutionIntent: { kind: "auto" },
+    workIdentity: { title: "Dune", year: 1984, mediaType: "film", identityHints: [] }, sourceObservations: [] },
+  { candidateId: "c-2", selectionId: "c-2:work", sourceKind: "work", ref: null,
+    title: "Dune", year: 2021, mediaType: "film", resolutionIntent: { kind: "auto" },
+    workIdentity: { title: "Dune", year: 2021, mediaType: "film", identityHints: [] }, sourceObservations: [] },
 ];
 let publicationApply;
 await act(async () => {
@@ -243,11 +245,15 @@ check("Der echte Publikationscontroller übernimmt mehrere gleichnamige Werke in
   assert.deepEqual(publicationModel.editor.references.map((row) => row.primaryTarget?.ref), ["dune-1984", "dune-2021"]);
 });
 const directStreamingApplication = {
-  candidateId: "c-burn", selectionId: "c-burn:streaming:1768658", sourceKind: "streaming",
-  ref: "1768658", title: "Evil Dead Burn", year: 2026, mediaType: "film",
+  candidateId: "c-burn", selectionId: "c-burn:work", sourceKind: "work",
+  ref: null, title: "Evil Dead Burn", year: 2026, mediaType: "film",
   resolutionIntent: { kind: "auto" },
-  sourceTarget: { kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn" },
-  identityHints: [{ namespace: "imdb", value: "tt31170389" }, { namespace: "watchmode", value: "1768658" }],
+  workIdentity: { title: "Evil Dead Burn", year: 2026, mediaType: "film",
+    identityHints: [{ namespace: "imdb", value: "tt31170389" }, { namespace: "watchmode", value: "1768658" }] },
+  sourceObservations: [{
+    target: { kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn" },
+    expiresAt: "2030-01-01T00:05:00.000Z",
+  }],
 };
 let sourceApply;
 await act(async () => {
@@ -262,12 +268,13 @@ await act(async () => {
   privateSave = await publicationModel.actions.onPrivateSave({ draftKey: publicationDraft.draftKey });
   await tick();
 });
-check("Direkte Streamingquelle bleibt nach privatem Speichern im Reload-Draft adressierbar", () => {
+check("Werkidentität bleibt nach privatem Speichern dynamisch und die aktuelle Quelle adressierbar", () => {
   assert.equal(sourceApply.status, "applied");
   assert.equal(privateSave.private.status, "saved");
-  assert.equal(publicationStored[0].liste[2].sourceTarget.ref, "1768658");
+  assert.equal(publicationStored[0].liste[2].ref, null);
+  assert.equal(publicationStored[0].liste[2].sourceObservations[0].target.ref, "1768658");
   assert.equal(publicationModel.editor.references[2].primaryTarget.ref, "1768658");
-  assert.equal(publicationStored[0].liste[2].identityHints[0].namespace, "imdb");
+  assert.equal(publicationStored[0].liste[2].workIdentity.identityHints[0].namespace, "imdb");
 });
 const beforeStale = publicationModel.editor.references.map((row) => row.rowId);
 let publicationStale;

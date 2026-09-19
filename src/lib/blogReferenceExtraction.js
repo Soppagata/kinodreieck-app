@@ -207,11 +207,69 @@ function sourceEvidence(source, item, ref, title) {
   return { sourceTarget: null, identityHints };
 }
 
+function identityConflicts(left, right) {
+  const rightByNamespace = new Map(right.identityHints.map((hint) => [hint.namespace, hint.value]));
+  return left.identityHints.some((hint) => rightByNamespace.has(hint.namespace)
+    && rightByNamespace.get(hint.namespace) !== hint.value);
+}
+
+function sharesIdentity(left, right) {
+  const rightKeys = new Set(right.identityHints.map((hint) => `${hint.namespace}:${hint.value}`));
+  return left.identityHints.some((hint) => rightKeys.has(`${hint.namespace}:${hint.value}`));
+}
+
+function sameKnownWork(left, right) {
+  return norm(left.title) === norm(right.title)
+    && left.mediaType === right.mediaType
+    && left.year !== null && right.year !== null && left.year === right.year;
+}
+
+function compatibleWithGroup(record, group) {
+  if (group.records.some((entry) => identityConflicts(record, entry)
+      || record.mediaType !== entry.mediaType
+      || (record.year !== null && entry.year !== null && record.year !== entry.year))) return false;
+  return group.records.some((entry) => sharesIdentity(record, entry) || sameKnownWork(record, entry));
+}
+
+function mergeWorkGroup(group, index) {
+  const hints = [];
+  const hintKeys = new Set();
+  const sourceLabels = [];
+  const observations = [];
+  const observationKeys = new Set();
+  for (const record of group.records) {
+    if (!sourceLabels.includes(record.sourceLabel)) sourceLabels.push(record.sourceLabel);
+    for (const hint of record.identityHints) {
+      const key = `${hint.namespace}:${hint.value}`;
+      if (!hintKeys.has(key)) { hintKeys.add(key); hints.push(hint); }
+    }
+    if (record.sourceTarget && record.expiresAt) {
+      const key = `${record.sourceTarget.kind}:${record.sourceTarget.ref}`;
+      if (!observationKeys.has(key)) {
+        observationKeys.add(key);
+        observations.push(Object.freeze({ target: record.sourceTarget, expiresAt: record.expiresAt }));
+      }
+    }
+  }
+  const first = group.records[0];
+  const creators = [...new Set(group.records.map((record) => record.creator).filter(Boolean))];
+  const identity = hints.length
+    ? `work:${hints.map((hint) => `${hint.namespace}:${hint.value}`).sort().join("|")}`
+    : `work:${norm(first.title)}:${first.mediaType}:${first.year ?? "unknown"}:${index}`;
+  return Object.freeze({
+    identity, title: first.title, year: first.year, mediaType: first.mediaType,
+    creator: creators.length === 1 ? creators[0] : null,
+    sourceLabels: Object.freeze(sourceLabels),
+    identityHints: Object.freeze(hints.map((hint) => Object.freeze({ ...hint }))),
+    sourceObservations: Object.freeze(observations),
+  });
+}
+
 function workOptions(candidate, sources) {
   const suggested = norm(candidate.titleSuggestion);
   if (!suggested) return [];
   const expectedType = MEDIA_TYPE_BY_KIND[candidate.kind] || null;
-  const options = [];
+  const records = [];
   const seen = new Set();
   for (const source of sources) {
     for (const item of Array.isArray(source.items) ? source.items : []) {
@@ -227,30 +285,46 @@ function workOptions(candidate, sources) {
       const evidence = sourceEvidence(source, item, ref, title);
       if (!evidence) continue;
       seen.add(identity);
-      options.push(Object.freeze({
-        identity, sourceKind: source.kind, ref, title, year, mediaType,
-        creator: itemCreator(item), sourceLabel: SOURCE_LABELS[source.kind] || "Bestand",
+      records.push(Object.freeze({
+        title, year, mediaType, creator: itemCreator(item),
+        sourceLabel: SOURCE_LABELS[source.kind] || "Bestand",
         sourceTarget: evidence.sourceTarget,
+        expiresAt: source.expiresAt || null,
         identityHints: Object.freeze(evidence.identityHints.map((hint) => Object.freeze({ ...hint }))),
       }));
     }
   }
-  return options.sort((a, b) => (a.year ?? Number.MAX_SAFE_INTEGER) - (b.year ?? Number.MAX_SAFE_INTEGER)
+  const groups = [];
+  const addRecord = (record) => {
+    const matches = groups.filter((group) => compatibleWithGroup(record, group));
+    if (matches.length === 1) matches[0].records.push(record);
+    else groups.push({ records: [record] });
+  };
+  records.filter((record) => record.identityHints.length > 0).forEach(addRecord);
+  records.filter((record) => record.identityHints.length === 0).forEach(addRecord);
+  return groups.map(mergeWorkGroup)
+    .sort((a, b) => (a.year ?? Number.MAX_SAFE_INTEGER) - (b.year ?? Number.MAX_SAFE_INTEGER)
     || a.title.localeCompare(b.title, "de"));
 }
 
 export function buildBlogReferenceSuggestions(candidates, {
-  library = [], mustwatch = [], streaming = [], cinema = [],
+  library = [], mustwatch = [], streaming = [], cinema = [], sourceExpiresAt = {},
 } = {}) {
   const sources = [
     { kind: "library", items: library }, { kind: "mustwatch", items: mustwatch },
-    { kind: "streaming", items: streaming }, { kind: "cinema", items: cinema },
+    { kind: "streaming", items: streaming, expiresAt: sourceExpiresAt.streaming || null },
+    { kind: "cinema", items: cinema, expiresAt: sourceExpiresAt.cinema || null },
   ];
-  return Object.freeze((Array.isArray(candidates) ? candidates : []).map((candidate) => Object.freeze({
-    ...candidate,
-    mediaType: MEDIA_TYPE_BY_KIND[candidate.kind] || null,
-    workOptions: Object.freeze(workOptions(candidate, sources)),
-  })));
+  return Object.freeze((Array.isArray(candidates) ? candidates : []).map((candidate) => {
+    const options = Object.freeze(workOptions(candidate, sources));
+    const mediaType = MEDIA_TYPE_BY_KIND[candidate.kind] || null;
+    return Object.freeze({
+      ...candidate,
+      mediaType,
+      workOptions: options,
+      requiresWorkDecision: options.length > 1 || (!mediaType && options.length === 0),
+    });
+  }));
 }
 
 function cinemaItems(program) {
@@ -364,23 +438,37 @@ export function buildBlogReferenceApplications(suggestions, selections) {
     if (selection.manual === true && selectedWorks.length > 0) {
       return { ok: false, reason: "conflicting-work-selection", candidateId: suggestion.candidateId, candidates: [] };
     }
+    const addWork = (work, selectionId) => {
+      const title = String(work?.title || suggestion.titleSuggestion || "").trim();
+      const mediaType = normalisiereTyp(work?.mediaType || suggestion.mediaType || "sonstiges");
+      const year = work?.year ?? suggestion.year ?? null;
+      result.push({
+        candidateId: suggestion.candidateId,
+        selectionId,
+        sourceKind: "work",
+        ref: null,
+        title,
+        year,
+        mediaType,
+        resolutionIntent: { kind: "auto" },
+        workIdentity: {
+          title, year, mediaType,
+          identityHints: Array.isArray(work?.identityHints) ? work.identityHints : [],
+        },
+        sourceObservations: Array.isArray(work?.sourceObservations) ? work.sourceObservations : [],
+      });
+    };
+    if (!suggestion.requiresWorkDecision) {
+      if (selectedWorks.length > 0 || selection.manual === true) {
+        return { ok: false, reason: "unexpected-work-selection", candidateId: suggestion.candidateId, candidates: [] };
+      }
+      addWork(suggestion.workOptions[0] || null, `${suggestion.candidateId}:work`);
+      continue;
+    }
     for (const identity of selectedWorks) {
       const option = optionById.get(identity);
       if (!option) return { ok: false, reason: "invalid-work-selection", candidateId: suggestion.candidateId, candidates: [] };
-      result.push({
-        candidateId: suggestion.candidateId,
-        selectionId: `${suggestion.candidateId}:${option.identity}`,
-        sourceKind: option.sourceKind,
-        ref: option.ref,
-        title: option.title,
-        year: option.year,
-        mediaType: option.mediaType,
-        resolutionIntent: { kind: "auto" },
-        ...(option.sourceKind === "streaming" || option.sourceKind === "cinema" ? {
-          sourceTarget: option.sourceTarget,
-          identityHints: option.identityHints,
-        } : {}),
-      });
+      addWork(option, `${suggestion.candidateId}:${option.identity}`);
     }
     if (selection.manual === true) {
       const title = String(selection.manualTitle || "").trim();

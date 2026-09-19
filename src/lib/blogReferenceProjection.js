@@ -7,6 +7,7 @@ import {
   projectBlogReferenceForReader,
 } from "./blogContract.js";
 import { gleicheEintragAb } from "./artikel.js";
+import { norm } from "./match.js";
 import { normalisiereTyp } from "./typen.js";
 
 const SOURCE_ALIASES = new Map([
@@ -29,6 +30,10 @@ const ID_FIELDS = Object.freeze({
 });
 
 function text(value) { return String(value == null ? "" : value).trim(); }
+const PRIVATE_MEDIA_TYPES = new Set(["film", "serie", "musik", "sonstiges"]);
+const exactKeys = (value, expected) => !!value && typeof value === "object" && !Array.isArray(value)
+  && Object.keys(value).length === expected.length
+  && expected.every((key) => Object.prototype.hasOwnProperty.call(value, key));
 
 export function isBlogPrivateStreamingTarget(target) {
   if (!target || typeof target !== "object" || Array.isArray(target)) return false;
@@ -39,6 +44,29 @@ export function isBlogPrivateStreamingTarget(target) {
   return target.kind === "streaming" && target.art === "entdecken"
     && !!text(target.ref) && !!text(target.titel)
     && (target.sourceId == null || isBlogStreamingSourceId(target.sourceId));
+}
+
+export function isBlogPrivateWorkIdentity(value) {
+  if (!exactKeys(value, ["title", "year", "mediaType", "identityHints"])
+      || !text(value.title) || !PRIVATE_MEDIA_TYPES.has(value.mediaType)
+      || (value.year !== null && !Number.isInteger(value.year))
+      || !Array.isArray(value.identityHints) || value.identityHints.length > 4) return false;
+  return value.identityHints.length === 0 || isBlogPublicIdentityHints(value.identityHints);
+}
+
+export function isBlogPrivateSourceObservations(value) {
+  if (!Array.isArray(value) || value.length > 4) return false;
+  const seen = new Set();
+  return value.every((entry) => {
+    if (!exactKeys(entry, ["target", "expiresAt"])
+        || !Number.isFinite(Date.parse(String(entry.expiresAt || "")))) return false;
+    const target = entry.target;
+    if (!isBlogPrivateStreamingTarget(target) && !isBlogPublicCinemaTarget(target)) return false;
+    const key = `${target.kind}:${target.ref}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function identityValue(item, namespace) {
@@ -185,8 +213,9 @@ export function projectPrivateReferenceForPublication(row, rank, libraryById = n
   const result = {
     rowId: text(row?.rowId), rank, title, year, mediaType, resolutionIntent,
   };
-  const identityHints = isBlogPublicIdentityHints(row?.identityHints)
-    ? row.identityHints.map((hint) => ({ ...hint }))
+  const storedHints = row?.workIdentity?.identityHints || row?.identityHints;
+  const identityHints = isBlogPublicIdentityHints(storedHints)
+    ? storedHints.map((hint) => ({ ...hint }))
     : blogIdentityHints(privateTarget || row);
   if (identityHints.length) result.identityHints = identityHints;
   return result;
@@ -274,12 +303,60 @@ export function projectPublicBlogReferences(references, {
   });
 }
 
-export function projectPrivateBlogReferences(references, targetById = new Map(), { ready = true } = {}) {
+function currentWorkTargets(reference, { library = [], mustwatch = [], cinema = [] } = {}, targetById) {
+  const identity = isBlogPrivateWorkIdentity(reference?.workIdentity) ? reference.workIdentity : null;
+  if (!identity) return [];
+  const matchesIdentity = (item) => {
+    if (!sameMediaType(identity.mediaType, item)) return false;
+    const hints = identity.identityHints;
+    const relation = hints.length ? identityRelation(hints, item) : { matches: 0, conflicts: 0 };
+    if (relation.conflicts > 0) return false;
+    if (relation.matches > 0) return true;
+    const year = Number.isInteger(item?.jahr ?? item?.year ?? item?.j)
+      ? (item?.jahr ?? item?.year ?? item?.j) : null;
+    return (identity.year === null || year === identity.year)
+      && norm(item?.titel || item?.title || item?.t) === norm(identity.title);
+  };
+  const uniqueTarget = (items, targetForItem) => {
+    const matches = (Array.isArray(items) ? items : []).filter(matchesIdentity);
+    if (matches.length !== 1) return null;
+    return targetForItem(matches[0]);
+  };
+  const libraryTarget = uniqueTarget(library, (item) => targetForLibraryItem(item, identity.title));
+  const mustwatchTarget = uniqueTarget(mustwatch, (item) => targetById.get(text(item?.id)) || null);
+  const cinemaItems = (Array.isArray(cinema) ? cinema : cinema?.filme || []).map((item) => ({
+    ...item, typ: "film", titel: item?.titel || item?.t, jahr: item?.jahr ?? item?.j,
+  }));
+  const cinemaTarget = uniqueTarget(cinemaItems, (item) => {
+    const ref = text(item?.film_at_id ?? item?.filmAtId);
+    return ref ? { kind: "cinema", art: "programm", ref, titel: text(item?.t || item?.titel) || identity.title } : null;
+  });
+  return [libraryTarget, mustwatchTarget, cinemaTarget].filter(Boolean);
+}
+
+export function projectPrivateBlogReferences(references, targetById = new Map(), {
+  ready = true, library = [], mustwatch = [], cinema = [], now = Date.now(),
+} = {}) {
   return (Array.isArray(references) ? references : []).map((reference, index) => {
     const rowId = text(reference?.rowId);
     const storedTarget = isBlogPrivateStreamingTarget(reference?.sourceTarget)
       || isBlogPublicCinemaTarget(reference?.sourceTarget) ? reference.sourceTarget : null;
-    const target = storedTarget || (reference?.ref == null ? null : targetById.get(String(reference.ref)));
+    const targets = currentWorkTargets(reference, { library, mustwatch, cinema }, targetById);
+    if (storedTarget) targets.push(storedTarget);
+    const nowMs = typeof now === "number" ? now : Date.parse(String(now));
+    if (isBlogPrivateSourceObservations(reference?.sourceObservations)) {
+      for (const observation of reference.sourceObservations) {
+        if (Date.parse(observation.expiresAt) > nowMs) targets.push(observation.target);
+      }
+    }
+    if (reference?.ref != null) {
+      const legacyTarget = targetById.get(String(reference.ref));
+      if (legacyTarget) targets.push(legacyTarget);
+    }
+    const uniqueTargets = targets.filter((target, targetIndex) => targets.findIndex((entry) => (
+      entry.kind === target.kind && entry.ref === target.ref
+    )) === targetIndex);
+    const target = uniqueTargets[0] || null;
     return Object.freeze({
       rowId,
       rank: index + 1,
@@ -288,7 +365,7 @@ export function projectPrivateBlogReferences(references, targetById = new Map(),
       mediaType: normalisiereTyp(reference?.mediaType || reference?.typ || "sonstiges"),
       state: target ? "available" : ready ? "redlink" : "unchecked",
       primaryTarget: target || null,
-      secondaryTargets: Object.freeze([]),
+      secondaryTargets: Object.freeze(uniqueTargets.slice(1)),
       resolutionIntent: reference?.resolutionIntent || (reference?.rotlink_ok
         ? { kind: "keep_redlink" } : { kind: "auto" }),
       decisionCandidates: Array.isArray(reference?.decisionCandidates) ? reference.decisionCandidates : [],

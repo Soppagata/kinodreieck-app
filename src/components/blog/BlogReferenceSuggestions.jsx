@@ -36,9 +36,11 @@ function WorkOption({ suggestion, option, checked, onChange }) {
       : option.mediaType === "sonstiges" ? "Sonstiges" : "Film"];
   if (option.year !== null) details.push(String(option.year));
   if (option.creator) details.push(option.creator);
+  const sources = Array.isArray(option.sourceLabels) && option.sourceLabels.length
+    ? `Gefunden in: ${option.sourceLabels.join(", ")}` : "Ohne aktuellen Katalogtreffer";
   return <label className="kd-blog-suggestion-work kd-touch-checkbox">
     <input type="checkbox" checked={checked} onChange={(event) => onChange(option.identity, event.target.checked)} />
-    <span><strong>{option.title}</strong><small>{details.join(" · ")} · {option.sourceLabel || "Bestand"}</small></span>
+    <span><strong>{option.title}</strong><small>{details.join(" · ")} · {sources}</small></span>
   </label>;
 }
 
@@ -111,7 +113,7 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
       setSelectionMessageType("error");
       setSelectionMessage(applications.reason === "invalid-manual-selection"
         ? `Prüfe die manuellen Angaben bei „${title}“. Es wurde nichts übernommen.`
-        : `Entscheidung offen bei „${title}“: Wähle ein belegtes Werk oder „Nur als Blogreferenz“. Es wurde nichts übernommen.`);
+        : `Entscheidung offen bei „${title}“: Wähle das gemeinte Werk oder bestätige die ungeklärte Referenz. Es wurde nichts übernommen.`);
       focusIssue(applications.candidateId);
       return;
     }
@@ -164,21 +166,28 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
             <span><strong>{suggestion.titleSuggestion}</strong><small>{blogReferenceKindLabel(suggestion.kind)} · {blogReferenceInterpretationLabel(suggestion.interpretation)}</small></span>
           </label>
           <p className="kd-blog-suggestion-evidence"><span>{evidenceSource}:</span> <q>{suggestion.evidence.quote}</q></p>
-          {selection.selected ? <fieldset className="kd-blog-suggestion-decisions">
-            <legend>Werk oder reine Blogreferenz wählen</legend>
-            <p className="kd-blog-muted">Wähle ein oder mehrere belegte Werke. Wenn keines passt, übernimm nur die Blogreferenz.</p>
+          {selection.selected && !suggestion.requiresWorkDecision ? <p className="kd-blog-suggestion-work-state">
+            Als ein Werk übernehmen{suggestion.workOptions[0]?.sourceLabels?.length
+              ? ` · gefunden in ${suggestion.workOptions[0].sourceLabels.join(", ")}` : " · aktuell in keinem Bestand gefunden"}.
+          </p> : null}
+          {selection.selected && suggestion.requiresWorkDecision ? <fieldset className="kd-blog-suggestion-decisions">
+            <legend>{suggestion.workOptions.length ? "Welches Werk ist gemeint?" : "Ungeklärte Erwähnung"}</legend>
+            <p className="kd-blog-muted">{suggestion.workOptions.length
+              ? "Die Fundorte desselben Werks sind bereits zusammengeführt. Wähle nur zwischen tatsächlich verschiedenen Werken."
+              : "Titel oder Typ sind noch nicht eindeutig. Prüfe die Angaben vor der Übernahme."}</p>
             {suggestion.workOptions.length ? suggestion.workOptions.map((option) => <WorkOption
               key={option.identity} suggestion={suggestion} option={option}
               checked={(selection.workIdentities || []).includes(option.identity)}
               onChange={(identity, checked) => toggleWork(suggestion.candidateId, identity, checked)} />)
-              : <p className="kd-blog-muted">Im bereits geladenen Bestand wurde kein eindeutiges Werk gefunden.</p>}
+              : null}
             <label className="kd-blog-suggestion-work kd-touch-checkbox">
               <input type="checkbox" checked={selection.manual === true}
                 onChange={(event) => update(suggestion.candidateId, {
                   manual: event.target.checked,
                   ...(event.target.checked ? { workIdentities: [] } : {}),
                 })} />
-              <span><strong>Nur als Blogreferenz</strong><small>Erzeugt keinen Mediathek-Eintrag. Du kannst ihn später ausdrücklich ergänzen.</small></span>
+              <span><strong>{suggestion.workOptions.length ? "Keines dieser Werke" : "Als ungeklärte Referenz übernehmen"}</strong>
+                <small>Erzeugt keinen Mediathek-Eintrag und bleibt bewusst unverknüpft.</small></span>
             </label>
             {selection.manual ? <div className="kd-blog-suggestion-manual">
               <label>Titel<input value={selection.manualTitle || ""} onChange={(event) => update(suggestion.candidateId, { manualTitle: event.target.value })} /></label>

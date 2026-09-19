@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { heileRotlinks } from "./src/lib/artikel.js";
 import {
   blogIdentityHints,
   buildBlogLibraryIndex,
@@ -187,6 +188,40 @@ check("Direkt belegte starke IDs gelangen ohne private Ref in die Publikationspr
   const projected = projectPrivateArticleForPublication({ titel: "Scan", text: "Evil Dead Burn", liste: [directStreamingRow] }, []);
   return projected.references[0].identityHints?.some((hint) => hint.namespace === "imdb"
     && hint.value === "tt31170389") && !("ref" in projected.references[0]);
+})());
+const workReference = {
+  rowId: "work-2001", eingabe: "2001: A Space Odyssey", jahr: 1968, typ: "film", ref: null,
+  workIdentity: { title: "2001: A Space Odyssey", year: 1968, mediaType: "film",
+    identityHints: [{ namespace: "imdb", value: "tt0062622" }] },
+  sourceObservations: [], resolutionIntent: { kind: "auto" },
+};
+const currentLibrary = [{ id: "private-2001", titel: "2001", jahr: 1968, typ: "film", imdb_id: "tt0062622" }];
+const currentMustwatch = [{ id: "watch-2001", titel: "2001: A Space Odyssey", jahr: 1968, typ: "film",
+  imdb_id: "tt0062622", verknuepfung: { ziel: "streaming", id: "stream-2001" } }];
+const currentTargets = buildPrivateBlogTargetIndex(currentLibrary, currentMustwatch);
+const dynamicView = projectPrivateBlogReferences([workReference], currentTargets, {
+  ready: true, library: currentLibrary, mustwatch: currentMustwatch,
+  cinema: [{ film_at_id: "kino-2001", t: "2001: A Space Odyssey", j: 1968 }],
+});
+check("Eine Werkreferenz löst aktuelle kontoeigene Mediathek-, Streaming- und Kinoziele gemeinsam auf",
+  dynamicView[0].primaryTarget?.ref === "private-2001"
+  && dynamicView[0].secondaryTargets.map((target) => target.ref).join(",") === "stream-2001,kino-2001");
+check("Dieselbe gespeicherte Werkreferenz bleibt ohne Treffer im anderen Konto unverknüpft",
+  projectPrivateBlogReferences([workReference], new Map(), {
+    ready: true, library: [], mustwatch: [], cinema: [],
+  })[0].state === "redlink");
+check("Ein späterer Mediathektreffer wird für Werkreferenzen projiziert statt dauerhaft eingetragen", (() => {
+  const article = { id: "work-article", liste: [workReference] };
+  const [healed, count] = heileRotlinks([article], currentLibrary);
+  return count === 0 && healed[0] === article && healed[0].liste[0].ref === null;
+})());
+check("Publikation übernimmt nur öffentliche Werkhinweise und keine privaten Fundorte", (() => {
+  const projected = projectPrivateArticleForPublication({ titel: "Scan", text: "2001", liste: [workReference] }, currentLibrary);
+  const serialized = JSON.stringify(projected.references[0]);
+  return projected.references[0].resolutionIntent.kind === "auto"
+    && projected.references[0].identityHints?.[0]?.value === "tt0062622"
+    && !serialized.includes("private-2001") && !serialized.includes("sourceObservations")
+    && !serialized.includes("workIdentity");
 })());
 check("Starke Hinweise enthalten keine private Mediathek-ID",
   JSON.stringify(blogIdentityHints(library[0])) === JSON.stringify([

@@ -1319,6 +1319,8 @@ export default function App() {
     libraryReady: isBlogLibraryReady(bootDone, masterReadStatus, master != null),
     mustwatch,
     mustwatchReady: mustwatchGeladen,
+    cinema: programm,
+    cinemaReady: !!programm && !!programmInfo && programmInfo.abgelaufen !== true && !programmInfo.fehler,
     selectedServices: sichtbareAuswahl,
     selectedServicesReady: sichtbareAuswahlGeladen,
     service: sharedArticlesService,

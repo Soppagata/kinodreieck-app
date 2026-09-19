@@ -14,7 +14,9 @@ import {
   buildBlogLibraryIndex,
   buildPrivateBlogTargetIndex,
   canonicalBlogSourceIds,
+  isBlogPrivateSourceObservations,
   isBlogPrivateStreamingTarget,
+  isBlogPrivateWorkIdentity,
   projectPrivateArticleForPublication,
   projectPrivateBlogReferences,
   projectPublicBlogReferences,
@@ -26,6 +28,7 @@ import {
   neueBlogZeilenId,
   normalisiereBlogZeilen,
 } from "../lib/artikel.js";
+import { norm } from "../lib/match.js";
 import {
   applyOwnerPublication,
   beginBlogPublication,
@@ -159,6 +162,9 @@ const BLOG_REFERENCE_APPLICATION_KEYS = Object.freeze([
 const BLOG_REFERENCE_SOURCE_APPLICATION_KEYS = Object.freeze([
   ...BLOG_REFERENCE_APPLICATION_KEYS, "sourceTarget", "identityHints",
 ]);
+const BLOG_REFERENCE_WORK_APPLICATION_KEYS = Object.freeze([
+  ...BLOG_REFERENCE_APPLICATION_KEYS, "workIdentity", "sourceObservations",
+]);
 const BLOG_REFERENCE_MEDIA_TYPES = new Set(["film", "serie", "musik", "sonstiges"]);
 
 function exactKeys(value, expected) {
@@ -175,9 +181,20 @@ function sourceItemForCandidate(candidate, library, mustwatch) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+function sameWorkIdentity(left, right) {
+  if (!isBlogPrivateWorkIdentity(left) || !isBlogPrivateWorkIdentity(right)) return false;
+  const rightHints = new Map(right.identityHints.map((hint) => [hint.namespace, hint.value]));
+  if (left.identityHints.some((hint) => rightHints.has(hint.namespace)
+      && rightHints.get(hint.namespace) !== hint.value)) return false;
+  if (left.identityHints.some((hint) => rightHints.get(hint.namespace) === hint.value)) return true;
+  return left.mediaType === right.mediaType && left.year !== null && right.year !== null
+    && left.year === right.year && norm(left.title) === norm(right.title);
+}
+
 function normalizeReferenceApplication(candidate, library, mustwatch) {
   const sourceBacked = ["streaming", "cinema"].includes(candidate?.sourceKind);
-  if (!exactKeys(candidate, sourceBacked
+  const workBacked = candidate?.sourceKind === "work";
+  if (!exactKeys(candidate, workBacked ? BLOG_REFERENCE_WORK_APPLICATION_KEYS : sourceBacked
     ? BLOG_REFERENCE_SOURCE_APPLICATION_KEYS : BLOG_REFERENCE_APPLICATION_KEYS)
       || typeof candidate.candidateId !== "string" || !candidate.candidateId
       || typeof candidate.selectionId !== "string" || !candidate.selectionId
@@ -186,7 +203,29 @@ function normalizeReferenceApplication(candidate, library, mustwatch) {
       || !BLOG_REFERENCE_MEDIA_TYPES.has(candidate.mediaType)
       || (candidate.year !== null && (!Number.isInteger(candidate.year)
         || candidate.year < (["film", "serie"].includes(candidate.mediaType) ? 1870 : 1)
-        || candidate.year > 2200))) return null;
+      || candidate.year > 2200))) return null;
+  if (workBacked) {
+    const identity = candidate.workIdentity;
+    if (candidate.ref !== null || !isBlogPrivateWorkIdentity(identity)
+        || !isBlogPrivateSourceObservations(candidate.sourceObservations)
+        || identity.title !== candidate.title.trim() || identity.year !== candidate.year
+        || identity.mediaType !== candidate.mediaType
+        || !exactKeys(candidate.resolutionIntent, ["kind"])
+        || candidate.resolutionIntent.kind !== "auto") return null;
+    const hintKey = identity.identityHints.map((hint) => `${hint.namespace}:${hint.value}`).sort().join("|");
+    return {
+      identity: hintKey || `work:${identity.mediaType}:${identity.year ?? "unknown"}:${identity.title}`,
+      workIdentity: identity,
+      row: editorReference({
+        title: identity.title, year: identity.year, mediaType: identity.mediaType, ref: null,
+        workIdentity: { ...identity, identityHints: identity.identityHints.map((hint) => ({ ...hint })) },
+        sourceObservations: candidate.sourceObservations.map((entry) => ({
+          target: { ...entry.target }, expiresAt: entry.expiresAt,
+        })),
+        resolutionIntent: { kind: "auto" }, decisionCandidates: [],
+      }, 0),
+    };
+  }
   if (candidate.sourceKind === "manual") {
     if (candidate.ref !== null || !exactKeys(candidate.resolutionIntent, ["kind"])
         || candidate.resolutionIntent.kind !== "keep_redlink") return null;
@@ -245,9 +284,16 @@ export function applyBlogReferenceSuggestionsToDraft(draft, {
     return { status: "failed", errorCode: "invalid-selection", addedCount: 0, draft };
   }
   const seenSelections = new Set();
+  const seenWorks = draft.references.map((row) => row?.workIdentity).filter(isBlogPrivateWorkIdentity);
   const seenIdentities = new Set(draft.references
-    .map((row) => row?.ref == null ? null : row?.sourceTarget?.kind
-      ? `${row.sourceTarget.kind}:${String(row.ref)}` : String(row.ref)).filter(Boolean));
+    .map((row) => {
+      if (isBlogPrivateWorkIdentity(row?.workIdentity)) {
+        const hints = row.workIdentity.identityHints.map((hint) => `${hint.namespace}:${hint.value}`).sort().join("|");
+        return hints || `work:${row.workIdentity.mediaType}:${row.workIdentity.year ?? "unknown"}:${row.workIdentity.title}`;
+      }
+      return row?.ref == null ? null : row?.sourceTarget?.kind
+        ? `${row.sourceTarget.kind}:${String(row.ref)}` : String(row.ref);
+    }).filter(Boolean));
   const additions = [];
   for (const candidate of candidates) {
     if (seenSelections.has(candidate?.selectionId)) {
@@ -256,8 +302,10 @@ export function applyBlogReferenceSuggestionsToDraft(draft, {
     seenSelections.add(candidate?.selectionId);
     const normalized = normalizeReferenceApplication(candidate, library, mustwatch);
     if (!normalized) return { status: "failed", errorCode: "invalid-selection", addedCount: 0, draft };
+    if (normalized.workIdentity && seenWorks.some((identity) => sameWorkIdentity(identity, normalized.workIdentity))) continue;
     if (normalized.identity && seenIdentities.has(normalized.identity)) continue;
     if (normalized.identity) seenIdentities.add(normalized.identity);
+    if (normalized.workIdentity) seenWorks.push(normalized.workIdentity);
     additions.push(normalized.row);
   }
   if (draft.references.length + additions.length > BLOG_MAX_REFERENCES) {
@@ -302,6 +350,17 @@ function articleFromDraft(draft, previous, articleId, contentVersion, nowIso, re
     ...(row.sourceTarget ? { sourceTarget: { ...row.sourceTarget } } : {}),
     ...(isBlogPublicIdentityHints(row.identityHints)
       ? { identityHints: row.identityHints.map((hint) => ({ ...hint })) } : {}),
+    ...(isBlogPrivateWorkIdentity(row.workIdentity) ? {
+      workIdentity: {
+        ...row.workIdentity,
+        identityHints: row.workIdentity.identityHints.map((hint) => ({ ...hint })),
+      },
+    } : {}),
+    ...(isBlogPrivateSourceObservations(row.sourceObservations) ? {
+      sourceObservations: row.sourceObservations.map((entry) => ({
+        target: { ...entry.target }, expiresAt: entry.expiresAt,
+      })),
+    } : {}),
     rank: index + 1,
   }));
   const next = {
@@ -319,10 +378,15 @@ function articleFromDraft(draft, previous, articleId, contentVersion, nowIso, re
   const matched = gleicheArtikelAb(versioned, [
     ...(Array.isArray(referenceItems) ? referenceItems : []), ...directSourceItems,
   ]);
+  const workRows = new Set(references
+    .filter((row) => isBlogPrivateWorkIdentity(row.workIdentity))
+    .map((row) => row.rowId));
   const { abgleichStat: _ignored, ...article } = matched;
   return {
     ...article,
-    liste: matched.liste.map(({ abgleich: _rowIgnored, ...row }) => row),
+    liste: matched.liste.map(({ abgleich: _rowIgnored, ...row }) => workRows.has(row.rowId)
+      ? { ...row, ref: null, rotlink_ok: false }
+      : row),
   };
 }
 
@@ -336,6 +400,8 @@ export function useBlogPublicationController({
   libraryReady = false,
   mustwatch = [],
   mustwatchReady = false,
+  cinema = [],
+  cinemaReady = false,
   selectedServices = [],
   selectedServicesReady = false,
   service = sharedArticlesService,
@@ -509,14 +575,15 @@ export function useBlogPublicationController({
       publishedContentVersion: article?.publikation?.publishedContentVersion,
     }),
     referencePreview: projectPrivateBlogReferences(article.liste, privateTargetIndex, {
-      ready: libraryReady && mustwatchReady,
+      ready: libraryReady && mustwatchReady, library, mustwatch,
+      cinema: cinemaReady ? cinema : [], now: clock(),
     }).slice(0, 15),
     publicationError: article?.publikation?.errorCode ? {
       status: article?.publikation?.pending?.status === "unknown" ? "unknown" : "failed",
       errorCode: article.publikation.errorCode,
       operationId: article?.publikation?.pending?.operationId || article?.publikation?.operationId || null,
     } : null,
-  })), [articles, libraryReady, mustwatchReady, privateTargetIndex]);
+  })), [articles, cinema, cinemaReady, clock, library, libraryReady, mustwatch, mustwatchReady, privateTargetIndex]);
 
   const editorView = useMemo(() => {
     if (!editor) return null;
@@ -538,10 +605,11 @@ export function useBlogPublicationController({
       publicationId: snapshot.publicationId || editor.publicationId || null,
       displayState,
       references: projectPrivateBlogReferences(editor.references, privateTargetIndex, {
-        ready: libraryReady && mustwatchReady,
+        ready: libraryReady && mustwatchReady, library, mustwatch,
+        cinema: cinemaReady ? cinema : [], now: clock(),
       }),
     };
-  }, [articles, editor, libraryReady, mustwatchReady, privateTargetIndex]);
+  }, [articles, cinema, cinemaReady, clock, editor, library, libraryReady, mustwatch, mustwatchReady, privateTargetIndex]);
 
   const reader = useMemo(() => {
     if (view.mode !== "reader" || !view.articleId) return null;
@@ -562,12 +630,14 @@ export function useBlogPublicationController({
       scope: "private",
       article: { articleId: article.id, title: article.titel, text: article.text, ordered: article.geordnet === true },
       referenceViews: projectPrivateBlogReferences(article.liste, privateTargetIndex, {
-        ready: libraryReady && mustwatchReady,
+        ready: libraryReady && mustwatchReady, library, mustwatch,
+        cinema: cinemaReady ? cinema : [], now: clock(),
       }),
       canEdit: true,
       returnToken: view.returnToken,
     };
-  }, [articles, libraryReady, mustwatchReady, privateTargetIndex, publicItems, view]);
+  }, [articles, cinema, cinemaReady, clock, library, libraryReady, mustwatch, mustwatchReady,
+    privateTargetIndex, publicItems, view]);
 
   const onNewArticle = useCallback(() => {
     if (editorRef.current?.dirty) {
@@ -998,9 +1068,14 @@ export function useBlogPublicationController({
         }
         const linkedDraft = {
           ...draft,
-          references: draft.references.map((row) => row.rowId === rowId
-            ? { ...row, ref: String(privateRef), resolutionIntent: { kind: "auto" }, decisionCandidates: [], decisionRequired: false }
-            : row),
+          references: draft.references.map((row) => {
+            if (row.rowId !== rowId) return row;
+            const {
+              workIdentity: _workIdentity, sourceObservations: _sourceObservations, ...linkedRow
+            } = row;
+            return { ...linkedRow, ref: String(privateRef), resolutionIntent: { kind: "auto" },
+              decisionCandidates: [], decisionRequired: false };
+          }),
         };
         persistedArticleId = draft.articleId || neueArtikelId(draft.title, articlesRef.current);
         const contentVersion = publicationContentVersion();

@@ -224,6 +224,10 @@ export function useBlogReferenceExtractionController({
         mustwatch: propsRef.current.mustwatch,
         streaming: sources.streaming.items,
         cinema: sources.cinema.items,
+        sourceExpiresAt: {
+          streaming: sources.streaming.expiresAt,
+          cinema: sources.cinema.expiresAt,
+        },
       });
       setScan({
         status: "result", binding, suggestions,
@@ -263,7 +267,8 @@ export function useBlogReferenceExtractionController({
     }
     const selected = Array.isArray(candidates) ? candidates : [];
     for (const sourceKind of ["streaming", "cinema"]) {
-      if (!selected.some((candidate) => candidate?.sourceKind === sourceKind)) continue;
+      if (!selected.some((candidate) => candidate?.sourceKind === sourceKind
+          || candidate?.sourceObservations?.some((entry) => entry?.target?.kind === sourceKind))) continue;
       const expiresAt = Date.parse(String(scan.sources?.[sourceKind]?.expiresAt || ""));
       if (!Number.isFinite(expiresAt) || expiresAt <= clock()) {
         setScan((value) => ({ ...value, errorCode: "result-expired", message: localError("result-expired") }));

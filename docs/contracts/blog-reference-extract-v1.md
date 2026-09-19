@@ -24,7 +24,10 @@ für höchstens acht Titel mit höchstens 20 Treffern je Titel. Sein positiver u
 negativer Cache wird wiederverwendet; es gibt keinen automatischen Retry, keine
 Providerabfrage und keine Vollkatalogladung.
 Für Musik/Sonstiges besteht kein belegter externer Resolver. Nicht gefundene
-Inhalte bleiben nach ausdrücklicher Bestätigung manuell/unverknüpft erfassbar.
+klare Inhalte bleiben als Werkreferenz mit automatischer späterer Auflösung
+erfassbar. Eine fehlende Quelle ist keine Werkmehrdeutigkeit und verlangt keine
+zweite Bestätigung. Nur fachlich ungeklärte Angaben dürfen bewusst
+manuell/unverknüpft bestätigt werden.
 Urheber/Jahr werden als Werkdaten nur angezeigt, soweit der Bestand sie belegt.
 
 ## API-Naht A/B
@@ -117,16 +120,28 @@ Bindung `{ accountScope, draftKey, contentHash, requestId }`; Hash über exakte
 Titel/Text-Paarung, niemals als Ersatz für Kontogrenzen. Wechsel von Text,
 Entwurf, Konto, Editor oder KI-Freigabe macht Antwort/Übernahme ungültig.
 Keine Vorauswahl, auch nicht bei genau einem Treffer. Erwähnungsauswahl und
-konkrete Werkauswahl sichtbar unterscheiden; mehrere gleichnamige Werke dürfen
-bewusst übernommen werden. Mehrdeutige Film-/Musik-/Sonstiges-Werke nebeneinander
-anbieten; Typ/Jahr/Urheber nur mit Bestandsbeleg. Keine reine Titelgleichheit
-bei widersprechenden IDs, Typen oder Jahren; keine unscharfe automatische Bindung.
-Streaming- und Kinotreffer zeigen ihre Herkunft. Nicht geladene, abgelaufene
-oder fehlgeschlagene Quellen werden ausdrücklich als nicht vollständig geprüft
+konkrete Werkauswahl sichtbar unterscheiden. Mediathek, Merkliste, Streaming und
+Kino sind Fundorte desselben Werks und niemals auswählbare Werkalternativen.
+Fundorte werden nach starker gemeinsamer ID oder, ohne ID-Konflikt, nach exaktem
+Titel, Typ und bekanntem Jahr zusammengeführt. Widersprüchliche IDs, Typen oder
+Jahre sowie echte Remakes bleiben getrennte Werke; ein ID-loser Fund darf keine
+widersprüchlichen ID-Gruppen transitiv verbinden. Nur bei mehreren tatsächlich
+verschiedenen Werken oder fachlich ungeklärtem Typ ist eine zweite Entscheidung
+nötig. Ein klarer KI-Titel wird nach der äußeren Erwähnungsauswahl unmittelbar
+als Werkreferenz mit `resolutionIntent: { kind: "auto" }` übernommen, auch ohne
+aktuellen Fundort. Die manuelle unverknüpfte Bestätigung bleibt auf echte
+Unklarheit beschränkt und erzeugt keinen Mediathek-Eintrag.
+
+Streaming- und Kinofunde zeigen ihre Herkunft. Nicht geladene, abgelaufene oder
+fehlgeschlagene Quellen werden ausdrücklich als nicht vollständig geprüft
 angezeigt. Quellenstand und Ablaufzeit gehören zur Entwurfsbindung; nach Ablauf
-ist vor der Übernahme ein neuer Scan nötig. Die Option „Nur als Blogreferenz“
-erzeugt keinen Mediathek-Eintrag und bleibt bis zu einer späteren ausdrücklichen
-Ergänzung unverknüpft.
+ist vor der Übernahme ein neuer Scan nötig. Gespeichert wird die Werkidentität,
+nicht ein ausgewählter Fundort. Private, befristete Quellenbeobachtungen dürfen
+die direkte Navigation nach Save/Reload ermöglichen. Beim späteren privaten
+Lesen werden aktuelle kontoeigene Mediathek-, Merklisten-, Streaming- und
+Kinoziele erneut aus der Werkidentität aufgelöst. In die öffentliche
+Publikationsprojektion gelangen ausschließlich öffentliche starke
+Identitätshinweise, niemals private Referenz- oder Fundort-IDs.
 
 `onApplyReferenceSuggestions({ draftKey, contentHash, candidates })` prüft die
 aktuelle Liste, erhält Reihenfolge/Identitäten und fügt die gesamte Auswahl in

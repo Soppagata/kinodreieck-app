@@ -112,8 +112,10 @@ const suggestions = buildBlogReferenceSuggestions(response.data.candidates, {
   ],
 });
 check("Exaktes Titel/Jahr/Typ-Matching trennt Remakes, Musik und Prefix-Fallen", () => {
-  assert.deepEqual(suggestions[0].workOptions.map((option) => option.ref), ["water-1720"]);
-  assert.deepEqual(suggestions[1].workOptions.map((option) => option.ref), ["dune-2021"]);
+  assert.deepEqual(suggestions[0].workOptions.map((option) => option.year), [1720]);
+  assert.deepEqual(suggestions[1].workOptions.map((option) => option.year), [2021]);
+  assert.equal(suggestions[0].requiresWorkDecision, false);
+  assert.equal(suggestions[1].requiresWorkDecision, false);
   const ambiguous = buildBlogReferenceSuggestions([{ ...response.data.candidates[1], year: null }], {
     library: [
       { id: "dune-1984", titel: "Dune", jahr: 1984, typ: "film" },
@@ -121,32 +123,43 @@ check("Exaktes Titel/Jahr/Typ-Matching trennt Remakes, Musik und Prefix-Fallen",
       { id: "wrong-type", titel: "Dune", jahr: 2021, typ: "musik" },
     ],
   });
-  assert.deepEqual(ambiguous[0].workOptions.map((option) => option.ref), ["dune-1984", "dune-2021"]);
+  assert.deepEqual(ambiguous[0].workOptions.map((option) => option.year), [1984, 2021]);
+  assert.equal(ambiguous[0].requiresWorkDecision, true);
   const prefix = buildBlogReferenceSuggestions([{ ...response.data.candidates[1], titleSuggestion: "The Odyssey", year: null }], {
     library: [{ id: "odyssey", titel: "2001: A Space Odyssey", jahr: 1968, typ: "film" }],
   });
   assert.equal(prefix[0].workOptions.length, 0);
+  assert.equal(prefix[0].requiresWorkDecision, false);
 });
 
-check("Erwähnung und konkrete Werke sind getrennt und nie vorausgewählt", () => {
-  const empty = buildBlogReferenceApplications(suggestions, suggestions.map((suggestion) => ({
-    candidateId: suggestion.candidateId, selected: true, workIdentities: [], manual: false,
-  })));
-  assert.equal(empty.ok, false);
-  assert.equal(empty.reason, "work-decision-required");
+check("Ein klares Werk braucht nach der Erwähnungsauswahl keine zweite Bestätigung", () => {
   const selected = buildBlogReferenceApplications(suggestions, [{
-    candidateId: "c-dune", selected: true,
-    workIdentities: ["library:dune-2021"], manual: false,
-    manualTitle: "Dune (Essay)", manualYear: "2021", manualType: "sonstiges",
+    candidateId: "c-dune", selected: true, workIdentities: [], manual: false,
   }]);
   assert.equal(selected.ok, true);
-  assert.deepEqual(selected.candidates.map((candidate) => candidate.ref), ["dune-2021"]);
-  const conflicting = buildBlogReferenceApplications(suggestions, [{
-    candidateId: "c-dune", selected: true,
-    workIdentities: ["library:dune-2021"], manual: true,
-    manualTitle: "Dune", manualYear: "2021", manualType: "film",
+  assert.equal(selected.candidates[0].sourceKind, "work");
+  assert.equal(selected.candidates[0].ref, null);
+  assert.deepEqual(selected.candidates[0].resolutionIntent, { kind: "auto" });
+  assert.equal(selected.candidates[0].workIdentity.year, 2021);
+});
+
+check("Nur echte Werkmehrdeutigkeit verlangt eine bewusste Werkauswahl", () => {
+  const ambiguous = buildBlogReferenceSuggestions([{ ...response.data.candidates[1], year: null }], {
+    library: [
+      { id: "dune-1984", titel: "Dune", jahr: 1984, typ: "film" },
+      { id: "dune-2021", titel: "Dune", jahr: 2021, typ: "film" },
+    ],
+  });
+  const open = buildBlogReferenceApplications(ambiguous, [{
+    candidateId: "c-dune", selected: true, workIdentities: [], manual: false,
   }]);
-  assert.equal(conflicting.reason, "conflicting-work-selection");
+  assert.equal(open.reason, "work-decision-required");
+  const selected = buildBlogReferenceApplications(ambiguous, [{
+    candidateId: "c-dune", selected: true,
+    workIdentities: [ambiguous[0].workOptions[1].identity], manual: false,
+  }]);
+  assert.equal(selected.ok, true);
+  assert.equal(selected.candidates[0].workIdentity.year, 2021);
 });
 
 let sourceActive = 0;
@@ -215,26 +228,77 @@ check("Der gezielte Streamingabgleich bleibt bei acht seriellen Suchbegriffen be
 const sourceSuggestions = buildBlogReferenceSuggestions(sourceCandidates, {
   streaming: sources.streaming.items,
   cinema: sources.cinema.items,
+  sourceExpiresAt: {
+    streaming: sources.streaming.expiresAt,
+    cinema: sources.cinema.expiresAt,
+  },
 });
 check("Vorhandene Streaming- und Kino-IDs werden typgerecht und mit sichtbarer Herkunft angeboten", () => {
   assert.equal(sourceSuggestions[0].workOptions[0].mediaType, "film");
-  assert.equal(sourceSuggestions[0].workOptions[0].sourceLabel, "Streaming-Katalog");
-  assert.equal(sourceSuggestions[0].workOptions[0].sourceTarget.ref, "1768658");
-  assert.equal("sourceId" in sourceSuggestions[0].workOptions[0].sourceTarget, false);
-  assert.equal(sourceSuggestions[1].workOptions[0].sourceLabel, "Kinoprogramm");
-  assert.equal(sourceSuggestions[1].workOptions[0].sourceTarget.ref, "kino-1");
+  assert.deepEqual(sourceSuggestions[0].workOptions[0].sourceLabels, ["Streaming-Katalog"]);
+  assert.equal(sourceSuggestions[0].workOptions[0].sourceObservations[0].target.ref, "1768658");
+  assert.equal("sourceId" in sourceSuggestions[0].workOptions[0].sourceObservations[0].target, false);
+  assert.deepEqual(sourceSuggestions[1].workOptions[0].sourceLabels, ["Kinoprogramm"]);
+  assert.equal(sourceSuggestions[1].workOptions[0].sourceObservations[0].target.ref, "kino-1");
 });
 const streamingApplication = buildBlogReferenceApplications(sourceSuggestions, [{
-  candidateId: "c-burn", selected: true,
-  workIdentities: ["streaming:1768658"], manual: false,
+  candidateId: "c-burn", selected: true, workIdentities: [], manual: false,
 }]);
-check("Katalog-IDs entstehen nur aus der bestätigten Quellenoption und bleiben für Persistenz adressierbar", () => {
+check("Shop-only-Katalogtreffer speichert das Werk und nur eine befristete private Quellenbeobachtung", () => {
   assert.equal(streamingApplication.ok, true);
-  assert.equal(streamingApplication.candidates[0].sourceKind, "streaming");
-  assert.deepEqual(streamingApplication.candidates[0].identityHints, [
+  assert.equal(streamingApplication.candidates[0].sourceKind, "work");
+  assert.equal(streamingApplication.candidates[0].ref, null);
+  assert.deepEqual(streamingApplication.candidates[0].workIdentity.identityHints, [
     { namespace: "imdb", value: "tt31170389" },
     { namespace: "watchmode", value: "1768658" },
   ]);
+  assert.equal(streamingApplication.candidates[0].sourceObservations[0].target.ref, "1768658");
+});
+
+const odysseyCandidate = {
+  ...response.data.candidates[1], candidateId: "c-2001", titleSuggestion: "2001: A Space Odyssey", year: 1968,
+};
+const odysseySuggestions = buildBlogReferenceSuggestions([odysseyCandidate], {
+  library: [{ id: "lib-2001", titel: "2001: A Space Odyssey", jahr: 1968, typ: "film" }],
+  streaming: [{ id: "stream-2001", titel: "2001: A Space Odyssey", jahr: 1968, typ: "movie",
+    imdb_id: "tt0062622", watchmode_id: "stream-2001" }],
+  cinema: [{ id: "kino-2001", titel: "2001: A Space Odyssey", jahr: 1968, typ: "film", film_at_id: "kino-2001" }],
+  sourceExpiresAt: { streaming: "2030-01-01T00:05:00.000Z", cinema: "2030-01-01T00:10:00.000Z" },
+});
+check("Dasselbe Werk aus Mediathek, Streaming und Kino erscheint genau einmal ohne Unterauswahl", () => {
+  assert.equal(odysseySuggestions[0].workOptions.length, 1);
+  assert.equal(odysseySuggestions[0].requiresWorkDecision, false);
+  assert.deepEqual(odysseySuggestions[0].workOptions[0].sourceLabels,
+    ["Streaming-Katalog", "Kinoprogramm", "Mediathek"]);
+  const application = buildBlogReferenceApplications(odysseySuggestions, [{
+    candidateId: "c-2001", selected: true, workIdentities: [], manual: false,
+  }]);
+  assert.equal(application.ok, true);
+  assert.equal(application.candidates.length, 1);
+});
+
+check("Widersprüchliche starke IDs werden nicht durch einen ID-losen Fund transitiv verbunden", () => {
+  const conflicts = buildBlogReferenceSuggestions([odysseyCandidate], {
+    library: [{ id: "plain", titel: "2001: A Space Odyssey", jahr: 1968, typ: "film" }],
+    streaming: [
+      { id: "a", titel: "2001: A Space Odyssey", jahr: 1968, typ: "movie", imdb_id: "tt-a" },
+      { id: "b", titel: "2001: A Space Odyssey", jahr: 1968, typ: "movie", imdb_id: "tt-b" },
+    ],
+  });
+  assert.equal(conflicts[0].workOptions.length, 3);
+  assert.equal(conflicts[0].requiresWorkDecision, true);
+});
+
+check("Ein klares Werk ohne Bestand bleibt auto-auflösbar und wird nicht dauerhaft zum Rotlink", () => {
+  const clear = buildBlogReferenceSuggestions([{ ...response.data.candidates[1], candidateId: "c-clear",
+    titleSuggestion: "Unbekannter klarer Film", year: 2025 }]);
+  const application = buildBlogReferenceApplications(clear, [{
+    candidateId: "c-clear", selected: true, workIdentities: [], manual: false,
+  }]);
+  assert.equal(clear[0].requiresWorkDecision, false);
+  assert.equal(application.ok, true);
+  assert.deepEqual(application.candidates[0].resolutionIntent, { kind: "auto" });
+  assert.equal(application.candidates[0].workIdentity.identityHints.length, 0);
 });
 
 const draft = {
@@ -262,16 +326,32 @@ check("Atomare Übernahme bewahrt Reihenfolge, überspringt bestätigte Identit�
   assert.equal(result.addedCount, 2);
   assert.deepEqual(result.draft.references.map((row) => row.ref), ["existing", "dune-1984", "dune-2021"]);
 });
-check("Ein belegter Streaming-Treffer behält Navigationsziel und starke IDs ohne Mediathekwrite", () => {
+check("Ein belegtes Werk behält private Quellenbeobachtung und starke IDs ohne Mediathekwrite", () => {
   const result = applyBlogReferenceSuggestionsToDraft(draft, {
     draftKey: "draft-1", library, candidates: streamingApplication.candidates,
   });
   assert.equal(result.status, "applied");
   assert.equal(result.draft.references[1].primaryTarget, undefined);
-  assert.deepEqual(result.draft.references[1].sourceTarget, {
+  assert.deepEqual(result.draft.references[1].sourceObservations[0].target, {
     kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn",
   });
-  assert.equal(result.draft.references[1].identityHints[0].namespace, "imdb");
+  assert.equal(result.draft.references[1].workIdentity.identityHints[0].namespace, "imdb");
+  assert.equal(result.draft.references[1].ref, null);
+});
+check("Ein späterer Scan erkennt dasselbe Werk auch bei einer Teilmenge starker IDs als Dublette", () => {
+  const existingWork = applyBlogReferenceSuggestionsToDraft(draft, {
+    draftKey: "draft-1", library, candidates: streamingApplication.candidates,
+  }).draft;
+  const repeat = structuredClone(streamingApplication.candidates[0]);
+  repeat.selectionId = "c-burn:repeat";
+  repeat.workIdentity.identityHints = [{ namespace: "imdb", value: "tt31170389" }];
+  repeat.sourceObservations = [];
+  const result = applyBlogReferenceSuggestionsToDraft(existingWork, {
+    draftKey: "draft-1", library, candidates: [repeat],
+  });
+  assert.equal(result.status, "applied");
+  assert.equal(result.addedCount, 0);
+  assert.equal(result.draft.references.length, existingWork.references.length);
 });
 check("Zu wenig Platz und erfundene Modell-IDs ändern keinen gespeicherten Inhalt", () => {
   const full = { ...draft, references: Array.from({ length: 50 }, (_, index) => ({
@@ -289,7 +369,7 @@ check("Zu wenig Platz und erfundene Modell-IDs ändern keinen gespeicherten Inha
   assert.equal(fake.status, "failed");
   assert.equal(fake.draft, draft);
   const forgedSource = structuredClone(streamingApplication.candidates[0]);
-  forgedSource.sourceTarget.ref = "vom-modell-erfunden";
+  forgedSource.sourceObservations[0].unexpected = "vom-modell-erfunden";
   const forged = applyBlogReferenceSuggestionsToDraft(draft, {
     draftKey: "draft-1", library, candidates: [forgedSource],
   });
