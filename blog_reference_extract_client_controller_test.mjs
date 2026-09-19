@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { useBlogReferenceExtractionController } from "./src/controllers/useBlogReferenceExtractionController.js";
 import { useBlogPublicationController } from "./src/controllers/useBlogPublicationController.js";
-import { blogReferenceContentHash } from "./src/lib/blogReferenceExtraction.js";
+import { blogReferenceContentHash, buildBlogReferenceApplications } from "./src/lib/blogReferenceExtraction.js";
 
 const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", { url: "http://localhost/" });
 globalThis.window = dom.window;
@@ -38,6 +38,17 @@ let model = null;
 let pending = [];
 let applied = [];
 const calls = [];
+const catalogCalls = [];
+const catalogService = {
+  async search(query, options = {}) {
+    catalogCalls.push({ query, options });
+    return { status: "ready", version: "mw-test", expiresAt: "2030-01-01T00:05:00.000Z", items: [{
+      id: "stream-dune", titel: "Dune", jahr: 2021, typ: "movie", dienste: ["Netflix"],
+      imdb_id: "tt1160419", watchmode_id: "stream-dune",
+    }] };
+  },
+};
+let controllerNow = Date.parse("2030-01-01T00:00:00Z");
 const service = {
   async runTask(task, payload, options = {}) {
     calls.push({ task, payload, options });
@@ -51,7 +62,7 @@ function Harness() {
       applied.push(input);
       return { status: "applied", addedCount: input.candidates.length };
     },
-    clock: () => Date.parse("2030-01-01T00:00:00Z"),
+    clock: () => controllerNow,
   });
   return null;
 }
@@ -63,7 +74,7 @@ const editor = (text = "Ich sah Dune 2021.", count = 0) => ({
 props = {
   accountScope: "account:a", enabled: true, personalAi: true, editor: editor(),
   library: [{ id: "dune-2021", titel: "Dune", jahr: 2021, typ: "film" }], libraryReady: true,
-  mustwatch: [], mustwatchReady: true,
+  mustwatch: [], mustwatchReady: true, catalogService,
 };
 await act(async () => { root.render(React.createElement(Harness)); await tick(); });
 check("Expliziter Capability-Handshake macht den Start bereit", () => {
@@ -113,7 +124,10 @@ await act(async () => {
 check("Aktuelle Antwort enthält keine Vorauswahl und nur belegte lokale Werkoptionen", () => {
   assert.equal(model.status, "result");
   assert.equal(model.suggestions.length, 1);
-  assert.deepEqual(model.suggestions[0].workOptions.map((option) => option.ref), ["dune-2021"]);
+  assert.deepEqual(model.suggestions[0].workOptions.map((option) => option.ref), ["dune-2021", "stream-dune"]);
+  assert.deepEqual(catalogCalls.map((call) => call.query), ["Dune"]);
+  assert.equal(catalogCalls[0].options.limit, 20);
+  assert.equal(model.sources.streaming.status, "ready");
 });
 
 const selected = [{
@@ -130,6 +144,19 @@ check("Übernahme prüft Health und Textbindung erneut und reicht genau einen at
   assert.equal(applied[0].draftKey, "draft-a");
   assert.equal(calls.filter((call) => call.task === "health").length, 2);
 });
+const streamingSelections = [{
+  candidateId: "c-dune", selected: true, workIdentities: ["streaming:stream-dune"], manual: false,
+}];
+const streamingApplications = buildBlogReferenceApplications(model.suggestions, streamingSelections);
+controllerNow = Date.parse("2030-01-01T00:06:00Z");
+let expiredSourceApply;
+await act(async () => { expiredSourceApply = await model.apply(streamingApplications.candidates); await tick(); });
+check("Ein abgelaufener Quellenstand wird vor der Übernahme verworfen", () => {
+  assert.equal(expiredSourceApply.status, "failed");
+  assert.equal(expiredSourceApply.errorCode, "result-expired");
+  assert.equal(applied.length, 1);
+});
+controllerNow = Date.parse("2030-01-01T00:00:00Z");
 
 props = { ...props, editor: editor(`${props.editor.text} Nachtrag.`) };
 await act(async () => { root.render(React.createElement(Harness)); await tick(); });
@@ -173,7 +200,11 @@ const publicationLibrary = [
   { id: "dune-2021", titel: "Dune", jahr: 2021, typ: "film" },
 ];
 const publicationEmpty = Object.freeze([]);
-const publicationWriteArticles = async () => true;
+let publicationStored = [];
+const publicationWriteArticles = async (updater) => {
+  publicationStored = updater(publicationStored);
+  return true;
+};
 const publicationService = Object.freeze({ capability: async () => ({ ok: true }) });
 function PublicationHarness() {
   publicationModel = useBlogPublicationController({
@@ -209,6 +240,33 @@ check("Der echte Publikationscontroller übernimmt mehrere gleichnamige Werke in
   assert.equal(publicationApply.status, "applied");
   assert.equal(publicationApply.addedCount, 2);
   assert.deepEqual(publicationModel.editor.references.map((row) => row.primaryTarget?.ref), ["dune-1984", "dune-2021"]);
+});
+const directStreamingApplication = {
+  candidateId: "c-burn", selectionId: "c-burn:streaming:1768658", sourceKind: "streaming",
+  ref: "1768658", title: "Evil Dead Burn", year: 2026, mediaType: "film",
+  resolutionIntent: { kind: "auto" },
+  sourceTarget: { kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn", sourceId: "prime" },
+  identityHints: [{ namespace: "imdb", value: "tt31170389" }, { namespace: "watchmode", value: "1768658" }],
+};
+let sourceApply;
+await act(async () => {
+  sourceApply = await publicationModel.actions.onApplyReferenceSuggestions({
+    draftKey: publicationDraft.draftKey, contentHash: publicationHash,
+    candidates: [directStreamingApplication],
+  });
+  await tick();
+});
+let privateSave;
+await act(async () => {
+  privateSave = await publicationModel.actions.onPrivateSave({ draftKey: publicationDraft.draftKey });
+  await tick();
+});
+check("Direkte Streamingquelle bleibt nach privatem Speichern im Reload-Draft adressierbar", () => {
+  assert.equal(sourceApply.status, "applied");
+  assert.equal(privateSave.private.status, "saved");
+  assert.equal(publicationStored[0].liste[2].sourceTarget.ref, "1768658");
+  assert.equal(publicationModel.editor.references[2].primaryTarget.ref, "1768658");
+  assert.equal(publicationStored[0].liste[2].identityHints[0].namespace, "imdb");
 });
 const beforeStale = publicationModel.editor.references.map((row) => row.rowId);
 let publicationStale;

@@ -2,6 +2,8 @@ import {
   BLOG_IDENTITY_NAMESPACES,
   BLOG_MAX_REFERENCES,
   isBlogPublicIdentityHints,
+  isBlogPublicCinemaTarget,
+  isBlogPublicStreamingTarget,
   projectBlogReferenceForReader,
 } from "./blogContract.js";
 import { gleicheEintragAb } from "./artikel.js";
@@ -172,7 +174,9 @@ export function projectPrivateReferenceForPublication(row, rank, libraryById = n
   const result = {
     rowId: text(row?.rowId), rank, title, year, mediaType, resolutionIntent,
   };
-  const identityHints = blogIdentityHints(privateTarget || row);
+  const identityHints = isBlogPublicIdentityHints(row?.identityHints)
+    ? row.identityHints.map((hint) => ({ ...hint }))
+    : blogIdentityHints(privateTarget || row);
   if (identityHints.length) result.identityHints = identityHints;
   return result;
 }
@@ -262,7 +266,9 @@ export function projectPublicBlogReferences(references, {
 export function projectPrivateBlogReferences(references, targetById = new Map(), { ready = true } = {}) {
   return (Array.isArray(references) ? references : []).map((reference, index) => {
     const rowId = text(reference?.rowId);
-    const target = reference?.ref == null ? null : targetById.get(String(reference.ref));
+    const storedTarget = isBlogPublicStreamingTarget(reference?.sourceTarget)
+      || isBlogPublicCinemaTarget(reference?.sourceTarget) ? reference.sourceTarget : null;
+    const target = storedTarget || (reference?.ref == null ? null : targetById.get(String(reference.ref)));
     return Object.freeze({
       rowId,
       rank: index + 1,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   blogReferenceInterpretationLabel,
   blogReferenceKindLabel,
@@ -38,8 +38,16 @@ function WorkOption({ suggestion, option, checked, onChange }) {
   if (option.creator) details.push(option.creator);
   return <label className="kd-blog-suggestion-work kd-touch-checkbox">
     <input type="checkbox" checked={checked} onChange={(event) => onChange(option.identity, event.target.checked)} />
-    <span><strong>{option.title}</strong><small>{details.join(" · ")} · im geladenen Bestand belegt</small></span>
+    <span><strong>{option.title}</strong><small>{details.join(" · ")} · {option.sourceLabel || "Bestand"}</small></span>
   </label>;
+}
+
+function sourceStatusText(sources) {
+  if (!sources) return null;
+  const streaming = ({ ready: "geprüft", partial: "teilweise geprüft", failed: "nicht vollständig verfügbar",
+    unavailable: "nicht verfügbar", "not-requested": "für diese Titel nicht angefragt" })[sources.streaming?.status] || "nicht verfügbar";
+  const cinema = sources.cinema?.status === "ready" ? "geprüft" : "nicht verfügbar";
+  return `Quellenabgleich: Streaming ${streaming}, Kino ${cinema}.`;
 }
 
 export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
@@ -47,9 +55,12 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
   const requestKey = extraction?.binding?.requestId || "none";
   const [selections, setSelections] = useState(() => initialSelections(suggestions));
   const [selectionMessage, setSelectionMessage] = useState("");
+  const [selectionMessageType, setSelectionMessageType] = useState("error");
+  const cardRefs = useRef(new Map());
   useEffect(() => {
     setSelections(initialSelections(suggestions));
     setSelectionMessage("");
+    setSelectionMessageType("error");
   }, [requestKey, suggestions]);
 
   const selectedRows = useMemo(() => Object.values(selections), [selections]);
@@ -57,6 +68,9 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
   const remaining = Math.max(0, BLOG_MAX_REFERENCES - referenceCount);
   const busy = ["running", "applying"].includes(extraction?.status);
   const selectionTooLarge = applications.ok && applications.candidates.length > remaining;
+  const selectedCount = selectedRows.filter((selection) => selection.selected === true).length;
+  const issueSuggestion = applications.ok ? null
+    : suggestions.find((suggestion) => suggestion.candidateId === applications.candidateId) || null;
 
   if (!(extraction?.entryVisible === true || extraction?.visible === true)) return null;
 
@@ -78,30 +92,45 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
       [candidateId]: { ...current[candidateId], ...patch },
     }));
     setSelectionMessage("");
+    setSelectionMessageType("error");
   };
   const toggleWork = (candidateId, identity, checked) => {
     const current = selections[candidateId];
     const workIdentities = new Set(current?.workIdentities || []);
     if (checked) workIdentities.add(identity); else workIdentities.delete(identity);
-    update(candidateId, { workIdentities: [...workIdentities] });
+    update(candidateId, { workIdentities: [...workIdentities], ...(checked ? { manual: false } : {}) });
+  };
+  const focusIssue = (candidateId) => {
+    const node = cardRefs.current.get(candidateId);
+    node?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    node?.focus?.({ preventScroll: true });
   };
   const apply = async () => {
     if (!applications.ok) {
-      setSelectionMessage(applications.reason === "work-decision-required"
-        ? "Wähle für jede markierte Erwähnung mindestens ein konkretes Werk oder bestätige die unverknüpfte Übernahme."
-        : "Die Auswahl ist noch nicht vollständig.");
+      const title = issueSuggestion?.titleSuggestion || "einem markierten Titel";
+      setSelectionMessageType("error");
+      setSelectionMessage(applications.reason === "invalid-manual-selection"
+        ? `Prüfe die manuellen Angaben bei „${title}“. Es wurde nichts übernommen.`
+        : `Entscheidung offen bei „${title}“: Wähle ein belegtes Werk oder „Nur als Blogreferenz“. Es wurde nichts übernommen.`);
+      focusIssue(applications.candidateId);
       return;
     }
     if (applications.candidates.length > remaining) {
+      setSelectionMessageType("error");
       setSelectionMessage(`Für alle ${applications.candidates.length} ausgewählten Werke fehlen Plätze. Es wurde nichts übernommen.`);
       return;
     }
     const result = await extraction.apply(applications.candidates);
     if (result?.status === "applied") {
+      setSelectionMessageType("success");
+      setSelectionMessage(result.addedCount
+        ? `${result.addedCount} Referenz${result.addedCount === 1 ? "" : "en"} übernommen.`
+        : "Die gewählten Werke waren bereits im Entwurf.");
       setSelections(initialSelections(suggestions));
       return;
     }
     if (result?.status !== "applied") {
+      setSelectionMessageType("error");
       setSelectionMessage(result?.errorCode === "selection-too-large"
         ? "Für die gesamte Auswahl ist nicht genug Platz. Es wurde nichts übernommen."
         : "Die Auswahl konnte nicht sicher übernommen werden. Der Entwurf blieb erhalten.");
@@ -119,12 +148,16 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
     {startMessage(extraction.startReason) ? <p className="kd-blog-muted">{startMessage(extraction.startReason)}</p> : null}
     {extraction.status === "running" ? <p role="status" className="kd-blog-muted">Der Text wird geprüft … Du kannst weiter schreiben oder speichern.</p> : null}
     {extraction.partial ? <p role="status" className="kd-blog-notice kd-blog-notice-warning">Die Antwort war teilweise ungültig. Angezeigt werden nur vollständig belegte Vorschläge.</p> : null}
-    {extraction.message ? <p role={extraction.errorCode ? "alert" : "status"} className={extraction.errorCode ? "kd-blog-error" : "kd-blog-muted"}>{extraction.message}</p> : null}
+    {extraction.message && !suggestions.length ? <p role={extraction.errorCode ? "alert" : "status"} className={extraction.errorCode ? "kd-blog-error" : "kd-blog-muted"}>{extraction.message}</p> : null}
+    {sourceStatusText(extraction.sources) ? <p className="kd-blog-muted">{sourceStatusText(extraction.sources)}</p> : null}
     {suggestions.length ? <div className="kd-blog-suggestions" aria-label="Gefundene Erwähnungen">
       {suggestions.map((suggestion) => {
         const selection = selections[suggestion.candidateId] || {};
         const evidenceSource = suggestion.evidence.field === "title" ? "Überschrift" : "Blogtext";
-        return <article key={suggestion.candidateId} className="kd-blog-suggestion">
+        const rowIssue = issueSuggestion?.candidateId === suggestion.candidateId && selection.selected === true;
+        return <article key={suggestion.candidateId} className={`kd-blog-suggestion${rowIssue ? " kd-blog-suggestion-open" : ""}`}
+          ref={(node) => node ? cardRefs.current.set(suggestion.candidateId, node) : cardRefs.current.delete(suggestion.candidateId)}
+          tabIndex="-1">
           <label className="kd-blog-check kd-touch-checkbox kd-blog-suggestion-mention">
             <input type="checkbox" checked={selection.selected === true}
               onChange={(event) => update(suggestion.candidateId, { selected: event.target.checked })} />
@@ -132,7 +165,8 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
           </label>
           <p className="kd-blog-suggestion-evidence"><span>{evidenceSource}:</span> <q>{suggestion.evidence.quote}</q></p>
           {selection.selected ? <fieldset className="kd-blog-suggestion-decisions">
-            <legend>Konkrete Werke auswählen</legend>
+            <legend>Werk oder reine Blogreferenz wählen</legend>
+            <p className="kd-blog-muted">Wähle ein oder mehrere belegte Werke. Wenn keines passt, übernimm nur die Blogreferenz.</p>
             {suggestion.workOptions.length ? suggestion.workOptions.map((option) => <WorkOption
               key={option.identity} suggestion={suggestion} option={option}
               checked={(selection.workIdentities || []).includes(option.identity)}
@@ -140,8 +174,11 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
               : <p className="kd-blog-muted">Im bereits geladenen Bestand wurde kein eindeutiges Werk gefunden.</p>}
             <label className="kd-blog-suggestion-work kd-touch-checkbox">
               <input type="checkbox" checked={selection.manual === true}
-                onChange={(event) => update(suggestion.candidateId, { manual: event.target.checked })} />
-              <span><strong>Manuell und unverknüpft übernehmen</strong><small>Bleibt transparent ein Rotlink, bis du ihn später ergänzt.</small></span>
+                onChange={(event) => update(suggestion.candidateId, {
+                  manual: event.target.checked,
+                  ...(event.target.checked ? { workIdentities: [] } : {}),
+                })} />
+              <span><strong>Nur als Blogreferenz</strong><small>Erzeugt keinen Mediathek-Eintrag. Du kannst ihn später ausdrücklich ergänzen.</small></span>
             </label>
             {selection.manual ? <div className="kd-blog-suggestion-manual">
               <label>Titel<input value={selection.manualTitle || ""} onChange={(event) => update(suggestion.candidateId, { manualTitle: event.target.value })} /></label>
@@ -150,16 +187,25 @@ export function BlogReferenceSuggestions({ extraction, referenceCount = 0 }) {
                 <option value="film">Film</option><option value="serie">Serie</option><option value="musik">Musik</option><option value="sonstiges">Sonstiges</option>
               </select></label>
             </div> : null}
+            {rowIssue ? <p className="kd-blog-error" role="alert">Für diesen markierten Titel fehlt noch eine Entscheidung.</p> : null}
           </fieldset> : null}
         </article>;
       })}
       <div className="kd-blog-suggestion-apply">
-        <p className="kd-blog-muted">Kein Vorschlag ist vorausgewählt.</p>
-        <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={busy || !applications.ok || selectionTooLarge}
+        <p className="kd-blog-muted">{selectedCount === 0
+          ? "Kein Vorschlag ist vorausgewählt."
+          : applications.ok
+            ? `${selectedCount} Erwähnung${selectedCount === 1 ? "" : "en"} markiert · ${applications.candidates.length} Referenz${applications.candidates.length === 1 ? "" : "en"} bereit.`
+            : `Entscheidung offen bei „${issueSuggestion?.titleSuggestion || "markierter Erwähnung"}“.`}</p>
+        <button type="button" className="kd-blog-button kd-blog-button-primary" disabled={busy || selectedCount === 0 || selectionTooLarge}
           onClick={() => void apply()}>{extraction.status === "applying" ? "Übernimmt …" : "Ausgewählte übernehmen"}</button>
       </div>
       {selectionTooLarge ? <p className="kd-blog-error" role="alert">Für die gesamte Auswahl ist nicht genug Platz. Es wurde nichts übernommen.</p> : null}
-      {selectionMessage ? <p className="kd-blog-error" role="alert">{selectionMessage}</p> : null}
+      {selectionMessage ? <p className={selectionMessageType === "success" ? "kd-blog-muted" : "kd-blog-error"}
+        role={selectionMessageType === "success" ? "status" : "alert"}>{selectionMessage}</p> : null}
+      {!selectionMessage && extraction.message
+        ? <p role={extraction.errorCode ? "alert" : "status"} className={extraction.errorCode ? "kd-blog-error" : "kd-blog-muted"}>{extraction.message}</p>
+        : null}
     </div> : null}
   </section>;
 }

@@ -1,5 +1,6 @@
 import { norm } from "./match.js";
 import { normalisiereTyp } from "./typen.js";
+import { blogIdentityHints, canonicalBlogSourceIds } from "./blogReferenceProjection.js";
 
 export const BLOG_REFERENCE_EXTRACT_CONTRACT = "blog-reference-extract-v1";
 export const BLOG_REFERENCE_EXTRACT_TASK = "blog-reference-extract";
@@ -7,6 +8,9 @@ export const BLOG_REFERENCE_EXTRACT_MAX_TITLE_BYTES = 512;
 export const BLOG_REFERENCE_EXTRACT_MAX_TEXT_BYTES = 18000;
 export const BLOG_REFERENCE_EXTRACT_MAX_CANDIDATES = 50;
 export const BLOG_REFERENCE_EXTRACT_MAX_RESULT_BYTES = 32768;
+export const BLOG_REFERENCE_STREAMING_MAX_QUERIES = 8;
+export const BLOG_REFERENCE_STREAMING_QUERY_LIMIT = 20;
+export const BLOG_REFERENCE_SOURCE_TTL_MS = 5 * 60 * 1000;
 
 const CANDIDATE_KEYS = Object.freeze([
   "candidateId", "mention", "titleSuggestion", "kind", "year", "interpretation", "evidence",
@@ -157,7 +161,12 @@ function itemYear(item) {
   const value = item?.jahr ?? item?.year;
   return Number.isInteger(value) ? value : null;
 }
-function itemType(item) { return normalisiereTyp(item?.typ || item?.mediaType || "sonstiges"); }
+function itemType(item) {
+  const raw = String(item?.typ || item?.mediaType || "sonstiges").trim().toLocaleLowerCase("de-AT");
+  if (["movie", "film"].includes(raw)) return "film";
+  if (["tv_series", "series", "serie", "tv", "show"].includes(raw)) return "serie";
+  return normalisiereTyp(raw);
+}
 function itemCreator(item) {
   for (const field of ["regie", "director", "kuenstler", "künstler", "artist", "interpret", "autor", "author"]) {
     const value = item?.[field];
@@ -168,6 +177,31 @@ function itemCreator(item) {
     }
   }
   return null;
+}
+
+const SOURCE_LABELS = Object.freeze({
+  library: "Mediathek", mustwatch: "Merkliste",
+  streaming: "Streaming-Katalog", cinema: "Kinoprogramm",
+});
+
+function sourceEvidence(source, item, ref, title) {
+  const identityHints = blogIdentityHints(item);
+  if (source.kind === "streaming") {
+    const sourceId = canonicalBlogSourceIds(item?.dienste || [])[0] || null;
+    if (!sourceId || identityHints.length === 0) return null;
+    return {
+      sourceTarget: { kind: "streaming", art: "entdecken", ref, titel: title, sourceId },
+      identityHints,
+    };
+  }
+  if (source.kind === "cinema") {
+    if (!identityHints.some((hint) => hint.namespace === "film_at")) return null;
+    return {
+      sourceTarget: { kind: "cinema", art: "programm", ref, titel: title },
+      identityHints,
+    };
+  }
+  return { sourceTarget: null, identityHints };
 }
 
 function workOptions(candidate, sources) {
@@ -187,10 +221,14 @@ function workOptions(candidate, sources) {
       if (candidate.year !== null && year !== candidate.year) continue;
       const identity = `${source.kind}:${ref}`;
       if (seen.has(identity)) continue;
+      const evidence = sourceEvidence(source, item, ref, title);
+      if (!evidence) continue;
       seen.add(identity);
       options.push(Object.freeze({
         identity, sourceKind: source.kind, ref, title, year, mediaType,
-        creator: itemCreator(item),
+        creator: itemCreator(item), sourceLabel: SOURCE_LABELS[source.kind] || "Bestand",
+        sourceTarget: evidence.sourceTarget,
+        identityHints: Object.freeze(evidence.identityHints.map((hint) => Object.freeze({ ...hint }))),
       }));
     }
   }
@@ -198,13 +236,117 @@ function workOptions(candidate, sources) {
     || a.title.localeCompare(b.title, "de"));
 }
 
-export function buildBlogReferenceSuggestions(candidates, { library = [], mustwatch = [] } = {}) {
-  const sources = [{ kind: "library", items: library }, { kind: "mustwatch", items: mustwatch }];
+export function buildBlogReferenceSuggestions(candidates, {
+  library = [], mustwatch = [], streaming = [], cinema = [],
+} = {}) {
+  const sources = [
+    { kind: "library", items: library }, { kind: "mustwatch", items: mustwatch },
+    { kind: "streaming", items: streaming }, { kind: "cinema", items: cinema },
+  ];
   return Object.freeze((Array.isArray(candidates) ? candidates : []).map((candidate) => Object.freeze({
     ...candidate,
     mediaType: MEDIA_TYPE_BY_KIND[candidate.kind] || null,
     workOptions: Object.freeze(workOptions(candidate, sources)),
   })));
+}
+
+function cinemaItems(program) {
+  const films = Array.isArray(program) ? program : Array.isArray(program?.filme) ? program.filme : [];
+  return films.map((item) => {
+    const id = String(item?.film_at_id ?? item?.filmAtId ?? "").trim();
+    const title = String(item?.t ?? item?.titel ?? item?.title ?? "").trim();
+    if (!id || !title) return null;
+    return Object.freeze({
+      ...item, id, titel: title, jahr: Number.isInteger(item?.j ?? item?.jahr) ? (item.j ?? item.jahr) : null,
+      typ: "film", film_at_id: id,
+    });
+  }).filter(Boolean);
+}
+
+function sourceExpiry(value, now, fallback) {
+  const parsed = typeof value === "number" && Number.isFinite(value)
+    ? value : Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? Math.min(parsed, fallback) : fallback;
+}
+
+export async function resolveBlogReferenceCatalogSources(candidates, {
+  streamingService = null,
+  cinema = [],
+  cinemaReady = false,
+  cinemaExpiresAt = null,
+  signal = null,
+  clock = () => Date.now(),
+} = {}) {
+  const now = clock();
+  const localExpiry = now + BLOG_REFERENCE_SOURCE_TTL_MS;
+  const queries = [];
+  const seenQueries = new Set();
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    if (!["film", "series", "title_group", "unclear"].includes(candidate?.kind)) continue;
+    const query = String(candidate?.titleSuggestion || "").trim();
+    const key = norm(query);
+    if (!key || seenQueries.has(key)) continue;
+    seenQueries.add(key);
+    queries.push(query);
+  }
+  const boundedQueries = queries.slice(0, BLOG_REFERENCE_STREAMING_MAX_QUERIES);
+  const streamingItems = new Map();
+  let streamingVersion = null;
+  let streamingExpiry = localExpiry;
+  let streamingStatus = boundedQueries.length === 0 ? "not-requested"
+    : typeof streamingService?.search === "function" ? "ready" : "unavailable";
+  let streamingCompleted = 0;
+  if (streamingStatus === "ready") {
+    try {
+      for (const query of boundedQueries) {
+        if (signal?.aborted) throw Object.assign(new Error("aborted"), { name: "AbortError" });
+        const response = await streamingService.search(query, {
+          signal, limit: BLOG_REFERENCE_STREAMING_QUERY_LIMIT,
+        });
+        if (response?.status !== "ready") {
+          streamingStatus = streamingCompleted > 0 ? "partial" : "unavailable";
+          break;
+        }
+        if (streamingVersion !== null && response.version !== streamingVersion) {
+          streamingStatus = "failed";
+          streamingItems.clear();
+          break;
+        }
+        streamingVersion = response.version;
+        streamingExpiry = sourceExpiry(response.expiresAt, now, streamingExpiry);
+        for (const item of Array.isArray(response.items) ? response.items : []) {
+          const id = String(item?.id ?? "").trim();
+          if (id) streamingItems.set(id, item);
+        }
+        streamingCompleted += 1;
+      }
+      if (streamingStatus === "ready" && queries.length > boundedQueries.length) streamingStatus = "partial";
+    } catch (error) {
+      if (error?.name === "AbortError" || signal?.aborted) throw error;
+      streamingStatus = streamingCompleted > 0 ? "partial" : "failed";
+    }
+  }
+  const parsedCinemaExpiry = typeof cinemaExpiresAt === "number" && Number.isFinite(cinemaExpiresAt)
+    ? cinemaExpiresAt : Date.parse(String(cinemaExpiresAt || ""));
+  const cinemaCurrent = cinemaReady === true
+    && (!Number.isFinite(parsedCinemaExpiry) || parsedCinemaExpiry > now);
+  const cinemaStatus = cinemaCurrent ? "ready" : "unavailable";
+  return Object.freeze({
+    streaming: Object.freeze({
+      status: streamingStatus,
+      items: Object.freeze([...streamingItems.values()]),
+      queried: streamingCompleted,
+      totalQueries: queries.length,
+      version: streamingVersion,
+      expiresAt: new Date(Math.max(now + 1, streamingExpiry)).toISOString(),
+    }),
+    cinema: Object.freeze({
+      status: cinemaStatus,
+      items: Object.freeze(cinemaCurrent ? cinemaItems(cinema) : []),
+      expiresAt: cinemaCurrent
+        ? new Date(sourceExpiry(cinemaExpiresAt, now, localExpiry)).toISOString() : null,
+    }),
+  });
 }
 
 export function buildBlogReferenceApplications(suggestions, selections) {
@@ -216,9 +358,12 @@ export function buildBlogReferenceApplications(suggestions, selections) {
     if (!suggestion || selection.selected !== true) continue;
     const optionById = new Map(suggestion.workOptions.map((option) => [option.identity, option]));
     const selectedWorks = Array.isArray(selection.workIdentities) ? selection.workIdentities : [];
+    if (selection.manual === true && selectedWorks.length > 0) {
+      return { ok: false, reason: "conflicting-work-selection", candidateId: suggestion.candidateId, candidates: [] };
+    }
     for (const identity of selectedWorks) {
       const option = optionById.get(identity);
-      if (!option) return { ok: false, reason: "invalid-work-selection", candidates: [] };
+      if (!option) return { ok: false, reason: "invalid-work-selection", candidateId: suggestion.candidateId, candidates: [] };
       result.push({
         candidateId: suggestion.candidateId,
         selectionId: `${suggestion.candidateId}:${option.identity}`,
@@ -228,6 +373,10 @@ export function buildBlogReferenceApplications(suggestions, selections) {
         year: option.year,
         mediaType: option.mediaType,
         resolutionIntent: { kind: "auto" },
+        ...(option.sourceKind === "streaming" || option.sourceKind === "cinema" ? {
+          sourceTarget: option.sourceTarget,
+          identityHints: option.identityHints,
+        } : {}),
       });
     }
     if (selection.manual === true) {
@@ -238,7 +387,7 @@ export function buildBlogReferenceApplications(suggestions, selections) {
       if (!title || !["film", "serie", "musik", "sonstiges"].includes(mediaType)
           || (year !== null && (!Number.isInteger(year)
             || year < yearMinForMediaType(mediaType) || year > YEAR_MAX))) {
-        return { ok: false, reason: "invalid-manual-selection", candidates: [] };
+        return { ok: false, reason: "invalid-manual-selection", candidateId: suggestion.candidateId, candidates: [] };
       }
       result.push({
         candidateId: suggestion.candidateId,
@@ -252,7 +401,7 @@ export function buildBlogReferenceApplications(suggestions, selections) {
       });
     }
     if (selectedWorks.length === 0 && selection.manual !== true) {
-      return { ok: false, reason: "work-decision-required", candidates: [] };
+      return { ok: false, reason: "work-decision-required", candidateId: suggestion.candidateId, candidates: [] };
     }
   }
   if (result.length === 0) return { ok: false, reason: "empty-selection", candidates: [] };

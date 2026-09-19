@@ -1335,6 +1335,14 @@ export default function App() {
     libraryReady: isBlogLibraryReady(bootDone, masterReadStatus, master != null),
     mustwatch,
     mustwatchReady: mustwatchGeladen,
+    cinema: programm,
+    cinemaReady: !!programm && !!programmInfo
+      && programmInfo.abgelaufen !== true && !programmInfo.fehler,
+    cinemaExpiresAt: programmInfo?.gueltigBis || null,
+    sourceContextKey: [
+      programmInfo?.art || "", programmInfo?.stand || "", programmInfo?.gueltigBis || "",
+      programmInfo?.abgelaufen === true ? "expired" : "current", programmInfo?.fehler ? "failed" : "ok",
+    ].join("|"),
     onApplyReferenceSuggestions: blogPublicationController.actions.onApplyReferenceSuggestions,
     onOpenSettings: oeffnePersonalisierungKi,
   });

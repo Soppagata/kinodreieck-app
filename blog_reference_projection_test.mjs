@@ -5,6 +5,7 @@ import {
   buildPrivateBlogTargetIndex,
   canonicalBlogSourceIds,
   projectPrivateArticleForPublication,
+  projectPrivateBlogReferences,
   projectPublicBlogReferences,
 } from "./src/lib/blogReferenceProjection.js";
 
@@ -174,6 +175,19 @@ check("Bestehende Must-Watch-Rückverweise bleiben echte Bibliotheks-, Streaming
   privateTargets.get("mw-library")?.kind === "library"
   && privateTargets.get("mw-stream")?.kind === "streaming"
   && privateTargets.get("mw-cinema")?.kind === "cinema");
+const directStreamingRow = {
+  rowId: "direct-stream", eingabe: "Evil Dead Burn", jahr: 2026, typ: "film", ref: "1768658",
+  sourceTarget: { kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn", sourceId: "prime" },
+  identityHints: [{ namespace: "imdb", value: "tt31170389" }, { namespace: "watchmode", value: "1768658" }],
+  resolutionIntent: { kind: "auto" },
+};
+check("Direkt bestätigte Streamingziele bleiben nach privatem Reload ohne Mediathekzeile navigierbar",
+  projectPrivateBlogReferences([directStreamingRow], new Map(), { ready: true })[0].primaryTarget?.ref === "1768658");
+check("Direkt belegte starke IDs gelangen ohne private Ref in die Publikationsprojektion", (() => {
+  const projected = projectPrivateArticleForPublication({ titel: "Scan", text: "Evil Dead Burn", liste: [directStreamingRow] }, []);
+  return projected.references[0].identityHints?.some((hint) => hint.namespace === "imdb"
+    && hint.value === "tt31170389") && !("ref" in projected.references[0]);
+})());
 check("Starke Hinweise enthalten keine private Mediathek-ID",
   JSON.stringify(blogIdentityHints(library[0])) === JSON.stringify([
     { namespace: "imdb", value: "tt0076759" }, { namespace: "tmdb", value: "11" },

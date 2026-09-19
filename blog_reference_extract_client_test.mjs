@@ -6,6 +6,7 @@ import {
   buildBlogReferenceApplications,
   buildBlogReferenceSuggestions,
   readBlogReferenceExtractCapability,
+  resolveBlogReferenceCatalogSources,
   validateBlogReferenceExtractionInput,
   validateBlogReferenceExtractionResponse,
 } from "./src/lib/blogReferenceExtraction.js";
@@ -135,11 +136,103 @@ check("Erwähnung und konkrete Werke sind getrennt und nie vorausgewählt", () =
   assert.equal(empty.reason, "work-decision-required");
   const selected = buildBlogReferenceApplications(suggestions, [{
     candidateId: "c-dune", selected: true,
-    workIdentities: ["library:dune-2021"], manual: true,
+    workIdentities: ["library:dune-2021"], manual: false,
     manualTitle: "Dune (Essay)", manualYear: "2021", manualType: "sonstiges",
   }]);
   assert.equal(selected.ok, true);
-  assert.deepEqual(selected.candidates.map((candidate) => candidate.ref), ["dune-2021", null]);
+  assert.deepEqual(selected.candidates.map((candidate) => candidate.ref), ["dune-2021"]);
+  const conflicting = buildBlogReferenceApplications(suggestions, [{
+    candidateId: "c-dune", selected: true,
+    workIdentities: ["library:dune-2021"], manual: true,
+    manualTitle: "Dune", manualYear: "2021", manualType: "film",
+  }]);
+  assert.equal(conflicting.reason, "conflicting-work-selection");
+});
+
+let sourceActive = 0;
+let sourceMaxActive = 0;
+const sourceCalls = [];
+const sourceCandidates = [
+  { ...response.data.candidates[1], candidateId: "c-burn", titleSuggestion: "Evil Dead Burn", year: 2026 },
+  { ...response.data.candidates[1], candidateId: "c-cinema", titleSuggestion: "Kinofilm", year: 2026 },
+  { ...response.data.candidates[0], candidateId: "c-music-source" },
+];
+const sources = await resolveBlogReferenceCatalogSources(sourceCandidates, {
+  streamingService: { search: async (query, { limit }) => {
+    sourceCalls.push({ query, limit });
+    sourceActive += 1;
+    sourceMaxActive = Math.max(sourceMaxActive, sourceActive);
+    await Promise.resolve();
+    sourceActive -= 1;
+    return { status: "ready", version: "mw1-69", expiresAt: "2030-01-01T00:05:00.000Z", items: query === "Evil Dead Burn" ? [{
+      id: "1768658", titel: "Evil Dead Burn", jahr: 2026, typ: "movie",
+      dienste: ["Prime Video"], watchmode_id: "1768658", imdb_id: "tt31170389",
+    }] : [] };
+  } },
+  cinema: { filme: [{ film_at_id: "kino-1", t: "Kinofilm", j: 2026 }] },
+  cinemaReady: true,
+  cinemaExpiresAt: "2030-01-01T00:10:00.000Z",
+  clock: () => Date.parse("2030-01-01T00:00:00.000Z"),
+});
+check("Streaming-Suchen laufen dedupliziert und seriell; Musik löst keine Katalogsuche aus", () => {
+  assert.deepEqual(sourceCalls, [
+    { query: "Evil Dead Burn", limit: 20 }, { query: "Kinofilm", limit: 20 },
+  ]);
+  assert.equal(sourceMaxActive, 1);
+  assert.equal(sources.streaming.status, "ready");
+  assert.equal(sources.cinema.status, "ready");
+});
+let failedLookupCalls = 0;
+const failedSources = await resolveBlogReferenceCatalogSources(sourceCandidates, {
+  streamingService: { search: async () => { failedLookupCalls += 1; throw new Error("429"); } },
+  cinema: { filme: [{ film_at_id: "expired-kino", t: "Kinofilm", j: 2026 }] },
+  cinemaReady: true,
+  cinemaExpiresAt: Date.parse("2029-12-31T23:59:59.000Z"),
+  clock: () => Date.parse("2030-01-01T00:00:00.000Z"),
+});
+check("Ein Quellenfehler stoppt ohne Retry und ungeladene Quellen werden nicht als geprüft ausgegeben", () => {
+  assert.equal(failedLookupCalls, 1);
+  assert.equal(failedSources.streaming.status, "failed");
+  assert.equal(failedSources.cinema.status, "unavailable");
+  assert.equal(failedSources.streaming.items.length, 0);
+});
+let boundedCalls = 0;
+const boundedSources = await resolveBlogReferenceCatalogSources(Array.from({ length: 10 }, (_, index) => ({
+  kind: "film", titleSuggestion: `Titel ${index}`,
+})), {
+  streamingService: { search: async () => {
+    boundedCalls += 1;
+    return { status: "ready", version: "mw1", expiresAt: "2030-01-01T00:05:00.000Z", items: [] };
+  } },
+  clock: () => Date.parse("2030-01-01T00:00:00.000Z"),
+});
+check("Der gezielte Streamingabgleich bleibt bei acht seriellen Suchbegriffen begrenzt", () => {
+  assert.equal(boundedCalls, 8);
+  assert.equal(boundedSources.streaming.status, "partial");
+  assert.equal(boundedSources.streaming.totalQueries, 10);
+});
+const sourceSuggestions = buildBlogReferenceSuggestions(sourceCandidates, {
+  streaming: sources.streaming.items,
+  cinema: sources.cinema.items,
+});
+check("Vorhandene Streaming- und Kino-IDs werden typgerecht und mit sichtbarer Herkunft angeboten", () => {
+  assert.equal(sourceSuggestions[0].workOptions[0].mediaType, "film");
+  assert.equal(sourceSuggestions[0].workOptions[0].sourceLabel, "Streaming-Katalog");
+  assert.equal(sourceSuggestions[0].workOptions[0].sourceTarget.ref, "1768658");
+  assert.equal(sourceSuggestions[1].workOptions[0].sourceLabel, "Kinoprogramm");
+  assert.equal(sourceSuggestions[1].workOptions[0].sourceTarget.ref, "kino-1");
+});
+const streamingApplication = buildBlogReferenceApplications(sourceSuggestions, [{
+  candidateId: "c-burn", selected: true,
+  workIdentities: ["streaming:1768658"], manual: false,
+}]);
+check("Katalog-IDs entstehen nur aus der bestätigten Quellenoption und bleiben für Persistenz adressierbar", () => {
+  assert.equal(streamingApplication.ok, true);
+  assert.equal(streamingApplication.candidates[0].sourceKind, "streaming");
+  assert.deepEqual(streamingApplication.candidates[0].identityHints, [
+    { namespace: "imdb", value: "tt31170389" },
+    { namespace: "watchmode", value: "1768658" },
+  ]);
 });
 
 const draft = {
@@ -167,6 +260,17 @@ check("Atomare Übernahme bewahrt Reihenfolge, überspringt bestätigte Identit�
   assert.equal(result.addedCount, 2);
   assert.deepEqual(result.draft.references.map((row) => row.ref), ["existing", "dune-1984", "dune-2021"]);
 });
+check("Ein belegter Streaming-Treffer behält Navigationsziel und starke IDs ohne Mediathekwrite", () => {
+  const result = applyBlogReferenceSuggestionsToDraft(draft, {
+    draftKey: "draft-1", library, candidates: streamingApplication.candidates,
+  });
+  assert.equal(result.status, "applied");
+  assert.equal(result.draft.references[1].primaryTarget, undefined);
+  assert.deepEqual(result.draft.references[1].sourceTarget, {
+    kind: "streaming", art: "entdecken", ref: "1768658", titel: "Evil Dead Burn", sourceId: "prime",
+  });
+  assert.equal(result.draft.references[1].identityHints[0].namespace, "imdb");
+});
 check("Zu wenig Platz und erfundene Modell-IDs ändern keinen gespeicherten Inhalt", () => {
   const full = { ...draft, references: Array.from({ length: 50 }, (_, index) => ({
     rowId: `row-${index}`, title: `Titel ${index}`, year: 2000, mediaType: "film", ref: `ref-${index}`,
@@ -182,6 +286,13 @@ check("Zu wenig Platz und erfundene Modell-IDs ändern keinen gespeicherten Inha
   });
   assert.equal(fake.status, "failed");
   assert.equal(fake.draft, draft);
+  const forgedSource = structuredClone(streamingApplication.candidates[0]);
+  forgedSource.sourceTarget.ref = "vom-modell-erfunden";
+  const forged = applyBlogReferenceSuggestionsToDraft(draft, {
+    draftKey: "draft-1", library, candidates: [forgedSource],
+  });
+  assert.equal(forged.status, "failed");
+  assert.equal(forged.draft, draft);
 });
 
 let sent = null;

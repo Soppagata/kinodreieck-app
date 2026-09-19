@@ -16,8 +16,13 @@ Der vorhandene Referenzvertrag unterstützt bereits `film`, `serie`, `musik`,
 `sonstiges`. KI-Kategorien `film`, `series`, `music`, `other` werden darauf
 abgebildet. `title_group` und `unclear` brauchen eine konkrete Nutzerentscheidung.
 Musik/Sonstiges werden niemals als Film behandelt. Belegte Werke kommen aus
-der eigenen bereits geladenen Mediathek und gegebenenfalls bereits geladenen
-Bestandskatalogen; keine neue externe Katalogabfrage oder Vollkatalogladung.
+der eigenen bereits geladenen Mediathek, der Merkliste, dem bereits geladenen
+aktuellen Kinoprogramm und einer nach dem ausdrücklichen Scan begrenzten Suche
+im vorhandenen serverseitigen Streamingbestand. Diese Suche verwendet den
+kontogebundenen `kd_mustwatch_streaming_candidates`-Pfad seriell und dedupliziert
+für höchstens acht Titel mit höchstens 20 Treffern je Titel. Sein positiver und
+negativer Cache wird wiederverwendet; es gibt keinen automatischen Retry, keine
+Providerabfrage und keine Vollkatalogladung.
 Für Musik/Sonstiges besteht kein belegter externer Resolver. Nicht gefundene
 Inhalte bleiben nach ausdrücklicher Bestätigung manuell/unverknüpft erfassbar.
 Urheber/Jahr werden als Werkdaten nur angezeigt, soweit der Bestand sie belegt.
@@ -116,6 +121,12 @@ konkrete Werkauswahl sichtbar unterscheiden; mehrere gleichnamige Werke dürfen
 bewusst übernommen werden. Mehrdeutige Film-/Musik-/Sonstiges-Werke nebeneinander
 anbieten; Typ/Jahr/Urheber nur mit Bestandsbeleg. Keine reine Titelgleichheit
 bei widersprechenden IDs, Typen oder Jahren; keine unscharfe automatische Bindung.
+Streaming- und Kinotreffer zeigen ihre Herkunft. Nicht geladene, abgelaufene
+oder fehlgeschlagene Quellen werden ausdrücklich als nicht vollständig geprüft
+angezeigt. Quellenstand und Ablaufzeit gehören zur Entwurfsbindung; nach Ablauf
+ist vor der Übernahme ein neuer Scan nötig. Die Option „Nur als Blogreferenz“
+erzeugt keinen Mediathek-Eintrag und bleibt bis zu einer späteren ausdrücklichen
+Ergänzung unverknüpft.
 
 `onApplyReferenceSuggestions({ draftKey, contentHash, candidates })` prüft die
 aktuelle Liste, erhält Reihenfolge/Identitäten und fügt die gesamte Auswahl in

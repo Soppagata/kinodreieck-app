@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiService } from "../services/ai.js";
+import { mustwatchCandidatesService } from "../services/mustwatchCandidates.js";
 import { errorText } from "../services/errors.js";
 import {
   BLOG_REFERENCE_EXTRACT_MAX_CANDIDATES,
@@ -8,6 +9,7 @@ import {
   blogReferenceHealthPayload,
   buildBlogReferenceSuggestions,
   readBlogReferenceExtractCapability,
+  resolveBlogReferenceCatalogSources,
   validateBlogReferenceExtractionInput,
   validateBlogReferenceExtractionResponse,
 } from "../lib/blogReferenceExtraction.js";
@@ -15,7 +17,7 @@ import { BLOG_MAX_REFERENCES } from "../lib/blogContract.js";
 
 const idleScan = () => ({
   status: "idle", binding: null, suggestions: [], partial: false, expiresAt: null,
-  errorCode: null, message: null, appliedCount: 0,
+  sources: null, errorCode: null, message: null, appliedCount: 0,
 });
 
 function requestId() {
@@ -31,7 +33,8 @@ function sameEditor(snapshot, current) {
     && snapshot.accountScope === current.accountScope
     && snapshot.draftKey === current.draftKey
     && snapshot.title === current.title
-    && snapshot.text === current.text;
+    && snapshot.text === current.text
+    && snapshot.sourceContextKey === current.sourceContextKey;
 }
 
 function localError(reason) {
@@ -57,6 +60,11 @@ export function useBlogReferenceExtractionController({
   libraryReady = false,
   mustwatch = [],
   mustwatchReady = false,
+  cinema = [],
+  cinemaReady = false,
+  cinemaExpiresAt = null,
+  sourceContextKey = "",
+  catalogService = mustwatchCandidatesService,
   service = aiService,
   onApplyReferenceSuggestions,
   onOpenSettings,
@@ -74,10 +82,12 @@ export function useBlogReferenceExtractionController({
   const editorSnapshot = editor ? {
     accountScope, draftKey: editor.draftKey, title: String(editor.title || ""),
     text: String(editor.text || ""), referenceCount: Array.isArray(editor.references) ? editor.references.length : 0,
+    sourceContextKey: String(sourceContextKey || ""),
   } : null;
   propsRef.current = {
     accountScope, enabled, personalAi, editor: editorSnapshot,
     library: libraryReady ? library : [], mustwatch: mustwatchReady ? mustwatch : [],
+    cinema: cinemaReady ? cinema : [], cinemaReady, cinemaExpiresAt, catalogService,
     onApplyReferenceSuggestions,
   };
 
@@ -96,7 +106,8 @@ export function useBlogReferenceExtractionController({
     invalidateRequest();
     invalidateApply();
     setScan(idleScan());
-  }, [accountScope, editor?.draftKey, editor?.title, editor?.text, enabled, personalAi, invalidateApply, invalidateRequest]);
+  }, [accountScope, editor?.draftKey, editor?.title, editor?.text, enabled, personalAi,
+    sourceContextKey, invalidateApply, invalidateRequest]);
 
   useEffect(() => {
     healthRef.current?.abort();
@@ -185,14 +196,27 @@ export function useBlogReferenceExtractionController({
         setScan({ ...idleScan(), status: "error", binding, errorCode: "invalid-response", message: localError("invalid-response") });
         return false;
       }
+      const sources = await resolveBlogReferenceCatalogSources(validated.value.candidates, {
+        streamingService: current.catalogService,
+        cinema: current.cinema,
+        cinemaReady: current.cinemaReady,
+        cinemaExpiresAt: current.cinemaExpiresAt,
+        signal: controller.signal,
+        clock,
+      });
+      if (requestRef.current !== run || controller.signal.aborted
+          || !sameEditor(snapshot, propsRef.current.editor)
+          || !propsRef.current.enabled || !propsRef.current.personalAi) return false;
       const suggestions = buildBlogReferenceSuggestions(validated.value.candidates, {
         library: propsRef.current.library,
         mustwatch: propsRef.current.mustwatch,
+        streaming: sources.streaming.items,
+        cinema: sources.cinema.items,
       });
       setScan({
         status: "result", binding, suggestions,
         partial: validated.value.partial, expiresAt: validated.value.expiresAt,
-        errorCode: null, message: suggestions.length === 0 ? "Keine Titel gefunden." : null,
+        sources, errorCode: null, message: suggestions.length === 0 ? "Keine Titel gefunden." : null,
         appliedCount: 0,
       });
       return true;
@@ -204,7 +228,7 @@ export function useBlogReferenceExtractionController({
       if (requestRef.current === run) requestRef.current = null;
       if (startRef.current === startToken) startRef.current = null;
     }
-  }, [capability.status, digest, invalidateRequest, service]);
+  }, [capability.status, clock, digest, invalidateRequest, service]);
 
   const cancel = useCallback(() => {
     invalidateRequest();
@@ -226,6 +250,14 @@ export function useBlogReferenceExtractionController({
       return { status: "failed", errorCode: "result-expired" };
     }
     const selected = Array.isArray(candidates) ? candidates : [];
+    for (const sourceKind of ["streaming", "cinema"]) {
+      if (!selected.some((candidate) => candidate?.sourceKind === sourceKind)) continue;
+      const expiresAt = Date.parse(String(scan.sources?.[sourceKind]?.expiresAt || ""));
+      if (!Number.isFinite(expiresAt) || expiresAt <= clock()) {
+        setScan((value) => ({ ...value, errorCode: "result-expired", message: localError("result-expired") }));
+        return { status: "failed", errorCode: "result-expired" };
+      }
+    }
     if (selected.length === 0 || selected.length > BLOG_REFERENCE_EXTRACT_MAX_CANDIDATES
         || snapshot.referenceCount + selected.length > BLOG_MAX_REFERENCES) {
       const reason = snapshot.referenceCount + selected.length > BLOG_MAX_REFERENCES
@@ -304,6 +336,7 @@ export function useBlogReferenceExtractionController({
     suggestions: scan.suggestions,
     partial: scan.partial,
     expiresAt: scan.expiresAt,
+    sources: scan.sources,
     errorCode: scan.errorCode,
     message: scan.message,
     appliedCount: scan.appliedCount,

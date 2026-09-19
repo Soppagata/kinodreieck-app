@@ -7,6 +7,9 @@ import {
   BLOG_SAVE_INTENT,
   BLOG_STREAMING_SOURCE_IDS,
   blogPublicationDisplayState,
+  isBlogPublicCinemaTarget,
+  isBlogPublicIdentityHints,
+  isBlogPublicStreamingTarget,
 } from "../lib/blogContract.js";
 import {
   buildBlogLibraryIndex,
@@ -153,6 +156,9 @@ function editorReference(row, index) {
 const BLOG_REFERENCE_APPLICATION_KEYS = Object.freeze([
   "candidateId", "selectionId", "sourceKind", "ref", "title", "year", "mediaType", "resolutionIntent",
 ]);
+const BLOG_REFERENCE_SOURCE_APPLICATION_KEYS = Object.freeze([
+  ...BLOG_REFERENCE_APPLICATION_KEYS, "sourceTarget", "identityHints",
+]);
 const BLOG_REFERENCE_MEDIA_TYPES = new Set(["film", "serie", "musik", "sonstiges"]);
 
 function exactKeys(value, expected) {
@@ -170,7 +176,9 @@ function sourceItemForCandidate(candidate, library, mustwatch) {
 }
 
 function normalizeReferenceApplication(candidate, library, mustwatch) {
-  if (!exactKeys(candidate, BLOG_REFERENCE_APPLICATION_KEYS)
+  const sourceBacked = ["streaming", "cinema"].includes(candidate?.sourceKind);
+  if (!exactKeys(candidate, sourceBacked
+    ? BLOG_REFERENCE_SOURCE_APPLICATION_KEYS : BLOG_REFERENCE_APPLICATION_KEYS)
       || typeof candidate.candidateId !== "string" || !candidate.candidateId
       || typeof candidate.selectionId !== "string" || !candidate.selectionId
       || typeof candidate.title !== "string" || !candidate.title.trim()
@@ -187,6 +195,25 @@ function normalizeReferenceApplication(candidate, library, mustwatch) {
       row: editorReference({
         title: candidate.title.trim(), year: candidate.year, mediaType: candidate.mediaType,
         ref: null, resolutionIntent: { kind: "keep_redlink" }, decisionCandidates: [],
+      }, 0),
+    };
+  }
+  if (sourceBacked) {
+    const validTarget = candidate.sourceKind === "streaming"
+      ? isBlogPublicStreamingTarget(candidate.sourceTarget)
+      : isBlogPublicCinemaTarget(candidate.sourceTarget);
+    if (!validTarget || !isBlogPublicIdentityHints(candidate.identityHints)
+        || candidate.sourceTarget.ref !== candidate.ref
+        || candidate.sourceTarget.titel !== candidate.title.trim()
+        || !exactKeys(candidate.resolutionIntent, ["kind"])
+        || candidate.resolutionIntent.kind !== "auto") return null;
+    return {
+      identity: `${candidate.sourceKind}:${candidate.ref}`,
+      row: editorReference({
+        title: candidate.title.trim(), year: candidate.year, mediaType: candidate.mediaType,
+        ref: String(candidate.ref), sourceTarget: { ...candidate.sourceTarget },
+        identityHints: candidate.identityHints.map((hint) => ({ ...hint })),
+        resolutionIntent: { kind: "auto" }, decisionCandidates: [],
       }, 0),
     };
   }
@@ -219,7 +246,8 @@ export function applyBlogReferenceSuggestionsToDraft(draft, {
   }
   const seenSelections = new Set();
   const seenIdentities = new Set(draft.references
-    .map((row) => row?.ref == null ? null : String(row.ref)).filter(Boolean));
+    .map((row) => row?.ref == null ? null : row?.sourceTarget?.kind
+      ? `${row.sourceTarget.kind}:${String(row.ref)}` : String(row.ref)).filter(Boolean));
   const additions = [];
   for (const candidate of candidates) {
     if (seenSelections.has(candidate?.selectionId)) {
@@ -271,6 +299,9 @@ function articleFromDraft(draft, previous, articleId, contentVersion, nowIso, re
     decisionCandidates: Array.isArray(row.decisionCandidates) ? row.decisionCandidates : [],
     decisionRequired: row.decisionRequired === true
       || (row.decisionRequired == null && Array.isArray(row.decisionCandidates) && row.decisionCandidates.length > 0),
+    ...(row.sourceTarget ? { sourceTarget: { ...row.sourceTarget } } : {}),
+    ...(isBlogPublicIdentityHints(row.identityHints)
+      ? { identityHints: row.identityHints.map((hint) => ({ ...hint })) } : {}),
     rank: index + 1,
   }));
   const next = {
@@ -282,7 +313,12 @@ function articleFromDraft(draft, previous, articleId, contentVersion, nowIso, re
     liste: references,
   };
   const versioned = mitNeuerBlogFassung(next, contentVersion, nowIso);
-  const matched = gleicheArtikelAb(versioned, Array.isArray(referenceItems) ? referenceItems : []);
+  const directSourceItems = references.filter((row) => row.ref && row.sourceTarget).map((row) => ({
+    id: row.ref, titel: row.eingabe, jahr: row.jahr, typ: row.typ,
+  }));
+  const matched = gleicheArtikelAb(versioned, [
+    ...(Array.isArray(referenceItems) ? referenceItems : []), ...directSourceItems,
+  ]);
   const { abgleichStat: _ignored, ...article } = matched;
   return {
     ...article,
