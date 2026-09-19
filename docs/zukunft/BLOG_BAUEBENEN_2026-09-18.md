@@ -1,7 +1,7 @@
 # Blog: Bauebenen und parallele Baumeister
 
-Stand: 18.09.2026 · Status: M1–M5 auf Staging und Production, M6 auf Staging; M7-Backend einschließlich Jahreskorrektur aktiv und zurückgelesen. Die mobile Checkboxkorrektur und der integrierte Nutzerweg sind geprüft; vollständige Staging-Nachlieferung beauftragt. Praktische iPhone/PWA-Abnahme offen.
-Aktueller Folgeauftrag: Max hat die schmale v2-Jahreskorrektur für Musik/Sonstiges ausdrücklich freigegeben, danach die vollständige Staging-Nachlieferung zum PWA-Test beauftragt und die Checkboxdarstellung samt Hinweislöschung korrigieren lassen. Die historischen Liefer-/Freigabegrenzen unten beschreiben ihre damaligen Aufträge; der aktuelle Nachweis steht am Dokumentende.
+Stand: 19.09.2026 · Status: Folgekorrektur in Produktcommit `3a55fea` integriert; 41 vollständige Nutzerwegprüfungen und Build grün. v3-Backend aktiv und per Datenbank sowie HTTP bestätigt. Frontend-Ziel ist `staging`; abschließende CI-/Domainbelege werden an den Liefercommit gebunden. Physische PWA-Abnahme offen.
+Aktueller Folgeauftrag: Privates Speichern und Veröffentlichen trennen; bewusst unter dem angemeldeten Benutzernamen oder anonym veröffentlichen können; KI-Scan im Editor auffindbar machen. Die historischen Liefer-/Freigabegrenzen unten beschreiben ihre damaligen Aufträge; der aktuelle Nachweis steht am Dokumentende.
 Freigabe: „Passt, merke dir deinen Plan und achte, dass kein baumeister falsch
 abbiegt! Viel Spaß beim bauen!“ Autorisiert sind lokale Umsetzung, Mock-/lokale
 Datenbanktests, Commits und Integration. Push, Deployment, gemeinsame
@@ -72,12 +72,12 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Beleg |
 |---|---|---|---|---|
 | M1 | Artikel und Ranglisten in einem einfachen Editor schreiben; kompakte Referenzen sicher umordnen. | B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Gesamttest 25/25, Chromium 34/34, vollständiger Abschlusslauf |
-| M2 | Bewusst anonym veröffentlichen, privat weiterarbeiten, aktualisieren und zurückziehen; andere Konten sehen keine Autorenmetadaten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Zwei-Konten-Projektion, Antwortverlust, Update/Rücknahme/Löschung im Gesamttest |
+| M2 | Privat speichern und getrennt bewusst mit angemeldetem Benutzernamen oder anonym veröffentlichen, aktualisieren und zurückziehen; nur die gewählte Autorenanzeige teilen. | Solo-Folgekorrektur B | DONE im Integrationskandidaten; Backend aktiv | Produktcommit 3a55fea, 41 Nutzerwegprüfungen mit echter privater PG-Persistenz; fokussierte PG-, Client-, Chromium-/WebKit-Belege und Build grün. Lieferziel staging, CI-/Domainbeleg an finalen Commit gebunden. |
 | M3 | Beim Lesen den passenden eigenen Mediathek-, Streaming- oder Kinotitel öffnen; fehlende Titel als Rotlink ergänzen. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Projektion 25/25 und echter SQL/Service/Client-Weg einschließlich Identitätskonflikt und Rotlink-Reload |
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 | M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE auf Staging | M6 in a3a0086; Migration, lokales Gate, CI und Domain-/Service-Worker-Readback bestätigt; Production-Frontend bleibt 77c5603 |
-| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS | DONE im Integrationskandidaten; Backend aktiv | Produktquellen 8336e95 mit Jahresmigration 5427cc5; 32 Nutzerwegprüfungen, 13 PG-Fälle, 44 Browserchecks und Build grün. Zielbranch staging; CI-/Domainbeleg der Nachlieferung wird extern an dessen SHA gebunden. Anbieterqualität und physische Abnahme nicht belegt |
+| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS; Solo-Folgekorrektur B | DONE im Integrationskandidaten; Backend aktiv | 3a55fea ergänzt sichtbaren Editor-Einstieg zu Personalisierung & KI. Integrierter Nutzerweg deckt den ausgeschalteten Einstieg, bewusste Übernahme, privaten Reload und Veröffentlichung ab. Anbieterqualität und physische Abnahme nicht belegt. |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -1193,3 +1193,98 @@ ausgeschalteten Schalter „Titel aus Blogtexten mit KI erkennen“ aktivieren,
 danach im Blogeditor bewusst „Titel im Text erkennen (KI)“ starten.
 Keine echte Anbieterprobe durch Agenten und keine physische Geräteabnahme
 werden aus den vorliegenden Mock-, Browser- und Health-Nachweisen abgeleitet.
+
+### PWA-Rückmeldung: privater Save, Autorenwahl und KI-Einstieg
+
+Die vorausgehende Nachlieferung ist abgeschlossen: `9eb6bbc` vollständig auf
+`origin/staging`, CI-Lauf `35398581148` erfolgreich. Der erste Domaincheck
+erhielt vorübergehend HTML für ein JavaScript-Asset; nach gezieltem erfolgreichem
+Readback wurde nur der fehlgeschlagene Deploymentjob erneut gestartet.
+Abschließend Domain, Service Worker und aktive Scan-Capability bestätigt;
+Production-Frontend und `main` bleiben `77c5603`. Belege im bereits genannten
+Unterordner `year-activation/`; Integrationsworktree war sauber.
+
+Max konkretisiert am 19.09. den Produktwunsch ausdrücklich: Nutzer sollen
+auch tatsächlich unter ihrem Profilnamen posten können. Außerdem findet er
+den KI-Scan nicht und meldet, nur veröffentlicht, aber nicht privat speichern
+zu können. Damit ist die frühere Beschränkung auf ausschließlich anonyme
+Veröffentlichung für diesen Folgeauftrag ersetzt, nicht die bewusste Auswahl
+oder der Schutz vorhandener anonymer Beiträge.
+
+SOLO-Delta an den bestehenden Client-Baumeister als Ende-zu-Ende-Owner:
+Basis `9eb6bbcb27eee63067fb4d20d76387baafe08d78`, neuer Worktree
+`/private/tmp/kd-blog-posting-fix-20260919`, Branch
+`codex/blog-posting-fix-20260919`. Er besitzt Produktcode, nötige neue additive
+Migration, vertragliche Naht und fokussierte Tests. Der Meister besitzt dieses
+Register, Paket-/CI-Registrierung, den bestehenden integrierten Nutzerwegtest
+und die Staging-Lieferung. Keine zusätzliche Prüfrolle oder Parallelwelle.
+
+Bindender Weg: eigener permanenter „Privat speichern“-Button; separater
+Veröffentlichungs-/Aktualisierungsbutton mit konkret sichtbarem Namen.
+„Anonym veröffentlichen“ bestimmt nur die Autorenanzeige. Bei neuen Entwürfen
+bleibt es aus; bereits anonym veröffentlichte Artikel bleiben anonym, bis der
+Nutzer dies bewusst bei einer Aktualisierung ändert. Privates Speichern
+verändert die veröffentlichte Fassung nicht und erhält sichtbare Rückmeldung
+am Speicherort. Fehlgeschlagene Writes lassen den Entwurf bestehen.
+
+Der bestehende `blogReferenzen`-Schalter bleibt standardmäßig aus. Im Editor
+führt ein sichtbarer Einstieg direkt zu Personalisierung & KI; kein stilles
+Einschalten, kein Anbieteraufruf durch Anzeigen oder Navigation. Persönliche
+KI-Berechtigung und serverseitige Capability bleiben erforderlich.
+
+Max hat die Namensquelle konkretisiert: „Immer den angemeldeten Benutzernamen
+verwenden.“ Der alte `kd:autor-name` ist damit ausgeschlossen. Der bestehende
+Auth-Vertrag speichert Benutzernamen als synthetische Systemadresse
+`<Benutzername>@login.kinodreieck.at`; alle 18 aktiven Konten entsprechen beim
+reinen Aggregat-Readback vom 19.09. diesem Vertrag. Persönliche Maildomains
+werden für eine öffentliche Namensableitung ausgeschlossen. Die automatische
+Freigabeprüfung blockierte dennoch die Änderung der Namensquelle. Max bestätigte
+daraufhin ausdrücklich die konkrete Frage einschließlich gemeinsamem Backend,
+Anzeige vor Klick, Ausschluss persönlicher Maildomains und Erhalt anonymer
+Beiträge: „Ja, den Benutzernamen aus der internen Systemadresse verwenden.“
+
+Den privaten Speicherfehler beschreibt Max als unveränderten Editor ohne
+erkennbare Reaktion. Der bisherige Datenweg besteht 32 lokale Gesamttestfälle
+einschließlich echter `kd_personal`-Persistenz mit Kontorechten und Reload;
+die bisherige Bestätigung stand jedoch oben außerhalb des sichtbaren
+Speicherbereichs. Der neue direkte Aktionshinweis wird zusammen mit
+Fehlerrückmeldung und erhaltenem Entwurf geprüft. Dieser Befund ersetzt keine
+physische PWA-Abnahme.
+
+Die neue Autorenprojektion muss
+versioniert/abwärtskompatibel und an das eigene Konto gebunden sein; kein
+Namen-Backfill und keine privaten Konto-/Mail-/Referenz-IDs im gemeinsamen
+Lesepfad. Backend- und Anbieterwirkung werden weiterhin getrennt belegt.
+
+
+DELIVERED / INTEGRATED: Solo-Paket `64f52aa` wurde als `bf1af02` übernommen;
+das gezielte Zustandsdelta `419ade2` als `3a55fea`. Ein bewusst im aktiven
+Entwurf geänderter Anonym-Modus bleibt nun auch nach privatem Speichern
+erhalten; Initialöffnung/Reload und bestätigte Veröffentlichung übernehmen
+weiterhin den serverbestätigten Autorenstand.
+
+Fokussierte Paketbelege: 16 v3-PG-Fälle, 39 R50- und 13 Jahresfälle,
+67 Artikeltransaktions-, 48 Service-, 27 Vertrags- und 10 Scancontrollerfälle,
+11 Scan-Browser-, 3 Scanentscheidungs- und 50 kompakte UI-Prüfungen mit
+Chromium und WebKit. Der Meister prüfte den vollständigen Nutzerweg mit
+zwei Konten und echter RLS-gebundener `kd_personal`-Persistenz: 41/41 grün,
+anschließend Build und Diffprüfung grün. Unveränderte frühere Vollsuitebelege
+werden übernommen; erforderliche CI bleibt Teil der Lieferung.
+
+Gemeinsames Backend am 19.09. um 07:35 UTC: additive Migration
+`20260919090000_blog_publication_author_v3.sql` ausgeführt, exakte Ledgerquelle
+bestätigt. SHA-256 `d751f5b0d289e6401f0420563ad4f1ff7281a2637934e972475a17f64e17df54`.
+Vorgängerdefinitionen wurden gesichert; Driftprüfung, Erhalt aller bestehenden
+Blogdaten und anonymer Autorenmodi waren atomare Transaktionsbedingungen.
+Sechs neue RPCs, ihre Rechte, private Autorenhilfe und unveränderte KI-/Export-
+Konfiguration sind bestätigt. Der echte HTTP-Readback bestätigt den kanonischen
+Login-Benutzernamen, v3-Lesen, unveränderte v2-Capability, anon-Sperre und den
+weiter aktiven KI-Scan. Keine Testpublikation und kein bezahlter Provideraufruf.
+
+Lieferbelege liegen unter `/private/tmp/kd-blog-posting-release-20260919/`:
+`authorization-evidence.json`, `author-migration-scope.json`,
+`author-migration-execution.json`, `author-migration-readback.json`,
+`http-readback.json`, `integrated-flow.log`, `build.log`. Die abschließenden
+`local-delta-gate.json`, `github-status.json` und `public-readback.json` binden
+Push, erforderliche CI und tatsächliche Staging-Version an den finalen
+Liefercommit. Production-Frontend und main werden nicht promoviert.

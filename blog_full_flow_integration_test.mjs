@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { JSDOM } from "jsdom";
-import { BLOG_RPC, BLOG_NEUTRAL_AUTHOR } from "./src/lib/blogContract.js";
+import { BLOG_RPC, BLOG_NEUTRAL_AUTHOR, BLOG_CONTRACT_VERSION } from "./src/lib/blogContract.js";
 import { buildBlogLibraryIndex, projectPublicBlogReferences } from "./src/lib/blogReferenceProjection.js";
 import { startBlogPublicationPgHarness } from "./tools/blog-publication-pg-harness.mjs";
 
@@ -112,13 +112,13 @@ export function createLocalBlogRpcFetch({ rpc, sessions, calls, afterResponse })
   };
 }
 
-function assertAnonymizedPage(page, privateIdentifiers) {
+function assertSafePublicPage(page, privateIdentifiers, expectedAuthor = () => BLOG_NEUTRAL_AUTHOR) {
   const encoded = JSON.stringify(page);
   for (const privateValue of privateIdentifiers) {
     assert.ok(!encoded.includes(privateValue), "Private identifier leaked into public page");
   }
   for (const item of page.items) {
-    assert.equal(item.author, BLOG_NEUTRAL_AUTHOR);
+    assert.equal(item.author, expectedAuthor(item));
     assert.equal(item.article.id, item.publicationId);
     assert.deepEqual(Object.keys(item).sort(), ["article", "author", "contentVersion",
       "publicationId", "publicRevision", "publishedAt", "shareToken", "updatedAt"].sort());
@@ -132,6 +132,8 @@ function assertAnonymizedPage(page, privateIdentifiers) {
     }
   }
 }
+
+const assertAnonymizedPage = (page, privateIdentifiers) => assertSafePublicPage(page, privateIdentifiers);
 
 function buttonWithText(host, label) {
   const element = [...host.querySelectorAll("button")]
@@ -177,16 +179,44 @@ function field(host, prefix) {
   return control;
 }
 
-async function mountAccount(ui, { accountId, service, values, initialLibrary = [], selectedServices, scanService = null }) {
+async function mountAccount(ui, { accountId, service, values, initialLibrary = [], selectedServices, scanService = null, scanEnabled = !!scanService }) {
   const writes = [];
   const navigations = [];
   const errors = [];
+  const settingsVisits = [];
+  let failArticleOnce = false;
+  const session = { role: "authenticated", accountId };
+  const sqlLiteral = (value) => `'${String(value).replaceAll("'", "''")}'`;
   const driver = {
-    name: "blog-integration", owner: `account:${accountId}`,
-    async get(key) { return values.has(key) ? { key, value: values.get(key) } : null; },
-    async set(key, value) { values.set(key, value); writes.push({ key, value }); return { key, value }; },
-    async delete(key) { values.delete(key); return { key, deleted: true }; },
-    async list() { return { keys: [...values.keys()] }; },
+    name: "blog-integration-pg", owner: `account:${accountId}`,
+    async get(key) {
+      const row = pg.sqlJson(`select coalesce((select jsonb_build_object('key',key,'value',value)
+        from public.kd_personal where key=${sqlLiteral(key)}),'null'::jsonb);`, session);
+      if (row) values.set(key, row.value);
+      else values.delete(key);
+      return row;
+    },
+    async set(key, value) {
+      if (key === "kd:artikel" && failArticleOnce) {
+        failArticleOnce = false;
+        throw new Error("Synthetic private storage unavailable");
+      }
+      const row = pg.sqlJson(`insert into public.kd_personal(key,value)
+        values(${sqlLiteral(key)},${sqlLiteral(value)})
+        on conflict(account_id,key) do update set value=excluded.value
+        returning jsonb_build_object('key',key,'value',value);`, session);
+      values.set(key, value);
+      writes.push({ key, value });
+      return row;
+    },
+    async delete(key) {
+      pg.sql(`delete from public.kd_personal where key=${sqlLiteral(key)};`, session);
+      values.delete(key);
+      return { key, deleted: true };
+    },
+    async list() {
+      return { keys: pg.sqlJson("select coalesce(jsonb_agg(key order by key),'[]'::jsonb) from public.kd_personal;", session) };
+    },
   };
   ui.setStorageDriver(driver);
   const host = document.createElement("div");
@@ -223,10 +253,11 @@ async function mountAccount(ui, { accountId, service, values, initialLibrary = [
       setError: reportError, clock,
     });
     const referenceExtraction = ui.useBlogReferenceExtractionController({
-      accountScope: accountId, enabled: !!scanService, personalAi: !!scanService,
+      accountScope: accountId, enabled: scanEnabled, personalAi: !!scanService,
       editor: publication.editor, library: items, libraryReady: true,
       mustwatch: [], mustwatchReady: true, service: scanService,
       onApplyReferenceSuggestions: publication.actions.onApplyReferenceSuggestions,
+      onOpenSettings: () => settingsVisits.push("personalisierung"),
     });
     model = { ...publication, referenceExtraction };
     articleApi = articles;
@@ -236,11 +267,12 @@ async function mountAccount(ui, { accountId, service, values, initialLibrary = [
   await ui.act(async () => { root.render(ui.React.createElement(Harness)); });
   await settled(ui, () => articleApi?.artikelGeladen && model?.publicationCapability.status === "ready", "account and capability");
   return {
-    host, writes, navigations, errors,
+    host, writes, navigations, errors, settingsVisits,
     get model() { return model; },
     get articles() { return articleApi.artikelListe; },
     get library() { return library; },
     failNextMediaWrite() { failMediaOnce = true; },
+    failNextArticleWrite() { failArticleOnce = true; },
     async action(name, argument) {
       let result;
       await ui.act(async () => { result = await model.actions[name](argument); });
@@ -263,7 +295,7 @@ function check(name, predicate) {
 
 const dom = installLocalDom();
 const ui = await loadDeliveredBlogUi();
-const pg = await startBlogPublicationPgHarness();
+const pg = await startBlogPublicationPgHarness({ applyAuthorMigration: true });
 const calls = [];
 const accounts = pg.accounts;
 const alphaValues = new Map();
@@ -282,8 +314,12 @@ const alphaService = localService(ui, {
 const betaService = localService(ui, { session: { accountId: accounts.beta }, rpc, calls });
 let mounted;
 try {
-  pg.sql(readFileSync("supabase/migrations/20260918170000_blog_reference_v2_years.sql", "utf8"), {
-    role: "postgres", accountId: null,
+  pg.sql(`update auth.users set email = case id
+    when '${accounts.alpha}' then 'konto-alpha@login.kinodreieck.at'
+    when '${accounts.beta}' then 'konto-beta@login.kinodreieck.at'
+    else 'inactive@login.kinodreieck.at' end;`, { role: "postgres", accountId: null });
+  pg.sql("insert into public.kd_personal(key,value) values('kd:autor-name','Alter Pseudonymname');", {
+    role: "authenticated", accountId: accounts.alpha,
   });
   for (const session of [{ role: "anon", accountId: null }, { role: "authenticated", accountId: accounts.inactive }]) {
     assert.throws(() => pg.callRpc(BLOG_RPC.list, { contractVersion: "blog-publication-v1", cursor: null, limit: 20 }, session));
@@ -309,6 +345,18 @@ try {
   }
   const originalRowIds = mounted.model.editor.references.map((row) => row.rowId);
   const privateStartCalls = calls.length;
+  check("Benannter Veröffentlichungsbutton zeigt den angemeldeten Benutzernamen statt des alten Autornamens",
+    !!buttonWithText(mounted.host, "Als konto-alpha veröffentlichen")
+      && !mounted.model.editor.anonymousPublication
+      && !mounted.host.textContent.includes("Alter Pseudonymname"));
+  mounted.failNextArticleWrite();
+  await click(ui, dom, buttonWithText(mounted.host, "Privat speichern"));
+  await settled(ui, () => !!mounted.host.querySelector(".kd-blog-local-notice[role=alert]"), "visible private save error");
+  check("Fehlgeschlagener privater Save zeigt den Fehler bei den Aktionen und erhält den Entwurf",
+    mounted.articles.length === 0
+      && field(mounted.host, "Titel").value === "Integration Star Wars"
+      && mounted.model.editor.references.length === 4
+      && /Eingabe bleibt erhalten/.test(mounted.host.querySelector(".kd-blog-finish").textContent));
   await click(ui, dom, buttonWithText(mounted.host, "Privat speichern"));
   await settled(ui, () => mounted.articles.length === 1, "private save");
   const articleId = mounted.articles[0].id;
@@ -316,8 +364,16 @@ try {
     mounted.articles[0].liste.length === 4 && mounted.articles[0].geordnet
       && mounted.articles[0].liste.every((row, index) => row.rowId === originalRowIds[index])
       && !calls.slice(privateStartCalls).some((call) => [BLOG_RPC.publish, BLOG_RPC.update].includes(call.name)));
+  check("Privater Save bestätigt den Erfolg direkt bei den Speicheraktionen",
+    mounted.host.querySelector(".kd-blog-local-notice[role=status]")?.textContent === "Privat gespeichert.");
   await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
-  await click(ui, dom, buttonWithText(mounted.host, "Speichern & veröffentlichen"));
+  const checkedPrivateCalls = calls.length;
+  await click(ui, dom, buttonWithText(mounted.host, "Privat speichern"));
+  check("Privat speichern bleibt bei angekreuzter Anonym-Option privat und nutzbar",
+    mounted.model.editor.anonymousPublication === true
+      && !calls.slice(checkedPrivateCalls).some((call) => [BLOG_RPC.publish, BLOG_RPC.update].includes(call.name))
+      && (await betaService.listV1()).page.items.length === 0);
+  await click(ui, dom, buttonWithText(mounted.host, "Anonym veröffentlichen"));
   await settled(ui, () => !!mounted.articles[0]?.publikation?.publicationId, "publication");
   const publicationId = mounted.articles[0].publikation.publicationId;
   let page = (await betaService.listV1()).page;
@@ -387,16 +443,15 @@ try {
   mounted = await mountAccount(ui, { accountId: accounts.alpha, service: alphaService, values: alphaValues, initialLibrary: alphaLibrary, selectedServices: ["Netflix"] });
   await settled(ui, () => mounted.articles[0]?.publikation?.publicationId === publicationId, "owner readback");
   await click(ui, dom, buttonWithText(mounted.host, "Bearbeiten"));
-  check("Reload stellt die Publikation wieder her und startet die Checkbox ausgeschaltet",
-    mounted.model.editor.publicationId === publicationId && !mounted.model.editor.anonymousPublication);
+  check("Reload einer anonymen Publikation erhält die anonyme Autorenwahl",
+    mounted.model.editor.publicationId === publicationId && mounted.model.editor.anonymousPublication);
   await input(ui, dom, field(mounted.host, "Text"), "Diese Änderung bleibt zunächst privat.");
-  await click(ui, dom, buttonWithText(mounted.host, "Änderungen privat speichern"));
+  await click(ui, dom, buttonWithText(mounted.host, "Privat speichern"));
   page = (await betaService.listV1()).page;
   check("Private Weiterarbeit bewahrt den veröffentlichten Inhalt und kennzeichnet den Unterschied",
     page.items[0].article.text === "Meine gemeinsame Watch-Order."
       && mounted.model.articleCards[0].displayState === "private_changes");
-  await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
-  await click(ui, dom, buttonWithText(mounted.host, "Speichern & aktualisieren"));
+  await click(ui, dom, buttonWithText(mounted.host, "Anonym aktualisieren"));
   await settled(ui, () => mounted.articles[0]?.publikation?.publicRevision === 2, "public update");
   page = (await betaService.listV1()).page;
   check("Bewusstes Aktualisieren ersetzt dieselbe öffentliche Kopie", page.items.length === 1
@@ -420,7 +475,7 @@ try {
   await input(ui, dom, field(mounted.host, "Text"), "Dieser Beitrag wird bestätigt zurückgezogen.");
   await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
   dropNextPublishResponse = true;
-  const uncertain = await mounted.action("onSave", { draftKey: mounted.model.editor.draftKey, anonymousPublication: true });
+  const uncertain = await mounted.action("onPublish", { draftKey: mounted.model.editor.draftKey, anonymousPublication: true });
   check("Verlorene Antwort meldet keinen erfundenen Veröffentlichungserfolg", uncertain.publication.status === "unknown");
   const uncertainArticleId = uncertain.private.articleId;
   check("Der simulierte Antwortverlust geschieht erst nach echtem SQL-Commit", (await betaService.listV1()).page.items.length === 1);
@@ -429,11 +484,48 @@ try {
     deletion.private.status === "deleted" && (await betaService.listV1()).page.items.length === 0
       && !mounted.articles.some((article) => article.id === uncertainArticleId));
 
+  await mounted.action("onNewArticle");
+  await input(ui, dom, field(mounted.host, "Titel"), "Namentlicher Beitrag");
+  await input(ui, dom, field(mounted.host, "Text"), "Dieser Text erscheint bewusst unter meinem Benutzernamen.");
+  await click(ui, dom, buttonWithText(mounted.host, "Als konto-alpha veröffentlichen"));
+  await settled(ui, () => mounted.articles.some((article) => article.titel === "Namentlicher Beitrag" && article.publikation?.publicationId), "named publication");
+  const namedArticle = mounted.articles.find((article) => article.titel === "Namentlicher Beitrag");
+  const namedPublicationId = namedArticle.publikation.publicationId;
+  page = (await betaService.listV1()).page;
+  assertSafePublicPage(page, [accounts.alpha, namedArticle.id, "konto-alpha@login.kinodreieck.at", "Alter Pseudonymname"], () => "konto-alpha");
+  check("Das andere Konto liest den bewusst veröffentlichten Benutzernamen ohne Mail oder private Kennungen",
+    page.items.length === 1 && page.items[0].publicationId === namedPublicationId
+      && page.items[0].author === "konto-alpha");
+  await mounted.close(); mounted = null;
+  mounted = await mountAccount(ui, { accountId: accounts.alpha, service: alphaService, values: alphaValues, initialLibrary: alphaLibrary, selectedServices: ["Netflix"] });
+  await mounted.action("onEditArticle", { articleId: namedArticle.id });
+  check("Reload einer namentlichen Publikation erhält Benutzername und ausgeschaltete Anonym-Option",
+    !mounted.model.editor.anonymousPublication && !!buttonWithText(mounted.host, "Als konto-alpha aktualisieren"));
+  await input(ui, dom, field(mounted.host, "Text"), "Dieser neue Stand bleibt privat.");
+  await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
+  await click(ui, dom, buttonWithText(mounted.host, "Privat speichern"));
+  page = (await betaService.listV1()).page;
+  check("Privates Speichern ändert weder den veröffentlichten Text noch dessen Autorenwahl",
+    page.items[0].author === "konto-alpha"
+      && page.items[0].article.text === "Dieser Text erscheint bewusst unter meinem Benutzernamen.");
+  await click(ui, dom, buttonWithText(mounted.host, "Anonym aktualisieren"));
+  page = (await betaService.listV1()).page;
+  assertAnonymizedPage(page, [accounts.alpha, namedArticle.id, "konto-alpha", "Alter Pseudonymname"]);
+  check("Erst ausdrückliches Aktualisieren wechselt die bestehende öffentliche Kopie auf anonym",
+    page.items[0].publicationId === namedPublicationId && page.items[0].publicRevision === 2
+      && page.items[0].article.text === "Dieser neue Stand bleibt privat.");
+  await mounted.action("onWithdraw", { articleId: namedArticle.id });
+
+  // The next independent scenario takes place in a fresh rate-limit window.
+  // The production limit stays unchanged; only completed local fixtures age.
+  pg.sql(`update public.kd_blog_publication_starts set started_at=started_at-interval '2 minutes'
+    where account_id='${accounts.alpha}';`, { role: "postgres", accountId: null });
   const twinPublication = await alphaService.publishV1({
-    contractVersion: "blog-publication-v2",
+    contractVersion: BLOG_CONTRACT_VERSION,
     operationId: "30000000-0000-4000-8000-000000000901",
     contentVersion: "40000000-0000-4000-8000-000000000901",
     privateArticleId: "private-alpha-identity-integration", expectedPublicRevision: null,
+    authorDecision: { mode: "anonymous", expectedAuthor: null },
     article: { title: "Identitätsprobe", text: "Zwei unterschiedliche gleichnamige Werke.", ordered: true,
       references: [{ rowId: "private-twin-row", rank: 1, title: "Synthetic Twin", year: 2000,
         mediaType: "film", identityHints: [{ namespace: "imdb", value: "tt1000001" }],
@@ -500,6 +592,17 @@ try {
     },
   };
   mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
+    values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService, scanEnabled: false });
+  await mounted.action("onNewArticle");
+  const beforeSettings = mounted.writes.length;
+  await click(ui, dom, buttonWithText(mounted.host, "Zu Personalisierung & KI"));
+  check("Auch ausgeschaltete KI ist im Editor mit direktem Einstellungsweg auffindbar",
+    mounted.host.textContent.includes("Titel im Text erkennen (KI)")
+      && mounted.model.referenceExtraction.visible === false
+      && mounted.settingsVisits.length === 1
+      && mounted.writes.length === beforeSettings && scanCalls.length === 0);
+  await mounted.close(); mounted = null;
+  mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
     values: scanValues, initialLibrary: scanLibrary, selectedServices: [], scanService });
   await mounted.action("onNewArticle");
   await input(ui, dom, field(mounted.host, "Titel"), scanTitle);
@@ -562,7 +665,7 @@ try {
       && mounted.model.editor.references[4].year === 1824
       && mounted.model.editor.references[5].year === 1605 && scanCalls.length === 1);
   await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
-  await click(ui, dom, buttonWithText(mounted.host, "Speichern & veröffentlichen"));
+  await click(ui, dom, buttonWithText(mounted.host, "Anonym veröffentlichen"));
   await settled(ui, () => mounted.articles[0]?.publikation?.errorCode === "DECISION_REQUIRED", "unavailable shared work decisions");
   await mounted.close(); mounted = null;
   mounted = await mountAccount(ui, { accountId: accounts.beta, service: betaService,
@@ -571,13 +674,13 @@ try {
   check("Fehlende gemeinsame Katalogbelege bleiben nach Reload als ausdrückliche Rotlink-Entscheidung lösbar",
     [...mounted.host.querySelectorAll("button")].filter((button) => button.textContent === "Als Rotlink behalten").length === 2);
   for (let i = 0; i < 2; i++) await click(ui, dom, buttonWithText(mounted.host, "Als Rotlink behalten"));
-  await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
-  await click(ui, dom, buttonWithText(mounted.host, "Speichern & veröffentlichen"));
+  if (!mounted.model.editor.anonymousPublication) await click(ui, dom, mounted.host.querySelector(".kd-blog-publish-check input"));
+  await click(ui, dom, buttonWithText(mounted.host, "Anonym veröffentlichen"));
   await settled(ui, () => !!mounted.articles[0]?.publikation?.publicationId, "scanned draft published");
   const scannedPage = (await alphaService.listV1()).page;
   assertAnonymizedPage(scannedPage, [accounts.alpha, accounts.beta, scannedArticle.id, ...savedRowIds, ...scanLibrary.map((item) => item.id)]);
   const publishedScan = scannedPage.items.find((item) => item.article.title === scanTitle);
-  check("Die bestätigten Scanreferenzen erreichen den echten v2-Publikationsweg und sind anonym für das andere Konto lesbar",
+  check("Die bestätigten Scanreferenzen erreichen den aktuellen Publikationsweg und sind anonym für das andere Konto lesbar",
     publishedScan?.article.references.length === 6
       && publishedScan.article.references[1].year === 1984 && publishedScan.article.references[2].year === 2021
       && publishedScan.article.references[4].mediaType === "musik"
