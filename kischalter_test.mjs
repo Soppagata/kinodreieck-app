@@ -538,7 +538,7 @@ const dt = fs.readFileSync(path.join(NAHT_WURZEL, "src/tabs/DatenTab.jsx"), "utf
 /* Genau der eine Sammelklappen-Block. „Konto, Daten & Sicherung" kommt weiter oben schon
    in einem Kommentar vor, deshalb wird ab der Klappe gesucht, nicht ab dem
    ersten Vorkommen. */
-const blockStart = dt.indexOf('<Klappe titel="Personalisierung & KI">');
+const blockStart = dt.search(/<Klappe\b[^>]*\btitel="Personalisierung & KI"[^>]*>/);
 const block = blockStart < 0 ? "" : dt.slice(blockStart, dt.indexOf("Konto, Daten & Sicherung", blockStart));
 const app = fs.readFileSync(path.join(NAHT_WURZEL, "src/App.jsx"), "utf8");
 const finderTab = fs.readFileSync(path.join(NAHT_WURZEL, "src/tabs/FinderTab.jsx"), "utf8");

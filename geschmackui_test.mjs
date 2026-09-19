@@ -1923,9 +1923,9 @@ check("M", "Container führt den Aufruf, DatenTab das zusammengesetzte Gate  [ge
     && /kiAktiv=\{kiProfilFaehig/.test(QUELLEN.datentab.text)
     && !importiert("bereich", "kiSchalter"));
 check("M", "in DatenTab hängt die Personalisierungs-Sammelklappe nicht an einer Bedingung mit `kiStand`"
-  + "  [gemessen: " + JSON.stringify((QUELLEN.datentab.text.match(/.{0,60}Klappe titel="Personalisierung & KI"/s) || [])[0]?.slice(-60)) + "]",
+  + "  [gemessen: " + JSON.stringify((QUELLEN.datentab.text.match(/.{0,60}<Klappe\b[^>]*\btitel="Personalisierung & KI"/s) || [])[0]?.slice(-60)) + "]",
   () => {
-    const i = QUELLEN.datentab.text.indexOf("<Klappe titel=\"Personalisierung & KI\">");
+    const i = QUELLEN.datentab.text.search(/<Klappe\b[^>]*\btitel="Personalisierung & KI"[^>]*>/);
     if (i < 0) return false;
     /* Die 200 Zeichen davor: dort stünde ein `{kiStand… && (` einer
        bedingten Einbettung. */

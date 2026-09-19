@@ -1296,3 +1296,6 @@ weiterhin Doppelklickschutz, Fehlschlag und erhaltene Veröffentlichung.
 14 Kartenlayout-, 4 Blogoberflächen- und 72 asynchrone Persistenzprüfungen grün.
 Dieses Delta ändert keinen Produkt- oder Backendcode; der 41-Fälle-Gesamtweg
 und Buildnachweis bleiben für dessen unveränderte Quellen gültig.
+Die statischen Einstellungsprüfungen erkennen die Personalisierungs-Klappe
+auch mit ihrer neuen Sprungmarken-ID: 89 KI-Schalter- und 281 Geschmacks-UI-
+Prüfungen grün, unveränderte Zustimmungs- und Schreibschutzkriterien.
