@@ -16,6 +16,7 @@ const SETWISE_MIGRATION = "supabase/migrations/20260918130000_blog_catalog_setwi
 const LOOKUP_MIGRATION = "supabase/migrations/20260918133000_blog_catalog_lookup.sql";
 const REFERENCE_V2_MIGRATION = "supabase/migrations/20260918140000_blog_reference_limit_v2.sql";
 const AUTHOR_V3_MIGRATION = "supabase/migrations/20260919090000_blog_publication_author_v3.sql";
+const LEGACY_NULL_MIGRATION = "supabase/migrations/20260919093000_blog_legacy_null_projection.sql";
 
 function verifyCronPrerequisiteSql() {
   const sql = readFileSync(CRON_PREREQUISITE, "utf8");
@@ -193,6 +194,7 @@ export async function startBlogPublicationPgHarness({
   applySetwiseMigration = true,
   applyLookupMigration = applySetwiseMigration,
   applyAuthorMigration = false,
+  applyLegacyNullMigration = applyAuthorMigration,
 } = {}) {
   const pg = pgBin();
   const root = mkdtempSync(join(tmpdir(), "kd-blog-pg-"));
@@ -356,6 +358,10 @@ export async function startBlogPublicationPgHarness({
     }
     rawSql(readFileSync(REFERENCE_V2_MIGRATION, "utf8"));
     if (applyAuthorMigration) rawSql(readFileSync(AUTHOR_V3_MIGRATION, "utf8"));
+    if (applyLegacyNullMigration) {
+      if (!applyAuthorMigration) throw new Error("legacy null migration requires author v3 migration");
+      rawSql(readFileSync(LEGACY_NULL_MIGRATION, "utf8"));
+    }
 
     const scalarRpcs = new Set([
       "kd_blog_publication_capabilities", "kd_publish_blog_v1", "kd_update_blog_publication_v1",
