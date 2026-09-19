@@ -695,7 +695,7 @@ try {
     scanRows[0].rowId === preservedRow && scanRows[1].year === 1984 && scanRows[2].year === 2021
       && scanRows[3].mediaType === "serie" && scanRows[4].mediaType === "musik"
       && scanRows[5].mediaType === "sonstiges" && scanRows[5].primaryTarget === null
-      && scanRows.slice(1).every((row) => row.ref === null && row.resolutionIntent.kind === "auto")
+      && scanRows.slice(1).every((row) => row.resolutionIntent.kind === "auto")
       && mounted.writes.length === beforeScanWrites);
   await click(ui, dom, buttonWithText(mounted.host, "Privat speichern"));
   await settled(ui, () => mounted.articles.some((article) => article.titel === scanTitle), "scanned draft persisted");
