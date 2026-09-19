@@ -7,6 +7,7 @@ import { JSDOM } from "jsdom";
 import { BLOG_RPC, BLOG_NEUTRAL_AUTHOR, BLOG_CONTRACT_VERSION } from "./src/lib/blogContract.js";
 import { buildBlogLibraryIndex, projectPublicBlogReferences } from "./src/lib/blogReferenceProjection.js";
 import { startBlogPublicationPgHarness } from "./tools/blog-publication-pg-harness.mjs";
+import { createProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
 
 const require = createRequire(import.meta.url);
 let esbuild;
@@ -585,7 +586,17 @@ try {
           interpretation: "direct", evidence: { field: "text", quote: "Don Quijote (1605)" } },
       ] }, ui.readBlogReferenceInput(payload));
       assert.ok(normalized && !normalized.partial);
-      return { ok: true, task, vorgangId: options.vorgangId, data: {
+      const model = "claude-sonnet-4-5-20250929";
+      const providerReceipt = await createProviderReceipt({
+        provider: "anthropic", providerResponseText: JSON.stringify(normalized),
+        model, inputTokens: 1206, outputTokens: 410, resultMode: "structured",
+        serverLogId: 1, providerRequests: 1, reservationUsdCent: 30, costUsdCent: 0.9768,
+      });
+      assert.ok(providerReceipt);
+      return { ok: true, task, vorgangId: options.vorgangId,
+        modellAlias: "gross", modell: model, providerReceipt,
+        verbrauch: { inputTokens: 1206, outputTokens: 410, kostenUsdCent: 0.9768,
+          dauerMs: 5896, stopReason: "end_turn" }, data: {
         contractVersion: "blog-reference-extract-v1", ...normalized,
         expiresAt: new Date(Date.now() + 86400000).toISOString(),
       } };
@@ -614,7 +625,7 @@ try {
   await settled(ui, () => mounted.model.referenceExtraction.canStart, "negotiated scan capability");
   await click(ui, dom, buttonWithText(mounted.host, "Titel im Text erkennen (KI)"));
   await settled(ui, () => mounted.model.referenceExtraction.status === "result", "server-normalized scan suggestions");
-  check("Serververtrag und Client liefern vier belegte Erwähnungen ohne Vorauswahl oder Speicherung",
+  check("Frische Serverantwort mit Metadaten liefert vier belegte Erwähnungen ohne Vorauswahl oder Speicherung",
     scanCalls.length === 1 && mounted.host.querySelectorAll(".kd-blog-suggestion").length === 4
       && !mounted.host.querySelector(".kd-blog-suggestion input:checked")
       && mounted.model.editor.references.length === 1 && mounted.writes.length === beforeScanWrites);

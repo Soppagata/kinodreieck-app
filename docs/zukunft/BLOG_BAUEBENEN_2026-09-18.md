@@ -77,7 +77,7 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 | M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE auf Staging | M6 in a3a0086; Migration, lokales Gate, CI und Domain-/Service-Worker-Readback bestätigt; Production-Frontend bleibt 77c5603 |
-| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS; Solo-Folgekorrektur B | DONE im Integrationskandidaten; Backend aktiv | 3a55fea ergänzt sichtbaren Editor-Einstieg zu Personalisierung & KI. Integrierter Nutzerweg deckt den ausgeschalteten Einstieg, bewusste Übernahme, privaten Reload und Veröffentlichung ab. Anbieterqualität und physische Abnahme nicht belegt. |
+| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS; Solo-Folgekorrektur B | DONE im Integrationskandidaten; Staging-Lieferung folgt | Produktdelta 32378ac akzeptiert reguläre frische und Cache-Antworten. 14 Client-, 10 Controllerfälle, vollständige lokale Mocksuite und 41 integrierte Nutzerwegprüfungen grün; Backend unverändert. Finaler Liefercommit wird durch CI-/Domainbelege gebunden. |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -1311,3 +1311,52 @@ und mit exakter Ledgerquelle zurückgelesen: SHA-256
 Kein bestehender Beitrag war betroffen; Rechte, Autorenentscheidung und
 KI-/Exportkonfiguration blieben unverändert. Belege im selben Lieferordner
 unter `legacy-migration-*.json` und `integrated-flow-with-legacy.log`.
+
+
+### M7-Folgekorrektur: frische Scanantwort vom 19.09.2026
+
+Max meldet um 13:48 Ortszeit einen sichtbaren Fehler nach dem manuellen Scan.
+Der reine Backend-Readback belegt den Vorgang von 11:47:57 bis 11:48:03 UTC
+als erfolgreich abgeschlossen: fünf Kandidaten, keine Teilantwort und keine
+Serverfehlerklasse. Es wurde für diese Diagnose kein Anbieteraufruf gestartet.
+Die Screenshot-Meldung entsteht im Client: Der Validator fordert exakt die
+vier Kernfelder des Umschlags, während der frische Servererfolg zusätzlich
+reguläre Modell-, Verbrauchs- und Receipt-Metadaten enthält. Die reduzierte
+Cacheantwort hatte diese Naht in bisherigen Mocks nicht abgedeckt.
+
+SOLO-Delta M7 an den bestehenden Client-Baumeister. Basis
+`78b96b477897ec45dcecb96e8aba829ea7750187`, eigener Worktree
+`/private/tmp/kd-blog-scan-envelope-fix-20260919`, Branch
+`codex/blog-scan-envelope-fix-20260919`. Write-Ownership: Clientvalidator,
+fokussierte Client-/Controller-Regressionen und notwendige Präzisierung des
+Antwortvertrags. Daten-/Beleg-/Konten-/Requestbindung bleiben streng; bekannte
+optionale Servermetadaten werden nicht als Vorschläge übernommen. Backend,
+DB, Modelle, Prompts und Kostenregeln bleiben unverändert.
+
+Der Meister besitzt weiterhin dieses Register, Integration und die bereits
+autorisierte Staging-Auslieferung. Read-only Diagnosebelege und frische
+Umgebungsbasis liegen unter `/private/tmp/kd-blog-scan-feedback-20260919/`.
+Die vorige Lieferung 78b96b4 ist mit grüner CI, Staging-Build und Service Worker
+bestätigt; Production-Frontend und main stehen weiterhin auf 77c5603.
+
+
+DELIVERED / INTEGRATED: Clientdelta `0f1c26d` als `32378ac` übernommen.
+Der neue Regressionstest lief vor der Korrektur durch den echten AI-Service
+und scheiterte am Clientvalidator; danach akzeptiert er die frische Antwort
+und den Cache mit denselben fünf Vorschlägen. 14 Client- und 10 Controller-
+prüfungen sowie Build grün. Die vier bekannten Metadaten sind nur an der
+äußeren Hülle erlaubt und gelangen nicht in fachliche Ergebnisse oder
+Persistenz. Unbekannte Felder und verschobene Textbelege bleiben abgelehnt.
+
+Die Integrationsnaht im vorhandenen Gesamttest verwendet jetzt ebenfalls
+eine vollständige frische Hülle mit dem echten Provider-Receipt-Builder.
+Der einmalige lokale Abschlusslauf `npm test` ist vollständig grün, darunter
+41 echte PG-/RLS-gebundene Nutzerwegprüfungen einschließlich Referenzauswahl,
+Speichern, Reload und Publikation. Kein Netzwerk- oder Providerzugriff aus
+diesem Gesamttest; keine weitere bezahlte Scanwiederholung zur Diagnose.
+Produktquellen entsprechen dem belegten Build des Paketcommits; Migrationen,
+Functioncode, Prompts, Modellkonfiguration und Kostenregeln sind unverändert.
+
+Der finale Liefercommit wird in `/private/tmp/kd-blog-scan-feedback-20260919/`
+mit lokalem Gate, Push-Readback, GitHub-CI und Domain-/Service-Worker-Readback
+gebunden. Die Abnahme der korrigierten Anzeige auf dem iPhone bleibt Max' Test.
