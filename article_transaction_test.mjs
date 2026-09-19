@@ -688,6 +688,44 @@ check("Namentliche Publikation speichert privat und bindet den sichtbaren Capabi
   && namedFixture.requests[0].authorDecision.expectedAuthor === "max"
   && namedFixture.api().articles[0].publikation.authorMode === "profile"
   && namedFixture.api().controller.editor.anonymousPublication === false);
+const namedReloadArticle = namedFixture.api().articles[0];
+await namedFixture.cleanup();
+namedFixture = await mounteBlogController({
+  initialArticles: [namedReloadArticle],
+  serviceOverrides: {
+    ownerReadback: async (privateArticleId) => ({
+      contractVersion: "blog-publication-v3", privateArticleId,
+      currentPublication: {
+        ...publicSnapshot, publicRevision: 1,
+        publishedContentVersion: namedReloadArticle.contentVersion,
+        authorMode: "profile", author: "max",
+      },
+      operation: null, legacyReloadRequired: false,
+    }),
+  },
+});
+await act(async () => {
+  namedFixture.api().controller.actions.onEditArticle({ articleId: namedReloadArticle.id });
+  await tick();
+  namedFixture.api().controller.actions.onEditorChange({
+    text: "Privat gespeichert, spaeter anonym aktualisieren",
+    anonymousPublication: true,
+  });
+  await tick();
+});
+let namedPrivateSave;
+await act(async () => {
+  namedPrivateSave = await namedFixture.api().controller.actions.onPrivateSave({
+    draftKey: namedFixture.api().controller.editor.draftKey,
+  });
+  await tick();
+});
+check("Privater Save bewahrt die frische anonyme Update-Wahl im aktiven Entwurf",
+  namedPrivateSave.private.status === "saved"
+  && namedPrivateSave.publication.status === "not_requested"
+  && namedFixture.api().articles[0].publikation.authorMode === "profile"
+  && namedFixture.api().controller.editor.publicationId === publicSnapshot.publicationId
+  && namedFixture.api().controller.editor.anonymousPublication === true);
 await namedFixture.cleanup();
 
 let blogFixture = await mounteBlogController();

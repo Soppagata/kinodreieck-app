@@ -253,6 +253,7 @@ function draftFromArticle(article, accountScope, draftKey = publicationOperation
     references,
     anonymousPublication: !!article?.publikation?.publicationId
       && article?.publikation?.authorMode !== BLOG_AUTHOR_MODE.PROFILE,
+    authorDecisionTouched: false,
     dirty: false, saveStatus: "idle",
   };
 }
@@ -414,6 +415,9 @@ export function useBlogPublicationController({
   useEffect(() => {
     setEditor((current) => {
       if (!current?.articleId || current.dirty || current.accountScope !== accountScope) return current;
+      /* Owner-Readback hydriert die Autorwahl nur, solange der Nutzer sie im
+         aktiven Entwurf noch nicht selbst getroffen hat. */
+      if (current.authorDecisionTouched === true) return current;
       const article = articles.find((entry) => entry.id === current.articleId);
       if (!article) return current;
       const snapshot = publicationSnapshot(article);
@@ -577,6 +581,9 @@ export function useBlogPublicationController({
       for (const key of ["title", "text", "ordered", "anonymousPublication"]) {
         if (Object.prototype.hasOwnProperty.call(patch || {}, key)) next[key] = patch[key];
       }
+      if (Object.prototype.hasOwnProperty.call(patch || {}, "anonymousPublication")) {
+        next.authorDecisionTouched = true;
+      }
       next.dirty = true;
       next.saveStatus = "idle";
       return next;
@@ -671,6 +678,7 @@ export function useBlogPublicationController({
           anonymousPublication: response?.publication
             ? response.publication.authorMode !== BLOG_AUTHOR_MODE.PROFILE
             : current.anonymousPublication,
+          authorDecisionTouched: response?.publication ? false : current.authorDecisionTouched,
           references: current.references.map((row) => candidates.has(row.rowId)
             ? { ...row, decisionCandidates: candidates.get(row.rowId), decisionRequired: true } : row),
           saveStatus: response?.outcome || "saved",
@@ -754,6 +762,7 @@ export function useBlogPublicationController({
       setEditor((current) => current?.draftKey === draftKey ? {
         ...draftFromArticle(savedArticle, token.scope, draftKey),
         anonymousPublication: !!anonymousPublication,
+        authorDecisionTouched: draft.authorDecisionTouched === true,
         dirty: false,
         saveStatus: "saving",
       } : current);
