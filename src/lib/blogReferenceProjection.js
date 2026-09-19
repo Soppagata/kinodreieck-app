@@ -134,8 +134,11 @@ function identityRelation(publicHints, item) {
 }
 
 function sameMediaType(referenceMediaType, item) {
-  return normalisiereTyp(item?.typ || item?.mediaType || "sonstiges")
-    === normalisiereTyp(referenceMediaType || "sonstiges");
+  const raw = text(item?.typ || item?.mediaType || "sonstiges").toLocaleLowerCase("de-AT");
+  const itemType = ["movie", "film"].includes(raw) ? "film"
+    : ["tv_series", "series", "serie", "tv", "show"].includes(raw) ? "serie"
+      : normalisiereTyp(raw);
+  return itemType === normalisiereTyp(referenceMediaType || "sonstiges");
 }
 
 function resolveStrongIdentity(publicHints, library, fallbackTitle, mediaType) {
@@ -303,7 +306,9 @@ export function projectPublicBlogReferences(references, {
   });
 }
 
-function currentWorkTargets(reference, { library = [], mustwatch = [], cinema = [] } = {}, targetById) {
+function currentWorkTargets(reference, {
+  library = [], mustwatch = [], streaming = [], cinema = [],
+} = {}, targetById) {
   const identity = isBlogPrivateWorkIdentity(reference?.workIdentity) ? reference.workIdentity : null;
   if (!identity) return [];
   const matchesIdentity = (item) => {
@@ -324,6 +329,11 @@ function currentWorkTargets(reference, { library = [], mustwatch = [], cinema = 
   };
   const libraryTarget = uniqueTarget(library, (item) => targetForLibraryItem(item, identity.title));
   const mustwatchTarget = uniqueTarget(mustwatch, (item) => targetById.get(text(item?.id)) || null);
+  const streamingTarget = uniqueTarget(streaming, (item) => {
+    const ref = text(item?.id ?? item?.watchmode_id ?? item?.streaming_id);
+    return ref ? { kind: "streaming", art: "entdecken", ref,
+      titel: text(item?.titel || item?.title) || identity.title } : null;
+  });
   const cinemaItems = (Array.isArray(cinema) ? cinema : cinema?.filme || []).map((item) => ({
     ...item, typ: "film", titel: item?.titel || item?.t, jahr: item?.jahr ?? item?.j,
   }));
@@ -331,17 +341,17 @@ function currentWorkTargets(reference, { library = [], mustwatch = [], cinema = 
     const ref = text(item?.film_at_id ?? item?.filmAtId);
     return ref ? { kind: "cinema", art: "programm", ref, titel: text(item?.t || item?.titel) || identity.title } : null;
   });
-  return [libraryTarget, mustwatchTarget, cinemaTarget].filter(Boolean);
+  return [libraryTarget, mustwatchTarget, streamingTarget, cinemaTarget].filter(Boolean);
 }
 
 export function projectPrivateBlogReferences(references, targetById = new Map(), {
-  ready = true, library = [], mustwatch = [], cinema = [], now = Date.now(),
+  ready = true, library = [], mustwatch = [], streaming = [], cinema = [], now = Date.now(),
 } = {}) {
   return (Array.isArray(references) ? references : []).map((reference, index) => {
     const rowId = text(reference?.rowId);
     const storedTarget = isBlogPrivateStreamingTarget(reference?.sourceTarget)
       || isBlogPublicCinemaTarget(reference?.sourceTarget) ? reference.sourceTarget : null;
-    const targets = currentWorkTargets(reference, { library, mustwatch, cinema }, targetById);
+    const targets = currentWorkTargets(reference, { library, mustwatch, streaming, cinema }, targetById);
     if (storedTarget) targets.push(storedTarget);
     const nowMs = typeof now === "number" ? now : Date.parse(String(now));
     if (isBlogPrivateSourceObservations(reference?.sourceObservations)) {

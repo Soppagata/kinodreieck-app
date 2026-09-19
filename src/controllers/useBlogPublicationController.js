@@ -40,8 +40,11 @@ import {
   publicationSnapshot,
 } from "../lib/sharedPublication.js";
 import { sharedArticlesService } from "../services/sharedArticles.js";
+import { mustwatchCandidatesService } from "../services/mustwatchCandidates.js";
 import { blogReferenceContentHash } from "../lib/blogReferenceExtraction.js";
 import { normalisiereTyp } from "../lib/typen.js";
+
+const BLOG_STREAMING_REFRESH_MAX_IDS = 500;
 
 export async function readBlogLibraryBootState(readMaster, decodeMaster) {
   try {
@@ -88,6 +91,34 @@ function publicationMayExist(article) {
     || !!article?.publikation?.pending
     || !!article?.publikation?.publicationId
     || article?.geteilt === true;
+}
+
+function blogStreamingRefreshIds(articles, editor) {
+  const ids = [];
+  const seen = new Set();
+  const add = (value) => {
+    const id = text(value);
+    if (!id || seen.has(id) || ids.length >= BLOG_STREAMING_REFRESH_MAX_IDS) return;
+    seen.add(id);
+    ids.push(id);
+  };
+  const rows = [
+    ...(Array.isArray(articles) ? articles.flatMap((article) => article?.liste || []) : []),
+    ...(Array.isArray(editor?.references) ? editor.references : []),
+  ];
+  for (const row of rows) {
+    if (isBlogPrivateWorkIdentity(row?.workIdentity)) {
+      for (const hint of row.workIdentity.identityHints) {
+        if (hint.namespace === "watchmode") add(hint.value);
+      }
+    }
+    if (isBlogPrivateSourceObservations(row?.sourceObservations)) {
+      for (const observation of row.sourceObservations) {
+        if (observation.target.kind === "streaming") add(observation.target.ref);
+      }
+    }
+  }
+  return ids;
 }
 export function createBlogSaveRequest(article, operationId, intent, library, authorDecision) {
   const snapshot = publicationSnapshot(article);
@@ -405,6 +436,7 @@ export function useBlogPublicationController({
   selectedServices = [],
   selectedServicesReady = false,
   service = sharedArticlesService,
+  streamingCatalogService = mustwatchCandidatesService,
   addLibraryItem,
   navigateTarget,
   focusedArticleId = null,
@@ -421,6 +453,10 @@ export function useBlogPublicationController({
   const [publishedPage, setPublishedPage] = useState({
     status: "idle", items: [], nextCursor: null, complete: false, errorCode: null,
   });
+  const [streamingWorkState, setStreamingWorkState] = useState({
+    requestKey: "", items: [], ready: true,
+  });
+  const [privateDataScope, setPrivateDataScope] = useState(accountScope);
   const scopeRef = useRef(accountScope);
   const articlesRef = useRef(articles);
   const editorRef = useRef(editor);
@@ -454,11 +490,50 @@ export function useBlogPublicationController({
     return selectedServicesReady && Array.isArray(selectedServices) && selectedServices.length === 0
       ? [...BLOG_STREAMING_SOURCE_IDS] : selected;
   }, [selectedServices, selectedServicesReady]);
+  const streamingRefreshPlan = useMemo(() => {
+    const scopeCurrent = privateDataScope === accountScope;
+    const ids = scopeCurrent && articlesReady
+      ? blogStreamingRefreshIds(articles, editor?.accountScope === accountScope ? editor : null) : [];
+    const activeArticle = view.mode === "editor" ? editor?.articleId || editor?.draftKey || "new"
+      : view.mode === "reader" && view.area === "mine" ? view.articleId || "reader" : "list";
+    return { ids, requestKey: `${accountScope}|${activeArticle}|${ids.join("\n")}` };
+  }, [accountScope, articles, articlesReady, editor, privateDataScope,
+    view.area, view.articleId, view.mode]);
+
+  useEffect(() => {
+    const { ids, requestKey } = streamingRefreshPlan;
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    let active = true;
+    if (!enabled || !ids.length || typeof streamingCatalogService?.loadByIds !== "function") {
+      setStreamingWorkState({ requestKey, items: [], ready: true });
+      return () => { active = false; controller?.abort(); };
+    }
+    const scope = accountScope;
+    setStreamingWorkState((current) => current.requestKey === requestKey
+      ? current : { requestKey, items: [], ready: false });
+    streamingCatalogService.loadByIds(ids, { signal: controller?.signal }).then((response) => {
+      if (!active || controller?.signal.aborted || scopeRef.current !== scope) return;
+      setStreamingWorkState({ requestKey,
+        items: response?.status === "ready" && Array.isArray(response.items) ? response.items : [],
+        ready: true });
+    }).catch(() => {
+      if (active && !controller?.signal.aborted && scopeRef.current === scope) {
+        setStreamingWorkState({ requestKey, items: [], ready: true });
+      }
+    });
+    return () => { active = false; controller?.abort(); };
+  }, [accountScope, enabled, streamingCatalogService, streamingRefreshPlan.requestKey]);
+
+  const currentStreamingItems = streamingWorkState.requestKey === streamingRefreshPlan.requestKey
+    ? streamingWorkState.items : [];
+  const currentStreamingReady = !streamingRefreshPlan.ids.length
+    || (streamingWorkState.requestKey === streamingRefreshPlan.requestKey && streamingWorkState.ready);
 
   useEffect(() => {
     epochRef.current += 1;
     mutationRef.current = null;
     scopeRef.current = accountScope;
+    setPrivateDataScope(accountScope);
     redlinkContextRef.current = null;
     setEditor(null);
     setRedlinkForm(null);
@@ -575,7 +650,8 @@ export function useBlogPublicationController({
       publishedContentVersion: article?.publikation?.publishedContentVersion,
     }),
     referencePreview: projectPrivateBlogReferences(article.liste, privateTargetIndex, {
-      ready: libraryReady && mustwatchReady, library, mustwatch,
+      ready: libraryReady && mustwatchReady && currentStreamingReady,
+      library, mustwatch, streaming: currentStreamingItems,
       cinema: cinemaReady ? cinema : [], now: clock(),
     }).slice(0, 15),
     publicationError: article?.publikation?.errorCode ? {
@@ -583,7 +659,8 @@ export function useBlogPublicationController({
       errorCode: article.publikation.errorCode,
       operationId: article?.publikation?.pending?.operationId || article?.publikation?.operationId || null,
     } : null,
-  })), [articles, cinema, cinemaReady, clock, library, libraryReady, mustwatch, mustwatchReady, privateTargetIndex]);
+  })), [articles, cinema, cinemaReady, clock, currentStreamingItems, currentStreamingReady,
+    library, libraryReady, mustwatch, mustwatchReady, privateTargetIndex]);
 
   const editorView = useMemo(() => {
     if (!editor) return null;
@@ -605,11 +682,13 @@ export function useBlogPublicationController({
       publicationId: snapshot.publicationId || editor.publicationId || null,
       displayState,
       references: projectPrivateBlogReferences(editor.references, privateTargetIndex, {
-        ready: libraryReady && mustwatchReady, library, mustwatch,
+        ready: libraryReady && mustwatchReady && currentStreamingReady,
+        library, mustwatch, streaming: currentStreamingItems,
         cinema: cinemaReady ? cinema : [], now: clock(),
       }),
     };
-  }, [articles, cinema, cinemaReady, clock, editor, library, libraryReady, mustwatch, mustwatchReady, privateTargetIndex]);
+  }, [articles, cinema, cinemaReady, clock, currentStreamingItems, currentStreamingReady,
+    editor, library, libraryReady, mustwatch, mustwatchReady, privateTargetIndex]);
 
   const reader = useMemo(() => {
     if (view.mode !== "reader" || !view.articleId) return null;
@@ -630,14 +709,15 @@ export function useBlogPublicationController({
       scope: "private",
       article: { articleId: article.id, title: article.titel, text: article.text, ordered: article.geordnet === true },
       referenceViews: projectPrivateBlogReferences(article.liste, privateTargetIndex, {
-        ready: libraryReady && mustwatchReady, library, mustwatch,
+        ready: libraryReady && mustwatchReady && currentStreamingReady,
+        library, mustwatch, streaming: currentStreamingItems,
         cinema: cinemaReady ? cinema : [], now: clock(),
       }),
       canEdit: true,
       returnToken: view.returnToken,
     };
-  }, [articles, cinema, cinemaReady, clock, library, libraryReady, mustwatch, mustwatchReady,
-    privateTargetIndex, publicItems, view]);
+  }, [articles, cinema, cinemaReady, clock, currentStreamingItems, currentStreamingReady,
+    library, libraryReady, mustwatch, mustwatchReady, privateTargetIndex, publicItems, view]);
 
   const onNewArticle = useCallback(() => {
     if (editorRef.current?.dirty) {
