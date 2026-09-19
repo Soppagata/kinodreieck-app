@@ -1429,3 +1429,12 @@ wiederholen. Deshalb kein weiterer lokaler Voll- oder Buildlauf; die reguläre
 CI übernimmt den abschließenden Gesamtcheck. Nach dem Deployment erfolgen
 nur Git-/Versions-/Service-Worker-Readback und Lieferbeleg. Kein zusätzlicher
 bezahlter KI-Test, keine Migration und keine Production-Frontend-Promotion.
+
+Der erste CI-Kandidat `1440ad5` bestätigt alle 46 PG-/UI-Gesamtchecks,
+scheitert aber später an der bestehenden Größenbegrenzung von `App.jsx`.
+Das begrenzte Delta `7759eaf` verlagert nur die neue Kino-Quellenableitung
+in den vorhandenen Extraktionscontroller. Die Grenze bleibt unverändert;
+der betroffene `controllers_test.mjs` besteht mit 97 Checks. Bereits grüne
+Blog- und Browsertests wurden dafür lokal nicht wiederholt. Der finale
+Staging-Kandidat samt CI und tatsächlichem Domainstand wird im oben genannten
+Lieferverzeichnis festgehalten.

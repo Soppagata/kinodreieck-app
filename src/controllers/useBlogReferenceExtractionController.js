@@ -51,6 +51,18 @@ function localError(reason) {
   })[reason] || "Die KI-Erkennung konnte nicht sicher abgeschlossen werden. Schreiben und Speichern funktionieren weiter.";
 }
 
+export function blogReferenceCinemaSourceInput(cinema, info) {
+  return {
+    cinema,
+    cinemaReady: !!cinema && !!info && info.abgelaufen !== true && !info.fehler,
+    cinemaExpiresAt: info?.gueltigBis || null,
+    sourceContextKey: [
+      info?.art || "", info?.stand || "", info?.gueltigBis || "",
+      info?.abgelaufen === true ? "expired" : "current", info?.fehler ? "failed" : "ok",
+    ].join("|"),
+  };
+}
+
 export function useBlogReferenceExtractionController({
   accountScope,
   enabled = false,

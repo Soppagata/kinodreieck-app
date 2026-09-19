@@ -51,7 +51,10 @@ import {
   readBlogLibraryBootState,
   useBlogPublicationController,
 } from "./controllers/useBlogPublicationController.js";
-import { useBlogReferenceExtractionController } from "./controllers/useBlogReferenceExtractionController.js";
+import {
+  blogReferenceCinemaSourceInput,
+  useBlogReferenceExtractionController,
+} from "./controllers/useBlogReferenceExtractionController.js";
 import { useErrorQueue } from "./controllers/useErrorQueue.js";
 import { useMasterStateController } from "./controllers/useMasterStateController.js";
 import { useBackupExportController } from "./controllers/useBackupExportController.js";
@@ -1335,14 +1338,7 @@ export default function App() {
     libraryReady: isBlogLibraryReady(bootDone, masterReadStatus, master != null),
     mustwatch,
     mustwatchReady: mustwatchGeladen,
-    cinema: programm,
-    cinemaReady: !!programm && !!programmInfo
-      && programmInfo.abgelaufen !== true && !programmInfo.fehler,
-    cinemaExpiresAt: programmInfo?.gueltigBis || null,
-    sourceContextKey: [
-      programmInfo?.art || "", programmInfo?.stand || "", programmInfo?.gueltigBis || "",
-      programmInfo?.abgelaufen === true ? "expired" : "current", programmInfo?.fehler ? "failed" : "ok",
-    ].join("|"),
+    ...blogReferenceCinemaSourceInput(programm, programmInfo),
     onApplyReferenceSuggestions: blogPublicationController.actions.onApplyReferenceSuggestions,
     onOpenSettings: oeffnePersonalisierungKi,
   });
