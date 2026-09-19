@@ -77,7 +77,7 @@ gemeinsamen lokalen Abschlusslauf. Ein Mockup allein erfüllt keines davon.
 | M4 | Veröffentlicht zügig öffnen; Quellenwechsel und eigener Bestand personalisieren vorbereitete Verweise ohne Katalogvollabruf. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); persönlicher Abgleich, bestätigter Leerbestand, keine Katalog-/Provideraufrufe im Gesamttest |
 | M5 | Quellenziele bleiben nach Katalogänderungen aktuell; Fehler und abgelaufene Angebote erzeugen keine falschen Verfügbarkeiten. | A, B, C | DONE (Staging + Production) | 77c5603 (Code 4170dcb); Paket-Refresh 13/13, registriertes Schedulerkommando und natürlicher erfolgreicher Lauf nach Aktivierung |
 | M6 | Bis zu 50 Referenzen sicher speichern und veröffentlichen; manipulierte oder zu häufige Aufrufe gefährden bestehende Blogs nicht. | R50, ein Baumeister durchgängig | DONE auf Staging | M6 in a3a0086; Migration, lokales Gate, CI und Domain-/Service-Worker-Readback bestätigt; Production-Frontend bleibt 77c5603 |
-| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS; Solo-Folgekorrektur B | INTEGRIERT; Staging-Nachweis im Lieferbeleg | Auswahlhinweise und Streaming-/Kinoabgleich als 233ad55 und 8a3eacc integriert. Gesamtcheck über reguläre CI; finaler Commit und Domainstand unter `/private/tmp/kd-blog-selection-release-20260919/`. Physische PWA-Abnahme bleibt bei Max. |
+| M7 | Erwähnte Filme, Serien, Musik und Sonstiges optional erkennen lassen; Textfunde und Werke bewusst auswählen, atomar übernehmen und regulär speichern/veröffentlichen. | A Backend, B Editor/Client, C Settings/DS; Solo-Folgekorrektur B | INTEGRIERT: Werkidentität statt Fundort | 1ce998b gruppiert Quellen je Werk; klare Titel brauchen keine zweite Auswahl. Kontobezogene Zielauflösung bleibt dynamisch. CI und finaler Staging-Stand: `/private/tmp/kd-blog-work-identity-release-20260919/`. |
 
 ## Ebene 0: gemeinsame Grundlage F0
 
@@ -1438,3 +1438,47 @@ der betroffene `controllers_test.mjs` besteht mit 97 Checks. Bereits grüne
 Blog- und Browsertests wurden dafür lokal nicht wiederholt. Der finale
 Staging-Kandidat samt CI und tatsächlichem Domainstand wird im oben genannten
 Lieferverzeichnis festgehalten.
+
+
+### M7-Korrektur: Werkidentität statt Fundort vom 19.09.2026
+
+Max stellt anhand des 15:56-Screenshots klar: 2001 (1968) in Mediathek
+und Streaming ist ein Werk, keine Mehrdeutigkeit. Die vorige Umsetzung hat
+Quellen und Werke vermischt. Ein eindeutiger erkannter Titel braucht nach der
+Erwähnungsauswahl keine zweite Bestätigung und keinen zusätzlichen manuellen
+Haken, auch wenn noch kein passender Bestandseintrag existiert. Eine echte
+Werkauswahl bleibt nur für unterschiedliche Filme, Serien oder andere Werke.
+Die gespeicherte Werkreferenz erhält ihre Ziele anschließend aus den Einträgen
+des jeweiligen Kontos; es wird weiterhin kein Mediathekeintrag automatisch
+angelegt. Frühere ausdrückliche Rotlinkentscheidungen bleiben erhalten.
+
+SOLO-Delta B von `107cfb769ca09218c7ce50a9641b407cd3a750b0` im Worktree
+`/private/tmp/kd-blog-work-identity-fix-20260919`, Branch
+`codex/blog-work-identity-fix-20260919`. B besitzt den vollständigen betroffenen
+Clientweg einschließlich vorhandener Blogtests und PG-/UI-Gesamtfixture.
+Meister besitzt Register, Integration und die autorisierte Staging-Lieferung.
+Bestehende Backend-/Providerverträge, Migrationen und öffentliche Abo-/
+Kontenfilter bleiben unverändert. Keine neue Websuche oder Anbieter-Rauchprobe.
+
+Max verlangt ausdrücklich einen konzentrierten Abschluss ohne mehrfache
+Kontrollen. Daher gezielte Prüfung nur beim Paketbauer, Übernahme seiner
+Belege, einmaliger Gesamtcheck durch die reguläre CI und anschließend nur
+Versions-/Service-Worker-Readback. Keine zusätzliche lokale Vollsuite, kein
+Kontrollagent und keine wiederholten Funktionstests nach dem Deployment.
+Lieferbelege: `/private/tmp/kd-blog-work-identity-release-20260919/`.
+
+DELIVERED / INTEGRATED: `c728fd0` als `1ce998b` übernommen. Der Fix
+führt widerspruchsfreie Fundorte zu einem Werk zusammen und unterscheidet
+weiterhin Remakes sowie ID-/Typ-/Jahrkonflikte. Klare Titel werden nach der
+Erwähnungsauswahl als Werkreferenz mit automatischer Auflösung übernommen,
+auch ohne aktuellen Bestand. Private Speicherung erhält die Werkidentität;
+befristete Quellenbeobachtungen werden nicht veröffentlicht. Die spätere
+Darstellung löst passende aktuelle Ziele des jeweiligen Kontos auf. Der
+bestehende Serververtrag trägt klare Werke ohne Quellenfund bereits ohne
+zusätzliche Rotlink-Pflicht. Keine Backendänderung oder Mediathekmutation.
+
+Übernommene fokussierte Paketbelege: 25 Client-, 31 Projektions- und zwölf
+Controllerchecks grün. UI-/PG-Gesamtfixture angepasst; sie läuft wie von Max
+gewünscht erst in der regulären CI. Kein Wiederholungslauf beim Meister,
+kein lokaler Build und kein zusätzlicher Browser- oder Anbieteraufruf.
+Der finale Commit wird mit CI und Staging-Version im Lieferbeleg gebunden.
