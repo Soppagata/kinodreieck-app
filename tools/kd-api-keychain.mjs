@@ -327,7 +327,7 @@ export async function executeKeyLifecycle(argv, {
   try {
     metadata = await mutateAndReadback({ baseUrl, ...call, credential, fetchImpl });
   } catch (error) {
-    const wrapped = new Error(`${error?.message || "KEY_LIFECYCLE_FAILED"}; operationId=${request.operationId}; keychainAccount=${alias}; denselben Befehl erneut verwenden`);
+    const wrapped = new Error(`${error?.message || "KEY_LIFECYCLE_FAILED"}; operationId=${request.operationId}; keychainService=${KD_API_KEYCHAIN_SERVICE}; keychainAccount=${alias}; denselben Befehl erneut verwenden`);
     wrapped.cause = error;
     throw wrapped;
   }
@@ -340,7 +340,14 @@ export async function executeKeyLifecycle(argv, {
     store(keychain, activeAccount, { alias, command, request, rawKey, metadata });
   }
   keychain.delete(pendingAccount, { missing: true });
-  return Object.freeze({ command, keychainAccount: alias, ...metadata });
+  const { accountId: _privateAccountId, ...publicMetadata } = metadata;
+  return Object.freeze({
+    command,
+    keychainService: KD_API_KEYCHAIN_SERVICE,
+    keychainAccount: alias,
+    keychainEnvelopeVersion: RECORD_VERSION,
+    ...publicMetadata,
+  });
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

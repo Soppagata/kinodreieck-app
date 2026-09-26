@@ -76,7 +76,16 @@ test("Issue hält Rohkey bei unklarem Ausgang fest und wiederholt Digest plus Op
     },
   });
   assert.equal(result.operationId, ids.operation);
+  assert.equal(result.keychainService, "at.kinodreieck.kd-api.access-v1");
+  assert.equal(result.keychainAccount, "owner-assistant");
+  assert.equal(result.keychainEnvelopeVersion, "kd-api-keychain-v1");
+  assert.equal(Object.hasOwn(result, "accountId"), false);
   assert.equal(keychain.entries.has("owner-assistant::issue-pending"), false);
+  const active = JSON.parse(keychain.entries.get("owner-assistant"));
+  assert.deepEqual(Object.keys(active).sort(), [
+    "alias", "command", "metadata", "rawKey", "request", "version",
+  ]);
+  assert.equal(active.metadata.accountId, ids.account);
   assert.equal(JSON.stringify(result).includes(pending.rawKey), false);
   assert.equal(payloads[0].p_key_digest, payloads[1].p_key_digest);
   assert.equal(payloads[1].p_key_digest, payloads[2].p_key_digest);
@@ -126,6 +135,7 @@ test("macOS-Keychain-Writer transportiert Geheimnis nur über stdin", () => {
   const secret = "kd_v1_never-in-argv";
   keychain.write("fixture", secret);
   assert.equal(seen[0].args.includes(secret), false);
+  assert.ok(seen[0].args.includes("at.kinodreieck.kd-api.access-v1"));
   assert.equal(seen[0].args.at(-1), "-w");
   assert.equal(seen[0].options.input, `${secret}\n`);
 });

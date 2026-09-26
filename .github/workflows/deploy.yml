@@ -59,6 +59,8 @@ jobs:
         run: npm run test:kd-api:backend
       - name: KD-API-Datenbankvertrag prüfen
         run: npm run test:kd-api:db
+      - name: KD-API-Assistentenabhängigkeiten installieren
+        run: npm ci --prefix integrations/kd-assistant
       - name: KD-API-Assistentenadapter prüfen
         run: npm run test:kd-api:assistant
       - name: KD-API-Liefervertrag prüfen

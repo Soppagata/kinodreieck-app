@@ -83,9 +83,16 @@ ausgegeben. Die Einrichtung dieses bestehenden Betriebscredentials und die
 Bindung der echten Zielkonten gehören zur freigegebenen E6-Wirkung.
 
 Jeder lokale Zugang bekommt einen nicht geheimen Alias. Die CLI erzeugt den
-Rohkey kryptographisch lokal und schreibt ihn über stdin direkt in den Dienst
-`at.kinodreieck.kd-api.access-v1`. Nur Digest und Fingerprint erreichen den
-service-only RPC:
+Rohkey kryptographisch lokal und schreibt ihn über stdin direkt in den festen
+Dienst `at.kinodreieck.kd-api.access-v1`; der Alias ist dort der Keychain-
+Account. Ein aktiver Eintrag hat die Envelope-Version `kd-api-keychain-v1`
+und die geschützte Form `{version, alias, command, request, rawKey, metadata}`.
+Der Assistentenadapter erhält nach erfolgreicher Ausgabe nur die beiden Labels
+`KD_API_KEYCHAIN_SERVICE=at.kinodreieck.kd-api.access-v1` und
+`KD_API_KEYCHAIN_ACCOUNT=<lokaler-alias>`. Sein Reader liest ausschließlich
+den aktiven Alias. Einträge mit den internen Suffixen `::issue-pending`,
+`::rotate-pending`, `::revoke-pending` oder `::revoked` sind keine
+Clientcredentials. Nur Digest und Fingerprint erreichen den service-only RPC:
 
 ```sh
 node tools/kd-api-keychain.mjs issue \
@@ -111,12 +118,16 @@ node tools/kd-api-keychain.mjs revoke \
 
 Vor dem ersten RPC speichert die CLI Rohkey, Vorgangs-ID und Eingaben als
 Pending-Eintrag. Bei Timeout oder unklarem Transportausgang nennt sie nur
-Vorgangs-ID und Alias. Derselbe Befehl verwendet danach denselben Pending-Key
-und dieselbe Operation; kein zweiter Zugang und kein zweiter Rotationskey wird
+Vorgangs-ID, festen Dienst und Alias. Derselbe Befehl verwendet danach
+denselben Pending-Key und dieselbe Operation; kein zweiter Zugang und kein
+zweiter Rotationskey wird
 blind erzeugt. Erfolg wird über denselben idempotenten RPC aus dem
 Operationsergebnis zurückgelesen. Erst danach wird ein neuer Key aktiv oder ein
 widerrufener lokaler Rohkey gelöscht. `--operation-id` ist für einen bewusst
 gebundenen Wiederanlauf zulässig, enthält aber niemals den Rohkey.
+Die erfolgreiche stdout-Projektion nennt Dienst, Alias und Envelope-Version
+sowie nicht geheime Lifecycle-Metadaten. Die private `accountId` wird ebenso
+wie der Rohkey und die ursprünglichen Eingaben nicht ausgegeben.
 
 ## Freischalten, abschalten und Function-Rollback
 
