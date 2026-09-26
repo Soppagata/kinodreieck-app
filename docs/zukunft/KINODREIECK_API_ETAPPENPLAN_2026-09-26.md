@@ -1,6 +1,6 @@
 # Kinodreieck-API: Etappenplan und Masterchat-Übergabe
 
-Stand: 26.09.2026. Status: **Foundation integriert; Backend, Assistentenanbindung und Lieferung im parallelen Bau.**
+Stand: 26.09.2026. Status: **Alle Baupakete samt Anschlüssen integriert; lokaler E6-Gesamtlauf beauftragt.**
 Der ausführende Meister arbeitet in einem eigenen Integrationsworktree.
 Neue Endpunkte, Migrationen, Keys und Deployments sind erst durch die jeweils
 zugeordneten Lieferbelege umgesetzt beziehungsweise freigeschaltet.
@@ -429,10 +429,10 @@ Der fremd veränderte Primärcheckout bleibt unberührt. Es gilt verbindlich
 | Paket | Agent / Profil | Branch / Worktree | Basis / DELIVERED / INTEGRATED | Write-Owner und eingefrorene Anschlüsse |
 |---|---|---|---|---|
 | F0 | `api_f0` / Sol high; tragende Kontobindungs- und Parallelitätsverträge | `codex/api-f0-20260926` / `/private/tmp/kd-api-f0-20260926` | Basis: `dddbb12668ba6dc3dedffb28c722ea3949b4d4f2`; DELIVERED `c89f919a` + `4f84ab43`; INTEGRATED `6e81032` + `e7d4630` | `contracts/kd-api/**`, notwendige `src/**`-Adapter, zugehörige gezielte App-Tests, Root-`package.json`/Lockfile und notwendige gemeinsame Laufzeitkonfiguration. Konkretisiert alle Befehle/Dateipfade im eingefrorenen Vertrag. |
-| B1 | `/root/api_f0` (weiterverwendet) / Sol high; Auth/RLS, Migration, Parallelität, Provider | `codex/api-b1-20260926` / `/private/tmp/kd-api-b1-20260926` | DISPATCH; Basis `e7d4630f04fcf3753201486762c49facf9226214` | Neue API-Migrationen, `supabase/functions/**`, `supabase/config.toml`, `tests/kd-api/backend/**`, `tests/kd-api/db/**`, `tests/kd-api/integration/**`; nötige bestehende Backendtests ausschließlich diesem Owner. |
-| B2 | `/root/api_b2` / Sol medium | `codex/api-b2-20260926` / `/private/tmp/kd-api-b2-20260926` | Basis `e7d4630`; DELIVERED `59d77951` + `b8989497`; Integration nach B1 | `integrations/kd-assistant/**` samt eigener Tests, Fixtures, Anleitung und gegebenenfalls eigenem Package/Lockfile; gemeinsame Verträge read-only. |
-| B3 | `/root/api_b3` / Sol high; Keychain, Rotation, Deploy-Zielbindung | `codex/api-b3-20260926` / `/private/tmp/kd-api-b3-20260926` | Basis `e7d4630`; DELIVERED `7e543b24` + `ccbaffb4`; Integration nach B2 | `.github/workflows/deploy.yml`, gezielter API-Workflow, `tools/function-release-info.mjs`, `tools/release-compatibility.mjs`, neue `tools/kd-api-*`, `tests/kd-api/release/**`, API-Lieferanleitung; keine Backend-/Adapterdateien. |
-| E6 | bereits beteiligter B1 | eigener Worktree vom exakt integrierten Kandidaten | erst nach vollständiger Integration | Ein gebündelter Gesamtlauf; nur konkret entwertete Nachweise nachprüfen. |
+| B1 | `/root/api_f0` (weiterverwendet) / Sol high; Auth/RLS, Migration, Parallelität, Provider | `codex/api-b1-20260926` / `/private/tmp/kd-api-b1-20260926` | Basis `e7d4630`; DELIVERED `7d021683`; INTEGRATED `2e4b42f` | Neue API-Migrationen, `supabase/functions/**`, `supabase/config.toml`, `tests/kd-api/backend/**`, `tests/kd-api/db/**`, `tests/kd-api/integration/**`; nötige bestehende Backendtests ausschließlich diesem Owner. |
+| B2 | `/root/api_b2` / Sol medium | `codex/api-b2-20260926` / `/private/tmp/kd-api-b2-20260926` | Basis `e7d4630`; DELIVERED `59d77951` + `b8989497`; INTEGRATED `571287b` + `aed63ce` | `integrations/kd-assistant/**` samt eigener Tests, Fixtures, Anleitung und gegebenenfalls eigenem Package/Lockfile; gemeinsame Verträge read-only. |
+| B3 | `/root/api_b3` / Sol high; Keychain, Rotation, Deploy-Zielbindung | `codex/api-b3-20260926` / `/private/tmp/kd-api-b3-20260926` | Basis `e7d4630`; DELIVERED `7e543b24` + `ccbaffb4`; INTEGRATED `40f6abc` + `087c5ee` + `c83bf17`; DELIVERED-Lieferdelta `fb102557` | `.github/workflows/deploy.yml`, gezielter API-Workflow, `tools/function-release-info.mjs`, `tools/release-compatibility.mjs`, neue `tools/kd-api-*`, `tests/kd-api/release/**`, API-Lieferanleitung; keine Backend-/Adapterdateien. |
+| E6 | `/root/api_f0`, bestehender B1 / Sol high | `codex/api-e6-20260926` / `/private/tmp/kd-api-e6-20260926` | gemeinsamer Stand `c83bf17` plus dieses Masterregister; exakter Dispatchcommit im Beleg | Ein gebündelter Gesamtlauf; nur konkret entwertete Nachweise nachprüfen. |
 
 **Frischer Zielabgleich am 26.09.2026 (nur lesend):** Die GitHub-Umgebungen
 `staging` und `production` nennen beide
@@ -481,19 +481,35 @@ nur in einer lokalen 0600-Datei unter einem 0700-Verzeichnis außerhalb des
 Repositories; sie werden nicht im Register protokolliert. Keine Keyausgabe
 oder Shared-Datenmutation erfolgt.
 
+**B1-DELIVERED-Beleg:** `test:kd-api:backend` 6/6; betroffener
+`ai_task_test.ts` 350/350; lokale PG17-Verträge final 15/15. Nach konkretem
+lokalem IPC-/DB-Fehler wurden ausschließlich die betroffenen DB-Nachweise
+erneuert. Kein Gesamtlauf oder verbundener Integrationstest vor E6.
+
+**Weitere belegte Verbindungsnaht:** `kd-api/index.ts` ruft die separate
+bestehende Function `ai-task` mit `X-KD-API-Job` auf. B1 hat deren Handler dafür
+angepasst. B3 hat deshalb den gebundenen Liefer-/Manifestpfad um genau
+`ai-task` erweitert bei unverändertem `verify_jwt=true`; ausschließlich `kd-api` bekommt
+`verify_jwt=false`. Keine andere Function wird daraus als Deployauftrag
+abgeleitet. Das neue API-Gate bleibt während dieser Kette geschlossen.
+DELIVERED `fb102557`, INTEGRATED `c83bf17`; gezielter Manifest-/Workflow-/
+Functionset-Readback-Beleg 7/7 übernommen. Der neue Workflow benötigt die
+im Lieferleitfaden ausdrücklich benannten Zielsecrets und Variablen; sie sind
+durch den lokalen Bau noch nicht eingerichtet oder remote geprüft.
+
 Root-Skripte, Lockfile und `contracts/kd-api/**` gehören während der Welle F0
 und bleiben eingefroren. Das Masterregister gehört ausschließlich dem Meister.
 Liefergrenzen bisher: F0 lokal gebaut, fokussiert getestet, committed und
-integriert. B1 im Bau; B2/B3 samt Anschlussdeltas geliefert, Integration wartet auf B1. Finaler Gesamtbeleg / Push / CI / Deployment /
+integriert. B1/B2/B3 samt bisherigen Anschlussdeltas integriert; Zweifunction-Lieferanschluss ebenfalls integriert. E6 lokal beauftragt. Finaler Gesamtbeleg / Push / CI / Deployment /
 praktische Owner-/Member-Verwendung **noch nicht belegt**.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Evidenz / Rest |
 |---|---|---|---|---|
-| API-01 | Erlaubte eigene Nutzeraktionen einschließlich Mediathek und Blog funktionieren über die API ohne Verlust bestehender App-Funktionen. | F0, B1, B2 | OFFEN | F0 integriert `e7d4630`; Backend und Adapter im Bau. |
-| API-02 | Beide Assistenten können eine Auswahl zusammenstellen und identisch als Text oder JSON ausgeben. | F0, B1, B2 | OFFEN | F0 integriert `e7d4630`; Backend und Adapter im Bau. |
-| API-03 | Zwei getrennte widerrufbare Zugänge binden Owner und Member sicher an Konto und Rechte. | B1, B2, E6 | OFFEN | — |
-| API-04 | Nur der persönliche Assistent kann KD-KI auslösen; Kosten-/Wiederholungsgrenzen greifen auch bei Abbruch und Folgeaktionen. | B1, B2 | OFFEN | — |
-| API-05 | Nur der persönliche Assistent erhält aussagekräftige Diagnose-, Nutzungs- und Requestdaten; der Member erhält keine solchen Zahlen. | B1, B2 | OFFEN | — |
+| API-01 | Erlaubte eigene Nutzeraktionen einschließlich Mediathek und Blog funktionieren über die API ohne Verlust bestehender App-Funktionen. | F0, B1, B2 | GEBAUT | F0/B1/B2 integriert; E6-Verbundnachweis noch offen. |
+| API-02 | Beide Assistenten können eine Auswahl zusammenstellen und identisch als Text oder JSON ausgeben. | F0, B1, B2 | GEBAUT | F0/B1/B2 integriert; E6-Verbundnachweis noch offen. |
+| API-03 | Zwei getrennte widerrufbare Zugänge binden Owner und Member sicher an Konto und Rechte. | B1, B2, E6 | GEBAUT | Lokaler Key-Lifecycle und Rollenprüfung belegt; zwei reale Keys und praktische Probe offen. |
+| API-04 | Nur der persönliche Assistent kann KD-KI auslösen; Kosten-/Wiederholungsgrenzen greifen auch bei Abbruch und Folgeaktionen. | B1, B2 | GEBAUT | Paketbelege übernommen; verbundener E6-Nachweis und reale Zielprobe offen. |
+| API-05 | Nur der persönliche Assistent erhält aussagekräftige Diagnose-, Nutzungs- und Requestdaten; der Member erhält keine solchen Zahlen. | B1, B2 | GEBAUT | Paketbelege übernommen; verbundener E6-Nachweis und reale Zielprobe offen. |
 | API-06 | Der geprüfte API-/Tool-Kandidat ist am gebundenen Ziel ausgeliefert und mit beiden Zugängen praktisch nutzbar; sein Vertrag ist für den späteren Apple-Client vorbereitet. | F0, B1, B2, B3, E6 | OFFEN | Gemeinsamer Vertrag und Apple-Schnittstelle in F0; reale Lieferung und beide Zugänge noch offen. |
 
 OFFEN = Ergebnis fehlt; GEBAUT = durch die einmalige Baumeisterkontrolle
@@ -502,7 +518,8 @@ Gesamtlauf der letzten Etappe 6 bestanden
 und das jeweilige Nutzerergebnis belegt. Liefergrenzen separat notieren:
 gebaut / getestet / committed / gepusht / CI-grün / deployed / praktisch
 abgenommen. Ein lokales DONE ist keine automatische Remote-Zusage.
-Der Live-KI-Nachweis wird bei API-04 ausdrücklich als belegt oder offen geführt.
+API-04: **Live-KI-Nachweis offen**, bisher ausschließlich providerfreie Belege.
+Der Live-KI-Nachweis wird getrennt vom lokalen Funktionsstand geführt.
 
 Nur der Meister pflegt dieses Register. Die verbindliche Wellenzuordnung
 ergänzt er hier einmal um tatsächliche Basis, Agent, Branch, Worktree und
