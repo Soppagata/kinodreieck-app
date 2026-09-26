@@ -208,6 +208,34 @@ Release-ID mit `enabled=true`. Danach muss `kd-api-readback.mjs` mit
 negativen KI-/Diagnosewegen geprüft; ein echter Providerrequest ist davon
 getrennt und bleibt an die Projekt-Budgetregeln gebunden.
 
+### Rückweg bei der ersten Installation
+
+Vor der ersten gemeinsamen KD-API-Lieferung gibt es noch keinen zuvor
+belegten Zweifunctionsatz. Der frisch providerfrei gelesene Owner-Health nennt
+für den bestehenden `ai-task` den Buildmarker
+`a3a00868d9b25076b3f51ed9304ed71411735271`; dieser Commit ist lokal
+vorhanden. Remote existiert `kd-api` zu diesem Zeitpunkt noch nicht. Der
+Buildmarker allein belegt weder die Byteparität der ausgelieferten Quellen
+noch einen gemeinsamen API-Releasezustand.
+
+Unmittelbar vor der ersten Shared-Wirkung werden deshalb der tatsächlich
+aktive `ai-task`-Managementstand und seine heruntergeladenen Quellen read-only
+erfasst, bytegenau gegen den lokal vorhandenen Stand geprüft und als
+konkretes Rückwegziel gebunden. Erst dieser Quellen-, JWT-, Versions- und
+Markerbeleg darf für einen nötigen Erstinstallations-Rückweg verwendet werden.
+
+Bricht die erste Installation ab, bleibt `KD_API_ENABLED=false` oder wird
+unmittelbar wieder auf `false` gesetzt und rückgelesen. Falls `ai-task` bereits
+verändert wurde, wird nötigenfalls exakt der so belegte vorherige Einzelstand
+wiederhergestellt. Anschließend werden sein Buildmarker sowie ACTIVE-, JWT-
+und Versionsstatus erneut gelesen. Neue additive API-Schemaobjekte dürfen
+dabei geschlossen bestehen bleiben. Dieser Rückweg stellt den bisherigen
+Appbetrieb wieder her; er behauptet weder eine ausgelieferte noch eine
+funktionsfähige KD-API.
+
+Nach der ersten vollständig gelieferten und gemeinsam belegten API-Version
+gilt wieder der folgende gemeinsame Zweifunction-Rollback vom selben Commit.
+
 Bei einem Vorfall zuerst denselben belegten Functioncommit mit neuer
 Release-ID und `enabled=false` deployen und `enabled:false` rücklesen. Danach
 betroffene Zugänge einzeln mit `revoke` sperren und die erhöhte `keyEpoch`
