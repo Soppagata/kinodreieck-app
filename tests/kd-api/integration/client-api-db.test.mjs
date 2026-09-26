@@ -23,7 +23,6 @@ function rpcFetch(harness) {
   return async (url, init) => {
     const name = new URL(url).pathname.split("/").at(-1);
     const value = await harness.rpc(name, JSON.parse(init.body));
-    if (name === "kd_api_rotate_access_v1") console.error(`E6_ROTATE_METADATA ${JSON.stringify(value)}`);
     return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
   };
 }
@@ -182,11 +181,11 @@ test("E6 connected local client/tool/MCP -> kd-api -> PG17/ai-task", { timeout: 
     const result = await sdk.callTool({ name: "account_export", arguments: {} }); assert.equal(result.isError, undefined); assert.equal(result.structuredContent.result.format, "kinodreieck-paket-v1");
   } finally { await sdk.close(); await server.close(); }
 
-  await executeKeyLifecycle(["rotate","--base-url","https://local.supabase.invalid","--keychain-account","e6-owner","--access-id",ownerAccess.stored.metadata.accessId,"--expected-key-epoch","0","--operation-id",operationId()], { keychain:harness.keychain,adminCredentialReader:()=>SERVICE_KEY,fetchImpl:rpcFetch(harness),random:()=>Buffer.alloc(32,68) });
+  const rotateResult = await executeKeyLifecycle(["rotate","--base-url","https://local.supabase.invalid","--keychain-account","e6-owner","--access-id",ownerAccess.stored.metadata.accessId,"--expected-key-epoch",String(ownerAccess.stored.metadata.keyEpoch),"--operation-id",operationId()], { keychain:harness.keychain,adminCredentialReader:()=>SERVICE_KEY,fetchImpl:rpcFetch(harness),random:()=>Buffer.alloc(32,68) });
   await assert.rejects(() => owner.call("capabilities_get"), (error) => error.code === "UNAUTHENTICATED");
   const rotatedKey = projectKeychainCredential(harness.keychain.read("e6-owner"), { alias: "e6-owner" }); const rotated = makeClient(harness.baseUrl, rotatedKey);
   assert.equal((await rotated.call("capabilities_get")).data.identity, "personal_owner_assistant");
-  await executeKeyLifecycle(["revoke","--base-url","https://local.supabase.invalid","--keychain-account","e6-owner","--access-id",ownerAccess.stored.metadata.accessId,"--expected-key-epoch","1","--reason-code","OWNER_REQUEST","--operation-id",operationId()], { keychain:harness.keychain,adminCredentialReader:()=>SERVICE_KEY,fetchImpl:rpcFetch(harness) });
+  await executeKeyLifecycle(["revoke","--base-url","https://local.supabase.invalid","--keychain-account","e6-owner","--access-id",ownerAccess.stored.metadata.accessId,"--expected-key-epoch",String(rotateResult.keyEpoch),"--reason-code","OWNER_REQUEST","--operation-id",operationId()], { keychain:harness.keychain,adminCredentialReader:()=>SERVICE_KEY,fetchImpl:rpcFetch(harness) });
   await assert.rejects(() => rotated.call("capabilities_get"), (error) => error.code === "ACCESS_REVOKED");
 
   harness.sql(`update public.kd_account_access set active=false,updated_at=clock_timestamp()+interval '1 second' where account_id='${harness.accounts.member}';`, { role:"service_role" });
