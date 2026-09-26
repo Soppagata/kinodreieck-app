@@ -112,7 +112,11 @@ function stripTomlComments(line) {
   return line;
 }
 
-function parseConfigBlob(configBlob) {
+export function parseFunctionConfigBlob(configBlob, {
+  functionName = "ai-task",
+  expectedVerifyJwt = true,
+  expectedProjectId = "bscjgwcntapobyxsiyce",
+} = {}) {
   const source = new TextDecoder("utf8", { fatal: true }).decode(configBlob);
   const lines = source.split(/\r?\n/);
   const sectionRegex = /^\s*\[([^\]]+)\]\s*$/;
@@ -123,7 +127,7 @@ function parseConfigBlob(configBlob) {
   let verifyJwtCount = 0;
   let verifyJwt = null;
   let functionSectionCount = 0;
-  let inAiTaskSection = false;
+  let inTargetFunctionSection = false;
   let currentSection = null;
 
   for (const line of lines) {
@@ -133,8 +137,8 @@ function parseConfigBlob(configBlob) {
     const sectionMatch = raw.match(sectionRegex);
     if (sectionMatch) {
       currentSection = sectionMatch[1];
-      inAiTaskSection = currentSection === "functions.ai-task";
-      if (inAiTaskSection) {
+      inTargetFunctionSection = currentSection === `functions.${functionName}`;
+      if (inTargetFunctionSection) {
         functionSectionCount += 1;
         continue;
       }
@@ -157,10 +161,10 @@ function parseConfigBlob(configBlob) {
       continue;
     }
 
-    if (inAiTaskSection && key === "verify_jwt") {
+    if (inTargetFunctionSection && key === "verify_jwt") {
       verifyJwtCount += 1;
       if (verifyJwtCount > 1) {
-        throw new Error("Config-Fehler: verify_jwt in [functions.ai-task] darf nur einmal vorkommen");
+        throw new Error(`Config-Fehler: verify_jwt in [functions.${functionName}] darf nur einmal vorkommen`);
       }
       if (value !== "true" && value !== "false") {
         throw new Error("Config-Fehler: verify_jwt muss ein boolescher TOML-Wert sein");
@@ -172,20 +176,24 @@ function parseConfigBlob(configBlob) {
   if (projectIdCount !== 1) {
     throw new Error("Config-Fehler: project_id muss genau einmal gesetzt sein");
   }
-  if (projectId !== "bscjgwcntapobyxsiyce") {
+  if (projectId !== expectedProjectId) {
     throw new Error("Config-Fehler: project_id ist nicht die erwartete Ziel-ID");
   }
   if (functionSectionCount !== 1) {
-    throw new Error("Config-Fehler: [functions.ai-task] fehlt oder ist mehrdeutig");
+    throw new Error(`Config-Fehler: [functions.${functionName}] fehlt oder ist mehrdeutig`);
   }
-  if (verifyJwtCount !== 1 || verifyJwt !== true) {
-    throw new Error("Config-Fehler: verify_jwt in [functions.ai-task] muss true sein");
+  if (verifyJwtCount !== 1 || verifyJwt !== expectedVerifyJwt) {
+    throw new Error(`Config-Fehler: verify_jwt in [functions.${functionName}] muss ${expectedVerifyJwt} sein`);
   }
 
   return {
     projectId,
     verifyJwt,
   };
+}
+
+function parseConfigBlob(configBlob) {
+  return parseFunctionConfigBlob(configBlob);
 }
 
 export function sourceHash(dateien, leseInhalt) {

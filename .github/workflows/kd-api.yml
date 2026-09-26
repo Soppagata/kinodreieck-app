@@ -1,0 +1,138 @@
+name: Deploy kd-api function
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Gebundene GitHub-Umgebung
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      source_commit:
+        description: Exakter geprüfter 40-stelliger Kandidatencommit
+        required: true
+        type: string
+      release_id:
+        description: Nicht geheime eindeutige Release-ID
+        required: true
+        type: string
+      enabled:
+        description: API-Gate; beim ersten Deploy false lassen
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  # Staging und Production teilen derzeit dasselbe Supabase-Projekt.
+  group: kinodreieck-kd-api-shared-supabase
+  cancel-in-progress: false
+
+jobs:
+  deploy-kd-api:
+    name: kd-api ${{ inputs.target }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.target }}
+    env:
+      EXPECTED_PROJECT_REF: bscjgwcntapobyxsiyce
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      TARGET_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Commit und Zielprojekt binden
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_COMMIT"
+          node --input-type=module -e '
+            const url = new URL(process.env.TARGET_SUPABASE_URL);
+            if (url.protocol !== "https:" || url.hostname !== `${process.env.EXPECTED_PROJECT_REF}.supabase.co` || url.pathname !== "/") process.exit(1);
+          '
+      - name: Lieferhülle fokussiert prüfen
+        run: npm run test:kd-api:release
+      - name: Quell-, Config- und Schema-Nachweis erzeugen
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: >-
+          node tools/kd-api-release-info.mjs
+          --source-commit "$EXPECTED_SOURCE_COMMIT"
+          --release-id "$RELEASE_ID"
+          > "$RUNNER_TEMP/kd-api-release-info.json"
+      - name: Nicht geheimen Liefernachweis sichern
+        uses: actions/upload-artifact@v4
+        with:
+          name: kd-api-release-${{ inputs.release_id }}
+          path: ${{ runner.temp }}/kd-api-release-info.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Gebundene Function-Konfiguration setzen
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          umask 077
+          printf 'KD_API_SOURCE_COMMIT=%s\nKD_API_RELEASE_ID=%s\nKD_API_ENABLED=%s\n' \
+            "$EXPECTED_SOURCE_COMMIT" "$RELEASE_ID" "false" \
+            > "$RUNNER_TEMP/kd-api-function.env"
+          ./node_modules/.bin/supabase secrets set \
+            --project-ref "$EXPECTED_PROJECT_REF" \
+            --env-file "$RUNNER_TEMP/kd-api-function.env" \
+            --output json > "$RUNNER_TEMP/kd-api-secrets-set.json"
+      - name: Ausschließlich kd-api deployen
+        run: >-
+          ./node_modules/.bin/supabase functions deploy kd-api
+          --project-ref "$EXPECTED_PROJECT_REF"
+          --no-verify-jwt
+          --use-api
+          --jobs 1
+          --output-format json
+      - name: Geschlossenen Function-Stand read-only rücklesen
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: >-
+          node tools/kd-api-readback.mjs
+          --base-url "$TARGET_SUPABASE_URL/functions/v1/kd-api"
+          --expected-source-commit "$EXPECTED_SOURCE_COMMIT"
+          --expected-release-id "$RELEASE_ID"
+          --expect-enabled false
+      - name: Gate nach geschlossenem Readback öffnen
+        if: ${{ inputs.enabled }}
+        run: |
+          umask 077
+          printf 'KD_API_ENABLED=true\n' > "$RUNNER_TEMP/kd-api-enable.env"
+          ./node_modules/.bin/supabase secrets set \
+            --project-ref "$EXPECTED_PROJECT_REF" \
+            --env-file "$RUNNER_TEMP/kd-api-enable.env" \
+            --output json > "$RUNNER_TEMP/kd-api-enable-set.json"
+          ./node_modules/.bin/supabase functions deploy kd-api \
+            --project-ref "$EXPECTED_PROJECT_REF" \
+            --no-verify-jwt \
+            --use-api \
+            --jobs 1 \
+            --output-format json
+      - name: Finales Gate read-only rücklesen
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          KD_API_ENABLED_INPUT: ${{ inputs.enabled }}
+        run: >-
+          node tools/kd-api-readback.mjs
+          --base-url "$TARGET_SUPABASE_URL/functions/v1/kd-api"
+          --expected-source-commit "$EXPECTED_SOURCE_COMMIT"
+          --expected-release-id "$RELEASE_ID"
+          --expect-enabled "$KD_API_ENABLED_INPUT"

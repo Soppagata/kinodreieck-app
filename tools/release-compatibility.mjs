@@ -16,6 +16,7 @@ export const RELEASE_CRITICAL_FUNCTIONS = Object.freeze([
   "ai-task",
   "automatic-ai-check",
   "entdecken-daily-task",
+  "kd-api",
   "private-mail-request",
   "radar-websearch-task",
 ]);
