@@ -13,6 +13,8 @@ const blobs = new Map([
   ["supabase/config.toml", Buffer.from('project_id = "bscjgwcntapobyxsiyce"\n[functions.ai-task]\nverify_jwt = true\n[functions.kd-api]\nverify_jwt = false\n')],
   ["supabase/migrations/20260926010101_kd_api.sql", Buffer.from("select 1;\n")],
   ["supabase/migrations/20260926010202_kd_api_more.sql", Buffer.from("select 2;\n")],
+  ["supabase/migrations/review/20260926010101_kd_api_readback.sql", Buffer.from("select 'review';\n")],
+  ["supabase/migrations/rollback/20260926010101_kd_api_rollback.sql", Buffer.from("select 'rollback';\n")],
 ]);
 
 function gitStub({ dirty = "", source = blobs } = {}) {
@@ -64,6 +66,23 @@ test("Release-Info bindet Commit, Functionclosure, Config und Migrationsbytes", 
   assert.notEqual(changedAiInfo.requiredFunctions[0].sourceSha256, info.requiredFunctions[0].sourceSha256);
   assert.equal(changedAiInfo.functionSources.sha256, info.functionSources.sha256);
   assert.notEqual(changedAiInfo.releaseSha256, info.releaseSha256);
+
+  const changedNestedEvidence = new Map(blobs);
+  changedNestedEvidence.set(
+    "supabase/migrations/review/20260926010101_kd_api_readback.sql",
+    Buffer.from("select 'changed review';\n"),
+  );
+  changedNestedEvidence.set(
+    "supabase/migrations/rollback/20260926010101_kd_api_rollback.sql",
+    Buffer.from("select 'changed rollback';\n"),
+  );
+  const nestedInfo = kdApiReleaseInfo({ sourceCommit: commit, releaseId: "e5-fixture-1", git: gitStub({ source: changedNestedEvidence }) });
+  assert.equal(nestedInfo.schema.sha256, info.schema.sha256);
+  assert.equal(nestedInfo.releaseSha256, info.releaseSha256);
+  assert.deepEqual(nestedInfo.schema.migrations.map(({ path }) => path), [
+    "supabase/migrations/20260926010101_kd_api.sql",
+    "supabase/migrations/20260926010202_kd_api_more.sql",
+  ]);
 });
 
 test("Release-Info sperrt falschen HEAD, Dirty-State und unsichere CLI-Werte", () => {

@@ -88,7 +88,7 @@ export function kdApiReleaseInfo({
   });
   const migrationPaths = gitText(git, [
     "ls-tree", "-r", "--name-only", sourceCommit, "--", "supabase/migrations",
-  ]).split("\n").filter(Boolean).filter((path) => path.endsWith(".sql")).sort();
+  ]).split("\n").filter((path) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).sort();
   if (migrationPaths.length === 0) throw new Error("SCHEMA_MIGRATIONS_MISSING");
   const migrations = migrationPaths.map((path) => {
     const match = path.match(MIGRATION_PATH);
