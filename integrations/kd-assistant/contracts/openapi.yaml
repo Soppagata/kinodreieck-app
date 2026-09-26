@@ -1,0 +1,402 @@
+openapi: 3.1.0
+info:
+  title: Kinodreieck API
+  version: 1.0.0
+  description: Kontogebundene Nutzer-, Assistenten- und Diagnoseoperationen. Auswahl ist fluechtig.
+servers:
+  - url: "{apiBaseUrl}"
+    variables:
+      apiBaseUrl:
+        default: https://example.invalid/functions/v1/kd-api/v1
+security:
+  - kdApiKey: []
+tags:
+  - name: library
+  - name: blog
+  - name: personal
+  - name: ai
+  - name: diagnostics
+paths:
+  /capabilities:
+    get:
+      operationId: capabilities_get
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      responses:
+        "200": {description: Gefilterte effektive Rechte, content: {application/json: {schema: {$ref: "#/components/schemas/Capabilities"}}}}
+        default: {$ref: "#/components/responses/Error"}
+  /library:
+    get:
+      operationId: library_search
+      tags: [library]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters:
+        - {$ref: "#/components/parameters/Cursor"}
+        - {$ref: "#/components/parameters/Limit"}
+        - {name: query, in: query, schema: {type: string, maxLength: 200}}
+        - {name: type, in: query, schema: {type: string}}
+      responses:
+        "200": {description: Seite lesbarer Eintraege, content: {application/json: {schema: {$ref: "#/components/schemas/LibraryPage"}}}}
+        default: {$ref: "#/components/responses/Error"}
+    post:
+      operationId: library_add
+      tags: [library]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/LibraryCreate"}}}}
+      responses:
+        "201": {$ref: "#/components/responses/Mutation"}
+        default: {$ref: "#/components/responses/Error"}
+  /library/{id}:
+    parameters: [{$ref: "#/components/parameters/EntityId"}]
+    get:
+      operationId: library_get
+      tags: [library]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      responses:
+        "200": {description: Eintrag, headers: {ETag: {$ref: "#/components/headers/ETag"}}, content: {application/json: {schema: {$ref: "#/components/schemas/LibraryItem"}}}}
+        default: {$ref: "#/components/responses/Error"}
+    patch:
+      operationId: library_update
+      tags: [library]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/merge-patch+json: {schema: {$ref: "#/components/schemas/LibraryPatch"}}}}
+      responses:
+        "200": {$ref: "#/components/responses/Mutation"}
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: library_remove
+      tags: [library]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      responses:
+        "200": {$ref: "#/components/responses/Mutation"}
+        default: {$ref: "#/components/responses/Error"}
+  /library/selection/export:
+    post:
+      operationId: library_export_selection
+      tags: [library]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      description: Reine Projektion; speichert keine Sammlung und startet keine KI.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/SelectionExportRequest"}}}}
+      responses:
+        "200": {description: Inhalt fuer Clientwirkung, content: {application/json: {schema: {$ref: "#/components/schemas/SelectionExportResult"}}}}
+        default: {$ref: "#/components/responses/Error"}
+  /blog-drafts:
+    get:
+      operationId: blog_drafts_list
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/Cursor"}, {$ref: "#/components/parameters/Limit"}]
+      responses:
+        "200": {description: Eigene Entwuerfe, content: {application/json: {schema: {$ref: "#/components/schemas/BlogPage"}}}}
+        default: {$ref: "#/components/responses/Error"}
+    post:
+      operationId: blog_draft_create
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/BlogDraftWrite"}}}}
+      responses:
+        "201": {$ref: "#/components/responses/Mutation"}
+        default: {$ref: "#/components/responses/Error"}
+  /blog-drafts/{id}:
+    parameters: [{$ref: "#/components/parameters/EntityId"}]
+    get:
+      operationId: blog_draft_get
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      responses:
+        "200": {description: Eigener Entwurf, content: {application/json: {schema: {$ref: "#/components/schemas/BlogDraft"}}}}
+        default: {$ref: "#/components/responses/Error"}
+    patch:
+      operationId: blog_draft_update
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/merge-patch+json: {schema: {$ref: "#/components/schemas/BlogDraftWrite"}}}}
+      responses:
+        "200": {$ref: "#/components/responses/Mutation"}
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: blog_draft_remove
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      responses:
+        "200": {$ref: "#/components/responses/Mutation"}
+        default: {$ref: "#/components/responses/Error"}
+  /blog-drafts/{id}/publish:
+    post:
+      operationId: blog_publish
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/EntityId"}, {$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/PublishRequest"}}}}
+      responses:
+        "202": {$ref: "#/components/responses/Mutation"}
+        default: {$ref: "#/components/responses/Error"}
+  /blog-publications:
+    get:
+      operationId: blog_publications_list
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/Cursor"}, {$ref: "#/components/parameters/Limit"}]
+      responses:
+        "200": {description: Lesbare Publikationen, content: {application/json: {schema: {$ref: "#/components/schemas/BlogPage"}}}}
+        default: {$ref: "#/components/responses/Error"}
+  /blog-publications/{id}:
+    get:
+      operationId: blog_publication_get
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/EntityId"}]
+      responses:
+        "200": {description: Lesbare Publikation, content: {application/json: {schema: {$ref: "#/components/schemas/BlogDraft"}}}}
+        default: {$ref: "#/components/responses/Error"}
+  /blog-publications/{id}/unpublish:
+    post:
+      operationId: blog_unpublish
+      tags: [blog]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/EntityId"}, {$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      responses:
+        "202": {$ref: "#/components/responses/Mutation"}
+        default: {$ref: "#/components/responses/Error"}
+  /must-watch:
+    get: {$ref: "#/components/pathItems/PersonalListGet"}
+    post: {$ref: "#/components/pathItems/PersonalListPost"}
+  /must-watch/{id}:
+    parameters: [{$ref: "#/components/parameters/EntityId"}]
+    patch: {$ref: "#/components/pathItems/PersonalItemPatch"}
+    delete: {$ref: "#/components/pathItems/PersonalItemDelete"}
+  /settings:
+    get:
+      operationId: settings_get
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      responses: {"200": {description: Settings und Revision, content: {application/json: {schema: {$ref: "#/components/schemas/RevisionedObject"}}}}, default: {$ref: "#/components/responses/Error"}}
+    patch:
+      operationId: settings_update
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/merge-patch+json: {schema: {type: object, additionalProperties: true}}}}
+      responses: {"200": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}
+  /account/export:
+    post:
+      operationId: account_export
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      responses: {"200": {description: Kontogebundene Sicherungsprojektion, content: {application/json: {schema: {type: object}}}}, default: {$ref: "#/components/responses/Error"}}
+  /packages/preview:
+    post:
+      operationId: package_preview
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [package], properties: {package: {type: object}}}}}}
+      responses: {"200": {description: Schreibfreie Importvorschau, content: {application/json: {schema: {type: object}}}}, default: {$ref: "#/components/responses/Error"}}
+  /packages/apply:
+    post:
+      operationId: package_apply
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [previewId, sections], properties: {previewId: {type: string}, sections: {type: array, items: {type: string}}}}}}}
+      responses: {"200": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}
+  /schedule:
+    get: {$ref: "#/components/pathItems/ScheduleListGet"}
+    post: {$ref: "#/components/pathItems/ScheduleListPost"}
+  /schedule/{id}:
+    parameters: [{$ref: "#/components/parameters/EntityId"}]
+    patch: {$ref: "#/components/pathItems/ScheduleItemPatch"}
+    delete: {$ref: "#/components/pathItems/ScheduleItemDelete"}
+  /radar:
+    get: {$ref: "#/components/pathItems/RadarListGet"}
+    post: {$ref: "#/components/pathItems/RadarListPost"}
+  /radar/{id}:
+    parameters: [{$ref: "#/components/parameters/EntityId"}]
+    patch: {$ref: "#/components/pathItems/RadarItemPatch"}
+    delete: {$ref: "#/components/pathItems/RadarItemDelete"}
+  /ai/jobs:
+    post:
+      operationId: ai_job_start
+      tags: [ai]
+      x-kd-identities: [personal_owner_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/AiJobRequest"}}}}
+      responses: {"202": {description: Stabiler Job, content: {application/json: {schema: {$ref: "#/components/schemas/Job"}}}}, default: {$ref: "#/components/responses/Error"}}
+  /ai/jobs/{id}:
+    get:
+      operationId: ai_job_get
+      tags: [ai]
+      x-kd-identities: [personal_owner_assistant]
+      parameters: [{$ref: "#/components/parameters/EntityId"}]
+      responses: {"200": {description: Statuslesen ohne neuen Anbieterauftrag, content: {application/json: {schema: {$ref: "#/components/schemas/Job"}}}}, default: {$ref: "#/components/responses/Error"}}
+  /assistant/usage:
+    get: {$ref: "#/components/pathItems/UsageGet"}
+  /assistant/requests:
+    get:
+      operationId: requests_list
+      tags: [diagnostics]
+      x-kd-identities: [personal_owner_assistant]
+      parameters: [{$ref: "#/components/parameters/Cursor"}, {$ref: "#/components/parameters/Limit"}]
+      responses: {"200": {description: Inhaltsfreie Requestmetadaten, content: {application/json: {schema: {$ref: "#/components/schemas/PaginatedObjects"}}}}, default: {$ref: "#/components/responses/Error"}}
+  /assistant/backend/status:
+    get: {$ref: "#/components/pathItems/BackendStatusGet"}
+  /assistant/backend/diagnostics:
+    get: {$ref: "#/components/pathItems/BackendDiagnosticsGet"}
+  /assistant/backend/usage:
+    get: {$ref: "#/components/pathItems/BackendUsageGet"}
+components:
+  securitySchemes:
+    kdApiKey: {type: http, scheme: bearer, bearerFormat: KD opaque key}
+  parameters:
+    EntityId: {name: id, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 200}}
+    Cursor: {name: cursor, in: query, schema: {type: string, maxLength: 1000}, description: Opaker signierter Cursor; nicht editieren.}
+    Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+    IfMatch: {name: If-Match, in: header, required: true, schema: {type: string, pattern: '^"[0-9]+"$'}, description: Zuletzt bestaetigte Topfrevision als starker ETag.}
+  headers:
+    ETag: {description: Bestaetigte Topfrevision, schema: {type: string, pattern: '^"[0-9]+"$'}}
+  responses:
+    Mutation:
+      description: Bestaetigtes oder wiedererkanntes Mutationsresultat
+      headers: {ETag: {$ref: "#/components/headers/ETag"}}
+      content: {application/json: {schema: {$ref: "#/components/schemas/MutationResult"}}}
+    Error:
+      description: Strukturierter Fehler ohne Secrets oder interne Inhalte
+      content: {application/problem+json: {schema: {$ref: "#/components/schemas/Error"}}}
+  schemas:
+    Revision: {type: integer, minimum: 0}
+    LibraryItem:
+      type: object
+      required: [id, titel, typ]
+      properties:
+        id: {type: string}
+        titel: {type: string, minLength: 1, maxLength: 500}
+        originaltitel: {type: [string, "null"], maxLength: 500}
+        jahr: {type: [integer, "null"]}
+        jahr_bis: {type: [integer, "null"]}
+        typ: {type: string}
+        quelle: {type: [string, "null"]}
+        kategorie: {type: [string, "null"]}
+        bewertung: {type: [object, "null"]}
+        genre: {type: array, items: {type: string}}
+        tags: {type: array, items: {type: string}}
+        begruendung: {type: string, maxLength: 12000}
+        beschreibung: {type: string, maxLength: 12000}
+        art: {type: string, maxLength: 40}
+        film_at_id: {type: [string, integer, "null"]}
+        notiz: {type: string, maxLength: 12000}
+        status: {type: [string, "null"]}
+        staffeln: {type: [object, array, "null"]}
+      additionalProperties: true
+    LibraryCreate: {$ref: "#/components/schemas/LibraryItem"}
+    LibraryPatch:
+      type: object
+      minProperties: 1
+      properties:
+        titel: {type: string, minLength: 1, maxLength: 500}
+        originaltitel: {type: [string, "null"], maxLength: 500}
+        jahr: {type: [integer, "null"]}
+        jahr_bis: {type: [integer, "null"]}
+        typ: {type: string}
+        quelle: {type: [string, "null"]}
+        kategorie: {type: [string, "null"]}
+        bewertung: {type: [object, "null"]}
+        genre: {type: array, items: {type: string}}
+        tags: {type: array, items: {type: string}}
+        begruendung: {type: string}
+        beschreibung: {type: string}
+        art: {type: string}
+        film_at_id: {type: [string, integer, "null"]}
+        notiz: {type: string}
+        status: {type: [string, "null"]}
+        staffeln: {type: [object, array, "null"]}
+      additionalProperties: false
+    LibraryPage:
+      type: object
+      required: [items, nextCursor, revision]
+      properties: {items: {type: array, items: {$ref: "#/components/schemas/LibraryItem"}}, nextCursor: {type: [string, "null"]}, revision: {$ref: "#/components/schemas/Revision"}}
+    SelectionExportRequest:
+      type: object
+      required: [ids, format]
+      properties:
+        ids: {type: array, minItems: 1, maxItems: 100, uniqueItems: true, items: {type: string, minLength: 1}}
+        format: {enum: [text, json]}
+      additionalProperties: false
+    SelectionExportResult:
+      type: object
+      required: [format, filename, mimeType, count, selectedIds, content]
+      properties:
+        format: {enum: [text, json]}
+        filename: {type: string}
+        mimeType: {enum: [text/plain;charset=utf-8, application/json]}
+        count: {type: integer, minimum: 1}
+        selectedIds: {type: array, items: {type: string}}
+        content: {type: string}
+    BlogReference: {type: object, required: [eingabe], properties: {eingabe: {type: string}, jahr: {type: [integer, "null"]}, typ: {type: [string, "null"]}, ref: {type: [string, "null"]}}, additionalProperties: true}
+    BlogDraftWrite: {type: object, minProperties: 1, properties: {titel: {type: string, maxLength: 500}, text: {type: string}, geordnet: {type: boolean}, liste: {type: array, maxItems: 50, items: {$ref: "#/components/schemas/BlogReference"}}, autor: {type: string}}, additionalProperties: false}
+    BlogDraft: {allOf: [{$ref: "#/components/schemas/BlogDraftWrite"}, {type: object, required: [id], properties: {id: {type: string}, status: {type: string}, contentVersion: {type: [string, "null"]}}}]}
+    BlogPage: {type: object, required: [items, nextCursor, revision], properties: {items: {type: array, items: {$ref: "#/components/schemas/BlogDraft"}}, nextCursor: {type: [string, "null"]}, revision: {$ref: "#/components/schemas/Revision"}}}
+    PublishRequest: {type: object, required: [anonymous], properties: {anonymous: {type: boolean}, expectedPublicRevision: {type: [integer, "null"]}}, additionalProperties: false}
+    MutationResult: {type: object, required: [operationId, status, revision], properties: {operationId: {type: string, format: uuid}, status: {enum: [succeeded, conflict, unknown]}, revision: {$ref: "#/components/schemas/Revision"}, entity: {}, jobId: {type: [string, "null"], format: uuid}, replayed: {type: boolean}}}
+    RevisionedObject: {type: object, required: [revision, value], properties: {revision: {$ref: "#/components/schemas/Revision"}, value: {type: object}}}
+    PaginatedObjects: {type: object, required: [items, nextCursor], properties: {items: {type: array, items: {type: object}}, nextCursor: {type: [string, "null"]}}}
+    Capabilities: {type: object, required: [contractVersion, identity, tools], properties: {contractVersion: {const: kd-api-v1}, identity: {enum: [app_session, personal_owner_assistant, member_assistant]}, tools: {type: array, items: {type: string}}, limits: {type: object}}}
+    AiJobRequest: {type: object, required: [kind, payload], properties: {kind: {type: string, minLength: 1, maxLength: 100}, payload: {type: object}}, additionalProperties: false}
+    Job: {type: object, required: [id, operationId, status, createdAt, updatedAt], properties: {id: {type: string, format: uuid}, operationId: {type: string, format: uuid}, status: {enum: [accepted, queued, running, succeeded, failed, cancelled, unknown]}, result: {}, error: {oneOf: [{$ref: "#/components/schemas/Error"}, {type: "null"}]}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}, finishedAt: {type: [string, "null"], format: date-time}}}
+    Usage: {type: object, required: [from, to, timezone, collectionStartedAt, coverage, requests, logicalJobs, providerRequests, websearchCalls, cost], properties: {from: {type: string, format: date-time}, to: {type: string, format: date-time}, timezone: {const: Europe/Vienna}, collectionStartedAt: {type: [string, "null"], format: date-time}, coverage: {enum: [complete, partial, unknown]}, requests: {type: [integer, "null"]}, logicalJobs: {type: [integer, "null"]}, providerRequests: {type: [integer, "null"]}, websearchCalls: {type: [integer, "null"]}, cost: {type: [object, "null"]}}}
+    Error:
+      type: object
+      required: [type, title, status, code, requestId]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer}
+        code: {enum: [API_DISABLED, UNAUTHENTICATED, ACCESS_REVOKED, ACCOUNT_INACTIVE, FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, PAYLOAD_TOO_LARGE, RATE_LIMITED, REVISION_REQUIRED, REVISION_CONFLICT, IDEMPOTENCY_REQUIRED, IDEMPOTENCY_MISMATCH, ORIGIN_REQUIRED, AI_DISABLED, BUDGET_EXHAUSTED, ONLINE_REQUIRED, TEMPORARILY_UNAVAILABLE, INTERNAL_ERROR]}
+        requestId: {type: string, format: uuid}
+        operationId: {type: [string, "null"], format: uuid}
+        currentRevision: {type: [integer, "null"]}
+        retryable: {type: boolean}
+      additionalProperties: false
+  pathItems:
+    PersonalListGet:
+      operationId: mustwatch_list
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/Cursor"}, {$ref: "#/components/parameters/Limit"}]
+      responses: {"200": {description: Seite, content: {application/json: {schema: {$ref: "#/components/schemas/PaginatedObjects"}}}}, default: {$ref: "#/components/responses/Error"}}
+    PersonalListPost:
+      operationId: mustwatch_add
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object}}}}
+      responses: {"201": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}
+    PersonalItemPatch:
+      operationId: mustwatch_update
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      requestBody: {required: true, content: {application/merge-patch+json: {schema: {type: object}}}}
+      responses: {"200": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}
+    PersonalItemDelete:
+      operationId: mustwatch_remove
+      tags: [personal]
+      x-kd-identities: [app_session, personal_owner_assistant, member_assistant]
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}]
+      responses: {"200": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}
+    ScheduleListGet: {operationId: schedule_list, tags: [personal], x-kd-identities: [app_session, personal_owner_assistant, member_assistant], responses: {"200": {description: Zeitplan, content: {application/json: {schema: {$ref: "#/components/schemas/PaginatedObjects"}}}}, default: {$ref: "#/components/responses/Error"}}}
+    ScheduleListPost: {operationId: schedule_add, tags: [personal], x-kd-identities: [app_session, personal_owner_assistant, member_assistant], parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}], requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {"201": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}}
+    ScheduleItemPatch: {operationId: schedule_update, tags: [personal], x-kd-identities: [app_session, personal_owner_assistant, member_assistant], parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}], requestBody: {required: true, content: {application/merge-patch+json: {schema: {type: object}}}}, responses: {"200": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}}
+    ScheduleItemDelete: {operationId: schedule_remove, tags: [personal], x-kd-identities: [app_session, personal_owner_assistant, member_assistant], parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}], responses: {"200": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}}
+    RadarListGet: {operationId: radar_list, tags: [personal], x-kd-identities: [app_session, personal_owner_assistant, member_assistant], responses: {"200": {description: Radarstand, content: {application/json: {schema: {$ref: "#/components/schemas/PaginatedObjects"}}}}, default: {$ref: "#/components/responses/Error"}}}
+    RadarListPost: {operationId: radar_add, tags: [personal], x-kd-identities: [app_session, personal_owner_assistant, member_assistant], parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}], requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {"201": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}}
+    RadarItemPatch: {operationId: radar_update, tags: [personal], x-kd-identities: [app_session, personal_owner_assistant, member_assistant], parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}], requestBody: {required: true, content: {application/merge-patch+json: {schema: {type: object}}}}, responses: {"200": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}}
+    RadarItemDelete: {operationId: radar_remove, tags: [personal], x-kd-identities: [app_session, personal_owner_assistant, member_assistant], parameters: [{$ref: "#/components/parameters/IdempotencyKey"}, {$ref: "#/components/parameters/IfMatch"}], responses: {"200": {$ref: "#/components/responses/Mutation"}, default: {$ref: "#/components/responses/Error"}}}
+    UsageGet: {operationId: usage_get, tags: [diagnostics], x-kd-identities: [personal_owner_assistant], responses: {"200": {description: Eigene Assistentennutzung, content: {application/json: {schema: {$ref: "#/components/schemas/Usage"}}}}, default: {$ref: "#/components/responses/Error"}}}
+    BackendStatusGet: {operationId: backend_status_get, tags: [diagnostics], x-kd-identities: [personal_owner_assistant], responses: {"200": {description: Begrenzter Status ohne Secrets, content: {application/json: {schema: {type: object}}}}, default: {$ref: "#/components/responses/Error"}}}
+    BackendDiagnosticsGet: {operationId: backend_diagnostics_get, tags: [diagnostics], x-kd-identities: [personal_owner_assistant], parameters: [{$ref: "#/components/parameters/Cursor"}, {$ref: "#/components/parameters/Limit"}], responses: {"200": {description: Begrenzte strukturierte Befunde, content: {application/json: {schema: {$ref: "#/components/schemas/PaginatedObjects"}}}}, default: {$ref: "#/components/responses/Error"}}}
+    BackendUsageGet: {operationId: backend_usage_get, tags: [diagnostics], x-kd-identities: [personal_owner_assistant], responses: {"200": {description: Globale Nutzung mit Abdeckung, content: {application/json: {schema: {$ref: "#/components/schemas/Usage"}}}}, default: {$ref: "#/components/responses/Error"}}}

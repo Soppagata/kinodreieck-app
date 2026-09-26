@@ -1,0 +1,35 @@
+{
+  "name": "@kinodreieck/kd-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Model-independent HTTP client and MCP stdio adapter for the Kinodreieck API v1",
+  "type": "module",
+  "bin": {
+    "kd-assistant-mcp": "./bin/kd-assistant-mcp.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./client": "./src/client.mjs",
+    "./tools": "./src/tools.mjs",
+    "./mcp": "./src/mcp-server.mjs",
+    "./contracts/tool-schemas.json": "./contracts/tool-schemas.json",
+    "./contracts/operation-map.json": "./contracts/operation-map.json",
+    "./contracts/openapi.yaml": "./contracts/openapi.yaml"
+  },
+  "files": [
+    "bin",
+    "contracts",
+    "examples",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.1"
+  }
+}
