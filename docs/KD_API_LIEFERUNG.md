@@ -48,6 +48,47 @@ fehlende Migration oder Functionversion sperrt die Freischaltung.
 Diese Schritte erfolgen erst in Etappe 6 nach der dort benannten Freigabe für
 das gemeinsame Backend:
 
+### Erste Staging-Lieferung vor Aufnahme des Workflows in `main`
+
+Der Default-Branch des Repositories ist `main`. GitHub stellt einen neuen
+`workflow_dispatch`-Workflow erst bereit, wenn dessen Workflowdatei auf dem
+Default-Branch vorhanden ist ([GitHub-Dokumentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch)).
+Ein erster Push ausschließlich auf `staging` registriert
+`.github/workflows/kd-api.yml` daher nicht als manuell startbaren Workflow.
+Zur Registrierung wird weder still auf `main` beziehungsweise Production
+gepusht noch eine zweite Pipeline angelegt.
+
+Für die erste ausdrücklich freigegebene Staging-Lieferung darf der Lieferowner
+dieselbe unten beschriebene, commit- und zielgebundene Zweifunction-Kette lokal
+ausführen. Diese lokale Ausführung gehört zur selben gebündelten Freigabe für
+das gemeinsam verwendete Supabase-Backend. Sie verwendet den lokal installierten
+Supabase-CLI-Weg, `tools/kd-api-release-info.mjs`, den vorhandenen
+`ai-task`-Owner-Health aus `tools/live_function_readback.mjs`,
+`tools/kd-api-readback.mjs` und `tools/kd-api-function-set-readback.mjs`.
+Die vorhandene geschützte lokale Konfiguration und das vorhandene Owner-
+Keychain-Item bleiben dabei lokal; ihre Werte werden weder in Argumente oder
+Logs geschrieben noch als GitHub-Secrets kopiert.
+
+Die Reihenfolge ist dieselbe wie im vorbereiteten Workflow: Ziel und exakten
+Commit binden; Manifest erzeugen; `KD_API_ENABLED=false` setzen und rücklesen;
+`ai-task` aus diesem Commit mit `verify_jwt=true` deployen; erst danach seinen
+Buildmarker setzen und über den providerfreien Owner-Health rücklesen;
+`kd-api` mit `verify_jwt=false` deployen; KD-API-Metadaten und den Management-
+Stand beider Functions rücklesen; Schema und Zugänge nach der getrennten
+Wirkungsfreigabe ausliefern; das Gate erst nach allen geschlossenen Readbacks
+öffnen und anschließend erneut rücklesen. Ein unklarer oder fehlgeschlagener
+Schritt wird zuerst read-only geklärt und nicht blind wiederholt.
+
+Der Workflow bleibt für eine spätere ausdrücklich autorisierte Aufnahme in
+`main` vorbereitet. Sowohl in der GitHub-Umgebung `staging` als auch auf
+Repository-Ebene fehlen derzeit
+`SUPABASE_ACCESS_TOKEN`, `KD_READBACK_OWNER_USER`,
+`KD_READBACK_OWNER_PASSWORD` und `MAIL_DOMAIN`; vor einem späteren
+Workflowstart müssen diese Werte sowohl in der `staging`-Umgebung als auch,
+soweit der spätere Aufruf es verlangt, auf Repository-Ebene bewusst und
+geschützt eingerichtet werden. Dieser offene GitHub-Anschluss blockiert die
+autorisierte lokale Erstlieferung nicht.
+
 1. Ausschließlich die freigegebenen neuen Migrationen einzeln, transaktional
    und mit dem Ledger-Verfahren aus `supabase/migrations/LIESMICH.md` anwenden.
    Danach Objekt-, Grant- und Migrationsstand read-only rücklesen. Es gibt
@@ -150,6 +191,13 @@ gebundenen Wiederanlauf zulässig, enthält aber niemals den Rohkey.
 Die erfolgreiche stdout-Projektion nennt Dienst, Alias und Envelope-Version
 sowie nicht geheime Lifecycle-Metadaten. Die private `accountId` wird ebenso
 wie der Rohkey und die ursprünglichen Eingaben nicht ausgegeben.
+
+Der Admin-Keychain-Eintrag für den geschützten Lifecycle-RPC ist lokal noch
+nicht eingerichtet. Seine Anlage unter Dienst
+`at.kinodreieck.supabase.admin`, Account `SUPABASE_SERVICE_ROLE_KEY`, gehört
+zur später ausdrücklich freigegebenen Zugangsausgabe. Bis dahin werden weder
+echte Owner-/Member-Keys ausgegeben noch Lifecycle-RPCs gegen das gemeinsame
+Backend aufgerufen.
 
 ## Freischalten, abschalten und Function-Rollback
 
