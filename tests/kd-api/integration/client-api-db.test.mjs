@@ -20,9 +20,12 @@ const rawKey = (byte) => `kd_v1_${Buffer.alloc(32, byte).toString("base64url")}`
 const currentRevision = (response) => response.revision ?? response.data.revision;
 
 function rpcFetch(harness) {
-  return async (url, init) => new Response(JSON.stringify(await harness.rpc(new URL(url).pathname.split("/").at(-1), JSON.parse(init.body))), {
-    status: 200, headers: { "content-type": "application/json" },
-  });
+  return async (url, init) => {
+    const name = new URL(url).pathname.split("/").at(-1);
+    const value = await harness.rpc(name, JSON.parse(init.body));
+    if (name === "kd_api_rotate_access_v1") console.error(`E6_ROTATE_METADATA ${JSON.stringify(value)}`);
+    return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
+  };
 }
 
 async function issue(harness, { alias, accountId, profile, permissions, byte }) {
