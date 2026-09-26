@@ -18,15 +18,20 @@ The client accepts exactly one credential source:
 
 - `KD_API_KEY`: a deliberately inherited process environment value;
 - `KD_API_KEY_FILE`: an owner-only file (`0600` or stricter on Unix); or
-- `KD_API_KEYCHAIN_SERVICE` plus `KD_API_KEYCHAIN_ACCOUNT`: a macOS Keychain
-  generic-password item read directly by the adapter.
+- `KD_API_KEYCHAIN_SERVICE=at.kinodreieck.kd-api.access-v1` plus
+  `KD_API_KEYCHAIN_ACCOUNT=<issued alias>`: the active macOS Keychain item
+  written by `tools/kd-api-keychain.mjs` and read directly by the adapter.
 
 Keys must never be pasted into prompts, MCP configuration committed to Git,
-tool arguments, tool results, or logs. `tools/kd-api-keychain.mjs` (delivered by
-the release package) owns issue, rotate, and revoke. Use the exact service and
-account names from its protected handoff. Rotation invalidates the old key;
-restart the stdio process so it opens the current Keychain item. Revocation is
-terminal until a separately issued access is configured.
+tool arguments, tool results, or logs. `tools/kd-api-keychain.mjs` owns issue,
+rotate, and revoke. Its active alias entry is a `kd-api-keychain-v1` JSON
+envelope. The adapter validates its version, alias, `issue`/`rotate` command,
+active RPC metadata, expiry, epoch and key fingerprint, then uses only
+`rawKey` as the Bearer credential. Pending entries (`::issue-pending`,
+`::rotate-pending`, `::revoke-pending`) and the `::revoked` tombstone are never
+accepted as active credentials. Rotation invalidates the old key; restart the
+stdio process so the next request reads the rotated active alias entry.
+Revocation is terminal until a separately issued access is configured.
 
 For the personal Owner assistant, configure the Owner access's own Keychain
 item. For a colleague, configure that person's separate Member access and
@@ -48,7 +53,7 @@ changes Codex configuration itself.
 ```sh
 codex mcp add kinodreieck \
   --env KD_API_BASE_URL=https://PROJECT.supabase.co/functions/v1/kd-api/v1 \
-  --env KD_API_KEYCHAIN_SERVICE=at.kinodreieck.api \
+  --env KD_API_KEYCHAIN_SERVICE=at.kinodreieck.kd-api.access-v1 \
   --env KD_API_KEYCHAIN_ACCOUNT=owner-assistant \
   -- /absolute/path/to/node /absolute/path/to/@kinodreieck/kd-assistant/bin/kd-assistant-mcp.mjs
 
