@@ -15,6 +15,8 @@ KD-Keys sind weder Supabase-JWTs noch `service_role`-Schlüssel.
   markiert bewusst lokale Clientwirkungen; es ist keine verschwiegene Route.
 - `persistence-rpc.md`: konkrete Datenbankobjekte, RPC-Signaturen, Sperren und
   Herkunftsweitergabe für B1.
+- `deployment.md`: Function-Slug, geschlossenes Enable-Gate, Versionsreadback
+  und service-only Key-Lebenszyklus als eingefrorene B1↔B3-Naht.
 - `apple-platform.md`: derselbe Fachvertrag für einen späteren Apple-Client.
 
 ## Gemeinsame Laufzeitnaht
@@ -63,11 +65,11 @@ Rootskripte und dieses Verzeichnis bleiben read-only.
 Der einmalige E6-Gesamtlauf wird von einem bereits beteiligten Baumeister mit
 `npm run test:kd-api:final` auf dem integrierten Kandidaten ausgeführt. Der
 Befehl bündelt die vier Paketbefehle, die vollständige bestehende Mocksuite,
-Function-Mocks und den Build. Er ist vor E6 nicht auszuführen. Normale CI und
-alle genannten Befehle bleiben providerfrei.
+Function-Mocks und abschließend `npm run build:online` für den vorhandenen
+Online-/PWA-Build. Er ist vor E6 nicht auszuführen. Normale CI und alle
+genannten Befehle bleiben providerfrei.
 
 F0 selbst wird einmal mit `npm run test:kd-api:contract` geprüft. Der Befehl
 umfasst Vertragskonsistenz, Medien-/Blogadapter, Text-/JSON-Auswahl sowie die
 bestehenden Auswahl- und Account-Sync-Prüfungen. Deno importiert den Adapter
 zusätzlich real über `npm run test:kd-api:runtime`.
-

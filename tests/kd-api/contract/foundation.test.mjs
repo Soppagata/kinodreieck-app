@@ -71,10 +71,11 @@ test("Aktionsadapter verlangt die vollstaendige schmale Medien- und Blognaht", a
 });
 
 test("OpenAPI, Toolangebot und Funktionszuordnung sind vollstaendig verbunden", async () => {
-  const [mapRaw, toolsRaw, openapi, persistence, readme, ui] = await Promise.all([
+  const [mapRaw, toolsRaw, openapi, persistence, deployment, readme, packageRaw, ui] = await Promise.all([
     read("contracts/kd-api/operation-map.json"), read("contracts/kd-api/tool-schemas.json"),
     read("contracts/kd-api/openapi.yaml"), read("contracts/kd-api/persistence-rpc.md"),
-    read("contracts/kd-api/README.md"), read("src/tabs/MediathekTab.jsx"),
+    read("contracts/kd-api/deployment.md"), read("contracts/kd-api/README.md"),
+    read("package.json"), read("src/tabs/MediathekTab.jsx"),
   ]);
   const map = JSON.parse(mapRaw);
   const registry = JSON.parse(toolsRaw);
@@ -100,13 +101,24 @@ test("OpenAPI, Toolangebot und Funktionszuordnung sind vollstaendig verbunden", 
   assert.ok(registry.tools.filter((tool) => /^(ai_|usage_|requests_|backend_)/.test(tool.name))
     .every((tool) => tool.identities.length === 1 && tool.identities[0] === "personal_owner_assistant"));
   assert.ok(!openapi.includes("/v1/lists") && !openapi.includes("  /lists:"));
-  for (const code of ["REVISION_CONFLICT", "IDEMPOTENCY_MISMATCH", "ORIGIN_REQUIRED", "ACCOUNT_INACTIVE"]) {
+  for (const code of ["API_DISABLED", "REVISION_CONFLICT", "IDEMPOTENCY_MISMATCH", "ORIGIN_REQUIRED", "ACCOUNT_INACTIVE"]) {
     assert.ok(openapi.includes(code));
   }
+  assert.ok(openapi.includes('url: "{apiBaseUrl}"'));
   for (const rpc of ["kd_api_mutate_personal_v1", "kd_api_apply_package_v1", "kd_api_mutate_blog_v1", "kd_api_enqueue_ai_job_v1", "kd_api_read_job_v1"]) {
     assert.ok(persistence.includes(rpc));
   }
+  for (const rpc of ["public.kd_api_resolve_key_v1", "kd_api_issue_access_v1", "kd_api_rotate_access_v1", "kd_api_revoke_access_v1"]) {
+    assert.ok(persistence.includes(rpc));
+  }
   assert.ok(persistence.includes("FOR UPDATE") && persistence.includes("kd_personal"));
+  assert.ok(deployment.includes("Function-Slug: exakt `kd-api`")
+    && deployment.includes("verify_jwt = false")
+    && deployment.includes("KD_API_ENABLED")
+    && deployment.includes("/_meta/version")
+    && deployment.includes("tools/kd-api-keychain.mjs"));
   assert.ok(readme.includes("tests/kd-api/backend/**") && readme.includes("integrations/kd-assistant/**"));
+  assert.ok(readme.includes("npm run build:online"));
+  assert.ok(JSON.parse(packageRaw).scripts["test:kd-api:final"].endsWith("npm run build:online"));
   assert.ok(ui.includes("exportLibrarySelection") && ui.includes("JSON speichern"));
 });

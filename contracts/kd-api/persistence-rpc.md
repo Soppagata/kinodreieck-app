@@ -54,7 +54,7 @@ API-Jobprojektion: `job_id uuid`, `account_id uuid`, `root_operation_id uuid`,
 `updated_at`, `finished_at`. Status ist
 `accepted|queued|running|succeeded|failed|cancelled|unknown`.
 
-## Interne Authentifizierung
+## Authentifizierung und öffentlicher Service-Wrapper
 
 ```sql
 private.kd_api_resolve_key_v1(
@@ -62,13 +62,22 @@ private.kd_api_resolve_key_v1(
   p_request_id uuid,
   p_now timestamptz
 ) returns jsonb
+
+public.kd_api_resolve_key_v1(
+  p_key_digest text,
+  p_request_id uuid,
+  p_now timestamptz
+) returns jsonb
 ```
 
-Nur `service_role` darf ausführen. Der Edge-Einstieg hasht den empfangenen
-Rohkey vor dem RPC, verwirft Rohkey und Header danach und erhält entweder
-einen kurzlebigen `context_id` plus effektive Rechte oder einen generischen
-Authfehler. Konto-ID, Rolle, Profil und Permissions aus Requestbody oder
-Headern werden ignoriert.
+Beide Funktionen sind nur für `service_role` ausführbar. Der öffentliche
+Wrapper ist die einzige über PostgREST erreichbare Auflösung und delegiert
+ohne erweiterte Rechte an die private Funktion. Das Schema `private` wird
+nicht als REST-Schema exponiert. Der Edge-Einstieg hasht den empfangenen Rohkey
+vor dem öffentlichen RPC, verwirft Rohkey und Header danach und erhält
+entweder einen kurzlebigen `context_id` plus effektive Rechte oder einen
+generischen Authfehler. Konto-ID, Rolle, Profil und Permissions aus
+Requestbody oder Headern werden ignoriert.
 
 Jeder folgende RPC beginnt mit
 `private.kd_api_require_context_v1(p_context_id uuid, p_permission text)`.
@@ -76,6 +85,49 @@ Diese interne Funktion prüft Ablauf, Widerruf, Key-/Kontoepoch, aktuelle
 Kontoaktivität und aktuelle Rolle. Für `ai.*` und `diagnostics.*` verlangt sie
 zusätzlich Profil `personal_owner`; für `ai.*` außerdem aktuelle persönliche
 KI-Freigabe. Sie liefert keine Secrets.
+
+## Service-only Key-Lebenszyklus
+
+```sql
+public.kd_api_issue_access_v1(
+  p_operation_id uuid,
+  p_account_id uuid,
+  p_assistant_profile text,
+  p_permissions text[],
+  p_key_digest text,
+  p_key_fingerprint text,
+  p_expires_at timestamptz default null,
+  p_label text default null
+) returns jsonb
+
+public.kd_api_rotate_access_v1(
+  p_operation_id uuid,
+  p_access_id uuid,
+  p_new_key_digest text,
+  p_new_key_fingerprint text,
+  p_expected_key_epoch bigint
+) returns jsonb
+
+public.kd_api_revoke_access_v1(
+  p_operation_id uuid,
+  p_access_id uuid,
+  p_expected_key_epoch bigint,
+  p_reason_code text
+) returns jsonb
+```
+
+Diese drei öffentlichen Wrapper sind ausschließlich `service_role` gewährt.
+Ihre Eingaben enthalten nie einen Rohkey. `issue` validiert Zielkonto,
+aktuelle Rolle, Profil und Permissionmenge; `rotate` ersetzt Digest und
+Fingerprint atomar und erhöht `key_epoch`; `revoke` setzt `revoked_at` und
+erhöht ebenfalls die Epoch. Alle verwenden das Idempotenzbuch.
+
+Erfolg liefert exakt `{operationId, accessId, accountId, assistantProfile,
+permissions, keyFingerprint, keyEpoch, createdAt, expiresAt, revokedAt}`.
+Fehler folgt dem gemeinsamen Fehlervertrag. Weder Erfolg noch Fehler enthalten
+Rohkey, Digest, Authheader oder Service-Credential. Rotate gibt insbesondere
+keinen neuen Key zurück; die B3-Keychain-Hülle besitzt den lokal erzeugten
+Rohwert bereits vor dem RPC.
 
 ## Persönliche Töpfe und Konkurrenz
 

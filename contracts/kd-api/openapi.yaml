@@ -4,10 +4,10 @@ info:
   version: 1.0.0
   description: Kontogebundene Nutzer-, Assistenten- und Diagnoseoperationen. Auswahl ist fluechtig.
 servers:
-  - url: "{baseUrl}/v1"
+  - url: "{apiBaseUrl}"
     variables:
-      baseUrl:
-        default: https://example.invalid
+      apiBaseUrl:
+        default: https://example.invalid/functions/v1/kd-api/v1
 security:
   - kdApiKey: []
 tags:
@@ -355,7 +355,7 @@ components:
         type: {type: string, format: uri}
         title: {type: string}
         status: {type: integer}
-        code: {enum: [UNAUTHENTICATED, ACCESS_REVOKED, ACCOUNT_INACTIVE, FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, PAYLOAD_TOO_LARGE, RATE_LIMITED, REVISION_REQUIRED, REVISION_CONFLICT, IDEMPOTENCY_REQUIRED, IDEMPOTENCY_MISMATCH, ORIGIN_REQUIRED, AI_DISABLED, BUDGET_EXHAUSTED, ONLINE_REQUIRED, TEMPORARILY_UNAVAILABLE, INTERNAL_ERROR]}
+        code: {enum: [API_DISABLED, UNAUTHENTICATED, ACCESS_REVOKED, ACCOUNT_INACTIVE, FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, PAYLOAD_TOO_LARGE, RATE_LIMITED, REVISION_REQUIRED, REVISION_CONFLICT, IDEMPOTENCY_REQUIRED, IDEMPOTENCY_MISMATCH, ORIGIN_REQUIRED, AI_DISABLED, BUDGET_EXHAUSTED, ONLINE_REQUIRED, TEMPORARILY_UNAVAILABLE, INTERNAL_ERROR]}
         requestId: {type: string, format: uuid}
         operationId: {type: [string, "null"], format: uuid}
         currentRevision: {type: [integer, "null"]}
