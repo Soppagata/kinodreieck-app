@@ -134,10 +134,7 @@ export async function startLocalKdApiHarness({ sourceCommit, releaseId = "e6-loc
     `, { role: "postgres" });
     await sqlFile("supabase/migrations/20260926120000_kd_api_v1.sql");
 
-    const rpc = async (name, args = {}) => {
-      try { return pg.sqlJson(`select coalesce(to_jsonb(${invocation(name,args)}),'null'::jsonb);`, { role: "service_role" }); }
-      catch (error) { console.error(`E6_RPC_FAILURE ${name}: ${String(error?.message || error)}`); throw error; }
-    };
+    const rpc = async (name, args = {}) => pg.sqlJson(`select coalesce(to_jsonb(${invocation(name,args)}),'null'::jsonb);`, { role: "service_role" });
     const sql = (statement, options = {}) => pg.sql(statement, options);
     const sqlJson = (statement, options = {}) => pg.sqlJson(statement, options);
     restServer = createServer(async (request, response) => {

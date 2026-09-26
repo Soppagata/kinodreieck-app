@@ -193,7 +193,7 @@ test("E6 connected local client/tool/MCP -> kd-api -> PG17/ai-task", { timeout: 
   const demotedKey = rawKey(85);
   await harness.rpc("kd_api_issue_access_v1", { p_operation_id:operationId(),p_account_id:harness.accounts.owner,p_assistant_profile:"personal_owner",p_permissions:OWNER_PERMISSIONS,p_key_digest:digest(demotedKey),p_key_fingerprint:fingerprint(demotedKey),p_expires_at:null,p_label:"demotion" });
   harness.sql(`update public.kd_account_access set role='member',personal_ai=false,updated_at=clock_timestamp()+interval '2 seconds' where account_id='${harness.accounts.owner}';`, { role:"service_role" });
-  await assert.rejects(() => makeClient(harness.baseUrl, demotedKey).call("backend_status_get"), (error) => error.code === "ACCOUNT_INACTIVE");
+  await assert.rejects(() => makeClient(harness.baseUrl, demotedKey).call("backend_status_get"), (error) => error.code === "FORBIDDEN");
 
   assert.deepEqual(new Set(ALL_TOOLS.map(({ name }) => name)), new Set(names));
   const missing = names.filter((name) => !called.has(name));
