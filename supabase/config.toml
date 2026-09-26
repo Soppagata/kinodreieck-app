@@ -59,3 +59,9 @@ verify_jwt = false
 [functions.streaming-motn]
 # Internal job: both headers must match an existing server service key.
 verify_jwt = false
+
+[functions.kd-api]
+# Persönliche KD-Keys sind absichtlich keine Supabase-JWTs. Der Handler prüft
+# sie über den service-only Resolver; echte App-JWTs zusätzlich mit getUser.
+# KD_API_ENABLED bleibt bis zur getrennten Aktivierung fail-closed.
+verify_jwt = false

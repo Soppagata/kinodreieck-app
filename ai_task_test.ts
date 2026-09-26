@@ -251,6 +251,8 @@ const z = {
   providerFreigabeHttpFehler: null as null | { status: number; koerper: unknown },
   start: { ok: true, log_id: LOG_ID, modell_alias: "klein" } as unknown,
   startHttpFehler: null as null | { status: number; koerper: unknown },
+  kdApiClaim: { ok: true, execute: true, jobId: "99999999-9999-4999-8999-999999999999", accountId: KONTO,
+    operationId: "88888888-8888-4888-8888-888888888888", kind: "echo-struct", payload: { wort: "Kinodreieck" } } as unknown,
   stand: { heute: 0 } as unknown,
   filmwissenAktuell: {
     format: "filmwissen-cache-v1",
@@ -305,6 +307,8 @@ function stelleZurueck() {
   Deno.env.delete(PROVIDER_DIAGNOSTIC_ENV);
   z.start = { ok: true, log_id: LOG_ID, modell_alias: "klein" };
   z.startHttpFehler = null;
+  z.kdApiClaim = { ok: true, execute: true, jobId: "99999999-9999-4999-8999-999999999999", accountId: KONTO,
+    operationId: "88888888-8888-4888-8888-888888888888", kind: "echo-struct", payload: { wort: "Kinodreieck" } };
   z.stand = { heute: 0 };
   z.filmwissenAktuell = { format: "filmwissen-cache-v1", status: "cache_miss" };
   z.flixpatrolCharts = null;
@@ -412,6 +416,8 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
     }
     return antwort(z.start);
   }
+  if (url.includes("/rest/v1/rpc/kd_api_claim_ai_job_v1")) return antwort(z.kdApiClaim);
+  if (url.includes("/rest/v1/rpc/kd_api_finish_ai_job_v1")) return antwort({ ok: true });
   if (url.includes("/rest/v1/rpc/kd_private_provider_allowed")) {
     if (z.providerFreigabeHttpFehler) {
       return antwort(
@@ -10299,4 +10305,29 @@ test("P06 movie TMDB synthesis retains typed identity through source and adapter
   gleich((start?.p_werk as Record<string, unknown>).typ, 'film');
   gleich(anbieterAufrufe().length, 1, 'one local provider mock');
   wahr(aufrufe.some(a => new URL(a.url).searchParams.get('srsearch') === 'haswbstatement:P4947=348'), 'numeric P4947 lookup');
+});
+
+test("KD-API-Job nutzt service-only Claim und bestehenden Providerzaun ohne Nutzer-JWT-Tausch", async () => {
+  stelleZurueck();
+  const jobId = "99999999-9999-4999-8999-999999999999";
+  const response = await handhabeAnfrage(new Request("https://test.supabase.co/functions/v1/ai-task", {
+    method: "POST",
+    headers: { Authorization: "Bearer service-test", "X-KD-API-Job": jobId, "Content-Type": "application/json" },
+    body: JSON.stringify({ kdApiJobId: jobId }),
+  }));
+  gleich(response.status, 200, "Job läuft durch den bestehenden Handler");
+  gleich(rpc("kd_api_claim_ai_job_v1").length, 1, "Herkunft wird serverseitig geclaimt");
+  gleich(rpc("kd_api_finish_ai_job_v1").length, 1, "Status wird genau einmal abgeschlossen");
+  gleich(rpc("kd_api_finish_ai_job_v1")[0].koerper?.p_succeeded, true, "Erfolg wird gebunden");
+  gleich(aufrufe.filter((a) => a.pfad === "/auth/v1/user").length, 0, "kein erzeugtes oder getauschtes Nutzer-JWT");
+  gleich(aufrufe.filter((a) => a.pfad === "/rest/v1/kd_account_access").length, 0, "Claim-RPC ist die einzige Kontoquelle");
+  gleich(anbieterAufrufe().length, 1, "genau ein gezaunter Provideraufruf");
+
+  stelleZurueck();
+  const denied = await handhabeAnfrage(new Request("https://test.supabase.co/functions/v1/ai-task", {
+    method: "POST", headers: { Authorization: "Bearer wrong", "X-KD-API-Job": jobId }, body: "{}",
+  }));
+  gleich(denied.status, 401, "fremder interner Aufruf wird vor Claim abgewiesen");
+  gleich(rpc("kd_api_claim_ai_job_v1").length, 0, "kein Claim bei falschem Service-Credential");
+  gleich(anbieterAufrufe().length, 0, "kein Provider bei falschem Service-Credential");
 });

@@ -209,3 +209,16 @@ Rollen-v1 korrigiert ausschließlich die zu breiten Tabellenrechte auf den
 bereits bestehenden tokenfreien anon-Vertrag. Der Rückbau seiner
 `scope=user`-Policies ist weiterhin ein eigener, späterer Cleanup-Schritt und
 bekommt dann eine additive Migrationsdatei.
+
+## KD API v1 (20260926120000)
+
+`20260926120000_kd_api_v1.sql` ist lokal gebaut und geprüft, aber hier nicht
+als remote angewandt eingetragen. Ein späterer freigegebener Lauf erfolgt als
+einzelne Datei bei ausgeschaltetem `KD_API_ENABLED`; danach werden Tabellen,
+Grants und die service-only RPC-Signaturen rückgelesen, bevor Function und Gate
+getrennt ausgeliefert werden. `rollback/20260926120000_kd_api_v1_rollback.sql`
+ist nur der manuelle, datenlöschende Rückweg außerhalb der Forward-Kette.
+
+Weder diese Notiz noch die lokale PostgreSQL-Prüfung ist eine Remote-Wirkung.
+`supabase db push` und `supabase config push` bleiben für dieses Repository
+ungeeignet.

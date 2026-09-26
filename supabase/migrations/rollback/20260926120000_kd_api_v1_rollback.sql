@@ -1,0 +1,54 @@
+-- MANUELLER RUECKWEG, nicht Teil der Forward-Kette.
+-- Vor Ausführung KD_API_ENABLED=false setzen und Function readback prüfen.
+-- Der Rückweg löscht API-Belege und Zugänge; deshalb nur nach separater
+-- Datensicherung und ausdrücklicher Betriebsentscheidung verwenden.
+begin;
+drop function if exists public.kd_api_record_request_v1(uuid,uuid,text,boolean,integer,integer,uuid);
+drop function if exists public.kd_api_account_export_v1(uuid);
+drop function if exists public.kd_api_backend_diagnostics_v1(uuid,text,integer);
+drop function if exists public.kd_api_backend_status_v1(uuid);
+drop function if exists public.kd_api_requests_v1(uuid,text,integer);
+drop function if exists public.kd_api_backend_usage_v1(uuid,timestamptz,timestamptz);
+drop function if exists public.kd_api_usage_v1(uuid,timestamptz,timestamptz);
+drop function if exists public.kd_api_capabilities_v1(uuid);
+drop function if exists public.kd_api_mark_ai_job_unknown_v1(uuid);
+drop function if exists public.kd_api_finish_ai_job_v1(uuid,boolean,jsonb,jsonb);
+drop function if exists public.kd_api_claim_ai_job_v1(uuid);
+drop function if exists public.kd_api_read_job_v1(uuid,uuid);
+drop function if exists public.kd_api_enqueue_ai_job_v1(uuid,uuid,text,text,jsonb,jsonb);
+drop function if exists public.kd_api_mutate_blog_v1(uuid,bigint,uuid,text,text,text,bigint,jsonb,jsonb);
+drop function if exists public.kd_api_read_blog_publication_v1(uuid,uuid);
+drop function if exists public.kd_api_list_blog_publications_v1(uuid,text,integer);
+drop function if exists public.kd_api_apply_preview_v1(uuid,uuid,text[],uuid,text,jsonb);
+drop function if exists public.kd_api_apply_package_v1(uuid,jsonb,uuid,text,text,text[],jsonb,jsonb);
+drop function if exists public.kd_api_preview_package_v1(uuid,jsonb);
+drop function if exists public.kd_api_mutate_personal_v1(uuid,text,bigint,uuid,text,text,text,jsonb,jsonb);
+drop function if exists public.kd_api_read_personal_v1(uuid,text,text,jsonb);
+drop function if exists public.kd_api_revoke_access_v1(uuid,uuid,bigint,text);
+drop function if exists public.kd_api_rotate_access_v1(uuid,uuid,text,text,bigint);
+drop function if exists public.kd_api_issue_access_v1(uuid,uuid,text,text[],text,text,timestamptz,text);
+drop function if exists public.kd_api_resolve_session_v1(uuid,uuid,timestamptz);
+drop function if exists public.kd_api_resolve_key_v1(text,uuid,timestamptz);
+drop function if exists private.kd_api_usage_projection_v1(uuid,timestamptz,timestamptz,boolean);
+drop function if exists private.kd_api_bucket_permission_v1(text,boolean);
+drop function if exists private.kd_api_bucket_with_items_v1(text,jsonb,jsonb);
+drop function if exists private.kd_api_bucket_items_v1(text,jsonb);
+drop function if exists private.kd_api_bucket_shape_v1(text,jsonb);
+drop function if exists private.kd_api_access_result_v1(uuid,private.kd_api_access_v1);
+drop function if exists private.kd_api_operation_claim_v1(jsonb,uuid,text,text);
+drop function if exists private.kd_api_require_context_v1(uuid,text);
+drop function if exists private.kd_api_resolve_key_v1(text,uuid,timestamptz);
+drop function if exists private.kd_api_cursor_decode_v1(text);
+drop function if exists private.kd_api_cursor_encode_v1(jsonb);
+drop function if exists private.kd_api_result_error_v1(text,uuid,bigint);
+drop function if exists private.kd_api_permissions_valid_v1(text,text[]);
+drop function if exists private.kd_api_account_epoch_v1(timestamptz);
+drop table if exists public.kd_api_job_v1;
+drop table if exists private.kd_api_preview_v1;
+drop table if exists private.kd_api_cursor_secret_v1;
+drop table if exists private.kd_api_request_v1;
+drop table if exists private.kd_api_operation_v1;
+drop table if exists private.kd_api_context_v1;
+drop table if exists private.kd_api_access_v1;
+notify pgrst,'reload schema';
+commit;

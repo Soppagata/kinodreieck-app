@@ -4228,7 +4228,17 @@ async function liesRequestTextBegrenzt(
    aufrufen kann, ohne einen Server zu starten. Bis Etappe 6 hatte diese Datei
    KEINEN einzigen automatisierten Test — geprüft wurde nur über die Rauchprobe
    gegen die deployte Fassung, und die kostet Geld. */
-export async function handhabeAnfrage(req: Request): Promise<Response> {
+type KdApiJobCaller = {
+  accountId: string;
+  rolle: "authenticated";
+  claimsSchluessel: string[];
+  weg: "kd-api-job";
+};
+
+async function handhabeAnfrageKern(
+  req: Request,
+  kdApiCaller: KdApiJobCaller | null = null,
+): Promise<Response> {
   const origin = req.headers.get("Origin");
   const beginn = Date.now();
   const providerDiagnosticHeader = req.headers.get(PROVIDER_DIAGNOSTIC_HEADER);
@@ -4322,25 +4332,33 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
 
   /* 2) Aufrufer. Eine im Körper mitgeschickte Account-ID wird nie gelesen. */
   let aufrufer: Aufrufer;
-  try {
-    aufrufer = await pruefeAufrufer(req);
-  } catch (e) {
-    const f = e as AufrufFehler;
-    return fehlerAntwort(f.code ?? CODES.UNAUTHENTICATED, origin, {
-      grund: f.grund,
-      vorgangId,
-    });
-  }
-
   let fachfreigabe: Fachfreigabe;
-  try {
-    fachfreigabe = await pruefeFachfreigabe(req);
-  } catch (e) {
-    const f = e as AufrufFehler;
-    return fehlerAntwort(f.code ?? CODES.FORBIDDEN, origin, {
-      grund: f.grund ?? "kontofreigabe-nicht-lesbar",
-      vorgangId,
-    });
+  if (kdApiCaller) {
+    aufrufer = kdApiCaller;
+    // Der service-only Claim-RPC hat Zugang, aktuelle Ownerrolle und
+    // personal_ai unmittelbar vor diesem Aufruf geprüft. Kein Nutzer-JWT wird
+    // erzeugt oder gegen den persönlichen KD-Key getauscht.
+    fachfreigabe = { rolle: "owner", active: true, personalAi: true };
+  } else {
+    try {
+      aufrufer = await pruefeAufrufer(req);
+    } catch (e) {
+      const f = e as AufrufFehler;
+      return fehlerAntwort(f.code ?? CODES.UNAUTHENTICATED, origin, {
+        grund: f.grund,
+        vorgangId,
+      });
+    }
+
+    try {
+      fachfreigabe = await pruefeFachfreigabe(req);
+    } catch (e) {
+      const f = e as AufrufFehler;
+      return fehlerAntwort(f.code ?? CODES.FORBIDDEN, origin, {
+        grund: f.grund ?? "kontofreigabe-nicht-lesbar",
+        vorgangId,
+      });
+    }
   }
 
   const providerDiagnostic = providerDiagnosticAccess({
@@ -6145,6 +6163,50 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
    Umgebung führt zum Serven, nie zum Schweigen. Ein Schalter, der andersherum
    gepolt wäre (nur serven wenn X gesetzt), würde bei einem Fehlgriff eine
    stumme Function deployen — und das fiele erst im Betrieb auf. */
+export async function handhabeAnfrage(req: Request): Promise<Response> {
+  const jobId = req.headers.get("X-KD-API-Job");
+  if (!jobId) return handhabeAnfrageKern(req);
+  const authorization = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] ?? "";
+  const acceptedSecrets = [
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+    geheim().schluessel,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+  if (!acceptedSecrets.some((secret) => authorization === secret) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId)) {
+    return fehlerAntwort(CODES.UNAUTHENTICATED, null, { grund: "kd-api-job-auth" });
+  }
+  const admin = adminClient();
+  if (!admin) return fehlerAntwort(CODES.SERVER, null, { grund: "kein-admin-zugang" });
+  const { data: claim, error: claimError } = await admin.rpc("kd_api_claim_ai_job_v1", { p_job_id: jobId });
+  if (claimError || !claim?.ok || claim.execute !== true) {
+    return fehlerAntwort(claim?.code ?? CODES.FORBIDDEN, null, { grund: "kd-api-job-claim" });
+  }
+  const forwarded = new Request(req.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task: claim.kind, vorgangId: claim.operationId, payload: claim.payload }),
+  });
+  const response = await handhabeAnfrageKern(forwarded, {
+    accountId: claim.accountId,
+    rolle: "authenticated",
+    claimsSchluessel: ["sub", "role", "kd_api_job"],
+    weg: "kd-api-job",
+  });
+  let responseBody: Record<string, unknown> = {};
+  try { responseBody = await response.clone().json(); } catch { /* fail below */ }
+  const succeeded = response.ok && responseBody.ok === true;
+  await admin.rpc("kd_api_finish_ai_job_v1", {
+    p_job_id: jobId,
+    p_succeeded: succeeded,
+    p_result: succeeded ? responseBody : null,
+    p_error: succeeded ? null : {
+      code: typeof responseBody.code === "string" ? responseBody.code : "TEMPORARILY_UNAVAILABLE",
+      retryable: response.status >= 500,
+    },
+  });
+  return response;
+}
+
 if (Deno.env.get("KD_KEIN_SERVER") !== "1") {
   Deno.serve(handhabeAnfrage);
 }
