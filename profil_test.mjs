@@ -1201,8 +1201,8 @@ check("N", "paket.js liest selbst KEINEN Speichertopf (kein K./store-Zugriff)",
   () => !/\bstore\.(get|set|list|delete)\b/.test(paket) && !/\bK\.[a-zA-Z]/.test(paket));
 check("N", "paket.js kennt das Geschmacksprofil an keiner Stelle",
   () => !/geschmacksprofil|profil\.js/i.test(paket));
-check("N", "bauePaket nimmt nur master, artikel, bereiche und autor entgegen",
-  () => /export function bauePaket\(\{\s*master,\s*artikel,\s*bereiche,\s*autor\s*\}\)/.test(paket));
+check("N", "bauePaket nimmt nur master, artikel, bereiche, autor und den injizierbaren Zeitstempel entgegen",
+  () => /export function bauePaket\(\{\s*master,\s*artikel,\s*bereiche,\s*autor,\s*erstellt\s*=\s*new Date\(\)\.toISOString\(\)\s*\}\)/.test(paket));
 const teilen = lies("src/components/TeilenBlock.jsx");
 check("N", "der einzige Aufrufer übergibt weiterhin nur master und artikel",
   () => /bauePaket\(\{\s*master,\s*artikel,\s*bereiche,\s*autor:\s*autorName\s*\}\)/.test(teilen)
