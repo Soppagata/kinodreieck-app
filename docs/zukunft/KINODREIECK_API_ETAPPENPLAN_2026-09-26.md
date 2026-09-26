@@ -428,11 +428,23 @@ Der fremd veränderte Primärcheckout bleibt unberührt. Es gilt verbindlich
 
 | Paket | Agent / Profil | Branch / Worktree | Basis / DELIVERED / INTEGRATED | Write-Owner und eingefrorene Anschlüsse |
 |---|---|---|---|---|
-| F0 | `api_f0` / Sol high; tragende Kontobindungs- und Parallelitätsverträge | `codex/api-f0-20260926` / `/private/tmp/kd-api-f0-20260926` | Basis: Dokumentationsstart auf `c7b4febb`; Bau beauftragt | `contracts/kd-api/**`, notwendige `src/**`-Adapter, zugehörige gezielte App-Tests, Root-`package.json`/Lockfile und notwendige gemeinsame Laufzeitkonfiguration. Konkretisiert alle Befehle/Dateipfade im eingefrorenen Vertrag. |
+| F0 | `api_f0` / Sol high; tragende Kontobindungs- und Parallelitätsverträge | `codex/api-f0-20260926` / `/private/tmp/kd-api-f0-20260926` | Basis: `dddbb12668ba6dc3dedffb28c722ea3949b4d4f2`; DISPATCH an `/root/api_f0` | `contracts/kd-api/**`, notwendige `src/**`-Adapter, zugehörige gezielte App-Tests, Root-`package.json`/Lockfile und notwendige gemeinsame Laufzeitkonfiguration. Konkretisiert alle Befehle/Dateipfade im eingefrorenen Vertrag. |
 | B1 | nach F0 zu dispatchen | `codex/api-b1-20260926` / `/private/tmp/kd-api-b1-20260926` | wartet auf F0 | Neue API-Migrationen, `supabase/functions/**`, `supabase/config.toml`, `tests/kd-api/backend/**`, `tests/kd-api/db/**`, `tests/kd-api/integration/**`; nötige bestehende Backendtests ausschließlich diesem Owner. |
 | B2 | nach F0 zu dispatchen | `codex/api-b2-20260926` / `/private/tmp/kd-api-b2-20260926` | wartet auf F0 | `integrations/kd-assistant/**` samt eigener Tests, Fixtures, Anleitung und gegebenenfalls eigenem Package/Lockfile; gemeinsame Verträge read-only. |
 | B3 | nach F0 zu dispatchen | `codex/api-b3-20260926` / `/private/tmp/kd-api-b3-20260926` | wartet auf F0 | `.github/workflows/deploy.yml`, gezielter API-Workflow, `tools/function-release-info.mjs`, `tools/release-compatibility.mjs`, neue `tools/kd-api-*`, `tests/kd-api/release/**`, API-Lieferanleitung; keine Backend-/Adapterdateien. |
 | E6 | bereits beteiligter B1 | eigener Worktree vom exakt integrierten Kandidaten | erst nach vollständiger Integration | Ein gebündelter Gesamtlauf; nur konkret entwertete Nachweise nachprüfen. |
+
+**Frischer Zielabgleich am 26.09.2026 (nur lesend):** Die GitHub-Umgebungen
+`staging` und `production` nennen beide
+`https://bscjgwcntapobyxsiyce.supabase.co` und `ai-task`. Pages-Projekt in
+beiden Umgebungen: `kinodreieck`; App-Adressen:
+`https://staging.kinodreieck.at` und `https://kinodreieck.at`.
+Die öffentlichen `build-meta.json` beider Hosts lieferten HTTP 200 und
+`buildVersion=c7b4febbcbca06ef8a973156510f738d6a5739db`, mit jeweils passender
+Umgebungskennung. **Staging und Production teilen laut aktueller
+Lieferkonfiguration das Backend.** Das ist keine Freigabe für Migrationen,
+Key-Ausgabe, Testdatenwrites oder einen Function-Deploy. Function-/DB-Parität
+ist durch den PWA-Buildstand ausdrücklich nicht belegt.
 
 Root-Skripte, Lockfile und `contracts/kd-api/**` gehören während der Welle F0
 und bleiben eingefroren. Das Masterregister gehört ausschließlich dem Meister.
