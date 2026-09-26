@@ -1,6 +1,6 @@
 # Kinodreieck-API: Etappenplan und Masterchat-Übergabe
 
-Stand: 26.09.2026. Status: **Lokale Umsetzung gestartet; Foundation wird gebaut.**
+Stand: 26.09.2026. Status: **Foundation integriert; Backend, Assistentenanbindung und Lieferung im parallelen Bau.**
 Der ausführende Meister arbeitet in einem eigenen Integrationsworktree.
 Neue Endpunkte, Migrationen, Keys und Deployments sind erst durch die jeweils
 zugeordneten Lieferbelege umgesetzt beziehungsweise freigeschaltet.
@@ -428,10 +428,10 @@ Der fremd veränderte Primärcheckout bleibt unberührt. Es gilt verbindlich
 
 | Paket | Agent / Profil | Branch / Worktree | Basis / DELIVERED / INTEGRATED | Write-Owner und eingefrorene Anschlüsse |
 |---|---|---|---|---|
-| F0 | `api_f0` / Sol high; tragende Kontobindungs- und Parallelitätsverträge | `codex/api-f0-20260926` / `/private/tmp/kd-api-f0-20260926` | Basis: `dddbb12668ba6dc3dedffb28c722ea3949b4d4f2`; DISPATCH an `/root/api_f0` | `contracts/kd-api/**`, notwendige `src/**`-Adapter, zugehörige gezielte App-Tests, Root-`package.json`/Lockfile und notwendige gemeinsame Laufzeitkonfiguration. Konkretisiert alle Befehle/Dateipfade im eingefrorenen Vertrag. |
-| B1 | nach F0 zu dispatchen | `codex/api-b1-20260926` / `/private/tmp/kd-api-b1-20260926` | wartet auf F0 | Neue API-Migrationen, `supabase/functions/**`, `supabase/config.toml`, `tests/kd-api/backend/**`, `tests/kd-api/db/**`, `tests/kd-api/integration/**`; nötige bestehende Backendtests ausschließlich diesem Owner. |
-| B2 | nach F0 zu dispatchen | `codex/api-b2-20260926` / `/private/tmp/kd-api-b2-20260926` | wartet auf F0 | `integrations/kd-assistant/**` samt eigener Tests, Fixtures, Anleitung und gegebenenfalls eigenem Package/Lockfile; gemeinsame Verträge read-only. |
-| B3 | nach F0 zu dispatchen | `codex/api-b3-20260926` / `/private/tmp/kd-api-b3-20260926` | wartet auf F0 | `.github/workflows/deploy.yml`, gezielter API-Workflow, `tools/function-release-info.mjs`, `tools/release-compatibility.mjs`, neue `tools/kd-api-*`, `tests/kd-api/release/**`, API-Lieferanleitung; keine Backend-/Adapterdateien. |
+| F0 | `api_f0` / Sol high; tragende Kontobindungs- und Parallelitätsverträge | `codex/api-f0-20260926` / `/private/tmp/kd-api-f0-20260926` | Basis: `dddbb12668ba6dc3dedffb28c722ea3949b4d4f2`; DELIVERED `c89f919a` + `4f84ab43`; INTEGRATED `6e81032` + `e7d4630` | `contracts/kd-api/**`, notwendige `src/**`-Adapter, zugehörige gezielte App-Tests, Root-`package.json`/Lockfile und notwendige gemeinsame Laufzeitkonfiguration. Konkretisiert alle Befehle/Dateipfade im eingefrorenen Vertrag. |
+| B1 | `/root/api_f0` (weiterverwendet) / Sol high; Auth/RLS, Migration, Parallelität, Provider | `codex/api-b1-20260926` / `/private/tmp/kd-api-b1-20260926` | DISPATCH; Basis `e7d4630f04fcf3753201486762c49facf9226214` | Neue API-Migrationen, `supabase/functions/**`, `supabase/config.toml`, `tests/kd-api/backend/**`, `tests/kd-api/db/**`, `tests/kd-api/integration/**`; nötige bestehende Backendtests ausschließlich diesem Owner. |
+| B2 | `/root/api_b2` / Sol medium | `codex/api-b2-20260926` / `/private/tmp/kd-api-b2-20260926` | DISPATCH; Basis `e7d4630f04fcf3753201486762c49facf9226214` | `integrations/kd-assistant/**` samt eigener Tests, Fixtures, Anleitung und gegebenenfalls eigenem Package/Lockfile; gemeinsame Verträge read-only. |
+| B3 | `/root/api_b3` / Sol high; Keychain, Rotation, Deploy-Zielbindung | `codex/api-b3-20260926` / `/private/tmp/kd-api-b3-20260926` | DISPATCH; Basis `e7d4630f04fcf3753201486762c49facf9226214` | `.github/workflows/deploy.yml`, gezielter API-Workflow, `tools/function-release-info.mjs`, `tools/release-compatibility.mjs`, neue `tools/kd-api-*`, `tests/kd-api/release/**`, API-Lieferanleitung; keine Backend-/Adapterdateien. |
 | E6 | bereits beteiligter B1 | eigener Worktree vom exakt integrierten Kandidaten | erst nach vollständiger Integration | Ein gebündelter Gesamtlauf; nur konkret entwertete Nachweise nachprüfen. |
 
 **Frischer Zielabgleich am 26.09.2026 (nur lesend):** Die GitHub-Umgebungen
@@ -446,19 +446,31 @@ Lieferkonfiguration das Backend.** Das ist keine Freigabe für Migrationen,
 Key-Ausgabe, Testdatenwrites oder einen Function-Deploy. Function-/DB-Parität
 ist durch den PWA-Buildstand ausdrücklich nicht belegt.
 
+**F0-Belege übernommen:** `test:kd-api:contract` Exit 0: 4 neue Vertrags-/
+Adapterfälle, 17 Auswahl-Logikfälle, 120 Auswahl-DOM-Fälle, 6 Account-Sync-
+Szenarien sowie reale Node-/Deno-Importe. Vertragsnachweis nach ergänztem
+Mehrtopf-RPC und danach nach dem gezielten B1/B3-Betriebsdelta jeweils nur
+für diesen geänderten Vertrag erneuert (4/4). Keine erneute Appprüfung durch
+den Meister. Meister-Verbindungsprüfung: tatsächliche Write-Fläche, benannte
+Import-/Export-, Rootbefehls- und RPC-/Deploymentanschlüsse den Folgepaketen
+zugeordnet. Supabase-Functionliste frisch gelesen: `kd-api` noch nicht vorhanden.
+Die unveränderten Lockfile-Abhängigkeiten sind einmal im Integrationsworktree
+installiert; B1/B2/B3 lesen dieselbe Root-Laufzeit über lokale Symlinks.
+
 Root-Skripte, Lockfile und `contracts/kd-api/**` gehören während der Welle F0
 und bleiben eingefroren. Das Masterregister gehört ausschließlich dem Meister.
-Liefergrenzen bisher: lokal gestartet; Tests / finaler Commit / Push / CI /
-Deployment / praktische Owner-/Member-Verwendung **noch nicht belegt**.
+Liefergrenzen bisher: F0 lokal gebaut, fokussiert getestet, committed und
+integriert. B1/B2/B3 im Bau. Finaler Gesamtbeleg / Push / CI / Deployment /
+praktische Owner-/Member-Verwendung **noch nicht belegt**.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Evidenz / Rest |
 |---|---|---|---|---|
-| API-01 | Erlaubte eigene Nutzeraktionen einschließlich Mediathek und Blog funktionieren über die API ohne Verlust bestehender App-Funktionen. | F0, B1, B2 | OFFEN | — |
-| API-02 | Beide Assistenten können eine Auswahl zusammenstellen und identisch als Text oder JSON ausgeben. | F0, B1, B2 | OFFEN | — |
+| API-01 | Erlaubte eigene Nutzeraktionen einschließlich Mediathek und Blog funktionieren über die API ohne Verlust bestehender App-Funktionen. | F0, B1, B2 | OFFEN | F0 integriert `e7d4630`; Backend und Adapter im Bau. |
+| API-02 | Beide Assistenten können eine Auswahl zusammenstellen und identisch als Text oder JSON ausgeben. | F0, B1, B2 | OFFEN | F0 integriert `e7d4630`; Backend und Adapter im Bau. |
 | API-03 | Zwei getrennte widerrufbare Zugänge binden Owner und Member sicher an Konto und Rechte. | B1, B2, E6 | OFFEN | — |
 | API-04 | Nur der persönliche Assistent kann KD-KI auslösen; Kosten-/Wiederholungsgrenzen greifen auch bei Abbruch und Folgeaktionen. | B1, B2 | OFFEN | — |
 | API-05 | Nur der persönliche Assistent erhält aussagekräftige Diagnose-, Nutzungs- und Requestdaten; der Member erhält keine solchen Zahlen. | B1, B2 | OFFEN | — |
-| API-06 | Der geprüfte API-/Tool-Kandidat ist am gebundenen Ziel ausgeliefert und mit beiden Zugängen praktisch nutzbar; sein Vertrag ist für den späteren Apple-Client vorbereitet. | F0, B1, B2, B3, E6 | OFFEN | — |
+| API-06 | Der geprüfte API-/Tool-Kandidat ist am gebundenen Ziel ausgeliefert und mit beiden Zugängen praktisch nutzbar; sein Vertrag ist für den späteren Apple-Client vorbereitet. | F0, B1, B2, B3, E6 | OFFEN | Gemeinsamer Vertrag und Apple-Schnittstelle in F0; reale Lieferung und beide Zugänge noch offen. |
 
 OFFEN = Ergebnis fehlt; GEBAUT = durch die einmalige Baumeisterkontrolle
 belegt; DONE = dem finalen Kandidaten und Zielbranch zugeordnet,
