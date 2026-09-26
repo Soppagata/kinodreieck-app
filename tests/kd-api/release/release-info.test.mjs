@@ -8,8 +8,9 @@ import {
 const commit = "a".repeat(40);
 const blobs = new Map([
   ["supabase/functions/kd-api/index.ts", Buffer.from('import "../_shared/helper.ts";\n')],
+  ["supabase/functions/ai-task/index.ts", Buffer.from('import "../_shared/helper.ts";\n')],
   ["supabase/functions/_shared/helper.ts", Buffer.from("export const helper = true;\n")],
-  ["supabase/config.toml", Buffer.from('project_id = "bscjgwcntapobyxsiyce"\n[functions.kd-api]\nverify_jwt = false\n')],
+  ["supabase/config.toml", Buffer.from('project_id = "bscjgwcntapobyxsiyce"\n[functions.ai-task]\nverify_jwt = true\n[functions.kd-api]\nverify_jwt = false\n')],
   ["supabase/migrations/20260926010101_kd_api.sql", Buffer.from("select 1;\n")],
   ["supabase/migrations/20260926010202_kd_api_more.sql", Buffer.from("select 2;\n")],
 ]);
@@ -35,6 +36,14 @@ test("Release-Info bindet Commit, Functionclosure, Config und Migrationsbytes", 
   assert.equal(info.sourceCommit, commit);
   assert.equal(info.enabledDefault, false);
   assert.equal(info.verifyJwt, false);
+  assert.deepEqual(info.requiredFunctions.map(({ slug, verifyJwt }) => ({ slug, verifyJwt })), [
+    { slug: "ai-task", verifyJwt: true },
+    { slug: "kd-api", verifyJwt: false },
+  ]);
+  assert.deepEqual(info.requiredFunctions[0].files, [
+    "supabase/functions/_shared/helper.ts", "supabase/functions/ai-task/index.ts",
+  ]);
+  assert.ok(info.requiredFunctions.every(({ deployContractSha256 }) => /^[a-f0-9]{64}$/.test(deployContractSha256)));
   assert.deepEqual(info.functionSources.files, [
     "supabase/functions/_shared/helper.ts", "supabase/functions/kd-api/index.ts",
   ]);
@@ -48,6 +57,13 @@ test("Release-Info bindet Commit, Functionclosure, Config und Migrationsbytes", 
   const changedInfo = kdApiReleaseInfo({ sourceCommit: commit, releaseId: "e5-fixture-1", git: gitStub({ source: changed }) });
   assert.notEqual(changedInfo.schema.sha256, info.schema.sha256);
   assert.notEqual(changedInfo.releaseSha256, info.releaseSha256);
+
+  const changedAiTask = new Map(blobs);
+  changedAiTask.set("supabase/functions/ai-task/index.ts", Buffer.from('import "../_shared/helper.ts";\nexport const changed = true;\n'));
+  const changedAiInfo = kdApiReleaseInfo({ sourceCommit: commit, releaseId: "e5-fixture-1", git: gitStub({ source: changedAiTask }) });
+  assert.notEqual(changedAiInfo.requiredFunctions[0].sourceSha256, info.requiredFunctions[0].sourceSha256);
+  assert.equal(changedAiInfo.functionSources.sha256, info.functionSources.sha256);
+  assert.notEqual(changedAiInfo.releaseSha256, info.releaseSha256);
 });
 
 test("Release-Info sperrt falschen HEAD, Dirty-State und unsichere CLI-Werte", () => {

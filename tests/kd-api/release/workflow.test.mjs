@@ -17,17 +17,38 @@ test("bestehende CI behält Pages-Deploys und ergänzt alle KD-API-Paketprüfung
   assert.doesNotMatch(workflow, /test:kd-api:final/);
 });
 
-test("gezielter Workflow ist manuell, serialisiert und deployt nur kd-api", async () => {
+test("gezielter Workflow liefert den gebundenen Zweifunctionsatz bei geschlossenem API-Gate", async () => {
   const workflow = await read(".github/workflows/kd-api.yml");
   assert.match(workflow, /workflow_dispatch:/);
   assert.doesNotMatch(workflow, /\n\s+push:/);
   assert.match(workflow, /default: false/);
+  assert.match(workflow, /functions deploy ai-task/);
   assert.match(workflow, /functions deploy kd-api/);
   assert.match(workflow, /--no-verify-jwt/);
   assert.match(workflow, /kd-api-readback\.mjs/);
+  assert.match(workflow, /liesOwnerFunctionBuildMarker/);
+  assert.match(workflow, /kd-api-function-set-readback\.mjs/);
   assert.match(workflow, /kinodreieck-kd-api-shared-supabase/);
   assert.doesNotMatch(workflow, /supabase (?:db|config) push/);
   assert.ok(RELEASE_CRITICAL_FUNCTIONS.includes("kd-api"));
+  const aiDeploy = workflow.indexOf("functions deploy ai-task");
+  const marker = workflow.indexOf("KD_FUNCTION_BUILD_VERSION");
+  const health = workflow.indexOf("liesOwnerFunctionBuildMarker");
+  const kdDeploy = workflow.indexOf("functions deploy kd-api");
+  assert.ok(aiDeploy > 0 && aiDeploy < marker && marker < health && health < kdDeploy);
+  const aiStep = workflow.slice(aiDeploy, marker);
+  assert.doesNotMatch(aiStep, /--no-verify-jwt/);
+  assert.match(workflow.slice(kdDeploy), /--no-verify-jwt/);
+  const deployed = [...workflow.matchAll(/functions deploy ([a-z0-9-]+)/g)].map((match) => match[1]);
+  assert.deepEqual([...new Set(deployed)].sort(), ["ai-task", "kd-api"]);
+});
+
+test("Runbook benennt ai-task als Shared-Wirkung und bindet beide Versionsreadbacks", async () => {
+  const runbook = await read("docs/KD_API_LIEFERUNG.md");
+  assert.match(runbook, /Zweifunctionsatz `ai-task`/);
+  assert.match(runbook, /X-KD-API-Job/);
+  assert.match(runbook, /Shared-Backend-Wirkung/);
+  assert.match(runbook, /Owner-Health, KD-API-Version, Management-/);
 });
 
 test("Runbook bindet den aktiven Keychain-Envelope und sperrt interne Einträge für Clients", async () => {

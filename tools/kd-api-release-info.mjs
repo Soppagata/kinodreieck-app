@@ -6,8 +6,10 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import {
+  deployContractHash,
   localImportClosure,
   parseFunctionConfigBlob,
+  releaseInfo as aiTaskReleaseInfo,
   sourceHash,
 } from "./function-release-info.mjs";
 
@@ -84,7 +86,6 @@ export function kdApiReleaseInfo({
     expectedVerifyJwt: false,
     expectedProjectId: PROJECT_ID,
   });
-
   const migrationPaths = gitText(git, [
     "ls-tree", "-r", "--name-only", sourceCommit, "--", "supabase/migrations",
   ]).split("\n").filter(Boolean).filter((path) => path.endsWith(".sql")).sort();
@@ -104,8 +105,21 @@ export function kdApiReleaseInfo({
   const dirty = gitText(git, ["status", "--short", "--", ...trackedPaths]);
   if (dirty) throw new Error("KD_API_RELEASE_INPUTS_NOT_COMMITTED");
 
+  const aiTask = aiTaskReleaseInfo({ git });
+  if (aiTask.commit !== sourceCommit || aiTask.functionName !== "ai-task"
+      || aiTask.verifyJwt !== true || aiTask.projectId !== PROJECT_ID) {
+    throw new Error("AI_TASK_RELEASE_BINDING_INVALID");
+  }
+
   const sourceSha256 = sourceHash(sourceFiles, readBlob);
   const configSha256 = createHash("sha256").update(configBlob).digest("hex");
+  const kdApiDeployContractSha256 = deployContractHash({
+    projectId: config.projectId,
+    functionName: KD_API_FUNCTION_SLUG,
+    verifyJwt: config.verifyJwt,
+    sourceSha256,
+    configSha256,
+  });
   const schemaSha256 = framedHash(
     "kd-api-schema-v1",
     migrations.map(({ path }) => [path, readBlob(path)]),
@@ -114,6 +128,9 @@ export function kdApiReleaseInfo({
     ["sourceCommit", sourceCommit],
     ["releaseId", releaseId],
     ["sourceSha256", sourceSha256],
+    ["kdApiDeployContractSha256", kdApiDeployContractSha256],
+    ["aiTaskSourceSha256", aiTask.sourceSha256],
+    ["aiTaskDeployContractSha256", aiTask.deployContractSha256],
     ["configSha256", configSha256],
     ["schemaSha256", schemaSha256],
   ]);
@@ -128,6 +145,22 @@ export function kdApiReleaseInfo({
     enabledDefault: false,
     projectId: config.projectId,
     verifyJwt: config.verifyJwt,
+    requiredFunctions: Object.freeze([
+      Object.freeze({
+        slug: "ai-task",
+        verifyJwt: true,
+        sourceSha256: aiTask.sourceSha256,
+        deployContractSha256: aiTask.deployContractSha256,
+        files: Object.freeze(aiTask.dateien),
+      }),
+      Object.freeze({
+        slug: KD_API_FUNCTION_SLUG,
+        verifyJwt: false,
+        sourceSha256,
+        deployContractSha256: kdApiDeployContractSha256,
+        files: Object.freeze(sourceFiles),
+      }),
+    ]),
     functionSources: Object.freeze({ files: Object.freeze(sourceFiles), sha256: sourceSha256 }),
     config: Object.freeze({ path: KD_API_CONFIG, sha256: configSha256 }),
     schema: Object.freeze({ migrations: Object.freeze(migrations), sha256: schemaSha256 }),

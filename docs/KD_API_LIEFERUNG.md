@@ -29,9 +29,11 @@ node tools/kd-api-release-info.mjs \
   --release-id <eindeutige-nicht-geheime-id>
 ```
 
-Das JSON bindet Function-Slug und Vertrag, die statische Importclosure der
-Function, `supabase/config.toml`, den vollständigen lokalen Migrationssatz und
-deren Byte-Hashes. Es enthält keine Credentials. Ein PWA-`build-meta.json`
+Das JSON bindet den Zweifunctionsatz `ai-task` (`verify_jwt=true`) und
+`kd-api` (`verify_jwt=false`) aus demselben Commit: beide statischen
+Importclosures, ihre Deploy-/Quellhashes, `supabase/config.toml`, den
+vollständigen lokalen Migrationssatz und dessen Byte-Hashes. Es enthält keine
+Credentials. Ein PWA-`build-meta.json`
 und dessen SHA ersetzen weder diesen Functionnachweis noch den Schemaabgleich.
 
 Vor jeder Shared-Wirkung wird der Migrationssatz nach dem gezielten,
@@ -50,13 +52,18 @@ das gemeinsame Backend:
    und mit dem Ledger-Verfahren aus `supabase/migrations/LIESMICH.md` anwenden.
    Danach Objekt-, Grant- und Migrationsstand read-only rücklesen. Es gibt
    keinen automatischen Migrationsschritt im Workflow.
-2. Den manuellen GitHub-Workflow `Deploy kd-api function` auf dem exakt
+2. Den manuellen GitHub-Workflow `Deploy kd-api function set` auf dem exakt
    geprüften `source_commit` starten. `target`, `release_id` und zunächst
    `enabled=false` binden. Der Workflow serialisiert beide GitHub-Ziele gegen
-   das gemeinsame Supabase-Projekt, prüft die Releasehülle, setzt nur die drei
-   Functionwerte `KD_API_SOURCE_COMMIT`, `KD_API_RELEASE_ID` und
-   `KD_API_ENABLED`, deployt ausschließlich `kd-api` und liest den
-   Versionsendpunkt anschließend exakt zurück.
+   das gemeinsame Supabase-Projekt und prüft die Releasehülle. Er setzt zuerst
+   `KD_API_SOURCE_COMMIT`, `KD_API_RELEASE_ID` und `KD_API_ENABLED=false`.
+   Solange das neue API-Gate geschlossen ist, deployt er aus demselben Commit
+   zuerst `ai-task` mit unverändertem `verify_jwt=true`, setzt dessen
+   `KD_FUNCTION_BUILD_VERSION` erst nach erfolgreichem Deploy und liest den
+   Commit über den vorhandenen providerfreien Owner-Health zurück. Danach
+   deployt er `kd-api` mit `verify_jwt=false`, liest dessen exakten
+   Versionsendpunkt und den ACTIVE-/JWT-Stand beider Functions aus dem
+   Managementpfad zurück. Andere Functions werden nicht deployt.
 3. Den nicht geheimen Workflow-Nachweis sowie den Remote-Schema-/Function-
    Snapshot dem Kandidaten zuordnen. Ein grüner Pages-Deploy allein genügt
    dafür nicht.
@@ -73,6 +80,21 @@ node tools/kd-api-readback.mjs \
 
 Umleitungen, Zusatzfelder, falsches Gate sowie Commit- oder Release-Drift sind
 Fehler.
+
+Der authentifizierte `ai-task`-Health benötigt in der gewählten GitHub-
+Umgebung `KD_READBACK_OWNER_USER` und `KD_READBACK_OWNER_PASSWORD` als
+Secrets sowie `MAIL_DOMAIN`, `SUPABASE_PUBLISHABLE_KEY` und `APP_URL` als
+Variablen. Diese Werte werden nicht ausgegeben. Der Health-Aufruf ist
+providerfrei. Fehlt sein exakter Commitmarker, bleibt `kd-api` geschlossen
+und der Workflow stoppt vor dessen Deploy oder Freischaltung.
+
+Dieser Workflow verändert bewusst auch die gemeinsam verwendete Function
+`ai-task`. Damit aktualisiert er den internen `X-KD-API-Job`-/`kdApiJobId`-
+Anschluss für bestehende Umgebungen; es handelt sich auch bei Ziel
+`staging` um eine Shared-Backend-Wirkung. Scheitert der Ablauf nach dem
+`ai-task`-Deploy, wird nicht blind erneut gestartet: zuerst werden Function-
+Status und Buildmarker read-only geklärt. Das geschlossene KD-API-Gate bleibt
+dabei die Wirkungsgrenze für den neuen API-Pfad.
 
 ## Keys ausgeben, rotieren und widerrufen
 
@@ -141,10 +163,12 @@ getrennt und bleibt an die Projekt-Budgetregeln gebunden.
 Bei einem Vorfall zuerst denselben belegten Functioncommit mit neuer
 Release-ID und `enabled=false` deployen und `enabled:false` rücklesen. Danach
 betroffene Zugänge einzeln mit `revoke` sperren und die erhöhte `keyEpoch`
-rücklesen. Für einen Function-Rollback wird ein zuvor belegter Git-Commit mit
-dem manuellen Workflow erneut ausschließlich als `kd-api` deployt, zunächst
-geschlossen. Erst nach Versions- und Kompatibilitätsreadback darf dessen Gate
-geöffnet werden.
+rücklesen. Für einen Function-Rollback wird ein zuvor belegter gemeinsamer
+Git-Commit mit dem manuellen Workflow als zusammengehöriger Satz aus
+`ai-task` und `kd-api` deployt, während das API-Gate geschlossen bleibt. Erst
+nach Owner-Health, KD-API-Version, Management- und Kompatibilitätsreadback darf
+das Gate geöffnet werden. Ein isolierter `kd-api`-Rollback wäre kein Beleg für
+den internen KI-Jobanschluss.
 
 Ein Function-Rollback rollt keine Migration und keine bereits erfolgte
 Fachdatenmutation zurück. Additive Schemaobjekte bleiben geschlossen; eine

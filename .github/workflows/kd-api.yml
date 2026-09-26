@@ -1,4 +1,4 @@
-name: Deploy kd-api function
+name: Deploy kd-api function set
 
 on:
   workflow_dispatch:
@@ -92,6 +92,49 @@ jobs:
             --project-ref "$EXPECTED_PROJECT_REF" \
             --env-file "$RUNNER_TEMP/kd-api-function.env" \
             --output json > "$RUNNER_TEMP/kd-api-secrets-set.json"
+      - name: Abhängige ai-task-Function aus demselben Commit deployen
+        run: >-
+          ./node_modules/.bin/supabase functions deploy ai-task
+          --project-ref "$EXPECTED_PROJECT_REF"
+          --use-api
+          --jobs 1
+          --output-format json
+      - name: ai-task-Buildmarker erst nach erfolgreichem Deploy setzen
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          umask 077
+          printf 'KD_FUNCTION_BUILD_VERSION=%s\n' "$EXPECTED_SOURCE_COMMIT" \
+            > "$RUNNER_TEMP/ai-task-marker.env"
+          ./node_modules/.bin/supabase secrets set \
+            --project-ref "$EXPECTED_PROJECT_REF" \
+            --env-file "$RUNNER_TEMP/ai-task-marker.env" \
+            --output json > "$RUNNER_TEMP/ai-task-marker-set.json"
+      - name: ai-task-Version über vorhandenen providerfreien Owner-Health rücklesen
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          KD_READBACK_OWNER_USER: ${{ secrets.KD_READBACK_OWNER_USER }}
+          KD_READBACK_OWNER_PASSWORD: ${{ secrets.KD_READBACK_OWNER_PASSWORD }}
+          KD_READBACK_MAIL_DOMAIN: ${{ vars.MAIL_DOMAIN }}
+          KD_READBACK_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          TARGET_APP_URL: ${{ vars.APP_URL }}
+        run: |
+          node --input-type=module -e '
+            import { liesOwnerFunctionBuildMarker } from "./tools/live_function_readback.mjs";
+            await liesOwnerFunctionBuildMarker({
+              expectedBuildVersion: process.env.EXPECTED_SOURCE_COMMIT,
+              expectedProjectRef: process.env.EXPECTED_PROJECT_REF,
+              lokaleKonfig: {
+                KD_SB_URL: process.env.TARGET_SUPABASE_URL,
+                KD_SB_ANON: process.env.KD_READBACK_PUBLISHABLE_KEY,
+                KD_OWNER_USER: process.env.KD_READBACK_OWNER_USER,
+                KD_MAIL_DOMAIN: process.env.KD_READBACK_MAIL_DOMAIN,
+                KD_AI_FUNKTION: "ai-task",
+                KD_ORIGIN: process.env.TARGET_APP_URL,
+              },
+              keychainLeser: () => process.env.KD_READBACK_OWNER_PASSWORD,
+            });
+          '
       - name: Ausschließlich kd-api deployen
         run: >-
           ./node_modules/.bin/supabase functions deploy kd-api
@@ -110,6 +153,13 @@ jobs:
           --expected-source-commit "$EXPECTED_SOURCE_COMMIT"
           --expected-release-id "$RELEASE_ID"
           --expect-enabled false
+      - name: Zweifunctionsatz read-only aus Management rücklesen
+        run: |
+          ./node_modules/.bin/supabase functions list \
+            --project-ref "$EXPECTED_PROJECT_REF" \
+            --output json > "$RUNNER_TEMP/kd-api-functions.json"
+          node tools/kd-api-function-set-readback.mjs \
+            --snapshot "$RUNNER_TEMP/kd-api-functions.json"
       - name: Gate nach geschlossenem Readback öffnen
         if: ${{ inputs.enabled }}
         run: |
