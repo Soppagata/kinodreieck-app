@@ -1,6 +1,6 @@
 # Kinodreieck-API: Etappenplan und Masterchat-Übergabe
 
-Stand: 26.09.2026. Status: **Alle Baupakete samt Anschlüssen integriert; lokaler E6-Gesamtlauf beauftragt.**
+Stand: 26.09.2026. Status: **E6a lokal bestanden; E6b zur gebündelten Shared-Freigabe vorbereitet.**
 Der ausführende Meister arbeitet in einem eigenen Integrationsworktree.
 Neue Endpunkte, Migrationen, Keys und Deployments sind erst durch die jeweils
 zugeordneten Lieferbelege umgesetzt beziehungsweise freigeschaltet.
@@ -419,8 +419,14 @@ Aktuelle Basis: **`c7b4febbcbca06ef8a973156510f738d6a5739db`**, am 26.09.2026
 gewählte Nicht-main-Quelle: `origin/staging`. Kein Production-Paritätsnachweis.
 Gemeinsamer Ziel-/Integrationsbranch: **`codex/api-master-20260926`**.
 Integrationsworktree: **`/private/tmp/kd-api-master-20260926`**.
-Finaler Kandidat: **noch keiner**. Remote-Lieferziel und reale Kontozuordnung
-werden am reviewbaren Kandidaten gebunden.
+Getesteter Codekandidat: **`1ef5b159f85c6a4a18931900cb3da11eb63dae1d`**.
+Der E6-Beleg ist als **`0aa73a639a85d0cbaf43e1d89c4c32540d6ee230`** unverändert
+per Fast-forward übernommen. Danach folgen ausschließlich Lieferdokumentation
+und dieses Register; sie verändern die getesteten Codebytes nicht. Der genaue
+Liefer-HEAD wird in der Freigabe und der Git-gebundenen Lieferhülle benannt.
+Remote-Ziel: erste Staging-Lieferung mit dem gemeinsamen Supabase-Projekt
+`bscjgwcntapobyxsiyce`. Reale Owner-/Member-Konten sind eindeutig und privat
+gebunden; eine Shared-Freigabe liegt noch nicht vor.
 
 Die zwei zuvor ungetrackten API-Planungsdateien wurden vollständig übernommen.
 Der fremd veränderte Primärcheckout bleibt unberührt. Es gilt verbindlich
@@ -432,7 +438,7 @@ Der fremd veränderte Primärcheckout bleibt unberührt. Es gilt verbindlich
 | B1 | `/root/api_f0` (weiterverwendet) / Sol high; Auth/RLS, Migration, Parallelität, Provider | `codex/api-b1-20260926` / `/private/tmp/kd-api-b1-20260926` | Basis `e7d4630`; DELIVERED `7d021683`; INTEGRATED `2e4b42f` | Neue API-Migrationen, `supabase/functions/**`, `supabase/config.toml`, `tests/kd-api/backend/**`, `tests/kd-api/db/**`, `tests/kd-api/integration/**`; nötige bestehende Backendtests ausschließlich diesem Owner. |
 | B2 | `/root/api_b2` / Sol medium | `codex/api-b2-20260926` / `/private/tmp/kd-api-b2-20260926` | Basis `e7d4630`; DELIVERED `59d77951` + `b8989497`; INTEGRATED `571287b` + `aed63ce` | `integrations/kd-assistant/**` samt eigener Tests, Fixtures, Anleitung und gegebenenfalls eigenem Package/Lockfile; gemeinsame Verträge read-only. |
 | B3 | `/root/api_b3` / Sol high; Keychain, Rotation, Deploy-Zielbindung | `codex/api-b3-20260926` / `/private/tmp/kd-api-b3-20260926` | Basis `e7d4630`; DELIVERED `7e543b24` + `ccbaffb4`; INTEGRATED `40f6abc` + `087c5ee` + `c83bf17`; DELIVERED-Lieferdelta `fb102557` | `.github/workflows/deploy.yml`, gezielter API-Workflow, `tools/function-release-info.mjs`, `tools/release-compatibility.mjs`, neue `tools/kd-api-*`, `tests/kd-api/release/**`, API-Lieferanleitung; keine Backend-/Adapterdateien. |
-| E6 | `/root/api_f0`, bestehender B1 / Sol high | `codex/api-e6-20260926` / `/private/tmp/kd-api-e6-20260926` | gemeinsamer Stand `c83bf17` plus dieses Masterregister; exakter Dispatchcommit im Beleg | Ein gebündelter Gesamtlauf; nur konkret entwertete Nachweise nachprüfen. |
+| E6 | `/root/api_f0`, bestehender B1 / Sol high | `codex/api-e6-20260926` / `/private/tmp/kd-api-e6-20260926` | Basis `3e3d4686`; getesteter Code `1ef5b159`; DELIVERED und INTEGRATED `0aa73a639` per Fast-forward | Ein gebündelter Gesamtlauf abgeschlossen; nur konkret entwertete Nachweise nachgeprüft. Keine Master-Tests oder Gegenreviews. |
 
 **Frischer Zielabgleich am 26.09.2026 (nur lesend):** Die GitHub-Umgebungen
 `staging` und `production` nennen beide
@@ -493,24 +499,95 @@ angepasst. B3 hat deshalb den gebundenen Liefer-/Manifestpfad um genau
 `verify_jwt=false`. Keine andere Function wird daraus als Deployauftrag
 abgeleitet. Das neue API-Gate bleibt während dieser Kette geschlossen.
 DELIVERED `fb102557`, INTEGRATED `c83bf17`; gezielter Manifest-/Workflow-/
-Functionset-Readback-Beleg 7/7 übernommen. Der neue Workflow benötigt die
-im Lieferleitfaden ausdrücklich benannten Zielsecrets und Variablen; sie sind
-durch den lokalen Bau noch nicht eingerichtet oder remote geprüft.
+Functionset-Readback-Beleg 7/7 übernommen.
+
+**E6a-Beleg übernommen:** Der bestehende B1-Baumeister hat den eingefrorenen
+`test:kd-api:final` genau einmal gestartet. Nach der Sandbox-Sperre vor der
+PG17-Stufe wurden nur offene beziehungsweise konkret entwertete Stufen
+fortgesetzt. Alle verlangten Nachweise sind jetzt grün: Vertrags-/Backendpfad,
+PG17 15 Checks, Adapter 13/13, Release 12/12, der verbundene Test für
+**39 Fachtools plus `capabilities_get`**, vollständige Mocksuite samt Pages
+72/72, Function-Mocks 357/357 und `build:online`. Die einzelnen Befehle,
+anfänglichen Abbrüche und gezielten Fortsetzungen stehen im
+[E6-Beleg](../../tests/kd-api/integration/E6_EVIDENCE.md).
+
+Der verbundene Nachweis verwendet den echten Client/Tool/MCP-Weg, lokale API,
+PostgreSQL und `ai-task`; ausschließlich die Providergrenze ist gemockt.
+Rollen, Kontotrennung, indirekte KI-Sperren, Revisionen, Idempotenz,
+Key-Lebenszyklus, Auswahl und Veröffentlichungsabläufe sind enthalten.
+Konkrete Korrekturen betreffen den Blog-Rücknahmeanschluss, den auf direkte
+Forward-Migrationen begrenzten Manifestfilter sowie lokale Harness- und
+veraltete Test-Erwartungen. B3 lieferte den Manifestfix als `729ef760`, in E6
+integriert als `259ef8d`, mit gezieltem Beleg 2/2. Der Meister hat ausschließlich
+Write-Zuordnung, Commit-Abstammung und Anschlüsse übernommen; keine Tests
+oder internen Paketreviews wiederholt.
+
+**E6b-Vorbereitung, ausschließlich lesend:** Der Remote-Ledger enthält alle
+103 bisherigen direkten Migrationen des Kandidaten. Nur
+`20260926120000_kd_api_v1.sql` fehlt; keine Remote-Migration fehlt lokal.
+Der providerfreie Owner-Health meldet für `ai-task` den Buildmarker
+`a3a00868d9b25076b3f51ed9304ed71411735271`; der Commit ist lokal vorhanden.
+Das ist kein Byte-Paritätsbeleg. `kd-api` ist noch nicht deployt.
+
+GitHub hat `main` als Default-Branch. Die neue manuelle Workflow-Datei ist
+dort noch nicht registriert. `SUPABASE_ACCESS_TOKEN`,
+`KD_READBACK_OWNER_USER`, `KD_READBACK_OWNER_PASSWORD` sowie `MAIL_DOMAIN`
+fehlen sowohl in `staging` als auch auf Repositoryebene. Der vorhandene
+lokale Owner-Readback samt geschützter Konfiguration ist verfügbar. Der neue
+Admin-Keychain-Eintrag muss erst im freigegebenen Zugangssetup eingerichtet
+werden. Deshalb ist für die erste Staging-Lieferung dieselbe gebundene
+Zweifunction-Kette lokal vorgesehen. Es gibt keinen stillen `main`-/
+Production-Push zur Workflowregistrierung und keine zweite Pipeline.
+Die reinen B3-Dokumentationsdeltas `c236dc1` und `d80f350` sind nach E6 als
+`ce9e372` und `cf2b9ff` übernommen; siehe
+[Lieferweg und Erstinstallations-Rückweg](../KD_API_LIEFERUNG.md).
+
+**Konkreter Umfang der ausstehenden gebündelten E6b-Freigabe:**
+
+1. Den in der Freigabe genannten Kandidaten force-frei auf `staging` liefern,
+   vorhandene CI/Pages-Kette und Versionsreadback abschließen. `main` und die
+   Production-PWA sind kein Ziel dieser Freigabe.
+2. Am gemeinsamen Supabase-Projekt `bscjgwcntapobyxsiyce` ausschließlich
+   `20260926120000_kd_api_v1.sql` gezielt und transaktional anwenden; Schema,
+   Rechte und Ledger rücklesen. Vor der Wirkung den tatsächlichen bisherigen
+   `ai-task`-Quellstand für den Rückweg binden. `ai-task` und `kd-api` aus
+   demselben Kandidaten deployen, mit zunächst geschlossenem API-Gate und
+   jeweils unverändert gebundenem JWT-Modus. Danach Versionen rücklesen.
+3. Das Betriebscredential geschützt lokal einrichten und zwei getrennte
+   aktive Zugänge für die bestätigten Owner-/Member-Konten ausgeben. Rohkeys
+   ausschließlich im macOS-Schlüsselbund; für den Widerrufsnachweis höchstens
+   ein zusätzlicher kurzlebiger Member-Prüfzugang, anschließend gesperrt.
+4. Nach dem geschlossenen Readback die API aktivieren. Pro bestätigtem Konto
+   höchstens einen neuen, klar markierten Medieneintrag und einen synthetischen
+   Blogbeitrag anlegen. Bearbeitung, Auswahl/Text/JSON, Veröffentlichung,
+   Rücknahme, Wiederholung und gezielte Löschung dieser Testeinträge prüfen.
+   Vorhandene Inhalte bleiben unverändert. Owner-Diagnose sowie direkte und
+   indirekte Member-KI-/Diagnosesperren prüfen; Readback und Cleanup gehören
+   zur selben Freigabe. Keine Nachricht an den Kollegen.
+5. Bei einem Problem das neue API-Gate geschlossen halten beziehungsweise
+   schließen; nötigenfalls den vorab belegten `ai-task`-Vorstand wiederherstellen
+   und rücklesen. Additive API-Schemaobjekte dürfen geschlossen bleiben.
+
+Diese Kette umfasst notwendige Sicherung, Ausführung, Readback und Cleanup.
+**Kein echter Providerrequest ist darin freigegeben.** Der Live-KI-Nachweis
+bleibt getrennt offen; die lokale Fixture ist dafür kein Ersatz.
 
 Root-Skripte, Lockfile und `contracts/kd-api/**` gehören während der Welle F0
 und bleiben eingefroren. Das Masterregister gehört ausschließlich dem Meister.
-Liefergrenzen bisher: F0 lokal gebaut, fokussiert getestet, committed und
-integriert. B1/B2/B3 samt bisherigen Anschlussdeltas integriert; Zweifunction-Lieferanschluss ebenfalls integriert. E6 lokal beauftragt. Finaler Gesamtbeleg / Push / CI / Deployment /
-praktische Owner-/Member-Verwendung **noch nicht belegt**.
+Liefergrenzen bisher: F0/B1/B2/B3 samt Anschlussdeltas lokal gebaut, getestet,
+committed und integriert. **E6a vollständig belegt und übernommen.** Push,
+Remote-CI, Deployment, reale Keyausgabe und praktische Owner-/Member-Verwendung
+sind **noch nicht erfolgt**. Externe LLM-/Kollegenanbindung und physische
+iPhone/PWA-Abnahme sind durch den lokalen Beleg ebenfalls nicht nachgewiesen.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Evidenz / Rest |
 |---|---|---|---|---|
-| API-01 | Erlaubte eigene Nutzeraktionen einschließlich Mediathek und Blog funktionieren über die API ohne Verlust bestehender App-Funktionen. | F0, B1, B2 | GEBAUT | F0/B1/B2 integriert; E6-Verbundnachweis noch offen. |
-| API-02 | Beide Assistenten können eine Auswahl zusammenstellen und identisch als Text oder JSON ausgeben. | F0, B1, B2 | GEBAUT | F0/B1/B2 integriert; E6-Verbundnachweis noch offen. |
-| API-03 | Zwei getrennte widerrufbare Zugänge binden Owner und Member sicher an Konto und Rechte. | B1, B2, E6 | GEBAUT | Lokaler Key-Lifecycle und Rollenprüfung belegt; zwei reale Keys und praktische Probe offen. |
-| API-04 | Nur der persönliche Assistent kann KD-KI auslösen; Kosten-/Wiederholungsgrenzen greifen auch bei Abbruch und Folgeaktionen. | B1, B2 | GEBAUT | Paketbelege übernommen; verbundener E6-Nachweis und reale Zielprobe offen. |
-| API-05 | Nur der persönliche Assistent erhält aussagekräftige Diagnose-, Nutzungs- und Requestdaten; der Member erhält keine solchen Zahlen. | B1, B2 | GEBAUT | Paketbelege übernommen; verbundener E6-Nachweis und reale Zielprobe offen. |
-| API-06 | Der geprüfte API-/Tool-Kandidat ist am gebundenen Ziel ausgeliefert und mit beiden Zugängen praktisch nutzbar; sein Vertrag ist für den späteren Apple-Client vorbereitet. | F0, B1, B2, B3, E6 | OFFEN | Gemeinsamer Vertrag und Apple-Schnittstelle in F0; reale Lieferung und beide Zugänge noch offen. |
+| API-01 | Erlaubte eigene Nutzeraktionen einschließlich Mediathek und Blog funktionieren über die API ohne Verlust bestehender App-Funktionen. | F0, B1, B2 | GEBAUT | E6a am Codekandidaten `1ef5b159` grün; reale Zielprobe offen. |
+| API-02 | Beide Assistenten können eine Auswahl zusammenstellen und identisch als Text oder JSON ausgeben. | F0, B1, B2 | GEBAUT | E6a Text-/JSON-Verbundnachweis grün; reale Zielprobe offen. |
+| API-03 | Zwei getrennte widerrufbare Zugänge binden Owner und Member sicher an Konto und Rechte. | B1, B2, E6 | GEBAUT | E6a Key-Lifecycle, Rollen und Credential-Übergabe grün; zwei reale Keys und praktische Probe offen. |
+| API-04 | Nur der persönliche Assistent kann KD-KI auslösen; Kosten-/Wiederholungsgrenzen greifen auch bei Abbruch und Folgeaktionen. | B1, B2 | GEBAUT | E6a mit echtem lokalem ai-task und gemockter Providergrenze grün; echte Providerprobe getrennt offen. |
+| API-05 | Nur der persönliche Assistent erhält aussagekräftige Diagnose-, Nutzungs- und Requestdaten; der Member erhält keine solchen Zahlen. | B1, B2 | GEBAUT | E6a Rollen- und Abdeckungsnachweis grün; reale Zielprobe offen. |
+| API-06 | Der geprüfte API-/Tool-Kandidat ist am gebundenen Ziel ausgeliefert und mit beiden Zugängen praktisch nutzbar; sein Vertrag ist für den späteren Apple-Client vorbereitet. | F0, B1, B2, B3, E6 | OFFEN | E6a bestanden, gemeinsamer und Apple-Vertrag vorbereitet; E6b wartet auf die oben benannte Shared-Freigabe. |
 
 OFFEN = Ergebnis fehlt; GEBAUT = durch die einmalige Baumeisterkontrolle
 belegt; DONE = dem finalen Kandidaten und Zielbranch zugeordnet,
