@@ -430,8 +430,8 @@ Der fremd veränderte Primärcheckout bleibt unberührt. Es gilt verbindlich
 |---|---|---|---|---|
 | F0 | `api_f0` / Sol high; tragende Kontobindungs- und Parallelitätsverträge | `codex/api-f0-20260926` / `/private/tmp/kd-api-f0-20260926` | Basis: `dddbb12668ba6dc3dedffb28c722ea3949b4d4f2`; DELIVERED `c89f919a` + `4f84ab43`; INTEGRATED `6e81032` + `e7d4630` | `contracts/kd-api/**`, notwendige `src/**`-Adapter, zugehörige gezielte App-Tests, Root-`package.json`/Lockfile und notwendige gemeinsame Laufzeitkonfiguration. Konkretisiert alle Befehle/Dateipfade im eingefrorenen Vertrag. |
 | B1 | `/root/api_f0` (weiterverwendet) / Sol high; Auth/RLS, Migration, Parallelität, Provider | `codex/api-b1-20260926` / `/private/tmp/kd-api-b1-20260926` | DISPATCH; Basis `e7d4630f04fcf3753201486762c49facf9226214` | Neue API-Migrationen, `supabase/functions/**`, `supabase/config.toml`, `tests/kd-api/backend/**`, `tests/kd-api/db/**`, `tests/kd-api/integration/**`; nötige bestehende Backendtests ausschließlich diesem Owner. |
-| B2 | `/root/api_b2` / Sol medium | `codex/api-b2-20260926` / `/private/tmp/kd-api-b2-20260926` | DISPATCH; Basis `e7d4630f04fcf3753201486762c49facf9226214` | `integrations/kd-assistant/**` samt eigener Tests, Fixtures, Anleitung und gegebenenfalls eigenem Package/Lockfile; gemeinsame Verträge read-only. |
-| B3 | `/root/api_b3` / Sol high; Keychain, Rotation, Deploy-Zielbindung | `codex/api-b3-20260926` / `/private/tmp/kd-api-b3-20260926` | DISPATCH; Basis `e7d4630f04fcf3753201486762c49facf9226214` | `.github/workflows/deploy.yml`, gezielter API-Workflow, `tools/function-release-info.mjs`, `tools/release-compatibility.mjs`, neue `tools/kd-api-*`, `tests/kd-api/release/**`, API-Lieferanleitung; keine Backend-/Adapterdateien. |
+| B2 | `/root/api_b2` / Sol medium | `codex/api-b2-20260926` / `/private/tmp/kd-api-b2-20260926` | Basis `e7d4630`; DELIVERED `59d77951` + `b8989497`; Integration nach B1 | `integrations/kd-assistant/**` samt eigener Tests, Fixtures, Anleitung und gegebenenfalls eigenem Package/Lockfile; gemeinsame Verträge read-only. |
+| B3 | `/root/api_b3` / Sol high; Keychain, Rotation, Deploy-Zielbindung | `codex/api-b3-20260926` / `/private/tmp/kd-api-b3-20260926` | Basis `e7d4630`; DELIVERED `7e543b24` + `ccbaffb4`; Integration nach B2 | `.github/workflows/deploy.yml`, gezielter API-Workflow, `tools/function-release-info.mjs`, `tools/release-compatibility.mjs`, neue `tools/kd-api-*`, `tests/kd-api/release/**`, API-Lieferanleitung; keine Backend-/Adapterdateien. |
 | E6 | bereits beteiligter B1 | eigener Worktree vom exakt integrierten Kandidaten | erst nach vollständiger Integration | Ein gebündelter Gesamtlauf; nur konkret entwertete Nachweise nachprüfen. |
 
 **Frischer Zielabgleich am 26.09.2026 (nur lesend):** Die GitHub-Umgebungen
@@ -457,10 +457,34 @@ zugeordnet. Supabase-Functionliste frisch gelesen: `kd-api` noch nicht vorhanden
 Die unveränderten Lockfile-Abhängigkeiten sind einmal im Integrationsworktree
 installiert; B1/B2/B3 lesen dieselbe Root-Laufzeit über lokale Symlinks.
 
+**B2-DELIVERED-Beleg:** `test:kd-api:assistant` Exit 0, 8/8, alle 39
+Tool-/HTTP-Zuordnungen, beide Profile, Konflikt-/Vorgangsvertrag, Auswahl und
+Blog sowie echter MCP-SDK-stdio-Client gegen Mock. Ein fehlerhafter Parser im
+Testharness wurde gezielt korrigiert; der dadurch rote Paketbeleg erneuert.
+Echter Backend-/LLM-/Kollegenweg damit noch nicht belegt.
+
+**B3-DELIVERED-Beleg:** `test:kd-api:release` mit benannten Bestandsdateien
+Exit 0, 20 Node-Subtests sowie 5 Cleanup- und 36 Function-Release-Checks.
+Nur Mocks/Fixtures, keine echte Keychain- oder Außenwirkung.
+
+**Konkrete Verbindungsdeltas:** B2 liest bisher einen Keychain-Rohstring,
+B3 liefert ein aktives Envelope `kd-api-keychain-v1`; B2 ergänzt ausschließlich
+die validierte Credentialprojektion. B3 ergänzt die Installation des separaten
+Adapter-Lockfiles in CI, dokumentiert die Keychain-Handofflabels und begrenzt
+die CLI-Ausgabe auf Metadaten ohne private Konto-ID. Nur diese entwerteten
+Anschlussnachweise wurden erneuert: B2 `test:credentials` 5/5, B3 Keychain-/Workflowtests 6/6. Keine Paketvollprüfung durch den Meister.
+
+**Reale Kontozuordnung vorbereitet:** Der Nutzer benannte am 26.09.2026 den
+Member-Zugang; ein rein lesender exakter Abgleich ergab genau ein passendes
+aktives Member-Konto und genau ein aktives Owner-Konto. Die privaten IDs liegen
+nur in einer lokalen 0600-Datei unter einem 0700-Verzeichnis außerhalb des
+Repositories; sie werden nicht im Register protokolliert. Keine Keyausgabe
+oder Shared-Datenmutation erfolgt.
+
 Root-Skripte, Lockfile und `contracts/kd-api/**` gehören während der Welle F0
 und bleiben eingefroren. Das Masterregister gehört ausschließlich dem Meister.
 Liefergrenzen bisher: F0 lokal gebaut, fokussiert getestet, committed und
-integriert. B1/B2/B3 im Bau. Finaler Gesamtbeleg / Push / CI / Deployment /
+integriert. B1 im Bau; B2/B3 samt Anschlussdeltas geliefert, Integration wartet auf B1. Finaler Gesamtbeleg / Push / CI / Deployment /
 praktische Owner-/Member-Verwendung **noch nicht belegt**.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Evidenz / Rest |
