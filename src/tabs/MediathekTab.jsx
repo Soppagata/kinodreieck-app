@@ -14,6 +14,7 @@ import {
   erstelleLoeschSnapshot, erstelleTitelliste, istErwarteteLoeschProjektion,
   kanonischeStabileId, schalteAuswahlUm,
 } from "../lib/mediathekSelection.js";
+import { exportLibrarySelection } from "../lib/kdApiAdapters.js";
 import { Chip, ChipReihe, IconClose, QuellenBadges, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -649,6 +650,24 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     }
   }, [titelliste]);
 
+  const speichereAuswahlJson = useCallback(() => {
+    if (!sichtbareAuswahl.length) return;
+    try {
+      const result = exportLibrarySelection({
+        entries: master || [], ids: sichtbareAuswahl.map((entry) => entry.id), format: "json",
+      });
+      const url = URL.createObjectURL(new Blob([result.content], { type: result.mimeType }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      setKopierStatus({ art: "erfolg", text: "Auswahl als JSON gespeichert." });
+    } catch {
+      setKopierStatus({ art: "fehler", text: "Die JSON-Datei konnte nicht erstellt werden." });
+    }
+  }, [master, sichtbareAuswahl]);
+
   const wechsleAnsicht = useCallback((id) => {
     beendeAuswahl();
     setAnsicht(id);
@@ -725,6 +744,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           <button type="button" className="kd-auswahl-kopieren" style={btnStyle(true)}
             disabled={!titelliste} onClick={kopiereTitelliste}>
             Titelliste kopieren
+          </button>
+          <button type="button" className="kd-auswahl-json" style={btnStyle(false)}
+            disabled={sichtbareAuswahl.length === 0} onClick={speichereAuswahlJson}>
+            JSON speichern
           </button>
           <button type="button" className="kd-auswahl-loeschen"
             style={{ ...btnStyle(false), borderColor: T.gefahr, color: T.gefahr }}

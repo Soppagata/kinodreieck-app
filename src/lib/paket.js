@@ -27,12 +27,12 @@ export const BEREICHE = ["filme", "serien", "musik", "sonstiges", "artikel"];
 export const BEREICH_LABELS = { filme: "Filme", serien: "Serien", musik: "Musik", sonstiges: "Sonstiges", artikel: "Blog-Artikel" };
 
 /* ---------- Export: Paket aus dem eigenen Bestand bauen ---------- */
-export function bauePaket({ master, artikel, bereiche, autor }) {
+export function bauePaket({ master, artikel, bereiche, autor, erstellt = new Date().toISOString() }) {
   const paket = {
     format: PAKET_FORMAT,
     version: PAKET_VERSION,
     autor: (autor || "unbekannt").trim(),
-    erstellt: new Date().toISOString(),
+    erstellt,
     quelle: "kinodreieck-export",
     hinweis: "Austauschdatei — in einer Kinodreieck-Instanz über 'Paket importieren' laden. Vor der Übernahme wird gefragt, welche Bereiche übernommen werden.",
     bereiche: {},
