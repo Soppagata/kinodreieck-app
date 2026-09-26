@@ -157,9 +157,11 @@ export function createKdApiHandler(deps) {
         result = await call("kd_api_read_blog_publication_v1", { p_publication_id: parts[1] });
       } else if (req.method === "POST" && parts[0] === "blog-publications" && parts[2] === "unpublish") {
         operationName = "blog_unpublish"; const meta = mutationInput(req, requestId); operationId = meta.operationId;
+        const publication = await call("kd_api_read_blog_publication_v1", { p_publication_id: parts[1] });
         result = await call("kd_api_mutate_blog_v1", { p_expected_private_revision: meta.revision, p_operation_id: meta.operationId,
-          p_request_hash: await deps.sha256(JSON.stringify({ path })), p_action: "unpublish", p_private_article_id: parts[1],
-          p_expected_public_revision: meta.revision, p_payload: {}, p_origin: origin(requestId, meta.operationId, req) }); status = 202; etag = result.revision;
+          p_request_hash: await deps.sha256(JSON.stringify({ path, publicationId: parts[1], publicRevision: publication.publicRevision })),
+          p_action: "unpublish", p_private_article_id: publication.privateArticleId,
+          p_expected_public_revision: publication.publicRevision, p_payload: {}, p_origin: origin(requestId, meta.operationId, req) }); status = 202; etag = result.revision;
       } else if (["must-watch","schedule","radar"].includes(parts[0])) {
         const key = parts[0] === "must-watch" ? "mustwatch" : parts[0]; const bucket = BUCKETS[key];
         if (req.method === "GET" && parts.length === 1) {

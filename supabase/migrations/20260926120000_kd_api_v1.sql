@@ -672,7 +672,8 @@ returns jsonb language plpgsql stable security definer set search_path=pg_catalo
 declare v_context jsonb; v_result jsonb;
 begin
   v_context:=private.kd_api_require_context_v1(p_context_id,'blog.read');
-  select jsonb_build_object('id',s.publication_id,'status','published','contentVersion',s.published_content_version,
+  select jsonb_build_object('id',s.publication_id,'privateArticleId',s.article_id,'publicRevision',s.public_revision,
+    'status','published','contentVersion',s.published_content_version,
     'titel',coalesce(s.payload->>'title',s.payload->>'titel',''),'text',coalesce(s.payload->>'text',''),
     'geordnet',coalesce((s.payload->>'ordered')::boolean,false),'liste',public.kd_blog_public_article(s.publication_id)->'references',
     'autor',case when s.author_mode='profile' then s.author else 'Ohne Namensangabe' end)
