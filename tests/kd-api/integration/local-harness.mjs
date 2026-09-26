@@ -99,6 +99,13 @@ export async function startLocalKdApiHarness({ sourceCommit, releaseId = "e6-loc
       alter table public.kd_account_access add column personal_ai boolean not null default false;
       alter table public.kd_account_access add column created_at timestamptz not null default now();
       alter table public.kd_account_access add column updated_at timestamptz not null default now();
+      alter table public.kd_personal drop constraint if exists kd_personal_key_erlaubt;
+      alter table public.kd_personal add constraint kd_personal_key_erlaubt check (key in (
+        'kd:master','kd:artikel','kd:kino-pins','kd:entdecken-pins','kd:wochenplan','kd:radar',
+        'kd:merkliste','kd:vokabular','kd:einstellungen','kd:entdecken-status','kd:autor-name',
+        'kd:streaming-dienste','kd:mustwatch','kd:achievements','kd:zeitgrenze','kd:filter-mediathek',
+        'kd:filter-kino','kd:filter-streaming','kd:geschmacksprofil'
+      ));
       insert into auth.users(id,email) values('${FOREIGN}','foreign@login.kinodreieck.at');
       insert into public.kd_account_access(account_id,active,role,personal_ai) values('${FOREIGN}',true,'member',false);
       update public.kd_account_access set role='owner',personal_ai=true where account_id='${OWNER}';
