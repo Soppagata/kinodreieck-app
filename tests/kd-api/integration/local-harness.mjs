@@ -116,6 +116,9 @@ export async function startLocalKdApiHarness({ sourceCommit, releaseId = "e6-loc
     pg.sql("alter function public.kd_ai_auftrag_starten(uuid,text,uuid,text,text,text,numeric) rename to kd_ai_auftrag_starten_ohne_task_cap;", { role: "postgres" });
     await sqlFile("supabase/migrations/20260808120000_ai_anbieter_request_kostenzaun.sql");
     pg.sql(`
+      grant select,insert,update,delete on public.kd_ai_limits,public.kd_ai_log to service_role;
+      grant usage,select on all sequences in schema public to service_role;
+      grant execute on function public.kd_ai_auftrag_beenden(bigint,text,text,integer,integer,numeric,text) to service_role;
       create table public.kd_private_settings(singleton boolean primary key default true check(singleton),provider_requests_enabled boolean not null default false);
       insert into public.kd_private_settings(singleton,provider_requests_enabled) values(true,true);
       create table public.kd_private_provider_registry(provider_id text primary key,feature_enabled boolean not null,rights_confirmed boolean not null,dpa_transfer_confirmed boolean not null,retention_confirmed boolean not null,price_budget_confirmed boolean not null,legal_status text not null,reviewed_at date);
