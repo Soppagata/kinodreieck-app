@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createMacKeychain,
   executeKeyLifecycle,
+  writeAdminCredential,
 } from "../../../tools/kd-api-keychain.mjs";
 
 const ids = {
@@ -127,15 +128,46 @@ test("Rotate und Revoke verwenden exakt die eingefrorenen RPC-Payloads", async (
 });
 
 test("macOS-Keychain-Writer transportiert Geheimnis nur über stdin", () => {
+  const secret = "kd_v1_never-in-argv";
   const seen = [];
   const keychain = createMacKeychain({ run(command, args, options) {
     seen.push({ command, args, options });
+    if (args[0] === "find-generic-password") return { status: 0, stdout: `${secret}\n` };
     return { status: 0, stdout: "" };
   } });
-  const secret = "kd_v1_never-in-argv";
   keychain.write("fixture", secret);
-  assert.equal(seen[0].args.includes(secret), false);
-  assert.ok(seen[0].args.includes("at.kinodreieck.kd-api.access-v1"));
-  assert.equal(seen[0].args.at(-1), "-w");
-  assert.equal(seen[0].options.input, `${secret}\n`);
+  assert.deepEqual(seen[0].args, ["-i"]);
+  assert.equal(seen[0].options.input.includes(secret), false);
+  assert.match(seen[0].options.input, /^add-generic-password -U -s at\.kinodreieck\.kd-api\.access-v1 -a fixture -X [a-f0-9]+\n$/);
+  assert.equal(seen[0].options.stdio[1], "ignore");
+  assert.equal(seen[0].options.stdio[2], "ignore");
+  assert.deepEqual(seen[1].args, [
+    "find-generic-password", "-s", "at.kinodreieck.kd-api.access-v1",
+    "-a", "fixture", "-w",
+  ]);
+});
+
+test("Admin-Credential-Writer nutzt denselben stdin-Pfad mit Readback", () => {
+  const credential = "synthetic.admin.credential";
+  const seen = [];
+  writeAdminCredential(credential, { run(command, args, options) {
+    seen.push({ command, args, options });
+    if (args[0] === "find-generic-password") return { status: 0, stdout: `${credential}\n` };
+    return { status: 0, stdout: "" };
+  } });
+  assert.deepEqual(seen[0].args, ["-i"]);
+  assert.equal(seen[0].options.input.includes(credential), false);
+  assert.match(seen[0].options.input, /^add-generic-password -U -s at\.kinodreieck\.supabase\.admin -a SUPABASE_SERVICE_ROLE_KEY -X [a-f0-9]+\n$/);
+  assert.deepEqual(seen[1].args, [
+    "find-generic-password", "-s", "at.kinodreieck.supabase.admin",
+    "-a", "SUPABASE_SERVICE_ROLE_KEY", "-w",
+  ]);
+});
+
+test("Keychain-Writer verwirft einen abweichenden nativen Readback", () => {
+  const keychain = createMacKeychain({ run(_command, args) {
+    if (args[0] === "find-generic-password") return { status: 0, stdout: "other\n" };
+    return { status: 0, stdout: "" };
+  } });
+  assert.throws(() => keychain.write("fixture", "expected"), /KEYCHAIN_WRITE_FAILED/);
 });

@@ -14,6 +14,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const ALIAS = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/;
 const PROFILE = new Set(["personal_owner", "member"]);
 const REASON = /^[A-Z][A-Z0-9_]{1,63}$/;
+const SECURITY_TOKEN = /^[A-Za-z0-9._:-]+$/;
 const META_KEYS = Object.freeze([
   "operationId", "accessId", "accountId", "assistantProfile", "permissions",
   "keyFingerprint", "keyEpoch", "createdAt", "expiresAt", "revokedAt",
@@ -23,24 +24,52 @@ function safeSecurityError(action) {
   return new Error(`KEYCHAIN_${action}_FAILED`);
 }
 
+function readGenericCredential({ service, account, run, missing = false, errorCode }) {
+  const result = run("/usr/bin/security", [
+    "find-generic-password", "-s", service, "-a", account, "-w",
+  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  if (result.status !== 0) {
+    if (missing) return null;
+    throw new Error(errorCode);
+  }
+  return String(result.stdout || "").replace(/\r?\n$/, "");
+}
+
+function writeGenericCredential({ service, account, value, run, errorCode }) {
+  if (!SECURITY_TOKEN.test(service) || !SECURITY_TOKEN.test(account)
+      || typeof value !== "string" || value.length === 0 || /[\r\n]/.test(value)) {
+    throw new Error(errorCode);
+  }
+  const passwordHex = Buffer.from(value, "utf8").toString("hex");
+  const result = run("/usr/bin/security", ["-i"], {
+    input: `add-generic-password -U -s ${service} -a ${account} -X ${passwordHex}\n`,
+    encoding: "utf8",
+    stdio: ["pipe", "ignore", "ignore"],
+  });
+  if (result.status !== 0) throw new Error(errorCode);
+  const stored = readGenericCredential({ service, account, run, errorCode });
+  if (stored !== value) throw new Error(errorCode);
+}
+
 export function createMacKeychain({ run = spawnSync } = {}) {
   return Object.freeze({
     read(account, { missing = false } = {}) {
-      const result = run("/usr/bin/security", [
-        "find-generic-password", "-s", KD_API_KEYCHAIN_SERVICE, "-a", account, "-w",
-      ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-      if (result.status !== 0) {
-        if (missing) return null;
-        throw safeSecurityError("READ");
-      }
-      return String(result.stdout || "").replace(/\r?\n$/, "");
+      return readGenericCredential({
+        service: KD_API_KEYCHAIN_SERVICE,
+        account,
+        run,
+        missing,
+        errorCode: "KEYCHAIN_READ_FAILED",
+      });
     },
     write(account, value) {
-      const result = run("/usr/bin/security", [
-        "add-generic-password", "-s", KD_API_KEYCHAIN_SERVICE, "-a", account,
-        "-U", "-w",
-      ], { input: `${value}\n`, encoding: "utf8", stdio: ["pipe", "ignore", "pipe"] });
-      if (result.status !== 0) throw safeSecurityError("WRITE");
+      writeGenericCredential({
+        service: KD_API_KEYCHAIN_SERVICE,
+        account,
+        value,
+        run,
+        errorCode: "KEYCHAIN_WRITE_FAILED",
+      });
     },
     delete(account, { missing = false } = {}) {
       const result = run("/usr/bin/security", [
@@ -52,14 +81,24 @@ export function createMacKeychain({ run = spawnSync } = {}) {
 }
 
 export function readAdminCredential({ run = spawnSync } = {}) {
-  const result = run("/usr/bin/security", [
-    "find-generic-password", "-s", KD_API_ADMIN_KEYCHAIN_SERVICE,
-    "-a", KD_API_ADMIN_KEYCHAIN_ACCOUNT, "-w",
-  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  if (result.status !== 0) throw new Error("ADMIN_KEYCHAIN_READ_FAILED");
-  const credential = String(result.stdout || "").replace(/\r?\n$/, "");
+  const credential = readGenericCredential({
+    service: KD_API_ADMIN_KEYCHAIN_SERVICE,
+    account: KD_API_ADMIN_KEYCHAIN_ACCOUNT,
+    run,
+    errorCode: "ADMIN_KEYCHAIN_READ_FAILED",
+  });
   if (!credential) throw new Error("ADMIN_KEYCHAIN_EMPTY");
   return credential;
+}
+
+export function writeAdminCredential(credential, { run = spawnSync } = {}) {
+  writeGenericCredential({
+    service: KD_API_ADMIN_KEYCHAIN_SERVICE,
+    account: KD_API_ADMIN_KEYCHAIN_ACCOUNT,
+    value: credential,
+    run,
+    errorCode: "ADMIN_KEYCHAIN_WRITE_FAILED",
+  });
 }
 
 function parseStored(raw, account) {
