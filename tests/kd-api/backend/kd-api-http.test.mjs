@@ -34,14 +34,47 @@ function harness({ enabled = true, resolve = ownerContext } = {}) {
 const api = (path, init = {}) => new Request(`https://example.test/functions/v1/kd-api/v1${path}`, { ...init,
   headers: { Authorization: "Bearer kd_test_opaque", ...(init.headers || {}) } });
 
-test("version remains readable while the API gate is closed", async () => {
+test("exact local and Supabase gateway routes preserve meta readback and the closed API gate", async () => {
   const { handler, calls } = harness({ enabled: false });
-  const meta = await handler(api("/_meta/version", { method: "GET" }));
-  assert.equal(meta.status, 200);
-  assert.deepEqual(await meta.json(), { functionSlug: "kd-api", contractVersion: "kd-api-v1", sourceCommit: "a".repeat(40), releaseId: "test-r1", enabled: false });
-  const denied = await handler(api("/library", { method: "GET" }));
-  assert.equal(denied.status, 503); assert.equal((await denied.json()).code, "API_DISABLED");
+  const expectedMeta = { functionSlug: "kd-api", contractVersion: "kd-api-v1", sourceCommit: "a".repeat(40), releaseId: "test-r1", enabled: false };
+  for (const url of [
+    "http://127.0.0.1:54321/_meta/version",
+    "https://example.test/functions/v1/kd-api/_meta/version",
+  ]) {
+    const meta = await handler(new Request(url));
+    assert.equal(meta.status, 200, url);
+    assert.deepEqual(await meta.json(), expectedMeta);
+  }
+  for (const url of [
+    "http://127.0.0.1:54321/v1/library",
+    "https://example.test/functions/v1/kd-api/v1/library",
+    "https://example.test/arbitrary/functions/v1/kd-api/_meta/version",
+    "https://example.test/functions/v1/other/_meta/version",
+  ]) {
+    const denied = await handler(new Request(url));
+    assert.equal(denied.status, 503, url);
+    assert.equal((await denied.json()).code, "API_DISABLED");
+  }
   assert.equal(calls.length, 0, "gate closes before auth/database work");
+});
+
+test("local and exact Supabase gateway v1 paths reach the same authorized API route", async () => {
+  for (const url of [
+    "http://127.0.0.1:54321/v1/capabilities",
+    "https://example.test/functions/v1/kd-api/v1/capabilities",
+  ]) {
+    const h = harness();
+    const response = await h.handler(new Request(url, { headers: { Authorization: "Bearer kd_test_opaque" } }));
+    assert.equal(response.status, 200, url);
+    assert.equal((await response.json()).identity, "personal_owner_assistant");
+    assert.deepEqual(h.calls.slice(0, 2).map((entry) => entry.name), ["kd_api_resolve_key_v1", "kd_api_capabilities_v1"]);
+  }
+  const h = harness();
+  const rejected = await h.handler(new Request("https://example.test/arbitrary/functions/v1/kd-api/v1/capabilities", {
+    headers: { Authorization: "Bearer kd_test_opaque" },
+  }));
+  assert.equal(rejected.status, 404);
+  assert.equal(h.calls.some((entry) => entry.name === "kd_api_capabilities_v1"), false);
 });
 
 test("anonymous and revoked callers stop before domain and provider work", async () => {

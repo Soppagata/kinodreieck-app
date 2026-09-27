@@ -31,9 +31,13 @@ function problem(code, requestId, operationId = null, detail = {}) {
 }
 function cleanPath(url) {
   const path = new URL(url).pathname;
-  const marker = path.lastIndexOf("/v1/");
-  if (path.endsWith("/v1")) return "/";
-  return marker >= 0 ? path.slice(marker + 3) : path;
+  const gateway = "/functions/v1/kd-api";
+  if (path === gateway || path === `${gateway}/` || path === "/v1" || path === "/v1/") return "/";
+  if (path === `${gateway}/_meta/version`) return "/_meta/version";
+  if (path === `${gateway}/v1` || path === `${gateway}/v1/`) return "/";
+  if (path.startsWith(`${gateway}/v1/`)) return path.slice(`${gateway}/v1`.length);
+  if (path.startsWith("/v1/")) return path.slice(3);
+  return path;
 }
 function parseRevision(value) {
   const match = value?.match(/^"(0|[1-9][0-9]*)"$/);
