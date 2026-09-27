@@ -1,6 +1,6 @@
 # Kinodreieck-API: Etappenplan und Masterchat-Übergabe
 
-Stand: 26.09.2026. Status: **E6a lokal bestanden; E6b zur gebündelten Shared-Freigabe vorbereitet.**
+Stand: 27.09.2026. Status: **E6a bestanden, Staging geliefert; Nam-ZIP vorbereitet, Shared-Freischaltung wartet auf ausdrückliche Bestätigung.**
 Der ausführende Meister arbeitet in einem eigenen Integrationsworktree.
 Neue Endpunkte, Migrationen, Keys und Deployments sind erst durch die jeweils
 zugeordneten Lieferbelege umgesetzt beziehungsweise freigeschaltet.
@@ -572,13 +572,65 @@ Diese Kette umfasst notwendige Sicherung, Ausführung, Readback und Cleanup.
 **Kein echter Providerrequest ist darin freigegeben.** Der Live-KI-Nachweis
 bleibt getrennt offen; die lokale Fixture ist dafür kein Ersatz.
 
+**Fortsetzung am 27.09.2026 — angefordertes Nam-ZIP einschließlich Key:**
+Der Nutzer verlangt ein versandfertiges Paket für den bestätigten Member.
+Der Meister hat dies zunächst als Freigabe der notwendigen Bereitstellung
+verstanden. Die automatische Freigabeprüfung hat die tatsächliche
+Shared-Migration jedoch vor Prozessstart abgelehnt: Der ZIP-/Key-Auftrag
+genügt ihr nicht als ausdrückliche Zustimmung zum gemeinsam genutzten
+Production-Schema. Eine gebündelte Rückfrage zu genau diesem Ziel, dieser
+Migration, dem Zweifunctionsatz, der Aktivierung und Nams Key ist gestellt.
+Bis zur Antwort keine Migration, Functionbereitstellung oder Keyausgabe.
+
+Bereits tatsächlich ausgeführt und gebunden:
+
+- Kandidat `d8e40df628a67631f3554e744e3ba690e2ad5f5f` force-frei auf
+  `staging` gepusht. GitHub-Lauf
+  [36307920827](https://github.com/Soppagata/kinodreieck-app/actions/runs/36307920827)
+  erfolgreich: Suiten, Chromium, WebKit und Staging-Deploy. Production-Deploy
+  wurde übersprungen. Öffentlicher Readback: Staging `d8e40df`, Production-PWA
+  weiterhin `c7b4febb`. Dies belegt keine API-Bereitstellung.
+- Neues API-Gate `KD_API_ENABLED=false`, Source-Commit `d8e40df` und Release
+  `kd-api-v1-20260927-nam-d8e40df` gesetzt und über ihre Hashes rückgelesen.
+  Keine andere Remote-Konfiguration verändert; `kd-api` ist noch nicht
+  deployt. Ledger frisch: 103 alte Migrationen, API-Migration fehlt.
+- Nam und Owner erneut aktiv und eindeutig gebunden. Keine privaten IDs im
+  Register. `ai-task`-Owner-Health weiterhin `a3a00868`; B3 hat 12 reale
+  heruntergeladene Quelldateien byte-/importclosure-identisch zu diesem
+  Commit bestätigt. Management: ACTIVE, Version 100, `verify_jwt=true`.
+  Privater Rückwegbeleg unter
+  `/private/tmp/kd-api-predeploy-20260927-B3.B4hwYk`.
+- B2-Nam-Paket unter `/private/tmp/kd-api-nam-bundle-prep-20260927` aus exakt
+  `d8e40df`: Adapter, Verträge, deutsche Kurz-Anleitung, MCP-Wrapper und
+  ausschließlich lesender Verbindungstest. Ein gebündelter Paketbeleg:
+  Installation, identische Adapterbytes, synthetische Credentials,
+  Capabilities-Check und MCP-Wrapper grün; keine echten Keys/Remote-Wirkung.
+  Vorbereitungs-ZIP mit 21 Dateien:
+  `/private/tmp/Kinodreieck-fuer-Nam-OHNE-KEY-2026-09-27.zip`.
+  Der Dateiname und die Dokumentation kennzeichnen den fehlenden Key.
+- Beim ersten nativen Credential-Setup schrieb der bisherige stdin-Promptweg
+  einen leeren Keychainwert. Kein Lifecycle-RPC wurde gestartet. B3-Fix
+  `9cbc0af2fc32c58fd2b2954b107c4ca067f6fe27` lokal per Fast-forward
+  integriert: geschützter interaktiver stdin-Schreibweg mit zwingendem
+  Readback. Gezielte Kontrolle 5/5 plus echte synthetische Native-Probe mit
+  Cleanup grün. Der vom Meister erzeugte leere Admin-Eintrag wurde nur nach
+  bestätigtem Leerwert entfernt. Keine realen Credentials oder API-Keys
+  gespeichert. Dieser lokale Betriebsfix ändert keine Function-, Adapter-
+  oder Schemabytes des ausgelieferten Staging-Kandidaten.
+- Bestehender B1 hat eine enge spätere Member-Lese-/Ablehnungsprobe
+  vorbereitet, ohne Key-Lesen oder Netzwerk vor dem ausdrücklichen
+  Root-READY nach Nutzerfreigabe. Kein erneuter Gesamtlauf. Helfercommit
+  `9a744637b66e250d09ed06eec0ef63089071e6e9` im eigenen
+  `/private/tmp/kd-api-nam-probe-20260927`; nicht Bestandteil des Nam-ZIPs.
+
 Root-Skripte, Lockfile und `contracts/kd-api/**` gehören während der Welle F0
 und bleiben eingefroren. Das Masterregister gehört ausschließlich dem Meister.
 Liefergrenzen bisher: F0/B1/B2/B3 samt Anschlussdeltas lokal gebaut, getestet,
-committed und integriert. **E6a vollständig belegt und übernommen.** Push,
-Remote-CI, Deployment, reale Keyausgabe und praktische Owner-/Member-Verwendung
-sind **noch nicht erfolgt**. Externe LLM-/Kollegenanbindung und physische
-iPhone/PWA-Abnahme sind durch den lokalen Beleg ebenfalls nicht nachgewiesen.
+committed und integriert. **E6a vollständig belegt; `d8e40df` auf Staging
+gepusht, CI-grün und als PWA ausgeliefert/rückgelesen.** Shared-Migration,
+API-/ai-task-Deployment, echte Keyausgabe und praktische API-Nutzung sind
+**noch nicht erfolgt**. Externe LLM-/Kollegenanbindung und physische
+iPhone/PWA-Abnahme sind ebenfalls nicht nachgewiesen.
 
 | ID | Nutzerergebnis | Pakete | Status | Kandidat / Evidenz / Rest |
 |---|---|---|---|---|
@@ -587,7 +639,7 @@ iPhone/PWA-Abnahme sind durch den lokalen Beleg ebenfalls nicht nachgewiesen.
 | API-03 | Zwei getrennte widerrufbare Zugänge binden Owner und Member sicher an Konto und Rechte. | B1, B2, E6 | GEBAUT | E6a Key-Lifecycle, Rollen und Credential-Übergabe grün; zwei reale Keys und praktische Probe offen. |
 | API-04 | Nur der persönliche Assistent kann KD-KI auslösen; Kosten-/Wiederholungsgrenzen greifen auch bei Abbruch und Folgeaktionen. | B1, B2 | GEBAUT | E6a mit echtem lokalem ai-task und gemockter Providergrenze grün; echte Providerprobe getrennt offen. |
 | API-05 | Nur der persönliche Assistent erhält aussagekräftige Diagnose-, Nutzungs- und Requestdaten; der Member erhält keine solchen Zahlen. | B1, B2 | GEBAUT | E6a Rollen- und Abdeckungsnachweis grün; reale Zielprobe offen. |
-| API-06 | Der geprüfte API-/Tool-Kandidat ist am gebundenen Ziel ausgeliefert und mit beiden Zugängen praktisch nutzbar; sein Vertrag ist für den späteren Apple-Client vorbereitet. | F0, B1, B2, B3, E6 | OFFEN | E6a bestanden, gemeinsamer und Apple-Vertrag vorbereitet; E6b wartet auf die oben benannte Shared-Freigabe. |
+| API-06 | Der geprüfte API-/Tool-Kandidat ist am gebundenen Ziel ausgeliefert und mit beiden Zugängen praktisch nutzbar; sein Vertrag ist für den späteren Apple-Client vorbereitet. | F0, B1, B2, B3, E6 | OFFEN | E6a und Staging-PWA-Lieferung belegt, Nam-ZIP ohne Key vorbereitet; Shared-Migration/Functions/Keys warten nach Auto-Review-Ablehnung auf ausdrückliche Freigabe. |
 
 OFFEN = Ergebnis fehlt; GEBAUT = durch die einmalige Baumeisterkontrolle
 belegt; DONE = dem finalen Kandidaten und Zielbranch zugeordnet,
