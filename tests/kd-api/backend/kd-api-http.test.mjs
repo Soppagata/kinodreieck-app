@@ -40,6 +40,7 @@ test("exact local and Supabase gateway routes preserve meta readback and the clo
   for (const url of [
     "http://127.0.0.1:54321/_meta/version",
     "https://example.test/functions/v1/kd-api/_meta/version",
+    "https://example.test/kd-api/_meta/version",
   ]) {
     const meta = await handler(new Request(url));
     assert.equal(meta.status, 200, url);
@@ -48,6 +49,7 @@ test("exact local and Supabase gateway routes preserve meta readback and the clo
   for (const url of [
     "http://127.0.0.1:54321/v1/library",
     "https://example.test/functions/v1/kd-api/v1/library",
+    "https://example.test/kd-api/v1/library",
     "https://example.test/arbitrary/functions/v1/kd-api/_meta/version",
     "https://example.test/functions/v1/other/_meta/version",
   ]) {
@@ -62,6 +64,7 @@ test("local and exact Supabase gateway v1 paths reach the same authorized API ro
   for (const url of [
     "http://127.0.0.1:54321/v1/capabilities",
     "https://example.test/functions/v1/kd-api/v1/capabilities",
+    "https://example.test/kd-api/v1/capabilities",
   ]) {
     const h = harness();
     const response = await h.handler(new Request(url, { headers: { Authorization: "Bearer kd_test_opaque" } }));
@@ -69,12 +72,15 @@ test("local and exact Supabase gateway v1 paths reach the same authorized API ro
     assert.equal((await response.json()).identity, "personal_owner_assistant");
     assert.deepEqual(h.calls.slice(0, 2).map((entry) => entry.name), ["kd_api_resolve_key_v1", "kd_api_capabilities_v1"]);
   }
-  const h = harness();
-  const rejected = await h.handler(new Request("https://example.test/arbitrary/functions/v1/kd-api/v1/capabilities", {
-    headers: { Authorization: "Bearer kd_test_opaque" },
-  }));
-  assert.equal(rejected.status, 404);
-  assert.equal(h.calls.some((entry) => entry.name === "kd_api_capabilities_v1"), false);
+  for (const url of [
+    "https://example.test/arbitrary/functions/v1/kd-api/v1/capabilities",
+    "https://example.test/other/v1/capabilities",
+  ]) {
+    const h = harness();
+    const rejected = await h.handler(new Request(url, { headers: { Authorization: "Bearer kd_test_opaque" } }));
+    assert.equal(rejected.status, 404, url);
+    assert.equal(h.calls.some((entry) => entry.name === "kd_api_capabilities_v1"), false);
+  }
 });
 
 test("anonymous and revoked callers stop before domain and provider work", async () => {
