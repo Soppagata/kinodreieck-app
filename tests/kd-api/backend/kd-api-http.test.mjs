@@ -6,7 +6,7 @@ import { createKdApiHandler } from "../../../supabase/functions/kd-api/core.js";
 const ownerContext = { ok: true, contextId: "10000000-0000-4000-8000-000000000001", accountId: "20000000-0000-4000-8000-000000000001",
   effectiveRole: "owner", assistantProfile: "personal_owner", permissions: ["library.read","library.write","ai.run","diagnostics.read"], aiAuthorized: true };
 
-function harness({ enabled = true, resolve = ownerContext } = {}) {
+function harness({ enabled = true, resolve = ownerContext, rpcFailure = null } = {}) {
   const calls = []; const dispatches = [];
   const handler = createKdApiHandler({
     env(name) { return ({ KD_API_ENABLED: enabled ? "true" : "false", KD_API_SOURCE_COMMIT: "a".repeat(40), KD_API_RELEASE_ID: "test-r1" })[name] || null; },
@@ -18,6 +18,7 @@ function harness({ enabled = true, resolve = ownerContext } = {}) {
       calls.push({ name, args });
       if (name === "kd_api_resolve_key_v1" || name === "kd_api_resolve_session_v1") return resolve;
       if (name === "kd_api_record_request_v1") return null;
+      if (rpcFailure?.name === name) throw rpcFailure.error;
       if (name === "kd_api_capabilities_v1") return { contractVersion: "kd-api-v1", identity: "personal_owner_assistant", tools: ["library_add"] };
       if (name === "kd_api_read_personal_v1") {
         if (args.p_entity_id) return { bucket: args.p_bucket, revision: 7, item: { id: args.p_entity_id, titel: `Titel ${args.p_entity_id}`, typ: "film", geheim: "nicht-exportiert" }, nextCursor: null };
@@ -80,6 +81,24 @@ test("local and exact Supabase gateway v1 paths reach the same authorized API ro
     const rejected = await h.handler(new Request(url, { headers: { Authorization: "Bearer kd_test_opaque" } }));
     assert.equal(rejected.status, 404, url);
     assert.equal(h.calls.some((entry) => entry.name === "kd_api_capabilities_v1"), false);
+  }
+});
+
+test("database error codes are mapped through safe domain messages without leaking SQLSTATE", async () => {
+  const cases = [
+    { error: { code: "42501", message: "FORBIDDEN", details: null, hint: null }, status: 403, code: "FORBIDDEN" },
+    { error: { code: "P0002", message: "row missing", details: null, hint: null }, status: 404, code: "NOT_FOUND" },
+    { error: { code: "XX999", message: "database failure", details: null, hint: null }, status: 500, code: "INTERNAL_ERROR" },
+    { error: { code: "VALIDATION_FAILED", message: "opaque" }, status: 400, code: "VALIDATION_FAILED" },
+    { error: { code: "IDEMPOTENCY_MISMATCH", message: "opaque" }, status: 409, code: "IDEMPOTENCY_MISMATCH" },
+  ];
+  for (const scenario of cases) {
+    const h = harness({ rpcFailure: { name: "kd_api_capabilities_v1", error: scenario.error } });
+    const response = await h.handler(api("/capabilities"));
+    assert.equal(response.status, scenario.status, scenario.error.code);
+    const result = await response.json();
+    assert.equal(result.code, scenario.code, scenario.error.code);
+    assert.equal(JSON.stringify(result).includes(scenario.error.code), scenario.error.code === scenario.code);
   }
 });
 

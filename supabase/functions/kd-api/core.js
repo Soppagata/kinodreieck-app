@@ -220,7 +220,8 @@ export function createKdApiHandler(deps) {
       deps.rpc("kd_api_record_request_v1",{p_context_id:contextId,p_request_id:requestId,p_operation:operationName,p_allowed:true,p_status_code:status,p_duration_ms:Date.now()-started,p_operation_id:operationId}).catch(()=>{});
       return response;
     } catch (error) {
-      const code = error?.code || (error instanceof SyntaxError ? "VALIDATION_FAILED" : rpcError(error));
+      const directCode = Object.hasOwn(ERROR_STATUS, error?.code) ? error.code : null;
+      const code = directCode || (error instanceof SyntaxError ? "VALIDATION_FAILED" : rpcError(error));
       const response = problem(code, requestId, operationId);
       if (contextId) deps.rpc("kd_api_record_request_v1",{p_context_id:contextId,p_request_id:requestId,p_operation:operationName,p_allowed:false,p_status_code:response.status,p_duration_ms:Date.now()-started,p_operation_id:operationId}).catch(()=>{});
       return response;
