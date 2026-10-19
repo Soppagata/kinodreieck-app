@@ -12,6 +12,7 @@
    Auth-Sitzung gehören ausdrücklich nicht in dieses Register. */
 
 import { K } from "./storage.js";
+import { validateRadarIdentityProjection } from "./radarStableIdentity.js";
 import { ensureIds } from "./match.js";
 import { normalisiereArtikelTypen } from "./artikel.js";
 import { isLocalRadarBackupState } from "./localEventRadar.js";
@@ -155,6 +156,11 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
     zaehle: (v) => v.subscriptions.length + v.outbox.length
       + (v.personSubscriptions?.length || 0) + (v.personResults?.length || 0)
       + v.shares.length + v.shareOutbox.length + v.receipts.length,
+  }),
+  jsonEintrag({
+    key: K.radarIdentities, backupField: "radar_identities", label: "Radar-Zuordnungen",
+    backupFallback: null, pruefe: (v) => validateRadarIdentityProjection(v).ok,
+    zaehle: (v) => v.rows.length,
   }),
   jsonEintrag({
     key: K.merkliste,

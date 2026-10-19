@@ -24,7 +24,7 @@ function check(name, wert) {
 }
 
 const eintraege = P.PERSONAL_DATA_ENTRIES;
-check("Register enthält genau die 19 persönlichen Töpfe", eintraege.length === 19);
+check("Register enthält genau die 20 persönlichen Töpfe", eintraege.length === 20);
 check("Wochenplan ist in Sync, Backup und Restore registriert",
   P.PERSONAL_DATA_KEYS.includes("kd:wochenplan")
   && P.personalDataEntry("kd:wochenplan")?.backupField === "wochenplan");
@@ -43,6 +43,13 @@ check("Ownergebundene Titel-Pins durchlaufen Backup und Restore bytegetreu",
   JSON.stringify(pinBackup) === JSON.stringify(pinTopf)
   && pinEintrag.restorePlan(pinBackup, "2026-09-14T20:00:00.000Z")?.wert === JSON.stringify(pinTopf)
   && pinEintrag.zaehleRoh(JSON.stringify(pinTopf)) === 1);
+const identityPot = {format:"kd-radar-identities-v1",accountId:"a1000000-0000-4000-8000-000000000001",enabled:false,rows:[],history:[]};
+const identityEntry = P.personalDataEntry(ST.K.radarIdentities);
+check("Versionierte Radar-Zuordnungen reisen separat und bytegetreu durch Sync/Backup/Restore",
+  A.ACCOUNT_SYNC_KEYS.includes(ST.K.radarIdentities)
+  && identityEntry.backupField === "radar_identities"
+  && JSON.stringify(identityEntry.backupAusRoh(JSON.stringify(identityPot))) === JSON.stringify(identityPot)
+  && identityEntry.restorePlan(identityPot).wert === JSON.stringify(identityPot));
 const radarEintrag = P.personalDataEntry("kd:radar");
 const radarStand = LR.createEmptyLocalRadar({ authority: "account-cache" });
 const radarBackup = radarEintrag.backupAusRoh(JSON.stringify(radarStand));
