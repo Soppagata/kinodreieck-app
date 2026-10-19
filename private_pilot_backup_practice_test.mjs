@@ -74,6 +74,7 @@ function persoenlicherStand(label) {
     })],
     ["kd:wochenplan", JSON.stringify({ version: 1, eintraege: [] })],
     ["kd:radar", JSON.stringify(radarState())],
+    ["kd:radar-identities:v1", JSON.stringify({format:"kd-radar-identities-v1",accountId:label === "A" ? "a1000000-0000-4000-8000-000000000001" : "a1000000-0000-4000-8000-000000000002",enabled:false,rows:[],history:[]})],
     ["kd:merkliste", "[]"],
     ["kd:vokabular", "[]"],
     ["kd:einstellungen", JSON.stringify({ theme: label === "A" ? "dunkel" : "hell", startTab: "start" })],
@@ -113,7 +114,7 @@ const profilA = mapDriver("lokal", "synthetic-profile-a", persoenlicherStand("A"
 const profilB = mapDriver("lokal", "synthetic-profile-b", persoenlicherStand("B"));
 
 await check("Praxisstand A deckt exakt alle Registry-Töpfe inklusive Radar ab", () => {
-  assert.equal(PERSONAL_DATA_KEYS.length, 19);
+  assert.equal(PERSONAL_DATA_KEYS.length, 20);
   assert.deepEqual([...profilA.values.keys()].sort(), [...PERSONAL_DATA_KEYS].sort());
   assert.equal(JSON.parse(profilA.values.get("kd:radar")).subscriptions.length, 1);
   assert.equal(JSON.parse(profilA.values.get("kd:entdecken-pins")).pins.length, 1);

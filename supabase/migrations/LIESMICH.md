@@ -50,6 +50,7 @@ die Statusautorität für den Remote-Lauf.
 
 | Datei | Projekt-Ref | Datum | Ausgeführt von | Ergebnis |
 |---|---|---|---|---|
+| `20261019200000_radar_stable_identity.sql` | `bscjgwcntapobyxsiyce` | 2026-10-19 | Codex über freigegebenes Dashboard | Einzelmigration atomar erfolgreich; Quell-SHA-256 `b150845c8bda1ac1542aef1443535164553c24ae5085fe3327af00faa7cbbd6b` im Remote-Ledger bestätigt. Sechs neue Tabellen mit RLS, vor expliziter Profilübernahme keine Profilaktivierung; eigener freigegebener Graph und unveränderte Originale danach zurückgelesen. Keine KI-Anbieterrequests. |
 | `20260725120000_kd_personal.sql` | Produktion (EU-West) | 2026-07-25 | Max | erfolgreich; `npm run test:rls` danach 18/18 grün |
 | `20260725220000_etappe4_quellenregister_zugriff.sql` | | | | |
 | `20260726120000_etappe4_guard_ausbaustufe.sql` | | | | |

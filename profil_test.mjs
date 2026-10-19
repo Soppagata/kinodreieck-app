@@ -1124,8 +1124,8 @@ const KEY = "kd:geschmacksprofil";
 
 check("N", "1. storage.js führt den Topf in der zentralen Schlüsselliste",
   () => ST.K.geschmacksprofil === KEY);
-check("N", "2. accountDriver.js hat ihn in ACCOUNT_SYNC_KEYS — und die Liste hat 19 Einträge",
-  () => AD.ACCOUNT_SYNC_KEYS.includes(KEY) && AD.ACCOUNT_SYNC_KEYS.length === 19);
+check("N", "2. accountDriver.js hat ihn in ACCOUNT_SYNC_KEYS — und die Liste hat 20 Einträge",
+  () => AD.ACCOUNT_SYNC_KEYS.includes(KEY) && AD.ACCOUNT_SYNC_KEYS.length === 20);
 const register = lies("src/lib/personalDataRegistry.js");
 check("N", "3. das Datenregister gibt dem Profil sein Gesamt-Backup-Feld",
   () => /key:\s*K\.geschmacksprofil[\s\S]*?backupField:\s*"geschmacksprofil"/.test(register)
@@ -1164,13 +1164,25 @@ const neuesteMigration = fs.readdirSync(migrationsOrdner)
   .reverse()
   .find((datei) => /add constraint kd_personal_key_erlaubt/.test(lies("supabase/migrations/" + datei)));
 const mig = lies("supabase/migrations/" + neuesteMigration);
-const rumpf = (/add constraint kd_personal_key_erlaubt\s+check \(key in \(([\s\S]*?)\)\);/.exec(mig) || [, ""])[1];
-const inMigration = [...rumpf.matchAll(/'(kd:[a-z:-]+)'/g)].map((m) => m[1]);
+const explicitConstraint = /add constraint kd_personal_key_erlaubt\s+check \(key in \(([\s\S]*?)\)\);/;
+const letzteVolleListe = fs.readdirSync(migrationsOrdner).sort().reverse()
+  .find(datei => /^\d{14}_.+\.sql$/.test(datei) && explicitConstraint.test(lies("supabase/migrations/"+datei)));
+const rumpf = explicitConstraint.exec(lies("supabase/migrations/"+letzteVolleListe))[1];
+const inMigration = [...rumpf.matchAll(/'(kd:[a-z0-9:-]+)'/g)].map((m) => m[1]);
+// Additive extensions retain the actual previous predicate instead of
+// duplicating the full allowlist. The executable PG test verifies both keys
+// and rejection of an unknown key against the resulting constraint.
+for(const datei of fs.readdirSync(migrationsOrdner).sort().filter(f=>f>letzteVolleListe && /^\d{14}_.+\.sql$/.test(f))) {
+  const source=lies("supabase/migrations/"+datei);
+  if(!source.includes("add constraint kd_personal_key_erlaubt")) continue;
+  if(!source.includes("pg_get_constraintdef") || !source.includes("substr(v_check,8,length(v_check)-8)")) throw new Error("Unbekannte Constraint-Erweiterung");
+  inMigration.push(...[...source.matchAll(/key=''([a-z0-9:-]+)'' OR \(/g)].map(m=>m[1]));
+}
 const fehlend = AD.ACCOUNT_SYNC_KEYS.filter((k) => !inMigration.includes(k));
 const zuviel = inMigration.filter((k) => !AD.ACCOUNT_SYNC_KEYS.includes(k));
-check("N", "8a. die neueste Constraint-Migration listet GENAU die 19 Sync-Töpfe — kein Bestandskey vergessen, keiner zu viel"
+check("N", "8a. die wirksame Constraint-Kette enthält GENAU die 20 Sync-Töpfe — kein Bestandskey vergessen, keiner zu viel"
   + "  [gelistet: " + inMigration.length + ", fehlend: " + JSON.stringify(fehlend) + ", zu viel: " + JSON.stringify(zuviel) + "]",
-  () => fehlend.length === 0 && zuviel.length === 0 && new Set(inMigration).size === 19);
+  () => fehlend.length === 0 && zuviel.length === 0 && new Set(inMigration).size === 20);
 /* Der CHECK ist nicht erweiterbar; deshalb ist die Gegenprobe im Kommentar
    Teil der Zusage: ein nicht gelisteter Key MUSS mit 23514 scheitern. */
 check("N", "8b. die Migration dokumentiert die Gegenprobe (nicht gelisteter Key → 23514)",

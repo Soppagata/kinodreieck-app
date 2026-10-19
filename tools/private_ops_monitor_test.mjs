@@ -112,6 +112,25 @@ const missingById = Object.fromEntries(missing.reports.map((r) => [r.id, r.code]
 check("fehlende Secrets je Check melden NOT_CONFIGURED", missingById.build === "NOT_CONFIGURED" && missingById.function === "NOT_CONFIGURED" && missingById.access === "NOT_CONFIGURED" && missingById.flags === "NOT_CONFIGURED" && missingById.radar_flags === "NOT_CONFIGURED" && missingById.budget === "NOT_CONFIGURED" && missingById.purge === "NOT_CONFIGURED" && missingById.entdecken_feed === "NOT_CONFIGURED");
 check("fehlende Secrets brechen den Ablauf nicht ab, aber machen ihn rot", missing.ok === false && missing.reports.map((r) => r.id).length === 8 && missing.critical.length === 8);
 
+const rejectedLoginFetch = createFetchMock((url) => {
+  if (url.includes("/auth/v1/token")) return fakeAntwort(400, { error_code: "invalid_credentials" });
+  if (url.includes("/functions/v1/ai-task") || url.includes("/rest/v1/kd_account_access")) {
+    throw new Error("Kein geschützter Abruf ohne Monitor-Sitzung");
+  }
+  return okFetch(url);
+});
+const rejectedLogin = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: rejectedLoginFetch });
+check("abgelehnte Anmeldung bleibt rot und wird nicht als fehlende Konfiguration ausgegeben",
+  rejectedLogin.ok === false && rejectedLogin.critical.includes("function") && rejectedLogin.critical.includes("access")
+  && rejectedLogin.reports.find((r) => r.id === "function")?.code === "AUTH_UNREACHABLE"
+  && rejectedLogin.reports.find((r) => r.id === "access")?.code === "AUTH_UNREACHABLE");
+check("abgelehnte Anmeldung startet weder Function-Health noch Rollenabruf",
+  rejectedLoginFetch.calls.every((c) => !c.url.includes("/functions/v1/ai-task") && !c.url.includes("/rest/v1/kd_account_access")));
+check("unabhängige Prüfungen laufen trotz abgelehnter Anmeldung weiter",
+  rejectedLogin.reports.find((r) => r.id === "build")?.code === "OK"
+  && rejectedLogin.reports.find((r) => r.id === "flags")?.code === "OK"
+  && rejectedLogin.reports.find((r) => r.id === "budget")?.code === "OK");
+
 const buildMismatch = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
   if (url.endsWith("/build-meta.json")) return fakeAntwort(200, { buildVersion: "build-v2" });
   return okFetch(url);
