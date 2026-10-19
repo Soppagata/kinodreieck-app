@@ -1134,14 +1134,16 @@ try {
     radarPilotEvents:episodeEvents,onRadarPilotSync:() => { detailRequests++; },
   });
   await act(async () => { button(seasonUi.container,"Radar").click(); await tick(); });
-  check("Radar zeigt fünf Folgen als eine Staffelkarte mit nativer Detailsteuerung und Suchstatus",() => {
+  check("Radar bündelt nur Folgen derselben Plattform; unbekannte Plattform bleibt separat mit Suchstatus",() => {
     const list=seasonUi.container.querySelector(".kd-radar-neuigkeiten");
-    assert.equal(list.children.length,1);
+    assert.equal(list.children.length,2);
     assert.match(list.firstElementChild.querySelector(".kd-radar-neuigkeit-titel").textContent,/Beispieldorf · Staffel 29/);
     assert.match(list.firstElementChild.querySelector(".kd-radar-neuigkeit-meta").textContent,/02\.09\.2099 · Staffel · Nächste Folge/);
-    assert.doesNotMatch(list.firstElementChild.querySelector(".kd-radar-neuigkeit-meta").textContent,/Beispiel\+|Staffelstart/);
-    assert.equal(list.querySelector("summary").textContent,"5 Folgen anzeigen");
-    assert.equal(list.querySelectorAll("details ol li").length,5);
+    assert.match(list.firstElementChild.querySelector(".kd-radar-neuigkeit-meta").textContent,/Beispiel\+/);
+    assert.equal(list.querySelector("summary").textContent,"4 Folgen anzeigen");
+    assert.equal(list.querySelectorAll("details ol li").length,4);
+    assert.match(list.children[1].querySelector(".kd-radar-neuigkeit-titel").textContent,/Folge 3/);
+    assert.doesNotMatch(list.children[1].querySelector(".kd-radar-neuigkeit-meta").textContent,/Beispiel\+/);
     assert.match(list.querySelector("details").textContent,/Folge 4 · Nacht/);
     assert.match(seasonUi.container.querySelector(".kd-radar-suchstatus").textContent,/Zuletzt gesucht.*keine neuen Treffer/);
   });
@@ -1150,7 +1152,7 @@ try {
     const details=seasonUi.container.querySelector("details");
     assert.equal(details.open,true); assert.equal(detailRequests,0);
     assert.match(details.querySelector("li").textContent,/Folge 2.*02\.09\.2099.*Beispiel\+/);
-    assert.doesNotMatch(details.querySelectorAll("li")[1].textContent,/Beispiel\+|unknown/);
+    assert.ok([...details.querySelectorAll("li")].every(li=>li.textContent.includes("Beispiel+")));
   });
   await seasonUi.cleanup();
 
