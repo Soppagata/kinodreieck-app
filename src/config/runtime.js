@@ -21,6 +21,7 @@ const STANDARD = Object.freeze({
   accountDeleteEnabled: false,
   privateMailEnabled: false,
   radarPilotClientEnabled: false,
+  radarStableIdentityClientEnabled: false,
   entdeckenDailyFeedEnabled: false,
   buildVersion: "dev",
   schemaVersion: RUNTIME_SCHEMA_VERSION,
@@ -49,6 +50,8 @@ export function createRuntimeConfig(env = {}) {
     accountDeleteEnabled: text(env.VITE_ACCOUNT_DELETE_ENABLED) === "true",
     privateMailEnabled: text(env.VITE_PRIVATE_MAIL_ENABLED) === "true",
     radarPilotClientEnabled: text(env.VITE_RADAR_PILOT_CLIENT_ENABLED) === "true",
+    radarStableIdentityClientEnabled: text(env.VITE_RADAR_PILOT_CLIENT_ENABLED) === "true"
+      && text(env.VITE_RADAR_STABLE_IDENTITY_CLIENT_ENABLED) !== "false",
     entdeckenDailyFeedEnabled: text(env.VITE_ENTDECKEN_DAILY_FEED_ENABLED) === "true",
     buildVersion: text(env.VITE_BUILD_VERSION) || STANDARD.buildVersion,
     schemaVersion: RUNTIME_SCHEMA_VERSION,

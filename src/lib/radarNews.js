@@ -1,5 +1,6 @@
 /* Read-only display projection. Explicit title markers only; no query matching,
    provider calls, inferred identity or changes to stored findings. */
+import { projectStableRadarNews } from "./radarStableIdentity.js";
 import { formatPresentationDate } from "./presentationDate.js";
 
 const SERIES_CATEGORIES = new Set(["series", "season"]);
@@ -37,6 +38,7 @@ export function radarEpisodeIdentity(entry) {
   return { seriesTitle, seasonNumber, episodeNumber, episodeTitle,
     key: JSON.stringify([
       seriesTitle.normalize("NFC").toLowerCase().replace(/\s+/gu, " "), seasonNumber, provenance,
+      entry.eventType, entry.platform ?? null, entry.region ?? null,
     ]) };
 }
 
@@ -46,13 +48,15 @@ function unanimous(entries, field) {
   return values.size === 1 ? [...values][0] : null;
 }
 
-export function projectRadarNews(events, today) {
-  const singles = [];
+export function projectRadarNews(events, today, identityProjection = null) {
+  const projected = projectStableRadarNews(events || [], today, identityProjection);
+  events = projected.unmapped;
+  const singles = [...projected.groups];
   const seasons = new Map();
   for (const event of events || []) {
     if (event.verificationStatus !== "confirmed" || typeof event.title !== "string" || !event.title.trim()) continue;
     const entry = { ...event, title: event.title.trim() };
-    const identity = radarEpisodeIdentity(entry);
+    const identity = entry.identityUnresolved ? null : radarEpisodeIdentity(entry);
     if (!identity) { if (entry.date >= today) singles.push(entry); continue; }
     const group = seasons.get(identity.key) || [];
     group.push({ ...entry, ...identity });

@@ -1,3 +1,4 @@
+import { RADAR_STABLE_FEED_FORMAT, validateRadarIdentityProjection } from "../lib/radarStableIdentity.js";
 import { runtimeConfig } from "../config/runtime.js";
 import { AUTH_SESSION_KEY } from "../lib/authDriver.js";
 import {
@@ -28,6 +29,7 @@ export const RADAR_PILOT_RPCS = Object.freeze([
   "kd_radar_pilot_import_event",
   "kd_radar_pilot_feed",
   "kd_radar_pilot_feed_search_access",
+  "kd_radar_pilot_feed_stable_v1",
 ]);
 
 const TERMINAL_SQLSTATES = new Set(["22023", "23505", "23514", "42501"]);
@@ -281,6 +283,8 @@ export function createRadarPilotService({
 
     let current = state;
     let automation = null;
+    let stableFeedAvailable = config.radarStableIdentityClientEnabled === true;
+    let identityProjection = null;
     let extendedFeedAvailable = true;
     let searchStatusOverloadAvailable = true;
     const importedEventVersionIds = new Set();
@@ -293,7 +297,27 @@ export function createRadarPilotService({
 
     try {
       const reconcileFeed = async (operationIds = []) => {
-        let response = extendedFeedAvailable
+        let response = stableFeedAvailable
+          ? await callRpc("kd_radar_pilot_feed_stable_v1", {
+            p_operation_ids: operationIds, p_include_search_status: true,
+          }, fence, token)
+          : null;
+        if (stableFeedAvailable && response.kind === "pilot-unavailable") {
+          stableFeedAvailable = false;
+        }
+        let nextIdentities = null;
+        if (stableFeedAvailable && response.kind === "ok") {
+          const envelope = response.payload;
+          if (envelope?.format !== RADAR_STABLE_FEED_FORMAT
+              || Object.keys(envelope).sort().join("|") !== "feed|format|identities"
+              || !validateRadarPilotFeed(envelope.feed).ok
+              || !validateRadarIdentityProjection(envelope.identities, {accountId:fence.account, events:envelope.feed.events}).ok) {
+            return { kind: "pending", state: current, reason: "pilot-identity-feed-invalid" };
+          }
+          nextIdentities = envelope.identities;
+          response = { ...response, payload: envelope.feed };
+        }
+        if (!stableFeedAvailable) response = extendedFeedAvailable
           ? await callRpc("kd_radar_pilot_feed_search_access", {
             p_operation_ids: operationIds, p_include_search_status: true,
           }, fence, token)
@@ -335,10 +359,19 @@ export function createRadarPilotService({
           ? Object.freeze({ ...response.payload.automation }) : null;
         const reconciled = reconcileAccountRadarPilotFeed(current, response.payload);
         if (!reconciled.ok) return Object.freeze({ kind: "pending", state: current, reason: reconciled.reason });
-        if (!reconciled.changed) return Object.freeze({ kind: "ok", state: current });
-        const persisted = await persistState(commit, reconciled.state, fence, token, run);
-        if (!persisted) return Object.freeze({ kind: "pending", state: current, reason: "pilot-persist-unconfirmed" });
-        current = persisted;
+        if (reconciled.changed) {
+          const persisted = await persistState(commit, reconciled.state, fence, token, run);
+          if (!persisted) return Object.freeze({ kind: "pending", state: current, reason: "pilot-persist-unconfirmed" });
+          current = persisted;
+        }
+        if (nextIdentities) {
+          const previous = await guarded(fence.storage.get(K.radarIdentities), fence, token);
+          const raw = JSON.stringify(nextIdentities);
+          if ((nextIdentities.enabled || previous?.value != null) && previous?.value !== raw) {
+            await guarded(fence.storage.set(K.radarIdentities, raw), fence, token);
+          }
+          identityProjection = freezeDeep(nextIdentities);
+        }
         return Object.freeze({ kind: "ok", state: current });
       };
 
@@ -514,6 +547,7 @@ export function createRadarPilotService({
         status: rejected ? "rejected" : "ready",
         state: current,
         ...(automation ? { automation } : {}),
+        identityProjection,
       });
     } catch (error) {
       if (error?.code === "RADAR_PILOT_CONTEXT_CHANGED") {
@@ -545,7 +579,16 @@ export function createRadarPilotService({
     finally { activeRun = null; syncActive = false; }
   }
 
-  return Object.freeze({ sync });
+  async function loadIdentities() {
+    if (config.radarStableIdentityClientEnabled !== true) return null;
+    const fence = captureFence(); if (!fence) return null;
+    try {
+      const cached = await guarded(fence.storage.get(K.radarIdentities), fence);
+      const value = JSON.parse(cached?.value || "null");
+      return validateRadarIdentityProjection(value, {accountId:fence.account}).ok ? freezeDeep(value) : null;
+    } catch { return null; }
+  }
+  return Object.freeze({ sync, loadIdentities });
 }
 
 export const radarPilotService = createRadarPilotService();

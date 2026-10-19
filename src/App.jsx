@@ -1357,7 +1357,7 @@ export default function App() {
   const { radarAuthority, sichtbarerRadarState, radarPreviewTarget, setRadarPreviewTarget, schliesseRadarPreview,
     aendereRadar, aendereRadarShare, bestaetigeRadarVorschau,
     radarTargetIds, fuehreGlobaleSuchaktionAus,
-    radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, fuegeRadarTextHinzu,
+    radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarIdentityProjection, radarReview, radarPilotSyncStatus, fuegeRadarTextHinzu,
     radarAutomaticAvailable, fuehreRadarPilotReceipt, fuehreRadarPilotImport,
     fuehreRadarPilotSync, verwerfeAbgelehnteRadarAenderung,
     personRadarAvailable, fuegePersonRadarHinzu, aenderePersonRadar, } = useEntdeckenRadarController({
@@ -2104,7 +2104,7 @@ export default function App() {
             dailyVariety={einstellungen.entdeckenTaeglich === true}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarAvailable={radarRuntimeAvailable}
-            radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}
+            radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarIdentityProjection={radarIdentityProjection} radarReview={radarReview}
             syncStatus={radarPilotSyncStatus} onRadarChange={aendereRadar}
             onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
             onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}

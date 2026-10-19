@@ -98,11 +98,13 @@ check("Uneindeutige ungruppierte Folgen werden ebenfalls nur ab heute angezeigt"
   assert.equal(shown.length,1);assert.equal(shown[0].title,"Beispieldorf Folge 3");
   assert.equal(shown[0].kind,undefined);
 });
-check("Plattform- oder Regionswiderspruch wird nicht auf die Staffel verallgemeinert", () => {
-  for (const extra of [{platform:"Andere+"},{platform:undefined},{region:"global"}]) {
-    const group=projectRadarNews([episode(2),episode(3,extra)],today)[0];
-    assert.equal(group[Object.keys(extra)[0]],null);
-    assert.equal(group.episodes.length,2);
+check("Unterschiedliche Plattformen, Regionen und Startarten bleiben auch in Altstaffeln getrennt", () => {
+  for (const extra of [{platform:"Andere+"},{platform:undefined},{region:"global"},{eventType:"streamingstart_at"}]) {
+    const originals=[episode(2),episode(3,extra)];
+    const shown=projectRadarNews(originals,today);
+    assert.equal(shown.length,2);
+    assert.ok(shown.every(entry=>entry.kind!=="season"));
+    assert.deepEqual(shown.map(entry=>entry[Object.keys(extra)[0]]),originals.map(entry=>entry[Object.keys(extra)[0]]));
   }
 });
 check("Staffelgruppen bleiben an genau eine vorhandene Zielprovenienz gebunden", () => {

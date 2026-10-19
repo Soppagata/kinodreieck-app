@@ -201,3 +201,10 @@
 }
 
 :root[data-kd-schrift="gross"] .kd-mediathek-tab .kd-mediathek-typen { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Stable Radar starts retain offer, market, episode and source history. */
+.kd-radar-starts { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 12px; }
+.kd-radar-start { display: grid; gap: 4px; padding: 8px 0 8px 12px; border-left: 2px solid var(--kd-kartenTextWeich); }
+.kd-radar-date-conflict { font-weight: 600; }
+.kd-radar-belege summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.kd-radar-belege li { display: grid; gap: 4px; margin-bottom: 8px; overflow-wrap: anywhere; }

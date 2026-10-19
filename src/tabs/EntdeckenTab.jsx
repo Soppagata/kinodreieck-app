@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlogTab } from "./BlogTab.jsx";
+import { RadarStableStarts } from "../components/RadarStableStarts.jsx";
 import { IconChevronDown } from "../components/ui.jsx";
 import { StreamingPageWindow, STREAMING_PAGE_PORTION } from "../components/StreamingPageWindow.jsx";
 import { ladeProfil } from "../lib/profil.js";
@@ -437,7 +438,7 @@ function isErrorStatus(status) {
 
 function RadarView({
   radarState, master, streamingKnown, streamingDiscover, accountMode,
-  radarPilotEvents = [], syncStatus, radarAutomaticAvailable = false,
+  radarPilotEvents = [], radarIdentityProjection = null, syncStatus, radarAutomaticAvailable = false,
   onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   onRadarRejectedDismiss,
 }) {
@@ -450,13 +451,14 @@ function RadarView({
   const { subscriptions, people } = projectVisibleRadarGoals(radarState);
   const syncProblem = radarSyncProblem(radarState?.outbox, syncStatus);
   const radarDay = radarViennaDay();
-  const events = useMemo(() => projectRadarNews(radarPilotEvents, radarDay), [radarPilotEvents, radarDay]);
+  const events = useMemo(() => projectRadarNews(radarPilotEvents, radarDay, radarIdentityProjection), [radarPilotEvents, radarDay, radarIdentityProjection]);
   // Der kontogebundene Feed ist bereits auf aktive eigene Textziele begrenzt,
   // enthält für Altfunde aber bewusst keine erratene Query-Zuordnung.
   const news = useMemo(() => events.map((entry) => Object.freeze({
     entry,
     target: radarSubscriptionForEvent(entry, subscriptions),
-  })).filter(({ entry, target }) => target !== null || (
+    targets: (entry.sourceTargetKeys || []).map(key => radarSubscriptionForEvent({...entry,sourceTargetKey:key},subscriptions)).filter(Boolean),
+  })).filter(({ entry, target, targets }) => (entry.kind === "work" && targets.length > 0) || target !== null || (
     accountMode
       && istKontogebundenerTextfund(entry)
       && subscriptions.some((subscription) => (
@@ -530,14 +532,15 @@ function RadarView({
       </article>
       <article className="kd-entdecken-panel">
         <h3>Neuigkeiten</h3>
-        {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target }) => <li key={entry.eventVersionId} className="kd-radar-neuigkeit">
+        {news.length ? <ul className="kd-radar-neuigkeiten">{news.map(({ entry, target, targets }) => <li key={entry.eventVersionId} className="kd-radar-neuigkeit">
           <h4 className="kd-radar-neuigkeit-titel">{entry.title}</h4>
-          <span className="kd-radar-neuigkeit-meta">{entry.date
+          {entry.kind === "work" ? <span className="kd-radar-neuigkeit-meta">{entry.starts.length} {entry.starts.length === 1 ? "Starttermin" : "getrennte Starts"}</span> : <span className="kd-radar-neuigkeit-meta">{entry.date
             ? formatPresentationDate(entry.date, { fallback: entry.date })
-            : "Datum nicht verfügbar"} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel || "Starttermin"}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
-          <span className="kd-radar-neuigkeit-herkunft">Gefunden für: {target
+            : "Datum nicht verfügbar"}{entry.identityUnresolved ? " · Zuordnung offen" : ""} · {entry.kind === "season" ? `Staffel · ${entry.dateLabel || "Starttermin"}` : ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>}
+          <span className="kd-radar-neuigkeit-herkunft">Gefunden für: {entry.kind === "work" && targets.length ? targets.map(t => localRadarTargetLabel(t, { master, streamingKnown, streamingDiscover })).join(", ") : target
             ? localRadarTargetLabel(target, { master, streamingKnown, streamingDiscover })
             : "Zuordnung nicht verfügbar"}</span>
+          {entry.kind === "work" ? <RadarStableStarts starts={entry.starts} /> : null}
           {entry.kind === "season" ? <details className="kd-radar-folgen">
             <summary>{entry.episodes.length} {entry.episodes.length === 1 ? "Folge" : "Folgen"} anzeigen</summary>
             <ol>{entry.episodes.map((episode) => <li key={episode.eventVersionId}>
@@ -556,7 +559,7 @@ export function EntdeckenTab({
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   webDiscoveryFeed = null, webDiscoveryStatus = null, dailyVariety = false, calendarDay = null,
   radarAvailable = false,
-  radarPilotEvents = [], syncStatus = "idle", radarAutomaticAvailable = false,
+  radarPilotEvents = [], radarIdentityProjection = null, syncStatus = "idle", radarAutomaticAvailable = false,
   onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   onRadarRejectedDismiss,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
@@ -609,7 +612,7 @@ export function EntdeckenTab({
       flixpatrolFacts={flixpatrolFacts} /> : null}
     {radarAvailable && ansicht === "radar" ? <RadarView key={datenKontextKey} radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
-      radarPilotEvents={radarPilotEvents} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
+      radarPilotEvents={radarPilotEvents} radarIdentityProjection={radarIdentityProjection} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
       radarAutomaticAvailable={radarAutomaticAvailable} onRadarPilotReceipt={onRadarPilotReceipt}
       onRadarTextAdd={onRadarTextAdd}
       onRadarRejectedDismiss={onRadarRejectedDismiss}
