@@ -181,9 +181,12 @@ export function projectStableRadarNews(events, today, identity) {
     if(dims.size !== 1){unmapped.push(...s.members);continue;}
     const history=identity.history.filter((h)=>h.startId === s.startId);
     const dates=[...new Set(history.map((h)=>h.date))].sort();
-    if(!dates.some((date)=>date >= today)) continue;
+    // Receipts were filtered upstream. An old unread occurrence must not
+    // resurrect a newer dismissed version merely because it is in history.
+    const upcoming=s.members.map((e)=>e.date).filter((date)=>date>=today).sort();
+    if(!upcoming.length) continue;
     const e=s.members[0];
-    const start={...s,date:dates.find((d)=>d>=today),dates,dateConflict:dates.length > 1,eventType:e.eventType,platform:e.platform,region:e.region,seasonNumber:e.seasonNumber??null,history,sourceTargetKeys:[...new Set(s.members.map((x)=>x.sourceTargetKey).filter(Boolean))]};
+    const start={...s,date:upcoming[0],dates,dateConflict:dates.length > 1,eventType:e.eventType,platform:e.platform,region:e.region,seasonNumber:e.seasonNumber??null,history,sourceTargetKeys:[...new Set(s.members.map((x)=>x.sourceTargetKey).filter(Boolean))]};
     const w=works.get(s.workId) || {...e,kind:"work",eventVersionId:`work:${s.workId}`,workId:s.workId,title:s.title,starts:[],sourceTargetKeys:[]};
     w.starts.push(start);works.set(s.workId,w);
   }

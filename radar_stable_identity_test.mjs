@@ -49,7 +49,7 @@ check('Monats- und Jahresversprechen werden nie als exakter erster oder letzter 
  assert.match(radarClaimDateLabel('2027-12-25','Ende 2027'),/2027/);assert.doesNotMatch(radarClaimDateLabel('2027-12-25','Ende 2027'),/25/);
 });
 const startId=randomUUID();
-const events=[a,b].map(f=>({eventId:f.finding_id,eventVersionId:f.event_version_id,title:f.title,targetType:f.target_type,eventType:f.event_type,platform:f.platform,region:f.region,seasonNumber:f.season_number,date:f.event_date,verificationStatus:'confirmed',sourceTargetKey:'text:text:1122334455667788'}));
+const events=[a,b].map((f,i)=>({eventId:f.finding_id,eventVersionId:f.event_version_id,title:f.title,targetType:f.target_type,eventType:f.event_type,platform:f.platform,region:f.region,seasonNumber:f.season_number,date:i?'2027-02-01':f.event_date,verificationStatus:'confirmed',sourceTargetKey:'text:text:1122334455667788'}));
 const projection={format:'kd-radar-identities-v1',accountId,enabled:true,rows:events.map(e=>({eventId:e.eventId,eventVersionId:e.eventVersionId,workId,startId,title:work.title,episodeNumber:null,editionKey:'original',licenseKey:'subscription'})),history:events.map((e,i)=>({observationId:randomUUID(),eventId:e.eventId,eventVersionId:e.eventVersionId,startId,date:i?'2027-02-01':e.date,title:e.title,sourceUrl:'https://press.example/release',sourceDomain:'press.example',checkedAt:'2026-10-19T10:00:00Z',sourceClaim:i?'2027-02-01':'2027-01-01'}))};
 check('Cache ist an Konto, Original-UUID, aktuelle Version und vollständige Quellen gebunden',()=>{
  assert.equal(validateRadarIdentityProjection(projection,{accountId,events}).ok,true);
@@ -62,6 +62,7 @@ check('Neue Ansicht zeigt einen Werkblock mit Belegen und keinem erfundenen Gewi
  const before=JSON.stringify(events);const p=projectStableRadarNews(events,'2026-10-19',projection);
  assert.equal(p.groups.length,1);assert.equal(p.groups[0].starts.length,1);assert.equal(p.groups[0].starts[0].dateConflict,true);
  assert.equal(p.groups[0].starts[0].history.length,2);assert.equal(JSON.stringify(events),before);
+ assert.equal(projectStableRadarNews([events[0]],'2027-01-15',projection).groups.length,0,'history must not resurrect a dismissed newer version');
  const changed=events.map(e=>({...e,eventVersionId:randomUUID()}));assert.equal(projectStableRadarNews(changed,'2026-10-19',projection).unmapped.length,2);
 });
 console.log(`${checks} Radar-Identitätsprüfungen bestanden.`);
