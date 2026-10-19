@@ -1,6 +1,6 @@
 # Radar: stabile Werke, Starts und Quellenstände
 
-Stand 19.10.2026. Implementierung im Feature-Branch; keine Remote-Migration oder Profilübernahme ausgeführt.
+Stand 19.10.2026. Die einzelne Migration ist am bestätigten Supabase-Ziel installiert und mit identischem Quellhash im Migrationsledger registriert. Die vom Owner konkret geprüfte eigene Zuordnungsliste ist angewandt und zurückgelesen; offene Funde bleiben ohne Zuordnung. Der Frontend-Livegang folgt nach den Production-Checks. Persönliche Rohdaten und Profilnachweise liegen außerhalb des Repositorys.
 
 Die neue Zuordnung ergänzt die bisherigen Textfunde. Werk und Start erhalten eigene IDs; der Titel und der Termin bleiben veränderliche Quellenangaben. Kein vorhandener Fund, keine Versions-ID, kein Receipt und kein Import wird umgeschrieben oder gelöscht.
 
