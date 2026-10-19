@@ -231,7 +231,8 @@ export async function runPrivateOpsCheck({
   } catch { add(result("function", "FUNCTION_UNAVAILABLE"), true); }
 
   try {
-    if (!base || !publicKey || !accessToken) add(result("access", "NOT_CONFIGURED"), true);
+    if (!base || !publicKey || !env.KD_MONITOR_EMAIL || !env.KD_MONITOR_PASSWORD) add(result("access", "NOT_CONFIGURED"), true);
+    else if (!accessToken) add(result("access", "AUTH_UNREACHABLE"), true);
     else {
       const response = await jsonFetch(fetchImpl, `${base}/rest/v1/kd_account_access?select=role,active,personal_ai`, { headers: { apikey: publicKey, Authorization: `Bearer ${accessToken}` } });
       const rows = Array.isArray(response.data) ? response.data : [];

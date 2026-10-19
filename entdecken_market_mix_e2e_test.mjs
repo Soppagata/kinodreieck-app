@@ -139,7 +139,7 @@ function netflixCatalog(feed) {
   }));
 }
 
-check("ÖFI-Parser akzeptiert 15 aktuelle Comscore-Zeilen und failt bei Drift", () => {
+check("ÖFI-Parser akzeptiert Comscore und Rentrak bei unverändert strengem Tabellenvertrag", () => {
   const rows = extractOefiWeekendChartItems(oefiHtml());
   assert.equal(rows.length, 15);
   assert.deepEqual(rows.map((row) => row.sourcePosition), Array.from({ length: 15 }, (_, index) => index + 1));
@@ -148,6 +148,11 @@ check("ÖFI-Parser akzeptiert 15 aktuelle Comscore-Zeilen und failt bei Drift", 
   assert.equal(extractOefiWeekendChartItems(oefiHtml().replace("14.-16.08.2026", "14.07.-16.08.2026")).length, 0);
   assert.equal(extractOefiWeekendChartItems(oefiHtml(14)).length, 0);
   assert.equal(extractOefiWeekendChartItems(oefiHtml().replace("Comscore", "Unbekannt")).length, 0);
+  const rentrakRows = extractOefiWeekendChartItems(oefiHtml().replace("Comscore", "Rentrak"));
+  assert.deepEqual(rentrakRows, rows);
+  assert.equal(extractOefiWeekendChartItems(oefiHtml(14).replace("Comscore", "Rentrak")).length, 0);
+  assert.equal(extractOefiWeekendChartItems(oefiHtml().replace("Comscore", "Rentrak").replace("14.-16.08.2026", "14.07.-16.08.2026")).length, 0);
+  assert.equal(extractOefiWeekendChartItems(oefiHtml().replace("Comscore", "Rentrak Unbekannt")).length, 0);
 });
 
 check("Netflix-Parser bindet den echten 8-Felder-Vertrag an die aktuelle AT-Woche", () => {
