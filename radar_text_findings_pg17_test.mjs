@@ -183,7 +183,7 @@ try {
       assert.equal(providerCalls,1);assert.equal(upserts,1);assert.equal(result.status,"no_change");
       assert.equal(result.textDiagnostics.acceptedCandidates,1);
       assert.ok(result.warnings.includes("text-evidence-missing"));
-      assert.equal(result.feed.events[0].targetId,result.textResult.candidates[0].targetId);
+      assert.equal(result.feed.events[0].targetId,sql(`select public.kd_radar_text_wire_v1_key(${quote(result.textResult.candidates[0].title)},${quote(today)},${quote(result.textResult.candidates[0].eventType)},${quote(result.textResult.candidates[0].targetType)},null)`));
       assert.equal(result.feed.events[0].eventVersionId,stored.eventVersionId);
       assert.equal(validateRadarPilotFeed(result.feed).ok,true);
     });

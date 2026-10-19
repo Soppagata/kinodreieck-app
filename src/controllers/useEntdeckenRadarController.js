@@ -32,6 +32,7 @@ import {
 } from "../lib/personRadarCatalog.js";
 import { projectEntdeckenRadarPilot, radarAutomationAttested } from "../lib/radarPilotContracts.js";
 import { projectVisibleRadarWebsearchEvents } from "../lib/radarWebsearchFlow.js";
+import { validateRadarIdentityProjection } from "../lib/radarStableIdentity.js";
 import { radarPilotService } from "../services/radarPilot.js";
 import { RADAR_WEBSEARCH_SINGLE_FILE_DISABLED, radarWebsearchService } from "../services/radarWebsearch.js";
 
@@ -97,6 +98,8 @@ export function useEntdeckenRadarController({
   const [radarPreviewTarget, setRadarPreviewTarget] = useState(null);
   const [radarPilotSyncStatus, setRadarPilotSyncStatus] = useState(radarPilotClientEnabled ? "idle" : "disabled");
   const [radarAutomationAttestation, setRadarAutomationAttestation] = useState(null);
+  const [identityCache, setIdentityCache] = useState({ key:null, value:null });
+  const radarIdentityProjection = identityCache.key === contextKey ? identityCache.value : null;
   const [localRadarWebsearchEvents, setLocalRadarWebsearchEvents] = useState([]);
   const localRadarWebsearchAvailable = radarAuthority === "guest"
     && radarWebsearchExecutor?.valid === true
@@ -137,6 +140,7 @@ export function useEntdeckenRadarController({
       });
       if (!current()) return { status: "forbidden", state: null };
       setRadarPilotSyncStatus(status?.status || "pending");
+      if (status?.status === "ready") setIdentityCache({key:contextKey,value:status.identityProjection || null});
       setRadarAutomationAttestation(
         status?.status === "ready" && radarAutomationAttested(status.automation, { allowInactive: true })
           ? status.automation : null,
@@ -148,7 +152,7 @@ export function useEntdeckenRadarController({
       setRadarAutomationAttestation(null);
       return { status: "pending", state, reason: "pilot-unknown" };
     }
-  }, [radarPilotAdapter, radarPilotClientEnabled, radarAuthority, remoteKontoAktiv, radarStateRef, setRadarState]);
+  }, [radarPilotAdapter, radarPilotClientEnabled, radarAuthority, remoteKontoAktiv, radarStateRef, setRadarState, contextKey]);
 
   useEffect(() => {
     if (!bootDone) {
@@ -160,6 +164,9 @@ export function useEntdeckenRadarController({
       try {
         const gespeicherterRadar = await store.get(K.radar);
         const decoded = decodeLocalRadar(gespeicherterRadar?.value, { authority: radarAuthority });
+        const identities = typeof radarPilotAdapter.loadIdentities === "function"
+          ? await radarPilotAdapter.loadIdentities() : null;
+        if (aktiv) setIdentityCache({key:contextKey,value:validateRadarIdentityProjection(identities, {accountId:session.account?.id,events:decoded.state?.pilot?.events}).ok ? identities : null});
         if (!aktiv) return;
         if (!decoded.ok) {
           setRadarState(createEmptyLocalRadar({ authority: radarAuthority }));
@@ -194,6 +201,7 @@ export function useEntdeckenRadarController({
           });
           if (!aktiv) return;
           setRadarPilotSyncStatus(status?.status || "pending");
+          if (status?.status === "ready") setIdentityCache({key:contextKey,value:status.identityProjection || null});
           setRadarAutomationAttestation(
             status?.status === "ready" && radarAutomationAttested(status.automation, { allowInactive: true })
               ? status.automation : null,
@@ -214,7 +222,7 @@ export function useEntdeckenRadarController({
       aktiv = false;
     };
   }, [bootDone, radarAuthority, radarPilotAdapter, radarPilotClientEnabled,
-    remoteKontoAktiv, session.account?.id, schreibeRadarState, setRadarState, setErr]);
+    remoteKontoAktiv, session.account?.id, schreibeRadarState, setRadarState, setErr, contextKey]);
 
   const radarTargetAusEintrag = useCallback((entry) => ({
     targetId: entry.targetId,
@@ -663,6 +671,7 @@ export function useEntdeckenRadarController({
     radarPilotClientEnabled,
     radarPilotActive: radarPilotProjection.active,
     radarPilotEvents: radarPilotProjection.events,
+    radarIdentityProjection,
     radarReview: radarPilotProjection.radarReview,
     radarSearch: radarPilotProjection.radarSearch,
     radarAutomaticAvailable,

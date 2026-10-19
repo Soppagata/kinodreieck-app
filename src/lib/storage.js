@@ -184,6 +184,7 @@ export const K = {
   entdeckenPins: "kd:entdecken-pins", // Konto-/Backup-Topf fuer Titelpins aus Entdecken
   entdeckenPinsLegacy: "kd:entdecken-pins:legacy-unbound", // geraetelokale Quarantaene fuer nicht eindeutig zuordenbaren Altbestand
   wochenplan: "kd:wochenplan",        // Persönlicher Folgen-/Staffelkalender {version,eintraege[]}
+  radarIdentities: "kd:radar-identities:v1", // Separate, account-bound derived identity cache
   radar: "kd:radar",                  // Lokaler Event-Radar: Gastabos oder accountgebundener Cache/Outbox/Receipts
   autorName: "kd:autor-name",        // Teilen & Tauschen: steht in jedem Paket-Export und im KI-Prompt
   entdeckenStatus: "kd:entdecken-status", // {watchmode_id: "gesehen"|"erstellt"} — Erledigtes im Entdecken ausblenden

@@ -172,7 +172,7 @@ check("Blog-Export verwirft Mengen-, Versions-, Größen-, Zeit- und Zusatzfelda
 });
 
 check("Nicht übernommene Vorschläge erhalten keinen Geräte-Topf; übernommene Referenzen bleiben im Artikel", () => {
-  assert.equal(PERSONAL_DATA_ENTRIES.length, 19);
+  assert.equal(PERSONAL_DATA_ENTRIES.length, 20);
   assert.equal(PERSONAL_DATA_ENTRIES.some((entry) => /blogReferenceExtractions|blog_reference/i.test(entry.key)), false);
   const artikel = PERSONAL_DATA_ENTRIES.find((entry) => entry.backupField === "artikel");
   assert.match(artikel.label, /übernommener Referenzen/);
