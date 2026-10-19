@@ -167,7 +167,7 @@ export function extractOefiWeekendChartItems(html) {
   const period = weekendPeriod(visibleText(description?.[0]));
   const table = block.match(/<table\b[^>]*>[\s\S]*?<\/table>/iu)?.[0];
   const sourceNote = visibleText(block.match(/<span\b[^>]*tablepress-table-description[^>]*>[\s\S]*?<\/span>/iu)?.[0]);
-  if (!period || !table || !/Quelle:\s*Comscore,\s*Wochenendcharts/iu.test(sourceNote)
+  if (!period || !table || !/Quelle:\s*(?:Comscore|Rentrak),\s*Wochenendcharts\b/iu.test(sourceNote)
       || !sourcePeriodLabels(period).some((label) => sourceNote.includes(`Zeitraum: ${label}`))) {
     return Object.freeze([]);
   }
